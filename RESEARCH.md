@@ -327,6 +327,39 @@ Extracted:
 - Its ability to remain sharp under scale and perspective makes it a useful high-quality presentation backend.
 - Licensing and the exact provenance of algorithms ported from Three Flatland require explicit review.
 
+### Alvin: Rendering Resolution Independent Fonts in Games and 3D-Applications
+
+Sources:
+
+- [Lund University publication record](https://lup.lub.lu.se/student-papers/record/9024910)
+- [Full thesis PDF](https://lup.lub.lu.se/luur/download?func=downloadFile&recordOId=9024910&fileOId=9024911)
+
+Type: 2020 master's thesis by Olle Alvin, Lund University; work carried out at EA DICE
+
+Abstract: Implements and compares pre-rasterized glyph atlases, SDF/MSDF, Slug, and three experimental SDF/Slug hybrids. It evaluates GPU time and image error across several sizes and three fonts of increasing outline complexity, then discusses small-size text and text viewed at an angle in world space.
+
+Extracted:
+
+- No tested technique dominates across every font, scale, and workload. Pre-rasterized glyphs were the performance baseline; SDF/MSDF traded atlas resolution and some quality for near-baseline rendering cost; Slug preserved outline detail and scaling more consistently but required substantially more shader work.
+- Slug cost was highly sensitive to outline complexity and antialiasing strategy in this implementation. The gap widened sharply for the detailed Elzevier Caps font, while the author notes that the implementation omitted some optimizations used by the commercial Slug library.
+- SDF quality degraded around sharp corners, thin features, extreme magnification, and minification. MSDF improved corner reproduction at larger sizes but did not remove every thin-feature or small-size failure and increased texture/shader cost.
+- The SDF/Slug hybrids improved the quality/performance tradeoff for a relatively simple font, but did not generalize to complex glyphs: dense corners caused most of a glyph to fall back to Slug while retaining the hybrid's overhead.
+- For very small text, the thesis recommends hinted pre-rasterized glyphs because outline alteration and pixel-grid alignment matter even when the underlying rasterizer is mathematically accurate.
+- For text viewed at an angle in world space, SDF and Slug can use screen-space derivatives for antialiasing, while a fixed bitmap strike can become blurry or undersampled across the glyph.
+- The quality metric was RMSE against a supersampled reference. The author explicitly warns that RMSE does not fully model perceptual importance, so visual inspection remains necessary.
+
+Limits on use:
+
+- The work studies glyph rasterization, not Unicode shaping, paragraph layout, or font fallback.
+- Its corpus is ASCII from three TrueType fonts, and the primary benchmarks use a 2020 OpenGL implementation on a GTX 1070 with text parallel to the screen. Its numeric timings are historical evidence, not current WebGPU/WebGL performance targets.
+- The results justify benchmarking several presentations against representative fonts and viewing conditions; they do not establish a universal selection threshold or prove that automatic selection cannot work.
+
+Project inference, not a thesis claim:
+
+- Preserve a sound renderer-independent text API while allowing callers to choose a presentation technique explicitly.
+- Treat any future automatic selector as optional policy rather than a requirement of the core API.
+- Keep presentation engines separable enough that applications can tree-shake unused engines or load them dynamically. This delivery concern is not evaluated by the thesis and requires bundler and runtime measurements.
+
 ### Vello and sparse strips
 
 Sources:
