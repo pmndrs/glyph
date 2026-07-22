@@ -179,7 +179,7 @@ Conformance fixtures, Unicode tests, differential fuzzing, corrupt-input tests, 
 
 ### Performance
 
-Every phase records startup, steady-state, allocation/peak memory, raw/compressed bytes, and boundary-call counts. Benchmarks are versioned artifacts, not prose estimates.
+Every phase records startup, steady-state, allocation/peak memory, raw/compressed bytes, and boundary-call counts. Benchmarks are versioned artifacts, not prose estimates. Once the presentation quality corpus and A/B runner exist, the [autoresearch protocol](AUTORESEARCH.md) may search bounded optimization hypotheses; it cannot weaken quality gates or advance a result without human review.
 
 ### Format governance
 

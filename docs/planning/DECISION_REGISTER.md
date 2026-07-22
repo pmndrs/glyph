@@ -72,6 +72,14 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | D-052 | “Direct to GPU” means no per-glyph reconstruction or numeric repacking, not zero upload/decode work. | Proposed | Browsers still create resources and may decode compressed images. | Documentation and benchmarks name unavoidable bulk operations honestly. |
 | D-053 | MTSDF channels are linear data and technique-specific padding stays in presentation plane bounds. | Proposed | Required by msdfgen's rendering model. | Do not infer logical bounds or advances from atlas rectangles. |
 | D-054 | Bitmap hinting policy is unresolved; deterministic unhinted oversampling is the baseline candidate. | Experiment required | Hinting may improve tiny text but adds complexity and parity risk. | Compare visual quality, size, native/Wasm determinism, and bake cost. |
+| D-055 | MTSDF is the proposed general-purpose recommendation; callers retain explicit presentation choice. | Proposed | Current research places bitmap at fixed tiny sizes, MTSDF across ordinary scalable use, and Slug at high-fidelity large/dynamic scale. | Convenience policy may recommend but must not silently switch techniques or force unused engines into the bundle. |
+| D-056 | Windfoil remains future optional presentation research rather than a V1 dependency. | Proposed | Available comparisons show advantages in specialized high-magnification/vector-art cases, not ordinary UI text. | Its preprocessing, shader, and payload do not block or enter V1 core contracts. |
+
+## Optimization governance
+
+| ID | Decision | Status | Rationale / evidence | Acceptance consequence |
+| --- | --- | --- | --- | --- |
+| D-060 | Agent-discovered optimizations require reproducible end-to-end A/B evidence and zero quality/conformance loss. | Proposed | Prior Slug work found both meaningful wins and attractive changes that were neutral or visually approximate. | The autoresearch agent may make local evidence commits but never push, merge, publish, weaken fixtures, or accept a quality tradeoff. |
 
 ## Decisions needed to start Phase 1
 

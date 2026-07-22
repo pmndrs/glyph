@@ -17,6 +17,8 @@ Start here:
 - [Three Flatland Slug audit](docs/planning/SLUG_AUDIT.md)
 - [Conformance plan](docs/planning/CONFORMANCE_PLAN.md)
 - [Benchmark plan](docs/planning/BENCHMARK_PLAN.md)
+- [Rendering implementation difficulty](docs/planning/IMPLEMENTATION_DIFFICULTY.md)
+- [Autoresearch optimization protocol](docs/planning/AUTORESEARCH.md)
 - [Original discussion extraction](docs/planning/DISCUSSION_EXTRACTION.md)
 - [Scope lanes](docs/planning/SCOPE_LANES.md)
 

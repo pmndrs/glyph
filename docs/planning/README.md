@@ -13,6 +13,8 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 - [Three Flatland Slug audit](SLUG_AUDIT.md): file-level inventory of what to port, rewrite, or leave behind.
 - [Conformance plan](CONFORMANCE_PLAN.md): reference engines, comparison fields, corpus, and CI tiers.
 - [Benchmark plan](BENCHMARK_PLAN.md): reproducible performance, size, memory, and boundary-crossing measurements.
+- [Rendering implementation difficulty](IMPLEMENTATION_DIFFICULTY.md): relative effort to make each presentation correct and then performant.
+- [Autoresearch optimization protocol](AUTORESEARCH.md): evidence gates and safety boundaries for agent-driven performance work.
 - [Original discussion extraction](DISCUSSION_EXTRACTION.md): comprehensive record of explored designs, estimates, and reasoning before rescoping.
 - [Initial design synthesis](DESIGN_SYNTHESIS.md): preserved architecture/manifesto that previously occupied `RESEARCH.md`.
 - [Scope lanes](SCOPE_LANES.md): separates what to build now, what V1 must leave possible, and what remains future research.
@@ -32,3 +34,4 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 4. Make offline and worker baking use the same compiler core.
 5. Treat worker fallback, Unicode correctness, and accessibility-related cluster semantics as product requirements.
 6. Do not optimize from estimates; add the benchmark or fixture first.
+7. Accept agent-discovered optimizations only when repeated A/B evidence shows an end-to-end win with no quality or conformance loss.

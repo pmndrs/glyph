@@ -393,3 +393,63 @@ Acceptance criteria:
 - decision uses measured interpreter bottlenecks;
 - module compilation/cache cost and multi-font payload are included;
 - browser-time JIT remains separately scoped.
+
+## Epic H — Autoresearch performance loop
+
+No optimization in this epic can weaken correctness or visual-quality gates. Approximate quality/performance modes require separate product decisions.
+
+### H1. Define the autoresearch experiment manifest and evidence schema — S
+
+Dependencies: A5, B4
+
+Acceptance criteria:
+
+- hypothesis, immutable base commit, changed variables, target workloads, guard workloads, backends, metrics, and quality policy are required;
+- result states include accepted, rejected, inconclusive, and variant-only;
+- raw samples, generated shader/code output, environment data, and image diffs have stable artifact locations;
+- the agent cannot change acceptance criteria after collecting results.
+
+### H2. Build the reproducible interleaved A/B runner — L
+
+Dependencies: H1, D5
+
+Acceptance criteria:
+
+- immutable base and candidate builds run in randomized or alternating order;
+- warmup, viewport, DPR, vsync, power/thermal notes, and environment metadata are controlled or recorded;
+- medians, tails, dispersion, and confidence/noise thresholds are reported from raw samples;
+- WebGPU and WebGL2 are supported where the target renderer supports both;
+- local runs never push, merge, publish, or replace baselines.
+
+### H3. Build the strict presentation quality guard corpus — L
+
+Dependencies: B4, D2–D4
+
+Acceptance criteria:
+
+- Latin, Arabic marks, CJK, icons, intricate SVG, grazing curves, holes/overlap, scale, minification, magnification, and transform cases are represented;
+- deterministic binary/reference results use exact equality;
+- cross-device raster variance is characterized separately from candidate-only differences;
+- fixtures and tolerances cannot be modified by the same experiment that relies on them.
+
+### H4. Reproduce proven Three Flatland Slug optimizations — L
+
+Dependencies: D2, H2, H3
+
+Acceptance criteria:
+
+- dynamic loops, shader hoisting, structural expensive branches, compact exact band data, band-list deduplication, and exact bounds are each evaluated independently;
+- each retained change has new-repository end-to-end evidence and passes the full quality guard;
+- neutral or regressing changes are recorded rather than compounded;
+- no lower-precision, approximate-minification, or grazing-quality tradeoff enters the baseline.
+
+### H5. Run the first novel Slug autoresearch campaign — L
+
+Dependencies: H4, licensed dense CJK/icon/SVG corpus
+
+Acceptance criteria:
+
+- adaptive bands and a build-time hull variant are evaluated first;
+- a workload-specific variant adds no runtime/bundle cost to sources that do not select it;
+- accepted experiments exceed the measured end-to-end noise gate without guard-workload regressions;
+- every result is presented for human review as a local evidence commit and is not pushed automatically.
