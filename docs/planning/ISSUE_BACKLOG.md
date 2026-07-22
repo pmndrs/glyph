@@ -48,6 +48,8 @@ Acceptance criteria:
 - license/attribution requirements are recorded;
 - coupling to Three Flatland types is identified.
 
+Research snapshot: [`SLUG_AUDIT.md`](SLUG_AUDIT.md). Implementation should begin by reviewing and accepting or revising its dispositions rather than repeating discovery.
+
 ### A5. Define benchmark methodology and result schema — M
 
 Dependencies: A1, A3
@@ -58,6 +60,8 @@ Acceptance criteria:
 - browser and machine metadata is recorded with results;
 - raw/Brotli/gzip sizes are separate metrics;
 - benchmark variance and regression thresholds are documented.
+
+Planning baseline: [`BENCHMARK_PLAN.md`](BENCHMARK_PLAN.md).
 
 ## Epic B — Shaping contract experiment
 
@@ -82,6 +86,8 @@ Acceptance criteria:
 - every output field can be compared;
 - allowlisted differences require a reason and upstream link;
 - fixture version metadata is mandatory.
+
+Planning baseline: [`CONFORMANCE_PLAN.md`](CONFORMANCE_PLAN.md).
 
 ### B3. Prototype a coarse-grained HarfRust Wasm call — M
 

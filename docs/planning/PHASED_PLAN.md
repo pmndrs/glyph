@@ -10,12 +10,13 @@ Goal: remove architectural ambiguity before production code.
 Deliverables:
 
 - approve the project brief and architecture boundaries;
+- review the [decision register](DECISION_REGISTER.md) and record accepted choices as ADRs;
 - select and pin HarfRust/HarfBuzz/Unicode reference versions;
 - select the initial font corpus and licenses;
-- inventory Three Flatland Slug code as port, rewrite, or discard;
+- review the [Three Flatland Slug audit](SLUG_AUDIT.md) and confirm port/rewrite dispositions;
 - write ADRs for container, shaper baseline, paragraph boundary, and static variations;
-- define benchmark machines/browsers and result format;
-- define correctness and unsupported-feature policies.
+- adopt the [benchmark plan](BENCHMARK_PLAN.md), machines/browsers, and result format;
+- adopt the [conformance plan](CONFORMANCE_PLAN.md) and unsupported-feature policies.
 
 Exit gate:
 
