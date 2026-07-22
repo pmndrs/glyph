@@ -1,501 +1,419 @@
-# Text shaping and rendering research
+# Research sources
 
-Status: living research record  
+Status: living annotated bibliography
 Last reviewed: 2026-07-22
 
-This document consolidates the research and design discussion that led to `pmndrs/text`. It separates sourced facts from project proposals and performance hypotheses. Links point to original projects, specifications, or author documentation wherever possible.
+This document is the source reference for the project. It records articles, specifications, papers, codebases, and tools examined during research, with a brief abstract and the useful observations extracted from each.
 
-## Executive conclusion
+It does not define product scope or architecture. Those live under [`docs/planning`](docs/planning/README.md). The historical discussion is preserved in [`DISCUSSION_EXTRACTION.md`](docs/planning/DISCUSSION_EXTRACTION.md), and the initial design synthesis is preserved in [`DESIGN_SYNTHESIS.md`](docs/planning/DESIGN_SYNTHESIS.md).
 
-The product should be a renderer-independent text system with four distinct layers:
+## How to maintain this file
 
-```text
-source font
-    ↓
-portable baker (offline or worker fallback)
-    ↓
-FL_font data in GLB
-    ├── shared shaping and metrics
-    ├── Slug presentation
-    ├── MSDF/MTSDF presentation
-    └── bitmap presentation
-    ↓
-one HarfRust-based Wasm shaper
-    ↓
-JS paragraph engine
-    ↓
-GPU renderer selected independently per glyph/run
-```
+For every source:
 
-The central invariant is:
+- link to the original or authoritative source;
+- state what kind of source it is;
+- summarize it briefly rather than restating the project plan;
+- record only what was extracted from that source;
+- distinguish a source's claim from our inference;
+- add a review date when current project status matters;
+- link measurements to their raw benchmark artifacts once they exist.
 
-> `FL_font` describes which glyphs result from text and where those glyphs go. Presentation payloads describe how each glyph is drawn.
+## Text shaping engines
 
-This makes Slug one presentation backend rather than the package identity. The work in [`three-flatland/packages/slug`](https://github.com/thejustinwalsh/three-flatland/tree/main/packages/slug) is prior art to port, revise, and eventually replace. `pmndrs/text` is the intended shipping package and Three Flatland becomes a consumer.
+### HarfBuzz manual
 
-## 1. Shaping, paragraph layout, and rendering are separate problems
+Source: [HarfBuzz manual](https://harfbuzz.github.io/)
+Type: authoritative project documentation
 
-Text shaping converts Unicode text into glyph IDs and positions. HarfBuzz defines shaped output as glyph information plus `x_advance`, `y_advance`, `x_offset`, and `y_offset`; each glyph also retains a cluster value that maps it back to input text. Its script-specific shaping models are internal engine logic, while OpenType GDEF/GSUB/GPOS data comes from the font. See the [HarfBuzz shaping guide](https://harfbuzz.github.io/shaping-and-shape-plans.html) and [shaping concepts](https://harfbuzz.github.io/shaping-concepts.html).
+Abstract: Documentation for HarfBuzz's object model, buffers, fonts, Unicode handling, shaping models, OpenType/AAT behavior, clusters, shape plans, and supporting tools.
 
-Paragraph layout then chooses line breaks, aligns and justifies lines, handles overflow, and positions shaped runs inside a region. Unicode [UAX #14](https://www.unicode.org/reports/tr14/) defines line-break opportunities but distinguishes those opportunities from choosing an actual break that fits a line. [UAX #29](https://www.unicode.org/reports/tr29/) defines grapheme segmentation, and [UAX #9](https://www.unicode.org/reports/tr9/) defines bidirectional behavior.
+Extracted:
 
-Rendering consumes positioned glyph IDs. It must not influence shaping advances or cluster mapping. Slug vector data, MTSDF atlas records, and bitmap strikes can therefore share a single shaping result.
+- HarfBuzz shapes a run with consistent font, direction, script, language, and feature settings.
+- Shaping returns glyph identity, clusters, advances, and offsets; it does not perform complete paragraph layout or choose a glyph renderer.
+- Complex-script behavior includes engine-side Unicode and script logic in addition to font-table lookup execution.
+- HarfBuzz is the appropriate behavioral oracle for modern OpenType shaping.
 
-### Required shaped-glyph model
+### HarfBuzz shaping and shape plans
 
-The renderer-independent output needs at least:
+Sources:
 
-```ts
-interface ShapedGlyph {
-  glyphId: number
-  cluster: number // UTF-16 source offset
-  xAdvance: number
-  yAdvance: number
-  xOffset: number
-  yOffset: number
-  flags: number
-}
-```
+- [Shaping and shape plans](https://harfbuzz.github.io/shaping-and-shape-plans.html)
+- [Plans and caching](https://harfbuzz.github.io/shaping-plans-and-caching.html)
+- [`hb_shape_plan` reference](https://harfbuzz.github.io/harfbuzz-hb-shape-plan.html)
 
-The one-character/one-glyph model is invalid for modern shaping. A character may become several glyphs, several characters may become one ligature, glyphs may reorder, and marks may have zero advance. HarfBuzz's [cluster documentation](https://harfbuzz.github.io/clusters.html) explains why cluster preservation is required for selection, caret placement, styling, line breaking, and extraction.
+Type: authoritative API and conceptual documentation
 
-## 2. HarfRust is the proposed shaping baseline
+Abstract: Describes shaped buffer output, OpenType feature application, shaper selection, and reusable plans created from a face, segment properties, and user features.
 
-[HarfRust](https://github.com/harfbuzz/harfrust) is the current Rust port of the HarfBuzz shaping engine. As of this review, its own README says it:
+Extracted:
 
-- tracks HarfBuzz behavior;
-- uses Fontations `read-fonts` for font access;
-- shapes in units-per-em;
-- ports shaping and Unicode logic, not the entire HarfBuzz platform;
-- passes most HarfBuzz tests and fuzzing suites, with documented differences;
-- does not support Graphite, deprecated `mort`, or the Arabic fallback shaper.
+- The stable output fields are glyph ID, cluster, `x_advance`, `y_advance`, `x_offset`, and `y_offset`.
+- Shape plans cache decisions and font capability inspection, but the public API does not document them as a portable serialized font program.
+- Reusing plans is an existing optimization baseline that any custom compiled-data approach must beat.
 
-These limitations are compatible with an initial baked-font scope because the baker controls and validates source fonts, static instances can be preferred, and unsupported shaping systems can be rejected explicitly.
+### HarfBuzz clusters and unsafe breaks
 
-The related [Fontations](https://github.com/googlefonts/fontations) project provides complementary building blocks:
+Sources:
 
-- `read-fonts`: allocation-free, zero-copy OpenType access intended for shaping;
-- `skrifa`: higher-level metadata and outline access;
-- `write-fonts`: owned types and font writing;
-- `skera`: subsetting.
+- [Clusters](https://harfbuzz.github.io/clusters.html)
+- [Working with clusters](https://harfbuzz.github.io/working-with-harfbuzz-clusters.html)
+- [Getting started with HarfBuzz](https://harfbuzz.github.io/getting-started.html)
 
-### Why not write a new shaper first?
+Type: authoritative conceptual documentation
 
-Complex-script shaping is not merely lookup-table evaluation. HarfBuzz carries normalization, script-specific preprocessing, feature scheduling, buffer mutation, reordering, cluster semantics, compatibility behavior, and fallback logic. Reimplementing those pieces would make conformance the project's largest risk.
+Abstract: Explains how input character clusters survive composition, decomposition, ligature formation, and reordering, and how unsafe flags inform clients about boundaries that require reshaping.
 
-The proposed path is to preserve HarfRust's script/buffer machinery and progressively replace font-specific lookup paths with baked data only after reference behavior and benchmarks exist.
+Extracted:
 
-### Conformance definition
+- One-character/one-glyph indexing is not a valid shaping contract.
+- Cluster mapping is required by caret placement, selection, styling, line breaking, and source extraction.
+- `UNSAFE_TO_BREAK` is a signal to paragraph layout that a selected boundary requires reshaping; it is not itself a complete line-breaking algorithm.
 
-There is no generic “modern shaping” assertion strong enough for tests. The project should define conformance as:
+### HarfBuzz tools and subsetting
 
-> For valid, supported, statically instantiated OpenType fonts, produce the same glyph IDs, clusters, advances, offsets, flags, and output length as a pinned HarfRust release for the same text, direction, script, language, features, variation location, buffer flags, and cluster level.
+Sources:
 
-HarfBuzz should remain the second oracle. Its [`hb-shape`](https://harfbuzz.github.io/utilities.html) tool reports glyph IDs, clusters, displacements, and advances and is suitable for fixture generation. Test metadata must record the HarfRust, HarfBuzz, Unicode, compiler, and `FL_font` versions.
+- [`hb-shape` and utilities](https://harfbuzz.github.io/utilities.html)
+- [`hb-subset`](https://harfbuzz.github.io/harfbuzz-hb-subset.html)
+- [HarfBuzz repository](https://github.com/harfbuzz/harfbuzz)
 
-## 3. Bake font-specific work; retain shared shaping logic
+Type: authoritative tool/API documentation and source repository
 
-The browser should not need the original source font on the normal path. The baker can perform expensive and validation-heavy work once:
+Abstract: `hb-shape` exposes shaped glyph output for diagnostics. The subsetter reduces code-point/glyph coverage and supports OpenType layout tables. The main repository also contains shaping tests, fuzzing infrastructure, raster/vector/GPU experiments, and configurable builds.
 
-- parse and validate source font data;
-- instantiate variable-font coordinates by default;
-- subset Unicode coverage and compute shaping closure;
-- remap source glyph IDs into one dense packed glyph-ID space;
-- compile cmap, metrics, glyph properties, coverage, class, GSUB, and GPOS data into runtime-oriented sections;
-- generate requested presentation payloads;
-- pack the result into a GLB.
+Extracted:
 
-The runtime retains shared logic that cannot be precomputed for arbitrary strings:
+- `hb-shape` is suitable for generating and inspecting oracle output.
+- Subsetting must preserve reachable shaping behavior, not only cmap-selected glyphs.
+- HarfBuzz's current repository includes GPU Slug work and experimental raster/vector components; renderer comparisons should use current upstream rather than assumptions from older architecture surveys.
 
-- UTF-16 decoding and cluster mapping;
-- script and language behavior;
-- normalization and reordering;
-- joining and syllable state machines;
-- feature scheduling;
-- buffer mutation;
-- contextual rule execution;
-- final attachment and flag semantics.
+### HarfRust
 
-HarfBuzz already uses reusable [shape plans and caching](https://harfbuzz.github.io/shaping-plans-and-caching.html) based on a font face, segment properties, and features. Shape plans are internal runtime objects, not a documented portable bytecode. `pmndrs/text` should not attempt to serialize HarfRust internals. Instead, the baked format should contain stable project-owned stage and lookup records from which runtime plans can be constructed or accelerated.
+Source: [harfbuzz/harfrust](https://github.com/harfbuzz/harfrust)
+Type: authoritative source repository
+Reviewed: 2026-07-22
 
-## 4. A compiled shaping IR is a hypothesis, not a V1 dependency
+Abstract: Rust port of the HarfBuzz shaping engine, using Fontations `read-fonts` for font access. Its README documents tracked HarfBuzz compatibility, performance, safety, and known conformance differences.
 
-The conversation explored compiling OpenType layout into a high-level intermediate representation. This remains a valuable direction, but it should be introduced behind a reference path.
+Extracted:
 
-Useful high-level operations include:
+- HarfRust contains shaping and Unicode logic without the whole C++ HarfBuzz integration platform.
+- It shapes in units per em and leaves scaling to consumers.
+- Known gaps include malformed-font fallback behavior, no Arabic fallback shaper, no Graphite, and no deprecated `mort` support as of the reviewed revision.
+- It is a strong candidate for a Rust/Wasm reference shaper, but an alternate baked lookup-provider seam must be verified rather than assumed.
 
-```text
-single substitution
-multiple substitution
-ligature trie
-context automaton
-single positioning
-direct or class pair positioning
-mark-to-base / mark-to-ligature / mark-to-mark
-cursive attachment
-```
+### RustyBuzz
 
-This should not be a tiny stack VM with an instruction per compare or load. Coarse operations preserve opportunities for specialized scalar and SIMD kernels and avoid excessive dispatch.
+Source: [harfbuzz/rustybuzz](https://github.com/harfbuzz/rustybuzz)
+Type: source repository
 
-Potential baked forms include:
+Abstract: Rust port of HarfBuzz's shaping algorithm and the project from which HarfRust was originally forked.
 
-- direct glyph-indexed class arrays;
-- contiguous substitution ranges;
-- dense class-pair matrices;
-- CSR sparse-pair overrides;
-- bitsets or ranges for coverage;
-- packed ligature tries;
-- shared anchor pools;
-- contextual DFAs where semantics permit.
+Extracted:
 
-### Expected benefits
+- Demonstrates that a Rust-native HarfBuzz-compatible shaper is practical.
+- HarfRust is the more strategically relevant baseline for this project because it is current under the HarfBuzz organization and aligned with Fontations; this is a project choice, not a criticism of RustyBuzz.
 
-Benefits that are architectural rather than speculative:
+### Allsorts
 
-- no source-font parsing on the normal runtime path;
-- deterministic validation at bake time;
-- one dense glyph-ID space shared with renderers;
-- flat typed-array access;
-- no per-glyph JavaScript objects;
-- no generic OpenType offset walking in optimized lookup paths;
-- simpler persistent caching of runtime-baked output.
+Source: [yeslogic/allsorts](https://github.com/yeslogic/allsorts)
+Type: source repository
 
-Possible performance and size benefits must be measured. Whole-shape speedups are bounded because Unicode preprocessing, script logic, and buffer mutation remain. Earlier estimates such as “1.3–2×” are hypotheses, not project commitments.
+Abstract: Rust font parser, shaping engine, and subsetter originating from Prince.
 
-### JIT versus AOT
+Extracted:
 
-Andy Wingo's article [“just-in-time code generation within WebAssembly”](https://www.wingolog.org/archives/2022/08/18/just-in-time-code-generation-within-webassembly) explains that Wasm code is not ordinary writable/executable memory. Dynamic generation involves producing and instantiating another Wasm module, then linking through an indirect function table.
+- Useful ecosystem comparison for Rust shaping and subsetting.
+- It primarily consumes OpenType at runtime rather than providing the renderer-independent baked representation explored here.
+- Current maintenance and feature status should be rechecked before making comparative claims.
 
-For typical short text runs, browser-time module generation, validation, compilation, and caching may cost more than interpretation. Therefore:
+## Font formats and Rust font tooling
 
-- browser-time JIT is not in the initial plan;
-- a shared high-level interpreter is the first optimized target;
-- per-font ahead-of-time Wasm specialization is a later experiment;
-- MLIR is not justified until a simple compiler proves specialization valuable.
+### OpenType specification
 
-## 5. Wasm and SIMD strategy
+Sources:
 
-Wasm is the proposed execution target for the shaper and portable baker. The [WebAssembly specification](https://www.w3.org/TR/wasm-core/) describes a compact, safe, portable low-level format intended for efficient execution.
+- [OpenType specification index](https://learn.microsoft.com/en-us/typography/opentype/spec/)
+- [OpenType Layout common table formats](https://learn.microsoft.com/en-us/typography/opentype/otspec190/chapter2)
+- [GDEF table](https://learn.microsoft.com/en-us/typography/opentype/otspec190/gdef)
+- [GSUB table](https://learn.microsoft.com/en-us/typography/opentype/otspec190/gsub)
+- [GPOS table](https://learn.microsoft.com/en-us/typography/opentype/otspec190/gpos)
 
-SIMD should assist regular kernels without defining the entire shaping model. Good candidates include:
+Type: normative/authoritative font-format specification
 
-- ASCII and non-ASCII scanning;
-- UTF-16 validation fast paths;
-- Unicode and glyph-property classification;
-- range and bitset coverage checks;
-- range/delta substitutions;
-- bulk advance initialization;
-- bulk offset/advance adjustment;
-- prefix sums and positioned-instance generation.
+Abstract: Defines the binary font format and the script/language/feature/lookup organization used for glyph substitution, positioning, class definitions, coverage, glyph properties, attachments, variation data, and caret information.
 
-Ligature matching, contextual substitution, mark attachment, Arabic/Indic state machines, and arbitrary table gathers remain branchy and stateful. They should retain scalar control flow unless profiling identifies a safe vector form.
+Extracted:
 
-Structure-of-arrays data is the precondition for useful SIMD:
+- Pair kerning is only one GPOS operation; modern positioning also includes marks, cursive attachment, contextual positioning, and variation adjustments.
+- Class definitions and coverage tables are compact source representations that should not automatically be expanded into explicit glyph pairs.
+- GDEF properties affect lookup filtering, mark behavior, attachment, and ligature carets; a compiler cannot treat GSUB/GPOS in isolation.
 
-```text
-glyphIds     u16[]
-clusters     u32[]
-xAdvances    i32[]
-yAdvances    i32[]
-xOffsets     i32[]
-yOffsets     i32[]
-flags        u16[]
-```
+### Fontations
 
-One JS/Wasm call should shape a run or paragraph batch. There must never be a boundary crossing per glyph. Width-only paragraph reflow should normally make zero Wasm calls; boundary-sensitive line reshaping should batch all changed ranges into one call.
+Source: [googlefonts/fontations](https://github.com/googlefonts/fontations)
+Type: authoritative source repository
+Reviewed: 2026-07-22
 
-## 6. `FL_font`: one shaping payload, multiple presentations
+Abstract: Rust workspace for reading, writing, subsetting, and accessing OpenType fonts. Important crates include `font-types`, `read-fonts`, `write-fonts`, Skrifa, and Skera.
 
-glTF is explicitly extensible and separates JSON descriptors from binary buffers. The [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) also emphasizes runtime efficiency and aligned binary data. A custom extension is therefore a reasonable transport for immutable font sections and GPU resources.
+Extracted:
 
-Proposed extension split:
+- `read-fonts` is designed for allocation-free, zero-copy font access suitable for shaping.
+- Skrifa supplies higher-level metadata and glyph-outline access and is a likely source abstraction for a shared baker.
+- Skera and `write-fonts` are relevant to subsetting and static-instance output; exact division of responsibility requires a prototype.
 
-```text
-FL_font                  shared shaping, metrics, glyph identity
-FL_font_slug             Slug curve/band presentation
-FL_font_distance_field   SDF/MSDF/MTSDF atlases and records
-FL_font_bitmap           generated bitmap strikes and records
-```
+## Unicode and paragraph algorithms
 
-The names are provisional until the extension specification is reviewed.
+### UAX #9: Unicode Bidirectional Algorithm
 
-### One packed glyph-ID space
+Source: [Unicode UAX #9](https://www.unicode.org/reports/tr9/)
+Type: Unicode Standard Annex
 
-The baker remaps source glyph IDs into a dense packed space. Every section uses that same value:
+Abstract: Specifies resolution of paragraph embedding levels and display ordering for bidirectional text.
 
-```text
-source glyph ID → packed glyph ID
-```
+Extracted:
 
-The packed ID indexes shared metrics, glyph properties, Slug geometry, distance-field records, bitmap records, and future color presentations. `u16` is the likely common representation; the format must define how larger fonts are rejected or upgraded.
+- Bidi analysis is paragraph-scoped, while visual reordering is applied after line boundaries are known.
+- Source text must remain in logical order.
+- Whether the package owns UAX #9 or accepts pre-segmented directional runs remains a product decision.
 
-### Shared data must not be duplicated
+### UAX #14: Unicode Line Breaking Algorithm
 
-Store once:
+Source: [Unicode UAX #14](https://www.unicode.org/reports/tr14/)
+Type: Unicode Standard Annex
 
-- cmap;
-- advances;
-- logical and ink bounds;
-- glyph class and mark attachment class;
-- shaping lookups and feature metadata;
-- per-glyph presentation availability.
+Abstract: Defines line-break classes and ordered rules that produce mandatory, allowed, and prohibited break opportunities. It distinguishes finding opportunities from selecting a break that fits a line.
 
-Presentation sections contain only what is needed to draw a packed glyph. Atlas-generator advances or kerning should be discarded after validation because they duplicate canonical shared data.
+Extracted:
 
-### Direct-to-GPU means no transformation, not no upload
+- Paragraph layout chooses among legal opportunities; the shaper does not perform this job.
+- The algorithm is contextual and has non-tailorable and tailorable behavior.
+- Version-matched `LineBreakTest.txt` is required for conformance testing.
+- Legal Unicode opportunities must still be combined with shaping cluster/unsafe-boundary information.
 
-The browser still creates GPU resources and copies or decodes bytes. The requirement means:
+### UAX #29: Unicode Text Segmentation
 
-- exact GPU scalar formats and strides are recorded;
-- no per-glyph object construction;
-- no deinterleaving or numeric conversion;
-- no atlas metadata JSON parsing;
-- no Slug band/curve reconstruction;
-- upload ranges are directly addressable from the GLB binary chunk.
+Source: [Unicode UAX #29](https://www.unicode.org/reports/tr29/)
+Type: Unicode Standard Annex
 
-CPU shaping sections should be extension-defined flat binary blocks. GPU sections may use glTF buffer views/accessors where that improves interoperability. Section alignment should satisfy both typed-array and GPU upload constraints.
+Abstract: Defines default extended grapheme, word, and sentence boundaries and the rules for declaring tailored profiles.
 
-## 7. Presentation backends
+Extracted:
 
-### Slug
+- Extended grapheme boundaries are the relevant emergency-break/caret safety baseline, but shaped clusters remain a distinct concept.
+- Locale-sensitive scripts can require tailoring or dictionary behavior beyond default segmentation.
+- Version-matched grapheme test data should be included in the paragraph conformance suite.
 
-Slug is a vector-curve presentation derived from the Three Flatland work. The existing implementation demonstrates preprocessing geometry and band data into a GLB, but the new package should revise it around flat ranges, one packed glyph-ID space, and no reconstructed `Map`/nested glyph object graph.
+### Unicode Character Database test files
 
-Vello's sparse-strip research is relevant as renderer prior art, not as a shaper. Linebender described sparse strips as a path-rendering direction intended to improve memory and performance in its [2024 roadmap](https://linebender.org/blog/roadmap-may-2024/), and later reported text/glyph rendering work in the [March 2025 update](https://linebender.org/blog/tmil-15/). This supports keeping shaping/layout independent from the vector rasterization technique.
+Source: [Unicode Character Database](https://www.unicode.org/ucd/)
+Type: normative data and conformance fixtures
 
-### MSDF and MTSDF
+Abstract: Versioned Unicode properties and test files, including bidi, line-break, normalization, and grapheme-break data.
 
-[msdfgen](https://github.com/Chlumsky/msdfgen) is the primary reference. It describes MSDF as using RGB channels to preserve sharp corners, and MTSDF as adding a true signed-distance field in alpha. It also warns that distance-field channels must be sampled in linear space rather than interpreted as sRGB.
+Extracted:
 
-Per-glyph records need distinct values for:
+- Unicode properties and tests must be pinned to an explicit version alongside HarfRust/HarfBuzz.
+- Test data should be vendored or fetched by immutable version/hash rather than silently following a latest URL.
 
-- logical advance from shared shaping data;
-- plane bounds for quad placement;
-- atlas bounds for texture lookup;
-- atlas page;
-- distance range and flags.
+## WebAssembly and code generation
 
-The plane bounds include technique-specific padding and must never be used as the shaping advance.
+### WebAssembly core and JavaScript interface
 
-### Generated bitmap strikes
+Sources:
 
-The baker takes a source font and generates one or more pixel-size strikes. Each strike has atlas bytes plus per-glyph plane and atlas bounds. The same shared shaping data is used for every strike.
-
-Important open choices include:
-
-- grayscale versus monochrome/RGBA output;
-- hinting policy;
-- oversampling;
-- atlas padding and page limits;
-- raw R8/RGBA8 versus compressed image payloads;
-- deterministic parity between native and Wasm baking.
-
-Unhinted oversampled rasterization is the simplest deterministic baseline. TrueType hinting may improve small sizes but adds another interpreter and can create native/Wasm parity issues; it needs a separate evidence-based decision.
-
-### Icons and emoji
-
-Font icons usually need only cmap, advances, and presentation records. Optional name lookup belongs outside the shaping hot path.
-
-Emoji shaping is not a separate shaper. Supplementary-plane cmap, variation selectors, ZWJ sequences, and ligature/contextual behavior use the same shaped-glyph output. Color or bitmap presentation is separate:
-
-```text
-shaped glyph ID
-    ├── monochrome Slug
-    ├── MSDF/MTSDF
-    ├── bitmap atlas
-    └── future color-layer/image presentation
-```
-
-Color vector paint graphs and embedded image formats are deferred but the presentation directory must remain extensible.
-
-## 8. Runtime fallback baker
-
-Pre-baked GLB is the production fast path, but the loader must accept ordinary font bytes. A lazy worker-hosted Wasm baker should produce the same canonical package in memory:
-
-```text
-pre-baked GLB → register and upload
-
-source font → worker + baker Wasm → canonical baked bytes
-            → register and upload through the same loader
-```
-
-There should not be a permanent second unbaked runtime model. After worker baking, all consumers see the same `FL_font` representation.
-
-The likely module split is:
-
-- small shaper Wasm on the normal path;
-- larger baker Wasm loaded only for fallback;
-- one shared Rust compiler core used by native build tools and the worker.
-
-Runtime-baked output should be cached using a key over source bytes, compiler and format versions, glyph selection, variation coordinates, and presentation options. IndexedDB or Cache Storage are implementation candidates.
-
-Large CJK fonts make unrestricted runtime baking dangerous. The API must support code-point/range/text selection and compute the GSUB/GPOS shaping closure from that selection.
-
-## 9. JS paragraph engine boundary
-
-Paragraph policy belongs in TypeScript/JavaScript because container constraints, style spans, framework lifecycle, layout caching, and custom overflow behavior are application-facing.
-
-The Wasm boundary owns correctness-sensitive shaping. The JS layer owns:
-
-- paragraph/style objects;
-- width and height constraints;
-- break strategy;
-- alignment and justification policy;
-- max lines and overflow;
-- caches and incremental reflow;
-- batching boundary-sensitive reshape requests.
-
-### Width changes
-
-A width change always requires reflow but does not always require reshaping the entire paragraph.
-
-For common Latin text, the paragraph engine can reuse shaped clusters and choose new line breaks. Boundary-sensitive cases—Arabic joining, contextual substitutions, cursive attachment, soft or inserted hyphens, ellipsis, and unsafe break boundaries—may require final line reshaping.
-
-HarfBuzz exposes `UNSAFE_TO_BREAK` to identify positions where breaking requires reshaping; see its [getting-started guide](https://harfbuzz.github.io/getting-started.html). The paragraph engine combines Unicode break opportunities with cluster and unsafe-break information.
-
-The intended call budget is:
-
-```text
-text/style/font change     one batched shaping call
-simple width change        zero Wasm calls
-boundary-sensitive reflow  one batched reshape call
-per glyph                  never
-```
-
-Initial layout can shape broad logical runs, measure cluster advances, choose line boundaries, and batch only the final ranges requiring boundary-aware shaping.
-
-## 10. Data-layout research
-
-The format should favor direct indexing and flat arrays.
-
-### Shared glyph data
-
-Candidate structure-of-arrays sections:
-
-```text
-advanceX             i16 or i32[glyphCount]
-advanceY             i16 or i32[glyphCount]
-logicalBounds        i16x4[glyphCount]
-inkBounds            i16x4[glyphCount]
-glyphClass           u8 or u16[glyphCount]
-markAttachmentClass  u8 or u16[glyphCount]
-glyphFlags           u16[glyphCount]
-presentationMask     u16[glyphCount]
-```
-
-Store design-unit values as narrow integers when the baker proves the range; use `i32` working and output positions. Fixed-point conversion to world/screen coordinates belongs after shaping.
-
-### cmap
-
-The current Slug approach discussed earlier used UTF-16 code units and therefore cannot represent all Unicode scalar values. The proposed cmap has:
-
-- direct ASCII table;
-- paged Unicode map with dense/sparse page choices;
-- separate variation-sequence records;
-- UTF-16 source offsets retained as clusters.
-
-The final paged representation is not decided. A full 4,352-entry page directory is fast but costs raw bytes; a two-level directory may be the better default.
-
-### Kerning and positioning
-
-Do not flatten all class kerning into explicit glyph pairs. Candidate forms:
-
-- direct small hot-glyph matrix;
-- class maps plus dense class-pair matrix;
-- CSR explicit overrides by left glyph;
-- shared anchors for mark positioning.
-
-The baker should choose representations based on measured byte cost and runtime cost, not a single universal encoding.
-
-## 11. Performance and payload hypotheses
-
-No performance claim in this section is established yet.
-
-Expected qualitative results:
-
-- direct flat data should reduce startup allocation and object traversal;
-- dense IDs and class arrays should make common lookups cheaper;
-- SIMD will improve selected bulk kernels more than contextual shaping;
-- shaped-run caching will dominate repeated-string workloads;
-- compiled font data may reduce size, but naive expansion can increase it;
-- per-font generated Wasm may add more payload and compile time than it saves.
-
-Required measurements:
-
-- raw and Brotli-compressed Wasm size;
-- raw and compressed shaping data size versus shaping-only OpenType;
-- registration/startup time and peak memory;
-- short-label, paragraph, Arabic, Indic, emoji, and mixed-script shaping;
-- cached and uncached runs;
-- scalar versus SIMD kernels;
-- native versus worker-Wasm bake time and byte determinism;
-- Slug, MTSDF, and bitmap upload time without repacking;
-- reflow call counts and reshape rate under interactive resizing.
-
-Representative initial fonts should include a compact Latin UI font, Arabic, Devanagari/USE, emoji or ZWJ coverage, an icon font, and a large CJK subset.
-
-## 12. Decisions, hypotheses, and deferrals
-
-### Proposed V1 decisions
-
-- `pmndrs/text` is the product; Three Flatland consumes it.
-- One renderer-independent shaping API.
-- HarfRust is the behavioral baseline.
-- One dense packed glyph-ID space.
-- Shared shaping/metrics separated from presentation payloads.
-- GLB with an `FL_font` family of extensions.
-- Native and worker-Wasm baker use the same compiler core.
-- JS owns paragraph policy; Wasm owns shaping.
-- Coarse Wasm calls with persistent flat buffers.
-- Pre-baked assets are preferred; runtime baking is a lazy fallback.
-
-### Hypotheses requiring prototypes
-
-- compiled lookup sections materially outperform HarfRust's generic access;
-- compiled data is smaller than shaping-only OpenType for target fonts;
-- Wasm SIMD produces meaningful whole-run gains;
-- per-font AOT specialization is worthwhile;
-- one GLB remains practical for multiple large presentation payloads.
-
-### Deferred
-
-- browser-time JIT;
-- MLIR;
-- GPU compute shaping;
-- runtime variable-font axes;
-- vertical writing;
-- full hyphenation dictionaries;
-- Graphite/AAT;
-- COLRv1 paint graph and SVG glyphs;
-- a public glTF extension proposal.
-
-## Source index
-
-Primary sources and project references used in this research:
-
-- [HarfBuzz manual](https://harfbuzz.github.io/)
-- [HarfBuzz shaping and output](https://harfbuzz.github.io/shaping-and-shape-plans.html)
-- [HarfBuzz clusters](https://harfbuzz.github.io/clusters.html)
-- [HarfBuzz shape plans and caching](https://harfbuzz.github.io/shaping-plans-and-caching.html)
-- [HarfBuzz subsetting API](https://harfbuzz.github.io/harfbuzz-hb-subset.html)
-- [HarfRust repository and conformance notes](https://github.com/harfbuzz/harfrust)
-- [Fontations repository](https://github.com/googlefonts/fontations)
-- [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
-- [Unicode UAX #9: Bidirectional Algorithm](https://www.unicode.org/reports/tr9/)
-- [Unicode UAX #14: Line Breaking](https://www.unicode.org/reports/tr14/)
-- [Unicode UAX #29: Text Segmentation](https://www.unicode.org/reports/tr29/)
 - [WebAssembly core specification](https://www.w3.org/TR/wasm-core/)
-- [WebAssembly SIMD proposal](https://github.com/WebAssembly/simd)
-- [Andy Wingo: JIT code generation within WebAssembly](https://www.wingolog.org/archives/2022/08/18/just-in-time-code-generation-within-webassembly)
-- [msdfgen](https://github.com/Chlumsky/msdfgen)
-- [Linebender sparse-strips roadmap](https://linebender.org/blog/roadmap-may-2024/)
-- [Linebender March 2025 renderer update](https://linebender.org/blog/tmil-15/)
-- [Three Flatland Slug package](https://github.com/thejustinwalsh/three-flatland/tree/main/packages/slug)
+- [WebAssembly JavaScript interface](https://www.w3.org/TR/wasm-js-api-1/)
 
-## Research maintenance rules
+Type: W3C specifications
 
-- Attribute technical claims to primary sources when one exists.
-- Mark estimates as estimates and replace them with benchmark links when measured.
-- Record the review date when dependency status is updated.
-- Move accepted architectural choices into an ADR or planning document; keep this file as the evidence trail.
-- Preserve rejected ideas and why they were rejected so the same investigation is not repeated.
+Abstract: Defines Wasm's portable low-level execution model and the JavaScript APIs for modules, instances, memories, tables, and exported functions.
+
+Extracted:
+
+- Wasm is suitable for a portable Rust shaping/baking core.
+- Boundary design and memory ownership are product concerns; the specifications do not make fine-grained JS/Wasm calls free.
+- Persistent linear-memory buffers and batched calls should be measured against ordinary JavaScript implementations.
+
+### WebAssembly SIMD
+
+Source: [WebAssembly SIMD proposal](https://github.com/WebAssembly/simd)
+Type: specification proposal/history and tests
+
+Abstract: Defines portable 128-bit vector operations across integer and floating lane widths.
+
+Extracted:
+
+- Bulk scans, range operations, classification, adjustments, and prefix work are plausible SIMD targets.
+- General arbitrary indexed gather is not supplied by baseline 128-bit SIMD, limiting direct vectorization of cmap, class, and pair lookups.
+- SIMD value must be established per kernel and for whole shaping; it is not an architecture by itself.
+
+### Andy Wingo: just-in-time code generation within WebAssembly
+
+Source: [“just-in-time code generation within WebAssembly”](https://www.wingolog.org/archives/2022/08/18/just-in-time-code-generation-within-webassembly)
+Type: technical article by an engine implementer
+
+Abstract: Explores runtime code generation when Wasm code is not addressable writable memory, using generated modules, indirect function tables, and late linking/snapshotting concepts.
+
+Extracted:
+
+- A Wasm-hosted JIT does not simply write native instructions into executable memory.
+- Runtime specialization implies module generation/compilation/linking and asynchronous/cache complexity.
+- The technique is relevant prior art, but typical short shaping runs may not amortize browser-time JIT cost; this requires measurement.
+
+### HarfBuzz Wasm examples
+
+Source: [harfbuzz/harfbuzz-wasm-examples](https://github.com/harfbuzz/harfbuzz-wasm-examples)
+Type: upstream experimental examples
+
+Abstract: Examples related to HarfBuzz's experimental Wasm shaper/programmatic-font work.
+
+Extracted:
+
+- Wasm has been explored as an execution environment for font-provided shaping behavior.
+- This is adjacent to, but different from, compiling a shared shaper or font lookup data to Wasm.
+- Current API, security model, and upstream status must be reviewed before citing it as more than related research.
+
+## Containers and binary layout
+
+### glTF 2.0 specification
+
+Source: [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
+Type: Khronos specification
+
+Abstract: Defines JSON descriptors, binary buffers/buffer views/accessors, GLB packaging, alignment, images, and an extension mechanism optimized for runtime asset delivery.
+
+Extracted:
+
+- GLB is a viable transport for font data alongside GPU resources.
+- glTF's extension system permits project-specific root data and technique-specific payloads.
+- Alignment and accessor rules can enable direct typed-array views, but compact CPU shaping records do not necessarily need to be expressed as generic accessors.
+- glTF is not itself a streaming protocol; progressive presentation delivery requires explicit asset design.
+
+## Glyph rendering and presentation
+
+### Three Flatland Slug implementation
+
+Sources:
+
+- [Three Flatland Slug package](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug)
+- [Local file-level audit](docs/planning/SLUG_AUDIT.md)
+
+Type: project source code and derived audit
+Reviewed revision: `c596ac2313e33cace825fe197a6d730269019175`
+
+Abstract: Existing TypeScript/TSL implementation of baked quadratic glyph curves, band acceleration, GLB storage, runtime fallback, layout helpers, and Three.js rendering.
+
+Extracted:
+
+- Curve/band generation, texture packing, shader references, narrow GLB reading, and baked-first loading are valuable prior art.
+- The current text path is intentionally basic: UTF-16-unit cmap, disabled GSUB on the runtime path, explicit pair kerning, and shaping coupled with wrapping/alignment.
+- Flat GPU texture bytes are already available, but the loader reconstructs per-glyph maps and nested band objects.
+- The package supplies useful real-font equivalence tests and baseline Slug payload measurements.
+
+### Slug Library
+
+Source: [Slug Library](https://sluglibrary.com/)
+Type: original/commercial technique documentation and implementation reference
+
+Abstract: Eric Lengyel's resolution-independent GPU text-rendering technique based on evaluating glyph outline data rather than sampling a fixed-resolution atlas.
+
+Extracted:
+
+- Slug is a presentation/rasterization technique, not a Unicode shaping or paragraph-layout engine.
+- Its ability to remain sharp under scale and perspective makes it a useful high-quality presentation backend.
+- Licensing and the exact provenance of algorithms ported from Three Flatland require explicit review.
+
+### Vello and sparse strips
+
+Sources:
+
+- [Linebender May–July 2024 roadmap](https://linebender.org/blog/roadmap-may-2024/)
+- [Linebender March 2025 update](https://linebender.org/blog/tmil-15/)
+- [Vello repository](https://github.com/linebender/vello)
+
+Type: project roadmap/update and source repository
+
+Abstract: Vello is a GPU vector renderer. Sparse strips are a rendering/rasterization direction intended to improve path-rendering memory and performance; later updates describe glyph-rendering integration.
+
+Extracted:
+
+- Sparse strips are relevant presentation prior art, not an alternative to HarfBuzz shaping.
+- Renderer evolution reinforces the need to keep shaped glyph identity and positioning independent of a particular rasterization backend.
+- Current Vello/Glifo status should be rechecked before selecting any dependency.
+
+### Parley
+
+Source: [linebender/parley](https://github.com/linebender/parley)
+Type: source repository
+
+Abstract: Rust text layout library in the Linebender ecosystem, covering styled text and layout on top of font/shaping infrastructure.
+
+Extracted:
+
+- Important comparison for paragraph APIs, bidi, line breaking, fallback, and layout caching.
+- The project should audit Parley directly before implementing its own paragraph algorithms to avoid recreating solved work unnecessarily.
+
+### Swash
+
+Source: [dfrg/swash](https://github.com/dfrg/swash)
+Type: source repository
+
+Abstract: Rust font introspection, shaping support, scaling, and glyph rasterization library.
+
+Extracted:
+
+- Relevant comparison for bitmap generation, hinting/scaling, and Rust/Wasm feasibility.
+- Dependency choice should be based on deterministic native/Wasm output, binary size, license, and current maintenance rather than ecosystem familiarity.
+
+### msdfgen
+
+Sources:
+
+- [Chlumsky/msdfgen](https://github.com/Chlumsky/msdfgen)
+- [Viktor Chlumský's thesis](https://github.com/Chlumsky/msdfgen/files/3050967/thesis.pdf)
+- [msdf-atlas-gen](https://github.com/Chlumsky/msdf-atlas-gen)
+
+Type: original implementation, paper/thesis, and atlas tool
+
+Abstract: Generates SDF, PSDF, MSDF, and MTSDF representations of vector shapes. MSDF uses multiple color channels to retain sharp corners; MTSDF adds a true signed-distance value in alpha.
+
+Extracted:
+
+- MSDF/MTSDF presentation needs plane bounds, atlas bounds, page, and distance-range metadata distinct from shaping advances.
+- Distance channels must be sampled as linear data rather than sRGB color.
+- Atlas generation is useful prior art, but a Rust/Wasm implementation must be evaluated for licensing, determinism, size, quality, and performance.
+
+## Related deployment and ecosystem comparisons
+
+### harfbuzzjs
+
+Source: [harfbuzz/harfbuzzjs](https://github.com/harfbuzz/harfbuzzjs)
+Type: source repository
+
+Abstract: JavaScript/Wasm packaging of HarfBuzz for browser and server environments.
+
+Extracted:
+
+- Provides a practical baseline for browser HarfBuzz deployment, API shape, and artifact size.
+- Benchmark comparisons should include current harfbuzzjs rather than only theoretical “full HarfBuzz Wasm” estimates.
+
+### three-text
+
+Source: [countertype/three-text](https://github.com/countertype/three-text)
+Type: related project source repository
+
+Abstract: High-fidelity 3D font rendering and text layout for the web with Three.js and other adapters; currently advertises HarfBuzz Wasm integration.
+
+Extracted:
+
+- Directly relevant product and API comparison that was absent from the early discussion.
+- Must be evaluated before making novelty claims or committing to duplicate surface area.
+- Review should compare shaping ownership, font loading, paragraph behavior, presentation backends, worker use, and renderer coupling.
+
+## Research queue
+
+Open investigations, prototype questions, and deferred topics are maintained in [`OPEN_QUESTIONS.md`](docs/planning/OPEN_QUESTIONS.md). New sources should be added here only after they have been reviewed and annotated.

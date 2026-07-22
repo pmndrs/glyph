@@ -2,7 +2,7 @@
 
 Status: pre-implementation
 
-The planning set turns the findings in [`RESEARCH.md`](../../RESEARCH.md) into an actionable project without committing to production APIs or implementation details prematurely.
+The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.md) and the preserved [design synthesis](DESIGN_SYNTHESIS.md) into an actionable project without committing to production APIs or implementation details prematurely.
 
 - [Project brief](PROJECT_BRIEF.md): product outcome, users, scope, and success criteria.
 - [Architecture](ARCHITECTURE.md): proposed system boundaries and data contracts.
@@ -14,6 +14,7 @@ The planning set turns the findings in [`RESEARCH.md`](../../RESEARCH.md) into a
 - [Conformance plan](CONFORMANCE_PLAN.md): reference engines, comparison fields, corpus, and CI tiers.
 - [Benchmark plan](BENCHMARK_PLAN.md): reproducible performance, size, memory, and boundary-crossing measurements.
 - [Original discussion extraction](DISCUSSION_EXTRACTION.md): comprehensive record of explored designs, estimates, and reasoning before rescoping.
+- [Initial design synthesis](DESIGN_SYNTHESIS.md): preserved architecture/manifesto that previously occupied `RESEARCH.md`.
 - [Scope lanes](SCOPE_LANES.md): separates what to build now, what V1 must leave possible, and what remains future research.
 
 ## Document states

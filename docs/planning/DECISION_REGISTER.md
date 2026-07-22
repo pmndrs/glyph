@@ -3,7 +3,7 @@
 Status: proposed decisions awaiting maintainer review  
 Last updated: 2026-07-22
 
-This is the concise review surface for architectural choices. Detailed evidence lives in [`RESEARCH.md`](../../RESEARCH.md), and unresolved implementation questions live in [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md).
+This is the concise review surface for architectural choices. Source material lives in [`RESEARCH.md`](../../RESEARCH.md), the reasoning history lives in [`DESIGN_SYNTHESIS.md`](DESIGN_SYNTHESIS.md) and [`DISCUSSION_EXTRACTION.md`](DISCUSSION_EXTRACTION.md), and unresolved implementation questions live in [`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md).
 
 No item in this register is an accepted ADR yet. When a decision is accepted, create an ADR that records the exact choice, alternatives, consequences, and date, then link it here.
 

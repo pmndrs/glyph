@@ -187,4 +187,4 @@ Binary structs remain experimental until golden fixtures, forward-compatibility 
 
 ### Documentation
 
-Research findings stay in `RESEARCH.md`; accepted choices become ADRs; user-facing behavior belongs in package documentation once stable.
+Annotated source references stay in `RESEARCH.md`; design reasoning stays in planning documents; accepted choices become ADRs; user-facing behavior belongs in package documentation once stable.
