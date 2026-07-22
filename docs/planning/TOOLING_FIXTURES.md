@@ -1,0 +1,147 @@
+# Tooling and fixtures for the first pipeline
+
+Status: proposed  
+Goal: make one-font results reproducible before expanding implementation surface
+
+## Reference font
+
+Use one statically selected, redistributable OpenType font for the first complete path. Inter Regular is the leading candidate because existing Three Flatland work and fixtures already exercise it, but the exact release file, license text, download source, and SHA-256 hash must be pinned before bytes enter the repository.
+
+V0 uses the original glyph IDs and does not subset or remap the font.
+
+## Reference text
+
+The initial paragraph should exercise more than plain cmap lookup while staying inside one font:
+
+```text
+office AVATAR café — ffi, kerning, marks, and wrapping.
+```
+
+The fixture must use an explicitly documented Unicode sequence, including the decomposed combining mark in `café`, and record UTF-16 indices. Additional narrow fixtures cover:
+
+- supplementary-plane decode even if the font maps it to `.notdef`;
+- variation selector handling supported by the reference font;
+- line breaks, spaces, and explicit newline;
+- ligature and kerning feature toggles;
+- one unsafe-to-break example where available.
+
+Complex-script and fallback fonts are required by the broader conformance plan, but they do not block the first rendered paragraph.
+
+## Fixture layout
+
+```text
+fixtures/
+  fonts/
+    inter-regular/
+      SOURCE.md
+      LICENSE.txt
+      manifest.json
+      source.ttf
+      presentation/
+        bitmap-v0.json
+        bitmap-v0.bin
+        bitmap-v0.png
+  shaping/
+    inter-regular/
+      cases.json
+      harfbuzz.json
+      harfrust.json
+  assets/
+    inter-regular-bitmap-v0.glb
+  paragraph/
+    inter-regular/
+      cases.json
+      expected-wide.json
+      expected-narrow.json
+  visual/
+    inter-regular-bitmap/
+      webgpu.png
+      webgl2.png
+  corrupt/
+    bad-buffer-range.glb
+    bad-glyph-count.glb
+    bad-page-index.glb
+  benchmarks/
+    manifests/
+    results/
+```
+
+The exact directories are created with the first tooling issue. This document defines ownership before files are added.
+
+## Fixture manifest
+
+```json
+{
+  "id": "inter-regular-v0",
+  "source": {
+    "url": "<pinned release URL>",
+    "sha256": "<required>",
+    "license": "OFL-1.1"
+  },
+  "fontIndex": 0,
+  "variation": {},
+  "glyphIds": "source",
+  "presentations": ["bitmap-v0"],
+  "unicodeVersion": "<pinned>",
+  "harfbuzzVersion": "<pinned>",
+  "harfrustCommit": "<pinned>"
+}
+```
+
+No fixture may silently follow a latest release.
+
+## Required tooling
+
+### Oracle capture
+
+Runs pinned `hb-shape` and HarfRust over the same source bytes and cases. Stores glyph IDs, clusters, advances, offsets, flags, feature settings, segment properties, and engine versions.
+
+### Fixture packer
+
+Assembles provided OpenType bytes, pre-generated presentation records, and payloads into the experimental asset envelope. It validates and writes ranges; it does not subset, remap, compile GSUB/GPOS, generate an IR, or become a general font compiler.
+
+### Asset validator
+
+Checks version, ranges, alignment, record counts, glyph ID width, texture dimensions, page indices, required capabilities, and declared resource limits without constructing per-glyph objects.
+
+### Paragraph fixture runner
+
+Loads the font, shapes the paragraph, lays it out at fixed widths, and records line source ranges, run/font slots, glyph identities, clusters, and positions. It verifies that width-only reflow reuses broad shaping where allowed.
+
+### Visual runner
+
+Draws a fixed viewport/DPR/color/transform matrix on WebGPU and WebGL2. It stores reference images and diffs separately from shaping/layout expectations.
+
+### Benchmark runner
+
+Records:
+
+- Wasm raw/compressed size, compile, and instantiate time;
+- font registration time and retained Wasm memory;
+- cold shape and warm-plan shape time;
+- JS/Wasm call count and bytes written/read;
+- paragraph initial layout and width-only reflow;
+- first drawable frame, GPU upload, frame GPU time, and presentation memory.
+
+Raw samples and environment metadata follow the benchmark and autoresearch plans.
+
+## Multi-font contract fixtures without expanding scope
+
+Before adding a second real font, register the same source fixture twice with different `FontKey`/`FontHandle` values and assert:
+
+- shape-plan and paragraph cache keys cannot collide incorrectly;
+- layout font slots distinguish the registrations;
+- presentation resources are owned and disposed independently;
+- the same local glyph ID resolves through the correct font handle;
+- a paragraph with two explicit spans can split runs by font without automatic fallback.
+
+This hardens identities without making multi-font fallback part of the first delivery. A second licensed font and missing-glyph fallback matrix arrive in the next scope lane.
+
+## Golden-update policy
+
+- source/oracle changes require explicit version or hash changes;
+- fixture generation must be deterministic;
+- an implementation change cannot update its own expected results unless the semantic change is separately approved;
+- visual tolerances are established before performance experiments;
+- autoresearch experiments cannot replace references or weaken tolerances;
+- golden changes are reviewed independently from performance claims.

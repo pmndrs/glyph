@@ -3,6 +3,8 @@
 Status: proposed  
 Audience: pmndrs maintainers and initial contributors
 
+Current execution is a narrower one-font runtime slice: HarfRust Wasm shapes original OpenType bytes, the JS paragraph engine reflows one paragraph, and a pre-generated bitmap fixture proves the presentation boundary. Compiler/baker, subsetting/remapping, worker baking, compiled IR, SIMD, and additional presentation generators remain future lanes. See the [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).
+
 ## Product statement
 
 `pmndrs/text` will be a renderer-independent text system for JavaScript and WebGPU/WebGL ecosystems. It will shape modern Unicode text once, lay it out within application-controlled regions, and render the resulting glyph stream through interchangeable Slug, MSDF/MTSDF, or bitmap presentations.

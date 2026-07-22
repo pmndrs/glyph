@@ -5,32 +5,31 @@ Status: proposed; interfaces are illustrative and not public API commitments.
 ## System boundaries
 
 ```text
-                         build time or worker
-source font ───────────► portable Rust baker
-                              │
-                              ▼
-                     canonical FL_font GLB
-                  ┌───────────┼─────────────┐
-                  │           │             │
-              shaping       Slug        MTSDF/bitmap
-               data       GPU data        GPU data
-                  │           │             │
-                  ▼           └──────┬──────┘
-          HarfRust-based Wasm        │
-                  │                  │
-                  ▼                  │
-          shaped glyph buffers       │
-                  │                  │
-                  ▼                  │
-           JS paragraph engine       │
-                  │                  │
-                  ▼                  ▼
-             positioned glyphs → presentation renderer
+OpenType bytes + pre-generated presentation fixture
+                    │
+                    ▼
+             loader + font registry
+                │              │
+       font bytes│              │flat presentation ranges
+                ▼              │
+       HarfRust-based Wasm      │
+       runtime shaping          │
+                │              │
+                ▼              │
+       shaped typed buffers     │
+                │              │
+                ▼              │
+        JS paragraph engine     │
+                │              │
+                ▼              ▼
+          positioned glyphs → explicit presentation plugin → GPU
 ```
+
+This is the current one-font vertical slice. Compiler/baker, subsetting/remapping, worker baking, compiled lookup IR, and SIMD specialization are future lanes rather than dependencies of this path. See the editable [system design diagram](system-design.excalidraw).
 
 ## Ownership
 
-### Baker owns
+### Future baker owns (not in the current slice)
 
 - source-font parsing and validation;
 - variation instancing;
@@ -50,12 +49,12 @@ source font ───────────► portable Rust baker
 - GSUB/GPOS application;
 - glyph flags and unsafe-break data;
 - packed output buffers;
-- optimized lookup and SIMD kernels when proven equivalent.
+- font/shaper state and reusable plan caches.
 
 ### JS paragraph engine owns
 
 - source text and style spans;
-- font fallback policy;
+- explicit font spans now and future font-fallback policy;
 - region constraints;
 - break selection and layout strategy;
 - alignment, justification, clipping, max lines, and ellipsis;
@@ -65,7 +64,7 @@ source font ───────────► portable Rust baker
 ### Presentation adapters own
 
 - GPU resource creation;
-- presentation selection policy;
+- explicit presentation preparation and caller-selected technique;
 - glyph quad/instance generation;
 - renderer-specific draw submission.
 
@@ -73,7 +72,8 @@ source font ───────────► portable Rust baker
 
 - Input text indices and public clusters are UTF-16 offsets.
 - Unicode processing uses decoded scalar values.
-- Each baked font has one dense packed glyph-ID space.
+- Every glyph ID is local to one opaque font handle; identity is `(FontHandle, LocalGlyphId)`.
+- V0 uses source OpenType glyph IDs. A future baker may introduce dense packed IDs inside a font record without creating global glyph IDs.
 - Stored shared metrics use font design units.
 - Shaping output uses signed 32-bit design-unit positions.
 - Presentation plane bounds use a documented design-unit or fixed-point space.
@@ -137,18 +137,12 @@ The paragraph engine creates measured clusters from broad-run shapes, chooses li
 ## Font loading states
 
 ```text
-source bytes
-    │
-    ├── contains supported FL_font
-    │      └── validate sections → register shaper → upload presentations
-    │
-    └── supported source font
-           └── check persistent bake cache
-                  ├── hit → normal baked path
-                  └── miss → worker baker → cache → normal baked path
+font asset V0
+    ├── OpenType buffer view → register once in HarfRust Wasm
+    └── presentation ranges  → validate → lazy GPU preparation
 ```
 
-The application must not retain two font models. Runtime baking terminates at the same canonical format as offline baking.
+Applications support multiple fonts by registering multiple font assets. Runtime baker/cache convergence remains a future extension of this path.
 
 ## `FL_font` extension family
 
@@ -157,15 +151,15 @@ The application must not retain two font models. Runtime baking terminates at th
 `FL_font` contains:
 
 - format/version metadata;
-- glyph count and ID width;
+- one font face, glyph count, and ID width;
 - units per em and line metrics;
 - section directory;
-- cmap and variation sequences;
-- dense glyph metrics and properties;
-- shaping program/reference sections;
+- an OpenType font buffer view for runtime HarfRust shaping in V0;
 - supported scripts, languages, and features;
 - presentation directory and per-glyph availability;
-- compiler, HarfRust, HarfBuzz-reference, and Unicode versions.
+- HarfRust, HarfBuzz-reference, and Unicode versions.
+
+Future versions may add shaping-only or compiled sections. They are not part of the current implementation.
 
 ### Presentation extensions
 
@@ -193,10 +187,10 @@ Future presentation extensions may add color layers or images without changing s
 Initial reference path:
 
 ```text
-baked shaping-only OpenType data → HarfRust → shaped output
+registered OpenType bytes → HarfRust runtime shaping → shaped output
 ```
 
-Progressive optimized path:
+Future optimized path:
 
 ```text
 HarfRust Unicode/script/buffer state
@@ -239,7 +233,7 @@ Expected width-change flow:
 
 ### Persistent baked-font cache key
 
-Hash of:
+Deferred until worker baking exists. The eventual key is expected to hash:
 
 - source bytes;
 - compiler and format versions;
@@ -260,26 +254,24 @@ Hash of:
 
 ## Failure model
 
-- Reject malformed or unsupported source fonts in the baker with structured diagnostics.
+- Reject malformed or unsupported source fonts during registration with structured diagnostics.
 - Reject malformed offsets, unsupported versions, and required unknown capability bits during load.
-- Permit missing optional presentation records and select an available fallback.
-- Never silently fall back from incorrect compiled shaping to approximate shaping.
-- Surface runtime-bake cancellation, memory limit, atlas overflow, and unsupported table errors distinctly.
+- Permit missing optional presentation records but require callers to select an available plugin.
+- Never silently replace failed HarfRust shaping with approximate shaping.
+- Surface font-size, glyph-count, atlas, and retained-memory limit errors distinctly.
 
 ## Dependency direction
 
 ```text
-binary model
-   ↑          ↑
-baker      shaper
-   ↑          ↑
-CLI/worker  JS bridge
-       ↑      ↑
-        loader
-          ↑
- paragraph + presentations
-          ↑
- downstream renderers / Three Flatland
+asset/data model
+      ↑
+    loader ─────► font registry ─────► runtime shaper
+      │                                  │
+      ▼                                  ▼
+presentation plugins ◄──────────── paragraph engine
+      │
+      ▼
+downstream renderers / Three Flatland
 ```
 
-The paragraph engine depends on shaper contracts, never HarfRust internals. Presentations depend on packed glyph IDs and positioned output, never GSUB/GPOS.
+The paragraph engine depends on shaper contracts, never HarfRust internals. Presentations depend on font-scoped glyph IDs and positioned output, never GSUB/GPOS. A future compiler/baker may produce compatible assets without becoming a dependency of these runtime layers.

@@ -12,51 +12,56 @@ The original discussion describes an eventual text platform, not a credible firs
 
 “Reserve the lane” does not mean adding placeholder machinery. It means choosing identities, versioning, ownership boundaries, and optional-section behavior that do not require a breaking redesign later.
 
-## Proposed first build: shaping vertical slice
+## Proposed first build: one-font runtime vertical slice
 
-The smallest coherent first build should answer one question:
+The smallest coherent first build should answer one end-to-end question:
 
-> Can `pmndrs/text` take a statically instantiated font, bake renderer-independent font identity and reference shaping data into a GLB, and produce HarfRust-conformant shaped buffers in Wasm without coupling the output to a renderer?
+> Can `pmndrs/text` register one ordinary OpenType font in HarfRust Wasm, shape and reflow one paragraph, and render one pre-generated presentation without introducing identities or APIs that break when a second font is registered?
 
 ### Build now
 
-- one source OpenType font input path for research fixtures;
-- static font instance only;
-- one deliberately small Unicode/glyph subset plus correct shaping closure;
-- dense packed glyph IDs;
-- experimental `FL_font` identity, metrics, cmap, and reference-shaping sections;
-- narrow GLB validator/reader;
+- one pinned OpenType font and one pre-generated bitmap presentation fixture;
+- runtime source-font registration and cached HarfRust state;
+- source-local glyph IDs scoped by opaque font handles;
+- experimental asset envelope and narrow validator/reader;
 - HarfRust Wasm reference shaper;
 - one coarse batched request/output ABI;
 - UTF-16 cluster mapping and full scalar decoding;
 - glyph IDs, clusters, four positioning values, and flags;
-- native test baker only, sufficient to create fixtures;
 - HarfBuzz/HarfRust/GLB three-way conformance harness;
-- Wasm size, startup, boundary, and shaping baselines.
+- JavaScript paragraph model, broad shaping, measured clusters, and greedy fixed-width reflow;
+- font tables/slots in shaped and layout output even though the first paragraph uses one font;
+- one explicit bitmap presentation plugin and direct bulk GPU upload;
+- WebGPU/WebGL2 visual fixtures;
+- Wasm size, registration, shaping, layout, upload, memory, and GPU baselines.
 
 ### Do not build in the first vertical slice
 
+- font compiler or generalized baker;
+- subsetting, shaping closure, or glyph remapping;
 - compiled GSUB/GPOS IR;
 - SIMD-specific code;
 - worker runtime baker;
 - persistent runtime-bake cache;
-- JS paragraph engine;
 - Slug renderer port;
-- MTSDF or bitmap generation;
+- MTSDF or Slug generation;
+- automatic font fallback;
+- automatic presentation selection;
 - public React/Three bindings;
 - stable file-format or public API promises.
 
-This slice proves the hardest shared identity and correctness boundary before presentation work multiplies the surface area.
+Fixture tooling may assemble existing source/presentation bytes and capture oracles, but it is not a product compiler. This slice proves the full ownership and identity chain before additional fonts, presentation engines, and build-time tooling multiply the surface area.
 
 ## Lane A — Shaping
 
 ### Build now
 
 - HarfRust reference behavior.
-- Static font units and one packed glyph-ID space.
+- Runtime registration of original OpenType bytes.
+- Source-local glyph IDs scoped by font handle.
 - Batched Wasm input/output.
 - Exact conformance fixtures.
-- Reference shaping data inside the experimental container.
+- Cached font state and shape plans.
 
 ### Reserve the lane
 
@@ -87,8 +92,11 @@ This slice proves the hardest shared identity and correctness boundary before pr
 
 ### Build now
 
-- Only document the JS/Wasm boundary and required shaping fields.
-- Add conformance fixtures that paragraph layout will later require: clusters, unsafe flags, context ranges.
+- Implement the JS/Wasm boundary and required shaping fields.
+- One-font paragraph and explicit span model.
+- Measured clusters and greedy fixed-width wrapping for the reference fixture.
+- Width-only reflow cache and batched boundary-reshape seam.
+- Conformance fixtures for clusters, unsafe flags, context ranges, and line source ranges.
 
 ### Reserve the lane
 
@@ -103,9 +111,6 @@ This slice proves the hardest shared identity and correctness boundary before pr
 
 - UAX #14 and UAX #29 implementation choice.
 - Bidi ownership.
-- Measured clusters.
-- Greedy wrapping and width-only reflow.
-- Boundary reshape policy and cache keys.
 - Font fallback granularity.
 
 ### Later
@@ -127,8 +132,8 @@ This slice proves the hardest shared identity and correctness boundary before pr
 
 ### Build now
 
-- Experimental shared font extension only.
-- Versioned binary header/directory sufficient for shaping fixtures.
+- Experimental one-face font asset with original OpenType bytes and one bitmap presentation.
+- Versioned binary header/directory sufficient for shaping and direct presentation fixtures.
 - Strict range/alignment/capability validation.
 - Deterministic test output and golden bytes.
 
@@ -141,7 +146,7 @@ This slice proves the hardest shared identity and correctness boundary before pr
 - `u16`/future wider ID policy encoded at font level.
 - Extension versioning independent from GLB container version.
 
-### Build next
+### Build later
 
 - Shared native/Wasm compiler core.
 - Worker protocol and limits.
@@ -165,20 +170,20 @@ This slice proves the hardest shared identity and correctness boundary before pr
 
 ### Build now
 
-- No production presentation backend in the first shaping slice.
-- Define only the packed glyph-ID lookup and optional availability contract.
+- One pre-generated bitmap presentation fixture and renderer plugin.
+- Source-local glyph-ID lookup and optional availability contract.
+- Flat direct-upload records and WebGPU/WebGL2 proof.
+- One positioned paragraph rendered without shaping-specific renderer knowledge.
 
 ### Build next
 
-- One presentation end to end, likely Slug because prior art exists.
-- Flattened presentation records and direct upload proof.
-- One positioned run rendered without shaping-specific renderer knowledge.
+- MTSDF generator/renderer as the proposed general-purpose presentation.
+- Slug port/rewrite after its quality corpus and proven optimization baseline are ready.
 
 ### Build after first presentation
 
-- MTSDF generator and renderer.
-- Generated bitmap strikes.
-- Automatic/manual presentation-selection policy.
+- Additional bitmap strikes and hinting experiment.
+- Explicit recommendation helper; automatic switching remains optional policy.
 
 ### Reserve the lane
 
@@ -206,8 +211,9 @@ This slice proves the hardest shared identity and correctness boundary before pr
 
 ### Build now
 
-- Minimal native research baker for the shaping vertical slice.
-- Source validation, static instance, subset closure, dense remap, deterministic shared sections.
+- No product font compiler or baker.
+- Fixture-only assembly of pinned OpenType bytes and already-generated presentation records.
+- Oracle capture and deterministic asset validation.
 
 ### Reserve the lane
 
@@ -218,10 +224,7 @@ This slice proves the hardest shared identity and correctness boundary before pr
 
 ### Build next
 
-- Wasm worker host.
-- Transfer/cancellation/resource limits.
-- Slug generator port/rewrite.
-- Persistent cache.
+- Nothing in the current roadmap. Reconsider compiler/baker work after the runtime path is measured.
 
 ### Later
 
@@ -246,51 +249,51 @@ This slice proves the hardest shared identity and correctness boundary before pr
 - Select versions, licensed corpus, target browsers, and experimental names.
 - Confirm the first vertical-slice success criteria.
 
-### Slice 1 — Reference shaping proof
+### Slice 1 — Fixture and reference shaping proof
 
-- Dense ID/subset fixture baker.
-- Experimental shared font sections.
+- Pinned original font and pre-generated bitmap fixture.
+- Experimental asset envelope with original glyph IDs.
 - HarfRust Wasm batched ABI.
 - Three-way conformance and baseline benchmark.
 
-Outcome: decide whether the central architecture is viable.
+Outcome: runtime shaping is correct, cached, and coarse-grained.
 
-### Slice 2 — One presentation proof
+### Slice 2 — Font registry and paragraph proof
 
-- Port/rewrite Slug presentation only.
-- Flat direct-upload records.
-- Render shaped output through a standalone adapter.
+- Opaque font handles and multi-font-safe font slots.
+- JS measured clusters and greedy wrapping.
+- Width-only reflow and batched boundary-reshape seam.
 
-Outcome: prove shaping/presentation separation and reuse prior work.
+Outcome: one font lays out in a constrained region without identity debt.
 
-### Slice 3 — Paragraph proof
+### Slice 3 — One bitmap presentation proof
 
-- JS measured-cluster and greedy wrapping engine.
-- Width-only reflow.
-- Batched boundary reshaping.
+- Flat direct-upload bitmap records.
+- WebGPU/WebGL2 renderer plugin.
+- Visual and first-frame/GPU baselines.
 
-Outcome: prove constrained regions without excessive Wasm crossings.
+Outcome: one font completes the full source-to-pixel runtime pipeline.
 
-### Slice 4 — Runtime ingestion proof
+### Slice 4 — Identity and API hardening
 
-- Shared portable compiler core.
-- Worker fallback and persistent cache.
-- Same canonical bytes/load path.
+- Register the same fixture under two independent handles.
+- Prove cache, layout slot, resource, and disposal isolation.
+- Accept/revise the experimental API and data contracts.
 
-Outcome: prove the non-prebaked product experience.
+Outcome: adding the first real second font is additive rather than a redesign.
 
 ### Slice 5 — Second presentation proof
 
-- Choose MTSDF or bitmap based on product priority.
+- Add MTSDF based on its proposed general-purpose role.
 - Reuse identical shaped and paragraph output.
 
 Outcome: prove the container is genuinely multi-presentation rather than Slug with abstractions.
 
-### Slice 6 — Optimization decision
+### Slice 6 — Slug and optimization decision
 
-- Profile the completed reference system.
-- Select zero or more compiled lookup/SIMD experiments.
-- Proceed only on measured product benefit.
+- Port/rewrite Slug against the same output.
+- Reproduce previously proven quality-preserving Slug optimizations.
+- Activate autoresearch only after strict quality and A/B harnesses exist.
 
 ## Minimum extension points V1 must preserve
 
@@ -302,7 +305,7 @@ These are the small number of architectural lanes worth reserving immediately:
 4. Full shaped output fields including vertical components and flags.
 5. Source item range distinct from context range.
 6. Presentation-independent logical/ink metrics.
-7. Compiler and Unicode provenance.
+7. Source, fixture-generator, and Unicode provenance, with space for a future compiler version.
 8. Unknown optional/required capability behavior.
 
 Everything else should be earned by a real use case or benchmark rather than represented with speculative placeholder types.
@@ -311,12 +314,12 @@ Everything else should be earned by a real use case or benchmark rather than rep
 
 The next review should answer only these questions:
 
-1. Is the first vertical slice reference shaping only, with no production renderer?
-2. Is HarfRust accepted as the primary baseline?
-3. Is a minimal shaping-only GLB experiment accepted before the full presentation schema?
-4. Is Slug the first presentation after shaping proof?
-5. Does paragraph layout precede or follow the runtime worker baker?
-6. Is the second presentation MTSDF or bitmap?
+1. Is HarfRust accepted as the runtime shaping baseline?
+2. Is `(FontHandle, LocalGlyphId)` accepted as the V0 identity?
+3. Is one font face per asset and many assets per registry accepted?
+4. Is a pre-generated bitmap the first presentation proof?
+5. Are the provisional shaped/layout buffer fields and view lifetimes acceptable?
+6. Which pinned Inter revision, HarfRust commit, HarfBuzz version, and Unicode version define the fixture?
 7. Which lanes above are essential to reserve in the first binary/API contracts?
 
 Once answered, the broad phased plan and issue backlog should be rewritten around slices rather than treating every explored feature as V1 work.

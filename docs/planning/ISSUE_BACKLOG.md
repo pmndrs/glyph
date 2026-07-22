@@ -5,6 +5,91 @@ Sizing: S is roughly one focused PR, M may need two PRs, and L must be split bef
 
 This backlog is ordered by dependency. Issue titles are ready to copy into GitHub after maintainers approve the project brief.
 
+## Current execution queue — one-font runtime slice
+
+The issues below are the active roadmap. The broader epics remain research/future work unless a current issue explicitly depends on them.
+
+### V0.1. Review runtime API, identity, and data contracts — S
+
+Dependencies: none
+
+Acceptance criteria:
+
+- `(FontHandle, LocalGlyphId)` and layout font slots are accepted or revised;
+- one-face-per-asset and many-fonts-per-registry ownership is decided;
+- shaped/layout typed views, memory lifetimes, and explicit presentation selection are reviewed;
+- compiler, subsetting/remapping, worker baking, compiled IR, and SIMD remain outside V0.
+
+### V0.2. Pin the font fixture and capture shaping oracles — M
+
+Dependencies: V0.1
+
+Acceptance criteria:
+
+- one redistributable font revision, license, source URL, and SHA-256 are recorded;
+- HarfRust, HarfBuzz, and Unicode versions are pinned;
+- exact UTF-16 cases and field-for-field oracle results are checked in;
+- a pre-generated bitmap presentation preserves source glyph IDs and records generator provenance.
+
+### V0.3. Implement the coarse runtime HarfRust Wasm boundary — M
+
+Dependencies: V0.2
+
+Acceptance criteria:
+
+- font registration/disposal uses opaque handles and copies font bytes once;
+- parsed font state and shape plans are reused;
+- one batch call returns font-scoped glyph IDs, UTF-16 clusters, four positions, and flags as typed views;
+- output matches the pinned HarfRust fixture exactly;
+- cold/warm size, latency, memory, and boundary-call baselines are recorded.
+
+### V0.4. Implement the font registry and experimental asset loader — M
+
+Dependencies: V0.1, V0.3
+
+Acceptance criteria:
+
+- original OpenType bytes and flat presentation ranges load from the fixture envelope;
+- malformed ranges/counts/pages fail with structured diagnostics;
+- no per-glyph map/object graph is constructed;
+- two registrations of the same fixture remain isolated by handle, cache, resource, and disposal identity.
+
+### V0.5. Implement one-font JS paragraph layout — M
+
+Dependencies: V0.3, V0.4
+
+Acceptance criteria:
+
+- the reference paragraph shapes and wraps at wide and narrow fixed widths;
+- measured clusters and line source ranges have golden outputs;
+- ordinary width-only reflow reuses broad shaping;
+- layout includes a font table and font slots;
+- shaping metrics are independent of presentation bounds.
+
+### V0.6. Render the bitmap fixture on WebGPU and WebGL2 — M
+
+Dependencies: V0.4, V0.5
+
+Acceptance criteria:
+
+- explicit bitmap plugin prepares flat records and texture payloads;
+- instance generation consumes positioned `(fontSlot, glyphId)` output;
+- GPU upload performs no per-glyph reconstruction or numeric repacking;
+- fixed-region, clipping, and resize references pass on both backends;
+- first-frame, upload, GPU-time, and GPU-memory baselines are stored.
+
+### V0.7. Harden and review the completed vertical slice — M
+
+Dependencies: V0.2–V0.6
+
+Acceptance criteria:
+
+- stale handles, limits, corrupt inputs, disposal, and view invalidation are tested;
+- presentation package/import boundaries remain tree-shakable;
+- performance claims link to raw reproducible evidence;
+- accepted experimental contracts become ADRs;
+- the next real font or presentation can be added without changing runtime identity.
+
 ## Epic A — Decisions and reference corpus
 
 ### A1. Accept the V1 product and scope brief — S

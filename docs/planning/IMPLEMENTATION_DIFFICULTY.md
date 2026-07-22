@@ -104,11 +104,12 @@ Future optional vector-art/presentation research. It must not block V1 or be pre
 The recommended sequence is:
 
 1. define the shared presentation directory, glyph-ID contract, and direct-upload records;
-2. implement bitmap strikes to prove the simplest complete baker-to-GPU path;
-3. implement MTSDF and establish the proposed general-purpose path;
-4. port/rewrite Slug with the already proven quality-preserving optimizations in its baseline;
-5. run the autoresearch loop against Slug and shared GPU infrastructure;
-6. reconsider a Windfoil prototype only after the initial techniques have measured production baselines.
+2. consume one pinned pre-generated bitmap fixture to prove the simplest complete runtime-to-GPU path without building a compiler;
+3. establish runtime shaping, paragraph, loader, and renderer baselines;
+4. later implement MTSDF generation and establish the proposed general-purpose path;
+5. port/rewrite Slug with the already proven quality-preserving optimizations in its baseline;
+6. run the autoresearch loop against Slug and shared GPU infrastructure;
+7. reconsider a Windfoil prototype only after the initial techniques have measured production baselines.
 
 This ordering does not require the package to expose the techniques in the same sequence. It minimizes the amount of novel shader and preprocessing work required to validate the shared architecture.
 

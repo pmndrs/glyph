@@ -3,6 +3,8 @@
 Status: proposed  
 Rule: every phase ends with an evidence gate before the next optimization layer begins.
 
+Current execution is deliberately narrower than this long-range plan. Follow the [one-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md) first: runtime HarfRust shaping, one JS paragraph path, and one pre-generated bitmap presentation. Compiler/baker and optimized shaping phases remain future lanes until that slice establishes evidence.
+
 ## Phase 0 — Decisions and baselines
 
 Goal: remove architectural ambiguity before production code.

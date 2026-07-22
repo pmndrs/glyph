@@ -30,29 +30,29 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | D-010 | HarfRust is the primary behavioral baseline; HarfBuzz is the second oracle. | Proposed | HarfRust ports HarfBuzz shaping/Unicode logic and uses Fontations; known differences are documented upstream. | Versions are pinned and every optimized path is differentially tested. |
 | D-011 | One unified shaper serves every presentation and script supported by the baseline. | Proposed | Capabilities vary by font data; public “Latin/complex/HarfBuzz profiles” would fragment behavior. | One request/output model, with optional data sections and capability bits. |
 | D-012 | Clusters are UTF-16 source offsets; Unicode lookup operates on scalar values. | Proposed | JavaScript APIs use UTF-16 indices while full Unicode cmap requires scalar decoding. | Every fixture tests surrogate pairs and source mapping. |
-| D-013 | Shaping output is structure-of-arrays with packed glyph IDs, clusters, four positions, and flags. | Proposed | Matches the HarfBuzz output model and favors bulk Wasm access. | No object-per-glyph bridge or renderer metadata. |
-| D-014 | Compiled lookup data replaces HarfRust font access incrementally, never script logic wholesale in V1. | Experiment required | The hard script/buffer behavior should remain inherited; speed and size benefits of replacement are unmeasured. | Preserve a reference path until each operation family passes conformance and benchmarks. |
+| D-013 | Shaping output is structure-of-arrays with font-scoped glyph IDs, clusters, four positions, and flags. | Proposed | Matches the HarfBuzz output model and favors bulk Wasm access. | No object-per-glyph bridge or renderer metadata. |
+| D-014 | Compiled lookup data is deferred from V0; runtime HarfRust font access is the complete initial shaping path. | Deferred | The hard script/buffer behavior should remain inherited, and speed/size benefits of replacement are unmeasured. | First establish registration, plan caching, coarse calls, correctness, and performance baselines. |
 | D-015 | Browser-time JIT, per-font AOT Wasm, and MLIR are not V1 dependencies. | Deferred | Module-generation cost and benefit are unknown; a high-level interpreter/reference path must exist first. | Reconsider only after profiling identifies lookup dispatch as material. |
 
 ## Font identity and container
 
 | ID | Decision | Status | Rationale / evidence | Acceptance consequence |
 | --- | --- | --- | --- | --- |
-| D-020 | The baker creates one dense packed glyph-ID space shared by shaping and all presentations. | Proposed | Eliminates runtime remapping and allows direct presentation lookup. | Source IDs exist only during baking/diagnostics. |
+| D-020 | V0 glyph IDs are source-local and scoped by `FontHandle`; a future baker may introduce a dense per-font remap. | Proposed | Runtime HarfRust shaping can ship without a compiler while the `(font, glyph)` identity remains compatible with later packed assets. | No glyph ID is globally meaningful; presentations and caches include font identity. |
 | D-021 | GLB carries an extension family separating shared font data from presentation payloads. | Proposed | glTF supplies an extensible binary container and existing Slug work proves the delivery shape. | Stabilize internal schemas before considering Khronos registration. |
 | D-022 | `FL_font`, `FL_font_slug`, `FL_font_distance_field`, and `FL_font_bitmap` are provisional names. | Blocked | Prefix/name ownership has not been reviewed by pmndrs or Khronos. | Do not publish a stable extension under these names yet. |
 | D-023 | CPU shaping data uses extension-owned flat binary sections; GPU data uses final upload formats. | Proposed | Generic accessors are useful for GPU interop but needlessly constrain compact CPU records. | A small JSON directory points to versioned binary sections. |
-| D-024 | `u16` is the preferred common glyph ID, with overflow behavior decided before format freeze. | Experiment required | Most subsets fit; large/unsubsetted fonts may not. | Corpus audit decides reject-versus-dual-width policy. |
+| D-024 | V0 shaped buffers declare `u16` or `u32` glyph-ID width per registered font. | Proposed | V0 does not subset fonts, so a hard `u16` assumption would make identity depend on future compiler work. | Buffer headers and presentation validators reject width mismatches explicitly. |
 
 ## Baking and loading
 
 | ID | Decision | Status | Rationale / evidence | Acceptance consequence |
 | --- | --- | --- | --- | --- |
-| D-030 | Offline and worker fallback use the same portable Rust compiler core. | Proposed | Prevents format drift and ensures one canonical downstream loader model. | Native/Wasm output parity is tested per canonical section. |
-| D-031 | Pre-baked GLB is the normal path; baker Wasm is lazy-loaded only when source font data is supplied. | Proposed | Keeps the common runtime smaller while supporting arbitrary font URLs. | Shaper and baker ship as separable artifacts/imports. |
-| D-032 | Runtime baking happens in a worker and returns transferable canonical bytes. | Proposed | Parsing, subsetting, outline conversion, and atlas generation must not block the main thread. | Worker protocol includes cancellation, limits, progress, and structured errors. |
-| D-033 | Runtime-baked results are persistently cached by content and complete bake configuration. | Proposed | Prevents repeated compilation while naturally invalidating format/generator changes. | Define quota/failure behavior and deterministic cache keys. |
-| D-034 | Bitmap strikes are generated from the source font by the shared baker. | Proposed | Keeps shaping identity and presentation generation in one pipeline. | Authored external bitmap fonts are a separate future ingestion mode. |
+| D-030 | A shared portable compiler core remains a future option, not a V0 dependency. | Deferred | The one-font runtime slice can validate shaping, layout, identity, and rendering without compiler architecture. | No compiler API, subsetting, remapping, or native/Wasm parity work enters the current roadmap. |
+| D-031 | V0 registers original OpenType bytes in HarfRust and pairs them with pre-generated presentation fixtures. | Proposed | Provides correct runtime shaping and a complete renderer path with minimal machinery. | Font registration caches parsed state/plans; fixture assembly does not interpret GSUB/GPOS. |
+| D-032 | Runtime worker baking is deferred until the measured runtime path establishes a need. | Deferred | Worker protocol and canonical output would expand the first slice without improving its central proof. | No worker, cancellation, or bake progress API in V0. |
+| D-033 | Persistent baked-result caching is deferred with runtime baking. | Deferred | There is no generated runtime artifact to cache in V0. | Only normal runtime font/shape/layout/GPU caches are designed now. |
+| D-034 | Product bitmap generation is deferred; V0 consumes a pinned pre-generated bitmap fixture. | Deferred | This proves presentation contracts without introducing a generalized font generator. | Fixture provenance/generator version is recorded; runtime layout still uses OpenType metrics. |
 
 ## Paragraph layout
 
@@ -85,8 +85,8 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 
 Maintainer review should address these first:
 
-1. Accept or revise D-001, D-002, D-010, D-011, D-020, D-030, D-040, and D-050.
+1. Accept or revise D-001, D-002, D-010, D-011, D-020, D-024, D-031, D-040, and D-050.
 2. Resolve version pins under D-010.
 3. Decide the experiment name/prefix policy under D-022.
-4. Choose an initial `u16` policy for D-024, even if it is “reject overflow during experiments.”
-5. Choose the licensed reference corpus and target browser matrix.
+4. Choose the pinned one-font fixture and target browser matrix.
+5. Review the [runtime API](API_SHAPES.md), [V0 data design](DATA_DESIGN_V0.md), and [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).

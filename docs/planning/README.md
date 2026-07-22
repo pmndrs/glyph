@@ -6,6 +6,11 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 
 - [Project brief](PROJECT_BRIEF.md): product outcome, users, scope, and success criteria.
 - [Architecture](ARCHITECTURE.md): proposed system boundaries and data contracts.
+- [System design diagram](system-design.excalidraw): editable Excalidraw view of the current runtime vertical slice and deferred lanes.
+- [Runtime API shapes](API_SHAPES.md): provisional multi-font-safe registration, shaping, paragraph, layout, and presentation contracts.
+- [Runtime data design V0](DATA_DESIGN_V0.md): source-local glyph identity, typed buffers, asset envelope, and presentation records for the first slice.
+- [One-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md): current execution sequence and evidence gates.
+- [Tooling and fixtures](TOOLING_FIXTURES.md): pinned font, oracle, golden asset, layout, visual, corrupt-input, and benchmark artifacts.
 - [Phased plan](PHASED_PLAN.md): sequencing, gates, and deliverables.
 - [Issue backlog](ISSUE_BACKLOG.md): issue-sized work packages with dependencies and acceptance criteria.
 - [Open questions](OPEN_QUESTIONS.md): decisions that need prototypes, measurements, or maintainer input.
