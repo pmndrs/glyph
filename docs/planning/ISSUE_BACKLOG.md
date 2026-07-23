@@ -374,6 +374,20 @@ Acceptance criteria:
 - each backend reports supported effects and numeric limits such as MSDF distance range;
 - unsupported effects return an explicit capability result instead of silently changing technique or quality.
 
+### D9. Prototype exact Slug band packing and optional curve compression — M
+
+Dependencies: D2, D5, A6
+
+Acceptance criteria:
+
+- baseline, exact-band, and compressed-curve variants use identical source glyphs and produce the report defined in [GPU compression](GPU_COMPRESSION.md);
+- u32 headers and u16 glyph-local references reproduce every addressed curve sequence bit-for-bit, with explicit overflow behavior;
+- RGBA16F remains the reference/fallback curve format;
+- UASTC/BC7/ASTC curve variants record selected device formats and pass the established visual/geometric gates at UI through extreme magnification scales;
+- WebGPU and WebGL2 capability/fallback behavior is demonstrated;
+- transport bytes, dynamic transcoder bytes, transcode/upload time, resident GPU memory, shader cost, and frame time are reported separately;
+- no KTX2/transcoder module appears in an application graph that does not require it.
+
 ## Epic E — Advanced compiler and baker extensions
 
 The V0 queue already establishes the shared core, Node/Worker hosts, canonical writer, and one bitmap generator. This epic adds optimization and scale features after that foundation is measured.

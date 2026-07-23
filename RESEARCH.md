@@ -323,6 +323,30 @@ Extracted:
 
 ## Glyph rendering and presentation
 
+### KTX2, Basis Universal, and GPU-native texture compression
+
+Sources:
+
+- [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html)
+- [Khronos KTX overview](https://www.khronos.org/ktx/)
+- [Khronos Basis Universal/KTX2 Vulkan sample](https://github.khronos.org/Vulkan-Site/samples/latest/samples/performance/texture_compression_basisu/README.html)
+- [WebGPU specification](https://gpuweb.github.io/gpuweb/)
+- [Three.js KTX2Loader](https://threejs.org/docs/pages/KTX2Loader.html)
+- [WebGL compressed-texture extension registry](https://registry.khronos.org/webgl/extensions/)
+
+Type: Khronos/WebGPU specifications, official implementation guidance, and Three.js loader documentation
+
+Abstract: KTX2 can contain native GPU texture blocks or Basis Universal transmission data. Basis ETC1S/UASTC payloads are transcoded at runtime into a GPU-supported BC, ETC2, ASTC, or uncompressed target; KTX2 lossless supercompression instead reduces delivery size but must be inflated before sampling.
+
+Extracted:
+
+- Download compression and GPU-resident compression are separate measurements.
+- WebGPU guarantees either BC or both ETC2 and ASTC support, enabling capability-selected native targets; WebGL2 still depends on extensions and fallback policy.
+- Basis Universal is portable but requires a transcoder; its module, transcode time, selected target, and resulting GPU bytes belong in the payload report.
+- Standard GPU block formats are lossy and are inappropriate for exact Slug band addresses/counts.
+- High-quality UASTC-derived curve or distance-field textures are plausible experiments, but geometry/edge errors require output-based quality gates and an uncompressed fallback.
+- The concrete Slug strategy and Lucide sizing model are recorded in [GPU compression and compact Slug storage](docs/planning/GPU_COMPRESSION.md).
+
 ### Three Flatland Slug implementation
 
 Sources:

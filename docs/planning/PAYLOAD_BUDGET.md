@@ -28,6 +28,8 @@ The payloads for bitmap, MSDF/MTSDF, and Slug are alternatives unless an asset d
 
 “Texture bytes” below means the uncompressed GPU-resident storage implied by dimensions and texel format. It is not a network-size estimate. Network bytes depend on the final PNG/KTX2/container choice and must be measured without applying lossy compression that changes rendering quality.
 
+The [GPU compression design note](GPU_COMPRESSION.md) separates lossless delivery compression, GPU-native block compression, and exact Slug band packing. Its Lucide experiment models a quality-preserving band redesign at roughly 2.04 MiB total Slug storage, or approximately 1.16 MiB when combined with a still-unproven compressed-curve path.
+
 ## Representative fixtures
 
 Measured source revisions:

@@ -85,6 +85,7 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | ID | Decision | Status | Rationale / evidence | Acceptance consequence |
 | --- | --- | --- | --- | --- |
 | D-060 | Agent-discovered optimizations require reproducible end-to-end A/B evidence and zero quality/conformance loss. | Proposed | Prior Slug work found both meaningful wins and attractive changes that were neutral or visually approximate. | The autoresearch agent may make local evidence commits but never push, merge, publish, weaken fixtures, or accept a quality tradeoff. |
+| D-061 | Slug band compression must be exact; curve block compression remains an optional quality-gated experiment with RGBA16F fallback. | Proposed | Band texels are addresses/counts and cannot tolerate BC/ETC/ASTC loss. Glyph-local u16 references model a substantial exact saving, while normalized UASTC/BC7/ASTC curves could save more but may perturb geometry. See [GPU compression](GPU_COMPRESSION.md). | Specify u32 headers/u16 local references and overflow behavior; benchmark compressed curves across every visual scale/target before acceptance; dynamically load transcode support only when required. |
 
 ## Decisions needed to start Phase 1
 

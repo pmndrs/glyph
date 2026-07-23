@@ -152,6 +152,8 @@ Compare current Three Flatland Slug loading with the new path for equivalent Slu
 - presentation bytes by glyph count;
 - curve/band generation time;
 - atlas/texture occupancy and padding;
+- current R32F bands versus exact u32-header/u16-local-reference packing;
+- RGBA16F curves versus each quality-gated UASTC/native compressed target, including dynamic transcoder bytes and selected device format;
 - curves per glyph and curves per band distribution;
 - glyphs per draw and GPU frame time;
 - extreme scale/perspective quality and cost.

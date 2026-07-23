@@ -23,6 +23,7 @@ Start here:
 - [Conformance plan](docs/planning/CONFORMANCE_PLAN.md)
 - [Benchmark plan](docs/planning/BENCHMARK_PLAN.md)
 - [Font payload budget](docs/planning/PAYLOAD_BUDGET.md)
+- [GPU compression and compact Slug storage](docs/planning/GPU_COMPRESSION.md)
 - [Rendering implementation difficulty](docs/planning/IMPLEMENTATION_DIFFICULTY.md)
 - [Renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md)
 - [Autoresearch optimization protocol](docs/planning/AUTORESEARCH.md)
