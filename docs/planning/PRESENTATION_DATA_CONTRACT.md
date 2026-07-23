@@ -1,3 +1,11 @@
+---
+type: Data Contract
+title: Presentation data contract V0
+description: Defines packaging-neutral bitmap, MSDF/MTSDF, and Slug presentation records and GPU resources.
+status: contract-candidate
+tags: [data, bitmap, mtsdf, slug, gpu]
+---
+
 # Presentation data contract V0
 
 Status: contract candidate

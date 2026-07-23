@@ -1,58 +1,145 @@
 # pmndrs/text
 
-Planning repository for a renderer-independent text system for pmndrs.
+`pmndrs/text` is a planned renderer-independent text system for JavaScript, WebGPU, and WebGL. It will shape Unicode text once, reflow it inside constrained regions, and render the same positioned glyphs through explicitly selected bitmap, MTSDF, or Slug presentations.
 
-The project is currently in research and design. No runtime API or file format is stable, and no production implementation has started.
+This repository is currently a reviewed design fixture: the APIs and binary contracts below describe what will be implemented, but no production package has shipped yet.
 
-Start here:
+## Planned API at a glance
 
-- [Research](RESEARCH.md)
-- [Planning index](docs/planning/README.md)
-- [Project brief](docs/planning/PROJECT_BRIEF.md)
-- [Architecture](docs/planning/ARCHITECTURE.md)
-- [System design diagram](docs/planning/system-design.excalidraw)
-- [Runtime API shapes](docs/planning/API_SHAPES.md)
-- [Runtime data design V0](docs/planning/DATA_DESIGN_V0.md)
-- [Shaping data contract V0](docs/planning/SHAPING_DATA_CONTRACT.md)
-- [Presentation data contract V0](docs/planning/PRESENTATION_DATA_CONTRACT.md)
-- [glTF vendor-prefix request and extension draft](docs/planning/GLTF_EXTENSION_REGISTRATION.md)
-- [One-font vertical-slice roadmap](docs/planning/VERTICAL_SLICE_ROADMAP.md)
-- [Tooling and fixtures](docs/planning/TOOLING_FIXTURES.md)
-- [Phased plan](docs/planning/PHASED_PLAN.md)
-- [Issue backlog](docs/planning/ISSUE_BACKLOG.md)
-- [Open questions](docs/planning/OPEN_QUESTIONS.md)
-- [Decision register](docs/planning/DECISION_REGISTER.md)
-- [Three Flatland Slug audit](docs/planning/SLUG_AUDIT.md)
-- [Conformance plan](docs/planning/CONFORMANCE_PLAN.md)
-- [Benchmark plan](docs/planning/BENCHMARK_PLAN.md)
-- [Font payload budget](docs/planning/PAYLOAD_BUDGET.md)
-- [GPU compression and compact Slug storage](docs/planning/GPU_COMPRESSION.md)
-- [Rendering implementation difficulty](docs/planning/IMPLEMENTATION_DIFFICULTY.md)
-- [Renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md)
-- [Autoresearch optimization protocol](docs/planning/AUTORESEARCH.md)
-- [Original discussion extraction](docs/planning/DISCUSSION_EXTRACTION.md)
-- [Scope lanes](docs/planning/SCOPE_LANES.md)
+The normal path loads a pre-baked core font and only the presentation requested by the application:
 
-The existing [`three-flatland/packages/slug`](https://github.com/thejustinwalsh/three-flatland/tree/main/packages/slug) work is prior art and a source for selected algorithms and data formats. This repository is intended to become the shipping product; Three Flatland should eventually consume it.
+```ts
+import { createFontLoader, createParagraphEngine } from '@pmndrs/text'
+import { bitmap } from '@pmndrs/text/presentation/bitmap'
 
-## Which renderer should I use?
+const fonts = createFontLoader()
+const paragraphs = createParagraphEngine()
 
-The current recommendation is to choose a presentation technique explicitly while sharing the same shaping and paragraph-layout result. These are research-informed starting points, not final performance guarantees; the project benchmark suite must validate them across representative fonts, sizes, transforms, and devices.
+const font = await fonts.load(
+  {
+    source: new URL('./Inter-Regular.ttf', import.meta.url),
+    baked: new URL('./Inter-Regular.font.glb', import.meta.url),
+  },
+  {
+    presentations: [{ id: 'ui-16', kind: 'bitmap', required: true }],
+  },
+)
 
-| Usage | Recommended technique | Why |
+const paragraph = paragraphs.create({
+  text: 'Fast, accurate text that reflows.',
+  font: font.handle,
+})
+
+const layout = paragraph.layout({
+  width: 420,
+  maxLines: 3,
+  wrap: 'word',
+  overflow: 'ellipsis',
+})
+
+const registered = await fonts.loadPresentation(font, { id: 'ui-16' })
+const resource = await bitmap.decode(font, registered)
+const drawBatch = bitmap.buildBatches(layout, resource)
+```
+
+Changing width reflows the paragraph. Ordinary width-only reflow reuses shaped clusters; boundary-sensitive lines are reshaped together in at most one batched Wasm call.
+
+```ts
+const narrow = paragraph.layout({ width: 260, wrap: 'word' })
+```
+
+Changing presentation does not reshape or remeasure the text:
+
+```ts
+import { slug } from '@pmndrs/text/presentation/slug'
+
+const slugPresentation = await fonts.loadPresentation(font, { kind: 'slug' })
+const slugResource = await slug.decode(font, slugPresentation)
+const slugBatch = slug.buildBatches(layout, slugResource)
+```
+
+Applications that ship ordinary font files still use the same loader. If the baked asset is missing, the loader warns once in development, dynamically imports the runtime baker library, performs the bake in a Worker, and registers the resulting canonical bytes through the same path. There is intentionally no option to force or bypass fallback baking.
+
+Pre-baking uses the Node host over the same portable bake core:
+
+```ts
+import { bakeFont } from '@pmndrs/text/bake'
+
+await bakeFont({
+  input: new URL('./Inter-Regular.ttf', import.meta.url),
+  output: new URL('./Inter-Regular.font.glb', import.meta.url),
+  descriptor: {
+    fontFaceIndex: 0,
+    presentations: [
+      {
+        id: 'ui-16',
+        kind: 'bitmap',
+        ppemX: 16,
+        ppemY: 16,
+        oversample: 2,
+        padding: 1,
+        hinting: 'none',
+        coverage: 'grayscale',
+        packaging: 'embedded',
+      },
+    ],
+  },
+})
+```
+
+See the [planned API walkthrough](docs/tutorials/API_PREVIEW.md) for lifecycle, split presentation loading, and renderer switching. The exact interfaces live in the [V0 API reference](docs/planning/API_SHAPES.md).
+
+## What gets built first
+
+The first internal vertical slice takes one pinned font through both delivery paths and one generated bitmap presentation. It proves the product end to end; it is not a shippable release:
+
+1. freeze the API, identity, GLB, and Worker boundaries;
+2. pin the font and capture HarfBuzz/HarfRust, bitmap, layout, and payload oracles;
+3. build the portable bake core and Node host;
+4. build the baked-first loader and lazy Worker fallback;
+5. add coarse-grained HarfRust Wasm shaping;
+6. add JavaScript paragraph reflow;
+7. upload and render the bitmap presentation on WebGPU and WebGL2;
+8. harden identity, cancellation, malformed input, package separation, and benchmarks for the proof.
+
+The first shippable release requires all three presentation engines: generated bitmap, MTSDF, and Slug. MTSDF and Slug begin only after the bitmap proof establishes correct interfaces, but they are release blockers—not optional post-release ideas. Color emoji, SVG icon-font artwork, multi-font fallback, compiled shaping data, and SIMD retain separate roadmap lanes. The [canonical roadmap](docs/roadmap/ROADMAP.md) names every deliverable, dependency, effort estimate, and exit gate.
+
+## System artifacts
+
+| Artifact | Role | First appears |
 | --- | --- | --- |
-| General-purpose UI and scalable text | MTSDF | Near-atlas rendering cost across a useful scale range, with good corner reproduction and effects support. |
-| Tiny text at known pixel sizes | Generated bitmap strike | Fastest path and potentially the best small-size legibility, particularly when hinting is available. |
-| World-space text with substantial minification | MTSDF | Texture sampling, mipmaps, and bounded per-pixel work suit text moving away from the camera. |
-| Large text, extreme zoom, or complex outlines | Slug | Preserves source-outline detail without a fixed atlas-resolution ceiling. |
-| Color emoji and SVG icon fonts | Slug feature set | Bake COLR, OpenType-SVG, or manifest-backed SVG icon artwork into Slug-compatible geometry/paint records; retain embedded color bitmaps as GPU-ready image presentations. |
-| Deeply zoomable, overlap-heavy general vector art | Windfoil, outside this text roadmap | Its credible niche is vector editors, generative art, and print-scale rendering—not ordinary text or XR UI. |
-| Pixel-art or deliberately raster-styled fonts | Bitmap | Preserves an exact authored raster appearance. |
+| Core font GLB with `PMNDRS_font` | Shaping face, shared metrics, provenance, presentation directory | portable baker |
+| Optional presentation GLB | Bitmap, MTSDF, or Slug GPU resources bound to the core identity | bitmap proof; all three by V1 |
+| Shared bake core library | Host-independent source-font transformation | portable baker |
+| `@pmndrs/text/bake` | Node API and thin CLI | portable baker |
+| Dynamically loaded runtime baker library | Worker host using the same bake core | loader fallback |
+| HarfRust shaper Wasm | Runtime shaping with coarse batch calls | shaping milestone |
+| JavaScript paragraph engine | Constraints, line breaking, reflow, and layout caching | paragraph milestone |
+| Presentation modules | Optional decode/upload/batch construction per technique | bitmap proof; all three by V1 |
 
-MTSDF is the proposed general-purpose default when an application has no stronger requirement. Bitmap strikes and Slug are deliberate alternatives, not transparent fallbacks. The Slug feature set is required to support color emoji and SVG icon fonts after the first vertical slice. Windfoil is a general-vector research reference, not a planned `pmndrs/text` backend.
+The [artifact map](docs/roadmap/ARTIFACTS.md) defines their ownership and required fixtures.
 
-The public API should preserve explicit caller choice. Convenience policy may recommend a technique from projected size and usage, but it should not silently switch renderers or force every rendering engine into an application's bundle. Presentation engines should remain separately importable, tree-shakable, and suitable for dynamic loading.
+## Renderer guidance
 
-See [Research: glyph rendering and presentation](RESEARCH.md#glyph-rendering-and-presentation) for the source material and limitations behind this guidance, and the [benchmark plan](docs/planning/BENCHMARK_PLAN.md) for how the recommendations will be tested.
+Applications select presentations explicitly; the package does not silently switch techniques.
 
-The [renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md) compares game-facing color, outlining, shadows, effects, color emoji, SVG icons, scale behavior, and technique limits across bitmap, MSDF/MTSDF, and Slug presentations.
+| Need | Planned recommendation |
+| --- | --- |
+| General-purpose UI and scalable text | MTSDF after its implementation and benchmarks |
+| Tiny text at known pixel sizes | Generated bitmap strikes |
+| Large text, extreme zoom, complex outlines, color vector layers | Slug |
+| Pixel-art or intentionally raster typography | Bitmap |
+
+Bitmap is implemented first because it is the smallest end-to-end proof, not because it is the eventual general-purpose default. Windfoil remains outside the text roadmap. See the [renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md).
+
+## Documentation map
+
+- [Documentation index](docs/index.md) — canonical navigation for people and agents.
+- [Canonical roadmap](docs/roadmap/ROADMAP.md) — exact implementation order and gates.
+- [Artifact map](docs/roadmap/ARTIFACTS.md) — what each phase must produce.
+- [Project brief](docs/planning/PROJECT_BRIEF.md) — product outcome and scope.
+- [Architecture](docs/planning/ARCHITECTURE.md) — system boundaries and invariants.
+- [Research bibliography](RESEARCH.md) — cited papers, articles, libraries, and extracted findings.
+- [Documentation audit](docs/DOCUMENTATION_AUDIT.md) — contradictions found and disposition of every prior planning document.
+
+The existing [Three Flatland Slug package](https://github.com/thejustinwalsh/three-flatland/tree/main/packages/slug) is prior art. `pmndrs/text` is intended to become the shipping package, with Three Flatland eventually consuming it.

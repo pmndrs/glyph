@@ -1,3 +1,11 @@
+---
+type: glTF Extension Specification
+title: PMNDRS_font
+description: Defines the core font, shaping payload, metrics, provenance, and presentation directory extension.
+status: draft-v0
+tags: [gltf, extension, font, shaping]
+---
+
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
 
 # PMNDRS_font

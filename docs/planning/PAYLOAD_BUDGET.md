@@ -1,3 +1,11 @@
+---
+type: Budget Model
+title: Font payload budget
+description: Separates shaping bytes, presentation records, transport bytes, decoded textures, and GPU residency.
+status: measured-and-modeled
+tags: [payload, memory, fonts]
+---
+
 # Font payload budget
 
 Status: measured baseline plus modeled presentation estimates  
@@ -47,7 +55,7 @@ Measurements read the checked-in TTF/GLB bytes and their accessor ranges directl
 | Font Awesome Solid | icon font | 1,403 source glyphs; 350 in legacy Slug bake | Existing source font and a smaller PUA presentation artifact with trivial shaping but substantial outline complexity. |
 | Lucide | standalone SVG icons | 1,594 baked shapes | Actual `feat/uikit-fork` SVG-to-Slug artifact and a realistic full-library stress case. |
 
-The first shipping fixture remains one pinned Inter file. Font Awesome and Lucide are payload/tooling fixtures; they do not expand the first vertical slice into automatic icon discovery or a second shaping system.
+The first integration fixture remains one pinned Inter file. Font Awesome and Lucide are payload/tooling fixtures; they do not expand the first vertical slice into automatic icon discovery or a second shaping system.
 
 ## Shared glyph and shaping data
 

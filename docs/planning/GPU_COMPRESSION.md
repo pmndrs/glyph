@@ -1,3 +1,11 @@
+---
+type: Technical Explanation
+title: GPU compression and compact Slug storage
+description: Distinguishes transport, decoded, and GPU compression and records quality constraints for font presentations.
+status: mixed-adopted-and-experimental
+tags: [gpu, compression, slug, mtsdf, bitmap]
+---
+
 # GPU compression and compact Slug storage
 
 Status: exact band packing adopted by the V0 presentation contract; lossy curve and atlas compression remain experiments

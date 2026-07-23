@@ -1,3 +1,11 @@
+---
+type: Optimization Protocol
+title: Autoresearch optimization protocol
+description: Governs evidence-based optimization experiments that cannot trade away rendering quality or text correctness.
+status: deferred-until-baseline
+tags: [optimization, benchmarks, quality]
+---
+
 # Autoresearch optimization protocol
 
 Status: proposed  

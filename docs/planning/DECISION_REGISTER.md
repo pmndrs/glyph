@@ -1,3 +1,11 @@
+---
+type: Decision Register
+title: Decision register
+description: Tracks proposed architectural choices and the decisions required before implementation begins.
+status: proposed
+tags: [decisions, governance]
+---
+
 # Decision register
 
 Status: proposed decisions awaiting maintainer review  
@@ -52,7 +60,7 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | D-031 | The loader is baked-first and automatically imports the runtime baker library on baked-asset miss; that library executes the bake core in a Worker. | Proposed | Preserves the successful Three Flatland product shape while keeping expensive fallback work off the main thread. | Offline and fallback bytes enter the same validator/registration path. |
 | D-032 | V0 exposes no `forceRuntime`, `skipBaked`, or equivalent option. | Proposed | Pre-baking is the intended delivery path; a policy toggle adds bundle/cache states without a product need. | A miss warns once in development and falls back automatically. |
 | D-033 | Persistent baked-result caching is deferred; in-memory in-flight/result deduplication is required. | Deferred | Persistence adds quota, eviction, and invalidation policy beyond the first proof. | Cache keys already include source/descriptor/format/baker identity so persistence remains additive. |
-| D-034 | The shared V0 baker generates one grayscale bitmap strike. | Proposed | The first complete pipeline must prove actual source-to-presentation generation in both hosts. | Product generation is real but narrow; MTSDF, Slug, subsetting, remapping, and compiled layout remain later. |
+| D-034 | The shared V0 baker generates one grayscale bitmap strike for the first integration proof. | Proposed | Bitmap is the easiest way to prove actual source-to-presentation generation in both hosts. | The proof is not shippable by itself; MTSDF and Slug remain mandatory release milestones. Subsetting, remapping, and compiled layout remain separate later work. |
 | D-035 | Presentation generators are optional imports, and the runtime fallback loads only the selected generator. | Proposed | Users must control rendering technique and unused engines must remain tree-shakable. | The main loader graph contains interfaces, not concrete generator implementations. |
 | D-036 | Planning and APIs distinguish baked font assets from dynamically loaded baker libraries. | Proposed | `PMNDRS_font` bytes are data assets, while Node/runtime baker surfaces are libraries/modules with hosts and a shared core. Conflating them obscures packaging and bundle ownership. | Use “baked asset,” “bake core,” “Node baker library,” and “runtime baker library” consistently; retire the old adjacent-file terminology. |
 
@@ -69,7 +77,7 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 
 | ID | Decision | Status | Rationale / evidence | Acceptance consequence |
 | --- | --- | --- | --- | --- |
-| D-050 | V1 presentation targets are Slug, MTSDF, and generated grayscale bitmap strikes. | Proposed | Covers resolution-independent vector, scalable atlas, and pixel-size-specific rendering. | One fixture must switch techniques without reshaping. |
+| D-050 | The first shippable release includes Slug, MTSDF, and generated grayscale bitmap strikes. | Proposed | Covers resolution-independent vector, scalable atlas, and pixel-size-specific rendering. Bitmap alone is only the integration proof. | Release is blocked until all three generators and runtime modules pass their quality, payload, and performance gates; one fixture must switch techniques without reshaping. |
 | D-051 | Shared advances and kerning never appear in presentation payloads. | Proposed | Plane/atlas bounds control drawing, not logical text flow. | Generator metrics are validation inputs only. |
 | D-052 | “Direct to GPU” means no per-glyph reconstruction or numeric repacking, not zero upload/decode work. | Proposed | Browsers still create resources and may decode compressed images. | Documentation and benchmarks name unavoidable bulk operations honestly. |
 | D-053 | MTSDF channels are linear data and technique-specific padding stays in presentation plane bounds. | Proposed | Required by msdfgen's rendering model. | Do not infer logical bounds or advances from atlas rectangles. |
@@ -96,4 +104,4 @@ Maintainer review should address these first:
 2. Resolve version pins under D-010.
 3. Confirm the provisional `PMNDRS` prefix policy under D-022 and assign its Khronos registration request.
 4. Choose the pinned one-font fixture and target browser matrix.
-5. Review the [runtime API](API_SHAPES.md), [V0 data design](DATA_DESIGN_V0.md), and [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).
+5. Review the [runtime API](API_SHAPES.md), [V0 data design](DATA_DESIGN_V0.md), and [canonical roadmap](/roadmap/ROADMAP.md).

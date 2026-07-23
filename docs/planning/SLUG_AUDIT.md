@@ -1,3 +1,11 @@
+---
+type: Research Audit
+title: Three Flatland Slug audit
+description: Identifies reusable prior art, required rewrites, and migration order from the Three Flatland Slug package.
+status: research-snapshot
+tags: [slug, migration, prior-art]
+---
+
 # Three Flatland Slug audit
 
 Status: research snapshot  

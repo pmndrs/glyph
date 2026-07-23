@@ -1,3 +1,11 @@
+---
+type: Test Plan
+title: Shaping and layout conformance plan
+description: Defines HarfBuzz, HarfRust, baked-runtime, paragraph, fuzzing, and visual correctness gates.
+status: proposed
+tags: [conformance, shaping, layout, testing]
+---
+
 # Shaping and layout conformance plan
 
 Status: proposed  

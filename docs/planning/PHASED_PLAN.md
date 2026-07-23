@@ -1,9 +1,19 @@
+---
+type: Superseded Plan
+title: Phased implementation plan
+description: Preserves the earlier long-range phase model superseded by the canonical implementation roadmap.
+status: superseded
+tags: [history, roadmap]
+---
+
 # Phased implementation plan
+
+> Superseded on 2026-07-23 by the [canonical implementation roadmap](/roadmap/ROADMAP.md). Preserve this document for planning history only.
 
 Status: proposed  
 Rule: every phase ends with an evidence gate before the next optimization layer begins.
 
-Current execution is deliberately narrower than this long-range plan. Follow the [one-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md) first: a minimal shared baker with Node and lazy Worker hosts, runtime HarfRust shaping, one JS paragraph path, and one generated bitmap presentation. Optimizing compiler and shaping phases remain future lanes until that slice establishes evidence.
+Current execution is defined only by the [canonical implementation roadmap](/roadmap/ROADMAP.md): first prove the system with one generated bitmap presentation, then complete MTSDF and Slug before V1. This historical plan must not be used to schedule work.
 
 ## Phase 0 — Decisions and baselines
 

@@ -1,3 +1,11 @@
+---
+type: Data Contract
+title: Runtime data design V0
+description: Summarizes canonical font identity, presentation binding, shaped output, paragraph boundaries, and allocation rules.
+status: contract-candidate
+tags: [data, glb, shaping, presentation]
+---
+
 # Runtime data design V0
 
 Status: contract candidate

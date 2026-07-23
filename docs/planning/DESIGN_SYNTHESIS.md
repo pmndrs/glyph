@@ -1,3 +1,11 @@
+---
+type: Historical Record
+title: Text shaping and rendering design synthesis
+description: Preserves the initial architecture synthesis, hypotheses, and alternatives that led to the current contracts.
+status: historical
+tags: [history, design, shaping, rendering]
+---
+
 # Text shaping and rendering design synthesis
 
 Status: historical planning synthesis; not an accepted specification

@@ -1,3 +1,11 @@
+---
+type: glTF Extension Specification
+title: PMNDRS_font_slug
+description: Defines Slug glyph, curve, band-header, curve-reference, and GPU page resources bound to a PMNDRS font.
+status: draft-v0
+tags: [gltf, extension, font, slug]
+---
+
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
 
 # PMNDRS_font_slug

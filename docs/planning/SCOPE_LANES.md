@@ -1,4 +1,14 @@
+---
+type: Superseded Plan
+title: Scope lanes
+description: Preserves the rescoping worksheet that preceded the canonical implementation roadmap.
+status: superseded
+tags: [history, scope, roadmap]
+---
+
 # Scope lanes
+
+> Superseded on 2026-07-23 by the [canonical implementation roadmap](/roadmap/ROADMAP.md). Preserve this worksheet as the rationale for what was moved out of the first slice.
 
 Status: rescoping worksheet  
 Purpose: decide what to build now without hard-coding away later capabilities

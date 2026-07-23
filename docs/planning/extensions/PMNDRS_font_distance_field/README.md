@@ -1,3 +1,11 @@
+---
+type: glTF Extension Specification
+title: PMNDRS_font_distance_field
+description: Defines MSDF and MTSDF glyph records and linear texture resources bound to a PMNDRS font.
+status: draft-v0
+tags: [gltf, extension, font, msdf, mtsdf]
+---
+
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
 
 # PMNDRS_font_distance_field

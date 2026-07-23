@@ -5,7 +5,7 @@ Last reviewed: 2026-07-22
 
 This document is the source reference for the project. It records articles, specifications, papers, codebases, and tools examined during research, with a brief abstract and the useful observations extracted from each.
 
-It does not define product scope or architecture. Those live under [`docs/planning`](docs/planning/README.md). The historical discussion is preserved in [`DISCUSSION_EXTRACTION.md`](docs/planning/DISCUSSION_EXTRACTION.md), and the initial design synthesis is preserved in [`DESIGN_SYNTHESIS.md`](docs/planning/DESIGN_SYNTHESIS.md).
+It does not define product scope or architecture. Start at the [`docs` knowledge bundle](docs/index.md). The historical discussion is preserved in [`DISCUSSION_EXTRACTION.md`](docs/planning/DISCUSSION_EXTRACTION.md), and the initial design synthesis is preserved in [`DESIGN_SYNTHESIS.md`](docs/planning/DESIGN_SYNTHESIS.md).
 
 ## How to maintain this file
 

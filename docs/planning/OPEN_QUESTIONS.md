@@ -1,3 +1,11 @@
+---
+type: Question Register
+title: Open questions
+description: Tracks unresolved decisions, blockers, and prototype questions for the contracts and roadmap.
+status: active
+tags: [questions, governance, blockers]
+---
+
 # Open questions
 
 Status: unresolved unless marked otherwise.

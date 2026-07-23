@@ -1,3 +1,11 @@
+---
+type: Architecture Reference
+title: Proposed architecture
+description: Defines system ownership, import boundaries, font identity, loading, shaping, paragraph, and presentation invariants.
+status: proposed
+tags: [architecture, loader, baker, shaping, paragraph, presentation]
+---
+
 # Proposed architecture
 
 Status: proposed; interfaces are illustrative and not public API commitments.
@@ -66,7 +74,7 @@ The runtime baker is a shared library/module, not an auxiliary process or adjace
 - selected presentation generation;
 - deterministic section packing and diagnostics.
 
-V0 emits the closed shaping-only static SFNT profile and generates one bitmap strike. Later units may add subsetting, closure, dense remapping, compiled lookups, Slug, MTSDF, and the required color-emoji/SVG-icon extensions to Slug and bitmap presentations.
+V0 emits the closed shaping-only static SFNT profile and generates one bitmap strike for the integration proof. The following release milestones add MTSDF and Slug before V1 can ship. Subsetting, closure, dense remapping, compiled lookups, and color-emoji/SVG-icon extensions remain separate later work.
 
 ### Node host owns
 

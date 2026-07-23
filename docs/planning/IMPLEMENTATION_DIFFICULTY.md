@@ -1,3 +1,11 @@
+---
+type: Planning Estimate
+title: Rendering implementation difficulty
+description: Compares the relative effort to make bitmap, MTSDF, and Slug presentations correct and performant.
+status: proposed-estimate
+tags: [planning, rendering, effort]
+---
+
 # Rendering implementation difficulty
 
 Status: proposed planning estimate  

@@ -1,3 +1,11 @@
+---
+type: Test Plan
+title: Tooling and fixtures for the first pipeline
+description: Defines the pinned font, text corpus, fixture manifest, oracle tooling, golden updates, and multi-font contract fixtures.
+status: proposed
+tags: [tooling, fixtures, testing]
+---
+
 # Tooling and fixtures for the first pipeline
 
 Status: proposed  

@@ -1,3 +1,11 @@
+---
+type: Test Plan
+title: Benchmark plan
+description: Defines reproducible performance, memory, payload, loader, baker, paragraph, and presentation measurements.
+status: proposed
+tags: [benchmarks, performance, payload]
+---
+
 # Benchmark plan
 
 Status: proposed  

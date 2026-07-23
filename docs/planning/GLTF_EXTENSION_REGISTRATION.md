@@ -1,3 +1,11 @@
+---
+type: Submission Draft
+title: glTF vendor-prefix request and extension submission set
+description: Contains the proposed PMNDRS vendor-prefix request and extension submission checklist.
+status: maintainer-review-required
+tags: [gltf, extension, governance]
+---
+
 # glTF vendor-prefix request and extension submission set
 
 Status: ready for Poimandres maintainer review; do not submit or push without approval

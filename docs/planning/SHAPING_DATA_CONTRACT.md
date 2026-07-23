@@ -1,3 +1,11 @@
+---
+type: Data Contract
+title: Shaping data contract V0
+description: Defines the complete reduced SFNT shaping payload, font-function data, batch ABI, byte accounting, and validation.
+status: contract-candidate
+tags: [data, shaping, harfrust, wasm, sfnt]
+---
+
 # Shaping data contract V0
 
 Status: contract candidate; implementation and fixture work may correct it only through an explicit format revision

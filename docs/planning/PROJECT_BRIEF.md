@@ -1,9 +1,21 @@
+---
+type: Project Brief
+title: Project brief
+description: Defines the product outcome, users, current one-font slice, later product horizon, non-goals, and success criteria.
+status: proposed
+tags: [product, scope, roadmap]
+---
+
 # Project brief
 
 Status: proposed  
 Audience: pmndrs maintainers and initial contributors
 
-Current execution is a narrower one-font slice with a required minimal baker: one shared core runs behind a Node host and a dynamically imported loader Worker, both emit the same canonical `PMNDRS_font` asset, HarfRust Wasm shapes its retained font data, the JS paragraph engine reflows one paragraph, and one generated bitmap presentation proves the rendering boundary. Advanced compiler work—subsetting/remapping, compiled IR, SIMD, and additional generators—remains in later lanes. See the [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).
+Current execution is a one-font slice with a required minimal baker: one shared core runs behind a Node host and a dynamically imported loader Worker, both emit the same canonical `PMNDRS_font` asset, HarfRust Wasm shapes its retained font data, the JS paragraph engine reflows one paragraph, and one generated bitmap presentation proves the rendering boundary. Advanced compiler work—subsetting/remapping, compiled IR, SIMD, and additional generators—remains later. The [canonical roadmap](/roadmap/ROADMAP.md) is authoritative for order and scope.
+
+The bitmap slice is an internal end-to-end proof, not the minimum shippable product. The first release requires bitmap, MTSDF, and Slug presentation engines to pass their format, quality, and performance gates.
+
+Terminology in the planning set is strict: the **integration slice** is the pre-release bitmap proof; **V1** is the first shippable release containing all three presentation engines.
 
 ## Product statement
 
@@ -33,7 +45,7 @@ We need:
 - applications with UI text, 3D labels, icons, bitmap styles, or mixed presentation needs;
 - library authors who need shaping/layout without adopting one renderer.
 
-## V1 user outcomes
+## Product-horizon user outcomes
 
 1. Load a pre-baked font package and shape Unicode text without source-font parsing on the main thread.
 2. Load an ordinary supported font and receive the same canonical representation after worker baking.
@@ -42,22 +54,32 @@ We need:
 5. Verify shaping output against pinned HarfRust and HarfBuzz references.
 6. Upload presentation buffers without per-glyph JavaScript reconstruction or numeric repacking.
 
-## V1 scope
+## Current one-font slice
+
+- one statically selected, pinned OpenType font;
+- horizontal LTR and RTL shaping supported by the pinned HarfRust baseline;
+- source-local `u16` glyph IDs scoped by opaque font handles;
+- pre-baked GLB and automatic lazy Worker fallback;
+- one generated grayscale bitmap strike;
+- JavaScript greedy paragraph reflow for the fixture scope;
+- WebGPU and WebGL2 first-frame proof;
+- conformance, package-graph, and benchmark evidence.
+
+## Product horizon after the slice
 
 - horizontal LTR and RTL shaping;
 - full Unicode scalar input with UTF-16 cluster offsets;
 - OpenType shaping supported by the pinned HarfRust baseline;
 - static variable-font instances;
-- one dense packed glyph-ID space;
-- source subsetting plus shaping closure;
+- optional dense packed glyph-ID remapping after source subsetting and shaping closure are proven;
 - pre-baked GLB and lazy worker fallback;
 - Slug, MSDF/MTSDF, and generated bitmap presentations;
-- post-slice Slug support for color emoji and SVG icon fonts through baked vector paint/layer and image records;
+- post-V1 Slug support for color emoji and SVG icon fonts through baked vector paint/layer and image records;
 - JS paragraph engine with greedy wrapping, alignment, height/max-lines, clipping, and ellipsis;
 - batched boundary reshaping;
 - conformance fixtures and benchmark harnesses.
 
-## Explicit non-goals for V1
+## Explicit non-goals for the current slice
 
 - replacing HarfRust script shaping;
 - browser-time JIT or MLIR;
@@ -81,7 +103,7 @@ We need:
 ### Architecture
 
 - Shaped output contains no presentation-specific fields.
-- A single packed glyph ID indexes every included presentation.
+- One font-local glyph ID indexes every included presentation for that font.
 - Offline and worker baking produce equivalent canonical sections.
 - Paragraph layout makes at most one batched shaping call for a text/style change and zero or one for width-only reflow.
 

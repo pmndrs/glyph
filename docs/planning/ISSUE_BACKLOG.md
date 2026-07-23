@@ -1,13 +1,23 @@
+---
+type: Issue Catalog
+title: Issue-sized backlog
+description: Provides issue-sized work candidates whose execution priority is controlled by the canonical roadmap.
+status: proposed-catalog
+tags: [issues, roadmap, planning]
+---
+
 # Issue-sized backlog
+
+> Execution order is defined only by the [canonical roadmap](/roadmap/ROADMAP.md). This catalog supplies issue-sized decomposition and future work; its older queue headings are not a competing roadmap.
 
 Status: proposed  
 Sizing: S is roughly one focused PR, M may need two PRs, and L must be split before implementation.
 
 This backlog is ordered by dependency. Issue titles are ready to copy into GitHub after maintainers approve the project brief.
 
-## Current execution queue — one-font baked/fallback slice
+## Historical decomposition of the one-font integration slice
 
-The issues below are the active roadmap. The broader epics remain research/future work unless a current issue explicitly depends on them.
+The issues below remain useful implementation-sized candidates for milestones 0–7, but the [canonical roadmap](/roadmap/ROADMAP.md) controls their execution order. The broader epics remain later work unless that roadmap activates them.
 
 ### V0.1. Review bake, loader, runtime API, identity, and data contracts — S
 

@@ -1,3 +1,11 @@
+---
+type: Reference
+title: Renderer capability matrix
+description: Compares planned game-text features and limitations across bitmap, MSDF/MTSDF, and Slug presentations.
+status: proposed-product-matrix
+tags: [rendering, bitmap, mtsdf, slug, games]
+---
+
 # Renderer capability matrix
 
 Status: proposed product support matrix  

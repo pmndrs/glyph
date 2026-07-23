@@ -1,3 +1,11 @@
+---
+type: Historical Record
+title: Original discussion extraction
+description: Preserves the complete design conversation, including superseded alternatives and unmeasured estimates.
+status: historical
+tags: [history, discussion, provenance]
+---
+
 # Original discussion extraction
 
 Status: historical design record, not an accepted specification  

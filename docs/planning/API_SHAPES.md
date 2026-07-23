@@ -1,3 +1,11 @@
+---
+type: API Reference
+title: Runtime and bake API fixture V0
+description: Defines the canonical proposed package, loader, baker, shaper, paragraph, presentation, and cache interfaces.
+status: contract-candidate
+tags: [api, loader, baker, shaping, paragraph, presentation]
+---
+
 # Runtime and bake API fixture V0
 
 Status: contract candidate; names may be polished, ownership and data flow may not remain implicit
@@ -86,6 +94,8 @@ interface FontLoader {
     bytes: ArrayBufferView,
   ): Promise<RegisteredPresentation>
 }
+
+declare function createFontLoader(): FontLoader
 ```
 
 Resolution order for a selected presentation is fixed:
@@ -335,6 +345,12 @@ interface ParagraphInput {
   style?: ParagraphStyle
 }
 
+interface ParagraphEngine {
+  create(input: ParagraphInput): Paragraph
+}
+
+declare function createParagraphEngine(): ParagraphEngine
+
 interface ParagraphConstraints {
   width: number
   height?: number
@@ -367,6 +383,16 @@ interface PresentationModule<Resource, DrawBatch> {
   dispose(resource: Resource): void
 }
 ```
+
+Each presentation subpath exports a module singleton named for the technique:
+
+```ts
+export const bitmap: PresentationModule<BitmapResource, BitmapDrawBatch>
+export const mtsdf: PresentationModule<DistanceFieldResource, DistanceFieldDrawBatch>
+export const slug: PresentationModule<SlugResource, SlugDrawBatch>
+```
+
+The resource and draw-batch types are owned by their optional presentation packages. The shared package depends only on `PresentationModule` and never imports these concrete engines.
 
 `decode` validates and uploads flat records and texture variants. It may dynamically import a KTX2 transcoder when the chosen variant requires one. It cannot alter shaping metrics, glyph identity, line breaks, or layout positions.
 
