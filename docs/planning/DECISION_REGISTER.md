@@ -40,7 +40,7 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | --- | --- | --- | --- | --- |
 | D-020 | V0 glyph IDs are source-local and scoped by `FontHandle`; a future baker may introduce a dense per-font remap. | Proposed | Runtime HarfRust shaping can ship without a compiler while the `(font, glyph)` identity remains compatible with later packed assets. | No glyph ID is globally meaningful; presentations and caches include font identity. |
 | D-021 | GLB carries an extension family separating shared font data from presentation payloads. | Proposed | glTF supplies an extensible binary container and existing Slug work proves the delivery shape. | Stabilize internal schemas before considering Khronos registration. |
-| D-022 | `FL_font`, `FL_font_slug`, `FL_font_distance_field`, and `FL_font_bitmap` are provisional names. | Blocked | Prefix/name ownership has not been reviewed by pmndrs or Khronos. | Do not publish a stable extension under these names yet. |
+| D-022 | Use the provisional vendor extension family `PMNDRS_font`, `PMNDRS_font_slug`, `PMNDRS_font_distance_field`, and `PMNDRS_font_bitmap`. | Proposed | `pmndrs/text` is the shipping owner; `FL_` incorrectly preserved Three Flatland identity, while `EXT_` would prematurely claim a multi-vendor extension. glTF naming requires an uppercase registered vendor prefix. | Use neutral internal Rust/TypeScript names, request the `PMNDRS` prefix before stable publication, and isolate serialization constants so a registry-driven rename remains mechanical. |
 | D-023 | CPU shaping data uses extension-owned flat binary sections; GPU data uses final upload formats. | Proposed | Generic accessors are useful for GPU interop but needlessly constrain compact CPU records. | A small JSON directory points to versioned binary sections. |
 | D-024 | V0 shaped buffers declare `u16` or `u32` glyph-ID width per registered font. | Proposed | V0 does not subset fonts, so a hard `u16` assumption would make identity depend on future compiler work. | Buffer headers and presentation validators reject width mismatches explicitly. |
 
@@ -88,6 +88,6 @@ Maintainer review should address these first:
 
 1. Accept or revise D-001, D-002, D-010, D-011, D-020, D-024, D-030–D-035, D-040, and D-050.
 2. Resolve version pins under D-010.
-3. Decide the experiment name/prefix policy under D-022.
+3. Confirm the provisional `PMNDRS` prefix policy under D-022 and assign its Khronos registration request.
 4. Choose the pinned one-font fixture and target browser matrix.
 5. Review the [runtime API](API_SHAPES.md), [V0 data design](DATA_DESIGN_V0.md), and [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).

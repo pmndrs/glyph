@@ -14,7 +14,7 @@ source font
     ↓
 portable baker (offline or worker fallback)
     ↓
-FL_font data in GLB
+PMNDRS_font data in GLB
     ├── shared shaping and metrics
     ├── Slug presentation
     ├── MSDF/MTSDF presentation
@@ -29,7 +29,7 @@ GPU renderer selected independently per glyph/run
 
 The central invariant is:
 
-> `FL_font` describes which glyphs result from text and where those glyphs go. Presentation payloads describe how each glyph is drawn.
+> `PMNDRS_font` describes which glyphs result from text and where those glyphs go. Presentation payloads describe how each glyph is drawn.
 
 This makes Slug one presentation backend rather than the package identity. The work in [`three-flatland/packages/slug`](https://github.com/thejustinwalsh/three-flatland/tree/main/packages/slug) is prior art to port, revise, and eventually replace. `pmndrs/text` is the intended shipping package and Three Flatland becomes a consumer.
 
@@ -91,7 +91,7 @@ There is no generic “modern shaping” assertion strong enough for tests. The 
 
 > For valid, supported, statically instantiated OpenType fonts, produce the same glyph IDs, clusters, advances, offsets, flags, and output length as a pinned HarfRust release for the same text, direction, script, language, features, variation location, buffer flags, and cluster level.
 
-HarfBuzz should remain the second oracle. Its [`hb-shape`](https://harfbuzz.github.io/utilities.html) tool reports glyph IDs, clusters, displacements, and advances and is suitable for fixture generation. Test metadata must record the HarfRust, HarfBuzz, Unicode, compiler, and `FL_font` versions.
+HarfBuzz should remain the second oracle. Its [`hb-shape`](https://harfbuzz.github.io/utilities.html) tool reports glyph IDs, clusters, displacements, and advances and is suitable for fixture generation. Test metadata must record the HarfRust, HarfBuzz, Unicode, compiler, and `PMNDRS_font` versions.
 
 ## 3. Bake font-specific work; retain shared shaping logic
 
@@ -204,17 +204,17 @@ flags        u16[]
 
 One JS/Wasm call should shape a run or paragraph batch. There must never be a boundary crossing per glyph. Width-only paragraph reflow should normally make zero Wasm calls; boundary-sensitive line reshaping should batch all changed ranges into one call.
 
-## 6. `FL_font`: one shaping payload, multiple presentations
+## 6. `PMNDRS_font`: one shaping payload, multiple presentations
 
 glTF is explicitly extensible and separates JSON descriptors from binary buffers. The [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) also emphasizes runtime efficiency and aligned binary data. A custom extension is therefore a reasonable transport for immutable font sections and GPU resources.
 
 Proposed extension split:
 
 ```text
-FL_font                  shared shaping, metrics, glyph identity
-FL_font_slug             Slug curve/band presentation
-FL_font_distance_field   SDF/MSDF/MTSDF atlases and records
-FL_font_bitmap           generated bitmap strikes and records
+PMNDRS_font                  shared shaping, metrics, glyph identity
+PMNDRS_font_slug             Slug curve/band presentation
+PMNDRS_font_distance_field   SDF/MSDF/MTSDF atlases and records
+PMNDRS_font_bitmap           generated bitmap strikes and records
 ```
 
 The names are provisional until the extension specification is reviewed.
@@ -319,7 +319,7 @@ source font → worker + baker Wasm → canonical baked bytes
             → register and upload through the same loader
 ```
 
-There should not be a permanent second unbaked runtime model. After worker baking, all consumers see the same `FL_font` representation.
+There should not be a permanent second unbaked runtime model. After worker baking, all consumers see the same `PMNDRS_font` representation.
 
 The likely module split is:
 
@@ -443,7 +443,7 @@ Representative initial fonts should include a compact Latin UI font, Arabic, Dev
 - HarfRust is the behavioral baseline.
 - One dense packed glyph-ID space.
 - Shared shaping/metrics separated from presentation payloads.
-- GLB with an `FL_font` family of extensions.
+- GLB with an `PMNDRS_font` family of extensions.
 - Native and worker-Wasm baker use the same compiler core.
 - JS owns paragraph policy; Wasm owns shaping.
 - Coarse Wasm calls with persistent flat buffers.

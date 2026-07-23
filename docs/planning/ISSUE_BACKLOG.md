@@ -39,7 +39,7 @@ Dependencies: V0.2
 Acceptance criteria:
 
 - a host-independent request retains shaping bytes and generates one grayscale bitmap strike;
-- canonical `FL_font` bytes contain provenance and flat GPU-ready records;
+- canonical `PMNDRS_font` bytes contain provenance and flat GPU-ready records;
 - Node JS API and thin CLI call the same core;
 - the core contains no filesystem/CLI logic and does not subset, remap, or compile layout;
 - deterministic output, bake time, peak memory, and size baselines are recorded.
@@ -215,7 +215,7 @@ Acceptance criteria:
 
 ## Epic C — Binary model and GLB
 
-### C1. Specify `FL_font` header and section directory — M
+### C1. Specify `PMNDRS_font` header and section directory — M
 
 Dependencies: A1, B1
 
@@ -247,7 +247,7 @@ Acceptance criteria:
 - stored and working coordinate widths are distinguished;
 - no presentation duplicates shaping metrics.
 
-### C4. Define experimental `FL_font` glTF JSON schema — M
+### C4. Define experimental `PMNDRS_font` glTF JSON schema — M
 
 Dependencies: C1, C2, C3
 

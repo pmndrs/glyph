@@ -8,7 +8,7 @@ Scope: one-font vertical slice with required offline baking and automatic worker
 The first implementation must:
 
 - use one portable bake core from both a Node host and a browser Worker host;
-- make a pre-baked `FL_font` sidecar the normal loader path;
+- make a pre-baked `PMNDRS_font` sidecar the normal loader path;
 - dynamically import the Worker host and presentation generator only after a sidecar miss;
 - warn once in development when runtime baking was required;
 - feed offline and fallback output through the same canonical asset loader;

@@ -281,7 +281,11 @@ Extracted:
 
 ### glTF 2.0 specification
 
-Source: [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
+Sources:
+
+- [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html)
+- [Khronos glTF extension registry and naming guidance](https://github.com/KhronosGroup/glTF/blob/master/extensions/README.md)
+
 Type: Khronos specification
 
 Abstract: Defines JSON descriptors, binary buffers/buffer views/accessors, GLB packaging, alignment, images, and an extension mechanism optimized for runtime asset delivery.
@@ -290,6 +294,7 @@ Extracted:
 
 - GLB is a viable transport for font data alongside GPU resources.
 - glTF's extension system permits project-specific root data and technique-specific payloads.
+- New extension names use an uppercase registered prefix followed by lowercase snake case. `KHR` is reserved for Khronos, `EXT` for multi-vendor work, and project-owned extensions should request a vendor prefix; this supports provisional `PMNDRS_font` naming rather than carrying Three Flatland's `FL_` prefix forward.
 - Alignment and accessor rules can enable direct typed-array views, but compact CPU shaping records do not necessarily need to be expressed as generic accessors.
 - glTF is not itself a streaming protocol; progressive presentation delivery requires explicit asset design.
 
@@ -390,7 +395,7 @@ Limits on use:
 Project inference, not a Windfoil claim:
 
 - Record Windfoil as a future optional presentation candidate and source of algorithmic ideas without changing the current product direction.
-- The shared shaping, paragraph, glyph-ID, and `FL_font` container layers should remain independent of Windfoil, Slug, MTSDF, and bitmap rendering.
+- The shared shaping, paragraph, glyph-ID, and `PMNDRS_font` container layers should remain independent of Windfoil, Slug, MTSDF, and bitmap rendering.
 - If evaluated later, Windfoil should be a separately importable/tree-shakable engine selected explicitly by the caller or by optional policy. It should not add its preprocessing or shader cost to applications that do not select it.
 - Any adoption gate should compare representative UI text, CJK, complex outlines, icons/vector art, perspective, magnification, minification, memory, bake cost, and WebGPU/WebGL deployment against the existing Slug and distance-field lanes.
 

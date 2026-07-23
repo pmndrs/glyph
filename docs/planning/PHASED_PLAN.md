@@ -63,7 +63,7 @@ Goal: prove one glyph-ID space and zero-repacking payloads.
 
 Deliverables:
 
-- experimental `FL_font` extension specification and golden GLBs;
+- experimental `PMNDRS_font` extension specification and golden GLBs;
 - presentation directory and availability model;
 - port/rewrite assessment implemented for Slug flat data;
 - MTSDF metadata and placeholder/generator experiment;

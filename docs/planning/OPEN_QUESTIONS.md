@@ -5,7 +5,7 @@ Status: unresolved unless marked otherwise.
 ## Blocking before Phase 1
 
 1. Which exact HarfRust, HarfBuzz, and Unicode versions become the first reference set?
-2. Is the experimental extension prefix `FL_` acceptable for pmndrs, or should the project use a neutral/project-specific prefix from the beginning?
+2. Who will request registration of the `PMNDRS` vendor prefix from Khronos, and at which pre-release milestone?
 3. Which minimum OpenType tables/bytes must V0 retain for HarfRust without attempting shaping-table compilation?
 4. Which source-font licenses permit checked-in fixtures and generated derivatives in CI?
 5. Which browsers and GPU APIs define the initial support matrix?

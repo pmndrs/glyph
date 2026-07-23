@@ -10,7 +10,7 @@ Status: proposed; interfaces are illustrative and not public API commitments.
                 Node host / CLI              browser Worker host
                 development bake             lazy loader fallback
                          \                           /
-                          canonical FL_font bytes
+                          canonical PMNDRS_font bytes
                                       │
                                       ▼
                            validator + font registry
@@ -153,11 +153,13 @@ load(source, presentation)
 
 There is no public branch that intentionally bypasses the sidecar probe.
 
-## `FL_font` extension family
+## `PMNDRS_font` extension family
 
-`FL_font` contains one font face, version/provenance, retained shaping data for HarfRust, metrics/capabilities, and a presentation directory.
+The names are provisional vendor-extension names. `PMNDRS` must be registered with Khronos before the format is published as stable; internal code uses neutral asset/section type names so serialization naming remains isolated.
 
-`FL_font_bitmap`, `FL_font_distance_field`, and `FL_font_slug` contain only technique-specific records and GPU payloads. They never repeat advances, kerning, or shaping behavior.
+`PMNDRS_font` contains one font face, version/provenance, retained shaping data for HarfRust, metrics/capabilities, and a presentation directory.
+
+`PMNDRS_font_bitmap`, `PMNDRS_font_distance_field`, and `PMNDRS_font_slug` contain only technique-specific records and GPU payloads. They never repeat advances, kerning, or shaping behavior.
 
 The asset supports multiple presentation sections; the first implementation emits one. Applications support multiple fonts by registering multiple one-face assets.
 

@@ -5,7 +5,7 @@ Goal: carry one font through offline or fallback baking, runtime shaping, paragr
 
 ## Scope decision
 
-V0 always produces a canonical `FL_font` asset before registration. The same portable bake core runs behind:
+V0 always produces a canonical `PMNDRS_font` asset before registration. The same portable bake core runs behind:
 
 - a Node host used by the CLI and development tooling; and
 - a browser Worker host dynamically imported by the loader after a sidecar miss.
@@ -20,7 +20,7 @@ The source OpenType glyph ID is the font-local glyph ID in V0. That choice is co
 Node CLI ───────────────┐
                        │
                        ▼
-                 shared bake core ──→ canonical FL_font bytes
+                 shared bake core ──→ canonical PMNDRS_font bytes
                        ▲                         │
                        │                         ▼
 loader sidecar miss ─→ lazy Worker host    canonical loader

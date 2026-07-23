@@ -7,7 +7,7 @@ Goal: bake, load, shape, reflow, and render one font while hardening interfaces 
 
 Given one pinned OpenType font, the package can:
 
-1. bake a canonical `FL_font` asset with a bitmap presentation from Node;
+1. bake a canonical `PMNDRS_font` asset with a bitmap presentation from Node;
 2. discover and load that sidecar without importing the runtime baker;
 3. when the sidecar is absent, warn once in development, dynamically import a Worker baker, and produce the same canonical asset;
 4. register the canonical font once in HarfRust Wasm;
@@ -64,7 +64,7 @@ Deliverables:
 - host-independent bake request/result contract;
 - source parsing sufficient to retain shaping bytes and enumerate/rasterize glyphs;
 - one deterministic bitmap strike and flat GPU-ready records;
-- canonical `FL_font` writer and validator;
+- canonical `PMNDRS_font` writer and validator;
 - Node filesystem host, JS API, and thin CLI;
 - Node bake timing, size, and memory baseline.
 

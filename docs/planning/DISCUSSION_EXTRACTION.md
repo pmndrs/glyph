@@ -496,11 +496,11 @@ Color layers and bitmap images were identified as presentation concerns, not alt
 The proposed extension family was:
 
 ```text
-FL_font
-FL_font_slug
-FL_font_distance_field
-FL_font_bitmap
-future FL_font_color/image
+PMNDRS_font
+PMNDRS_font_slug
+PMNDRS_font_distance_field
+PMNDRS_font_bitmap
+future PMNDRS_font_color/image
 ```
 
 The shared section would contain metrics, cmap, glyph properties, shaping programs/reference data, script/language/feature metadata, and presentation availability.
@@ -530,14 +530,14 @@ The baker changed from an offline-only tool into a portable compiler used in two
 
 ```text
 CLI/native build tool ─┐
-                      ├── shared Rust compiler core → canonical FL_font bytes
+                      ├── shared Rust compiler core → canonical PMNDRS_font bytes
 worker Wasm fallback ─┘
 ```
 
 The loader flow became:
 
 ```text
-pre-baked FL_font → validate/register/upload
+pre-baked PMNDRS_font → validate/register/upload
 
 source TTF/OTF/WOFF2
     → lazy worker

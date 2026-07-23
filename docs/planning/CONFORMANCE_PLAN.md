@@ -26,7 +26,7 @@ HarfRust version and commit
 HarfBuzz version and commit
 Unicode version
 pmndrs/text compiler version
-FL_font format version
+PMNDRS_font format version
 variation coordinates
 shaping input options
 ```
@@ -86,7 +86,7 @@ Output:
 Run the same pinned HarfRust path on:
 
 1. original/static-instanced source font;
-2. subsetted/remapped shaping reference data used by `FL_font`.
+2. subsetted/remapped shaping reference data used by `PMNDRS_font`.
 
 Purpose: prove subset closure, ID remapping, metrics, and retained layout tables before testing optimized data.
 

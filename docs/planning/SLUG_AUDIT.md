@@ -94,7 +94,7 @@ This is strong prior art for avoiding a general glTF runtime dependency. The new
 Disposition:
 
 - port the narrow-reader philosophy;
-- rewrite around `FL_font` section directories and presentation references;
+- rewrite around `PMNDRS_font` section directories and presentation references;
 - keep fuzz/corrupt-input tests from the beginning;
 - decide whether GPU-oriented sections remain accessors while CPU shaping sections use one custom block.
 
@@ -262,7 +262,7 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 | `pipeline/bandBuilder.ts` | Port | Slug presentation baker | corpus capacity statistics |
 | `pipeline/texturePacker.ts` | Port/revise | Slug GPU payload packer | upload and shader agreement |
 | `shaders/*` | Port after audit | renderer adapter | CPU reference + visual snapshots |
-| `glb.ts` | Port philosophy | narrow `FL_font` reader/validator | corrupt-input suite |
+| `glb.ts` | Port philosophy | narrow `PMNDRS_font` reader/validator | corrupt-input suite |
 | `format.ts`, `bake.ts` | Redesign | shared extension + presentation schemas | golden bytes and version rules |
 | `baked.ts` object hydration | Retire | flat Wasm/GPU views | allocation/startup benchmark |
 | `textShaper*.ts` | Replace | HarfRust Wasm shaper | three-way conformance |
@@ -277,7 +277,7 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 
 1. Freeze the current Slug revision used for comparison and retain its tests/fixtures.
 2. Establish the new shaped output and packed glyph-ID contracts without rendering.
-3. Produce a tiny `FL_font` with shared metrics plus a revised Slug presentation.
+3. Produce a tiny `PMNDRS_font` with shared metrics plus a revised Slug presentation.
 4. Compare old and new Slug GPU bytes or rendered output for the same source outlines.
 5. Add MTSDF and bitmap presentations against the same glyph IDs.
 6. Add the worker fallback and prove it emits the same canonical sections.
