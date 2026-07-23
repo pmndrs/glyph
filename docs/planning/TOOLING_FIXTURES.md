@@ -106,7 +106,7 @@ It deliberately does not subset, compute shaping closure, remap glyphs, compile 
 
 ### Node/Worker parity runner
 
-Runs identical source bytes and descriptor through both hosts. It compares canonical sections, provenance, presentation pixels, and diagnostics. It also proves that a baked sidecar hit does not load the Worker/baker/generator chunk.
+Runs identical source bytes and descriptor through both hosts. It compares canonical sections, provenance, presentation pixels, and diagnostics. It also proves that a baked-asset hit does not load the runtime baker library, Worker, Wasm bake core, or generator module.
 
 ### Asset validator
 
@@ -135,7 +135,7 @@ Raw samples and environment metadata follow the benchmark and autoresearch plans
 
 ### Loader-path runner
 
-Exercises sidecar hit, missing sidecar, corrupt/incompatible sidecar, cancelled fallback, and repeated concurrent loads. It asserts one development warning per missing source, no warning in production, canonical-path convergence after fallback, and no public runtime-forcing switch.
+Exercises baked asset hit, missing baked asset, corrupt/incompatible baked asset, cancelled fallback, and repeated concurrent loads. It asserts one development warning per missing source, no warning in production, canonical-path convergence after fallback, and no public runtime-forcing switch.
 
 ## Multi-font contract fixtures without expanding scope
 

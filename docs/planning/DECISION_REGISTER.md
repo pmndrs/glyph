@@ -49,11 +49,12 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | ID | Decision | Status | Rationale / evidence | Acceptance consequence |
 | --- | --- | --- | --- | --- |
 | D-030 | One portable minimal bake core is required in V0 and is hosted by both Node and a browser Worker. | Proposed | Baking is part of the loader compatibility contract, while host duplication would cause format drift. | Core request/result and canonical output are shared; filesystem, CLI, and Worker concerns remain outside it. |
-| D-031 | The loader is baked-first and automatically invokes the lazy Worker baker on sidecar miss. | Proposed | Preserves the successful Three Flatland product shape while keeping expensive fallback work off the main thread. | Offline and fallback bytes enter the same validator/registration path. |
+| D-031 | The loader is baked-first and automatically imports the runtime baker library on baked-asset miss; that library executes the bake core in a Worker. | Proposed | Preserves the successful Three Flatland product shape while keeping expensive fallback work off the main thread. | Offline and fallback bytes enter the same validator/registration path. |
 | D-032 | V0 exposes no `forceRuntime`, `skipBaked`, or equivalent option. | Proposed | Pre-baking is the intended delivery path; a policy toggle adds bundle/cache states without a product need. | A miss warns once in development and falls back automatically. |
 | D-033 | Persistent baked-result caching is deferred; in-memory in-flight/result deduplication is required. | Deferred | Persistence adds quota, eviction, and invalidation policy beyond the first proof. | Cache keys already include source/descriptor/format/baker identity so persistence remains additive. |
 | D-034 | The shared V0 baker generates one grayscale bitmap strike. | Proposed | The first complete pipeline must prove actual source-to-presentation generation in both hosts. | Product generation is real but narrow; MTSDF, Slug, subsetting, remapping, and compiled layout remain later. |
 | D-035 | Presentation generators are optional imports, and the runtime fallback loads only the selected generator. | Proposed | Users must control rendering technique and unused engines must remain tree-shakable. | The main loader graph contains interfaces, not concrete generator implementations. |
+| D-036 | Planning and APIs distinguish baked font assets from dynamically loaded baker libraries. | Proposed | `PMNDRS_font` bytes are data assets, while Node/runtime baker surfaces are libraries/modules with hosts and a shared core. Conflating them obscures packaging and bundle ownership. | Use “baked asset,” “bake core,” “Node baker library,” and “runtime baker library” consistently; retire the old adjacent-file terminology. |
 
 ## Paragraph layout
 
@@ -86,7 +87,7 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 
 Maintainer review should address these first:
 
-1. Accept or revise D-001, D-002, D-010, D-011, D-020, D-024, D-030–D-035, D-040, and D-050.
+1. Accept or revise D-001, D-002, D-010, D-011, D-020, D-024, D-030–D-036, D-040, and D-050.
 2. Resolve version pins under D-010.
 3. Confirm the provisional `PMNDRS` prefix policy under D-022 and assign its Khronos registration request.
 4. Choose the pinned one-font fixture and target browser matrix.

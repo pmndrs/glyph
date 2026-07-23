@@ -541,16 +541,16 @@ pre-baked PMNDRS_font → validate/register/upload
 
 source TTF/OTF/WOFF2
     → lazy worker
-    → lazy baker Wasm
+    → lazy runtime baker library + Wasm core
     → canonical bytes
     → persistent cache
     → same validate/register/upload path
 ```
 
-Two Wasm artifacts were proposed:
+Two Wasm-backed libraries/modules were proposed:
 
-- always/commonly loaded shaper Wasm;
-- larger lazy baker Wasm containing parsing, subsetting, outline conversion, Slug/MTSDF/bitmap generation, atlas packing, and GLB writing.
+- always/commonly loaded shaper Wasm module;
+- larger lazy runtime baker library and Wasm core containing parsing, subsetting, outline conversion, Slug/MTSDF/bitmap generation, atlas packing, and GLB writing.
 
 Runtime cache identity included:
 
@@ -664,7 +664,7 @@ The conversation's final broad plan evolved into:
 5. compiled common lookup data;
 6. SIMD kernels;
 7. compiled complex lookups;
-8. portable native/worker baker;
+8. portable bake core with Node and dynamically loaded runtime library hosts;
 9. generated bitmap and MTSDF presentations;
 10. JS paragraph engine and batched reshape;
 11. conformance, fuzzing, and benchmarking throughout;

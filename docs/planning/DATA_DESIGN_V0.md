@@ -8,7 +8,7 @@ Goal: carry one font through offline or fallback baking, runtime shaping, paragr
 V0 always produces a canonical `PMNDRS_font` asset before registration. The same portable bake core runs behind:
 
 - a Node host used by the CLI and development tooling; and
-- a browser Worker host dynamically imported by the loader after a sidecar miss.
+- a dynamically imported runtime baker library whose browser host executes the core in a Worker after a baked-asset miss.
 
 V0 baking is intentionally simple: validate the source, retain the OpenType data HarfRust needs, generate one bitmap presentation, write deterministic ranges, and stamp provenance. It does not subset, compute shaping closure, densely remap glyphs, or compile GSUB/GPOS into a new IR.
 
@@ -17,17 +17,21 @@ The source OpenType glyph ID is the font-local glyph ID in V0. That choice is co
 ## Convergent load graph
 
 ```text
-Node CLI ───────────────┐
-                       │
-                       ▼
-                 shared bake core ──→ canonical PMNDRS_font bytes
-                       ▲                         │
-                       │                         ▼
-loader sidecar miss ─→ lazy Worker host    canonical loader
-                                                 │
-                                  ┌──────────────┴──────────────┐
-                                  ▼                             ▼
-                             HarfRust shaper              GPU presentations
+Node baker library / CLI ───────────────────┐
+                                           ▼
+                                     shared bake core
+                                           ▲
+loader baked-asset miss                    │
+  → runtime baker library → Worker host ───┘
+                                           │
+                                           ▼
+                               canonical PMNDRS_font bytes
+                                           │
+                                           ▼
+                                    canonical loader
+                                      │          │
+                                      ▼          ▼
+                               HarfRust shaper  GPU presentations
 ```
 
 No raw-source registration path survives beyond the baker. Offline and runtime-fallback assets use the same validation and registration path.
@@ -180,7 +184,7 @@ The JS paragraph engine separates stable text/style analysis and broad shaping f
 
 ```text
 unresolved
-  → sidecar probe
+  → baked asset probe
     → baked hit → validate/load
     → miss      → warn in development → import Worker host → bake → validate/load
     → invalid   → structured diagnostic → Worker fallback policy → validate/load
@@ -218,7 +222,7 @@ The baker validates source format and face selection. The canonical loader then 
 - caps input size, output size, glyph count, atlas dimensions, Worker memory, and elapsed work;
 - emits structured errors.
 
-Missing sidecars are ordinary development fallback. Corrupt or incompatible sidecars are diagnostics, not silent misses.
+Missing baked assets are ordinary development fallback. Corrupt or incompatible baked assets are diagnostics, not silent misses.
 
 ## Future-compatible seams, not V0 work
 

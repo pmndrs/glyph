@@ -315,7 +315,7 @@ Pre-baked GLB is the production fast path, but the loader must accept ordinary f
 ```text
 pre-baked GLB → register and upload
 
-source font → worker + baker Wasm → canonical baked bytes
+source font → runtime baker library + Worker/Wasm core → canonical baked bytes
             → register and upload through the same loader
 ```
 
@@ -324,7 +324,7 @@ There should not be a permanent second unbaked runtime model. After worker bakin
 The likely module split is:
 
 - small shaper Wasm on the normal path;
-- larger baker Wasm loaded only for fallback;
+- larger runtime baker library and Wasm core loaded only for fallback;
 - one shared Rust compiler core used by native build tools and the worker.
 
 Runtime-baked output should be cached using a key over source bytes, compiler and format versions, glyph selection, variation coordinates, and presentation options. IndexedDB or Cache Storage are implementation candidates.

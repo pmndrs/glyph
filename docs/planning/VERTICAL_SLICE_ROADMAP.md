@@ -8,8 +8,8 @@ Goal: bake, load, shape, reflow, and render one font while hardening interfaces 
 Given one pinned OpenType font, the package can:
 
 1. bake a canonical `PMNDRS_font` asset with a bitmap presentation from Node;
-2. discover and load that sidecar without importing the runtime baker;
-3. when the sidecar is absent, warn once in development, dynamically import a Worker baker, and produce the same canonical asset;
+2. discover and load that baked asset without importing the runtime baker library;
+3. when the baked asset is absent, warn once in development, dynamically import the runtime baker library, execute it in a Worker, and produce the same canonical asset;
 4. register the canonical font once in HarfRust Wasm;
 5. shape reference text with correct clusters, glyph IDs, positions, and flags;
 6. lay text into a fixed-width region in JavaScript and reflow on resize;
@@ -79,19 +79,19 @@ Exit gate:
 
 Deliverables:
 
-- deterministic sidecar naming and probe;
+- deterministic baked asset naming and probe;
 - normal baked hit path;
 - one development-only, deduplicated warning on miss;
-- separate `runtime-bake` entry and Worker lifecycle;
+- separate dynamically loaded `runtime-bake` library entry and Worker lifecycle;
 - transferable request/result buffers;
 - dynamically imported bitmap generator and bake Wasm;
 - in-memory in-flight/result cache;
-- sidecar hit/miss/invalid tests and bundle-graph assertions;
+- baked asset hit/miss/invalid tests and bundle-graph assertions;
 - Node-versus-Worker canonical-section parity test.
 
 Exit gate:
 
-- a sidecar hit does not download or instantiate the baker;
+- a baked asset hit does not download or instantiate the runtime baker library or its Wasm core;
 - fallback work never parses or rasterizes on the main thread;
 - fallback bytes re-enter the same validator/registration path;
 - no public API can force or bypass the baked probe.

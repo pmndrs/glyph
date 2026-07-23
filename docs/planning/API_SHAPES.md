@@ -8,8 +8,8 @@ Scope: one-font vertical slice with required offline baking and automatic worker
 The first implementation must:
 
 - use one portable bake core from both a Node host and a browser Worker host;
-- make a pre-baked `PMNDRS_font` sidecar the normal loader path;
-- dynamically import the Worker host and presentation generator only after a sidecar miss;
+- make a pre-baked `PMNDRS_font` asset the normal loader path;
+- dynamically import the runtime baker library only after a baked-asset miss; that library owns its Worker host and imports the selected presentation generator;
 - warn once in development when runtime baking was required;
 - feed offline and fallback output through the same canonical asset loader;
 - provide no `forceRuntime`, `skipBaked`, or equivalent public option;
@@ -31,7 +31,7 @@ The baker is required infrastructure. The advanced OpenType compiler discussed i
   Node-only host and CLI surface
 
 @pmndrs/text/runtime-bake
-  browser Worker host; imported internally only on sidecar miss
+  dynamically loaded browser library and Worker host; imported internally only on baked asset miss
 
 @pmndrs/text/presentation/bitmap
 @pmndrs/text/presentation/mtsdf
@@ -79,10 +79,11 @@ interface FontLoader {
 There is deliberately no option that forces the runtime path. `load` follows one state machine:
 
 ```text
-derive and fetch baked sidecar
+derive and fetch baked asset
   hit  → validate canonical bytes → register
   miss → development warning once
-       → dynamically import runtime-bake Worker host
+       → dynamically import the runtime baker library
+       → execute its bake core in a Worker
        → fetch/transfer source font
        → bake canonical bytes
        → validate canonical bytes → register
@@ -277,7 +278,7 @@ Required V0 caches:
 
 Persistent browser storage is a later optimization. The first fallback may use memory caching.
 
-On a sidecar miss, the loader emits one development-only warning per source URL. It names the source, states that worker baking occurred, and points to the Node bake command. Production does not warn. Corrupt or incompatible sidecars produce a structured diagnostic before fallback rather than masquerading as a normal miss.
+On a baked asset miss, the loader emits one development-only warning per source URL. It names the source, states that worker baking occurred, and points to the Node bake command. Production does not warn. Corrupt or incompatible baked assets produce a structured diagnostic before fallback rather than masquerading as a normal miss.
 
 ## Deliberately absent now
 

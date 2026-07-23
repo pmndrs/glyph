@@ -191,21 +191,21 @@ Disposition:
 
 [`SlugFontLoader.ts`](https://github.com/thejustinwalsh/three-flatland/blob/c596ac2313e33cace825fe197a6d730269019175/packages/slug/src/SlugFontLoader.ts) demonstrates:
 
-- a baked-first sidecar lookup;
+- a baked-asset-first lookup;
 - cached load promises;
 - dynamic imports on the runtime path;
 - a narrow GLB reader without glTF-Transform in the browser bundle;
 - direct `DataTexture` construction from baked texture accessors.
 
-The current fallback fetches and parses the source font on the main thread, parses it through both `parseFont` and `opentype.parse`, then creates a distinct runtime `SlugFont` model instead of canonical baked bytes. A corrupt baked sidecar silently falls back to runtime parsing.
+The current fallback fetches and parses the source font on the main thread, parses it through both `parseFont` and `opentype.parse`, then creates a distinct runtime `SlugFont` model instead of canonical baked bytes. A corrupt baked asset silently falls back to runtime parsing.
 
 Disposition:
 
 - preserve baked-first/lazy-heavy-dependency behavior;
-- replace fallback with a worker baker returning canonical bytes;
-- remove `forceRuntime`; a sidecar miss automatically falls back and emits one development warning with the pre-bake command;
+- replace fallback with a dynamically loaded runtime baker library that executes in a Worker and returns canonical bytes;
+- remove `forceRuntime`; a baked asset miss automatically falls back and emits one development warning with the pre-bake command;
 - avoid double source parsing;
-- distinguish “sidecar absent” from “sidecar corrupt/incompatible” in diagnostics and policy;
+- distinguish “baked asset absent” from “baked asset corrupt/incompatible” in diagnostics and policy;
 - keep the everyday/direct/preload surface aligned with the eventual pmndrs loader conventions.
 
 The reusable structural pattern extends beyond `SlugFontLoader`: Three Flatland's browser-safe `@three-flatland/bake` root keeps Node discovery/writers behind `/node`, package-specific baker modules behind separate exports, and the standalone/unified CLIs call the same `Baker.run()` implementation. `pmndrs/text` should preserve that host separation while replacing the TypeScript font-domain core with one portable core shared by the Node host and runtime Worker.
@@ -214,7 +214,7 @@ The reusable structural pattern extends beyond `SlugFontLoader`: Three Flatland'
 
 The existing `FL_slug_font` format has several good ideas:
 
-- a single GLB sidecar;
+- a single baked GLB asset;
 - schema version gating;
 - named structure-of-arrays columns;
 - standard accessors for GPU data;

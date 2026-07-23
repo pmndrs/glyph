@@ -50,13 +50,13 @@ Dependencies: V0.1, V0.3
 
 Acceptance criteria:
 
-- a valid sidecar reaches the canonical validator without importing fallback code;
-- a miss warns once in development, dynamically imports the Worker host and selected generator, and transfers source/result buffers;
+- a valid baked asset reaches the canonical validator without importing fallback code;
+- a miss warns once in development, dynamically imports the runtime baker library, starts its Worker host, imports the selected generator module, and transfers source/result buffers;
 - Node and Worker output have identical canonical sections;
 - fallback output re-enters the normal canonical load path;
-- invalid sidecars produce structured diagnostics; no `forceRuntime` option exists;
+- invalid baked assets produce structured diagnostics; no `forceRuntime` option exists;
 - in-flight and completed loads are deduplicated in memory;
-- bundle-graph tests prove the common path excludes baker/generator code.
+- bundle-graph tests prove the common path excludes the runtime baker library, Wasm bake core, and generator modules.
 
 ### V0.5. Implement the coarse runtime HarfRust Wasm boundary and registry — M
 

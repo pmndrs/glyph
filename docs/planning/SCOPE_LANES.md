@@ -13,10 +13,10 @@ Purpose: decide what to build now without hard-coding away later capabilities
 
 - one host-independent bake core;
 - Node filesystem/CLI host;
-- browser Worker host dynamically imported only after sidecar miss;
+- runtime baker library dynamically imported only after baked-asset miss, with its core executed in a Worker;
 - baked-first loader with deterministic sibling naming;
 - one development-only deduplicated warning on fallback;
-- no `forceRuntime` or sidecar-bypass option;
+- no `forceRuntime` or baked-asset bypass option;
 - one canonical asset output and one validator/registration path;
 - one generated grayscale bitmap strike;
 - Node/Worker output-parity and package-graph tests;
@@ -84,9 +84,9 @@ Reserve these through font-scoped identity, versioned optional sections, capabil
 
 ### Loader
 
-- A sidecar hit never downloads/instantiates the baker.
+- A baked asset hit never downloads or instantiates the runtime baker library, Worker, or Wasm core.
 - A miss warns only in development and automatically uses the Worker.
-- Invalid/incompatible sidecars produce structured diagnostics before fallback.
+- Invalid/incompatible baked assets produce structured diagnostics before fallback.
 - Raw OpenType never becomes a second registered runtime model.
 
 ### Shaper

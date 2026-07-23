@@ -28,7 +28,16 @@ Status: proposed; interfaces are illustrative and not public API commitments.
                               └── positioned glyphs ──→ GPU
 ```
 
-The loader first probes the canonical sidecar. Only a miss imports the Worker host and selected presentation generator. Both hosts use the same bake core and emit the same format. Subsetting, remapping, compiled IR, and SIMD specialization remain later compiler units. See the editable [system design diagram](system-design.excalidraw).
+The loader first probes the canonical baked asset. Only a miss dynamically imports the runtime baker library, whose Worker host loads the bake core and selected presentation generator. The Node host and runtime library use the same core and emit the same format. Subsetting, remapping, compiled IR, and SIMD specialization remain later compiler units. See the editable [system design diagram](system-design.excalidraw).
+
+## Terminology
+
+- **Baked font asset**: canonical `PMNDRS_font` GLB data produced ahead of time or during loader fallback.
+- **Bake core**: host-independent font transformation library shared by Node and browser builds.
+- **Node baker library**: Node host/API and CLI adapter around the bake core.
+- **Runtime baker library**: dynamically imported browser module that owns the Worker host and loads the Wasm bake core plus selected generator modules.
+
+The runtime baker is a shared library/module, not an auxiliary process or adjacent data-file category.
 
 ## What we retain from Three Flatland Slug
 
@@ -44,7 +53,7 @@ The loader first probes the canonical sidecar. Only a miss imports the Worker ho
 - remove `forceRuntime` and similar policy switches;
 - move fallback parsing/generation into a Worker;
 - make fallback return canonical bytes instead of a distinct in-memory model;
-- run those bytes through the same validation, registration, and presentation paths as a sidecar;
+- run those bytes through the same validation, registration, and presentation paths as a baked asset;
 - make presentation generators independently importable.
 
 ## Ownership
@@ -75,7 +84,7 @@ V0 retains shaping-required OpenType bytes and generates one bitmap strike. Late
 
 ### Loader and registry own
 
-- sidecar naming/probing;
+- baked asset naming/probing;
 - the automatic hit/miss state machine;
 - development warnings;
 - canonical asset validation;
@@ -113,7 +122,7 @@ V0 retains shaping-required OpenType bytes and generates one bitmap strike. Late
 @pmndrs/text/bake (Node-only)
   └─ Node host → shared bake core
 
-@pmndrs/text/runtime-bake (lazy browser chunk)
+@pmndrs/text/runtime-bake (dynamically loaded browser library)
   └─ Worker host → shared bake core → dynamic selected generator
 
 @pmndrs/text/presentation/* (optional)
@@ -121,7 +130,7 @@ V0 retains shaping-required OpenType bytes and generates one bitmap strike. Late
   └─ corresponding bake generator entry
 ```
 
-A sidecar hit must not make the main module graph reach `runtime-bake` or generator code.
+A baked asset hit must not make the main module graph reach the runtime baker library or generator modules.
 
 ## Canonical identity and coordinates
 
@@ -137,13 +146,13 @@ A sidecar hit must not make the main module graph reach `runtime-bake` or genera
 ```text
 load(source, presentation)
   │
-  ├─ derive sidecar URL and fetch
+  ├─ derive baked asset URL and fetch
   │    ├─ valid → canonical load
   │    ├─ missing → dev warning once → runtime fallback
   │    └─ invalid/incompatible → structured diagnostic → fallback policy
   │
   └─ runtime fallback
-       ├─ import runtime-bake
+       ├─ import runtime baker library
        ├─ start/reuse Worker
        ├─ fetch and transfer source bytes
        ├─ import selected generator in Worker
@@ -151,7 +160,7 @@ load(source, presentation)
        └─ canonical load
 ```
 
-There is no public branch that intentionally bypasses the sidecar probe.
+There is no public branch that intentionally bypasses the baked asset probe.
 
 ## `PMNDRS_font` extension family
 
@@ -188,7 +197,7 @@ Width changes reuse broad shaping where safe. JS recomputes line breaks and batc
 
 V0 requires:
 
-- sidecar/load promise deduplication;
+- baked asset/load promise deduplication;
 - in-memory runtime-bake result keyed by source identity, descriptor, and versions;
 - registered HarfRust state and shape plans;
 - broad-run, line-shape, paragraph-analysis, and width-layout caches;
@@ -198,8 +207,8 @@ Persistent runtime-bake caching is deferred, but the key shape is reserved for s
 
 ## Failure and warning model
 
-- A missing sidecar is recoverable and warns once in development.
-- An invalid sidecar yields a structured diagnostic before any allowed fallback.
+- A missing baked asset is recoverable and warns once in development.
+- An invalid baked asset yields a structured diagnostic before any allowed fallback.
 - Unsupported source fonts, output/resource limits, Worker failures, and unsupported required sections are distinct errors.
 - HarfRust shaping never silently falls back to approximate shaping.
 - Production fallback remains functional but does not emit the development pre-bake warning.

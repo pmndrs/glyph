@@ -320,8 +320,8 @@ Extracted:
 
 - Curve/band generation, texture packing, shader references, narrow GLB reading, and baked-first loading are valuable prior art.
 - The browser-safe loader, Node-only bake subpath, package-declared baker, and thin standalone/unified CLI demonstrate a sound host/dependency split worth retaining.
-- The current fallback dynamically imports heavy modules but creates a separate in-memory runtime model. The new plan improves this by moving fallback work to a Worker and returning the same canonical bytes used by the sidecar path.
-- The current `forceRuntime` option is not carried forward: sidecar miss is automatic fallback with a development warning, not a user-selectable delivery policy.
+- The current fallback dynamically imports heavy modules but creates a separate in-memory runtime model. The new plan improves this by dynamically loading a runtime baker library, executing it in a Worker, and returning the same canonical bytes used by the pre-baked asset path.
+- The current `forceRuntime` option is not carried forward: baked asset miss is automatic fallback with a development warning, not a user-selectable delivery policy.
 - The current text path is intentionally basic: UTF-16-unit cmap, disabled GSUB on the runtime path, explicit pair kerning, and shaping coupled with wrapping/alignment.
 - Flat GPU texture bytes are already available, but the loader reconstructs per-glyph maps and nested band objects.
 - The package supplies useful real-font equivalence tests and baseline Slug payload measurements.

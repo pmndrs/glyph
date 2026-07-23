@@ -188,7 +188,7 @@ MTSDF metadata and atlas bytes
 bitmap metadata and per-strike atlas bytes
 GLB JSON/alignment overhead
 shaper Wasm
-baker Wasm
+runtime baker library and Wasm core
 JavaScript by export/chunk
 ```
 
