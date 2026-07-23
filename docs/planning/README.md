@@ -9,6 +9,7 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 - [System design diagram](system-design.excalidraw): editable Excalidraw view of the Node/Worker bake convergence and runtime pipeline.
 - [Runtime API shapes](API_SHAPES.md): provisional loader, shared bake, Worker, shaping, paragraph, and presentation contracts.
 - [Runtime data design V0](DATA_DESIGN_V0.md): canonical asset, source-local glyph identity, typed buffers, and generated presentation records.
+- [glTF vendor-prefix request and extension draft](GLTF_EXTENSION_REGISTRATION.md): submission-ready `PMNDRS` prefix issue and a `Template.md`-aligned draft of `PMNDRS_font`.
 - [One-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md): current execution sequence and evidence gates.
 - [Tooling and fixtures](TOOLING_FIXTURES.md): pinned font, oracle, golden asset, layout, visual, corrupt-input, and benchmark artifacts.
 - [Phased plan](PHASED_PLAN.md): sequencing, gates, and deliverables.

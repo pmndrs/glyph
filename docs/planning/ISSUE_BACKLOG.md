@@ -178,6 +178,18 @@ Acceptance criteria:
 - Node and Worker generators emit equivalent canonical report values and pixels;
 - modeled values in the [font payload budget](PAYLOAD_BUDGET.md) are replaced by checked-in raw reports without changing visual or conformance gates.
 
+### A7. Register the PMNDRS glTF vendor prefix — S
+
+Dependencies: A1
+
+Acceptance criteria:
+
+- Poimandres maintainers approve the project name, public contact, requested `PMNDRS` prefix, and intended-use summary;
+- an authorized maintainer files the issue body in the [registration draft](GLTF_EXTENSION_REGISTRATION.md) against `KhronosGroup/glTF`;
+- prefix reservation is described separately from extension specification, implementation, and Khronos ratification;
+- the resulting registry issue and `extensions/Prefixes.md` entry are linked from D-022;
+- the `PMNDRS_font` specification PR remains blocked on an accepted schema, public reference implementation, validator fixtures, and reproducible sample assets.
+
 ## Epic B — Shaping contract experiment
 
 ### B1. Specify the experimental shaped-buffer ABI — M
