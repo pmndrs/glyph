@@ -27,7 +27,7 @@ This slice is an internal integration proof, not a release candidate. The first 
 | Order | Milestone | Effort | Depends on | Exit result |
 | ---: | --- | --- | --- | --- |
 | 0 | Accept contracts and versions | S | documentation audit | No unresolved identity, ownership, package, or version decision can force a redesign. |
-| 1 | Pin fixtures and capture oracles | M | 0 | Font, text, shaping, bitmap, layout, malformed-input, and benchmark fixtures are reproducible. |
+| 1 | Pin fixtures and scaffold benchmark lab | L | 0 | Fixtures are reproducible and the shared interactive/headless harness contracts are executable. |
 | 2 | Build portable bake core and Node host | L | 1 | Node emits a valid core GLB plus one bitmap presentation without advanced compiler work. |
 | 3 | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
@@ -52,7 +52,7 @@ Deliver:
 
 Do not implement production runtime behavior in this milestone.
 
-## Milestone 1 — pin fixtures and capture oracles
+## Milestone 1 — pin fixtures and scaffold benchmark lab
 
 Deliver:
 
@@ -60,9 +60,11 @@ Deliver:
 - UTF-16 text corpus and HarfBuzz/HarfRust expected outputs;
 - bitmap strike, paragraph layout, GLB, malformed input, and GPU readback fixtures;
 - benchmark environment manifest and result schema;
+- interactive benchmark lab shell modeled on the adapter/scenario structure of `js-physics-benchmarks`;
+- shared target/scenario/capability contracts, shareable configuration, headless smoke runner, and independent bundle-size pipeline;
 - empty multi-font/multi-presentation contract fixtures that test identity without adding product behavior.
 
-Exit only when every oracle can be regenerated deterministically.
+Exit only when every oracle can be regenerated deterministically and one fixture target produces the same validated result through the interactive and headless paths.
 
 ## Milestone 2 — portable bake core and Node host
 
@@ -136,6 +138,7 @@ Deliver:
 - stale-handle, cancellation, source/resource limit, corrupt GLB, and unsupported capability tests;
 - second registration of the same font proving scoped identity and lifecycle;
 - offline/Worker byte parity and cold/warm end-to-end benchmark reports;
+- populated interactive lab scenarios for shaping, loading, paragraph reflow, and bitmap rendering using the same definitions as headless runs;
 - tree-shaking and dynamic-import bundle assertions;
 - accepted ADRs and updated extension schemas;
 - an autoresearch baseline with optimization campaigns still disabled.
@@ -176,6 +179,7 @@ Deliver:
 - one paragraph rendered through bitmap, MTSDF, and Slug without reshaping or remeasurement;
 - explicit presentation-selection API and failure behavior;
 - documented technique recommendations backed by the benchmark corpus;
+- interactive comparison scenarios for bitmap, MTSDF, and Slug with correctness/visual gates and downloadable raw results;
 - second-font registration and presentation-binding smoke fixtures;
 - release-level conformance, browser, GPU, memory, package-size, and malformed-input suites;
 - reviewed public API, migration notes, and versioned extension schemas.

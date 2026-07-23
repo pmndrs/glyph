@@ -568,6 +568,24 @@ Extracted:
 
 ## Related deployment and ecosystem comparisons
 
+### js-physics-benchmarks
+
+Source: [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks)
+Type: source repository and interactive benchmark application
+Reviewed: 2026-07-23
+
+Abstract: A browser benchmark lab for JavaScript and WebAssembly physics engines. It compares multiple implementations through a common adapter API and shared scenario catalog, exposes capability-gated unsupported scenarios, keeps scenario state in shareable URL parameters, displays live phase timings, measures JavaScript and Wasm bundle sizes separately, and deploys the built application as a static site.
+
+Extracted:
+
+- `pmndrs/text` needs a benchmark product, not only scripts and prose reports: an interactive browser lab plus a headless runner over the same scenario definitions.
+- Renderer, shaper, delivery-path, and GPU-backend variants should implement stable target adapters rather than duplicate benchmark scenarios.
+- Scenarios must declare required capabilities and show unsupported combinations explicitly; silently omitting a weak or unsupported case would make comparisons misleading.
+- Live timing should separate pipeline phases such as shaping, paragraph layout, upload, rendering, and total frame cost.
+- Bundle-size measurement needs independent entry points and must report JavaScript and Wasm separately. This project additionally requires raw, gzip, and Brotli sizes plus font/presentation payload and GPU residency.
+- Query-addressable scenario, target, and parameter state makes measurements reviewable and easy to reproduce.
+- We adopt the harness architecture as precedent, not its physics-specific API, timing assumptions, or implementation verbatim.
+
 ### harfbuzzjs
 
 Source: [harfbuzz/harfbuzzjs](https://github.com/harfbuzz/harfbuzzjs)

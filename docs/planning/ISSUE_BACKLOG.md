@@ -42,9 +42,24 @@ Acceptance criteria:
 - exact UTF-16 cases and field-for-field oracle results are checked in;
 - expected bitmap pixels/bounds preserve source glyph IDs and record generator provenance.
 
-### V0.3. Implement the minimal shared baker and Node host — M
+### V0.3. Scaffold the interactive benchmark lab and headless runner — M
 
-Dependencies: V0.2
+Dependencies: V0.1, V0.2
+
+Acceptance criteria:
+
+- `apps/benchmarks` provides one local browser shell with target, scenario, capability, and control contracts;
+- selected target/scenario/controls round-trip through a shareable URL;
+- unsupported target/scenario combinations remain visible with missing capabilities;
+- the headless smoke runner imports the same registry, sample policy, validation, and result schema as the UI;
+- independent bundle entries report JavaScript and Wasm sizes without importing every optional renderer/generator;
+- one deterministic fixture target exports raw samples and environment metadata without claiming product performance.
+
+Planning baseline: [`BENCHMARK_PLAN.md`](BENCHMARK_PLAN.md), using [`isaac-mason/js-physics-benchmarks`](https://github.com/isaac-mason/js-physics-benchmarks) as the structural precedent.
+
+### V0.4. Implement the minimal shared baker and Node host — M
+
+Dependencies: V0.2, V0.3
 
 Acceptance criteria:
 
@@ -54,9 +69,9 @@ Acceptance criteria:
 - the core contains no filesystem/CLI logic and does not subset, remap, or compile layout;
 - deterministic output, bake time, peak memory, and size baselines are recorded.
 
-### V0.4. Implement the baked-first loader and lazy Worker fallback — M
+### V0.5. Implement the baked-first loader and lazy Worker fallback — M
 
-Dependencies: V0.1, V0.3
+Dependencies: V0.1, V0.4
 
 Acceptance criteria:
 
@@ -68,9 +83,9 @@ Acceptance criteria:
 - in-flight and completed loads are deduplicated in memory;
 - bundle-graph tests prove the common path excludes the runtime baker library, Wasm bake core, and generator modules.
 
-### V0.5. Implement the coarse runtime HarfRust Wasm boundary and registry — M
+### V0.6. Implement the coarse runtime HarfRust Wasm boundary and registry — M
 
-Dependencies: V0.3, V0.4
+Dependencies: V0.4, V0.5
 
 Acceptance criteria:
 
@@ -81,9 +96,9 @@ Acceptance criteria:
 - malformed ranges/counts/pages fail without per-glyph object construction;
 - cold/warm size, latency, memory, and boundary-call baselines are recorded.
 
-### V0.6. Implement one-font JS paragraph layout — M
+### V0.7. Implement one-font JS paragraph layout — M
 
-Dependencies: V0.5
+Dependencies: V0.6
 
 Acceptance criteria:
 
@@ -93,9 +108,9 @@ Acceptance criteria:
 - layout includes a font table/slots and never measures with presentation bounds;
 - boundary-sensitive ranges use at most one reshape batch.
 
-### V0.7. Render the generated bitmap on WebGPU and WebGL2 — M
+### V0.8. Render the generated bitmap on WebGPU and WebGL2 — M
 
-Dependencies: V0.4–V0.6
+Dependencies: V0.3, V0.5–V0.7
 
 Acceptance criteria:
 
@@ -105,9 +120,9 @@ Acceptance criteria:
 - clipping/resize references pass on WebGPU and WebGL2;
 - first-frame, upload, GPU-time, and GPU-memory baselines are stored.
 
-### V0.8. Harden and review the completed vertical slice — M
+### V0.9. Harden and review the completed vertical slice — M
 
-Dependencies: V0.2–V0.7
+Dependencies: V0.2–V0.8
 
 Acceptance criteria:
 

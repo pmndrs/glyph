@@ -2,6 +2,7 @@
 
 ## 2026-07-23
 
+- **Update**: Made the interactive benchmark lab and shared headless runner an explicit milestone-1 artifact, using `js-physics-benchmarks` as the adapter/scenario and bundle-report precedent.
 - **Restructure**: Established this OKF v0.1 bundle and progressive-disclosure [index](index.md).
 - **Creation**: Added the API-first [planned API walkthrough](tutorials/API_PREVIEW.md).
 - **Consolidation**: Replaced competing execution plans with one [canonical roadmap](roadmap/ROADMAP.md) and [artifact map](roadmap/ARTIFACTS.md).

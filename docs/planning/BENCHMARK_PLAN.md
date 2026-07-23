@@ -1,7 +1,7 @@
 ---
 type: Test Plan
 title: Benchmark plan
-description: Defines reproducible performance, memory, payload, loader, baker, paragraph, and presentation measurements.
+description: Defines the interactive benchmark lab, headless runner, and reproducible performance, memory, payload, loader, baker, paragraph, and presentation measurements.
 status: proposed
 tags: [benchmarks, performance, payload]
 ---
@@ -19,6 +19,134 @@ Purpose: replace performance and payload estimates with reproducible evidence.
 4. Never compare outputs that differ semantically or in font coverage.
 5. Store raw samples and environment metadata, not only summary charts.
 6. Treat variance and regression thresholds as part of the benchmark definition.
+
+## Required benchmark product
+
+The project must ship an interactive benchmark lab modeled on the architecture of [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks), together with a headless runner that executes the same scenarios. This is a first-class repository artifact, not a collection of unrelated microbenchmark scripts.
+
+The useful precedent is:
+
+- one browser application for selecting a target and scenario;
+- a stable adapter contract shared by all compared targets;
+- independent scenario modules with configurable controls;
+- explicit capability declarations and visible unsupported combinations;
+- URL-encoded target, scenario, and control state for reproducible links;
+- live measurements split into meaningful pipeline phases;
+- a separate, reproducible bundle-size build whose results appear beside runtime measurements;
+- static deployment suitable for maintainer and contributor review.
+
+The pmndrs/text lab extends that pattern with correctness hashes, image diffs, cold-start automation, raw sample export, GPU/device metadata, and font/presentation byte accounting.
+
+## Harness architecture
+
+Planned repository shape:
+
+```text
+apps/benchmarks/
+  src/
+    targets/
+      shaping/
+      presentation/
+      delivery/
+    scenarios/
+      shaping/
+      paragraph/
+      loading/
+      rendering/
+    harness/
+      capabilities.ts
+      runner.ts
+      samples.ts
+      validation.ts
+    ui/
+  bundle-sizes/
+    entries/
+    build.mjs
+    results.json
+  results/
+    schema.json
+```
+
+The interactive application and headless runner import the same target registry, scenario registry, controls, validation rules, warmup policy, and result schema. A visually convenient browser path must not become a separate benchmark definition.
+
+### Target adapters
+
+A target is one implementation choice on a declared axis:
+
+- shaping: pinned HarfRust reference or a later optimized path;
+- presentation: bitmap, MTSDF, or Slug;
+- graphics API: WebGPU or WebGL2;
+- delivery: pre-baked hit or automatic Worker fallback;
+- bake host: Node or Worker Wasm where parity is being measured.
+
+The exact TypeScript is accepted with the API fixture, but the contract must express:
+
+```ts
+interface BenchmarkTarget<Prepared, Output> {
+  id: string
+  label: string
+  kind: 'shaping' | 'paragraph' | 'baker' | 'loader' | 'presentation'
+  capabilities: ReadonlySet<BenchmarkCapability>
+
+  load(context: BenchmarkContext): Promise<void>
+  prepare(scenario: BenchmarkScenario): Promise<Prepared>
+  run(prepared: Prepared, sample: SampleContext): Promise<Output>
+  validate(output: Output, oracle: ScenarioOracle): ValidationResult
+  dispose(): Promise<void>
+}
+```
+
+Adapters normalize lifecycle and measurement boundaries; they must not hide technique-specific costs or coerce unsupported behavior into a misleading approximation.
+
+### Scenario modules
+
+Each scenario declares:
+
+- stable ID, category, description, and default controls;
+- required target kind and capabilities;
+- pinned font, text, constraints, viewport, DPR, and transforms;
+- cold/warm setup and sample policy;
+- phase markers and primary metric;
+- semantic oracle or visual reference;
+- output hash inputs;
+- teardown and leak checks.
+
+Unsupported target/scenario pairs remain visible with their missing capabilities. They are not scored as failures and are never silently removed from comparison tables.
+
+### Interactive lab
+
+The browser UI must provide:
+
+- target, scenario, font, presentation, GPU backend, and parameter controls;
+- a shareable URL encoding the selected configuration;
+- live current, median, p95, minimum, maximum, and sample count;
+- separate shaping, layout, upload, render, and total panels where applicable;
+- correctness/visual status adjacent to performance;
+- payload cards separating JS, Wasm, core font, presentation, decoded texture, and GPU bytes;
+- environment details and downloadable raw JSON.
+
+Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where supported, first-frame latency, memory, and quality remain separate.
+
+### Automation and publication
+
+- Pull requests run deterministic smoke scenarios and schema/output validation.
+- Scheduled or manually approved runs capture longer browser/device matrices because noisy GPU results should not block every pull request.
+- The static lab can be published from the default branch after maintainers approve the workflow.
+- Committed summaries point to raw run artifacts and the exact commit/environment; hand-edited headline numbers are not authoritative.
+- The lab must operate locally without publication, and this planning branch does not authorize deployment.
+
+### Bundle-size pipeline
+
+Like the reference project, bundle sizes are produced from independent import entries. Required entries include:
+
+- browser core;
+- HarfRust shaper JavaScript glue and Wasm;
+- runtime baker loader and bake Wasm;
+- each presentation runtime;
+- each presentation generator;
+- combined V1 application path.
+
+Report raw, minified, gzip, and Brotli JavaScript; raw, gzip, and Brotli Wasm; and any dynamically imported transcoder separately. The interactive lab reads generated result JSON rather than estimating sizes from the development bundle.
 
 ## Benchmark environments
 
@@ -260,7 +388,7 @@ Thresholds must include expected measurement noise and require confirmation befo
 
 ## Phase 1 benchmark deliverable
 
-The first benchmark report must answer:
+The first benchmark milestone delivers the lab shell, target/scenario contracts, shareable configuration, result schema, headless smoke runner, and bundle-size pipeline with placeholder or fixture targets. The first real benchmark report must answer:
 
 1. What is the minimal HarfRust Wasm size and cold-start cost under the intended build settings?
 2. What does one coarse batched shaping call cost compared with repeated calls?
@@ -268,3 +396,7 @@ The first benchmark report must answer:
 4. What are the size and registration costs of shaping-only reference data?
 5. Does the proposed shaped-buffer ABI cause copying or allocation that dominates short strings?
 6. What baseline will later compiled lookup and SIMD experiments be required to beat?
+
+# Citations
+
+- [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks) — adapter/scenario browser-lab precedent, phase timing, capability gating, bundle-size generation, and static deployment.

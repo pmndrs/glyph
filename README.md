@@ -116,6 +116,7 @@ The first shippable release requires all three presentation engines: generated b
 | HarfRust shaper Wasm | Runtime shaping with coarse batch calls | shaping milestone |
 | JavaScript paragraph engine | Constraints, line breaking, reflow, and layout caching | paragraph milestone |
 | Presentation modules | Optional decode/upload/batch construction per technique | bitmap proof; all three by V1 |
+| Interactive benchmark lab | Shared scenarios, target adapters, live phase timing, payload comparison, and reproducible result export | fixture milestone |
 
 The [artifact map](docs/roadmap/ARTIFACTS.md) defines their ownership and required fixtures.
 
@@ -137,6 +138,7 @@ Bitmap is implemented first because it is the smallest end-to-end proof, not bec
 - [Documentation index](docs/index.md) — canonical navigation for people and agents.
 - [Canonical roadmap](docs/roadmap/ROADMAP.md) — exact implementation order and gates.
 - [Artifact map](docs/roadmap/ARTIFACTS.md) — what each phase must produce.
+- [Benchmark lab and methodology](docs/planning/BENCHMARK_PLAN.md) — interactive comparison harness, headless runner, measurements, and gates.
 - [Project brief](docs/planning/PROJECT_BRIEF.md) — product outcome and scope.
 - [Architecture](docs/planning/ARCHITECTURE.md) — system boundaries and invariants.
 - [Research bibliography](RESEARCH.md) — cited papers, articles, libraries, and extracted findings.

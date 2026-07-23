@@ -138,7 +138,9 @@ Loads the font, shapes the paragraph, lays it out at fixed widths, and records l
 
 Draws a fixed viewport/DPR/color/transform matrix on WebGPU and WebGL2. It stores reference images and diffs separately from shaping/layout expectations.
 
-### Benchmark runner
+### Interactive benchmark lab and headless runner
+
+Provides the target-adapter/scenario architecture, capability gating, shareable browser configuration, live phase panels, raw result export, and independent bundle-size comparison defined by the [benchmark plan](BENCHMARK_PLAN.md). The headless runner imports those same scenarios and validation rules for repeatable local and CI runs; it does not maintain a second benchmark corpus.
 
 Records:
 

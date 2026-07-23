@@ -18,6 +18,7 @@ tags: [artifacts, roadmap, testing, packaging]
 | Portable bake core | internal Rust/Wasm/native library | source validation, canonical transformation, packing, diagnostics | filesystem, DOM, CLI policy |
 | Runtime shaper | HarfRust-based Wasm module | Unicode/OpenType shaping, plans, flat batch ABI | paragraph policy, presentation data |
 | Paragraph engine | JavaScript module | constraints, breaks, line layout, caches, reshape batching | GSUB/GPOS, GPU records |
+| Benchmark lab | `apps/benchmarks` | shared target adapters and scenarios, interactive comparisons, headless execution, result export, bundle-size reports | alternate benchmark semantics per UI/CI path |
 | Bitmap presentation | `@pmndrs/text/presentation/bitmap` | validation, texture upload, draw batching | measurement or shaping changes |
 | MTSDF presentation | `@pmndrs/text/presentation/mtsdf` | release-required generator/decoder/shader after the bitmap proof | eager inclusion in bitmap-only apps |
 | Slug presentation | `@pmndrs/text/presentation/slug` | release-required curves/bands/paint rendering after the bitmap proof | eager inclusion in other apps |
@@ -44,6 +45,7 @@ Embedded and split packaging must preserve identical authoritative records. A pr
 | Presentation | decoded records, texture pixels, GPU readback, visual goldens |
 | Delivery | baked hit, missing fallback, invalid asset, cancellation, deduplication |
 | Package graph | proof that unused baker and presentation modules are unreachable |
+| Benchmark | target/scenario manifest, environment, raw samples, validation hash, summaries, and shareable configuration |
 
 ## Reports
 
@@ -62,15 +64,15 @@ Every milestone that creates executable behavior emits machine-readable raw evid
 | Milestone | New authoritative artifacts |
 | --- | --- |
 | 0 | accepted API/data contracts and version manifest |
-| 1 | source, shaping, paragraph, visual, corrupt-input, and benchmark fixtures |
+| 1 | source, shaping, paragraph, visual, corrupt-input, and benchmark fixtures; benchmark lab shell, contracts, result schema, and headless smoke runner |
 | 2 | portable bake core, Node baker, core GLB, bitmap GLB, validators, bake report |
 | 3 | loader, runtime baker library, Worker protocol, delivery/package-graph fixtures |
 | 4 | HarfRust Wasm shaper, batch ABI fixtures, shaping report |
 | 5 | JS paragraph engine, layout fixtures, reflow report |
 | 6 | bitmap presentation module, WebGPU/WebGL2 scenes, GPU and quality reports |
-| 7 | full integration suite, baselines, accepted ADRs, reviewed extension drafts |
+| 7 | full integration suite, populated interactive benchmark lab, baselines, accepted ADRs, reviewed extension drafts |
 | 8 | MTSDF generator/runtime, atlas and visual fixtures, GPU and payload reports |
 | 9 | Slug generator/runtime, packed curve/band fixtures, visual and GPU reports |
-| 10 | three-renderer integration suite, second-font smoke fixtures, release evidence |
+| 10 | three-renderer integration suite, public comparison scenarios, second-font smoke fixtures, release evidence |
 
 The [canonical roadmap](ROADMAP.md) defines the order and exit gates. The detailed [tooling plan](/planning/TOOLING_FIXTURES.md), [conformance plan](/planning/CONFORMANCE_PLAN.md), and [benchmark plan](/planning/BENCHMARK_PLAN.md) define how artifacts are produced and checked.
