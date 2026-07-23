@@ -38,7 +38,7 @@ The HarfRust Wasm shaper is shared application code, not repeated per font. Its 
 
 “Texture bytes” below means the uncompressed GPU-resident storage implied by dimensions and texel format. It is not a network-size estimate. Network bytes depend on the final PNG/KTX2/container choice and must be measured without applying lossy compression that changes rendering quality.
 
-The [GPU compression design note](GPU_COMPRESSION.md) separates lossless delivery compression, GPU-native block compression, and exact Slug band packing. Its Lucide experiment models a quality-preserving band redesign at roughly 2.04 MiB total Slug storage, or approximately 1.16 MiB when combined with a still-unproven compressed-curve path.
+The [GPU compression design note](gpu-compression.md) separates lossless delivery compression, GPU-native block compression, and exact Slug band packing. Its Lucide experiment models a quality-preserving band redesign at roughly 2.04 MiB total Slug storage, or approximately 1.16 MiB when combined with a still-unproven compressed-curve path.
 
 ## Representative fixtures
 
@@ -59,7 +59,7 @@ The first integration fixture remains one pinned Inter file. Font Awesome and Lu
 
 ## Shared glyph and shaping data
 
-V0 uses the closed [`opentype-sfnt-harfrust-v0`](SHAPING_DATA_CONTRACT.md) profile. It keeps the standard metrics and layout tables HarfRust consumes and removes outlines, hinting, font-authored presentation data, variation data, names, AAT, and Graphite. It does not duplicate cmap, advances, or kerning into another serialized representation.
+V0 uses the closed [`opentype-sfnt-harfrust-v0`](shaping-data-contract.md) profile. It keeps the standard metrics and layout tables HarfRust consumes and removes outlines, hinting, font-authored presentation data, variation data, names, AAT, and Graphite. It does not duplicate cmap, advances, or kerning into another serialized representation.
 
 | Fixture | Full source font | Canonical shaping SFNT | Dense extents | V0 raw subtotal before sparse points |
 | --- | ---: | ---: | ---: | ---: |

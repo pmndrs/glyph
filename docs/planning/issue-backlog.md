@@ -8,7 +8,7 @@ tags: [issues, roadmap, planning]
 
 # Issue-sized backlog
 
-> Execution order is defined only by the [canonical roadmap](/roadmap/ROADMAP.md). This catalog supplies issue-sized decomposition and future work; its older queue headings are not a competing roadmap.
+> Execution order is defined only by the [canonical roadmap](/roadmap/roadmap.md). This catalog supplies issue-sized decomposition and future work; its older queue headings are not a competing roadmap.
 
 Status: proposed  
 Sizing: S is roughly one focused PR, M may need two PRs, and L must be split before implementation.
@@ -17,7 +17,7 @@ This backlog is ordered by dependency. Issue titles are ready to copy into GitHu
 
 ## Historical decomposition of the one-font integration slice
 
-The issues below remain useful implementation-sized candidates for milestones 0–7, but the [canonical roadmap](/roadmap/ROADMAP.md) controls their execution order. The broader epics remain later work unless that roadmap activates them.
+The issues below remain useful implementation-sized candidates for milestones 0–7, but the [canonical roadmap](/roadmap/roadmap.md) controls their execution order. The broader epics remain later work unless that roadmap activates them.
 
 ### V0.1. Review bake, loader, runtime API, identity, and data contracts — S
 
@@ -55,7 +55,7 @@ Acceptance criteria:
 - independent bundle entries report JavaScript and Wasm sizes without importing every optional renderer/generator;
 - one deterministic fixture target exports raw samples and environment metadata without claiming product performance.
 
-Planning baseline: [`BENCHMARK_PLAN.md`](BENCHMARK_PLAN.md), using [`isaac-mason/js-physics-benchmarks`](https://github.com/isaac-mason/js-physics-benchmarks) as the structural precedent.
+Planning baseline: [`benchmark-plan.md`](benchmark-plan.md), using [`isaac-mason/js-physics-benchmarks`](https://github.com/isaac-mason/js-physics-benchmarks) as the structural precedent.
 
 ### V0.4. Implement the minimal shared baker and Node host — M
 
@@ -140,7 +140,7 @@ Dependencies: none
 
 Acceptance criteria:
 
-- maintainers resolve every decision-gate item in `PROJECT_BRIEF.md`;
+- maintainers resolve every decision-gate item in `project-brief.md`;
 - edits are reflected in architecture and phase documents;
 - deferred features have no implied V1 commitment.
 
@@ -175,7 +175,7 @@ Acceptance criteria:
 - license/attribution requirements are recorded;
 - coupling to Three Flatland types is identified.
 
-Research snapshot: [`SLUG_AUDIT.md`](SLUG_AUDIT.md). Implementation should begin by reviewing and accepting or revising its dispositions rather than repeating discovery.
+Research snapshot: [`slug-audit.md`](slug-audit.md). Implementation should begin by reviewing and accepting or revising its dispositions rather than repeating discovery.
 
 ### A5. Define benchmark methodology and result schema — M
 
@@ -188,7 +188,7 @@ Acceptance criteria:
 - raw/Brotli/gzip sizes are separate metrics;
 - benchmark variance and regression thresholds are documented.
 
-Planning baseline: [`BENCHMARK_PLAN.md`](BENCHMARK_PLAN.md).
+Planning baseline: [`benchmark-plan.md`](benchmark-plan.md).
 
 ### A6. Capture reproducible font and icon payload baselines — M
 
@@ -201,7 +201,7 @@ Acceptance criteria:
 - bitmap, MSDF/MTSDF, and Slug are measured independently with atlas dimensions, formats, mipmaps, and occupancy;
 - selected-icon and full-library Lucide cases are separate;
 - Node and Worker generators emit equivalent canonical report values and pixels;
-- modeled values in the [font payload budget](PAYLOAD_BUDGET.md) are replaced by checked-in raw reports without changing visual or conformance gates.
+- modeled values in the [font payload budget](payload-budget.md) are replaced by checked-in raw reports without changing visual or conformance gates.
 
 ### A7. Register the PMNDRS glTF vendor prefix — S
 
@@ -210,7 +210,7 @@ Dependencies: A1
 Acceptance criteria:
 
 - Poimandres maintainers approve the project name, public contact, requested `PMNDRS` prefix, and intended-use summary;
-- an authorized maintainer files the issue body in the [registration draft](GLTF_EXTENSION_REGISTRATION.md) against `KhronosGroup/glTF`;
+- an authorized maintainer files the issue body in the [registration draft](gltf-extension-registration.md) against `KhronosGroup/glTF`;
 - prefix reservation is described separately from extension specification, implementation, and Khronos ratification;
 - the resulting registry issue and `extensions/Prefixes.md` entry are linked from D-022;
 - the `PMNDRS_font` specification PR remains blocked on an accepted schema, public reference implementation, validator fixtures, and reproducible sample assets.
@@ -239,7 +239,7 @@ Acceptance criteria:
 - allowlisted differences require a reason and upstream link;
 - fixture version metadata is mandatory.
 
-Planning baseline: [`CONFORMANCE_PLAN.md`](CONFORMANCE_PLAN.md).
+Planning baseline: [`conformance-plan.md`](conformance-plan.md).
 
 ### B3. Prototype a coarse-grained HarfRust Wasm call — M
 
@@ -418,7 +418,7 @@ Dependencies: D2, D5, A6
 
 Acceptance criteria:
 
-- baseline, exact-band, and compressed-curve variants use identical source glyphs and produce the report defined in [GPU compression](GPU_COMPRESSION.md);
+- baseline, exact-band, and compressed-curve variants use identical source glyphs and produce the report defined in [GPU compression](gpu-compression.md);
 - u32 headers and u16 glyph-local references reproduce every addressed curve sequence bit-for-bit, with explicit overflow behavior;
 - RGBA16F remains the reference/fallback curve format;
 - UASTC/BC7/ASTC curve variants record selected device formats and pass the established visual/geometric gates at UI through extreme magnification scales;

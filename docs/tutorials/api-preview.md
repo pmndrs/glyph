@@ -149,7 +149,7 @@ Disposal invalidates stale shape, layout, presentation, and GPU-resource cache e
 
 ## Contract references
 
-- The [API reference](/planning/API_SHAPES.md) defines every V0 interface used above.
-- The [architecture](/planning/ARCHITECTURE.md) assigns ownership and import boundaries.
-- The [shaping contract](/planning/SHAPING_DATA_CONTRACT.md) defines the Wasm request/result ABI.
-- The [presentation contract](/planning/PRESENTATION_DATA_CONTRACT.md) defines binding and GPU records.
+- The [API reference](/planning/api-shapes.md) defines every V0 interface used above.
+- The [architecture](/planning/architecture.md) assigns ownership and import boundaries.
+- The [shaping contract](/planning/shaping-data-contract.md) defines the Wasm request/result ABI.
+- The [presentation contract](/planning/presentation-data-contract.md) defines binding and GPU records.

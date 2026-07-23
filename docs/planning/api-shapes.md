@@ -333,7 +333,7 @@ interface ShapedBatchViews {
 }
 ```
 
-The implementation packs these public values into the exact 16-byte feature and 32-byte run records in the [shaping ABI](SHAPING_DATA_CONTRACT.md). One API call crosses into Wasm per batch.
+The implementation packs these public values into the exact 16-byte feature and 32-byte run records in the [shaping ABI](shaping-data-contract.md). One API call crosses into Wasm per batch.
 
 ## Paragraph API
 

@@ -104,4 +104,4 @@ A paragraph may contain glyphs using different presentations while preserving on
 - [MSDF author preview shader](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553): demonstrated thickness, border, gradient, and shadow operations over an MSDF.
 - [OpenType color glyph overview](https://learn.microsoft.com/en-us/typography/opentype/spec/overview), [COLR](https://learn.microsoft.com/en-us/typography/opentype/spec/colr), [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg), [CBDT](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt), and [`sbix`](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix): source-authored vector and bitmap color formats.
 - [`RESEARCH.md`](../../RESEARCH.md): maintained summaries of Slug, the Alvin renderer comparison, msdfgen, and the source-format research.
-- [`SLUG_AUDIT.md`](SLUG_AUDIT.md): current Slug pipeline, quality constraints, and performance findings inherited from Three Flatland.
+- [`slug-audit.md`](slug-audit.md): current Slug pipeline, quality constraints, and performance findings inherited from Three Flatland.

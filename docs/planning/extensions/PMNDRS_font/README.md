@@ -93,7 +93,7 @@ Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, 
 
 `fontFunctions` preserves geometry queries needed during shaping after outlines are removed. `glyphExtentsBufferView` contains one dense 8-byte `(xMin, yMin, xMax, yMax)` i16 record per glyph. Optional contour-point records contain sorted 8-byte `(glyphId, pointIndex, x, y)` values for every point referenced by GPOS Anchor Format 2.
 
-The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../SHAPING_DATA_CONTRACT.md) while this extension is incubated in `pmndrs/text`.
+The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../shaping-data-contract.md) while this extension is incubated in `pmndrs/text`.
 
 `shaping.hash` is lowercase SHA-256 over the domain-separated, length-prefixed SFNT, glyph-extents, and contour-point bytes defined by the shaping contract. Companion presentation artifacts MUST repeat this hash.
 
@@ -127,7 +127,7 @@ Three Flatland Slug is prior art for baked GLB font delivery but does not implem
 
 ## Resources
 
-- [V0 shaping data contract](../../SHAPING_DATA_CONTRACT.md)
-- [V0 presentation data contract](../../PRESENTATION_DATA_CONTRACT.md)
-- [Runtime/bake API fixture](../../API_SHAPES.md)
-- [Payload budget](../../PAYLOAD_BUDGET.md)
+- [V0 shaping data contract](../../shaping-data-contract.md)
+- [V0 presentation data contract](../../presentation-data-contract.md)
+- [Runtime/bake API fixture](../../api-shapes.md)
+- [Payload budget](../../payload-budget.md)

@@ -313,7 +313,7 @@ Compare current Three Flatland Slug loading with the new path for equivalent Slu
 
 ## Payload report
 
-The initial measured baselines, modeled atlas envelopes, and required report schema live in the [font payload budget](PAYLOAD_BUDGET.md). Benchmarks replace its modeled values; they do not mix shared font bytes, transport bytes, and GPU texture allocation into one total.
+The initial measured baselines, modeled atlas envelopes, and required report schema live in the [font payload budget](payload-budget.md). Benchmarks replace its modeled values; they do not mix shared font bytes, transport bytes, and GPU texture allocation into one total.
 
 Every font configuration reports sections separately:
 

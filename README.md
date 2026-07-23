@@ -87,7 +87,7 @@ await bakeFont({
 })
 ```
 
-See the [planned API walkthrough](docs/tutorials/API_PREVIEW.md) for lifecycle, split presentation loading, and renderer switching. The exact interfaces live in the [V0 API reference](docs/planning/API_SHAPES.md).
+See the [planned API walkthrough](docs/tutorials/api-preview.md) for lifecycle, split presentation loading, and renderer switching. The exact interfaces live in the [V0 API reference](docs/planning/api-shapes.md).
 
 ## What gets built first
 
@@ -102,7 +102,7 @@ The first internal vertical slice takes one pinned font through both delivery pa
 7. upload and render the bitmap presentation on WebGPU and WebGL2;
 8. harden identity, cancellation, malformed input, package separation, and benchmarks for the proof.
 
-The first shippable release requires all three presentation engines: generated bitmap, MTSDF, and Slug. MTSDF and Slug begin only after the bitmap proof establishes correct interfaces, but they are release blockers—not optional post-release ideas. Color emoji, SVG icon-font artwork, multi-font fallback, compiled shaping data, and SIMD retain separate roadmap lanes. The [canonical roadmap](docs/roadmap/ROADMAP.md) names every deliverable, dependency, effort estimate, and exit gate.
+The first shippable release requires all three presentation engines: generated bitmap, MTSDF, and Slug. MTSDF and Slug begin only after the bitmap proof establishes correct interfaces, but they are release blockers—not optional post-release ideas. Color emoji, SVG icon-font artwork, multi-font fallback, compiled shaping data, and SIMD retain separate roadmap lanes. The [canonical roadmap](docs/roadmap/roadmap.md) names every deliverable, dependency, effort estimate, and exit gate.
 
 ## System artifacts
 
@@ -118,7 +118,7 @@ The first shippable release requires all three presentation engines: generated b
 | Presentation modules | Optional decode/upload/batch construction per technique | bitmap proof; all three by V1 |
 | Interactive benchmark lab | Shared scenarios, target adapters, live phase timing, payload comparison, and reproducible result export | fixture milestone |
 
-The [artifact map](docs/roadmap/ARTIFACTS.md) defines their ownership and required fixtures.
+The [artifact map](docs/roadmap/artifacts.md) defines their ownership and required fixtures.
 
 ## Renderer guidance
 
@@ -131,17 +131,17 @@ Applications select presentations explicitly; the package does not silently swit
 | Large text, extreme zoom, complex outlines, color vector layers | Slug |
 | Pixel-art or intentionally raster typography | Bitmap |
 
-Bitmap is implemented first because it is the smallest end-to-end proof, not because it is the eventual general-purpose default. Windfoil remains outside the text roadmap. See the [renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md).
+Bitmap is implemented first because it is the smallest end-to-end proof, not because it is the eventual general-purpose default. Windfoil remains outside the text roadmap. See the [renderer capability matrix](docs/planning/renderer-capabilities.md).
 
 ## Documentation map
 
 - [Documentation index](docs/index.md) — canonical navigation for people and agents.
-- [Canonical roadmap](docs/roadmap/ROADMAP.md) — exact implementation order and gates.
-- [Artifact map](docs/roadmap/ARTIFACTS.md) — what each phase must produce.
-- [Benchmark lab and methodology](docs/planning/BENCHMARK_PLAN.md) — interactive comparison harness, headless runner, measurements, and gates.
-- [Project brief](docs/planning/PROJECT_BRIEF.md) — product outcome and scope.
-- [Architecture](docs/planning/ARCHITECTURE.md) — system boundaries and invariants.
+- [Canonical roadmap](docs/roadmap/roadmap.md) — exact implementation order and gates.
+- [Artifact map](docs/roadmap/artifacts.md) — what each phase must produce.
+- [Benchmark lab and methodology](docs/planning/benchmark-plan.md) — interactive comparison harness, headless runner, measurements, and gates.
+- [Project brief](docs/planning/project-brief.md) — product outcome and scope.
+- [Architecture](docs/planning/architecture.md) — system boundaries and invariants.
 - [Research bibliography](RESEARCH.md) — cited papers, articles, libraries, and extracted findings.
-- [Documentation audit](docs/DOCUMENTATION_AUDIT.md) — contradictions found and disposition of every prior planning document.
+- [Documentation audit](docs/documentation-audit.md) — contradictions found and disposition of every prior planning document.
 
 The existing [Three Flatland Slug package](https://github.com/thejustinwalsh/three-flatland/tree/main/packages/slug) is prior art. `pmndrs/text` is intended to become the shipping package, with Three Flatland eventually consuming it.

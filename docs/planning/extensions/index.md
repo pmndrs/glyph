@@ -10,4 +10,4 @@
 - [PMNDRS_font_distance_field](PMNDRS_font_distance_field/README.md) - MSDF and MTSDF records and textures.
 - [PMNDRS_font_slug](PMNDRS_font_slug/README.md) - Slug curve, band, and GPU resources.
 
-These are draft V0 vendor extensions. The [data contracts](../DATA_DESIGN_V0.md) are their source of truth, and the [registration draft](../GLTF_EXTENSION_REGISTRATION.md) must not be submitted without maintainer approval.
+These are draft V0 vendor extensions. The [data contracts](../data-design-v0.md) are their source of truth, and the [registration draft](../gltf-extension-registration.md) must not be submitted without maintainer approval.

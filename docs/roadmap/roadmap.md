@@ -44,7 +44,7 @@ Do not start a milestone before its dependencies and exit evidence exist.
 
 Deliver:
 
-- maintainer review of the [API](/planning/API_SHAPES.md), [architecture](/planning/ARCHITECTURE.md), [shaping data](/planning/SHAPING_DATA_CONTRACT.md), and [presentation data](/planning/PRESENTATION_DATA_CONTRACT.md);
+- maintainer review of the [API](/planning/api-shapes.md), [architecture](/planning/architecture.md), [shaping data](/planning/shaping-data-contract.md), and [presentation data](/planning/presentation-data-contract.md);
 - accepted font identity `(FontHandle, LocalGlyphId)` and one-face asset rule;
 - accepted embedded/external presentation binding;
 - pinned HarfRust, HarfBuzz reference, Unicode, glTF schema, and generator versions;
@@ -202,4 +202,4 @@ Windfoil, browser-time JIT, MLIR, GPU shaping, vertical writing, runtime variati
 
 ## Roadmap change rule
 
-Any change to order, scope, or an exit gate must update this document, the [artifact map](ARTIFACTS.md), the [decision register](/planning/DECISION_REGISTER.md), and affected contract references in one review. Historical plans are never silently reactivated.
+Any change to order, scope, or an exit gate must update this document, the [artifact map](artifacts.md), the [decision register](/planning/decision-register.md), and affected contract references in one review. Historical plans are never silently reactivated.

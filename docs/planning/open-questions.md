@@ -13,7 +13,7 @@ Status: unresolved unless marked otherwise.
 ## Blocking before Phase 1
 
 1. Which exact HarfRust, HarfBuzz, and Unicode versions become the first reference set?
-2. Which authorized Poimandres maintainer will submit the prepared [`PMNDRS` prefix request](GLTF_EXTENSION_REGISTRATION.md), and should the registry identify the project as `Poimandres` or `pmndrs`?
+2. Which authorized Poimandres maintainer will submit the prepared [`PMNDRS` prefix request](gltf-extension-registration.md), and should the registry identify the project as `Poimandres` or `pmndrs`?
 3. Which source-font licenses permit checked-in fixtures and generated derivatives in CI?
 4. Which browsers and GPU APIs define the initial support matrix?
 

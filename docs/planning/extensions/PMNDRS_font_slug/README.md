@@ -47,6 +47,6 @@ The extension adds a `PMNDRS_font_slug` object to the root glTF `extensions` obj
 
 ## Resources
 
-- [Presentation data contract](../../PRESENTATION_DATA_CONTRACT.md)
-- [Slug audit](../../SLUG_AUDIT.md)
-- [GPU compression and compact Slug storage](../../GPU_COMPRESSION.md)
+- [Presentation data contract](../../presentation-data-contract.md)
+- [Slug audit](../../slug-audit.md)
+- [GPU compression and compact Slug storage](../../gpu-compression.md)

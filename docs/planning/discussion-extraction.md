@@ -678,7 +678,7 @@ The conversation's final broad plan evolved into:
 11. conformance, fuzzing, and benchmarking throughout;
 12. downstream Three Flatland migration.
 
-The ordering was exploratory and contains too much for a single V1. [`SCOPE_LANES.md`](SCOPE_LANES.md) separates implementation scope from compatibility lanes.
+The ordering was exploratory and contains too much for a single V1. [`scope-lanes.md`](scope-lanes.md) separates implementation scope from compatibility lanes.
 
 ## 20. Ideas explicitly rejected or deferred during discussion
 

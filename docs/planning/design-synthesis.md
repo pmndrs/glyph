@@ -11,7 +11,7 @@ tags: [history, design, shaping, rendering]
 Status: historical planning synthesis; not an accepted specification
 Last reviewed: 2026-07-22
 
-This document preserves the first architecture synthesis that led to `pmndrs/text`. It mixes sourced findings, proposed product direction, and performance hypotheses, so it is planning history rather than a research bibliography. Use [`RESEARCH.md`](../../RESEARCH.md) for annotated sources, [`DISCUSSION_EXTRACTION.md`](DISCUSSION_EXTRACTION.md) for the complete conversation record, and [`SCOPE_LANES.md`](SCOPE_LANES.md) for rescoping.
+This document preserves the first architecture synthesis that led to `pmndrs/text`. It mixes sourced findings, proposed product direction, and performance hypotheses, so it is planning history rather than a research bibliography. Use [`RESEARCH.md`](../../RESEARCH.md) for annotated sources, [`discussion-extraction.md`](discussion-extraction.md) for the complete conversation record, and [`scope-lanes.md`](scope-lanes.md) for rescoping.
 
 ## Executive conclusion
 

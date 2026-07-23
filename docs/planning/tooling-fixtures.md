@@ -41,7 +41,7 @@ Post-slice presentation fixtures must also pin:
 - one CBDT/CBLC or `sbix` color-emoji font covering embedded bitmap strikes;
 - one OpenType-SVG icon font and one manifest-backed standalone SVG icon set covering the accepted subset plus explicit rejection cases.
 
-Payload fixtures additionally include the existing 350-glyph Font Awesome bake and the uikit fork's 1,594-shape Lucide bake. They establish icon-font and standalone-SVG baselines without expanding the first runtime slice. The selected Lucide subset and full library must be measured independently so tree-shaken application usage is not conflated with whole-library stress testing. See the [font payload budget](PAYLOAD_BUDGET.md).
+Payload fixtures additionally include the existing 350-glyph Font Awesome bake and the uikit fork's 1,594-shape Lucide bake. They establish icon-font and standalone-SVG baselines without expanding the first runtime slice. The selected Lucide subset and full library must be measured independently so tree-shaken application usage is not conflated with whole-library stress testing. See the [font payload budget](payload-budget.md).
 
 Each source, license, version, hash, expected baked records, and reference image is immutable. These fixtures do not expand the first one-font vertical slice.
 
@@ -51,7 +51,7 @@ Each source, license, version, hash, expected baked records, and reference image
 fixtures/
   fonts/
     inter-regular/
-      SOURCE.md
+      source.md
       LICENSE.txt
       manifest.json
       source.ttf
@@ -140,7 +140,7 @@ Draws a fixed viewport/DPR/color/transform matrix on WebGPU and WebGL2. It store
 
 ### Interactive benchmark lab and headless runner
 
-Provides the target-adapter/scenario architecture, capability gating, shareable browser configuration, live phase panels, raw result export, and independent bundle-size comparison defined by the [benchmark plan](BENCHMARK_PLAN.md). The headless runner imports those same scenarios and validation rules for repeatable local and CI runs; it does not maintain a second benchmark corpus.
+Provides the target-adapter/scenario architecture, capability gating, shareable browser configuration, live phase panels, raw result export, and independent bundle-size comparison defined by the [benchmark plan](benchmark-plan.md). The headless runner imports those same scenarios and validation rules for repeatable local and CI runs; it does not maintain a second benchmark corpus.
 
 Records:
 
@@ -151,7 +151,7 @@ Records:
 - paragraph initial layout and width-only reflow;
 - first drawable frame, GPU upload, frame GPU time, and presentation memory.
 
-It also emits the machine-readable `FontPayloadReport` defined by the [payload budget](PAYLOAD_BUDGET.md), with source/shared/container/transport bytes separated from serialized presentation records and GPU-resident pages.
+It also emits the machine-readable `FontPayloadReport` defined by the [payload budget](payload-budget.md), with source/shared/container/transport bytes separated from serialized presentation records and GPU-resident pages.
 
 Raw samples and environment metadata follow the benchmark and autoresearch plans.
 

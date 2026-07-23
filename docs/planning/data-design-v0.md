@@ -13,9 +13,9 @@ Goal: freeze the font, shaping, presentation, and runtime-memory shapes used by 
 
 The detailed shaping rules and binary ABI are normative within this plan:
 
-- [Shaping data contract V0](SHAPING_DATA_CONTRACT.md)
-- [Presentation data contract V0](PRESENTATION_DATA_CONTRACT.md)
-- [Runtime and bake API shapes](API_SHAPES.md)
+- [Shaping data contract V0](shaping-data-contract.md)
+- [Presentation data contract V0](presentation-data-contract.md)
+- [Runtime and bake API shapes](api-shapes.md)
 
 ## Canonical model
 
@@ -67,7 +67,7 @@ interface FontAssetV0 {
 
 `Sha256Hex` is exactly 64 lowercase hexadecimal characters. `sourceHash` covers the original input bytes; `descriptorHash` covers the canonical bake descriptor; `shaping.hash` uses the domain-separated, length-prefixed SFNT/extents/contour-point encoding in the shaping contract.
 
-The V0 shaping profile is a deterministic shaping-only static SFNT plus flat extents and referenced contour points required by HarfRust font functions after outlines are removed. It retains required OpenType layout and metrics tables, excludes outlines/presentations/metadata/hinting, and has a closed table whitelist. The exact table and record policy is defined in [the shaping contract](SHAPING_DATA_CONTRACT.md).
+The V0 shaping profile is a deterministic shaping-only static SFNT plus flat extents and referenced contour points required by HarfRust font functions after outlines are removed. It retains required OpenType layout and metrics tables, excludes outlines/presentations/metadata/hinting, and has a closed table whitelist. The exact table and record policy is defined in [the shaping contract](shaping-data-contract.md).
 
 ## Presentation references
 
@@ -105,7 +105,7 @@ interface PresentationBindingV0 {
 | `PMNDRS_font_distance_field` | 20 B/glyph | Linear RGBA8 KTX2 pages for MSDF or MTSDF; compression variants are quality-gated. |
 | `PMNDRS_font_slug` | 40 B/glyph | RGBA16F curves, exact u32 headers, and exact glyph-local u16 references. |
 
-Bounds, sentinel values, fixed-point coordinates, texture variants, Slug address resolution, and cost formulas are fixed in the [presentation contract](PRESENTATION_DATA_CONTRACT.md).
+Bounds, sentinel values, fixed-point coordinates, texture variants, Slug address resolution, and cost formulas are fixed in the [presentation contract](presentation-data-contract.md).
 
 ## Runtime font record
 
@@ -154,7 +154,7 @@ interface BitmapBakeDescriptorV0 {
 }
 ```
 
-The exact distance-field and Slug descriptor fields are defined in the [API fixture](API_SHAPES.md). The first executable baker completes bitmap first; unsupported requested generators fail explicitly rather than ignoring fields. Node and Worker hosts invoke the same descriptor and MUST produce byte-identical authoritative sections.
+The exact distance-field and Slug descriptor fields are defined in the [API fixture](api-shapes.md). The first executable baker completes bitmap first; unsupported requested generators fail explicitly rather than ignoring fields. Node and Worker hosts invoke the same descriptor and MUST produce byte-identical authoritative sections.
 
 ## Shaped output
 
@@ -171,7 +171,7 @@ x/y offsets         i32[glyphCount]
 flags               u16[glyphCount]
 ```
 
-Clusters are UTF-16 offsets and positions are signed design units. V0 costs exactly 24 bytes per shaped glyph plus 10 bytes per run before arena headers and alignment. The exact request records, flags, and validation are in the [shaping contract](SHAPING_DATA_CONTRACT.md).
+Clusters are UTF-16 offsets and positions are signed design units. V0 costs exactly 24 bytes per shaped glyph plus 10 bytes per run before arena headers and alignment. The exact request records, flags, and validation are in the [shaping contract](shaping-data-contract.md).
 
 ## Paragraph boundary
 

@@ -8,12 +8,12 @@ tags: [history, roadmap]
 
 # Phased implementation plan
 
-> Superseded on 2026-07-23 by the [canonical implementation roadmap](/roadmap/ROADMAP.md). Preserve this document for planning history only.
+> Superseded on 2026-07-23 by the [canonical implementation roadmap](/roadmap/roadmap.md). Preserve this document for planning history only.
 
 Status: proposed  
 Rule: every phase ends with an evidence gate before the next optimization layer begins.
 
-Current execution is defined only by the [canonical implementation roadmap](/roadmap/ROADMAP.md): first prove the system with one generated bitmap presentation, then complete MTSDF and Slug before V1. This historical plan must not be used to schedule work.
+Current execution is defined only by the [canonical implementation roadmap](/roadmap/roadmap.md): first prove the system with one generated bitmap presentation, then complete MTSDF and Slug before V1. This historical plan must not be used to schedule work.
 
 ## Phase 0 — Decisions and baselines
 
@@ -22,13 +22,13 @@ Goal: remove architectural ambiguity before production code.
 Deliverables:
 
 - approve the project brief and architecture boundaries;
-- review the [decision register](DECISION_REGISTER.md) and record accepted choices as ADRs;
+- review the [decision register](decision-register.md) and record accepted choices as ADRs;
 - select and pin HarfRust/HarfBuzz/Unicode reference versions;
 - select the initial font corpus and licenses;
-- review the [Three Flatland Slug audit](SLUG_AUDIT.md) and confirm port/rewrite dispositions;
+- review the [Three Flatland Slug audit](slug-audit.md) and confirm port/rewrite dispositions;
 - write ADRs for container, shaper baseline, paragraph boundary, and static variations;
-- adopt the [benchmark plan](BENCHMARK_PLAN.md), machines/browsers, and result format;
-- adopt the [conformance plan](CONFORMANCE_PLAN.md) and unsupported-feature policies.
+- adopt the [benchmark plan](benchmark-plan.md), machines/browsers, and result format;
+- adopt the [conformance plan](conformance-plan.md) and unsupported-feature policies.
 
 Exit gate:
 
@@ -194,7 +194,7 @@ Conformance fixtures, Unicode tests, differential fuzzing, corrupt-input tests, 
 
 ### Performance
 
-Every phase records startup, steady-state, allocation/peak memory, raw/compressed bytes, and boundary-call counts. Benchmarks are versioned artifacts, not prose estimates. Once the presentation quality corpus and A/B runner exist, the [autoresearch protocol](AUTORESEARCH.md) may search bounded optimization hypotheses; it cannot weaken quality gates or advance a result without human review.
+Every phase records startup, steady-state, allocation/peak memory, raw/compressed bytes, and boundary-call counts. Benchmarks are versioned artifacts, not prose estimates. Once the presentation quality corpus and A/B runner exist, the [autoresearch protocol](autoresearch.md) may search bounded optimization hypotheses; it cannot weaken quality gates or advance a result without human review.
 
 ### Format governance
 

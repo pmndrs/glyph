@@ -63,11 +63,11 @@ Shared texture-resource schemas live in [`extensions/schema`](extensions/schema)
 
 ## Contract source
 
-- [Shaping data contract V0](SHAPING_DATA_CONTRACT.md)
-- [Presentation data contract V0](PRESENTATION_DATA_CONTRACT.md)
-- [Runtime data design V0](DATA_DESIGN_V0.md)
-- [Runtime and bake API fixture V0](API_SHAPES.md)
-- [Payload budget](PAYLOAD_BUDGET.md)
+- [Shaping data contract V0](shaping-data-contract.md)
+- [Presentation data contract V0](presentation-data-contract.md)
+- [Runtime data design V0](data-design-v0.md)
+- [Runtime and bake API fixture V0](api-shapes.md)
+- [Payload budget](payload-budget.md)
 
 ## Submission readiness gate
 

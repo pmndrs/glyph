@@ -75,4 +75,4 @@ Every milestone that creates executable behavior emits machine-readable raw evid
 | 9 | Slug generator/runtime, packed curve/band fixtures, visual and GPU reports |
 | 10 | three-renderer integration suite, public comparison scenarios, second-font smoke fixtures, release evidence |
 
-The [canonical roadmap](ROADMAP.md) defines the order and exit gates. The detailed [tooling plan](/planning/TOOLING_FIXTURES.md), [conformance plan](/planning/CONFORMANCE_PLAN.md), and [benchmark plan](/planning/BENCHMARK_PLAN.md) define how artifacts are produced and checked.
+The [canonical roadmap](roadmap.md) defines the order and exit gates. The detailed [tooling plan](/planning/tooling-fixtures.md), [conformance plan](/planning/conformance-plan.md), and [benchmark plan](/planning/benchmark-plan.md) define how artifacts are produced and checked.

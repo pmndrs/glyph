@@ -44,5 +44,5 @@ The extension adds a `PMNDRS_font_distance_field` object to the root glTF `exten
 
 ## Resources
 
-- [Presentation data contract](../../PRESENTATION_DATA_CONTRACT.md)
+- [Presentation data contract](../../presentation-data-contract.md)
 - [msdfgen](https://github.com/Chlumsky/msdfgen)

@@ -11,7 +11,7 @@ tags: [product, scope, roadmap]
 Status: proposed  
 Audience: pmndrs maintainers and initial contributors
 
-Current execution is a one-font slice with a required minimal baker: one shared core runs behind a Node host and a dynamically imported loader Worker, both emit the same canonical `PMNDRS_font` asset, HarfRust Wasm shapes its retained font data, the JS paragraph engine reflows one paragraph, and one generated bitmap presentation proves the rendering boundary. Advanced compiler work—subsetting/remapping, compiled IR, SIMD, and additional generators—remains later. The [canonical roadmap](/roadmap/ROADMAP.md) is authoritative for order and scope.
+Current execution is a one-font slice with a required minimal baker: one shared core runs behind a Node host and a dynamically imported loader Worker, both emit the same canonical `PMNDRS_font` asset, HarfRust Wasm shapes its retained font data, the JS paragraph engine reflows one paragraph, and one generated bitmap presentation proves the rendering boundary. Advanced compiler work—subsetting/remapping, compiled IR, SIMD, and additional generators—remains later. The [canonical roadmap](/roadmap/roadmap.md) is authoritative for order and scope.
 
 The bitmap slice is an internal end-to-end proof, not the minimum shippable product. The first release requires bitmap, MTSDF, and Slug presentation engines to pass their format, quality, and performance gates.
 

@@ -28,7 +28,7 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 The extension repeats `presentationId`, `shapingHash`, `glyphCount`, and `glyphIdWidth`; all MUST match the core presentation reference before upload.
 
-Each 20-byte glyph record contains four signed fixed-point plane bounds, four unsigned pixel-edge atlas bounds, a page index, and flags. `page = 0xffff` marks an absent image. Bounds and byte offsets are defined in the [presentation contract](../../PRESENTATION_DATA_CONTRACT.md).
+Each 20-byte glyph record contains four signed fixed-point plane bounds, four unsigned pixel-edge atlas bounds, a page index, and flags. `page = 0xffff` marks an absent image. Bounds and byte offsets are defined in the [presentation contract](../../presentation-data-contract.md).
 
 Grayscale V0 requires a lossless linear R8 KTX2 variant. Color image strikes use a separate sRGB RGBA8 resource. Native compressed variants may be added with a retained baseline fallback.
 
@@ -46,4 +46,4 @@ The extension adds a `PMNDRS_font_bitmap` object to the root glTF `extensions` o
 
 ## Resources
 
-- [Presentation data contract](../../PRESENTATION_DATA_CONTRACT.md)
+- [Presentation data contract](../../presentation-data-contract.md)

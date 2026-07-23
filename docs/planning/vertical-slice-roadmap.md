@@ -8,7 +8,7 @@ tags: [history, roadmap, vertical-slice]
 
 # One-font vertical-slice roadmap
 
-> Superseded on 2026-07-23 by the [canonical implementation roadmap](/roadmap/ROADMAP.md), which retains this sequence and resolves its conflicts with the phased plan and issue queue.
+> Superseded on 2026-07-23 by the [canonical implementation roadmap](/roadmap/roadmap.md), which retains this sequence and resolves its conflicts with the phased plan and issue queue.
 
 > This bitmap slice was always the easiest end-to-end product proof. It is not a shipping gate; the first release also requires MTSDF and Slug.
 

@@ -225,4 +225,4 @@ Acceptance rules:
 - [WebGL 2.0 specification](https://registry.khronos.org/webgl/specs/2.0/)
 - [WebGL compressed-texture extension registry](https://registry.khronos.org/webgl/extensions/)
 - [Reviewed Three Flatland uikit texture packer](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug/src/pipeline/texturePacker.ts)
-- [Font payload budget](PAYLOAD_BUDGET.md)
+- [Font payload budget](payload-budget.md)
