@@ -123,6 +123,8 @@ Rules:
 - each plugin validates its own ranges;
 - payloads declare final GPU component formats, strides, dimensions, row layouts, and alignment.
 
+Post-slice color support extends these existing families rather than changing shaping identity: `slug` gains optional paint/layer ranges for baked COLR, OpenType-SVG, and manifest-backed SVG icon artwork, while `bitmap` gains RGBA/sRGB image strikes for embedded color emoji. No SVG document or font paint graph is interpreted in the rendering hot path.
+
 ## First bitmap presentation
 
 ```ts
@@ -230,6 +232,8 @@ Missing baked assets are ordinary development fallback. Corrupt or incompatible 
 - dense packed glyph remapping;
 - shaping-only or compiled lookup sections;
 - MTSDF and Slug generators behind the same presentation request seam;
+- Slug paint/layer records generated from COLR, a validated OpenType-SVG subset, and manifest-backed SVG icon sets;
+- RGBA color-bitmap strikes generated from CBDT/CBLC and `sbix`;
 - persistent runtime-bake cache;
 - progressive generation;
 - automatic font fallback;

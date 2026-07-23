@@ -27,6 +27,7 @@ No `forceRuntime` option exists. Pre-baking is the expected path; fallback is an
 - persistent runtime-bake cache;
 - automatic font fallback;
 - MTSDF/Slug generation;
+- color emoji and SVG icon-font generation through the Slug feature set;
 - Windfoil implementation, which remains general-vector research outside the text roadmap;
 - automatic presentation selection;
 - progressive baking;
@@ -154,5 +155,6 @@ Exit gate: one font completes both delivery paths reproducibly, the normal path 
 2. add font fallback and mixed-script fixtures;
 3. add MTSDF behind the established generator/plugin boundaries;
 4. port/rewrite Slug with its proven optimizations;
-5. activate autoresearch on measured bottlenecks;
-6. introduce subsetting, remapping, compiled lookup data, or SIMD only when evidence justifies each unit.
+5. add baked COLR/SVG vector layers and embedded color-bitmap presentations to the Slug feature set;
+6. activate autoresearch on measured bottlenecks;
+7. introduce subsetting, remapping, compiled lookup data, or SIMD only when evidence justifies each unit.

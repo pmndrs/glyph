@@ -227,7 +227,7 @@ The baker remaps source glyph IDs into a dense packed space. Every section uses 
 source glyph ID → packed glyph ID
 ```
 
-The packed ID indexes shared metrics, glyph properties, Slug geometry, distance-field records, bitmap records, and future color presentations. `u16` is the likely common representation; the format must define how larger fonts are rejected or upgraded.
+The packed ID indexes shared metrics, glyph properties, Slug geometry, distance-field records, bitmap records, and post-slice color presentations. `u16` is the likely common representation; the format must define how larger fonts are rejected or upgraded.
 
 ### Shared data must not be duplicated
 
@@ -303,10 +303,11 @@ shaped glyph ID
     ├── monochrome Slug
     ├── MSDF/MTSDF
     ├── bitmap atlas
-    └── future color-layer/image presentation
+    ├── Slug vector paint/layers from COLR or supported SVG glyphs
+    └── color-bitmap/image presentation
 ```
 
-Color vector paint graphs and embedded image formats are deferred but the presentation directory must remain extensible.
+Color emoji and SVG icon fonts are required after the first vertical slice. The baker converts supported COLR, OpenType-SVG, and manifest-backed SVG icon artwork into Slug-compatible geometry plus explicit paint/layer records; embedded color bitmap strikes remain GPU-ready image presentations. Shaping still emits the same glyph IDs. Arbitrary SVG scripting, animation, filters, and external resources are not part of the font runtime.
 
 ## 8. Runtime fallback baker
 
@@ -466,7 +467,7 @@ Representative initial fonts should include a compact Latin UI font, Arabic, Dev
 - vertical writing;
 - full hyphenation dictionaries;
 - Graphite/AAT;
-- COLRv1 paint graph and SVG glyphs;
+- color emoji and SVG icon-font generation, required after the first vertical slice;
 - a public glTF extension proposal.
 
 ## Sources used in this synthesis

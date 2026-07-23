@@ -27,6 +27,14 @@ The fixture must use an explicitly documented Unicode sequence, including the de
 
 Complex-script and fallback fonts are required by the broader conformance plan, but they do not block the first rendered paragraph.
 
+Post-slice presentation fixtures must also pin:
+
+- one COLR/CPAL color-emoji font covering layered and paint-graph vectors;
+- one CBDT/CBLC or `sbix` color-emoji font covering embedded bitmap strikes;
+- one OpenType-SVG icon font and one manifest-backed standalone SVG icon set covering the accepted subset plus explicit rejection cases.
+
+Each source, license, version, hash, expected baked records, and reference image is immutable. These fixtures do not expand the first one-font vertical slice.
+
 ## Fixture layout
 
 ```text

@@ -66,7 +66,7 @@ The runtime baker is a shared library/module, not an auxiliary process or adjace
 - selected presentation generation;
 - deterministic section packing and diagnostics.
 
-V0 retains shaping-required OpenType bytes and generates one bitmap strike. Later units may add variation instancing, subsetting, closure, dense remapping, shaping-only tables, compiled lookups, Slug, and MTSDF.
+V0 retains shaping-required OpenType bytes and generates one bitmap strike. Later units may add variation instancing, subsetting, closure, dense remapping, shaping-only tables, compiled lookups, Slug, MTSDF, and the required color-emoji/SVG-icon extensions to Slug and bitmap presentations.
 
 ### Node host owns
 

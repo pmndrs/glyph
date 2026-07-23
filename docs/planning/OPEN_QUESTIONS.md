@@ -59,7 +59,7 @@ Status: unresolved unless marked otherwise.
 3. Can a renderer switch technique per glyph, or only per run/font in V1?
 4. What is the default presentation-selection policy by projected pixel height?
 5. How are missing glyph presentations reported and substituted?
-6. Are color emoji and bitmap image glyphs explicitly deferred, or must the presentation directory reserve concrete records now?
+6. Which COLR paint operations, OpenType SVG subset, standalone SVG-icon manifest contract, and embedded bitmap formats must the first color/SVG milestone support?
 
 ## Product and package shape
 

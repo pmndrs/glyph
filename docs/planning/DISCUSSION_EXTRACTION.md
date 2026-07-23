@@ -411,7 +411,7 @@ The discussion expanded the project beyond Slug to support:
 - Slug vector curves;
 - SDF/MSDF/MTSDF;
 - generated bitmap strikes;
-- future color layers or image glyphs;
+- post-slice color layers and image glyphs;
 - icons and emoji.
 
 All presentations share one packed glyph-ID space:
@@ -424,7 +424,7 @@ packed glyph ID
         ├── Slug data
         ├── MTSDF record
         ├── bitmap strike record
-        └── future color/image record
+        └── post-slice color/image record
 ```
 
 The discussion proposed per-glyph presentation availability bits and runtime policy based on projected pixel size:
@@ -486,10 +486,10 @@ Font icons were treated as a simple specialization: cmap, advance, presentation,
 Emoji were split into presentation cases while retaining one shaping engine:
 
 - monochrome outline emoji: normal presentation plus supplementary cmap, variation selectors, ZWJ/ligature rules;
-- color layered vector glyphs: future layer/paint records referencing packed glyph IDs;
+- color layered vector glyphs: post-slice layer/paint records referencing packed glyph IDs;
 - bitmap/image emoji: atlas/image presentation.
 
-Color layers and bitmap images were identified as presentation concerns, not alternative shaping systems. COLRv1 paint graphs, SVG glyphs, and embedded image formats were deferred from initial implementation but should not be made impossible by the presentation directory.
+Color layers and bitmap images were identified as presentation concerns, not alternative shaping systems. The current rescope makes color emoji and SVG icon fonts required after the first vertical slice: supported COLR/SVG vectors bake into Slug geometry and paint/layer records, while embedded images remain bitmap presentations.
 
 ## 15. GLB organization and direct GPU data
 
@@ -500,7 +500,7 @@ PMNDRS_font
 PMNDRS_font_slug
 PMNDRS_font_distance_field
 PMNDRS_font_bitmap
-future PMNDRS_font_color/image
+post-slice Slug color layers + bitmap images
 ```
 
 The shared section would contain metrics, cmap, glyph properties, shaping programs/reference data, script/language/feature metadata, and presentation availability.
@@ -686,7 +686,7 @@ The ordering was exploratory and contains too much for a single V1. [`SCOPE_LANE
 - Starting with browser-time JIT.
 - Attempting to independently rewrite all HarfBuzz script shapers before shipping.
 - Making all consumers download the runtime baker.
-- Making variable font axes, vertical writing, Graphite, COLRv1, SVG, or GPU shaping V1 blockers.
+- Making variable font axes, vertical writing, Graphite, color/SVG presentation, or GPU shaping blockers for the first vertical slice. Color emoji and SVG icon fonts remain required post-slice product work.
 
 ## 21. Items that remained unresolved
 

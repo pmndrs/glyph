@@ -325,6 +325,29 @@ Acceptance criteria:
 - any unavoidable decode/transcode step is named honestly;
 - no per-glyph repacking is required.
 
+### D6. Specify Slug color layers and SVG icon-font baking — L
+
+Dependencies: D1, D2, E1
+
+Acceptance criteria:
+
+- COLRv0/COLRv1, OpenType-SVG, and manifest-backed SVG icon support matrices name every accepted, flattened, rasterized, or rejected operation;
+- supported vectors bake into ordinary Slug geometry plus flat palette, paint, transform, clip, and layer records;
+- shaping continues to return the original font-scoped glyph ID;
+- runtime drawing parses no SVG document and executes no script, animation, filter, or external resource;
+- generator and renderer remain optional dynamic imports.
+
+### D7. Specify embedded color-bitmap emoji presentation — M
+
+Dependencies: D1, D4, E1
+
+Acceptance criteria:
+
+- CBDT/CBLC and `sbix` extraction, strike choice, origin, bounds, and missing-glyph behavior are explicit;
+- color space, premultiplication, texture format, decode/transcode, atlas paging, and GPU upload are specified;
+- shared shaping advances and offsets are not duplicated or replaced;
+- bitmap-color support remains optional and tree-shakable.
+
 ## Epic E — Advanced compiler and baker extensions
 
 The V0 queue already establishes the shared core, Node/Worker hosts, canonical writer, and one bitmap generator. This epic adds optimization and scale features after that foundation is measured.

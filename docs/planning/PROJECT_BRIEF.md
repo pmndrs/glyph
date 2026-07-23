@@ -52,6 +52,7 @@ We need:
 - source subsetting plus shaping closure;
 - pre-baked GLB and lazy worker fallback;
 - Slug, MSDF/MTSDF, and generated bitmap presentations;
+- post-slice Slug support for color emoji and SVG icon fonts through baked vector paint/layer and image records;
 - JS paragraph engine with greedy wrapping, alignment, height/max-lines, clipping, and ellipsis;
 - batched boundary reshaping;
 - conformance fixtures and benchmark harnesses.
@@ -64,7 +65,7 @@ We need:
 - runtime variable-font axes;
 - vertical writing;
 - Graphite and deprecated AAT `mort`;
-- COLRv1/SVG presentation;
+- unrestricted SVG DOM, scripting, animation, filter, or external-resource semantics inside font glyphs;
 - complete locale-specific hyphenation;
 - standardizing a Khronos extension before the internal format stabilizes;
 - promising numeric speed or size gains before benchmarks.

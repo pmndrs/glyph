@@ -53,7 +53,7 @@ The V0 contracts must permit, without implementing:
 - dense per-font glyph remapping;
 - persistent content-addressed fallback cache;
 - font fallback, mixed-font spans, bidi growth, and advanced line breaking;
-- color/image presentations and multiple atlas pages/strikes.
+- concrete color/image presentation records, SVG-derived Slug layers, and multiple atlas pages/strikes.
 
 Reserve these through font-scoped identity, versioned optional sections, capability bits, provenance, clear ownership, and stable request/result seams—not placeholder engines.
 
@@ -66,6 +66,7 @@ Reserve these through font-scoped identity, versioned optional sections, capabil
 - runtime variable axes;
 - automatic presentation switching;
 - MTSDF or Slug generation;
+- color emoji and SVG icon-font generation; these are required after the first vertical slice;
 - Windfoil implementation; it remains general-vector research outside the text roadmap;
 - persistent runtime-bake storage;
 - progressive generation;

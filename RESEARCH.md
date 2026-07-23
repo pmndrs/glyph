@@ -151,6 +151,29 @@ Extracted:
 - Class definitions and coverage tables are compact source representations that should not automatically be expanded into explicit glyph pairs.
 - GDEF properties affect lookup filtering, mark behavior, attachment, and ligature carets; a compiler cannot treat GSUB/GPOS in isolation.
 
+### OpenType color and SVG glyph presentations
+
+Sources:
+
+- [OpenType color glyph overview](https://learn.microsoft.com/en-us/typography/opentype/spec/overview)
+- [COLR table](https://learn.microsoft.com/en-us/typography/opentype/spec/colr)
+- [SVG table](https://learn.microsoft.com/en-us/typography/opentype/spec/svg)
+- [CBDT table](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt)
+- [CBLC table](https://learn.microsoft.com/en-us/typography/opentype/spec/cblc)
+- [`sbix` table](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix)
+
+Type: normative/authoritative font-format specification
+
+Abstract: OpenType can present a shaped glyph through layered or paint-graph vector compositions (`COLR`/`CPAL`), constrained SVG artwork, or embedded color bitmap strikes (`CBDT`/`CBLC` and `sbix`). These formats change how a glyph is drawn, not how text becomes a positioned glyph sequence.
+
+Extracted:
+
+- Color emoji and SVG icon fonts use the same font-scoped glyph IDs, clusters, advances, and offsets as monochrome glyphs.
+- The baker should convert supported COLR and SVG vector artwork into Slug-compatible geometry plus explicit palette/paint/layer records.
+- Embedded color bitmap strikes remain image presentations with their own atlas bounds and scale selection; they must not redefine shared advances.
+- OpenType SVG intentionally restricts the broader SVG platform. The runtime should consume validated baked records, not execute arbitrary SVG DOM, script, animation, filters, or external resources.
+- Color/SVG generators and runtime support remain optional dynamic imports even though the capability is part of the required post-slice Slug feature set.
+
 ### Fontations
 
 Source: [googlefonts/fontations](https://github.com/googlefonts/fontations)
