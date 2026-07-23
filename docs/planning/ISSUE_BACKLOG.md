@@ -165,6 +165,19 @@ Acceptance criteria:
 
 Planning baseline: [`BENCHMARK_PLAN.md`](BENCHMARK_PLAN.md).
 
+### A6. Capture reproducible font and icon payload baselines — M
+
+Dependencies: A3, A5
+
+Acceptance criteria:
+
+- pinned Inter, Font Awesome, and Lucide sources/artifacts have licenses, hashes, descriptors, and generator revisions;
+- reports separate shared shaping/metrics, serialized presentation records, container overhead, transport bytes, and GPU-resident bytes;
+- bitmap, MSDF/MTSDF, and Slug are measured independently with atlas dimensions, formats, mipmaps, and occupancy;
+- selected-icon and full-library Lucide cases are separate;
+- Node and Worker generators emit equivalent canonical report values and pixels;
+- modeled values in the [font payload budget](PAYLOAD_BUDGET.md) are replaced by checked-in raw reports without changing visual or conformance gates.
+
 ## Epic B — Shaping contract experiment
 
 ### B1. Specify the experimental shaped-buffer ABI — M

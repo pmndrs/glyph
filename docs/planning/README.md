@@ -18,6 +18,7 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 - [Three Flatland Slug audit](SLUG_AUDIT.md): file-level inventory of what to port, rewrite, or leave behind.
 - [Conformance plan](CONFORMANCE_PLAN.md): reference engines, comparison fields, corpus, and CI tiers.
 - [Benchmark plan](BENCHMARK_PLAN.md): reproducible performance, size, memory, and boundary-crossing measurements.
+- [Font payload budget](PAYLOAD_BUDGET.md): measured shaping/Slug baselines and modeled bitmap/MSDF/MTSDF storage for common fonts and icon sets.
 - [Rendering implementation difficulty](IMPLEMENTATION_DIFFICULTY.md): relative effort to make each presentation correct and then performant.
 - [Renderer capability matrix](RENDERER_CAPABILITIES.md): game-facing styling, color/font-source support, scale behavior, and limitations by bitmap, MSDF/MTSDF, and Slug.
 - [Autoresearch optimization protocol](AUTORESEARCH.md): evidence gates and safety boundaries for agent-driven performance work.

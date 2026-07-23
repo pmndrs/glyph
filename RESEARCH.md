@@ -349,6 +349,30 @@ Extracted:
 - Flat GPU texture bytes are already available, but the loader reconstructs per-glyph maps and nested band objects.
 - The package supplies useful real-font equivalence tests and baseline Slug payload measurements.
 
+### Three Flatland uikit SVG icon baker
+
+Sources:
+
+- [uikit fork at the reviewed revision](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60)
+- [SVG bake pipeline plan](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/superpowers/plans/svg-bake-pipeline.md)
+- [SVG bake evidence](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/superpowers/specs/svg-bake-pipeline-evidence.md)
+- [uikit Lucide package and baked set](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/uikit-lucide)
+- [Glyph paging design](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md)
+
+Type: project source code, design records, and measured artifact
+Reviewed revision: `2935a89fcd9999e8a8b3d3b733f7f7302285cd60`
+
+Abstract: Extends the Slug pipeline from font outlines to standalone SVG icons. The CLI accepts files or directories, parses SVG paths into a shared `SlugShapeSet`, and writes named shape, fill, and view-box metadata plus flat curve/band columns into `FL_slug_shapes` GLB data.
+
+Extracted:
+
+- SVG icon baking is implemented prior art, not a hypothetical future path: the fork includes a checked-in 1,594-shape Lucide asset.
+- One shared shape set allows icons to share GPU resources and batching rather than creating a renderer resource per icon.
+- The baked path removes SVG parsing and DOM work from runtime, while preserving names, multiple handles/fills, fill rules, and view boxes.
+- Full-library and imported-subset costs must be measured separately. The checked-in Lucide artifact is a stress case, not the expected payload for an application importing a few icons.
+- The fork's RGBA16F curve and R32F band texture layout is the relevant optimized Slug baseline; older font artifacts used a larger RG32F band texture.
+- The [font payload budget](docs/planning/PAYLOAD_BUDGET.md) records the current Inter, Font Awesome, and Lucide measurements and keeps serialized geometry separate from GPU-resident textures.
+
 ### Slug Library
 
 Source: [Slug Library](https://sluglibrary.com/)
