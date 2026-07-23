@@ -5,7 +5,7 @@ Purpose: decide what to build now without hard-coding away later capabilities
 
 ## Current proof
 
-> Can `pmndrs/text` take one ordinary OpenType font through the same portable baker from Node or a lazy loader Worker, load one canonical asset, shape and reflow a paragraph, and render one generated presentation without identity or dependency debt?
+> Can `pmndrs/text` take one ordinary OpenType font through the same portable baker from Node or a lazy loader Worker, load one canonical core resource plus a selected presentation, shape and reflow a paragraph, and render without identity or dependency debt?
 
 ## Build now
 
@@ -17,7 +17,7 @@ Purpose: decide what to build now without hard-coding away later capabilities
 - baked-first loader with deterministic sibling naming;
 - one development-only deduplicated warning on fallback;
 - no `forceRuntime` or baked-asset bypass option;
-- one canonical asset output and one validator/registration path;
+- one canonical resource model and validator path whether core/presentation data is bundled or split;
 - one generated grayscale bitmap strike;
 - Node/Worker output-parity and package-graph tests;
 - in-memory load/fallback deduplication.
@@ -26,7 +26,7 @@ This is a real baker, not fixture assembly. It is deliberately not yet an optimi
 
 ### Shaping and layout
 
-- one pinned font retained in the canonical asset for HarfRust;
+- one pinned font reduced to the closed shaping-only SFNT profile for HarfRust;
 - source-local glyph IDs scoped by opaque font handles;
 - HarfRust Wasm registration and reusable shaping state/plans;
 - coarse batched shaping with UTF-16 clusters, four positions, and flags;
@@ -47,9 +47,9 @@ This is a real baker, not fixture assembly. It is deliberately not yet an optimi
 The V0 contracts must permit, without implementing:
 
 - many one-face font assets in one registry;
-- zero, one, or many presentations per asset;
+- zero, one, or many presentations, embedded in one GLB or attached from independently loaded presentation GLBs;
 - MTSDF and Slug generator/runtime pairs as optional imports;
-- shaping-only or compiled lookup sections;
+- a later compiled lookup format alongside the already-fixed shaping-only SFNT profile;
 - dense per-font glyph remapping;
 - persistent content-addressed fallback cache;
 - font fallback, mixed-font spans, bidi growth, and advanced line breaking;

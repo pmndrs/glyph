@@ -240,48 +240,48 @@ Acceptance criteria:
 
 ## Epic C — Binary model and GLB
 
-### C1. Specify `PMNDRS_font` header and section directory — M
+### C1. Validate the `PMNDRS_font` shaping profile and metric envelope — M
 
 Dependencies: A1, B1
 
 Acceptance criteria:
 
-- byte order, widths, alignment, capability bits, and versioning are explicit;
-- all offsets are relative to a documented base;
-- unknown optional/required behavior is defined;
-- golden binary examples and corrupt cases are listed.
+- the closed SFNT table whitelist produces a valid single static face;
+- duplicated glyph count, units, and line metrics agree with the SFNT;
+- shaping hash and provenance hashes are deterministic;
+- golden and corrupt payloads exercise every validation rule in the shaping contract.
 
-### C2. Select and specify the cmap representation — M
+### C2. Prove full-Unicode cmap behavior through the canonical shaping face — M
 
 Dependencies: C1, A3
 
 Acceptance criteria:
 
 - ASCII, BMP, supplementary-plane, missing glyph, and variation-sequence cases work;
-- dense/sparse thresholds are justified with corpus measurements;
 - UTF-16 clusters remain independent from Unicode scalar lookup;
-- size and lookup benchmarks compare at least two representations.
+- HarfRust reads the retained cmap without a JavaScript mapping table;
+- size and lookup timing are reported against the original source face.
 
-### C3. Specify shared glyph metrics and properties — S
+### C3. Validate shared metrics and identity — S
 
 Dependencies: C1
 
 Acceptance criteria:
 
-- canonical advances, bounds, glyph class, flags, and presentation availability are defined;
-- stored and working coordinate widths are distinguished;
+- canonical advances and glyph properties come from the retained shaping face;
+- stored metrics and i32 working/output coordinates are distinguished;
 - no presentation duplicates shaping metrics.
 
-### C4. Define experimental `PMNDRS_font` glTF JSON schema — M
+### C4. Validate and freeze the experimental `PMNDRS_font` schemas — M
 
 Dependencies: C1, C2, C3
 
 Acceptance criteria:
 
-- extension locations and buffer-view references are defined;
-- GLB and external-buffer cases are considered;
-- validator requirements and `extensionsRequired` behavior are explicit;
-- the schema is marked experimental.
+- every checked-in schema validates golden combined and split assets;
+- embedded, URI-resolved, and application-resolved presentation references are exercised;
+- reciprocal shaping-hash and `extensionsRequired` behavior are explicit;
+- a schema change updates the contract, golden bytes, and version analysis together.
 
 ### C5. Prototype deterministic pack/unpack golden tests — M
 
@@ -296,48 +296,49 @@ Acceptance criteria:
 
 ## Epic D — Presentation specifications
 
-### D1. Specify the presentation directory and availability map — S
+### D1. Validate presentation binding and packaging — S
 
 Dependencies: C1, C3
 
 Acceptance criteria:
 
-- multiple techniques and multiple strikes/atlases are representable;
-- per-glyph absence is explicit;
-- future technique IDs can be added without changing shaping data.
+- combined and split GLBs attach identical presentation records;
+- embedded, external-URI, and resolver-provided resources are representable;
+- shaping hash, glyph count, and ID width mismatches reject attachment;
+- per-glyph absence uses the specified `0xffff` sentinel.
 
-### D2. Specify flat Slug presentation data — M
+### D2. Implement golden Slug V0 packing fixtures — M
 
 Dependencies: A4, D1
 
 Acceptance criteria:
 
-- glyph-to-curve and glyph-to-band ranges are flat;
-- GPU formats, strides, and alignment are explicit;
-- prior nested runtime reconstruction is unnecessary;
-- port/rewrite decisions cite the audit.
+- 40-byte records, RGBA16F curves, u32 headers, and glyph-local u16 references match the contract;
+- address reconstruction is exact across contours, endpoint sharing, and row padding;
+- overflow and multi-page behavior reject or page without truncation;
+- no nested runtime reconstruction or duplicate source/GPU curve representation remains.
 
-### D3. Specify MSDF/MTSDF presentation data — M
-
-Dependencies: D1
-
-Acceptance criteria:
-
-- plane bounds, atlas bounds, page, distance range, and linear sampling are defined;
-- shared advance is not duplicated;
-- multi-page and missing-glyph behavior is explicit;
-- atlas encoding alternatives are measured before acceptance.
-
-### D4. Specify generated bitmap strike data — M
+### D3. Implement golden MSDF/MTSDF V0 packing fixtures — M
 
 Dependencies: D1
 
 Acceptance criteria:
 
-- strike ppem, format, sampling, bounds, pages, and availability are defined;
-- hinting/oversampling policy is an explicit unresolved or accepted choice;
-- shared advance is not duplicated;
-- native/Wasm determinism requirements are stated.
+- 20-byte records and lossless linear RGBA8 KTX2 pages match the contract;
+- shared advances are absent and missing glyphs use `0xffff`;
+- MSDF alpha is opaque and MTSDF alpha stores true signed distance;
+- compressed variants remain additional and quality-gated.
+
+### D4. Implement golden generated-bitmap V0 fixtures — M
+
+Dependencies: D1
+
+Acceptance criteria:
+
+- 20-byte records, ppem, fixed-point plane bounds, pages, and sentinel match the contract;
+- the first descriptor uses grayscale, no hinting, explicit oversampling and padding;
+- lossless linear R8 KTX2 is present and shared advances are absent;
+- Node and Worker records and decoded pixels are identical.
 
 ### D5. Validate direct GPU upload constraints — M
 

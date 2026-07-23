@@ -28,7 +28,7 @@ Status: proposed; interfaces are illustrative and not public API commitments.
                               └── positioned glyphs ──→ GPU
 ```
 
-The loader first probes the canonical baked asset. Only a miss dynamically imports the runtime baker library, whose Worker host loads the bake core and selected presentation generator. The Node host and runtime library use the same core and emit the same format. Subsetting, remapping, compiled IR, and SIMD specialization remain later compiler units. See the editable [system design diagram](system-design.excalidraw).
+The loader first probes the canonical baked core font. Only a miss dynamically imports the runtime baker library, whose Worker host loads the bake core and selected presentation generator. Presentations may be embedded in that GLB or loaded as independently addressable GLBs. The Node host and runtime library use the same core and emit the same records. Subsetting, remapping, compiled IR, and SIMD specialization remain later compiler units. See the editable [system design diagram](system-design.excalidraw).
 
 ## Terminology
 
@@ -66,7 +66,7 @@ The runtime baker is a shared library/module, not an auxiliary process or adjace
 - selected presentation generation;
 - deterministic section packing and diagnostics.
 
-V0 retains shaping-required OpenType bytes and generates one bitmap strike. Later units may add variation instancing, subsetting, closure, dense remapping, shaping-only tables, compiled lookups, Slug, MTSDF, and the required color-emoji/SVG-icon extensions to Slug and bitmap presentations.
+V0 emits the closed shaping-only static SFNT profile and generates one bitmap strike. Later units may add subsetting, closure, dense remapping, compiled lookups, Slug, MTSDF, and the required color-emoji/SVG-icon extensions to Slug and bitmap presentations.
 
 ### Node host owns
 
@@ -166,9 +166,9 @@ There is no public branch that intentionally bypasses the baked asset probe.
 
 The names are provisional vendor-extension names. `PMNDRS` must be registered with Khronos before the format is published as stable; internal code uses neutral asset/section type names so serialization naming remains isolated.
 
-`PMNDRS_font` contains one font face, version/provenance, retained shaping data for HarfRust, metrics/capabilities, and a presentation directory.
+`PMNDRS_font` contains one font face, version/provenance, the closed shaping-only SFNT for HarfRust, authoritative metrics, and a presentation directory.
 
-`PMNDRS_font_bitmap`, `PMNDRS_font_distance_field`, and `PMNDRS_font_slug` contain only technique-specific records and GPU payloads. They never repeat advances, kerning, or shaping behavior.
+`PMNDRS_font_bitmap`, `PMNDRS_font_distance_field`, and `PMNDRS_font_slug` contain only technique-specific records and GPU payloads. They never repeat advances, kerning, or shaping behavior. Each may be embedded in the core GLB or delivered as its own GLB and attached after reciprocal shaping-hash validation.
 
 The asset supports multiple presentation sections; the first implementation emits one. Applications support multiple fonts by registering multiple one-face assets.
 
@@ -188,7 +188,7 @@ The asset supports multiple presentation sections; the first implementation emit
 Initial reference path:
 
 ```text
-retained OpenType bytes → cached HarfRust runtime shaping → typed shaped output
+shaping-only static SFNT → cached HarfRust runtime shaping → typed shaped output
 ```
 
 Width changes reuse broad shaping where safe. JS recomputes line breaks and batches only boundary-sensitive line ranges into one reshape call. Presentation data never participates in text measurement.
@@ -215,4 +215,4 @@ Persistent runtime-bake caching is deferred, but the key shape is reserved for s
 
 ## Central invariant
 
-> The loader may obtain canonical bytes from the network or from a lazy Worker bake, but every downstream consumer sees exactly one asset model and one shaping/layout/presentation architecture.
+> The loader may obtain core and presentation bytes from one GLB, several GLBs, an application resolver, or a lazy Worker bake, but identity validation and downstream shaping/layout/presentation records are identical.

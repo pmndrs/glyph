@@ -86,9 +86,9 @@ Output:
 Run the same pinned HarfRust path on:
 
 1. original/static-instanced source font;
-2. subsetted/remapped shaping reference data used by `PMNDRS_font`.
+2. the closed shaping-only static SFNT used by `PMNDRS_font`.
 
-Purpose: prove subset closure, ID remapping, metrics, and retained layout tables before testing optimized data.
+Purpose: prove the table whitelist, metrics, glyph identity, and retained layout behavior before testing any optimized data.
 
 ### Stage C — baked reference versus optimized operation
 

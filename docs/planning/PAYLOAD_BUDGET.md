@@ -9,8 +9,8 @@ A font package has costs that must not be collapsed into one number:
 
 ```text
 shared font data
-  source/layout tables used by HarfRust
-  + flat cmap, metrics, properties, and section indexes
+  closed shaping-only static SFNT used by HarfRust
+  + small core-extension metrics, provenance, and presentation directory
 
 selected presentation data
   bitmap records + pixels
@@ -25,6 +25,8 @@ runtime memory
 ```
 
 The payloads for bitmap, MSDF/MTSDF, and Slug are alternatives unless an asset deliberately contains more than one presentation. The shaping data is paid once and is shared by every presentation.
+
+The HarfRust Wasm shaper is shared application code, not repeated per font. Its current pre-build envelope is 250–600 KiB raw / 90–250 KiB compressed and must be replaced by the first compiled artifact report. Presentation modules, KTX2 transcoders, and renderer adapters are likewise reported as independently loaded code chunks rather than charged to every font.
 
 “Texture bytes” below means the uncompressed GPU-resident storage implied by dimensions and texel format. It is not a network-size estimate. Network bytes depend on the final PNG/KTX2/container choice and must be measured without applying lossy compression that changes rendering quality.
 
@@ -41,31 +43,29 @@ Measurements read the checked-in TTF/GLB bytes and their accessor ranges directl
 
 | Fixture | Kind | Coverage | Why it is useful |
 | --- | --- | ---: | --- |
-| Inter Regular | common UI font | 907 baked glyphs | Existing Three Flatland font and Slug artifact; representative Latin/Greek/Cyrillic UI coverage. |
-| Font Awesome Solid | icon font | 350 baked PUA glyphs | Existing font-icon path with trivial shaping but substantial outline complexity. |
+| Inter Regular | common UI font | 2,871 source glyphs; 907 in legacy Slug bake | Existing source font and a smaller presentation artifact; exposes why V0 must not confuse presentation coverage with shaping closure. |
+| Font Awesome Solid | icon font | 1,403 source glyphs; 350 in legacy Slug bake | Existing source font and a smaller PUA presentation artifact with trivial shaping but substantial outline complexity. |
 | Lucide | standalone SVG icons | 1,594 baked shapes | Actual `feat/uikit-fork` SVG-to-Slug artifact and a realistic full-library stress case. |
 
 The first shipping fixture remains one pinned Inter file. Font Awesome and Lucide are payload/tooling fixtures; they do not expand the first vertical slice into automatic icon discovery or a second shaping system.
 
 ## Shared glyph and shaping data
 
-The current V0 plan retains source OpenType layout bytes for HarfRust and separately exposes flat logical fields needed by the loader/layout/render path. These measurements show both that conservative baseline and the possible later floor from removing outlines and image/color presentation tables.
+V0 uses the closed [`opentype-sfnt-harfrust-v0`](SHAPING_DATA_CONTRACT.md) profile. It keeps the standard metrics and layout tables HarfRust consumes and removes outlines, hinting, font-authored presentation data, variation data, names, AAT, and Graphite. It does not duplicate cmap, advances, or kerning into another serialized representation.
 
-| Fixture | Full source font | Flat shared glyph records measured in current Slug GLB | Conservative V0 shared total | Experimental shaping-only face | Potential shared total with shaping-only face |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Inter, 907 glyphs | 324,820 B | 36,962 B | 361,782 B (353.3 KiB) | 145,664 B | 182,626 B (178.3 KiB) |
-| Font Awesome, 350 glyphs | 426,112 B | 12,708 B | 438,820 B (428.5 KiB) | 23,048 B | 35,756 B (34.9 KiB) |
+| Fixture | Full source font | Canonical shaping SFNT | Dense extents | V0 raw subtotal before sparse points |
+| --- | ---: | ---: | ---: | ---: |
+| Inter, 2,871 glyphs | 324,820 B | 145,344 B | 22,968 B | 168,312 B (164.4 KiB) |
+| Font Awesome, 1,403 glyphs | 426,112 B | 24,624 B | 11,224 B | 35,848 B (35.0 KiB) |
 
-The flat records counted here are glyph ID, bounds, advance, side bearing, outline flag, cmap, and legacy kerning columns. They are evidence from the old format, not the final `PMNDRS_font` schema.
+Transport measurements for the source and earlier shaping-only experiment remain compression proxies; the canonical V0 SFNT plus font-function views must be recompressed by the first baker:
 
-Transport measurements for the source and experimental shaping face:
-
-| Fixture | Full source gzip | Full source Brotli | Shaping-only gzip | Shaping-only Brotli |
+| Fixture | Full source gzip | Full source Brotli | Earlier shaping-only gzip | Earlier shaping-only Brotli |
 | --- | ---: | ---: | ---: | ---: |
 | Inter | 153,302 B | 122,540 B | 58,610 B | 44,006 B |
 | Font Awesome | 172,729 B | 147,594 B | 11,234 B | 8,017 B |
 
-The shaping-only faces were produced only as a sizing experiment by retaining glyph IDs and dropping `glyf`, `loca`, `CFF/CFF2`, `SVG`, `COLR/CPAL`, `CBDT/CBLC`, and `sbix`. Sample `hb-shape` outputs matched, but this is not a conformance proof or an accepted on-disk design. V0 deliberately keeps the safer source-font path until fixtures prove an alternative.
+The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents are exact contract costs; sparse GPOS contour-point records add 8 bytes per referenced point. Sample shaping-only `hb-shape` outputs matched, but the finalized reconstruction and three-way corpus still require fixture proof. Every bake report lists directory, per-table, extents, and point bytes.
 
 Lucide is not a font and has no shaping payload. Its shared records are icon identity, view box, fill/paint, and shape indexes. The existing artifact spends 237,704 B on GLB JSON, largely for named icon metadata; the pmndrs format should measure a compact binary name/index representation rather than inherit that JSON cost by default.
 
@@ -85,7 +85,7 @@ curve texture: width × height × 8 bytes (RGBA16F)
 band texture:  width × height × 4 bytes (R32F)
 ```
 
-The source CPU columns and final GPU textures are shown separately. A direct-GPU `PMNDRS_font_slug` design must decide whether it retains editable/source-like curve and band words, final texture bytes, or both; it must not silently count duplicate representations as unavoidable.
+The source CPU columns and final GPU textures are shown separately. `PMNDRS_font_slug` V0 resolves this choice: it retains final GPU records, RGBA16F curve bits, u32 headers, and u16 references only. Editable/source-like curves and nested band data are baker intermediates and are not serialized.
 
 ### Existing uikit Lucide SVG bake
 
@@ -141,8 +141,8 @@ Assumptions:
 
 | Fixture | Presentation metadata | Bitmap R8, one representative strike | MSDF RGB8 | MTSDF RGBA8 |
 | --- | ---: | ---: | ---: | ---: |
-| Inter, 907 glyphs | ~18 KiB | ~1 MiB (modeled 1024²) | ~3–6 MiB | ~4–8 MiB |
-| Font Awesome, 350 glyphs | ~7 KiB | ~1 MiB (modeled 1024²) | ~3–6 MiB | ~4–8 MiB |
+| Inter legacy subset, 907 glyphs | 18,140 B | ~1 MiB (modeled 1024²) | ~3–6 MiB | ~4–8 MiB |
+| Font Awesome legacy subset, 350 glyphs | 7,000 B | ~1 MiB (modeled 1024²) | ~3–6 MiB | ~4–8 MiB |
 | Lucide, 1,594 SVG icons | ~31 KiB | ~4 MiB (modeled 2048²) | ~12 MiB (modeled 2048²) | ~16 MiB (modeled 2048²) |
 
 The distance-field ranges span a 1024² to 2048×1024 page for the font fixtures. Icon shapes are often near-square and consume more atlas area per entry than proportional text glyphs, so glyph count alone is not a reliable predictor.
@@ -162,21 +162,21 @@ Mipmaps add approximately one third to the base texture size when a full chain i
 
 ## Planning totals
 
-For an Inter-like common UI font, the current planning envelope is:
+For the non-subsetted 2,871-glyph Inter V0 face, the shared cost is fixed while presentation textures require first-generator measurement:
 
 | Selected representation | Shared raw baseline | Presentation GPU storage | Notes |
 | --- | ---: | ---: | --- |
-| Generated bitmap, one strike | ~353 KiB | ~1 MiB R8 | First vertical slice; add each strike independently. |
-| MTSDF | ~353 KiB | ~4–8 MiB RGBA8 | Proposed general-purpose default; exact range depends on generation scale. |
-| Slug | ~353 KiB | 2 MiB measured-derived | Current source-like Slug columns add ~360 KiB unless final format stores GPU form only. |
+| Generated bitmap, one strike | 164.4 KiB + sparse points | generator report required | 20 B × 2,871 = 57,420 B records. |
+| MTSDF | 164.4 KiB + sparse points | generator report required | 57,420 B records; legacy subset was modeled at 4–8 MiB. |
+| Slug | 164.4 KiB + sparse points | generator report required | 40 B × 2,871 = 114,840 B records; legacy subset derived near 2 MiB. |
 
-For the measured 350-glyph Font Awesome icon font:
+For the non-subsetted 1,403-glyph Font Awesome V0 face:
 
 | Selected representation | Shared raw baseline | Presentation GPU storage | Notes |
 | --- | ---: | ---: | --- |
-| Generated bitmap, one strike | ~429 KiB | ~1 MiB R8 | Full source font dominates shared V0; shaping-only experiment falls to ~35 KiB. |
-| MTSDF | ~429 KiB | ~4–8 MiB RGBA8 | Strong normal-size icon option, modeled only. |
-| Slug | ~429 KiB | 1 MiB measured-derived | Preserves outline fidelity and supports shared vector/icon machinery. |
+| Generated bitmap, one strike | 35.0 KiB + sparse points | generator report required | 20 B × 1,403 = 28,060 B records. |
+| MTSDF | 35.0 KiB + sparse points | generator report required | 28,060 B records; legacy subset was modeled at 4–8 MiB. |
+| Slug | 35.0 KiB + sparse points | generator report required | 40 B × 1,403 = 56,120 B records; legacy subset derived near 1 MiB. |
 
 These columns are intentionally not added into a fake single “download size.” Shared raw bytes, compressed transport, and GPU allocations have different lifetimes and compression behavior.
 

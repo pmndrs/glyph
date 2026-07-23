@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "title": "PMNDRS_font glTF Document Extension",
+  "type": "object",
+  "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+  "properties": {
+    "version": { "type": "integer", "enum": [0] },
+    "shaping": {
+      "type": "object",
+      "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+      "properties": {
+        "format": { "type": "string", "enum": ["opentype-sfnt-harfrust-v0"] },
+        "bufferView": { "type": "integer", "minimum": 0 },
+        "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "fontFunctions": {
+          "type": "object",
+          "properties": {
+            "glyphExtentsBufferView": { "type": "integer", "minimum": 0 },
+            "glyphExtentsStride": { "type": "integer", "enum": [8] },
+            "contourPoints": {
+              "type": "object",
+              "properties": {
+                "bufferView": { "type": "integer", "minimum": 0 },
+                "count": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+                "stride": { "type": "integer", "enum": [8] }
+              },
+              "required": ["bufferView", "count", "stride"]
+            }
+          },
+          "required": ["glyphExtentsBufferView", "glyphExtentsStride"]
+        }
+      },
+      "required": ["format", "bufferView", "hash", "fontFunctions"]
+    },
+    "metrics": {
+      "type": "object",
+      "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+      "properties": {
+        "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "glyphIdWidth": { "type": "integer", "enum": [16] },
+        "unitsPerEm": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "ascender": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "descender": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "lineGap": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+      },
+      "required": ["glyphCount", "glyphIdWidth", "unitsPerEm", "ascender", "descender", "lineGap"]
+    },
+    "provenance": {
+      "type": "object",
+      "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+      "properties": {
+        "sourceHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "descriptorHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bakerVersion": { "type": "string", "minLength": 1 },
+        "harfrustVersion": { "type": "string", "minLength": 1 },
+        "harfbuzzReferenceVersion": { "type": "string", "minLength": 1 },
+        "unicodeVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$" }
+      },
+      "required": ["sourceHash", "descriptorHash", "bakerVersion", "harfrustVersion", "harfbuzzReferenceVersion", "unicodeVersion"]
+    },
+    "presentations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["bitmap", "distance-field", "slug"] },
+          "extension": { "type": "string", "enum": ["PMNDRS_font_bitmap", "PMNDRS_font_distance_field", "PMNDRS_font_slug"] },
+          "version": { "type": "integer", "enum": [0] },
+          "source": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": { "type": { "type": "string", "enum": ["embedded"] } },
+                "required": ["type"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["external"] },
+                  "uri": { "type": "string", "minLength": 1 },
+                  "artifactHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                },
+                "required": ["type"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": ["id", "kind", "extension", "version", "source"]
+      }
+    }
+  },
+  "required": ["version", "shaping", "metrics", "provenance", "presentations"]
+}

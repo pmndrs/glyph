@@ -1,6 +1,6 @@
 # GPU compression and compact Slug storage
 
-Status: proposed experiments; exact band packing recommended for design  
+Status: exact band packing adopted by the V0 presentation contract; lossy curve and atlas compression remain experiments
 Purpose: distinguish smaller downloads from smaller GPU resources and identify which font-presentation data can tolerate GPU-native compression.
 
 ## Position
@@ -61,21 +61,21 @@ Those values are exact because float32 represents integers through `2^24 - 1` ex
 
 There is no portable lossless GPU block-compressed integer texture format in the target WebGPU/WebGL2 baseline. Lossless transport compression remains valid, but it does not reduce the resident resource after inflation.
 
-### Recommended exact representation experiment
+### Adopted exact V0 representation
 
-Instead of storing an absolute 24-bit curve-texture coordinate for every band reference, store a glyph-local curve index:
+Instead of storing an absolute 24-bit curve-texture coordinate for every band reference, V0 stores a glyph-local `u16` curve-texel offset:
 
 ```text
 headers:         R32UI or equivalent u32 storage
-curve references: R16UI local indices
+curve references: R16UI local texel offsets
 glyph record:     curve base/address
 
-resolved address = glyphCurveBase + localCurveIndex
+resolved address = glyphCurveBase + localCurveTexelOffset
 ```
 
-This keeps headers exact and reduces the dominant reference list from four bytes to two bytes per entry. WebGL2 and WebGPU both expose unsigned integer texture formats suitable for the representation, but the Three.js WebGL/WebGPU/TSL path must be validated before it becomes a format decision.
+This keeps headers exact and reduces the dominant reference list from four bytes to two bytes per entry. The offset addresses the first/control texel and therefore remains valid across endpoint sharing, contour endpoints, and row padding. WebGL2 and WebGPU can expose the bytes as unsigned integer textures or storage buffers without changing serialization.
 
-The experiment must define overflow behavior. A glyph whose local curve count exceeds `u16` must fail baking, use a wider page/record format, or be isolated into an explicitly declared wide page; it must never truncate.
+V0 overflow behavior is fixed: a glyph whose curve span, local reference, band count, per-band reference count, or reference offset exceeds `u16` fails baking. It never truncates.
 
 ## Slug curve compression experiment
 

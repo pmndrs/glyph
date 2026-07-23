@@ -64,7 +64,7 @@ Exit gate: every oracle and visual fixture is versioned and reproducible.
 Deliverables:
 
 - host-independent bake request/result contract;
-- source parsing sufficient to retain shaping bytes and enumerate/rasterize glyphs;
+- source parsing sufficient to emit the closed shaping-only SFNT profile and enumerate/rasterize glyphs;
 - one deterministic bitmap strike and flat GPU-ready records;
 - canonical `PMNDRS_font` writer and validator;
 - Node filesystem host, JS API, and thin CLI;

@@ -6,10 +6,8 @@ Status: unresolved unless marked otherwise.
 
 1. Which exact HarfRust, HarfBuzz, and Unicode versions become the first reference set?
 2. Which authorized Poimandres maintainer will submit the prepared [`PMNDRS` prefix request](GLTF_EXTENSION_REGISTRATION.md), and should the registry identify the project as `Poimandres` or `pmndrs`?
-3. Which minimum OpenType tables/bytes must V0 retain for HarfRust without attempting shaping-table compilation?
-4. Which source-font licenses permit checked-in fixtures and generated derivatives in CI?
-5. Which browsers and GPU APIs define the initial support matrix?
-6. Is `u16` glyph identity a V1 hard limit, or must the first format support both `u16` and `u32`?
+3. Which source-font licenses permit checked-in fixtures and generated derivatives in CI?
+4. Which browsers and GPU APIs define the initial support matrix?
 
 ## Baker
 
@@ -23,13 +21,9 @@ Status: unresolved unless marked otherwise.
 
 ## Binary format and GLB
 
-1. Should CPU shaping sections use one extension-owned buffer view or several independently fetchable views?
-2. What alignment is sufficient across Wasm typed views, WebGPU buffers, raw texture uploads, and compressed textures?
-3. Are raw upload-ready textures worth row padding in the asset, or should loading perform a bulk row copy?
-4. Which atlas image formats can be considered “no repacking” across WebGL and WebGPU?
-5. How are optional sections checksummed or validated?
-6. What versioning change requires a new extension name versus a binary section version?
-7. Can presentation sections be external or progressively fetched while shared shaping data is already usable?
+1. Which exact KTX2 encodings and GPU-native compressed variants make the initial WebGL2/WebGPU support matrix?
+2. What versioning change requires a new extension name versus a declared format version?
+3. Should independently fetched presentation artifacts support progressive range requests beyond whole-resource loading?
 
 ## Shaper and compiled data
 

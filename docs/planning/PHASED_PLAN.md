@@ -32,7 +32,7 @@ Goal: prove the canonical glyph identity and conformance pipeline without optimi
 
 Deliverables:
 
-- minimal binary-model specification for header, section directory, metrics, cmap, and reference shaping data;
+- closed shaping-only SFNT profile, authoritative metric envelope, presentation binding, and runtime ABI;
 - shared minimal bake core that emits deterministic experimental bytes;
 - Node host/CLI and dynamically imported Worker host over that core;
 - baked-first loader with development warning and no runtime-forcing option;

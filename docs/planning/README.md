@@ -7,9 +7,11 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 - [Project brief](PROJECT_BRIEF.md): product outcome, users, scope, and success criteria.
 - [Architecture](ARCHITECTURE.md): proposed system boundaries and data contracts.
 - [System design diagram](system-design.excalidraw): editable Excalidraw view of the Node/Worker bake convergence and runtime pipeline.
-- [Runtime API shapes](API_SHAPES.md): provisional loader, shared bake, Worker, shaping, paragraph, and presentation contracts.
-- [Runtime data design V0](DATA_DESIGN_V0.md): canonical asset, source-local glyph identity, typed buffers, and generated presentation records.
-- [glTF vendor-prefix request and extension draft](GLTF_EXTENSION_REGISTRATION.md): submission-ready `PMNDRS` prefix issue and a `Template.md`-aligned draft of `PMNDRS_font`.
+- [Runtime API fixture V0](API_SHAPES.md): concrete loader, shared bake, Worker, shaping, paragraph, and presentation contracts.
+- [Runtime data design V0](DATA_DESIGN_V0.md): canonical resource identity, packaging-independent assets, buffers, and byte reports.
+- [Shaping data contract V0](SHAPING_DATA_CONTRACT.md): retained SFNT profile, exact runtime ABI, byte accounting, validation, and conformance.
+- [Presentation data contract V0](PRESENTATION_DATA_CONTRACT.md): embedded/external binding and exact bitmap, MSDF/MTSDF, and Slug layouts.
+- [glTF vendor-prefix request and extension set](GLTF_EXTENSION_REGISTRATION.md): submission-ready `PMNDRS` prefix issue plus maintained specifications and schemas.
 - [One-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md): current execution sequence and evidence gates.
 - [Tooling and fixtures](TOOLING_FIXTURES.md): pinned font, oracle, golden asset, layout, visual, corrupt-input, and benchmark artifacts.
 - [Phased plan](PHASED_PLAN.md): sequencing, gates, and deliverables.

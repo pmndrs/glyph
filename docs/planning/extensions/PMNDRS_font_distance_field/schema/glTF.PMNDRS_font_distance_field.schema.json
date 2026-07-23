@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "title": "PMNDRS_font_distance_field glTF Document Extension",
+  "type": "object",
+  "allOf": [{ "$ref": "glTFProperty.schema.json" }],
+  "properties": {
+    "version": { "type": "integer", "enum": [0] },
+    "presentationId": { "type": "string", "minLength": 1 },
+    "shapingHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "glyphIdWidth": { "type": "integer", "enum": [16] },
+    "technique": { "type": "string", "enum": ["msdf", "mtsdf"] },
+    "emSize": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "pixelRange": { "type": "number", "exclusiveMinimum": true, "minimum": 0 },
+    "planeUnitsPerEm": { "type": "integer", "minimum": 1, "maximum": 32767 },
+    "recordBufferView": { "type": "integer", "minimum": 0 },
+    "recordStride": { "type": "integer", "enum": [20] },
+    "pages": { "$ref": "../../schema/texturePages.PMNDRS_font.schema.json" }
+  },
+  "required": ["version", "presentationId", "shapingHash", "glyphCount", "glyphIdWidth", "technique", "emSize", "pixelRange", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
+}

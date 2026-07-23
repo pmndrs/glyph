@@ -13,6 +13,8 @@ Start here:
 - [System design diagram](docs/planning/system-design.excalidraw)
 - [Runtime API shapes](docs/planning/API_SHAPES.md)
 - [Runtime data design V0](docs/planning/DATA_DESIGN_V0.md)
+- [Shaping data contract V0](docs/planning/SHAPING_DATA_CONTRACT.md)
+- [Presentation data contract V0](docs/planning/PRESENTATION_DATA_CONTRACT.md)
 - [glTF vendor-prefix request and extension draft](docs/planning/GLTF_EXTENSION_REGISTRATION.md)
 - [One-font vertical-slice roadmap](docs/planning/VERTICAL_SLICE_ROADMAP.md)
 - [Tooling and fixtures](docs/planning/TOOLING_FIXTURES.md)
