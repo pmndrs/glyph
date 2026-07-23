@@ -505,6 +505,7 @@ Sources:
 - [Chlumsky/msdfgen](https://github.com/Chlumsky/msdfgen)
 - [Viktor Chlumský's thesis](https://github.com/Chlumsky/msdfgen/files/3050967/thesis.pdf)
 - [msdf-atlas-gen](https://github.com/Chlumsky/msdf-atlas-gen)
+- [MSDF preview shader by Viktor Chlumský](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553)
 
 Type: original implementation, paper/thesis, and atlas tool
 
@@ -514,6 +515,7 @@ Extracted:
 
 - MSDF/MTSDF presentation needs plane bounds, atlas bounds, page, and distance-range metadata distinct from shaping advances.
 - Distance channels must be sampled as linear data rather than sRGB color.
+- The author's preview shader demonstrates runtime thickness, border/outline, gradient fill, displaced soft shadow, and perspective reconstruction. Every distance-based effect remains bounded by the field's encoded range and atlas padding.
 - Atlas generation is useful prior art, but a Rust/Wasm implementation must be evaluated for licensing, determinism, size, quality, and performance.
 
 ## Related deployment and ecosystem comparisons

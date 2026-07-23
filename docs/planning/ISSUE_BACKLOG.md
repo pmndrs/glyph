@@ -348,6 +348,19 @@ Acceptance criteria:
 - shared shaping advances and offsets are not duplicated or replaced;
 - bitmap-color support remains optional and tree-shakable.
 
+### D8. Specify the shared game-text paint and effects contract — M
+
+Dependencies: D1–D4
+
+Acceptance criteria:
+
+- fill color, opacity, outline color/width, and hard-shadow color/offset are baseline fields;
+- soft shadow/glow, gradients, textures, and source palettes are optional extensions;
+- per-span and per-glyph paint changes reuse shaping and layout data;
+- screen-pixel, presentation-pixel, em, and world-space units are not conflated;
+- each backend reports supported effects and numeric limits such as MSDF distance range;
+- unsupported effects return an explicit capability result instead of silently changing technique or quality.
+
 ## Epic E — Advanced compiler and baker extensions
 
 The V0 queue already establishes the shared core, Node/Worker hosts, canonical writer, and one bitmap generator. This epic adds optimization and scale features after that foundation is measured.

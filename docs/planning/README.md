@@ -19,6 +19,7 @@ The planning set turns the annotated sources in [`RESEARCH.md`](../../RESEARCH.m
 - [Conformance plan](CONFORMANCE_PLAN.md): reference engines, comparison fields, corpus, and CI tiers.
 - [Benchmark plan](BENCHMARK_PLAN.md): reproducible performance, size, memory, and boundary-crossing measurements.
 - [Rendering implementation difficulty](IMPLEMENTATION_DIFFICULTY.md): relative effort to make each presentation correct and then performant.
+- [Renderer capability matrix](RENDERER_CAPABILITIES.md): game-facing styling, color/font-source support, scale behavior, and limitations by bitmap, MSDF/MTSDF, and Slug.
 - [Autoresearch optimization protocol](AUTORESEARCH.md): evidence gates and safety boundaries for agent-driven performance work.
 - [Original discussion extraction](DISCUSSION_EXTRACTION.md): comprehensive record of explored designs, estimates, and reasoning before rescoping.
 - [Initial design synthesis](DESIGN_SYNTHESIS.md): preserved architecture/manifesto that previously occupied `RESEARCH.md`.

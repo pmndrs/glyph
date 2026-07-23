@@ -23,6 +23,7 @@ Start here:
 - [Conformance plan](docs/planning/CONFORMANCE_PLAN.md)
 - [Benchmark plan](docs/planning/BENCHMARK_PLAN.md)
 - [Rendering implementation difficulty](docs/planning/IMPLEMENTATION_DIFFICULTY.md)
+- [Renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md)
 - [Autoresearch optimization protocol](docs/planning/AUTORESEARCH.md)
 - [Original discussion extraction](docs/planning/DISCUSSION_EXTRACTION.md)
 - [Scope lanes](docs/planning/SCOPE_LANES.md)
@@ -48,3 +49,5 @@ MTSDF is the proposed general-purpose default when an application has no stronge
 The public API should preserve explicit caller choice. Convenience policy may recommend a technique from projected size and usage, but it should not silently switch renderers or force every rendering engine into an application's bundle. Presentation engines should remain separately importable, tree-shakable, and suitable for dynamic loading.
 
 See [Research: glyph rendering and presentation](RESEARCH.md#glyph-rendering-and-presentation) for the source material and limitations behind this guidance, and the [benchmark plan](docs/planning/BENCHMARK_PLAN.md) for how the recommendations will be tested.
+
+The [renderer capability matrix](docs/planning/RENDERER_CAPABILITIES.md) compares game-facing color, outlining, shadows, effects, color emoji, SVG icons, scale behavior, and technique limits across bitmap, MSDF/MTSDF, and Slug presentations.
