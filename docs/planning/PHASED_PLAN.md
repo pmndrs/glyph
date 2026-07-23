@@ -3,7 +3,7 @@
 Status: proposed  
 Rule: every phase ends with an evidence gate before the next optimization layer begins.
 
-Current execution is deliberately narrower than this long-range plan. Follow the [one-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md) first: runtime HarfRust shaping, one JS paragraph path, and one pre-generated bitmap presentation. Compiler/baker and optimized shaping phases remain future lanes until that slice establishes evidence.
+Current execution is deliberately narrower than this long-range plan. Follow the [one-font vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md) first: a minimal shared baker with Node and lazy Worker hosts, runtime HarfRust shaping, one JS paragraph path, and one generated bitmap presentation. Optimizing compiler and shaping phases remain future lanes until that slice establishes evidence.
 
 ## Phase 0 — Decisions and baselines
 
@@ -26,14 +26,17 @@ Exit gate:
 - every open blocking question has an owner or prototype issue;
 - no public API is declared stable.
 
-## Phase 1 — Reference shaping and format experiment
+## Phase 1 — Minimal portable baker, reference shaping, and format experiment
 
 Goal: prove the canonical glyph identity and conformance pipeline without optimized lookup IR or production rendering.
 
 Deliverables:
 
 - minimal binary-model specification for header, section directory, metrics, cmap, and reference shaping data;
-- native research baker that emits deterministic experimental bytes;
+- shared minimal bake core that emits deterministic experimental bytes;
+- Node host/CLI and dynamically imported Worker host over that core;
+- baked-first loader with development warning and no runtime-forcing option;
+- generated grayscale bitmap strike and Node/Worker output-parity tests;
 - HarfRust Wasm wrapper that shapes a registered font in coarse calls;
 - typed-array shaped output with UTF-16 clusters and flags;
 - HarfRust/HarfBuzz three-way fixture runner;
@@ -43,7 +46,7 @@ Deliverables:
 Non-goals:
 
 - compiled GSUB/GPOS replacement;
-- worker baking;
+- subsetting, remapping, shaping closure, or persistent bake caching;
 - production paragraph layout;
 - production presentation renderers.
 
@@ -76,16 +79,16 @@ Exit gate:
 - GPU records need no per-glyph JS conversion;
 - extension validator catches corrupt offsets, alignments, and capabilities.
 
-## Phase 3 — Runtime worker baker
+## Phase 3 — Harden and extend the portable baker
 
-Goal: make source fonts converge on the same canonical representation during load.
+Goal: extend the already-shipping minimal fallback baker with production-scale selection, caching, and limits.
 
 Deliverables:
 
-- shared native/Wasm compiler core;
-- lazy worker protocol with cancellation and structured progress/errors;
+- subsetting, shaping closure, and optional dense remapping;
+- persistent cache and deterministic content-addressed cache key;
+- mature cancellation, progress, and structured errors;
 - source transfer and baked-result transfer without cloning large buffers;
-- persistent cache and deterministic cache key;
 - glyph-range/text selection plus shaping closure;
 - native-versus-Wasm canonical section parity tests;
 - time/memory limits and large-font failure behavior.

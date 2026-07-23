@@ -300,6 +300,10 @@ Extracted:
 Sources:
 
 - [Three Flatland Slug package](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug)
+- [`SlugFontLoader` baked-first and dynamic fallback path](https://github.com/thejustinwalsh/three-flatland/blob/c596ac2313e33cace825fe197a6d730269019175/packages/slug/src/SlugFontLoader.ts)
+- [Slug Node bake module](https://github.com/thejustinwalsh/three-flatland/blob/c596ac2313e33cace825fe197a6d730269019175/packages/slug/src/bake.ts)
+- [Shared browser-safe/Node-split bake package](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/bake)
+- [Slug package exports and baker registration](https://github.com/thejustinwalsh/three-flatland/blob/c596ac2313e33cace825fe197a6d730269019175/packages/slug/package.json)
 - [Local file-level audit](docs/planning/SLUG_AUDIT.md)
 
 Type: project source code and derived audit
@@ -310,6 +314,9 @@ Abstract: Existing TypeScript/TSL implementation of baked quadratic glyph curves
 Extracted:
 
 - Curve/band generation, texture packing, shader references, narrow GLB reading, and baked-first loading are valuable prior art.
+- The browser-safe loader, Node-only bake subpath, package-declared baker, and thin standalone/unified CLI demonstrate a sound host/dependency split worth retaining.
+- The current fallback dynamically imports heavy modules but creates a separate in-memory runtime model. The new plan improves this by moving fallback work to a Worker and returning the same canonical bytes used by the sidecar path.
+- The current `forceRuntime` option is not carried forward: sidecar miss is automatic fallback with a development warning, not a user-selectable delivery policy.
 - The current text path is intentionally basic: UTF-16-unit cmap, disabled GSUB on the runtime path, explicit pair kerning, and shaping coupled with wrapping/alignment.
 - Flat GPU texture bytes are already available, but the loader reconstructs per-glyph maps and nested band objects.
 - The package supplies useful real-font equivalence tests and baseline Slug payload measurements.

@@ -5,273 +5,203 @@ Status: proposed; interfaces are illustrative and not public API commitments.
 ## System boundaries
 
 ```text
-OpenType bytes + pre-generated presentation fixture
-                    │
-                    ▼
-             loader + font registry
-                │              │
-       font bytes│              │flat presentation ranges
-                ▼              │
-       HarfRust-based Wasm      │
-       runtime shaping          │
-                │              │
-                ▼              │
-       shaped typed buffers     │
-                │              │
-                ▼              │
-        JS paragraph engine     │
-                │              │
-                ▼              ▼
-          positioned glyphs → explicit presentation plugin → GPU
+                           shared portable bake core
+                         /                           \
+                Node host / CLI              browser Worker host
+                development bake             lazy loader fallback
+                         \                           /
+                          canonical FL_font bytes
+                                      │
+                                      ▼
+                           validator + font registry
+                              │                │
+                   shaping data│                │GPU-ready ranges
+                              ▼                ▼
+                     HarfRust Wasm       selected presentation
+                              │                │
+                              ▼                │
+                       shaped buffers          │
+                              │                │
+                              ▼                │
+                      JS paragraph engine      │
+                              │                │
+                              └── positioned glyphs ──→ GPU
 ```
 
-This is the current one-font vertical slice. Compiler/baker, subsetting/remapping, worker baking, compiled lookup IR, and SIMD specialization are future lanes rather than dependencies of this path. See the editable [system design diagram](system-design.excalidraw).
+The loader first probes the canonical sidecar. Only a miss imports the Worker host and selected presentation generator. Both hosts use the same bake core and emit the same format. Subsetting, remapping, compiled IR, and SIMD specialization remain later compiler units. See the editable [system design diagram](system-design.excalidraw).
+
+## What we retain from Three Flatland Slug
+
+- a single loader that derives and probes a baked sibling;
+- no application code change between baked and fallback delivery;
+- a browser-safe main surface;
+- Node tooling behind a separate bake subpath and thin CLI;
+- heavy runtime generation reachable only through dynamic import;
+- development-only, deduplicated guidance to pre-bake.
+
+## What we change
+
+- remove `forceRuntime` and similar policy switches;
+- move fallback parsing/generation into a Worker;
+- make fallback return canonical bytes instead of a distinct in-memory model;
+- run those bytes through the same validation, registration, and presentation paths as a sidecar;
+- make presentation generators independently importable.
 
 ## Ownership
 
-### Future baker owns (not in the current slice)
+### Shared bake core owns
 
-- source-font parsing and validation;
-- variation instancing;
-- subset and shaping closure;
-- dense glyph remapping;
-- canonical metrics and shaping-section emission;
-- Slug conversion;
-- MSDF/MTSDF generation and atlas packing;
-- bitmap rasterization and atlas packing;
-- GLB writing and deterministic diagnostics.
+- source-font validation and face selection;
+- canonical bake descriptor and provenance;
+- outline/metric access shared by generators;
+- selected presentation generation;
+- deterministic section packing and diagnostics.
+
+V0 retains shaping-required OpenType bytes and generates one bitmap strike. Later units may add variation instancing, subsetting, closure, dense remapping, shaping-only tables, compiled lookups, Slug, and MTSDF.
+
+### Node host owns
+
+- filesystem reads/writes;
+- CLI and JavaScript API;
+- output naming and process diagnostics;
+- invoking the shared core.
+
+### Worker host owns
+
+- transferred source input and result output;
+- dynamic generator imports;
+- cancellation, resource limits, and serialized errors;
+- invoking the same shared core without main-thread font work.
+
+### Loader and registry own
+
+- sidecar naming/probing;
+- the automatic hit/miss state machine;
+- development warnings;
+- canonical asset validation;
+- in-flight/result caching;
+- font handles, presentation ranges, and lifetime.
 
 ### Wasm shaper owns
 
-- UTF-16 decoding and source clusters;
-- HarfRust script behavior;
-- shaping plans and font registration;
-- GSUB/GPOS application;
-- glyph flags and unsafe-break data;
-- packed output buffers;
-- font/shaper state and reusable plan caches.
+- UTF-16 decoding and clusters;
+- HarfRust script behavior and GSUB/GPOS;
+- reusable font/shaper data and shape plans;
+- glyph flags and packed outputs.
 
 ### JS paragraph engine owns
 
-- source text and style spans;
-- explicit font spans now and future font-fallback policy;
-- region constraints;
-- break selection and layout strategy;
-- alignment, justification, clipping, max lines, and ellipsis;
-- shape/reflow caches;
-- batching ranges that need boundary reshaping.
+- text/styles, region constraints, and break selection;
+- alignment, clipping, max lines, ellipsis, and reflow caches;
+- batching boundary-sensitive reshapes.
 
-### Presentation adapters own
+### Presentation plugins own
 
-- GPU resource creation;
-- explicit presentation preparation and caller-selected technique;
-- glyph quad/instance generation;
-- renderer-specific draw submission.
+- validation of technique-specific ranges;
+- GPU resource creation and direct upload;
+- instance generation and renderer submission.
 
-## Canonical identities and coordinates
-
-- Input text indices and public clusters are UTF-16 offsets.
-- Unicode processing uses decoded scalar values.
-- Every glyph ID is local to one opaque font handle; identity is `(FontHandle, LocalGlyphId)`.
-- V0 uses source OpenType glyph IDs. A future baker may introduce dense packed IDs inside a font record without creating global glyph IDs.
-- Stored shared metrics use font design units.
-- Shaping output uses signed 32-bit design-unit positions.
-- Presentation plane bounds use a documented design-unit or fixed-point space.
-- World/screen scaling occurs after shaping.
-
-## Proposed runtime contracts
-
-### Shaper request
-
-```ts
-interface ShapeRequest {
-  fontHandle: number
-  textStart: number
-  textLength: number
-  direction: 'ltr' | 'rtl'
-  script: number
-  language: number
-  clusterLevel: number
-  features: readonly FontFeature[]
-  flags: number
-}
-```
-
-Requests are encoded into persistent Wasm memory and submitted in batches. Strings and per-glyph objects must not cross the boundary one at a time.
-
-### Shaper output
-
-```ts
-interface ShapedBufferViews {
-  glyphIds: Uint16Array | Uint32Array
-  clusters: Uint32Array
-  xAdvances: Int32Array
-  yAdvances: Int32Array
-  xOffsets: Int32Array
-  yOffsets: Int32Array
-  flags: Uint16Array
-}
-```
-
-### Paragraph boundary
-
-```ts
-interface Paragraph {
-  text: string
-  spans: readonly TextSpan[]
-  style: ParagraphStyle
-}
-
-interface ParagraphConstraints {
-  width: number
-  height?: number
-  maxLines?: number
-  wrap: 'none' | 'word' | 'character'
-  align: 'start' | 'center' | 'end' | 'justify'
-  overflow: 'visible' | 'clip' | 'ellipsis'
-}
-```
-
-The paragraph engine creates measured clusters from broad-run shapes, chooses line boundaries, then submits all boundary-sensitive final ranges in one reshape batch.
-
-## Font loading states
+## Dependency and import graph
 
 ```text
-font asset V0
-    ├── OpenType buffer view → register once in HarfRust Wasm
-    └── presentation ranges  → validate → lazy GPU preparation
+@pmndrs/text (browser-safe)
+  ├─ asset validator / registry
+  ├─ shaper bridge
+  ├─ paragraph engine
+  └─ presentation interfaces
+
+@pmndrs/text/bake (Node-only)
+  └─ Node host → shared bake core
+
+@pmndrs/text/runtime-bake (lazy browser chunk)
+  └─ Worker host → shared bake core → dynamic selected generator
+
+@pmndrs/text/presentation/* (optional)
+  ├─ runtime renderer plugin
+  └─ corresponding bake generator entry
 ```
 
-Applications support multiple fonts by registering multiple font assets. Runtime baker/cache convergence remains a future extension of this path.
+A sidecar hit must not make the main module graph reach `runtime-bake` or generator code.
+
+## Canonical identity and coordinates
+
+- Public clusters are UTF-16 offsets; Unicode logic uses scalar values.
+- Glyph identity is `(FontHandle, LocalGlyphId)`.
+- V0 local IDs may preserve source glyph IDs; later packed IDs remain font-local.
+- Shared metrics and shaping positions use design units.
+- Presentation plane bounds use a documented design-unit/fixed-point space.
+- World/screen scaling occurs after shaping.
+
+## Font loading state machine
+
+```text
+load(source, presentation)
+  │
+  ├─ derive sidecar URL and fetch
+  │    ├─ valid → canonical load
+  │    ├─ missing → dev warning once → runtime fallback
+  │    └─ invalid/incompatible → structured diagnostic → fallback policy
+  │
+  └─ runtime fallback
+       ├─ import runtime-bake
+       ├─ start/reuse Worker
+       ├─ fetch and transfer source bytes
+       ├─ import selected generator in Worker
+       ├─ bake canonical bytes
+       └─ canonical load
+```
+
+There is no public branch that intentionally bypasses the sidecar probe.
 
 ## `FL_font` extension family
 
-### Shared extension
+`FL_font` contains one font face, version/provenance, retained shaping data for HarfRust, metrics/capabilities, and a presentation directory.
 
-`FL_font` contains:
+`FL_font_bitmap`, `FL_font_distance_field`, and `FL_font_slug` contain only technique-specific records and GPU payloads. They never repeat advances, kerning, or shaping behavior.
 
-- format/version metadata;
-- one font face, glyph count, and ID width;
-- units per em and line metrics;
-- section directory;
-- an OpenType font buffer view for runtime HarfRust shaping in V0;
-- supported scripts, languages, and features;
-- presentation directory and per-glyph availability;
-- HarfRust, HarfBuzz-reference, and Unicode versions.
+The asset supports multiple presentation sections; the first implementation emits one. Applications support multiple fonts by registering multiple one-face assets.
 
-Future versions may add shaping-only or compiled sections. They are not part of the current implementation.
+## Binary rules
 
-### Presentation extensions
+1. JSON locates top-level views; authoritative numeric records remain flat binary.
+2. Sections meet typed-view alignment; GPU ranges meet backend upload constraints.
+3. Registration bounds-checks offsets and lengths once.
+4. Shaping and layout outputs use structure-of-arrays.
+5. GPU data records final formats, strides, dimensions, row layout, and alignment.
+6. No platform-sized values appear on disk.
+7. Unknown optional sections are skipped; unknown required sections reject.
+8. Every serialized structure receives golden-byte and corrupt-input tests.
 
-`FL_font_slug` contains flat glyph-to-curve/band ranges and GPU-ready geometry data.
-
-`FL_font_distance_field` contains one or more SDF/MSDF/MTSDF atlases, technique metadata, and dense or sparse packed-glyph records.
-
-`FL_font_bitmap` contains strike directories, atlas payloads, and per-strike glyph records.
-
-Future presentation extensions may add color layers or images without changing shaped output.
-
-## Binary-layout rules
-
-1. The GLB JSON locates top-level extension buffer views; authoritative section records live in binary data.
-2. All sections are aligned sufficiently for direct typed-array views; GPU blocks also meet backend upload constraints.
-3. Section offsets and lengths are bounds-checked once during registration.
-4. Shaping data uses structure-of-arrays where bulk access dominates.
-5. GPU presentation data uses final component widths, record strides, texture dimensions, and row layouts.
-6. No pointer-sized or platform-dependent values appear on disk.
-7. Unknown optional sections are skipped; unknown required capability bits reject the asset.
-8. Every serialized structure has golden-byte tests before its version is considered stable.
-
-## Reference and optimized shaping paths
+## Shaping and reflow
 
 Initial reference path:
 
 ```text
-registered OpenType bytes → HarfRust runtime shaping → shaped output
+retained OpenType bytes → cached HarfRust runtime shaping → typed shaped output
 ```
 
-Future optimized path:
-
-```text
-HarfRust Unicode/script/buffer state
-            +
-FL_font direct cmap/metrics/classes/lookups
-            ↓
-same shaped output
-```
-
-Each optimized operation ships only after differential tests pass. The reference path remains available in debug/test builds and as a temporary fallback until the operation family is complete.
-
-## Reflow algorithm boundary
-
-Stable across width changes:
-
-- decoded text and style segmentation;
-- paragraph bidi analysis;
-- Unicode break opportunities;
-- font fallback decisions;
-- broad-run shaping and measured clusters;
-- shape plans.
-
-Width-dependent:
-
-- selected line breaks;
-- boundary reshape ranges;
-- visual line ordering;
-- justification and alignment;
-- ellipsis and vertical placement.
-
-Expected width-change flow:
-
-1. JS fits cached measured clusters to the new width.
-2. It intersects legal UAX #14 opportunities with cluster and unsafe-break constraints.
-3. It identifies changed line ranges.
-4. It batches only ranges needing boundary-sensitive reshaping.
-5. It finalizes visual order and placement.
+Width changes reuse broad shaping where safe. JS recomputes line breaks and batches only boundary-sensitive line ranges into one reshape call. Presentation data never participates in text measurement.
 
 ## Caching
 
-### Persistent baked-font cache key
+V0 requires:
 
-Deferred until worker baking exists. The eventual key is expected to hash:
+- sidecar/load promise deduplication;
+- in-memory runtime-bake result keyed by source identity, descriptor, and versions;
+- registered HarfRust state and shape plans;
+- broad-run, line-shape, paragraph-analysis, and width-layout caches;
+- GPU resources by font and presentation.
 
-- source bytes;
-- compiler and format versions;
-- glyph selection;
-- variation instance;
-- presentation options;
-- generator versions affecting deterministic output.
+Persistent runtime-bake caching is deferred, but the key shape is reserved for source hash, descriptor hash, format/baker/generator versions, and selected presentation.
 
-### Runtime caches
+## Failure and warning model
 
-- registered font and validated section offsets;
-- HarfRust shaper data;
-- shape plans keyed by segment properties and feature set;
-- broad-run shape cache;
-- final line-shape cache;
-- paragraph analysis and width-dependent layout cache;
-- GPU resources by font/presentation.
+- A missing sidecar is recoverable and warns once in development.
+- An invalid sidecar yields a structured diagnostic before any allowed fallback.
+- Unsupported source fonts, output/resource limits, Worker failures, and unsupported required sections are distinct errors.
+- HarfRust shaping never silently falls back to approximate shaping.
+- Production fallback remains functional but does not emit the development pre-bake warning.
 
-## Failure model
+## Central invariant
 
-- Reject malformed or unsupported source fonts during registration with structured diagnostics.
-- Reject malformed offsets, unsupported versions, and required unknown capability bits during load.
-- Permit missing optional presentation records but require callers to select an available plugin.
-- Never silently replace failed HarfRust shaping with approximate shaping.
-- Surface font-size, glyph-count, atlas, and retained-memory limit errors distinctly.
-
-## Dependency direction
-
-```text
-asset/data model
-      ↑
-    loader ─────► font registry ─────► runtime shaper
-      │                                  │
-      ▼                                  ▼
-presentation plugins ◄──────────── paragraph engine
-      │
-      ▼
-downstream renderers / Three Flatland
-```
-
-The paragraph engine depends on shaper contracts, never HarfRust internals. Presentations depend on font-scoped glyph IDs and positioned output, never GSUB/GPOS. A future compiler/baker may produce compatible assets without becoming a dependency of these runtime layers.
+> The loader may obtain canonical bytes from the network or from a lazy Worker bake, but every downstream consumer sees exactly one asset model and one shaping/layout/presentation architecture.

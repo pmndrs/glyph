@@ -5,11 +5,11 @@ Sizing: S is roughly one focused PR, M may need two PRs, and L must be split bef
 
 This backlog is ordered by dependency. Issue titles are ready to copy into GitHub after maintainers approve the project brief.
 
-## Current execution queue — one-font runtime slice
+## Current execution queue — one-font baked/fallback slice
 
 The issues below are the active roadmap. The broader epics remain research/future work unless a current issue explicitly depends on them.
 
-### V0.1. Review runtime API, identity, and data contracts — S
+### V0.1. Review bake, loader, runtime API, identity, and data contracts — S
 
 Dependencies: none
 
@@ -17,10 +17,11 @@ Acceptance criteria:
 
 - `(FontHandle, LocalGlyphId)` and layout font slots are accepted or revised;
 - one-face-per-asset and many-fonts-per-registry ownership is decided;
+- shared-core/Node-host/Worker-host ownership and canonical-path convergence are accepted or revised;
 - shaped/layout typed views, memory lifetimes, and explicit presentation selection are reviewed;
-- compiler, subsetting/remapping, worker baking, compiled IR, and SIMD remain outside V0.
+- subsetting/remapping, compiled IR, SIMD, MTSDF, and Slug generation remain outside V0.
 
-### V0.2. Pin the font fixture and capture shaping oracles — M
+### V0.2. Pin the font fixture and capture shaping and bitmap oracles — M
 
 Dependencies: V0.1
 
@@ -29,66 +30,82 @@ Acceptance criteria:
 - one redistributable font revision, license, source URL, and SHA-256 are recorded;
 - HarfRust, HarfBuzz, and Unicode versions are pinned;
 - exact UTF-16 cases and field-for-field oracle results are checked in;
-- a pre-generated bitmap presentation preserves source glyph IDs and records generator provenance.
+- expected bitmap pixels/bounds preserve source glyph IDs and record generator provenance.
 
-### V0.3. Implement the coarse runtime HarfRust Wasm boundary — M
+### V0.3. Implement the minimal shared baker and Node host — M
 
 Dependencies: V0.2
 
 Acceptance criteria:
 
-- font registration/disposal uses opaque handles and copies font bytes once;
-- parsed font state and shape plans are reused;
-- one batch call returns font-scoped glyph IDs, UTF-16 clusters, four positions, and flags as typed views;
-- output matches the pinned HarfRust fixture exactly;
-- cold/warm size, latency, memory, and boundary-call baselines are recorded.
+- a host-independent request retains shaping bytes and generates one grayscale bitmap strike;
+- canonical `FL_font` bytes contain provenance and flat GPU-ready records;
+- Node JS API and thin CLI call the same core;
+- the core contains no filesystem/CLI logic and does not subset, remap, or compile layout;
+- deterministic output, bake time, peak memory, and size baselines are recorded.
 
-### V0.4. Implement the font registry and experimental asset loader — M
+### V0.4. Implement the baked-first loader and lazy Worker fallback — M
 
 Dependencies: V0.1, V0.3
 
 Acceptance criteria:
 
-- original OpenType bytes and flat presentation ranges load from the fixture envelope;
-- malformed ranges/counts/pages fail with structured diagnostics;
-- no per-glyph map/object graph is constructed;
-- two registrations of the same fixture remain isolated by handle, cache, resource, and disposal identity.
+- a valid sidecar reaches the canonical validator without importing fallback code;
+- a miss warns once in development, dynamically imports the Worker host and selected generator, and transfers source/result buffers;
+- Node and Worker output have identical canonical sections;
+- fallback output re-enters the normal canonical load path;
+- invalid sidecars produce structured diagnostics; no `forceRuntime` option exists;
+- in-flight and completed loads are deduplicated in memory;
+- bundle-graph tests prove the common path excludes baker/generator code.
 
-### V0.5. Implement one-font JS paragraph layout — M
+### V0.5. Implement the coarse runtime HarfRust Wasm boundary and registry — M
 
 Dependencies: V0.3, V0.4
 
 Acceptance criteria:
 
-- the reference paragraph shapes and wraps at wide and narrow fixed widths;
-- measured clusters and line source ranges have golden outputs;
-- ordinary width-only reflow reuses broad shaping;
-- layout includes a font table and font slots;
-- shaping metrics are independent of presentation bounds.
+- canonical assets register/dispose through opaque handles and copy shaping bytes once;
+- parsed HarfRust state and shape plans are reused;
+- one batch returns font-scoped IDs, UTF-16 clusters, four positions, and flags as typed views;
+- output matches pinned HarfRust fixtures;
+- malformed ranges/counts/pages fail without per-glyph object construction;
+- cold/warm size, latency, memory, and boundary-call baselines are recorded.
 
-### V0.6. Render the bitmap fixture on WebGPU and WebGL2 — M
+### V0.6. Implement one-font JS paragraph layout — M
 
-Dependencies: V0.4, V0.5
+Dependencies: V0.5
 
 Acceptance criteria:
 
-- explicit bitmap plugin prepares flat records and texture payloads;
+- the reference paragraph shapes and wraps at wide and narrow widths;
+- measured clusters and line source ranges have golden outputs;
+- ordinary width reflow reuses broad shaping;
+- layout includes a font table/slots and never measures with presentation bounds;
+- boundary-sensitive ranges use at most one reshape batch.
+
+### V0.7. Render the generated bitmap on WebGPU and WebGL2 — M
+
+Dependencies: V0.4–V0.6
+
+Acceptance criteria:
+
+- explicit bitmap plugin prepares canonical flat records/texture payloads;
 - instance generation consumes positioned `(fontSlot, glyphId)` output;
-- GPU upload performs no per-glyph reconstruction or numeric repacking;
-- fixed-region, clipping, and resize references pass on both backends;
+- GPU upload performs no per-glyph reconstruction/repacking;
+- clipping/resize references pass on WebGPU and WebGL2;
 - first-frame, upload, GPU-time, and GPU-memory baselines are stored.
 
-### V0.7. Harden and review the completed vertical slice — M
+### V0.8. Harden and review the completed vertical slice — M
 
-Dependencies: V0.2–V0.6
+Dependencies: V0.2–V0.7
 
 Acceptance criteria:
 
-- stale handles, limits, corrupt inputs, disposal, and view invalidation are tested;
-- presentation package/import boundaries remain tree-shakable;
-- performance claims link to raw reproducible evidence;
-- accepted experimental contracts become ADRs;
-- the next real font or presentation can be added without changing runtime identity.
+- cancellation, stale handles, limits, corrupt inputs, disposal, and view invalidation are tested;
+- two registrations remain isolated by handle/cache/resource identity;
+- main, Node bake, Worker bake, and presentation imports stay separated;
+- performance claims link to raw evidence and accepted contracts become ADRs;
+- the next font or presentation is additive.
 
 ## Epic A — Decisions and reference corpus
 
@@ -308,7 +325,9 @@ Acceptance criteria:
 - any unavoidable decode/transcode step is named honestly;
 - no per-glyph repacking is required.
 
-## Epic E — Portable baker
+## Epic E — Advanced compiler and baker extensions
+
+The V0 queue already establishes the shared core, Node/Worker hosts, canonical writer, and one bitmap generator. This epic adds optimization and scale features after that foundation is measured.
 
 ### E1. Define source-font and canonical-outline interfaces — M
 
@@ -341,13 +360,13 @@ Acceptance criteria:
 - `.notdef` behavior is explicit;
 - `u16` overflow is rejected or upgrades through a specified path.
 
-### E4. Define native/worker baker API and diagnostics — M
+### E4. Extend native/worker diagnostics for advanced compilation — M
 
 Dependencies: C5, E1–E3
 
 Acceptance criteria:
 
-- the compiler core has no host-specific business logic;
+- the existing core remains free of host-specific business logic;
 - progress, cancellation, warning, and failure records are defined;
 - output diagnostics separate shaping and presentation sizes/times.
 

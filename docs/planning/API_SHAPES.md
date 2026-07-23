@@ -1,22 +1,45 @@
-# Runtime API shapes
+# Runtime and bake API shapes
 
 Status: current hardening target; provisional and not a public API commitment  
-Scope: one-font vertical slice with multi-font-safe identities
+Scope: one-font vertical slice with required offline baking and automatic worker fallback
 
 ## Design constraints
 
 The first implementation must:
 
-- shape at runtime with HarfRust Wasm at reasonable speed;
-- parse/register a font once and reuse its shaping state and plans;
-- cross the JS/Wasm boundary in coarse batches, never per glyph;
+- use one portable bake core from both a Node host and a browser Worker host;
+- make a pre-baked `FL_font` sidecar the normal loader path;
+- dynamically import the Worker host and presentation generator only after a sidecar miss;
+- warn once in development when runtime baking was required;
+- feed offline and fallback output through the same canonical asset loader;
+- provide no `forceRuntime`, `skipBaked`, or equivalent public option;
+- shape at runtime with HarfRust Wasm in coarse batches;
 - lay out constrained paragraphs in TypeScript/JavaScript;
-- render through an explicitly selected presentation plugin;
-- complete one font end to end before implementing fallback or automatic selection;
-- avoid global glyph IDs so multiple fonts can be introduced without an API break;
-- keep compiler, subsetting/remapping, compiled IR, SIMD specialization, and runtime baking out of the current slice.
+- render through an explicitly selected, optional presentation plugin;
+- avoid global glyph IDs so multiple fonts remain additive;
+- defer subsetting, dense remapping, compiled lookup IR, SIMD specialization, and generalized compiler optimization.
 
-Names below communicate ownership and invariants. They may change before implementation.
+The baker is required infrastructure. The advanced OpenType compiler discussed in the research is not required for V0.
+
+## Package and import boundaries
+
+```text
+@pmndrs/text
+  loader, registry, shaper bridge, paragraph API
+
+@pmndrs/text/bake
+  Node-only host and CLI surface
+
+@pmndrs/text/runtime-bake
+  browser Worker host; imported internally only on sidecar miss
+
+@pmndrs/text/presentation/bitmap
+@pmndrs/text/presentation/mtsdf
+@pmndrs/text/presentation/slug
+  independently selectable/importable presentation engines
+```
+
+The main entry must not statically reach Node modules, the bake Wasm, atlas generators, Slug conversion, or MTSDF tooling. Package-graph tests enforce this.
 
 ## Identity model
 
@@ -30,68 +53,134 @@ type LocalGlyphId = number
 type FontSlot = number
 ```
 
-`LocalGlyphId` is meaningful only inside one registered font. In the first slice it is the source OpenType glyph ID returned by HarfRust. Public/runtime identity is therefore:
+`LocalGlyphId` is meaningful only inside one registered font. V0 may preserve the source OpenType glyph ID. Public/runtime identity is always:
 
 ```text
 (FontHandle, LocalGlyphId)
 ```
 
-Paragraph output can encode `FontSlot` once per run or instance batch rather than repeating an opaque handle in every internal operation. The layout owns a font table mapping slots back to handles.
+A later baker may remap IDs internally without changing paragraph or renderer APIs.
 
-No API may assume that glyph `42` in two fonts is the same glyph. A future baker may remap glyph IDs internally, but that must not change the public identity model.
-
-## Text system
+## Loader API
 
 ```ts
-interface TextSystemOptions {
-  shaper: RuntimeShaper
-  presentations?: readonly PresentationPlugin[]
+type PresentationKind = 'bitmap' | 'mtsdf' | 'slug'
+
+interface FontLoadOptions {
+  presentation: PresentationKind
+  signal?: AbortSignal
 }
 
-interface TextSystem {
-  readonly fonts: FontRegistry
-
-  createParagraph(input: ParagraphInput): Paragraph
-  dispose(): void
+interface FontLoader {
+  load(sourceURL: string | URL, options: FontLoadOptions): Promise<RegisteredFont>
 }
 ```
 
-The core package should not import all presentation engines. Callers construct the system with the engines they use.
+There is deliberately no option that forces the runtime path. `load` follows one state machine:
+
+```text
+derive and fetch baked sidecar
+  hit  → validate canonical bytes → register
+  miss → development warning once
+       → dynamically import runtime-bake Worker host
+       → fetch/transfer source font
+       → bake canonical bytes
+       → validate canonical bytes → register
+```
+
+The selected presentation is explicit. Selection determines which optional generator the fallback imports; it does not change shaping or paragraph data.
+
+## Shared bake request
+
+This host-independent contract is used by the Node host and Worker host:
+
+```ts
+interface BakeRequestV0 {
+  source: Uint8Array
+  presentation: PresentationBakeRequestV0
+  sourceName?: string
+}
+
+type PresentationBakeRequestV0 =
+  | { kind: 'bitmap'; ppem: number }
+  | { kind: 'mtsdf'; emSize: number; pixelRange: number }
+  | { kind: 'slug' }
+
+interface BakeResultV0 {
+  bytes: Uint8Array
+  diagnostics: BakeDiagnosticsV0
+}
+
+interface BakeDiagnosticsV0 {
+  sourceHash: string
+  glyphCount: number
+  outputBytes: number
+  presentationBytes: number
+  elapsedMs: number
+  warnings: readonly BakeWarningV0[]
+}
+```
+
+V0 implements one complete bitmap request first. The union fixes the extensibility seam without requiring every generator.
+
+## Node bake surface
+
+```ts
+interface NodeBakeOptions {
+  input: string | URL
+  output?: string | URL
+  presentation: PresentationBakeRequestV0
+}
+
+declare function bakeFont(options: NodeBakeOptions): Promise<BakeDiagnosticsV0>
+```
+
+The Node host owns filesystem and CLI concerns only. It calls the shared core used by the Worker and writes the returned canonical bytes. A standalone `text-font-bake` command and any future dispatcher call the same function.
+
+## Internal Worker protocol
+
+```ts
+interface RuntimeBakeMessageV0 {
+  id: number
+  source: ArrayBuffer
+  request: Omit<BakeRequestV0, 'source'>
+}
+
+interface RuntimeBakeSuccessV0 {
+  id: number
+  ok: true
+  bytes: ArrayBuffer
+  diagnostics: BakeDiagnosticsV0
+}
+
+interface RuntimeBakeFailureV0 {
+  id: number
+  ok: false
+  error: SerializedBakeErrorV0
+}
+```
+
+Source and result buffers are transferred, not cloned. The Worker host is an implementation detail of the loader, not an alternate user-facing font API.
 
 ## Font registration
 
 ```ts
-interface FontDefinition {
-  key: FontKey
-  opentype: ArrayBufferView
-  presentations?: readonly PresentationSource[]
-}
-
 interface RegisteredFont {
   readonly key: FontKey
   readonly handle: FontHandle
   readonly metrics: FontMetrics
   readonly capabilities: FontCapabilities
-
   dispose(): void
 }
 
 interface FontRegistry {
-  register(definition: FontDefinition): Promise<RegisteredFont>
+  registerAsset(bytes: ArrayBufferView): Promise<RegisteredFont>
   get(key: FontKey): RegisteredFont | undefined
   getByHandle(handle: FontHandle): RegisteredFont | undefined
 }
 ```
 
-Registration:
-
-1. validates the source bytes and presentation descriptors;
-2. copies or transfers the font bytes into Wasm-owned memory once;
-3. creates cached HarfRust font/shaper state;
-4. retains presentation ranges for lazy GPU preparation;
-5. returns an opaque handle.
-
-The first fixture registers one font. Registry keys, handles, disposal, and run records must already permit many.
+Only canonical asset bytes enter registration. There is no second registration path for raw OpenType data.
 
 ## Runtime shaper boundary
 
@@ -118,16 +207,11 @@ interface RuntimeShaper {
   shapeBatch(request: ShapeBatchRequest): ShapedBatchViews
   reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews
 }
-```
 
-The bridge will eventually encode requests into persistent Wasm memory rather than marshal these object forms literally. The public rule is one call per batch.
-
-```ts
 interface ShapedBatchViews {
   readonly fonts: Uint16Array
   readonly runGlyphStarts: Uint32Array
   readonly runGlyphCounts: Uint32Array
-
   readonly glyphIds: Uint16Array | Uint32Array
   readonly clusters: Uint32Array
   readonly xAdvances: Int32Array
@@ -138,13 +222,7 @@ interface ShapedBatchViews {
 }
 ```
 
-Invariants:
-
-- clusters are UTF-16 offsets into the original paragraph text;
-- glyph IDs are local to the font slot referenced by their shaped run;
-- positioning remains in signed design units;
-- output views are immutable to callers and valid for a documented lifetime;
-- no presentation bounds, atlas data, or rendering technique appears here.
+Clusters are UTF-16 offsets. Positions remain signed design units. No presentation data crosses this boundary.
 
 ## Paragraph API
 
@@ -156,21 +234,6 @@ interface ParagraphInput {
   style?: ParagraphStyle
 }
 
-interface TextSpan {
-  start: number
-  end: number
-  font?: FontHandle
-  fontSize?: number
-  language?: string
-  features?: readonly FontFeature[]
-}
-
-interface Paragraph {
-  layout(constraints: ParagraphConstraints): ParagraphLayout
-  update(input: ParagraphInput): void
-  dispose(): void
-}
-
 interface ParagraphConstraints {
   width: number
   height?: number
@@ -179,50 +242,21 @@ interface ParagraphConstraints {
   align?: 'start' | 'center' | 'end' | 'justify'
   overflow?: 'visible' | 'clip' | 'ellipsis'
 }
-```
 
-V0 exercises a single default font span. Optional span-level font handles are included now so explicit multi-font content does not require changing paragraph ownership later. Automatic fallback is deferred.
-
-## Layout output
-
-```ts
-interface ParagraphLayout {
-  readonly fontTable: readonly FontHandle[]
-  readonly lines: LayoutLineViews
-  readonly runs: LayoutRunViews
-  readonly glyphs: LayoutGlyphViews
-  readonly width: number
-  readonly height: number
-  readonly overflowed: boolean
-}
-
-interface LayoutGlyphViews {
-  readonly fontSlots: Uint16Array
-  readonly glyphIds: Uint16Array | Uint32Array
-  readonly clusters: Uint32Array
-  readonly x: Float32Array
-  readonly y: Float32Array
-  readonly scale: Float32Array
-  readonly flags: Uint16Array
+interface Paragraph {
+  layout(constraints: ParagraphConstraints): ParagraphLayout
+  update(input: ParagraphInput): void
+  dispose(): void
 }
 ```
 
-The paragraph engine may store font identity at run granularity internally. The presentation boundary receives a normalized view with an explicit font slot so it can batch instances by `(font, technique, resource page)`.
+Width changes reflow in JS. Boundary-sensitive ranges are reshaped in one batched Wasm call when required.
 
 ## Presentation boundary
 
 ```ts
-type PresentationKind = 'bitmap' | 'mtsdf' | 'slug'
-
-interface PresentationSource {
-  kind: PresentationKind
-  data: ArrayBufferView
-  metadata: Readonly<Record<string, unknown>>
-}
-
 interface PresentationPlugin<Resource = unknown, DrawBatch = unknown> {
   readonly kind: PresentationKind
-
   supports(font: RegisteredFont): boolean
   prepare(font: RegisteredFont): Promise<Resource>
   buildBatches(layout: ParagraphLayout, resource: Resource): DrawBatch
@@ -230,36 +264,29 @@ interface PresentationPlugin<Resource = unknown, DrawBatch = unknown> {
 }
 ```
 
-Selection is explicit:
+Preparation consumes flat asset ranges. It must not reconstruct a glyph map or repeat shaping metrics.
 
-```ts
-const batches = bitmap.buildBatches(layout, bitmapResource)
-```
+## Caching and warnings
 
-A future recommendation helper may suggest a technique. It must not silently switch engines or make unselected engines part of the core bundle.
+Required V0 caches:
 
-## Caching and lifetime
+- in-flight and completed loads keyed by source URL, bake descriptor, and format/compiler version;
+- registered HarfRust state and reusable shape plans;
+- broad shaped runs and width-dependent layouts;
+- GPU resources by `(FontHandle, PresentationKind)`.
 
-The first implementation needs these cache boundaries:
+Persistent browser storage is a later optimization. The first fallback may use memory caching.
 
-- registered font state keyed by `FontHandle`;
-- HarfRust reusable data and shape plans keyed by font plus segment properties;
-- broad shaped runs keyed by text/style/font identity;
-- width-dependent layouts keyed separately from broad shaping;
-- GPU presentation resources keyed by `(FontHandle, PresentationKind)`.
-
-Disposing a font invalidates paragraphs, layouts, and resources that reference its handle. Stale-handle behavior must be a checked error in development builds.
+On a sidecar miss, the loader emits one development-only warning per source URL. It names the source, states that worker baking occurred, and points to the Node bake command. Production does not warn. Corrupt or incompatible sidecars produce a structured diagnostic before fallback rather than masquerading as a normal miss.
 
 ## Deliberately absent now
 
-- font compiler/baker API;
-- subsetting or shaping closure;
+- subsetting and shaping closure;
 - dense glyph remapping;
-- compiled shaping lookup provider;
+- compiled GSUB/GPOS IR or alternate HarfRust lookup provider;
 - SIMD or per-font generated Wasm;
-- worker baking and persistent baked cache;
+- runtime variable axes;
 - automatic font fallback;
 - automatic presentation switching;
+- progressive or incremental baking;
 - stable React/Three adapter API.
-
-The shapes above leave lanes for these features without requiring them in the one-font path.

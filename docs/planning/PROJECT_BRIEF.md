@@ -3,7 +3,7 @@
 Status: proposed  
 Audience: pmndrs maintainers and initial contributors
 
-Current execution is a narrower one-font runtime slice: HarfRust Wasm shapes original OpenType bytes, the JS paragraph engine reflows one paragraph, and a pre-generated bitmap fixture proves the presentation boundary. Compiler/baker, subsetting/remapping, worker baking, compiled IR, SIMD, and additional presentation generators remain future lanes. See the [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).
+Current execution is a narrower one-font slice with a required minimal baker: one shared core runs behind a Node host and a dynamically imported loader Worker, both emit the same canonical `FL_font` asset, HarfRust Wasm shapes its retained font data, the JS paragraph engine reflows one paragraph, and one generated bitmap presentation proves the rendering boundary. Advanced compiler work—subsetting/remapping, compiled IR, SIMD, and additional generators—remains in later lanes. See the [vertical-slice roadmap](VERTICAL_SLICE_ROADMAP.md).
 
 ## Product statement
 

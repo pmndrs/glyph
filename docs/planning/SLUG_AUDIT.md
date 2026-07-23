@@ -203,9 +203,12 @@ Disposition:
 
 - preserve baked-first/lazy-heavy-dependency behavior;
 - replace fallback with a worker baker returning canonical bytes;
+- remove `forceRuntime`; a sidecar miss automatically falls back and emits one development warning with the pre-bake command;
 - avoid double source parsing;
 - distinguish “sidecar absent” from “sidecar corrupt/incompatible” in diagnostics and policy;
 - keep the everyday/direct/preload surface aligned with the eventual pmndrs loader conventions.
+
+The reusable structural pattern extends beyond `SlugFontLoader`: Three Flatland's browser-safe `@three-flatland/bake` root keeps Node discovery/writers behind `/node`, package-specific baker modules behind separate exports, and the standalone/unified CLIs call the same `Baker.run()` implementation. `pmndrs/text` should preserve that host separation while replacing the TypeScript font-domain core with one portable core shared by the Node host and runtime Worker.
 
 ## Format observations
 

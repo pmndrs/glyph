@@ -1,171 +1,157 @@
 # One-font vertical-slice roadmap
 
 Status: proposed current roadmap  
-Goal: render one constrained paragraph from one runtime-shaped font, while hardening identities and interfaces for multiple fonts
+Goal: bake, load, shape, reflow, and render one font while hardening interfaces for many fonts and presentation engines
 
 ## Finish line
 
-Given one pinned OpenType font and one pre-generated bitmap presentation fixture, the package can:
+Given one pinned OpenType font, the package can:
 
-1. register the font once in HarfRust Wasm;
-2. shape reference text with correct UTF-16 clusters, glyph IDs, advances, offsets, and flags;
-3. lay the text into a fixed-width region in JavaScript;
-4. reflow on width change without unnecessary reshaping;
-5. build bitmap instances using the same local glyph IDs;
-6. upload prepared records/texture data without per-glyph reconstruction;
-7. render and verify the result on WebGPU and WebGL2;
-8. report registration, shaping, layout, upload, memory, and GPU baselines.
+1. bake a canonical `FL_font` asset with a bitmap presentation from Node;
+2. discover and load that sidecar without importing the runtime baker;
+3. when the sidecar is absent, warn once in development, dynamically import a Worker baker, and produce the same canonical asset;
+4. register the canonical font once in HarfRust Wasm;
+5. shape reference text with correct clusters, glyph IDs, positions, and flags;
+6. lay text into a fixed-width region in JavaScript and reflow on resize;
+7. upload bitmap records and texture data without per-glyph reconstruction;
+8. render on WebGPU and WebGL2;
+9. report bake, load, shape, layout, upload, memory, and GPU baselines.
 
-The implementation uses one font, but all identities and output records remain correct when more fonts are registered.
+No `forceRuntime` option exists. Pre-baking is the expected path; fallback is an automatic compatibility path.
 
 ## Current exclusions
 
-- font compiler or generalized baker;
 - subsetting, shaping closure, or glyph remapping;
-- worker runtime baking and persistent baked cache;
-- compiled GSUB/GPOS data or alternate HarfRust provider;
+- compiled GSUB/GPOS data or an alternate HarfRust provider;
 - SIMD, AOT Wasm, browser-time JIT, or MLIR;
+- persistent runtime-bake cache;
 - automatic font fallback;
 - MTSDF/Slug generation or Windfoil integration;
 - automatic presentation selection;
+- progressive baking;
 - React/Three public bindings.
 
-These remain documented future lanes. They do not enter the critical path.
+The minimal baker, Node host, Worker host, and dynamic import boundary are in scope now. The advanced font compiler is not.
 
-## Milestone 0 — Contract freeze for the experiment
+## Milestone 0 — Contract freeze
 
 Deliverables:
 
-- review `API_SHAPES.md` and `DATA_DESIGN_V0.md`;
+- approve the runtime/bake API and V0 data design;
+- approve one portable bake core with Node and Worker hosts;
+- approve one canonical output path and no runtime-forcing option;
 - approve `(FontHandle, LocalGlyphId)` and layout font slots;
-- approve one-font-per-asset, many-fonts-per-registry ownership;
-- approve the typed shaped/layout buffer fields and lifetimes;
-- approve explicit presentation plugin selection;
-- choose/pin the reference font, HarfRust commit, HarfBuzz version, and Unicode version.
+- pin the reference font, HarfRust, HarfBuzz, Unicode, and generator versions.
 
-Exit gate:
-
-- no unresolved identity or ownership question can force a multi-font breaking change;
-- no compiler or presentation-specific field appears in the shaping API.
+Exit gate: no unresolved ownership, identity, or package-boundary question can force a breaking multi-font or multi-generator redesign.
 
 ## Milestone 1 — Fixture and oracle foundation
 
 Deliverables:
 
-- pinned Inter Regular candidate with source/license/hash manifest;
-- exact UTF-16 shaping cases;
-- HarfBuzz and HarfRust oracle outputs;
-- pre-generated bitmap strike, dense glyph records, and asset envelope;
-- corrupt range/count/page fixtures;
-- benchmark environment/result manifest.
+- pinned Inter Regular candidate with license/hash manifest;
+- UTF-16 shaping cases and HarfBuzz/HarfRust oracle outputs;
+- expected bitmap strike outputs and visual goldens;
+- malformed font/asset/range/page fixtures;
+- benchmark environment and result schema.
+
+Exit gate: every oracle and visual fixture is versioned and reproducible.
+
+## Milestone 2 — Minimal shared baker and Node host
+
+Deliverables:
+
+- host-independent bake request/result contract;
+- source parsing sufficient to retain shaping bytes and enumerate/rasterize glyphs;
+- one deterministic bitmap strike and flat GPU-ready records;
+- canonical `FL_font` writer and validator;
+- Node filesystem host, JS API, and thin CLI;
+- Node bake timing, size, and memory baseline.
 
 Exit gate:
 
-- oracle generation is deterministic and versioned;
-- presentation glyph IDs agree with source/OpenType glyph IDs;
-- fixture packer performs assembly and validation only, not compilation.
+- the Node host contains no font-domain logic;
+- the core contains no filesystem or CLI logic;
+- the output loads through the canonical asset validator;
+- no subsetting, remapping, or compiled layout IR sneaks into the milestone.
 
-## Milestone 2 — Runtime HarfRust shaper
+## Milestone 3 — Baked-first loader and Worker fallback
+
+Deliverables:
+
+- deterministic sidecar naming and probe;
+- normal baked hit path;
+- one development-only, deduplicated warning on miss;
+- separate `runtime-bake` entry and Worker lifecycle;
+- transferable request/result buffers;
+- dynamically imported bitmap generator and bake Wasm;
+- in-memory in-flight/result cache;
+- sidecar hit/miss/invalid tests and bundle-graph assertions;
+- Node-versus-Worker canonical-section parity test.
+
+Exit gate:
+
+- a sidecar hit does not download or instantiate the baker;
+- fallback work never parses or rasterizes on the main thread;
+- fallback bytes re-enter the same validator/registration path;
+- no public API can force or bypass the baked probe.
+
+## Milestone 4 — Runtime HarfRust shaper
 
 Deliverables:
 
 - minimal Wasm wrapper and memory ABI;
 - font registration/disposal by opaque handle;
-- cached HarfRust font data and reusable shape plans;
-- coarse `shapeBatch` call over UTF-16 and run records;
-- structure-of-arrays output views;
-- exact comparisons against pinned HarfRust fixtures.
+- cached HarfRust state and reusable shape plans;
+- coarse `shapeBatch` and `reshapeRanges` calls;
+- structure-of-arrays outputs;
+- exact comparison with pinned HarfRust fixtures.
 
-Reasonable-speed gate:
+Reasonable-speed gate: one registration copy, one Wasm call per batch, warm state reuse, no per-glyph objects, and recorded p50/p95/memory/call-count evidence.
 
-- font bytes are copied/registered once;
-- shaping performs one JS/Wasm call per batch;
-- warm calls reuse parsed font state and plans;
-- no per-glyph JS object allocation occurs;
-- raw timing, p50/p95, retained memory, and call counts are recorded before optimization claims.
-
-## Milestone 3 — Font registry and asset loader
-
-Deliverables:
-
-- `FontDefinition`, `RegisteredFont`, and `FontRegistry` experiment;
-- experimental asset-envelope reader and validator;
-- source bytes registered with the shaper;
-- presentation metadata retained as flat views;
-- lazy presentation resource preparation;
-- two-handles/one-source collision and disposal tests.
-
-Exit gate:
-
-- glyph lookup always includes font identity;
-- the loader creates no per-glyph map/object graph;
-- malformed assets fail with structured diagnostics.
-
-## Milestone 4 — JS paragraph engine, one font
+## Milestone 5 — JS paragraph engine
 
 Deliverables:
 
 - paragraph text/default-font/span model;
-- broad shaping and measured clusters;
-- initial legal break representation sufficient for the fixture;
-- greedy word wrapping and line placement;
-- width-only reflow cache;
-- batched reshape seam even if the first Latin fixture rarely needs it;
-- wide and narrow golden layout outputs.
+- broad shapes and measured clusters;
+- legal break representation for the fixture;
+- greedy wrapping, placement, and width-only reflow cache;
+- batched boundary-reshape seam;
+- wide/narrow golden layout outputs.
 
-Exit gate:
+Exit gate: layout remains UTF-16/cluster-correct, reuses broad shaping on ordinary resize, carries font slots, and never reads presentation bounds to measure text.
 
-- source ranges and clusters remain UTF-16 based;
-- ordinary width changes reuse broad shaping;
-- layout output includes a font table and font slots;
-- no presentation technique participates in line measurement.
-
-## Milestone 5 — Bitmap presentation and first frame
+## Milestone 6 — Bitmap presentation and first frame
 
 Deliverables:
 
-- bitmap presentation plugin;
-- direct dense-record views and texture upload;
-- instance generation from positioned glyphs;
+- bitmap plugin consuming direct canonical ranges;
+- texture upload and instance generation;
 - WebGPU and WebGL2 reference scenes;
-- fixed-region clipping and resize demonstration;
-- first-draw timing and GPU memory report.
+- clipping and resize demonstration;
+- first-draw and GPU-memory report.
 
-Exit gate:
+Exit gate: layout uses font metrics, no record reconstruction/repacking occurs, and changing presentation code cannot change shaped identities.
 
-- the fixture paragraph renders correctly on both backends;
-- shared OpenType metrics—not bitmap atlas bounds—control layout;
-- no per-glyph record reconstruction or numeric repacking occurs before upload;
-- changing presentation code cannot change shaped/layout identities.
-
-## Milestone 6 — Harden the first complete path
+## Milestone 7 — Harden the complete path
 
 Deliverables:
 
-- API misuse and stale-handle tests;
-- corrupt/untrusted-input limits;
-- cold/warm benchmark report;
-- multi-font identity contract tests using two registrations;
-- package/export boundaries that keep presentation code optional;
-- accepted decision records for the experimental API and data contracts;
-- autoresearch baseline artifacts, with optimization search still disabled until quality gates are complete.
+- stale-handle, cancellation, malformed-input, and resource-limit tests;
+- cold/warm offline and fallback benchmark report;
+- two-registrations identity tests;
+- export-boundary and tree-shaking tests;
+- accepted decision records;
+- autoresearch baseline artifacts, with optimization search disabled until quality gates pass.
 
-Exit gate:
-
-- one font completes the full pipeline reproducibly;
-- baseline performance is reasonable for the reference workload and bottlenecks are measured;
-- the next font or presentation requires an additive fixture/plugin, not an identity/API redesign;
-- all performance claims link to raw evidence.
+Exit gate: one font completes both delivery paths reproducibly, the normal path stays small, runtime performance is reasonable, and adding another font or presentation is additive.
 
 ## After the slice
 
-Recommended next sequence:
-
-1. add one genuinely different second font and explicit multi-font spans;
-2. add fallback selection and mixed-script fixtures;
-3. add MTSDF as the general-purpose presentation target;
-4. port/rewrite Slug with its proven quality-preserving optimizations;
-5. activate the autoresearch loop on measured Slug and shared runtime bottlenecks;
-6. reconsider compiler/baker work only when runtime parsing, asset delivery, or payload evidence justifies it.
-
-The first slice is successful if it makes these additions routine—not if it implements them early.
+1. add a genuinely different second font and explicit multi-font spans;
+2. add font fallback and mixed-script fixtures;
+3. add MTSDF behind the established generator/plugin boundaries;
+4. port/rewrite Slug with its proven optimizations;
+5. activate autoresearch on measured bottlenecks;
+6. introduce subsetting, remapping, compiled lookup data, or SIMD only when evidence justifies each unit.

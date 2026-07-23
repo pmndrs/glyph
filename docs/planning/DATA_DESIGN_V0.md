@@ -1,78 +1,103 @@
 # Runtime data design V0
 
 Status: current hardening target; experimental  
-Goal: carry one font through runtime shaping, paragraph layout, and one renderer while keeping every identity multi-font-safe
+Goal: carry one font through offline or fallback baking, runtime shaping, paragraph layout, and one renderer while keeping identities multi-font-safe
 
 ## Scope decision
 
-V0 does not compile OpenType layout data. HarfRust reads the registered OpenType font at runtime and caches its parsed/shaper state. V0 does not subset or remap glyph IDs.
+V0 always produces a canonical `FL_font` asset before registration. The same portable bake core runs behind:
 
-The source OpenType glyph ID is therefore the local glyph ID used by shaping and presentation lookup. That decision is intentionally contained inside a font record so a future compiled format can introduce dense IDs without changing paragraph or renderer APIs.
+- a Node host used by the CLI and development tooling; and
+- a browser Worker host dynamically imported by the loader after a sidecar miss.
 
-## Runtime ownership graph
+V0 baking is intentionally simple: validate the source, retain the OpenType data HarfRust needs, generate one bitmap presentation, write deterministic ranges, and stamp provenance. It does not subset, compute shaping closure, densely remap glyphs, or compile GSUB/GPOS into a new IR.
+
+The source OpenType glyph ID is the font-local glyph ID in V0. That choice is contained inside the font asset so later remapping does not change paragraph or renderer APIs.
+
+## Convergent load graph
 
 ```text
-FontRegistry
-  FontRecord[FontHandle]
-    OpenType bytes owned by Wasm shaper
-    Font metrics/capabilities
-    PresentationSource[]
-    GPU resources, created lazily per selected presentation
-
-Paragraph
-  original UTF-16 text
-  spans referencing FontHandle
-  shaped runs referencing font slots
-  width-independent measured clusters
-  width-dependent line/layout cache
-
-ParagraphLayout
-  fontTable: FontHandle[]
-  line/run/glyph typed views
-  positioned glyph identity = (fontSlot, localGlyphId)
+Node CLI ───────────────┐
+                       │
+                       ▼
+                 shared bake core ──→ canonical FL_font bytes
+                       ▲                         │
+                       │                         ▼
+loader sidecar miss ─→ lazy Worker host    canonical loader
+                                                 │
+                                  ┌──────────────┴──────────────┐
+                                  ▼                             ▼
+                             HarfRust shaper              GPU presentations
 ```
 
-## Font record
+No raw-source registration path survives beyond the baker. Offline and runtime-fallback assets use the same validation and registration path.
 
-```ts
-interface FontRecordV0 {
-  handle: FontHandle
-  key: FontKey
-
-  opentypeBytes: WasmRange
-  unitsPerEm: number
-  glyphCount: number
-  glyphIdWidth: 16 | 32
-
-  ascender: number
-  descender: number
-  lineGap: number
-
-  capabilities: FontCapabilityBits
-  presentations: readonly PresentationRecordV0[]
-}
-```
-
-`opentypeBytes` is a Wasm-owned range or an equivalent immutable registration owned by the shaper. JavaScript should not retain duplicate parsed font objects.
-
-## Asset envelope
-
-The first fixture may be delivered as an experimental GLB or as equivalent test ranges. The logical envelope is:
+## Canonical asset envelope
 
 ```ts
 interface FontAssetV0 {
   version: 0
   font: {
-    key?: string
     opentypeBufferView: number
+    glyphCount: number
+    glyphIdWidth: 16 | 32
+    unitsPerEm: number
+  }
+  provenance: {
+    sourceHash: string
+    formatVersion: number
+    bakerVersion: string
+    harfrustVersion: string
+    harfbuzzReferenceVersion: string
+    unicodeVersion: string
+    descriptorHash: string
   }
   presentations: readonly PresentationDescriptorV0[]
 }
 ```
 
-This is a packaging description, not a compiler output contract. Fixture tooling may assemble already-generated font and presentation bytes without understanding GSUB/GPOS.
+One asset contains one font face. A registry supports many assets. The source font bytes retained here may later be replaced by shaping-only or compiled sections without changing the envelope’s ownership model.
 
-The asset contains one font face. Applications support multiple fonts by registering multiple assets. We do not need a multi-face GLB to make the runtime multi-font-safe.
+## Runtime font record
+
+```ts
+interface FontRecordV0 {
+  handle: FontHandle
+  key: FontKey
+  opentypeBytes: WasmRange
+  unitsPerEm: number
+  glyphCount: number
+  glyphIdWidth: 16 | 32
+  ascender: number
+  descender: number
+  lineGap: number
+  capabilities: FontCapabilityBits
+  presentations: readonly PresentationRecordV0[]
+}
+```
+
+The loader validates the asset, copies or transfers the retained shaping bytes into Wasm once, and retains direct typed views over presentation records. It does not construct glyph objects or maps.
+
+## Bake descriptor and determinism
+
+```ts
+interface BakeDescriptorV0 {
+  formatVersion: 0
+  fontFaceIndex: number
+  variationInstance: readonly [tag: string, value: number][]
+  presentation: { kind: 'bitmap'; ppem: number }
+}
+```
+
+The descriptor has a canonical serialization and hash. Given identical source bytes, descriptor, bake-core version, and generator version, Node and Worker hosts must produce byte-identical authoritative binary sections. If the surrounding GLB writer introduces non-semantic variation, tests compare normalized sections and hashes until byte determinism is achieved.
+
+Host concerns are excluded from the core:
+
+- filesystem paths and writes;
+- URL fetching;
+- Worker lifecycle and messaging;
+- console warnings;
+- CLI argument parsing.
 
 ## Presentation directory
 
@@ -88,16 +113,13 @@ interface PresentationDescriptorV0 {
 
 Rules:
 
-- presentation records are keyed by the font's local glyph ID;
+- records are keyed by font-local glyph ID;
 - presentation metadata never duplicates shaping advances or kerning;
-- a missing presentation record is explicit;
-- the loader rejects unknown required presentation kinds and skips unknown optional ones;
-- each plugin owns validation of its metadata and payload;
-- GPU payloads declare final component format, stride, dimensions, and alignment.
+- unknown required kinds reject the asset; unknown optional kinds are skipped;
+- each plugin validates its own ranges;
+- payloads declare final GPU component formats, strides, dimensions, row layouts, and alignment.
 
-## First bitmap presentation record
-
-Bitmap is the proposed first end-to-end fixture because it proves the shared architecture with the smallest shader and generator surface.
+## First bitmap presentation
 
 ```ts
 interface BitmapPresentationV0 {
@@ -107,7 +129,6 @@ interface BitmapPresentationV0 {
   atlasWidth: number
   atlasHeight: number
   pageCount: number
-
   glyphCount: number
   records: BufferRange
   pages: readonly ImageRange[]
@@ -125,11 +146,9 @@ flags          u16
 20 bytes per glyph
 ```
 
-`page = 0xffff` marks a glyph without visible bitmap data, such as a space. Plane bounds use a declared fixed-point em convention. Shared OpenType advances remain authoritative for layout.
+`page = 0xffff` marks no visible bitmap. Plane bounds use a declared fixed-point em convention. Shared OpenType advances remain authoritative for layout.
 
-MTSDF and Slug receive separate versioned record formats later. Their presence does not change font registration, shaping, paragraph data, or glyph identity.
-
-## Shaped data
+## Shaped and paragraph data
 
 Shaped output is structure-of-arrays:
 
@@ -137,7 +156,6 @@ Shaped output is structure-of-arrays:
 run font slots      u16[runCount]
 run glyph starts    u32[runCount]
 run glyph counts    u32[runCount]
-
 glyph IDs           u16|u32[glyphCount]
 clusters            u32[glyphCount]
 x/y advances        i32[glyphCount]
@@ -145,75 +163,70 @@ x/y offsets         i32[glyphCount]
 flags               u16[glyphCount]
 ```
 
-V0 uses `u16` glyph IDs when the registered font fits. The API and buffer header carry the width so a larger font can use `u32` without redefining every field.
-
-## Paragraph data
-
-The JS paragraph engine keeps stable and width-dependent data separate.
-
-Stable for the text/style revision:
-
-- original text and UTF-16 boundaries;
-- style/font runs;
-- shaped run views;
-- clusters and measured advances;
-- break opportunities and unsafe-boundary flags;
-- font-slot table.
-
-Recomputed for a constraint revision:
-
-- selected line breaks;
-- boundary reshape batch, if required;
-- visual run order;
-- x/y placement, alignment, ellipsis, and clipping;
-- presentation batches.
+The JS paragraph engine separates stable text/style analysis and broad shaping from width-dependent line selection, boundary reshaping, placement, ellipsis, and presentation batching.
 
 ## Multiple-font invariants
 
-Even though the first pipeline uses one font:
+1. Every span refers to a `FontHandle`.
+2. Every shaped run carries a font slot.
+3. Glyph IDs are never global keys.
+4. Layout exposes its font-slot table.
+5. Resource lookup uses `(FontHandle, PresentationKind)`.
+6. Caches include font handle and asset generation/version.
+7. Disposal detects stale references.
+8. Each canonical asset contains one face, while a registry holds many.
 
-1. every span refers to a `FontHandle`;
-2. every shaped run carries a font slot;
-3. glyph IDs are never used as global keys;
-4. layout exposes its font-slot table;
-5. GPU resource lookup uses `(FontHandle, PresentationKind)`;
-6. caches include font handle and font generation/version;
-7. disposal detects stale font references;
-8. presentation batching may split by font without reshaping.
+## Loader state and caching
 
-An early contract test should register the same fixture twice under different handles and prove that cache/resource identity does not collide. A real second-font fallback corpus is later work.
+```text
+unresolved
+  → sidecar probe
+    → baked hit → validate/load
+    → miss      → warn in development → import Worker host → bake → validate/load
+    → invalid   → structured diagnostic → Worker fallback policy → validate/load
+```
+
+V0 deduplicates in-flight and completed work in memory. Cache identity includes source URL or source hash, descriptor hash, format version, and bake-core version. Persistent Cache Storage or IndexedDB is a later addition.
 
 ## Copy and allocation budget
 
-V0 allows one bulk copy of OpenType bytes into Wasm memory during registration. It does not allow:
+Allowed:
 
-- per-shape font copies;
-- per-run string transcoding through JS objects;
-- per-glyph object output;
+- source `ArrayBuffer` transfer to the Worker;
+- one final compacting write inside the baker;
+- result transfer to the main thread;
+- one bulk copy of shaping bytes into Wasm if direct shared ownership is unavailable;
+- required GPU upload copies.
+
+Not allowed:
+
+- source parsing or rasterization on the main thread;
+- per-run font copies;
+- per-glyph JS object output;
 - reconstruction of presentation maps;
-- numeric repacking before GPU upload.
+- numeric repacking before GPU upload;
+- a distinct runtime-only font model.
 
-Typed views are refreshed after Wasm memory growth. Their lifetime and invalidation rules must be explicit in the bridge.
+## Validation and resource limits
 
-## Validation
+The baker validates source format and face selection. The canonical loader then independently:
 
-At registration:
+- bounds-checks every range;
+- validates version, descriptor hash, glyph count, and ID width;
+- validates record stride, count, page indices, dimensions, and alignment;
+- rejects unknown required capabilities;
+- caps input size, output size, glyph count, atlas dimensions, Worker memory, and elapsed work;
+- emits structured errors.
 
-- bound-check every buffer view/range;
-- validate glyph count and ID width;
-- validate presentation record count/stride/page indices;
-- reject overlapping mutable output/input ranges;
-- reject unsupported required capabilities;
-- cap source byte length, glyph count, atlas dimensions, and retained memory;
-- surface a structured diagnostic rather than silently falling back.
+Missing sidecars are ordinary development fallback. Corrupt or incompatible sidecars are diagnostics, not silent misses.
 
-## Future-compatible seams, not current work
+## Future-compatible seams, not V0 work
 
-- a future compiler can replace `opentypeBufferView` with shaping-only or compiled sections;
-- a future `glyphIdMap` can translate compiled dense IDs inside font registration;
-- a worker baker can eventually produce the same presentation directory;
-- additional font assets can be registered without changing layout records;
-- automatic fallback can choose font handles before shaping;
-- Slug, MTSDF, color, or image presentations can add independent descriptors.
-
-None of those seams requires implementing the corresponding subsystem in V0.
+- subsetting and shaping closure;
+- dense packed glyph remapping;
+- shaping-only or compiled lookup sections;
+- MTSDF and Slug generators behind the same presentation request seam;
+- persistent runtime-bake cache;
+- progressive generation;
+- automatic font fallback;
+- variable-font runtime axes.

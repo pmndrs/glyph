@@ -104,8 +104,8 @@ Future optional vector-art/presentation research. It must not block V1 or be pre
 The recommended sequence is:
 
 1. define the shared presentation directory, glyph-ID contract, and direct-upload records;
-2. consume one pinned pre-generated bitmap fixture to prove the simplest complete runtime-to-GPU path without building a compiler;
-3. establish runtime shaping, paragraph, loader, and renderer baselines;
+2. build the minimal shared baker and generated bitmap strike to prove the required Node/Worker convergence without adding advanced compiler units;
+3. establish baked-hit, worker-fallback, runtime shaping, paragraph, loader, and renderer baselines;
 4. later implement MTSDF generation and establish the proposed general-purpose path;
 5. port/rewrite Slug with the already proven quality-preserving optimizations in its baseline;
 6. run the autoresearch loop against Slug and shared GPU infrastructure;

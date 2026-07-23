@@ -6,7 +6,7 @@ Status: unresolved unless marked otherwise.
 
 1. Which exact HarfRust, HarfBuzz, and Unicode versions become the first reference set?
 2. Is the experimental extension prefix `FL_` acceptable for pmndrs, or should the project use a neutral/project-specific prefix from the beginning?
-3. Is shaping-only OpenType data retained as the initial HarfRust reference payload, or may Phase 1 register source font bytes while the binary model is explored?
+3. Which minimum OpenType tables/bytes must V0 retain for HarfRust without attempting shaping-table compilation?
 4. Which source-font licenses permit checked-in fixtures and generated derivatives in CI?
 5. Which browsers and GPU APIs define the initial support matrix?
 6. Is `u16` glyph identity a V1 hard limit, or must the first format support both `u16` and `u32`?
@@ -19,7 +19,7 @@ Status: unresolved unless marked otherwise.
 4. Does V1 bitmap rendering include TrueType hinting, or use deterministic unhinted oversampling?
 5. What are default runtime-bake glyph ranges, time limits, memory limits, and atlas limits?
 6. Can WOFF2 decoding remain out of the always-loaded shaper module and live only in the baker?
-7. Must native and Wasm baking be byte-identical, or only semantically identical with per-section hashes?
+7. Which GLB writer details could prevent full byte identity even when authoritative Node/Worker sections are identical?
 
 ## Binary format and GLB
 
@@ -64,8 +64,8 @@ Status: unresolved unless marked otherwise.
 ## Product and package shape
 
 1. Is the initial package framework-neutral core only, or does it ship React Three Fiber bindings concurrently?
-2. How are the large lazy baker/worker artifacts exposed without making bundlers include them on the normal path?
-3. Does the offline baker ship as a CLI, a JavaScript API, or both in the first release?
+2. Which bundlers form the initial package-graph test matrix for the required dynamic `runtime-bake` boundary?
+3. What final names should be used for the Node bake subpath, Worker chunk, and standalone CLI?
 4. Which APIs are public versus experimental while the binary format changes?
 5. What compatibility promise does Three Flatland need during migration?
 
