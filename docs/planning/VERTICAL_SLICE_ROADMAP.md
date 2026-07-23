@@ -26,7 +26,8 @@ No `forceRuntime` option exists. Pre-baking is the expected path; fallback is an
 - SIMD, AOT Wasm, browser-time JIT, or MLIR;
 - persistent runtime-bake cache;
 - automatic font fallback;
-- MTSDF/Slug generation or Windfoil integration;
+- MTSDF/Slug generation;
+- Windfoil implementation, which remains general-vector research outside the text roadmap;
 - automatic presentation selection;
 - progressive baking;
 - React/Three public bindings.

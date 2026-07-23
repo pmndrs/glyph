@@ -17,7 +17,7 @@ Scores are relative planning estimates from 1 (lowest effort/risk) to 5 (highest
 | 1 | Generated grayscale bitmap strikes | 2 | 2 | Deterministic rasterization, bounds, atlas packing, and optional hinting; the runtime shader is simple. |
 | 2 | MTSDF | 3 | 2 | Edge coloring, field generation, padding, and atlas quality are harder than the runtime sampling path. |
 | 3 | Slug | 4 | 5 | Correct curve/band generation and robust analytic coverage are followed by fill-bound per-fragment curve work. |
-| 4 | Windfoil | 5 | 5 | A separate preprocessing and band format, a more expensive analytic shader, WebGPU-first implementation, and limited production evidence. |
+| — | Windfoil (research only) | 5 | 5 | General-vector technique outside the current text roadmap; no implementation is planned. |
 
 ## 1. Generated bitmap strikes
 
@@ -83,7 +83,7 @@ Performance work therefore needs separate Latin, CJK, icon, complex-outline, mag
 
 Use when outline fidelity under large or dynamic scaling justifies higher fragment cost.
 
-## 4. Windfoil
+## Research-only: Windfoil
 
 ### Make it work
 
@@ -97,7 +97,7 @@ The official and Three Flatland comparisons place its likely advantage at high m
 
 ### Initial role
 
-Future optional vector-art/presentation research. It must not block V1 or be presented as the general text default.
+Research reference only. Its precise niche is deeply zoomable, overlap-heavy vector art and hairlines. It is not planned for ordinary text or XR UI, and it does not enter the implementation sequence.
 
 ## Shared implementation order
 
@@ -109,7 +109,7 @@ The recommended sequence is:
 4. later implement MTSDF generation and establish the proposed general-purpose path;
 5. port/rewrite Slug with the already proven quality-preserving optimizations in its baseline;
 6. run the autoresearch loop against Slug and shared GPU infrastructure;
-7. reconsider a Windfoil prototype only after the initial techniques have measured production baselines.
+7. retain Windfoil only as research; prototype it in a separate vector package only if product scope expands or measured production evidence matches its niche.
 
 This ordering does not require the package to expose the techniques in the same sequence. It minimizes the amount of novel shader and preprocessing work required to validate the shared architecture.
 

@@ -66,7 +66,7 @@ Reserve these through font-scoped identity, versioned optional sections, capabil
 - runtime variable axes;
 - automatic presentation switching;
 - MTSDF or Slug generation;
-- Windfoil integration;
+- Windfoil implementation; it remains general-vector research outside the text roadmap;
 - persistent runtime-bake storage;
 - progressive generation;
 - public React/Three bindings;

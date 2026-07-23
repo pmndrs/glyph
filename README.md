@@ -39,10 +39,10 @@ The current recommendation is to choose a presentation technique explicitly whil
 | Tiny text at known pixel sizes | Generated bitmap strike | Fastest path and potentially the best small-size legibility, particularly when hinting is available. |
 | World-space text with substantial minification | MTSDF | Texture sampling, mipmaps, and bounded per-pixel work suit text moving away from the camera. |
 | Large text, extreme zoom, or complex outlines | Slug | Preserves source-outline detail without a fixed atlas-resolution ceiling. |
-| Highly magnified vector art, hairlines, or overlapping paths | Windfoil, potentially | Promising coverage and band-memory behavior in its target cases, but still experimental and not part of the initial implementation scope. |
+| Deeply zoomable, overlap-heavy general vector art | Windfoil, outside this text roadmap | Its credible niche is vector editors, generative art, and print-scale rendering—not ordinary text or XR UI. |
 | Pixel-art or deliberately raster-styled fonts | Bitmap | Preserves an exact authored raster appearance. |
 
-MTSDF is the proposed general-purpose default when an application has no stronger requirement. Bitmap strikes and Slug are deliberate alternatives, not transparent fallbacks. Windfoil is currently classified as future rendering research rather than a production dependency.
+MTSDF is the proposed general-purpose default when an application has no stronger requirement. Bitmap strikes and Slug are deliberate alternatives, not transparent fallbacks. Windfoil is a general-vector research reference, not a planned `pmndrs/text` backend.
 
 The public API should preserve explicit caller choice. Convenience policy may recommend a technique from projected size and usage, but it should not silently switch renderers or force every rendering engine into an application's bundle. Presentation engines should remain separately importable, tree-shakable, and suitable for dynamic loading.
 

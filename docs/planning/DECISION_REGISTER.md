@@ -75,7 +75,7 @@ No item in this register is an accepted ADR yet. When a decision is accepted, cr
 | D-053 | MTSDF channels are linear data and technique-specific padding stays in presentation plane bounds. | Proposed | Required by msdfgen's rendering model. | Do not infer logical bounds or advances from atlas rectangles. |
 | D-054 | Bitmap hinting policy is unresolved; deterministic unhinted oversampling is the baseline candidate. | Experiment required | Hinting may improve tiny text but adds complexity and parity risk. | Compare visual quality, size, native/Wasm determinism, and bake cost. |
 | D-055 | MTSDF is the proposed general-purpose recommendation; callers retain explicit presentation choice. | Proposed | Current research places bitmap at fixed tiny sizes, MTSDF across ordinary scalable use, and Slug at high-fidelity large/dynamic scale. | Convenience policy may recommend but must not silently switch techniques or force unused engines into the bundle. |
-| D-056 | Windfoil remains future optional presentation research rather than a V1 dependency. | Proposed | Available comparisons show advantages in specialized high-magnification/vector-art cases, not ordinary UI text. | Its preprocessing, shader, and payload do not block or enter V1 core contracts. |
+| D-056 | Windfoil is a general-vector research reference, not a planned `pmndrs/text` backend. | Proposed | Its credible advantages are deeply magnified, overlap-heavy vector art, hairlines, CPU-union avoidance, and smaller bands—not ordinary 8–64 px text or demonstrated XR workloads. | Do not schedule its preprocessing, payload, or renderer. Reconsider only if product scope expands or a measured production blocker matches its niche. |
 
 ## Optimization governance
 
