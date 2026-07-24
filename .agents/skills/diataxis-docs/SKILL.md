@@ -1,6 +1,6 @@
 ---
 name: diataxis-docs
-description: Design, classify, write, audit, or restructure technical documentation with the Diátaxis framework. Use for tutorials, how-to guides, reference material, explanations, documentation maps, README routing, documentation audits, OKF documentation organization, or requests to separate mixed-purpose docs. Do not apply it automatically to internal plans, ADRs, research logs, or specifications unless the user wants those artifacts organized as product documentation.
+description: Design, classify, write, audit, or restructure technical documentation with the Diátaxis framework. Use for tutorials, how-to guides, reference material, explanations, documentation maps, README routing, documentation audits, or requests to separate mixed-purpose docs. Do not apply it automatically to internal plans, ADRs, research logs, or specifications unless the user wants those artifacts organized as product documentation.
 ---
 
 # Diátaxis documentation
@@ -56,30 +56,6 @@ Infer the type when the evidence is clear. Ask only when choosing incorrectly wo
 5. Keep landing pages and READMEs as routing surfaces. They may summarize several types without pretending to be one of them.
 6. Verify that no claims or operational steps were lost.
 
-## Compose with Open Knowledge Format
-
-When the documentation tree is an Open Knowledge Format bundle, apply this skill together with the repository's `open-knowledge-format` skill. The two frameworks own different decisions:
-
-- Diátaxis identifies the reader need and primary purpose of a concept document.
-- OKF defines concept frontmatter, concept identity, links, citations, and reserved bundle files.
-
-For every non-reserved Markdown concept:
-
-1. Preserve its valid OKF frontmatter and unknown producer fields while classifying or restructuring it.
-2. Keep a non-empty `type`; use a descriptive value appropriate to the artifact rather than forcing all pages into four literal type names.
-3. Follow the active OKF authoring profile for `title`, `description`, `resource`, `tags`, citations, and link verification.
-4. Refresh the required ISO 8601 `timestamp` after a meaningful edit and keep it as the final frontmatter field.
-
-Treat every `index.md` as a reserved navigation-only surface:
-
-- It is not a concept document and does not receive a Diátaxis classification, concept frontmatter, citations, plans, rationale, or authoritative requirements.
-- Use short headings and links with concise descriptions to expose the directory's concepts and child directories through progressive disclosure.
-- Keep substantive knowledge in concept documents and link to the authoritative page instead of summarizing enough detail to create another drift surface.
-- A bundle-root `index.md` may carry only the OKF version declaration permitted by the active OKF specification; nested indexes have no frontmatter.
-- Update affected parent and child indexes whenever concepts are added, removed, renamed, or moved.
-
-Do not conflate an OKF index with a project README. A README may orient readers, show a minimal first success, establish project status, and route into the documentation. An OKF index only exposes the knowledge graph and directory hierarchy.
-
 ## Write by type
 
 ### Tutorial
@@ -118,7 +94,8 @@ Do not conflate an OKF index with a project README. A README may orient readers,
 - Follow existing terminology, style, navigation, and contribution rules.
 - Treat plans, decision records, research notes, release notes, and issue backlogs as valid genres outside the four product-documentation types.
 - Keep a README focused on orientation, first success, status, and routes to deeper documentation.
-- Preserve OKF frontmatter on concept pages and reserved navigation-only behavior for `index.md` files when the repository declares an OKF bundle.
+- Preserve existing document frontmatter; Diátaxis classification does not authorize removing or rewriting repository metadata conventions.
+- Treat `index.md` files as navigation surfaces. Do not flag their purposeful links and short descriptions as duplicated human-facing documentation.
 - Prefer gradual improvement over a repository-wide rewrite without evidence.
 - Do not sacrifice accuracy, runnable examples, accessibility, or source attribution for quadrant purity.
 
@@ -130,4 +107,4 @@ Do not conflate an OKF index with a project README. A README may orient readers,
 - Split or link only where another need would interrupt the page's flow.
 - Verify facts and examples against current sources.
 - Make the next step discoverable.
-- In an OKF bundle, confirm concept frontmatter remains valid, required timestamps are last, and reserved indexes contain navigation rather than duplicated knowledge.
+- Confirm existing frontmatter remains intact and navigation indexes were not mistaken for duplicate content.

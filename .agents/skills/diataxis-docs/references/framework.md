@@ -59,13 +59,7 @@ Internal project artifacts also have different jobs:
 
 Do not distort these genres to make them look like product documentation. Apply Diátaxis when turning their stable findings into material for users.
 
-## Open Knowledge Format composition
-
-Diátaxis and Open Knowledge Format operate at different layers. Diátaxis classifies a reader-facing page by the need it serves. OKF makes a hierarchy of concept documents portable through frontmatter, links, citations, and reserved navigation files. Using both does not require mapping OKF `type` values directly to the four Diátaxis forms; descriptive artifact types such as `API Reference`, `Architecture Reference`, `Roadmap`, or `Research` remain valid when they accurately identify the concept.
-
-Within an OKF bundle, ordinary concept pages retain their OKF frontmatter when they are reorganized through Diátaxis. The bundle's authoring profile may require metadata beyond upstream OKF's minimum, including a final last-modified `timestamp` and source citations.
-
-An OKF `index.md` has a narrower role than a README or documentation homepage: it is a reserved directory listing for progressive disclosure. It should contain grouped links and concise descriptions, not tutorials, procedures, design arguments, plans, specifications, or copied summaries of authoritative concepts. It is not assigned a Diátaxis quadrant. Nested indexes have no frontmatter; the bundle-root index may contain only the version declaration allowed by the active OKF specification.
+Diátaxis does not define repository metadata. Preserve existing frontmatter when classifying or restructuring documents. Treat `index.md` files as navigation surfaces, and do not report their links and short descriptions as duplicated human-facing documentation.
 
 ## Sources and surveyed skills
 
@@ -75,7 +69,6 @@ Primary sources:
 - [Diátaxis in five minutes](https://diataxis.fr/start-here/) — concise definition of the four needs.
 - [The Diátaxis map](https://diataxis.fr/map/) — the action/cognition and acquisition/application model.
 - [Applying Diátaxis](https://diataxis.fr/application/) — incremental application rather than template-first restructuring.
-- [Open Knowledge Format v0.1 specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) — concept metadata and reserved `index.md` navigation rules used when the frameworks are composed.
 
 Community skills reviewed for this repository adaptation:
 
