@@ -1,0 +1,36 @@
+{
+  "name": "@pmndrs/text",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "pmndrs": {
+    "text": {
+      "bitmap": "./bakers/bitmap",
+      "msdf": "./bakers/msdf",
+      "slug": "./bakers/slug"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:types": "tsc -p tsconfig.types.json"
+  },
+  "peerDependencies": {
+    "three": ">=0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.185.1",
+    "three": "0.185.1"
+  }
+}
