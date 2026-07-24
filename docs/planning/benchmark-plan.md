@@ -1,7 +1,7 @@
 ---
 type: Test Plan
 title: Benchmark plan
-description: Defines the interactive benchmark lab, headless runner, and reproducible performance, memory, payload, loader, baker, paragraph, and presentation measurements.
+description: Defines the interactive benchmark lab, headless runner, and reproducible performance, memory, payload, loader, baker, paragraph, and raster measurements.
 status: proposed
 tags: [benchmarks, performance, payload]
 ---
@@ -15,14 +15,14 @@ Purpose: replace performance and payload estimates with reproducible evidence.
 
 1. Report whole-product outcomes and isolated kernels separately.
 2. Measure cold and warm behavior; startup is part of runtime cost.
-3. Separate shaping data, presentation data, JavaScript, and Wasm bytes.
+3. Separate shaping data, raster data, JavaScript, and Wasm bytes.
 4. Never compare outputs that differ semantically or in font coverage.
 5. Store raw samples and environment metadata, not only summary charts.
 6. Treat variance and regression thresholds as part of the benchmark definition.
 
 ## Required benchmark product
 
-The project must ship an interactive benchmark lab modeled on the architecture of [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks), together with a headless runner that executes the same scenarios. This is a first-class repository artifact, not a collection of unrelated microbenchmark scripts.
+The project's first executable artifact is an interactive benchmark lab modeled on the architecture of [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks), together with a headless runner that executes the same scenarios. It is built before production font components and extended by every implementation milestone. The first real bitmap rendering proof lands inside this lab; no separate demo or alternate benchmark definition precedes it. This is a first-class repository artifact, not a collection of unrelated microbenchmark scripts.
 
 The useful precedent is:
 
@@ -35,37 +35,29 @@ The useful precedent is:
 - a separate, reproducible bundle-size build whose results appear beside runtime measurements;
 - static deployment suitable for maintainer and contributor review.
 
-The pmndrs/text lab extends that pattern with correctness hashes, image diffs, cold-start automation, raw sample export, GPU/device metadata, and font/presentation byte accounting.
+The pmndrs/text lab extends that pattern with correctness hashes, image diffs, cold-start automation, raw sample export, GPU/device metadata, and font/raster byte accounting.
 
 ## Harness architecture
 
-Planned repository shape:
+One registry and runner definition feeds every human and automated surface:
 
-```text
-apps/benchmarks/
-  src/
-    targets/
-      shaping/
-      presentation/
-      delivery/
-    scenarios/
-      shaping/
-      paragraph/
-      loading/
-      rendering/
-    harness/
-      capabilities.ts
-      runner.ts
-      samples.ts
-      validation.ts
-    ui/
-  bundle-sizes/
-    entries/
-    build.mjs
-    results.json
-  results/
-    schema.json
+```mermaid
+flowchart TD
+  Targets["target registry<br/>shaper, raster, delivery, GPU"] --> Matrix["capability-checked scenario matrix"]
+  Scenarios["scenario registry<br/>shape, paragraph, load, render"] --> Matrix
+  Validation["correctness hashes<br/>goldens and image gates"] --> Runner["shared runner"]
+  Matrix --> Runner
+  Policy["warmup, sampling, environment policy"] --> Runner
+  Runner --> Interactive["interactive browser lab<br/>URL state and live phases"]
+  Runner --> Headless["headless local/CI runner"]
+  Bundle["independent bundle-size builds"] --> Report["reviewable result set"]
+  Interactive --> Report
+  Headless --> Report
+  Report --> Raw["raw samples + environment metadata"]
+  Report --> Summary["comparisons + regression gates"]
 ```
+
+The planned repository keeps target adapters, scenarios, harness policy, UI, bundle-size entries, and result schemas as separate modules under `apps/benchmarks`; the exact directory names are implementation details rather than a second architecture contract.
 
 The interactive application and headless runner import the same target registry, scenario registry, controls, validation rules, warmup policy, and result schema. A visually convenient browser path must not become a separate benchmark definition.
 
@@ -74,7 +66,7 @@ The interactive application and headless runner import the same target registry,
 A target is one implementation choice on a declared axis:
 
 - shaping: pinned HarfRust reference or a later optimized path;
-- presentation: bitmap, MTSDF, or Slug;
+- raster: bitmap, MSDF, or Slug;
 - graphics API: WebGPU or WebGL2;
 - delivery: pre-baked hit or automatic Worker fallback;
 - bake host: Node or Worker Wasm where parity is being measured.
@@ -85,7 +77,7 @@ The exact TypeScript is accepted with the API fixture, but the contract must exp
 interface BenchmarkTarget<Prepared, Output> {
   id: string
   label: string
-  kind: 'shaping' | 'paragraph' | 'baker' | 'loader' | 'presentation'
+  kind: 'shaping' | 'paragraph' | 'baker' | 'loader' | 'raster'
   capabilities: ReadonlySet<BenchmarkCapability>
 
   load(context: BenchmarkContext): Promise<void>
@@ -117,12 +109,12 @@ Unsupported target/scenario pairs remain visible with their missing capabilities
 
 The browser UI must provide:
 
-- target, scenario, font, presentation, GPU backend, and parameter controls;
+- target, scenario, font, raster, GPU backend, and parameter controls;
 - a shareable URL encoding the selected configuration;
 - live current, median, p95, minimum, maximum, and sample count;
 - separate shaping, layout, upload, render, and total panels where applicable;
 - correctness/visual status adjacent to performance;
-- payload cards separating JS, Wasm, core font, presentation, decoded texture, and GPU bytes;
+- payload cards separating JS, Wasm, core font, raster, decoded texture, and GPU bytes;
 - environment details and downloadable raw JSON.
 
 Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where supported, first-frame latency, memory, and quality remain separate.
@@ -142,8 +134,8 @@ Like the reference project, bundle sizes are produced from independent import en
 - browser core;
 - HarfRust shaper JavaScript glue and Wasm;
 - runtime baker loader and bake Wasm;
-- each presentation runtime;
-- each presentation generator;
+- each raster runtime;
+- each raster generator;
 - combined V1 application path.
 
 Report raw, minified, gzip, and Brotli JavaScript; raw, gzip, and Brotli Wasm; and any dynamically imported transcoder separately. The interactive lab reads generated result JSON rather than estimating sizes from the development bundle.
@@ -232,7 +224,9 @@ Measure:
 - height/max-lines/ellipsis update;
 - cache memory;
 - changed lines and reshaped lines;
-- Wasm call count and transferred/written bytes.
+- Wasm call count and transferred/written bytes;
+- allocation-light host measurement versus final positioned layout;
+- the current-UIKit-shaped `CustomLayouting` path, reported separately for repeated measurements, compatible final-box reuse, and changed-width reflow.
 
 Resize scenario:
 
@@ -253,7 +247,7 @@ Measure native and worker Wasm independently:
 - shaping-section compilation;
 - canonical outline extraction;
 - Slug generation;
-- MTSDF generation and atlas packing;
+- MSDF-module MTSDF generation and atlas packing;
 - each bitmap strike rasterization/packing;
 - GLB assembly;
 - total time;
@@ -263,7 +257,7 @@ Measure native and worker Wasm independently:
 - transfer time;
 - persistent-cache write/read time.
 
-Run with shaping-only, each presentation individually, and the combined package. Large-font tests must include cancellation and configured limit failures.
+Run with shaping-only, each raster individually, and the combined package. Large-font tests must include cancellation and configured limit failures.
 
 ## Loader and GPU benchmarks
 
@@ -281,11 +275,11 @@ Measure:
 
 Compare current Three Flatland Slug loading with the new path for equivalent Slug coverage, while reporting semantic/format differences.
 
-## Presentation benchmarks
+## Raster benchmarks
 
 ### Slug
 
-- presentation bytes by glyph count;
+- raster bytes by glyph count;
 - curve/band generation time;
 - atlas/texture occupancy and padding;
 - current R32F bands versus exact u32-header/u16-local-reference packing;
@@ -294,14 +288,18 @@ Compare current Three Flatland Slug loading with the new path for equivalent Slu
 - glyphs per draw and GPU frame time;
 - extreme scale/perspective quality and cost.
 
-### MTSDF
+### MSDF
 
-- generation time;
+- MTSDF generation time;
 - atlas occupancy/page count;
 - raw and compressed texture bytes;
 - GPU upload/decode time;
 - frame time by projected pixel height;
-- perceptual error at small/normal/large sizes.
+- perceptual error at small/normal/large sizes;
+- fill-only, outline, shadow, and glow paths over the same atlas and batch;
+- draw/batch count proving that an enabled effect does not create parallel MSDF/MTSDF resources.
+
+Plain RGB MSDF is excluded from the product matrix. A compression campaign may include it as a counterfactual target, but must count lost alpha effects, texture variants, shader/module bytes, platform coverage, batch changes, and visual error before proposing a contract change.
 
 ### Bitmap
 
@@ -324,7 +322,7 @@ metrics/properties
 reference shaping data
 compiled shaping data
 Slug metadata and texture bytes
-MTSDF metadata and atlas bytes
+MSDF metadata and MTSDF atlas bytes
 bitmap metadata and per-strike atlas bytes
 GLB JSON/alignment overhead
 shaper Wasm
@@ -382,7 +380,7 @@ Candidates for CI gates after baselines stabilize:
 - Arabic boundary-reflow p95;
 - worker bake time/peak memory for one reference font;
 - canonical section sizes;
-- first drawable frame for one pre-baked Slug and MTSDF font.
+- first drawable frame for one pre-baked Slug and MSDF font.
 
 Thresholds must include expected measurement noise and require confirmation before blocking a change.
 

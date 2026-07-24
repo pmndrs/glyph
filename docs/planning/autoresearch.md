@@ -17,14 +17,14 @@ The autoresearch agent may change an implementation only inside a bounded experi
 
 Its job is not to produce the largest benchmark number. Its job is to discover changes that survive an adversarial comparison with the current implementation.
 
-The first presentation target should be Slug because:
+The first raster target should be Slug because:
 
 - it has the highest V1 optimization difficulty;
 - Three Flatland already supplies measured hypotheses and rejected experiments;
 - its fill-bound shader has meaningful room for representation, code-generation, and workload-specific improvements;
-- bitmap and MTSDF runtime paths are comparatively conventional.
+- bitmap and MTSDF-backed MSDF runtime paths are comparatively conventional.
 
-The same protocol later applies to shaping, baking, paragraph layout, loading, and the other presentations.
+The same protocol later applies to shaping, baking, paragraph layout, loading, and the other rasters.
 
 ## Non-negotiable acceptance rule
 
@@ -63,7 +63,7 @@ Every run starts from a small checked-in manifest:
 id: slug-adaptive-bands-cjk-001
 owner: autoresearch
 baseCommit: <immutable commit>
-target: presentation/slug
+target: raster/slug
 hypothesis: Adaptive per-glyph bands reduce dense glyph curve visits without affecting output.
 changedVariables:
   - band selection policy
@@ -81,7 +81,7 @@ backends:
 qualityPolicy: exact
 metrics:
   - gpu_ms
-  - presentation_bytes
+  - raster_bytes
   - bake_ms
   - gpu_memory_bytes
 ```
@@ -170,7 +170,7 @@ They still require new-repository evidence because the format, shader generator,
 2. a build-time hull-assisted band variant for sources where it wins without a Latin cost;
 3. per-root branch structure after measuring divergence on both backends;
 4. source-class-specific packing chosen at bake time with explicit payload metadata;
-5. overdraw and batching improvements that preserve the presentation-independent layout contract;
+5. overdraw and batching improvements that preserve the raster-independent layout contract;
 6. atlas paging and residency strategies for broad CJK coverage.
 
 ### Known rejected or separate-lane ideas

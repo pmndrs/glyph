@@ -35,7 +35,7 @@ The fixture must use an explicitly documented Unicode sequence, including the de
 
 Complex-script and fallback fonts are required by the broader conformance plan, but they do not block the first rendered paragraph.
 
-Post-slice presentation fixtures must also pin:
+Post-slice raster fixtures must also pin:
 
 - one COLR/CPAL color-emoji font covering layered and paint-graph vectors;
 - one CBDT/CBLC or `sbix` color-emoji font covering embedded bitmap strikes;
@@ -101,7 +101,7 @@ The exact directories are created with the first tooling issue. This document de
   "glyphIds": "source",
   "bakerVersion": "<pinned>",
   "bakeDescriptorHash": "<required>",
-  "presentations": [{ "kind": "bitmap", "ppem": 16 }],
+  "rasters": [{ "kind": "bitmap", "ppem": 16 }],
   "unicodeVersion": "<pinned>",
   "harfbuzzVersion": "<pinned>",
   "harfrustCommit": "<pinned>"
@@ -112,19 +112,40 @@ No fixture may silently follow a latest release.
 
 ## Required tooling
 
+### Static font discovery
+
+The Node baker analyzes the TypeScript/JavaScript module graph with a parser and symbol-aware constant evaluator. It never uses regular expressions as the source of truth and never executes application modules. Its target is a `defineFont(fontInput, rasterInput)` call imported from `@pmndrs/text` (including aliased imports), plus the equivalent one-off raw-font/raster form when that form is statically visible.
+
+The analyzer extracts the selected raster package and a JSON-literal options value. It resolves the package's exported baker through the flat `package.json#pmndrs.text` map, then asks that package to canonicalize the descriptor and `rasterKey`. Bitmap `strikes` must be a statically known tuple; aliases to `const` literal tuples are allowed, while broad numbers, environment values, function results, mutation, and other runtime-only values are rejected by TypeScript when typed and diagnosed by the analyzer otherwise.
+
+Font-source discovery uses this ordered, conservative procedure:
+
+1. Evaluate string literals, `const` aliases, string concatenations, template literals with statically known substitutions, and `new URL(relativeLiteral, import.meta.url)`.
+2. Resolve module-relative URLs from the importing module. Resolve root-relative application paths against configured asset roots; the default root is the project's `public` directory when it exists.
+3. For an absolute web URL, remove its origin, query, and fragment and try its decoded pathname against each asset root.
+4. For a dynamic origin or prefix with a statically known path suffix—such as a template combining `cdnOrigin` with `/fonts/Inter.ttf`—try that suffix against each asset root.
+5. Accept a source only when the result is an existing regular file and exactly one candidate matches. Record the source expression, resolved file, asset root, and derived public pathname in the bake report.
+6. If no candidate or more than one candidate matches, do not guess. Emit a deterministic diagnostic and leave that font to the mandatory runtime fallback.
+
+Percent-decoding is applied per URL path segment after removing the query and fragment. The analyzer rejects decoded `.`/`..` traversal, encoded path separators, NUL, and any candidate escaping its configured asset root. Filesystem case rules are those of the host, but the emitted report records the exact resolved spelling.
+
+Dynamic URLs remain legal API values. Static discovery is an optimization that creates the baked sibling before deployment; inability to prove a local source never changes runtime semantics. A user may instead supply the Node API with an explicit local input/output pair when application URL construction cannot be resolved statically.
+
+Fixtures cover literal strings, `URL` objects, module constants, aliased imports, concatenation, templates, stripped absolute domains, dynamic origins with static suffixes, query/fragment removal, percent-encoded filenames, configured roots, ambiguous matches, traversal attempts, missing files, dynamic bitmap strikes, and third-party raster packages.
+
 ### Oracle capture
 
 Runs pinned `hb-shape` and HarfRust over the same source bytes and cases. Stores glyph IDs, clusters, advances, offsets, flags, feature settings, segment properties, and engine versions.
 
-### Shared minimal baker
+### Font bake core and bitmap baker fixture
 
-Accepts source font bytes and a canonical bitmap descriptor, retains the shaping data required by HarfRust, rasterizes one grayscale strike, packs flat GPU-ready records, stamps provenance, and writes the experimental asset envelope. The font-domain core is host-independent; Node and Worker wrappers supply I/O only.
+The font bake core accepts source bytes and a face descriptor, retains the shaping data required by HarfRust, stamps provenance, and writes `PMNDRS_font`. The independently imported bitmap package owns its descriptor, rasterizes one grayscale strike, packs its flat GPU-ready records, validates its companion artifact, and reports its bytes. The generic Node and Worker hosts compose those outputs without interpreting bitmap fields.
 
-It deliberately does not subset, compute shaping closure, remap glyphs, compile GSUB/GPOS, generate an IR, or become a general optimizing compiler.
+The font core deliberately does not subset, compute shaping closure, remap glyphs, compile GSUB/GPOS, generate an IR, generate raster data, or become a general optimizing compiler.
 
 ### Node/Worker parity runner
 
-Runs identical source bytes and descriptor through both hosts. It compares canonical sections, provenance, presentation pixels, and diagnostics. It also proves that a baked-asset hit does not load the runtime baker library, Worker, Wasm bake core, or generator module.
+Runs identical source bytes and descriptor through both hosts. It compares canonical sections, provenance, raster pixels, and diagnostics. It also proves that a baked-asset hit does not load the runtime baker library, Worker, Wasm bake core, or generator module.
 
 ### Asset validator
 
@@ -133,6 +154,8 @@ Checks version, ranges, alignment, record counts, glyph ID width, texture dimens
 ### Paragraph fixture runner
 
 Loads the font, shapes the paragraph, lays it out at fixed widths, and records line source ranges, run/font slots, glyph identities, clusters, and positions. It verifies that width-only reflow reuses broad shaping where allowed.
+
+The same runner includes an adapter fixture shaped after current pmndrs/uikit's `CustomLayouting`, `FlexNode`, and resolved size/padding/border signal flow without adding UIKit or Yoga to core. It covers intrinsic `minWidth`/`minHeight` derivation; `Undefined`/unconstrained, `AtMost`, and `Exactly`; definite dimensions where measurement may be skipped; first-baseline reporting; point-scale rounding at the host boundary; and a final content box different from the candidate measurement. Repeated `measure` calls must not materialize positioned-glyph arrays. Text or shaping-policy changes invalidate measurement, while paint and raster changes do not. The final `layout` positions remain relative to the content-box origin and are translated by the host fixture. See [UIKit integration](uikit-integration.md).
 
 ### Visual runner
 
@@ -149,15 +172,25 @@ Records:
 - cold shape and warm-plan shape time;
 - JS/Wasm call count and bytes written/read;
 - paragraph initial layout and width-only reflow;
-- first drawable frame, GPU upload, frame GPU time, and presentation memory.
+- first drawable frame, GPU upload, frame GPU time, and raster memory.
 
-It also emits the machine-readable `FontPayloadReport` defined by the [payload budget](payload-budget.md), with source/shared/container/transport bytes separated from serialized presentation records and GPU-resident pages.
+It also emits the machine-readable `FontPayloadReport` defined by the [payload budget](payload-budget.md), with source/shared/container/transport bytes separated from serialized raster records and GPU-resident pages.
 
 Raw samples and environment metadata follow the benchmark and autoresearch plans.
 
 ### Loader-path runner
 
-Exercises baked asset hit, missing baked asset, corrupt/incompatible baked asset, cancelled fallback, and repeated concurrent loads. It asserts one development warning per missing source, no warning in production, canonical-path convergence after fallback, and no public runtime-forcing switch.
+Exercises shorthand source URLs, explicit source/baked overrides, baked-only GLBs, preloads, baked hits, missing assets, corrupt/incompatible assets, cancelled fallback, and repeated concurrent loads. URL fixtures cover every recognized source suffix, suffix case, extensionless paths, query preservation, fragment removal, and non-hierarchical URLs. It asserts one development warning per missing source, no warning in production, canonical-path convergence after fallback, no duplicate probe after preload, and no public runtime-forcing switch.
+
+### Package-graph runner
+
+Installs the packed package into minimal Node ESM and browser-bundler fixtures. It imports every declared public subpath, validates declaration resolution, executes the ESM CLI, and starts the fallback as a module Worker. It asserts that the manifest contains `"type": "module"`, exposes no `require` condition, publishes no CommonJS artifact, keeps Node built-ins out of the browser-safe core, and leaves the runtime baker, generators, transcoders, React wrapper, and unselected raster engines outside the initial graph. A CommonJS `require('@pmndrs/text')` is expected to fail clearly rather than resolve a hidden compatibility build.
+
+### Type-contract runner
+
+Compiles `packages/text/tests/types` with the pinned TypeScript compiler. Positive fixtures prove that composed tokens retain literal font inputs and exact raster modules; explicit source/baked and baked-only inputs compile; configurable rasters retain their package-owned option literals; and raster/baker values retain literal kinds plus associated resource, batch, option, and descriptor types. Negative `@ts-expect-error` fixtures prove that mismatched artifacts, duplicate token/raster selection, raw fonts without raster modules, configurable rasters without options, invalid package-owned option literals, kind-only raster lookup, dynamic or empty bitmap strikes, invalid source/baked combinations, and invalid text/span combinations are rejected.
+
+The suite includes at least one external raster kind and opaque resource/batch types unrelated to the first-party TSL implementation. Core type tests must not import or mention TSL, TypeGPU, shader-node, WebGPU-pipeline, or WebGL-material types. React type fixtures later prove that the subpath derives from the core properties and preserves lazy module inference.
 
 ## Multi-font contract fixtures without expanding scope
 
@@ -165,7 +198,7 @@ Before adding a second real font, register the same source fixture twice with di
 
 - shape-plan and paragraph cache keys cannot collide incorrectly;
 - layout font slots distinguish the registrations;
-- presentation resources are owned and disposed independently;
+- raster resources are owned and disposed independently;
 - the same local glyph ID resolves through the correct font handle;
 - a paragraph with two explicit spans can split runs by font without automatic fallback.
 

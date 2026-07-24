@@ -1,7 +1,7 @@
 ---
 type: Planning Estimate
 title: Rendering implementation difficulty
-description: Compares the relative effort to make bitmap, MTSDF, and Slug presentations correct and performant.
+description: Compares the relative effort to make bitmap, MSDF, and Slug rasters correct and performant.
 status: proposed-estimate
 tags: [planning, rendering, effort]
 ---
@@ -9,7 +9,7 @@ tags: [planning, rendering, effort]
 # Rendering implementation difficulty
 
 Status: proposed planning estimate  
-Scope: presentation generation and rendering, not shaping or paragraph layout
+Scope: raster generation and rendering, not shaping or paragraph layout
 
 This ranking separates two different problems:
 
@@ -23,7 +23,7 @@ Scores are relative planning estimates from 1 (lowest effort/risk) to 5 (highest
 | Rank | Technique | Make it work | Make it performant | Primary difficulty |
 | ---: | --- | :---: | :---: | --- |
 | 1 | Generated grayscale bitmap strikes | 2 | 2 | Deterministic rasterization, bounds, atlas packing, and optional hinting; the runtime shader is simple. |
-| 2 | MTSDF | 3 | 2 | Edge coloring, field generation, padding, and atlas quality are harder than the runtime sampling path. |
+| 2 | MSDF | 3 | 2 | MTSDF edge coloring, field generation, padding, and atlas quality are harder than the runtime sampling path. |
 | 3 | Slug | 4 | 5 | Correct curve/band generation and robust analytic coverage are followed by fill-bound per-fragment curve work. |
 | — | Windfoil (research only) | 5 | 5 | General-vector technique outside the current text roadmap; no implementation is planned. |
 
@@ -43,14 +43,14 @@ Rendering is a texture sample over a quad and should establish the practical per
 
 Use for tiny text with known pixel sizes and for deliberately raster-styled content. It is not the general scaling or perspective solution.
 
-## 2. MTSDF
+## 2. MSDF raster
 
 ### Make it work
 
 The renderer is straightforward once correct atlas data exists. Most implementation risk is in the baker:
 
 - canonical outline conversion and edge coloring;
-- deterministic MTSDF generation in native and worker Wasm;
+- deterministic MTSDF atlas generation in native and worker Wasm;
 - padding and distance-range conventions;
 - multi-page atlas packing;
 - linear texture sampling and correct plane bounds;
@@ -68,7 +68,7 @@ Proposed general-purpose default for UI and world-space text when an application
 
 ### Make it work
 
-Three Flatland supplies substantial prior art, but the implementation still has to be reworked around the shared font container and direct GPU payloads. Correctness includes robust quadratic solving, curve classification, band generation, fill rules, antialiasing, transform behavior, and identical packed-glyph indexing across presentations.
+Three Flatland supplies substantial prior art, but the implementation still has to be reworked around the shared font container and direct GPU payloads. Correctness includes robust quadratic solving, curve classification, band generation, fill rules, antialiasing, transform behavior, and identical packed-glyph indexing across rasters.
 
 The new implementation should treat the quality-preserving improvements already measured in the Three Flatland Slug/uikit fork as baseline requirements where they apply:
 
@@ -111,10 +111,10 @@ Research reference only. Its precise niche is deeply zoomable, overlap-heavy vec
 
 The recommended sequence is:
 
-1. define the shared presentation directory, glyph-ID contract, and direct-upload records;
+1. define the shared raster directory, glyph-ID contract, and direct-upload records;
 2. build the minimal shared baker and generated bitmap strike to prove the required Node/Worker convergence without adding advanced compiler units;
 3. establish baked-hit, worker-fallback, runtime shaping, paragraph, loader, and renderer baselines;
-4. later implement MTSDF generation and establish the proposed general-purpose path;
+4. later implement the MSDF module and its MTSDF generator as the proposed general-purpose path;
 5. port/rewrite Slug with the already proven quality-preserving optimizations in its baseline;
 6. run the autoresearch loop against Slug and shared GPU infrastructure;
 7. retain Windfoil only as research; prototype it in a separate vector package only if product scope expands or measured production evidence matches its niche.
