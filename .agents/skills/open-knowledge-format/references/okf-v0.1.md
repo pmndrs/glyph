@@ -38,7 +38,7 @@ The body is standard Markdown. The upstream spec gives conventional meaning to t
 
 ## Reserved files
 
-`index.md` is an optional directory listing. It supports progressive disclosure by linking to concepts or subdirectories with short descriptions. It normally has no frontmatter. The bundle-root index may use frontmatter only to declare a target such as `okf_version: "0.1"`.
+`index.md` is an optional directory listing. It supports progressive disclosure by linking to concepts or subdirectories with short descriptions. Nested indexes have no frontmatter. The bundle-root index may use frontmatter only to declare `okf_version: "0.1"`.
 
 `log.md` is an optional update history. Entries are grouped under ISO `YYYY-MM-DD` headings, newest first. A leading word such as **Creation**, **Update**, or **Deprecation** is conventional rather than mandatory.
 

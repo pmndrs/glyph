@@ -2,8 +2,8 @@
 type: Test Plan
 title: Shaping and layout conformance plan
 description: Defines HarfBuzz, HarfRust, baked-runtime, paragraph, fuzzing, and visual correctness gates.
-status: proposed
 tags: [conformance, shaping, layout, testing]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Shaping and layout conformance plan
@@ -127,11 +127,24 @@ Verify that line fitting and boundary reshaping preserve:
 | USE script | at least one non-Devanagari USE font/script with syllable behavior |
 | Thai/Lao | marks and line-break tailoring boundary cases |
 | Hangul | precomposed and Jamo sequences |
-| CJK | supplementary cmap, variation sequences, vertical-form data retained though vertical layout is deferred |
+| CJK | `cmap` formats 12/14, supplementary Han, standardized and ideographic variation sequences, `locl` for pinned Chinese/Japanese/Korean language cases, no-space line breaking and punctuation boundaries, vertical-form data retained though vertical layout is deferred |
 | Emoji | supplementary scalars, VS15/VS16, modifiers, ZWJ sequences, flags/keycaps |
-| Icons | private-use cmap, missing glyph, no-GSUB fast/simple font |
+| Icons | private-use cmap, missing glyph, no-GSUB fast/simple font, selected/full-library paging, manifest-backed standalone SVG identity, accepted fill rules, and explicit SVG rejection cases |
 | Controls | LF, CRLF, paragraph separator, tabs policy, default ignorables, ZWJ/ZWNJ, soft hyphen |
 | Invalid input | unpaired UTF-16 surrogates and replacement policy at JS boundary |
+
+The CJK and icons rows share the post-V1 large-coverage paging gate. They do not block the Latin-first slice or the bitmap/MSDF/Slug V1 renderer gate. Before V0 contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK product support.
+
+### Large-coverage page invariants
+
+- `u16` remains the per-face OpenType glyph-ID width; maximum-cardinality arithmetic must not overflow record lengths or offsets.
+- `page = 0xffff` means permanently absent raster data; a valid but nonresident logical page is a distinct runtime state.
+- Logical page order is independent of URI order, fetch completion, GPU array layers, bindings, and draw order.
+- Embedded and external sources produce identical decoded bytes and GPU readback for lossless variants.
+- Every external source verifies declared length and SHA-256 before decode or upload.
+- Slug curve, header, and reference resources publish atomically as one resident page.
+- A changed layout cancels or supersedes stale preparation without publishing obsolete batches.
+- CJK and icon page-walk fixtures preserve visual order and blending while pages span multiple backend batches.
 
 ## Cluster-specific cases
 
@@ -215,6 +228,7 @@ Fuzz:
 - cmap page descriptors;
 - operation records and trie/CSR indexes;
 - atlas dimensions and row strides.
+- external page URI, length, hash, page-directory, and duplicate-request state;
 
 ### Failure policy
 
@@ -227,9 +241,11 @@ Fuzz:
 
 Shaping conformance is data equality; visual tests cover raster and integration.
 
+The current browser's HTML/CSS text renderer is the visual reference. Each capture uses the same browser process, font bytes, text, language, direction, feature settings, size, constraints, DPR, colors, and viewport as the candidate. Browser screenshots do not replace HarfRust/HarfBuzz field-level shaping comparisons; both gates must pass. Current Three Flatland Slug is not a visual or shaping oracle.
+
 Required views:
 
-- reference raster versus Slug/MSDF/bitmap at representative sizes;
+- browser HTML/CSS reference versus Slug/MSDF/bitmap at representative sizes;
 - extreme zoom/perspective for Slug;
 - tiny text for bitmap and MSDF;
 - marks and cursive connections;
@@ -266,7 +282,6 @@ Target duration: short enough to be required on every PR.
 - browser matrix;
 - package and Wasm size gates;
 - GLB backward/forward compatibility fixtures;
-- Three Flatland downstream integration suite.
 
 ## Allowlist rules
 
@@ -290,3 +305,17 @@ There is no wildcard allowlist by script, font, or output field.
 - JS/Wasm handling of UTF-16 and clusters has dedicated fixtures.
 - The conformance runner emits machine-readable and human-readable diffs.
 - Saved fixtures include all comparison inputs and version metadata.
+
+# Citations
+
+[1] [HarfBuzz shaping documentation](https://harfbuzz.github.io/shaping-opentype-features.html) — reference shaping pipeline and OpenType feature behavior.
+
+[2] [HarfBuzz test suite](https://github.com/harfbuzz/harfbuzz/tree/main/test) — upstream regression corpus and comparison precedent.
+
+[3] [HarfRust](https://github.com/harfbuzz/harfrust) — primary Rust-runtime conformance target and known-difference source.
+
+[4] Unicode [UAX #9](https://unicode.org/reports/tr9/), [UAX #14](https://unicode.org/reports/tr14/), and [UAX #29](https://unicode.org/reports/tr29/) — bidi, line-break, and text-boundary behavior.
+
+[5] [CSS Fonts Module Level 4](https://www.w3.org/TR/css-fonts-4/) and [CSS Text Module Level 3](https://www.w3.org/TR/css-text-3/) — browser font-feature and inline-text behavior exercised by the visual reference.
+
+[6] [OpenType specification](https://learn.microsoft.com/en-us/typography/opentype/spec/) — glyph-ID width, `cmap`, language-system, variation-sequence, and vertical-layout table definitions used by the CJK fixtures.

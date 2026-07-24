@@ -2,8 +2,8 @@
 type: Question Register
 title: Open questions
 description: Tracks unresolved decisions, blockers, and prototype questions for the contracts and roadmap.
-status: active
 tags: [questions, governance, blockers]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Open questions
@@ -59,13 +59,12 @@ V1 owns UAX #9 bidi analysis/reordering, UAX #14 break opportunities, UAX #24 sc
 
 1. Which pieces of Three Flatland Slug are legally and technically suitable to port?
 2. How are missing glyph rasters reported and substituted within the V1 per-font-slot raster assignment?
-3. Which COLR paint operations, OpenType SVG subset, standalone SVG-icon manifest contract, and embedded bitmap formats must the first color/SVG milestone support?
+3. Which safe OpenType-SVG subset and standalone-SVG manifest contract must the large-coverage CJK/icon milestone accept?
 
 ## Product and package shape
 
 1. Which bundlers form the initial package-graph test matrix for the required dynamic `runtime-bake` boundary and optional React/raster subpaths?
 2. Which APIs are public versus experimental while the binary format changes?
-3. What compatibility promise does Three Flatland need during migration?
 
 ## Required prototypes before decisions
 

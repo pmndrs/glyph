@@ -2,14 +2,13 @@
 type: Decision Register
 title: Decision register
 description: Tracks proposed architectural choices and the decisions required before implementation begins.
-status: proposed
 tags: [decisions, governance]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Decision register
 
 Status: proposed decisions awaiting maintainer review  
-Last updated: 2026-07-23
 
 This register records choices, not their full rationale. The linked API, architecture, data contracts, roadmap, and research are authoritative for detail. Accepted choices receive an ADR with the exact decision, alternatives, consequences, and date.
 
@@ -19,7 +18,7 @@ Status vocabulary: **Proposed**, **Experiment**, **Deferred**, **Settled for V0*
 
 | ID | Decision | Status |
 | --- | --- | :---: |
-| D-001 | `pmndrs/text` is the product; Three Flatland becomes a consumer. | Proposed |
+| D-001 | `pmndrs/text` is the product | Proposed |
 | D-002 | Slug is one raster, not the shaping or package identity. | Proposed |
 | D-003 | V1 targets horizontal LTR/RTL text and static font instances. | Proposed |
 | D-004 | `@pmndrs/text` is Three.js-first; `@pmndrs/text/react` is a thin optional wrapper. | Proposed |
@@ -50,10 +49,10 @@ D-004/005 follow the established uikit split: the core owns every feature and Re
 | D-043 | V1 uses greedy word/character wrapping; balanced wrap and hyphenation are later. | Proposed |
 | D-044 | Third-party layout systems consume allocation-light synchronous `measure` results and request positioned `layout` output only for a box that needs drawing. | Proposed |
 | D-045 | Paragraph axes model unconstrained, at-most, and exact sizing without importing a host layout vocabulary; host adapters own translation, invalidation, padding, transforms, and clipping. | Proposed |
-| D-069 | UIKit v2 owns an incremental adapter from its current `CustomLayouting` and content-box signals; no UIKit, Yoga, or Preact Signal types enter core. | Proposed |
+| D-069 | uikit owns an incremental adapter from its current `CustomLayouting` and content-box signals; no uikit, Yoga, or Preact Signal types enter core. | Proposed |
 | D-072 | The JavaScript paragraph engine owns UAX #9, #14, #24, and #29 using Unicode data pinned to the core font provenance version. | Proposed |
 
-The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [UIKit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
+The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [uikit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
 
 ## Identity and container
 
@@ -96,13 +95,15 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-054 | Deterministic unhinted bitmap oversampling is the baseline candidate. | Experiment |
 | D-055 | Recommend MSDF generally, but require an explicit raster module. | Proposed |
 | D-056 | Windfoil is research prior art, not a planned text backend. | Proposed |
-| D-057 | Post-slice Slug includes color emoji and safe SVG icon-font baking. | Proposed |
+| D-057 | Post-slice Slug includes color-emoji vector paint; safe OpenType-SVG and standalone-SVG icon baking lands in the large-coverage CJK/icon milestone. | Proposed |
 | D-058 | Fill, opacity, outline, and hard shadow are baseline game-text styles. | Proposed |
 | D-059 | Payload reports separate shaping, transport, decoded, and GPU bytes. | Proposed |
 | D-061 | Slug bands compress exactly; curve compression remains quality-gated. | Proposed |
 | D-064 | V1 does not support plain MSDF assets or parallel MSDF/MTSDF batches. | Proposed |
 | D-065 | First-party raster packages use TSL internally; the core raster API is shader-system and backend agnostic. | Proposed |
 | D-073 | V1 assigns one selected raster per font slot; per-glyph raster mixing is additive color/SVG work after the first release. | Proposed |
+| D-075 | Latin remains the V1 release priority; CJK and icon support share the next large-coverage paging milestone and cannot expand the Latin-first exit gate. | Proposed |
+| D-076 | Raster page indexes are logical IDs; page payloads may be embedded or independently addressed, and raster modules own preparation, residency, eviction, and backend batching. | Proposed |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
@@ -112,12 +113,13 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 | --- | --- | :---: |
 | D-060 | Optimizations require reproducible A/B evidence and no quality loss. | Proposed |
 | D-063 | The interactive/headless benchmark harness is the first executable artifact; one shared registry defines every proof and measurement, including the first bitmap frame. | Proposed |
+| D-074 | Every rendering scenario uses current browser HTML/CSS output as its visual reference; HarfRust/HarfBuzz remain structured shaping oracles, and legacy Three Flatland Slug is historical comparison data only. | Proposed |
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.
 
 ## Decisions required before implementation
 
-1. Accept or revise all proposed decisions, including D-067–073; D-016 and D-066 are already settled for V0.
+1. Accept or revise all proposed decisions, including D-067–076; D-016 and D-066 are already settled for V0.
 2. Pin HarfRust, HarfBuzz, Unicode, glTF schema, and generator versions.
 3. Confirm the provisional `PMNDRS` prefix and assign its Khronos request.
 4. Choose the first font fixture and target browser/GPU matrix.

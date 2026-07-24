@@ -2,8 +2,8 @@
 type: Roadmap
 title: Canonical implementation roadmap
 description: Defines the only active implementation sequence, dependencies, effort estimates, deliverables, and exit gates for pmndrs/text.
-status: proposed
 tags: [roadmap, implementation, milestones]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Canonical implementation roadmap
@@ -33,7 +33,7 @@ This slice is an internal integration proof, not a release candidate. The first 
 | 2 | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-UIKit-shaped fixture. |
+| 5 | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
 | 6 | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
 | 8 | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
@@ -70,7 +70,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 0.3 | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
 | 1.2 | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
-| 1.3 | Pin the source font and shaping/layout/visual oracles as harness fixtures. | M | 1.2 |
+| 1.3 | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
 | 2.1 | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | Implement the host-independent font bake request/result core. | M | 2.1 |
 | 2.3 | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
@@ -82,7 +82,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 4.2 | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
 | 5.1 | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
 | 5.2 | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
-| 5.3 | Add alignment, clipping, max-lines, ellipsis, bidi, and current-UIKit adapter fixtures. | M | 5.2 |
+| 5.3 | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
 | 6.1 | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
 | 6.2 | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
@@ -121,8 +121,10 @@ Deliver:
 - a dedicated package-size entry for the version-pinned JS Unicode property tables used by bidi, script itemization, line breaking, and grapheme segmentation;
 - authorized Inter Regular fixture with exact URL, license, version, and SHA-256;
 - UTF-16 text corpus and HarfBuzz/HarfRust expected outputs;
+- deterministic browser HTML/CSS visual-reference captures using the exact fixture font and scenario inputs;
 - pinned contracts and source inputs for bitmap-strike, paragraph-layout, GLB, malformed-input, and GPU-readback fixtures;
 - benchmark environment manifest and result schema;
+- synthetic 65,535-glyph, multi-page record/source fixture proving logical page identity without a real CJK bake;
 - empty multi-font/multi-raster contract fixtures that test identity without adding product behavior.
 
 Exit only when the lab is usable, the synthetic smoke target produces the same validated result through interactive and headless paths, and every oracle can be regenerated deterministically. Later milestones extend this harness; none creates a parallel benchmark or demo architecture.
@@ -183,12 +185,12 @@ Deliver:
 - broad-shape and width-layout caches;
 - one batched boundary-reshape seam;
 - synchronous unconstrained/at-most/exactly axis constraints, allocation-light measurement, final positioned layout, and explicit paragraph baselines;
-- a current-UIKit-shaped fixture proving `CustomLayouting` derivation, Yoga-mode translation, final content-box signal layout, point-scale rounding ownership, and dirtying rules without adding Yoga to core;
+- a current-uikit-shaped fixture proving `CustomLayouting` derivation, Yoga-mode translation, final content-box signal layout, point-scale rounding ownership, and dirtying rules without adding Yoga to core;
 - wide/narrow and bidi-aware golden layouts.
 
 Width changes always reflow. Simple reflow crosses into Wasm zero times; boundary-sensitive changes cross once for the batch.
 
-The milestone is not complete until a retained-layout leaf can repeatedly measure a prepared paragraph without materializing positioned glyph arrays, then obtain final glyph positions for its resolved content box without implementing line breaking. The concrete compatibility fixture mirrors current UIKit's `CustomLayouting → FlexNode/Yoga → size signal → positioned layout` flow; the production adapter remains owned by UIKit v2.
+The milestone is not complete until a retained-layout leaf can repeatedly measure a prepared paragraph without materializing positioned glyph arrays, then obtain final glyph positions for its resolved content box without implementing line breaking. The concrete compatibility fixture mirrors current uikit's `CustomLayouting → FlexNode/Yoga → size signal → positioned layout` flow; the production adapter remains owned by uikit.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 
@@ -269,10 +271,28 @@ The order below preserves lanes without pretending the work is part of V1:
 | Order | Workstream | Effort | Why next |
 | ---: | --- | --- | --- |
 | 11 | Mixed-font spans and explicit font fallback | XL | Extend the multi-font identity smoke proof into paragraph behavior. |
-| 12 | Color emoji and SVG icon-font baking | XL | Extend Slug vector paint/layers and bitmap color resources without changing layout. |
-| 13 | Raster effects and expanded recommendations | L | Extend outlines, colorization, shadows, and projected-size guidance with measurements. |
-| 14 | Measured optimization campaigns | ongoing | Activate autoresearch only with strict correctness and visual gates. |
-| 15 | Advanced font compiler units | XL each | Add subsetting, closure, remapping, normalized lookups, or SIMD only from evidence. |
+| 12 | Large-coverage CJK and icons | XL | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates. |
+| 13 | Color emoji | XL | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout. |
+| 14 | Raster effects and expanded recommendations | L | Extend outlines, colorization, shadows, and projected-size guidance with measurements. |
+| 15 | Measured optimization campaigns | ongoing | Activate autoresearch only with strict correctness and visual gates. |
+| 16 | Advanced font compiler units | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence. |
+
+### Milestone 12 — large-coverage CJK and icons
+
+This milestone begins only after the Latin-first V1 renderer gate. CJK and icons share the page-scale implementation while retaining separate semantic fixtures.
+
+Deliver:
+
+- a pinned redistributable pan-CJK face with Chinese, Japanese, and Korean language cases, supplementary Han, variation sequences, and no-space paragraph fixtures;
+- a pinned private-use icon font, OpenType-SVG icon font, and manifest-backed standalone SVG set with selected and complete-library cases;
+- content-aware raster coverage with explicit missing-glyph diagnostics and no change to font-local `u16` glyph identity;
+- companion raster indexes whose logical pages resolve to embedded or external payloads with byte length and SHA-256 integrity;
+- raster-module page preparation, request deduplication, cancellation, atomic generation swaps, residency accounting, and deterministic eviction tests;
+- backend batching that does not equate page index with texture-array layer, binding slot, draw, or order;
+- browser visual references plus HarfRust/HarfBuzz structured CJK shaping comparisons;
+- CJK/icon payload, first-use, page-walk, cache, upload, GPU-memory, and batch-count reports at increasing coverage tiers.
+
+Vertical writing remains deferred. The milestone retains vertical-form source data and tests that it survives baking, but does not add vertical paragraph layout.
 
 Windfoil, browser-time JIT, MLIR, GPU shaping, vertical writing, runtime variation axes, and automatic raster-module switching are not scheduled.
 

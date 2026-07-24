@@ -2,8 +2,8 @@
 type: Test Plan
 title: Benchmark plan
 description: Defines the interactive benchmark lab, headless runner, and reproducible performance, memory, payload, loader, baker, paragraph, and raster measurements.
-status: proposed
 tags: [benchmarks, performance, payload]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Benchmark plan
@@ -19,6 +19,7 @@ Purpose: replace performance and payload estimates with reproducible evidence.
 4. Never compare outputs that differ semantically or in font coverage.
 5. Store raw samples and environment metadata, not only summary charts.
 6. Treat variance and regression thresholds as part of the benchmark definition.
+7. Use the current browser's HTML/CSS text renderer as the visual reference for every rendering scenario; use structured shaping oracles separately.
 
 ## Required benchmark product
 
@@ -66,7 +67,7 @@ The interactive application and headless runner import the same target registry,
 A target is one implementation choice on a declared axis:
 
 - shaping: pinned HarfRust reference or a later optimized path;
-- raster: bitmap, MSDF, or Slug;
+- raster: browser HTML reference, bitmap, MSDF, or Slug;
 - graphics API: WebGPU or WebGL2;
 - delivery: pre-baked hit or automatic Worker fallback;
 - bake host: Node or Worker Wasm where parity is being measured.
@@ -104,6 +105,14 @@ Each scenario declares:
 - teardown and leak checks.
 
 Unsupported target/scenario pairs remain visible with their missing capabilities. They are not scored as failures and are never silently removed from comparison tables.
+
+### Reference hierarchy
+
+Every rendering scenario captures an HTML/CSS reference in the same browser, using the same font bytes, text, language, direction, OpenType features, font size, constraints, DPR, foreground/background colors, and viewport. Browser output is the primary authority for visual shaping and rendering deltas. The harness retains the browser image, candidate image, perceptual score, and raw difference image.
+
+Structured shaping correctness remains a separate comparison against pinned HarfRust and HarfBuzz output: glyph IDs, clusters, advances, offsets, and flags cannot be recovered reliably from a browser screenshot. A candidate must pass both the structured shaping gate and the browser visual gate.
+
+Current Three Flatland Slug may be included as a historical performance or payload target when an equivalent workload can be constructed. It is never the visual or shaping oracle and is not required in every benchmark run.
 
 ### Interactive lab
 
@@ -171,8 +180,10 @@ Initial environments should include one current Chromium desktop reference, one 
 | Devanagari short label and paragraph | syllable/reorder/context workload |
 | mixed LTR/RTL paragraph | run segmentation and line ordering |
 | emoji/ZWJ list | supplementary decode and sequence substitution |
-| repeated icon labels | simple cmap/advance and cache ceiling |
-| CJK paragraph subset | coverage size and line-fitting throughput |
+| repeated private-use icon labels | simple cmap/advance and cache ceiling |
+| sparse standalone-SVG icon set | name lookup, selected/full-library paging, and residency |
+| CJK paragraph without spaces | line fitting, `locl`, variation sequences, and page working set |
+| CJK page-walk document | first-use fetch/upload, cache reuse, eviction, and page churn |
 
 Each workload has unique-text and repeated-text variants.
 
@@ -183,8 +194,8 @@ Each workload has unique-text and repeated-text variants.
 - Arabic;
 - Devanagari or another USE-heavy font;
 - emoji-capable font subset;
-- private-use icon font;
-- large CJK subset;
+- private-use icon font and manifest-backed standalone SVG set;
+- one pinned pan-CJK face exercised as small, medium, large, and complete coverage tiers;
 - one font with class kerning and one with many explicit pairs.
 
 ## Shaper benchmarks
@@ -226,7 +237,7 @@ Measure:
 - changed lines and reshaped lines;
 - Wasm call count and transferred/written bytes;
 - allocation-light host measurement versus final positioned layout;
-- the current-UIKit-shaped `CustomLayouting` path, reported separately for repeated measurements, compatible final-box reuse, and changed-width reflow.
+- the current-uikit-shaped `CustomLayouting` path, reported separately for repeated measurements, compatible final-box reuse, and changed-width reflow.
 
 Resize scenario:
 
@@ -273,7 +284,24 @@ Measure:
 - first drawable frame;
 - warm cache load.
 
-Compare current Three Flatland Slug loading with the new path for equivalent Slug coverage, while reporting semantic/format differences.
+Loader scenarios compare baked-hit and Worker-fallback behavior against the declared loader contract. Current Three Flatland Slug may be measured as a labeled historical target, but it does not define correctness for loading, shaping, or visual output.
+
+### Large-coverage paging
+
+CJK and icon benchmarks share one page-stress lane. The same pinned sources are baked at 256, 2,048, 8,192, and complete selected-glyph coverage, with the final tier determined by the fixture manifest rather than assumed to fit one atlas. Report:
+
+- dense record bytes separately from page payload bytes;
+- page count, occupancy, padding, and glyph distribution;
+- index-only load and validation time;
+- pages and bytes required for the first visible layout;
+- cold page fetch, hash validation, decode/transcode, upload, and first draw;
+- warm page reuse and concurrent request deduplication;
+- resident bytes, peak bytes, eviction count, and re-fetch rate during a deterministic page walk;
+- draw/batch count without assuming page index equals texture-array layer;
+- cancellation and stale-generation behavior when text changes during preparation;
+- selected icon subset versus complete icon-library stress case.
+
+The synthetic maximum-cardinality contract fixture and small real CJK/icon fixtures run early to protect the format. Full-face generation, long page walks, and device residency measurements belong to scheduled/manual jobs and the combined CJK/icon milestone; they do not block the Latin-first implementation or V1 renderer gate.
 
 ## Raster benchmarks
 
@@ -386,7 +414,7 @@ Thresholds must include expected measurement noise and require confirmation befo
 
 ## Phase 1 benchmark deliverable
 
-The first benchmark milestone delivers the lab shell, target/scenario contracts, shareable configuration, result schema, headless smoke runner, and bundle-size pipeline with placeholder or fixture targets. The first real benchmark report must answer:
+The first benchmark milestone delivers the lab shell, target/scenario contracts, shareable configuration, result schema, headless smoke runner, bundle-size pipeline, and a synthetic 65,535-glyph multi-page contract target without rasterizing a real CJK font. The first real benchmark report must answer:
 
 1. What is the minimal HarfRust Wasm size and cold-start cost under the intended build settings?
 2. What does one coarse batched shaping call cost compared with repeated calls?
@@ -397,4 +425,8 @@ The first benchmark milestone delivers the lab shell, target/scenario contracts,
 
 # Citations
 
-- [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks) — adapter/scenario browser-lab precedent, phase timing, capability gating, bundle-size generation, and static deployment.
+[1] [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks) — adapter/scenario browser-lab precedent, phase timing, capability gating, bundle-size generation, and static deployment.
+
+[2] [CSS Fonts Module Level 4](https://www.w3.org/TR/css-fonts-4/) — browser font selection, feature control, variations, and color-font behavior represented by the HTML reference target.
+
+[3] [CSS Text Module Level 3](https://www.w3.org/TR/css-text-3/) — browser inline-text processing, spacing, white-space, and line-breaking behavior represented by the HTML reference target.

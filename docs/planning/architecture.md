@@ -2,8 +2,8 @@
 type: Architecture Reference
 title: Proposed architecture
 description: Defines system ownership, import boundaries, font identity, loading, shaping, paragraph, and raster invariants.
-status: proposed
 tags: [architecture, loader, baker, shaping, paragraph, raster]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Proposed architecture
@@ -253,7 +253,9 @@ The names are provisional vendor-extension names. `PMNDRS` must be registered wi
 
 Each raster package owns its companion extension, records, and GPU payloads. `PMNDRS_font_bitmap`, `PMNDRS_font_distance_field`, and `PMNDRS_font_slug` are the three companion packages currently planned here. External packages may define different extensions without changing `PMNDRS_font`. No companion repeats advances, kerning, or shaping behavior. Each may be embedded in the core GLB or delivered as its own GLB and attached after reciprocal shaping-hash validation.
 
-The asset supports multiple raster sections; the first implementation emits one. Applications support multiple fonts by registering multiple one-face assets.
+The companion asset contains dense glyph records and a logical page directory. Each page payload may be embedded or independently addressed by URI plus length and content hash. A glyph's page value does not prescribe a GPU array layer, binding, draw, or residency policy. Raster modules decode the index first, prepare only pages required by a positioned layout, and own device-specific caching and batching. The Latin-first implementation may eagerly prepare every embedded page; that behavior is an implementation choice rather than a format invariant.
+
+The asset supports multiple raster sections; the first implementation emits one. Applications support multiple fonts by registering multiple one-face assets. Large-coverage CJK and icon work shares the same page contract later without changing font identity, shaping output, paragraph layout, or the public raster-module type.
 
 ## Binary rules
 
@@ -265,6 +267,7 @@ The asset supports multiple raster sections; the first implementation emits one.
 6. No platform-sized values appear on disk.
 7. Unknown optional sections are skipped; unknown required sections reject.
 8. Every serialized structure receives golden-byte and corrupt-input tests.
+9. Resource page identifiers remain logical and independently addressable; no serialized value is derived from a device binding limit.
 
 ## Shaping and reflow
 
@@ -299,12 +302,14 @@ sequenceDiagram
   Y-->>U: final content-box geometry
   U->>P: layout(exact final content box)
   P-->>U: positioned layout
+  U->>R: prepare(positioned layout, resource, font slot)
+  R-->>U: required logical pages resident
   U->>R: buildBatches(committed layout, resource, glyph paint)
 ```
 
 The core modes are `unconstrained`, `at-most`, and `exactly`; each host translates its own constraint vocabulary. Adapters install only after asynchronous font/shaper readiness when their measurement callbacks are synchronous. Final host geometry is authoritative even when measurement was skipped or produced a different candidate. Paragraph positions remain local to the content box; the host applies node transforms and clipping afterward.
 
-Invalidation is directional: text, font, spans, font size, language, direction, features, letter spacing, or line policy update the paragraph and invalidate host measurement. Parent constraint changes cause the host to remeasure. Raster selection and paint-only changes rebuild or update draw batches without paragraph invalidation. The [API contract](api-shapes.md#third-party-layout-systems) owns the generic constraint and output shapes. The current UIKit source mapping and incremental v2 adoption are isolated in [UIKit integration](uikit-integration.md).
+Invalidation is directional: text, font, spans, font size, language, direction, features, letter spacing, or line policy update the paragraph and invalidate host measurement. Parent constraint changes cause the host to remeasure. Raster selection and paint-only changes rebuild or update draw batches without paragraph invalidation. The [API contract](api-shapes.md#third-party-layout-systems) owns the generic constraint and output shapes. The current uikit source mapping and incremental adoption plan are isolated in [uikit integration](uikit-integration.md).
 
 ## Caching
 
@@ -314,7 +319,7 @@ V0 requires:
 - in-memory runtime-bake result keyed by source identity, descriptor, and versions;
 - registered HarfRust state and shape plans;
 - broad-run, line-shape, paragraph-analysis, and width-layout caches;
-- GPU resources by font and raster.
+- GPU resources by font, raster, logical page, selected variant, and device.
 
 Persistent runtime-bake caching is deferred, but the key shape is reserved for source hash, descriptor hash, format/baker/generator versions, and selected raster.
 
@@ -323,9 +328,20 @@ Persistent runtime-bake caching is deferred, but the key shape is reserved for s
 - A missing baked asset is recoverable and warns once in development.
 - An invalid baked asset yields a structured diagnostic before any allowed fallback.
 - Unsupported source fonts, output/resource limits, Worker failures, and unsupported required sections are distinct errors.
+- External raster-page fetch, length, hash, decode, capability, and budget failures identify the raster and logical page and never publish a partial draw generation.
 - HarfRust shaping never silently falls back to approximate shaping.
 - Production fallback remains functional but does not emit the development pre-bake warning.
 
 ## Central invariant
 
 > The loader may obtain core and raster bytes from one GLB, several GLBs, an application resolver, or a lazy Worker bake, but identity validation and downstream shaping/layout/raster records are identical.
+
+# Citations
+
+[1] [HarfRust](https://github.com/harfbuzz/harfrust) — Rust shaping engine, buffer behavior, and OpenType integration baseline.
+
+[2] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — GLB container, extension, buffer-view, and URI semantics.
+
+[3] [HTML worker specification](https://html.spec.whatwg.org/multipage/workers.html) — runtime fallback isolation and module-worker execution model.
+
+[4] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) — independently loadable raster texture resources.

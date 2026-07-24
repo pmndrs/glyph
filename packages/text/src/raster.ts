@@ -112,6 +112,13 @@ export interface RasterModule<
     signal?: AbortSignal,
   ): Promise<Resource>
 
+  prepare(
+    layout: ParagraphLayout,
+    resource: Resource,
+    fontSlot: FontSlot,
+    signal?: AbortSignal,
+  ): Promise<void>
+
   buildBatches(
     layout: ParagraphLayout,
     resource: Resource,

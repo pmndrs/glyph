@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "title": "PMNDRS font binary resource",
+  "type": "object",
+  "properties": {
+    "source": { "$ref": "resourceSource.PMNDRS_font.schema.json" }
+  },
+  "required": ["source"],
+  "additionalProperties": false
+}

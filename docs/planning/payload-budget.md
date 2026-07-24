@@ -2,8 +2,8 @@
 type: Budget Model
 title: Font payload budget
 description: Separates shaping bytes, raster records, transport bytes, decoded textures, and GPU residency.
-status: measured-and-modeled
 tags: [payload, memory, fonts]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Font payload budget
@@ -176,6 +176,18 @@ For the non-subsetted 1,403-glyph Font Awesome V0 face:
 | MSDF | 35.2 KiB | generator report required | MTSDF RGBA8; 28,060 B records; legacy subset was modeled at 4–8 MiB. |
 | Slug | 35.2 KiB | generator report required | 40 B × 1,403 = 56,120 B records; legacy subset derived near 1 MiB. |
 
+## Large-coverage CJK and icon envelope
+
+Dense records scale predictably even when page payloads are sparse or independently loaded. At the V0 maximum of 65,535 glyphs:
+
+| Record family | Exact bytes | Binary size | Notes |
+| --- | ---: | ---: | --- |
+| Bitmap, per strike | 1,310,700 | 1.25 MiB | `20 × 65,535`; may contain mostly `page = 0xffff` records for a selected subset. |
+| MSDF | 1,310,700 | 1.25 MiB | `20 × 65,535`; independent of MTSDF atlas residency. |
+| Slug | 2,621,400 | 2.50 MiB | `40 × 65,535`; independent of curve/header/reference page residency. |
+
+These are metadata envelopes, not estimates of CJK texture cost. The combined CJK/icon milestone reports the companion index separately from embedded/external page bytes, first-layout bytes fetched, peak/resident GPU bytes, page churn, and complete-library stress payload. A selected icon subset and complete icon library are always separate results.
+
 These columns are intentionally not added into a fake single “download size.” Shared raw bytes, compressed transport, and GPU allocations have different lifetimes and compression behavior.
 
 ## Required measurement artifact
@@ -196,10 +208,18 @@ interface FontPayloadReport {
       height: number
       format: string
       mipBytes: number
+      source: 'embedded' | 'external'
+      encodedBytes: number
     }>
   }>
-  container: { jsonBytes: number; paddingBytes: number; totalBytes: number }
-  transport: { format: string; bytes: number }[]
+  containers: Array<{
+    artifactId: string
+    role: 'font' | 'raster' | 'raster-page'
+    jsonBytes: number
+    paddingBytes: number
+    totalBytes: number
+  }>
+  transport: Array<{ artifactId: string; format: string; bytes: number }>
 }
 ```
 
@@ -210,7 +230,18 @@ The benchmark corpus must eventually produce this report for:
 3. a selected subset and the full 1,594-shape Lucide SVG library;
 4. each raster independently and an intentionally combined asset;
 5. Node and Worker bakes, which must agree on canonical section sizes and pixels.
+6. large-coverage index-only load, first-layout page working set, full page directory, and deterministic page-walk residency.
 
 No modeled number becomes a product claim until a checked-in generator, descriptor, source hash, visual reference, and raw report reproduce it.
 
 Plain RGB MSDF is not part of the V1 totals. A later compression experiment may compare an RGB-capable native block format against the MTSDF baseline, including transport bytes, GPU residency, visual error, effect loss, and extra batch/module complexity. It becomes a supported encoding only if that complete comparison proves a material win.
+
+# Citations
+
+[1] [Three Flatland main at the measured revision](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175) — measured source font and legacy Slug artifacts.
+
+[2] [Three Flatland uikit fork at the measured revision](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60) — optimized Slug texture layout and Lucide SVG artifact.
+
+[3] [SVG bake pipeline](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/superpowers/plans/svg-bake-pipeline.md) and [glyph paging design](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md) — prior artifact structure and paging assumptions.
+
+[4] [GPU compression design](gpu-compression.md) — repository-local transport/GPU byte model and quality gates.

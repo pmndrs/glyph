@@ -2,8 +2,8 @@
 type: glTF Extension Specification
 title: PMNDRS_font_distance_field
 description: Defines MTSDF glyph records and linear texture resources for the MSDF raster module.
-status: draft-v0
 tags: [gltf, extension, font, msdf, mtsdf]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -26,7 +26,7 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 `PMNDRS_font_distance_field` stores the MTSDF glyph atlas consumed by the public MSDF raster module. V0 requires `encoding: "mtsdf"`: linear RGBA8 with multi-channel distance in RGB and true signed distance in alpha. Plain MSDF is not a V0 resource variant.
 
-The extension declares generation em size, encoded pixel range, fixed-point plane units, one dense 20-byte glyph-record view, and KTX2 texture pages. Records share the bitmap plane/atlas/page layout. Advances and kerning are never duplicated.
+The extension declares generation em size, encoded pixel range, fixed-point plane units, one dense 20-byte glyph-record view, and a logical directory of KTX2 texture pages. Each page variant may be embedded or independently addressed; the page index does not prescribe a GPU layer, draw, or residency state. Records share the bitmap plane/atlas/page layout. Advances and kerning are never duplicated.
 
 The records are two-byte-aligned CPU-side typed-array inputs for bulk instance generation; texture pages, not these 20-byte records, are the direct GPU-upload resource.
 
@@ -46,7 +46,10 @@ The extension adds a `PMNDRS_font_distance_field` object to the root glTF `exten
 
 - [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation planned against this contract.
 
-## Resources
+# Citations
 
-- [Raster data contract](../../raster-data-contract.md)
-- [msdfgen](https://github.com/Chlumsky/msdfgen)
+[1] [msdfgen](https://github.com/Chlumsky/msdfgen) — MSDF/MTSDF channel encoding and generation reference.
+
+[2] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) — atlas texture container and level encoding.
+
+[3] [Raster data contract](../../raster-data-contract.md) — normative distance-field records, texture variants, and validation.

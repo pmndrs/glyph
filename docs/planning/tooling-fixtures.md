@@ -2,8 +2,8 @@
 type: Test Plan
 title: Tooling and fixtures for the first pipeline
 description: Defines the pinned font, text corpus, fixture manifest, oracle tooling, golden updates, and multi-font contract fixtures.
-status: proposed
 tags: [tooling, fixtures, testing]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -37,13 +37,17 @@ Complex-script and fallback fonts are required by the broader conformance plan, 
 
 Post-slice raster fixtures must also pin:
 
+- one redistributable pan-CJK face with pinned Chinese, Japanese, and Korean language cases, supplementary Han, and variation sequences;
+- one private-use icon font and one manifest-backed standalone SVG icon set, exercised as selected and complete-library coverage;
 - one COLR/CPAL color-emoji font covering layered and paint-graph vectors;
 - one CBDT/CBLC or `sbix` color-emoji font covering embedded bitmap strikes;
-- one OpenType-SVG icon font and one manifest-backed standalone SVG icon set covering the accepted subset plus explicit rejection cases.
+- one OpenType-SVG icon font covering the accepted subset plus explicit rejection cases.
 
 Payload fixtures additionally include the existing 350-glyph Font Awesome bake and the uikit fork's 1,594-shape Lucide bake. They establish icon-font and standalone-SVG baselines without expanding the first runtime slice. The selected Lucide subset and full library must be measured independently so tree-shaken application usage is not conflated with whole-library stress testing. See the [font payload budget](payload-budget.md).
 
 Each source, license, version, hash, expected baked records, and reference image is immutable. These fixtures do not expand the first one-font vertical slice.
+
+Before those real assets are introduced, a generated contract fixture declares `glyphCount = 65535`, dense zero/absent records, several logical pages, embedded and external resource sources, and glyph references that cross page boundaries. It exercises maximum arithmetic, source integrity, index decoding, and backend-independent batching without checking in a full CJK raster.
 
 ## Fixture layout
 
@@ -73,6 +77,7 @@ fixtures/
       expected-narrow.json
   visual/
     inter-regular-bitmap/
+      browser-html.png
       webgpu.png
       webgl2.png
   corrupt/
@@ -149,17 +154,17 @@ Runs identical source bytes and descriptor through both hosts. It compares canon
 
 ### Asset validator
 
-Checks version, ranges, alignment, record counts, glyph ID width, texture dimensions, page indices, required capabilities, and declared resource limits without constructing per-glyph objects.
+Checks version, ranges, alignment, record counts, glyph ID width, texture dimensions, logical page indices, embedded/external source unions, external byte lengths and hashes, required capabilities, and declared resource limits without constructing per-glyph objects. A valid nonresident page is distinct from the permanent `0xffff` absence sentinel.
 
 ### Paragraph fixture runner
 
 Loads the font, shapes the paragraph, lays it out at fixed widths, and records line source ranges, run/font slots, glyph identities, clusters, and positions. It verifies that width-only reflow reuses broad shaping where allowed.
 
-The same runner includes an adapter fixture shaped after current pmndrs/uikit's `CustomLayouting`, `FlexNode`, and resolved size/padding/border signal flow without adding UIKit or Yoga to core. It covers intrinsic `minWidth`/`minHeight` derivation; `Undefined`/unconstrained, `AtMost`, and `Exactly`; definite dimensions where measurement may be skipped; first-baseline reporting; point-scale rounding at the host boundary; and a final content box different from the candidate measurement. Repeated `measure` calls must not materialize positioned-glyph arrays. Text or shaping-policy changes invalidate measurement, while paint and raster changes do not. The final `layout` positions remain relative to the content-box origin and are translated by the host fixture. See [UIKit integration](uikit-integration.md).
+The same runner includes an adapter fixture shaped after current pmndrs/uikit's `CustomLayouting`, `FlexNode`, and resolved size/padding/border signal flow without adding uikit or Yoga to core. It covers intrinsic `minWidth`/`minHeight` derivation; `Undefined`/unconstrained, `AtMost`, and `Exactly`; definite dimensions where measurement may be skipped; first-baseline reporting; point-scale rounding at the host boundary; and a final content box different from the candidate measurement. Repeated `measure` calls must not materialize positioned-glyph arrays. Text or shaping-policy changes invalidate measurement, while paint and raster changes do not. The final `layout` positions remain relative to the content-box origin and are translated by the host fixture. See [uikit integration](uikit-integration.md).
 
 ### Visual runner
 
-Draws a fixed viewport/DPR/color/transform matrix on WebGPU and WebGL2. It stores reference images and diffs separately from shaping/layout expectations.
+Draws a fixed viewport/DPR/color/transform matrix through browser HTML/CSS, WebGPU, and WebGL2. The HTML/CSS capture is the visual reference and uses the exact fixture font bytes and equivalent text, language, direction, feature, size, constraint, and color settings. The runner stores browser references, candidate images, perceptual scores, and raw diffs separately from HarfRust/HarfBuzz shaping expectations. Legacy Three Flatland Slug output may be retained as a labeled historical comparison, never as the oracle.
 
 ### Interactive benchmark lab and headless runner
 
@@ -212,3 +217,15 @@ This hardens identities without making multi-font fallback part of the first del
 - visual tolerances are established before performance experiments;
 - autoresearch experiments cannot replace references or weaken tolerances;
 - golden changes are reviewed independently from performance claims.
+
+# Citations
+
+[1] [Inter](https://github.com/rsms/inter) — primary UI-font fixture source and licensing reference.
+
+[2] [Font Awesome Free](https://github.com/FortAwesome/Font-Awesome) — icon-font fixture source and licensing reference.
+
+[3] [Lucide](https://github.com/lucide-icons/lucide) — standalone SVG icon fixture source and licensing reference.
+
+[4] [HarfBuzz test suite](https://github.com/harfbuzz/harfbuzz/tree/main/test) — shaping oracle corpus and regression precedent.
+
+[5] [CSS Fonts Module Level 4](https://www.w3.org/TR/css-fonts-4/) and [CSS Text Module Level 3](https://www.w3.org/TR/css-text-3/) — browser font and inline-text behavior used by the visual runner.

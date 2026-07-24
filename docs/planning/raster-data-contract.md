@@ -2,8 +2,8 @@
 type: Data Contract
 title: Raster data contract V0
 description: Defines packaging-neutral bitmap, MTSDF-backed MSDF, and Slug raster records and GPU resources.
-status: settled-v0
 tags: [data, bitmap, mtsdf, slug, gpu]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Raster data contract V0
@@ -47,7 +47,7 @@ interface RasterReference {
 }
 ```
 
-`rasterKey` is the lowercase hexadecimal SHA-256 digest of the UTF-8 bytes of the [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) canonical JSON object below:
+`rasterKey` is the lowercase hexadecimal SHA-256 digest of the UTF-8 bytes of the [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785.html) canonical JSON object below:
 
 ```json
 {
@@ -79,7 +79,7 @@ interface RasterBindingV0 {
 ## Shared conventions
 
 - Glyph records are dense and indexed by font-local glyph ID.
-- `page = 0xffff` means that glyph has no representation in that raster; all other fields are ignored and SHOULD be zero.
+- `page = 0xffff` means that glyph has no representation in that raster; all other fields are ignored and SHOULD be zero. Any other value is a logical index into the raster's page directory, never an implicit GPU texture-array layer, binding slot, draw call, or residency guarantee.
 - Plane bounds use baseline-relative em coordinates: X increases right, Y increases up.
 - A required `planeUnitsPerEm` integer declares fixed-point precision. Decode with `em = stored_i16 / planeUnitsPerEm`.
 - Atlas coordinates are unsigned pixel-edge coordinates with upper-left origin, X right, Y down, and right/bottom exclusive.
@@ -87,7 +87,7 @@ interface RasterBindingV0 {
 - Shared advances, kerning, clusters, and line metrics never occur in a raster.
 - Record buffer views are aligned to their widest member, tightly packed, and have exactly `glyphCount × recordStride` bytes. Bitmap/distance-field records are two-byte aligned with 20-byte stride; Slug records are four-byte aligned with 40-byte stride.
 - Extension-owned record and texture buffer views MUST omit core glTF `byteStride` and `target`; their layout is defined only by the companion extension.
-- Texture resources declare dimensions, mip count, exact GPU format, encoding, and KTX2 buffer-view source.
+- Texture resources declare dimensions, mip count, exact GPU format, encoding, and an embedded or independently addressable KTX2 source.
 
 ## Texture resource
 
@@ -102,8 +102,21 @@ interface TextureResourceV0 {
   variants: readonly TextureVariantV0[]
 }
 
+type ResourceSourceV0 =
+  | { type: 'bufferView'; bufferView: number }
+  | {
+      type: 'external'
+      uri: string
+      byteLength: number
+      artifactHash: string
+    }
+
+interface BinaryResourceV0 {
+  source: ResourceSourceV0
+}
+
 interface TextureVariantV0 {
-  bufferView: number
+  source: ResourceSourceV0
   container: 'ktx2'
   gpuFormat:
     | 'r8unorm'
@@ -121,9 +134,11 @@ interface TextureVariantV0 {
 }
 ```
 
-KTX2 bytes occupy the complete referenced glTF `bufferView`; the raster GLB is the independently addressable unit. A variant whose KTX2 `vkFormat` names a native GPU format can be uploaded directly only when the device supports it. A Basis payload requires a dynamically imported transcoder and is not described as direct upload. The runtime selects the first supported variant in listed order.
+Embedded bytes occupy the complete referenced glTF `bufferView`. An external source URI resolves relative to the companion raster asset, declares its encoded byte length, and requires lowercase SHA-256 over the complete resource. Redirected or cross-origin bytes are accepted only after the same length and hash checks. The page directory and dense glyph records remain in the companion raster asset, so a raster module can determine required logical pages before fetching their payloads.
 
-Before decompression, transcoding, or upload, the loader MUST parse every KTX2 level and prove that its decoded byte count equals the size implied by the declared dimensions, mip count, and GPU format. Dimensions MUST fit the active device limits and the configured per-font/per-raster GPU-byte budget. Reversible supercompression and Basis/native transcoding run off the main thread. A size mismatch, unsupported dimension, arithmetic overflow, or budget excess rejects the artifact before allocation or GPU submission.
+A variant whose KTX2 `vkFormat` names a native GPU format can be uploaded directly only when the device supports it. A Basis payload requires a dynamically imported transcoder and is not described as direct upload. The runtime selects the first supported variant in listed order. Page sources may be fetched, decoded, uploaded, cached, and evicted independently; all variants belonging to one logical page reconstruct the same declared texel content within their quality class.
+
+Before decompression, transcoding, or upload, the raster module MUST validate the selected source length and hash, parse every KTX2 level, and prove that its decoded byte count equals the size implied by the declared dimensions, mip count, and GPU format. Dimensions MUST fit the active device limits and the configured per-font/per-raster GPU-byte budget. Reversible supercompression and Basis/native transcoding run off the main thread. A size mismatch, hash mismatch, unsupported dimension, arithmetic overflow, or budget excess rejects the page before allocation or GPU submission.
 
 Every V0 raster MUST provide a lossless baseline variant. GPU-native block-compressed variants are additive. They cannot be the sole variant until the supported platform matrix guarantees them.
 
@@ -278,15 +293,17 @@ interface SlugPageV0 {
   headerCount: number
   headerWidth: number
   headerHeight: number
-  headerBufferView: number
+  headerResource: BinaryResourceV0
   referenceCount: number
   referenceWidth: number
   referenceHeight: number
-  referenceBufferView: number
+  referenceResource: BinaryResourceV0
 }
 ```
 
-The curve dimensions come only from `curve.width` and `curve.height`. Header and reference arrays use declared two-dimensional storage grids so the exact serialized bytes can be uploaded to WebGL2 `R32UI` and `R16UI` textures without padding or repacking. Their buffer lengths are exactly `headerWidth × headerHeight × 4` and `referenceWidth × referenceHeight × 2`. Counts MUST fit their grid capacities; unused trailing texels MUST be zero. All dimensions are at least one and within the target device limits. WebGPU implementations may upload the same grids to integer textures or copy the same bytes into storage buffers while preserving logical linear indexing. Both views are four-byte aligned in the GLB. Curve and integer-texture sampling is nearest and uses one mip level.
+The curve dimensions come only from `curve.width` and `curve.height`. Header and reference arrays use declared two-dimensional storage grids so the exact serialized bytes can be uploaded to WebGL2 `R32UI` and `R16UI` textures without padding or repacking. Their source lengths are exactly `headerWidth × headerHeight × 4` and `referenceWidth × referenceHeight × 2`. Counts MUST fit their grid capacities; unused trailing texels MUST be zero. All dimensions are at least one and within the target device limits. WebGPU implementations may upload the same grids to integer textures or copy the same bytes into storage buffers while preserving logical linear indexing. Embedded sources are four-byte aligned in the GLB; external sources carry the same exact bytes and integrity checks. Curve and integer-texture sampling is nearest and uses one mip level.
+
+All three Slug resources for one logical page—curve, headers, and references—become resident as one page generation. A renderer MUST NOT expose a partially resident page to drawing. Concurrent requests deduplicate by raster identity, logical page index, selected variant, and device; cancellation or eviction of one generation cannot publish stale resources over a newer request.
 
 The shader maps a logical index to `(index % width, index / width)` using the matching declared width. Slug plane bounds are the unpadded analytic glyph bounds used by the curve normalization/band domain; effects expand runtime geometry and do not mutate shaping metrics or these stored bounds.
 
@@ -338,7 +355,21 @@ Every raster format requires golden-byte, range, and GPU-readback fixtures cover
 - missing pages and the `0xffff` sentinel;
 - out-of-range atlas rectangles and page indexes;
 - unsupported compressed variants with successful lossless fallback;
+- embedded and external page sources, external length/hash failure, relative URI resolution, fetch deduplication, cancellation, eviction, and stale-generation rejection;
+- logical page indexes that do not match GPU array layers or draw ordering;
 - mismatched KTX2 decoded sizes, oversized dimensions, decompression bombs, format/feature mismatches, and configured GPU-budget overflow;
 - misaligned bitmap/distance-field two-byte records and Slug four-byte records;
 - Slug header/reference overflow, page-boundary, row-padding, and exact address reconstruction;
 - Node/Worker bake parity for records and decoded texture pixels.
+
+# Citations
+
+[1] [RFC 8785: JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785.html) — deterministic raster descriptor serialization.
+
+[2] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — extension, GLB, buffer-view, alignment, and URI rules.
+
+[3] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) — texture container, format, and mip-level validation.
+
+[4] [WebGPU specification](https://gpuweb.github.io/gpuweb/) — texture format features, device limits, and upload constraints.
+
+[5] [msdfgen](https://github.com/Chlumsky/msdfgen) — MSDF/MTSDF channel semantics and generator reference.

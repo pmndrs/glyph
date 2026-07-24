@@ -2,8 +2,8 @@
 type: Planning Estimate
 title: Rendering implementation difficulty
 description: Compares the relative effort to make bitmap, MSDF, and Slug rasters correct and performant.
-status: proposed-estimate
 tags: [planning, rendering, effort]
+timestamp: 2026-07-24T13:32:48Z
 ---
 
 # Rendering implementation difficulty
@@ -131,3 +131,13 @@ This ordering does not require the package to expose the techniques in the same 
 - implementation maintenance and dependency-size evidence.
 
 The source basis for the current estimates is maintained in [`RESEARCH.md`](../../RESEARCH.md), especially the Alvin thesis, Three Flatland Slug audit, Windfoil entry, and renderer-specific references.
+
+# Citations
+
+[1] [GPU-accelerated text rendering thesis](https://lup.lub.lu.se/luur/download?func=downloadFile&recordOId=9024910&fileOId=9024911) — comparative classification and quality/performance evidence for raster techniques.
+
+[2] [texel-org/windfoil](https://github.com/texel-org/windfoil) — analytic vector-rendering implementation and scope evidence.
+
+[3] [Three Flatland Slug/uikit performance plan](https://github.com/thejustinwalsh/three-flatland/blob/feat/uikit-fork/planning/perf/slug-uikit-shader-perf-plan.md) — measured optimization candidates for the Slug path.
+
+[4] [Research bibliography](../../RESEARCH.md) — complete annotated source set behind the ranking.

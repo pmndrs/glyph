@@ -1,5 +1,6 @@
 export type {
   AnyRasterBakerModule,
+  BakeArtifactV0,
   RasterBakeArtifact,
   RasterBakeDescriptorOf,
   RasterBakeFontContext,
@@ -7,7 +8,8 @@ export type {
   RasterBakePlan,
   RasterBakeRequest,
   RasterBakerModule,
-  RasterPackaging,
+  RasterPackagingV0,
+  RasterPagePayloadReport,
   RasterPayloadReport,
   BakeWarning,
   FontPayloadReport,

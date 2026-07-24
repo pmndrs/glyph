@@ -23,13 +23,13 @@
           "headerCount": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
           "headerWidth": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "headerHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
-          "headerBufferView": { "type": "integer", "minimum": 0 },
+          "headerResource": { "$ref": "../../schema/binaryResource.PMNDRS_font.schema.json" },
           "referenceCount": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
           "referenceWidth": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "referenceHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
-          "referenceBufferView": { "type": "integer", "minimum": 0 }
+          "referenceResource": { "$ref": "../../schema/binaryResource.PMNDRS_font.schema.json" }
         },
-        "required": ["curve", "headerCount", "headerWidth", "headerHeight", "headerBufferView", "referenceCount", "referenceWidth", "referenceHeight", "referenceBufferView"]
+        "required": ["curve", "headerCount", "headerWidth", "headerHeight", "headerResource", "referenceCount", "referenceWidth", "referenceHeight", "referenceResource"]
       }
     }
   },

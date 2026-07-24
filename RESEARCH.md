@@ -691,16 +691,16 @@ Sources at reviewed commit `0d4d887343d4492234ac9f35a4c470cea4176ca0`:
 
 Type: authoritative project source code
 
-Abstract: UIKit's current `Text` component connects a reactive `CustomLayouting` object to its `FlexNode` Yoga measure function. Yoga's resolved node size, padding, and border signals then drive a separate computed positioned-glyph layout used by the MSDF renderer and editing queries. The current font object combines BMFont character metrics, pair kerning, and atlas ownership, while caret and selection logic assumes one positioned entry per JavaScript character.
+Abstract: uikit's current `Text` component connects a reactive `CustomLayouting` object to its `FlexNode` Yoga measure function. Yoga's resolved node size, padding, and border signals then drive a separate computed positioned-glyph layout used by the MSDF renderer and editing queries. The current font object combines BMFont character metrics, pair kerning, and atlas ownership, while caret and selection logic assumes one positioned entry per JavaScript character.
 
 Extracted:
 
-- The adoption seam should preserve UIKit's `CustomLayouting → FlexNode/Yoga → resolved content-box signals` flow rather than introduce an unrelated imperative lifecycle.
+- The adoption seam should preserve uikit's `CustomLayouting → FlexNode/Yoga → resolved content-box signals` flow rather than introduce an unrelated imperative lifecycle.
 - Core needs a synchronous allocation-light measurement operation separate from final positioned layout so repeated host measurements do not create glyph arrays.
-- UIKit should own signal adaptation, point-scale rounding, padding/border removal, centered-coordinate conversion, transforms, clipping, and render-group integration.
-- `pmndrs/text` must not expose Yoga, Preact Signals, or UIKit-specific types merely to support this consumer.
+- uikit should own signal adaptation, point-scale rounding, padding/border removal, centered-coordinate conversion, transforms, clipping, and render-group integration.
+- `pmndrs/text` must not expose Yoga, Preact Signals, or uikit-specific types merely to support this consumer.
 - Current character-entry caret and selection code cannot represent ligatures, combining marks, reordered glyphs, or cluster boundaries; a later migration step must use cluster-aware queries rather than adapting glyph IDs back into character entries.
-- See the [UIKit integration explanation](docs/planning/uikit-integration.md) for the resulting incremental migration.
+- See the [uikit integration explanation](docs/planning/uikit-integration.md) for the resulting incremental migration.
 
 ### harfbuzzjs
 

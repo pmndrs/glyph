@@ -2,8 +2,8 @@
 type: Data Contract
 title: Shaping data contract V0
 description: Defines the complete reduced SFNT shaping payload, font-function data, batch ABI, byte accounting, and validation.
-status: settled-v0
 tags: [data, shaping, harfrust, wasm, sfnt]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Shaping data contract V0
@@ -157,6 +157,12 @@ The serialized values are authoritative for paragraph metrics and MUST agree wit
 
 The metric selection policy is fixed: when `OS/2.fsSelection.USE_TYPO_METRICS` is set, use `sTypoAscender`, `sTypoDescender`, and `sTypoLineGap`; otherwise use `hhea.ascender`, `hhea.descender`, and `hhea.lineGap`. The serialized values prevent consumer disagreement.
 
+### Large-coverage faces
+
+CJK does not require a wider per-face glyph ID: OpenType glyph IDs and `maxp.numGlyphs` remain 16-bit, and V0 supports `glyphCount` through 65,535. Every byte-length and offset calculation uses checked `u32`/`usize` arithmetic before allocation; no implementation may multiply dense record counts in `u16`. A TTC/OTC or other collection still registers one selected face per `PMNDRS_font`, identified by the existing face index and source provenance.
+
+The shaping payload remains complete for the selected face in V0. Raster paging and sparse raster availability do not change cmap, shaping behavior, clusters, or glyph identity. Later source-font subsetting may reduce a large CJK shaping payload only after shaping closure and differential conformance are proven; the Latin-first implementation does not depend on that compiler work.
+
 ## Runtime shape ABI
 
 JavaScript and Wasm exchange one batch, never one glyph. All integers are little-endian in Wasm linear memory. Offsets are 32-bit byte offsets from the start of the request or result arena and MUST meet the component alignment of the referenced array.
@@ -296,6 +302,7 @@ Registration MUST reject:
 - absent required tables or a table outside the whitelist;
 - overlapping/out-of-range tables, invalid alignment, invalid checksums, or inconsistent duplicated metrics;
 - `glyphIdWidth != 16` for this shaping format;
+- `glyphCount` outside `1..=65535` or any checked dense-array byte calculation that overflows the host/Wasm address space;
 - a run with an invalid ISO 15924 script tag, cluster-level value, language offset, direction, or unknown buffer-flag bit;
 - variable, AAT, Graphite, or deprecated `mort` shaping dependencies;
 - invalid GSUB/GPOS/GDEF references as reported by the pinned font reader;
@@ -313,3 +320,13 @@ For the same static face, text, direction, script, language, features, cluster l
 3. canonical `PMNDRS_font` through the Wasm ABI.
 
 The comparison includes glyph count, IDs, clusters, all four positions, and mapped flags. Any optimized font-function or lookup path added later runs against the same canonical input and MUST be bit-for-bit equivalent to path 2 for the supported corpus.
+
+# Citations
+
+[1] [OpenType specification](https://learn.microsoft.com/en-us/typography/opentype/spec/) — normative SFNT, cmap, metrics, GSUB, GPOS, GDEF, variation, and glyph-data definitions.
+
+[2] [HarfRust](https://github.com/harfbuzz/harfrust) — runtime shaper, font-function surface, and OpenType behavior baseline.
+
+[3] [HarfBuzz shaping documentation](https://harfbuzz.github.io/shaping-and-shape-plans.html) — shape-plan, buffer, cluster, and positioning model used for comparison.
+
+[4] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — buffer-view containment and GLB serialization rules.

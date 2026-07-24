@@ -51,6 +51,7 @@ const msdf = defineRaster({
   async decode(_font, _raster): Promise<MsdfResource> {
     return { texture: {} }
   },
+  async prepare() {},
   buildBatches(_layout, _resource): MsdfBatch {
     return { instances: 0 }
   },
@@ -72,6 +73,7 @@ const external = defineRaster({
   async decode() {
     return { custom: true as const }
   },
+  async prepare() {},
   buildBatches() {
     return { draws: 1 }
   },
@@ -89,6 +91,7 @@ const configurable = defineRaster({
   async decode() {
     return { configured: true as const }
   },
+  async prepare() {},
   buildBatches() {
     return { draws: 1 }
   },
@@ -269,8 +272,13 @@ const msdfBaker = defineRasterBaker({
       kind: 'msdf',
       extension: 'PMNDRS_font_distance_field',
       version: 0,
-      bytes: new Uint8Array(),
-      report: { metadataBytes: 0, serializedBytes: 0, gpuBytes: 0 },
+      artifacts: [],
+      report: {
+        metadataBytes: 0,
+        serializedBytes: 0,
+        gpuBytes: 0,
+        pages: [],
+      },
     }
   },
 })
@@ -278,13 +286,16 @@ const msdfBaker = defineRasterBaker({
 type _BakerKind = Expect<Equal<typeof msdfBaker.kind, 'msdf'>>
 
 const msdfPlan = rasterBake(msdfBaker, {
-  packaging: 'external',
+  packaging: { artifact: 'external', pages: 'external' },
   options: { pixelRange: 4 },
 })
 type _PlanOptions = Expect<Equal<typeof msdfPlan.options, { readonly pixelRange: number }>>
 
-// @ts-expect-error The package-owned MSDF baker requires its own options.
-rasterBake(msdfBaker, { packaging: 'external', options: { ppem: 16 } })
+rasterBake(msdfBaker, {
+  packaging: { artifact: 'external', pages: 'external' },
+  // @ts-expect-error The package-owned MSDF baker requires its own options.
+  options: { ppem: 16 },
+})
 
 interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
   readonly strikes: StaticNumberTuple<Strikes>

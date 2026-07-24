@@ -2,8 +2,8 @@
 type: Technical Explanation
 title: GPU compression and compact Slug storage
 description: Distinguishes transport, decoded, and GPU compression and records quality constraints for font rasters.
-status: mixed-adopted-and-experimental
 tags: [gpu, compression, slug, mtsdf, bitmap]
+timestamp: 2026-07-24T13:32:48Z
 ---
 
 # GPU compression and compact Slug storage
@@ -209,14 +209,16 @@ Acceptance rules:
 
 Plain RGB MSDF is not a V1 storage option. A smaller RGB-native compressed variant is an experiment only: it must include the loss of true-distance effects, additional format/shader/batch complexity, platform coverage, transport bytes, and GPU bytes in the comparison. It cannot replace the MTSDF baseline from an isolated texture-size result.
 
-## Sources
+# Citations
 
-- [WebGPU specification and compressed-texture feature guarantees](https://gpuweb.github.io/gpuweb/)
-- [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html)
-- [Khronos KTX overview](https://www.khronos.org/ktx/)
-- [Khronos Basis Universal/KTX2 Vulkan sample](https://github.khronos.org/Vulkan-Site/samples/latest/samples/performance/texture_compression_basisu/README.html)
-- [Three.js KTX2Loader](https://threejs.org/docs/pages/KTX2Loader.html)
-- [WebGL 2.0 specification](https://registry.khronos.org/webgl/specs/2.0/)
-- [WebGL compressed-texture extension registry](https://registry.khronos.org/webgl/extensions/)
-- [Reviewed Three Flatland uikit texture packer](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug/src/pipeline/texturePacker.ts)
-- [Font payload budget](payload-budget.md)
+[1] [WebGPU specification](https://gpuweb.github.io/gpuweb/) — compressed-texture features and upload constraints.
+
+[2] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) and [Khronos KTX overview](https://www.khronos.org/ktx/) — texture container, supercompression, and delivery model.
+
+[3] [Basis Universal/KTX2 Vulkan sample](https://github.khronos.org/Vulkan-Site/samples/latest/samples/performance/texture_compression_basisu/README.html) and [Three.js KTX2Loader](https://threejs.org/docs/pages/KTX2Loader.html) — transcoding and runtime integration precedents.
+
+[4] [WebGL 2.0 specification](https://registry.khronos.org/webgl/specs/2.0/) and [compressed-texture extension registry](https://registry.khronos.org/webgl/extensions/) — WebGL format availability and fallback constraints.
+
+[5] [Reviewed Three Flatland uikit texture packer](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug/src/pipeline/texturePacker.ts) — prior Slug texture packing implementation.
+
+[6] [Font payload budget](payload-budget.md) — repository-local measured and modeled byte accounting.

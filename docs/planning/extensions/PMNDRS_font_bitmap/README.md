@@ -2,8 +2,8 @@
 type: glTF Extension Specification
 title: PMNDRS_font_bitmap
 description: Defines generated bitmap strikes, dense glyph records, and texture resources bound to a PMNDRS font.
-status: draft-v0
 tags: [gltf, extension, font, bitmap]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -24,7 +24,7 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 ## Overview
 
-`PMNDRS_font_bitmap` stores generated grayscale or color bitmap strikes indexed by the local glyph IDs of a `PMNDRS_font`. Each strike contains one dense 20-byte record per glyph and KTX2 atlas pages. Layout metrics remain in the core font.
+`PMNDRS_font_bitmap` stores generated grayscale or color bitmap strikes indexed by the local glyph IDs of a `PMNDRS_font`. Each strike contains one dense 20-byte record per glyph and a logical directory of KTX2 atlas pages. Each page variant may be embedded or independently addressed; the page index does not prescribe a GPU layer, draw, or residency state. Layout metrics remain in the core font.
 
 The extension repeats `rasterKey`, `shapingHash`, `glyphCount`, and `glyphIdWidth`; all MUST match the core raster reference before upload. Its strike array MUST exactly satisfy the canonical strike tuple encoded by that raster key. A missing requested strike makes the artifact incompatible and triggers the ordinary automatic runtime-bake path when source bytes are available.
 
@@ -46,6 +46,8 @@ The extension adds a `PMNDRS_font_bitmap` object to the root glTF `extensions` o
 
 - [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation in development.
 
-## Resources
+# Citations
 
-- [Raster data contract](../../raster-data-contract.md)
+[1] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) — atlas texture container and level encoding.
+
+[2] [Raster data contract](../../raster-data-contract.md) — normative bitmap records, strike descriptors, texture variants, and validation.

@@ -1,41 +1,41 @@
 ---
 type: Explanation
-title: UIKit integration
-description: Explains how pmndrs/text can replace UIKit's current text subsystem incrementally without coupling the core API to Yoga, signals, or UIKit rendering internals.
-status: proposed
+title: uikit integration
+description: Explains how pmndrs/text can replace uikit's current text subsystem incrementally without coupling the core API to Yoga, signals, or uikit rendering internals.
 tags: [uikit, yoga, integration, paragraphs]
+timestamp: 2026-07-24T13:32:48Z
 ---
 
-# UIKit integration
+# uikit integration
 
-This document is for maintainers integrating `pmndrs/text` into pmndrs/uikit v2. It explains the seam in UIKit's current implementation, the minimum framework-neutral API the text package must provide, and an incremental migration that does not require UIKit to replace layout, rendering, and editing at once.
+This document is for maintainers integrating `pmndrs/text` into pmndrs/uikit. It explains the seam in uikit's current implementation, the minimum framework-neutral API the text package must provide, and an incremental migration that does not require uikit to replace layout, rendering, and editing at once.
 
-The authoritative public types remain in the [API contract](api-shapes.md). This page owns UIKit-specific reasoning; UIKit terminology and dependencies do not belong in the core package.
+The authoritative public types remain in the [API contract](api-shapes.md). This page owns uikit-specific reasoning; uikit terminology and dependencies do not belong in the core package.
 
-## Evidence from UIKit today
+## Evidence from uikit today
 
 This analysis is pinned to pmndrs/uikit commit [`0d4d887343d4492234ac9f35a4c470cea4176ca0`](https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0).
 
-UIKit's current `Text` component does not perform an explicit imperative measure-and-commit protocol. It wires text into UIKit's existing reactive layout system:
+uikit's current `Text` component does not perform an explicit imperative measure-and-commit protocol. It wires text into uikit's existing reactive layout system:
 
 1. [`Text`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/components/text.ts) resolves a font signal and calls `setupTextLayout`.
 2. [`setupTextLayout`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/index.ts) produces a `CustomLayouting` signal for Yoga and a positioned-layout signal for rendering.
 3. [`computedCustomLayouting`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/measure.ts) supplies `minWidth`, `minHeight`, and a synchronous Yoga measure callback.
-4. [`FlexNode`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts) installs that callback, rounds its result upward to UIKit's point scale, marks the Yoga node dirty, and publishes final size, padding, and border signals after Yoga calculates layout.
+4. [`FlexNode`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts) installs that callback, rounds its result upward to uikit's point scale, marks the Yoga node dirty, and publishes final size, padding, and border signals after Yoga calculates layout.
 5. The positioned-layout signal subtracts padding and borders from the resolved node size and rebuilds glyph positions for that content box.
-6. [`InstancedText`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts) turns those entries into UIKit-owned instances.
+6. [`InstancedText`](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts) turns those entries into uikit-owned instances.
 
 ```mermaid
 flowchart LR
-  Props["UIKit properties"] --> Font["font signal"]
+  Props["uikit properties"] --> Font["font signal"]
   Props --> CurrentMeasure["computed CustomLayouting"]
   Font --> CurrentMeasure
-  CurrentMeasure --> FlexNode["UIKit FlexNode"]
+  CurrentMeasure --> FlexNode["uikit FlexNode"]
   FlexNode --> Yoga["Yoga measure and layout"]
   Yoga --> BoxSignals["size, padding, border signals"]
   BoxSignals --> CurrentPosition["positioned glyph layout"]
   Font --> CurrentPosition
-  CurrentPosition --> CurrentRender["UIKit instanced MSDF renderer"]
+  CurrentPosition --> CurrentRender["uikit instanced MSDF renderer"]
   CurrentPosition --> CurrentQueries["caret, selection, hit testing"]
 ```
 
@@ -43,12 +43,12 @@ The existing font and layout model is intentionally limited: BMFont/MSDF metrics
 
 ## The replacement seam
 
-UIKit should continue to own:
+uikit should continue to own:
 
 - Preact signals and property inheritance;
 - Yoga nodes, flex constraints, padding, borders, and overflow;
 - component readiness, invalidation, clipping, transforms, ordering, and scene lifecycle;
-- UIKit-specific batching and root render integration.
+- uikit-specific batching and root render integration.
 
 `pmndrs/text` should own:
 
@@ -59,23 +59,23 @@ UIKit should continue to own:
 - the effective per-glyph em size required to render mixed-size spans;
 - raster-module resources and conversion of a paragraph layout into draw batches.
 
-The integration becomes a small UIKit-owned adapter around a framework-neutral paragraph:
+The integration becomes a small uikit-owned adapter around a framework-neutral paragraph:
 
 ```mermaid
 flowchart LR
-  Props["UIKit text properties"] --> Adapter["UIKit adapter signals"]
+  Props["uikit text properties"] --> Adapter["uikit adapter signals"]
   Ready["prepared font + shaper"] --> Paragraph["pmndrs/text Paragraph"]
   Adapter --> Paragraph
   Paragraph --> Measure["measure constraints<br/>metrics only"]
-  Measure --> Custom["UIKit CustomLayouting"] --> Yoga
+  Measure --> Custom["uikit CustomLayouting"] --> Yoga
   Yoga --> ContentBox["resolved content-box signals"]
   ContentBox --> Layout["Paragraph.layout"]
   Paragraph --> Layout
   Layout --> Batches["selected raster buildBatches"]
-  Batches --> UIKitRoot["UIKit render groups"]
+  Batches --> uikitRoot["uikit render groups"]
 ```
 
-There is no `YogaAdapter` in `@pmndrs/text`, no Preact signal type in its API, and no UIKit matrix or clipping type in a raster module. UIKit translates its values at the boundary.
+There is no `YogaAdapter` in `@pmndrs/text`, no Preact signal type in its API, and no uikit matrix or clipping type in a raster module. uikit translates its values at the boundary.
 
 ## Minimum core API
 
@@ -94,18 +94,18 @@ interface Paragraph {
 
 This separation matters for Yoga and other retained layout engines: they may measure a leaf repeatedly before resolving its final dimensions. Measurement must not allocate or copy the complete render output each time.
 
-The API does not expose `minWidth` or `minHeight` as UIKit concepts. UIKit can derive its current `CustomLayouting` values from measurements:
+The API does not expose `minWidth` or `minHeight` as uikit concepts. uikit can derive its current `CustomLayouting` values from measurements:
 
 - natural measurement: `paragraph.measure()`;
 - minimum-content width: the `contentWidth` from a zero-width, word-policy measurement;
 - constrained leaf measurement: `paragraph.measure(...)` using the supplied modes;
 - final positioned result: `paragraph.layout(...)` using the resolved content box.
 
-The exact normalization belongs to the UIKit adapter because its current minimum-size behavior and point-scale rounding are UIKit policies, not font-system invariants.
+The exact normalization belongs to the uikit adapter because its current minimum-size behavior and point-scale rounding are uikit policies, not font-system invariants.
 
-## Mapping into current UIKit
+## Mapping into current uikit
 
-The first adapter can preserve UIKit's existing signal shape:
+The first adapter can preserve uikit's existing signal shape:
 
 ```ts
 const customLayouting = computed(() => {
@@ -133,25 +133,25 @@ const customLayouting = computed(() => {
 })
 ```
 
-After Yoga updates UIKit's existing size, padding, and border signals, a computed signal calls `paragraph.layout` with the final content width and height. This is the reactive equivalent of a final commit; UIKit does not need a new imperative lifecycle.
+After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.layout` with the final content width and height. This is the reactive equivalent of a final commit; uikit does not need a new imperative lifecycle.
 
 The adapter must preserve these existing behaviors:
 
 - an undefined Yoga axis ignores its numeric payload, including `NaN`;
 - constrained values are finite and nonnegative before reaching core;
-- UIKit retains its point-scale rounding at the Yoga boundary;
+- uikit retains its point-scale rounding at the Yoga boundary;
 - padding and border are removed before paragraph measurement and layout;
-- paragraph positions are translated into UIKit's centered local coordinate system only after layout;
+- paragraph positions are translated into uikit's centered local coordinate system only after layout;
 - text or shaping-policy changes update the paragraph and dirty the Yoga node;
 - paint, raster uniforms, transforms, and clipping do not invalidate paragraph measurement.
 
-Core supports both axes even though current UIKit text measurement primarily branches on the width mode. UIKit can adopt height constraints without changing the paragraph API.
+Core supports both axes even though current uikit text measurement primarily branches on the width mode. uikit can adopt height constraints without changing the paragraph API.
 
-## Incremental UIKit v2 migration
+## Incremental uikit migration
 
 ### 1. Add a shadow adapter
 
-Create a prepared paragraph beside the existing glyph layout. Feed it the same text and effective properties, compare its metrics against current UIKit fixtures, and keep the existing renderer authoritative. This proves readiness, invalidation, and unit conversion without changing visuals.
+Create a prepared paragraph beside the existing glyph layout. Feed it the same text and effective properties, compare its metrics against current uikit fixtures, and keep the existing renderer authoritative. This proves readiness, invalidation, and unit conversion without changing visuals.
 
 ### 2. Replace measurement
 
@@ -159,11 +159,11 @@ Use `Paragraph.measure` to populate the existing `CustomLayouting` object. Keep 
 
 ### 3. Replace positioned layout and rendering
 
-Compute `Paragraph.layout` from the resolved content-box signals and send it to the selected raster module. Adapt raster batches into UIKit's root grouping, ordering, clipping, and transform infrastructure. UIKit should consume the low-level paragraph and raster APIs directly rather than embedding the standalone Three.js `Text` object.
+Compute `Paragraph.layout` from the resolved content-box signals and send it to the selected raster module. Adapt raster batches into uikit's root grouping, ordering, clipping, and transform infrastructure. uikit should consume the low-level paragraph and raster APIs directly rather than embedding the standalone Three.js `Text` object.
 
 ### 4. Replace interaction queries
 
-Current selection code indexes one layout entry per JavaScript character. Replace it with cluster-aware hit-test, caret, and selection helpers built over `ParagraphLayout`. These interaction helpers are adjacent to the minimal layout contract and may be delivered as a separate core utility surface; UIKit must not reconstruct character boundaries from glyph IDs.
+Current selection code indexes one layout entry per JavaScript character. Replace it with cluster-aware hit-test, caret, and selection helpers built over `ParagraphLayout`. These interaction helpers are adjacent to the minimal layout contract and may be delivered as a separate core utility surface; uikit must not reconstruct character boundaries from glyph IDs.
 
 ### 5. Remove the legacy text subsystem
 
@@ -171,7 +171,7 @@ Delete the BMFont-specific `Font`, wrappers, positioned character entries, and M
 
 ## Validation gates
 
-The integration fixture must exercise the actual UIKit seam rather than a generic Yoga demo:
+The integration fixture must exercise the actual uikit seam rather than a generic Yoga demo:
 
 - `CustomLayouting` creation from a prepared paragraph;
 - repeated synchronous measurement without positioned-glyph allocation;
@@ -184,4 +184,14 @@ The integration fixture must exercise the actual UIKit seam rather than a generi
 - final bitmap, MSDF, and Slug batches from the same paragraph result;
 - cluster-aware caret, selection, and pointer tests before removing the old query path.
 
-The production adapter remains in UIKit v2. The pmndrs/text repository owns a small UIKit-shaped test fixture to prevent accidental API drift, but it does not add Yoga, Preact Signals, or UIKit as runtime dependencies.
+The production adapter remains in uikit. The pmndrs/text repository owns a small uikit-shaped test fixture to prevent accidental API drift, but it does not add Yoga, Preact Signals, or uikit as runtime dependencies.
+
+# Citations
+
+[1] [pmndrs/uikit at the reviewed revision](https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0) — source snapshot for the integration analysis.
+
+[2] [uikit Text component](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/components/text.ts) and [text layout setup](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/index.ts) — current component and reactive layout boundary.
+
+[3] [uikit measurement](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/measure.ts) and [FlexNode](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts) — Yoga measurement, rounding, and resolved-box integration.
+
+[4] [uikit instanced text rendering](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts) and [text queries](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/query.ts) — rendering, caret, selection, and hit-testing assumptions.

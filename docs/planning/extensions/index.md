@@ -1,11 +1,3 @@
----
-type: Reference Index
-title: glTF extension drafts
-description: Routes reviewers to the core and raster extension specifications.
-status: draft-v0
-tags: [gltf, extensions, index]
----
-
 # glTF extension drafts
 
 ## Core font

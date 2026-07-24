@@ -2,8 +2,8 @@
 type: Submission Draft
 title: glTF vendor-prefix request and extension submission set
 description: Contains the proposed PMNDRS vendor-prefix request and extension submission checklist.
-status: maintainer-review-required
 tags: [gltf, extension, governance]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # glTF vendor-prefix request and extension submission set
@@ -33,7 +33,7 @@ Poimandres would like to request registration of the `PMNDRS` vendor prefix.
 
 The prefix will be used for experimental glTF 2.0 extensions developed by the Poimandres community. The first extension family represents baked fonts for real-time graphics: one raster-independent shaping resource plus independently loadable bitmap, distance-field, and analytic-vector glyph rasters.
 
-The design uses glTF buffer views, extension discovery, and validation while allowing a consumer to embed all selected resources in one GLB or load only the raster required by its renderer. Detailed specifications, schemas, examples, and implementations will be submitted separately as they are validated.
+The design uses glTF buffer views, extension discovery, and validation while allowing a consumer to embed all selected resources in one GLB, load only the raster required by its renderer, and resolve large raster pages independently through integrity-checked external resources. Detailed specifications, schemas, examples, and implementations will be submitted separately as they are validated.
 
 Thank you.
 ```
@@ -82,10 +82,14 @@ The extension pull request waits for:
 6. measured section and texture reports;
 7. named specification editors and accepted Poimandres ownership.
 
-## Format references reviewed
+# Citations
 
-- [`extensions/Template.md`](https://github.com/KhronosGroup/glTF/blob/main/extensions/Template.md)
-- [`extensions/README.md`](https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md)
-- [`extensions/Prefixes.md`](https://github.com/KhronosGroup/glTF/blob/main/extensions/Prefixes.md)
-- accepted requests for [BEVY](https://github.com/KhronosGroup/glTF/issues/2497), [KITTYCAD](https://github.com/KhronosGroup/glTF/issues/2344), [MANYFOLD](https://github.com/KhronosGroup/glTF/issues/2398), and [PYTHA](https://github.com/KhronosGroup/glTF/issues/2581)
-- representative vendor specifications [GODOT_single_root](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/GODOT_single_root), [CESIUM_primitive_outline](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/CESIUM_primitive_outline), and [MSFT_lod](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod)
+[1] [glTF extension template](https://github.com/KhronosGroup/glTF/blob/main/extensions/Template.md) — required structure for extension proposals.
+
+[2] [glTF extension registry guidance](https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md) — registry process and extension organization.
+
+[3] [Registered glTF vendor prefixes](https://github.com/KhronosGroup/glTF/blob/main/extensions/Prefixes.md) — prefix availability and registration source.
+
+[4] [BEVY](https://github.com/KhronosGroup/glTF/issues/2497), [KITTYCAD](https://github.com/KhronosGroup/glTF/issues/2344), [MANYFOLD](https://github.com/KhronosGroup/glTF/issues/2398), and [PYTHA](https://github.com/KhronosGroup/glTF/issues/2581) — accepted vendor-prefix request precedents.
+
+[5] [GODOT_single_root](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/GODOT_single_root), [CESIUM_primitive_outline](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/CESIUM_primitive_outline), and [MSFT_lod](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod) — representative vendor extension specifications.

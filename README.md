@@ -38,14 +38,6 @@ function Label() {
 
 ### Font loading and preloading
 
-`defineFont` composes a canonical font input with a raster module. The root `<Text>` suspends only while that token's core font and raster dependencies load. Importing `msdf` includes only that raster engine; bitmap and Slug remain separate imports. Applications that need a deferred engine can compose the font with a module created by `lazyRaster(() => import(...))` without changing the `<Text>` contract.
-
-Core does not enumerate raster kinds or require a first-party raster package. Each raster package owns its baker, artifact format, validation, GPU resources, and rendering implementation. First-party rasters use TSL internally; an external module may use TypeGPU or another renderer without exposing that choice to the core API.
-
-For `/fonts/Inter-Regular.ttf`, the loader first probes `/fonts/Inter-Regular.font.glb`. A valid baked asset wins. A missing, invalid, or incompatible baked asset triggers the Worker fallback using the TTF and warns once in development. Passing a `.glb` URL means baked-only and never guesses a source font.
-
-Preloading can warm one or many composed fonts through the same resolver and caches:
-
 ```ts
 import { bitmap } from '@pmndrs/text/raster/bitmap'
 import { slug } from '@pmndrs/text/raster/slug'
@@ -56,22 +48,9 @@ const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }))
 await Promise.all([useFont.preload(TitleFont), useFont.preload(ProseFont)])
 ```
 
-This preload covers asynchronous dependencies: the core font, shared shaper module, raster artifact or fallback bake, and raster decode. It does not attempt to preload a paragraph layout. Text, inherited styles, and downstream constraints are required before line breaking and final boundary shaping can run; once the asynchronous dependencies are ready, that shaping and layout work is ordinary computation and does not itself suspend.
+`defineFont` composes one canonical font input with an independently loadable raster; preload warms those asynchronous dependencies, while layout waits for text and downstream constraints. The [API contract](docs/planning/api-shapes.md#loader) defines URL inference, explicit and baked-only inputs, lazy rasters, caching, Suspense, and fallback behavior.
 
-Explicit paths remain available when a build pipeline relocates or renames baked assets. The source and baked URLs may use different directories or origins:
-
-```ts
-const relocated = defineFont({
-  source: '/fonts/Inter-Regular.ttf',
-  baked: 'https://cdn.example.com/generated/inter-ui.glb',
-}, msdf)
-
-const bakedOnly = defineFont({ baked: '/fonts/inter-ui.glb' }, msdf)
-```
-
-### Three.js object
-
-The framework-neutral package owns the real object and lifecycle:
+### Three.js
 
 ```ts
 import { Text, defineFont } from '@pmndrs/text'
@@ -91,31 +70,17 @@ await label.ready
 label.setProperties({ width: 2.5 })
 ```
 
-Changing width reflows the paragraph. It reuses broad shaped runs and batches any boundary-sensitive reshaping into at most one Wasm call. Changing raster does not reshape or remeasure the text.
+The framework-neutral `Text` owns the Three.js lifecycle; width changes reflow its paragraph without coupling layout to the selected raster. The [API contract](docs/planning/api-shapes.md#threejs-text-object) defines construction, readiness, mutation, and disposal.
 
 ### Baking and fallback
-
-If the baked core font is absent or invalid, the loader warns once in development, dynamically imports the runtime font-baker library, and runs the shared font bake core in a Worker. If the selected raster artifact is separately absent or incompatible, the raster module dynamically loads its own package-owned runtime baker and Worker. The Node baker may compose both outputs in one command, but the browser keeps those fallback imports independent. Both hosts emit the same canonical records, so there is no second unbaked runtime model.
-
-The Node baker normally discovers `defineFont` calls and their static raster options from project source. It can resolve literal paths, `new URL(..., import.meta.url)`, concatenated paths, and a stable local pathname whose deployment origin is dynamic. Absolute or dynamic origins are stripped only for a conservative lookup against configured local asset roots; exactly one existing file must match. Unresolved or ambiguous sources remain valid at runtime and use the mandatory Worker fallback. Bitmap strike values are static literal tuples, so `bitmap({ strikes: [16, 32] })` requests the same exact payload during offline and fallback baking.
 
 ```ts
 import { bakeProject } from '@pmndrs/text/bake'
 
-const report = await bakeProject()
+await bakeProject()
 ```
 
-By default this analyzes the conventional `src` tree, resolves local assets beneath `public`, and writes canonical baked siblings beside the matched font files. Explicit entries, asset roots, and an output root are available for non-standard pipelines. The baker reports every source-to-output mapping and never guesses between ambiguous files.
-
-### UIKit and Yoga
-
-UIKit v2 is a required consumer, but `@pmndrs/text` contains no Yoga, Preact Signals, or UIKit-specific API. UIKit keeps its existing `CustomLayouting`, `FlexNode`, content-box signals, transforms, clipping, and render groups. Its adapter uses the synchronous framework-neutral `Paragraph.measure(...)` during Yoga resolution and `Paragraph.layout(...)` only when positioned glyphs are needed for the resolved content box.
-
-This boundary is based on the current UIKit implementation and has an incremental migration path for measurement, rendering, and cluster-aware editing. See [UIKit integration](docs/planning/uikit-integration.md) for the source audit and adoption plan, and the [API contract](docs/planning/api-shapes.md#third-party-layout-systems) for the generic surface.
-
-The complete proposed surface—including low-level loader, paragraph, Worker, and raster interfaces—is the [API contract](docs/planning/api-shapes.md).
-
-Every package and subpath is native ESM. Optional engines and the runtime baker are reached through static ESM imports or `import()`; the project will not publish CommonJS wrappers or a `require` export condition.
+The Node baker discovers statically declared font and raster requirements; missing or incompatible artifacts use dynamically imported Worker bakers and produce the same canonical records. The [architecture](docs/planning/architecture.md#bake-and-fallback-flow) owns the bake/fallback flow, while the [API contract](docs/planning/api-shapes.md#shared-bake-core) defines discovery and configuration.
 
 ## What we are building
 
@@ -163,6 +128,18 @@ Select the preview to open the editable [benchmark harness wireframe in Figma](h
 
 The benchmark harness is the first executable product surface, not a reporting layer added afterward. Every later implementation enters through its target/scenario contracts, and the first bitmap frame is rendered in that harness. Bitmap is the easiest end-to-end proof, not the eventual universal default. The package does not ship until bitmap, MSDF, and Slug pass their gates. See the [canonical roadmap](docs/roadmap/roadmap.md) for dependencies, deliverables, issue-sized work, and exit criteria.
 
+After that Latin-first V1 gate, the first additive milestone lands CJK and icons together over the paging contract already protected by V0 fixtures; color emoji remains the following independent milestone.
+
+### uikit and layout integrations
+
+For integration with uikit `@pmndrs/text` contains no Yoga, Preact Signals, or uikit-specific API. uikit keeps its existing `CustomLayouting`, `FlexNode`, content-box signals, transforms, clipping, and render groups. Its adapter uses the synchronous framework-neutral `Paragraph.measure(...)` during Yoga resolution and `Paragraph.layout(...)` only when positioned glyphs are needed for the resolved content box.
+
+This boundary is based on the current uikit implementation and has an incremental migration path for measurement, rendering, and cluster-aware editing. See [uikit integration](docs/planning/uikit-integration.md) for the source audit and adoption plan, and the [API contract](docs/planning/api-shapes.md#third-party-layout-systems) for the generic surface.
+
+The complete proposed surface—including low-level loader, paragraph, Worker, and raster interfaces—is the [API contract](docs/planning/api-shapes.md).
+
+Every package and subpath is native ESM. Optional engines and the runtime baker are reached through static ESM imports or `import()`; the project will not publish CommonJS wrappers or a `require` export condition.
+
 ## Renderer guidance
 
 Applications select a raster explicitly; the package never silently changes technique.
@@ -188,19 +165,14 @@ The [renderer capability matrix](docs/planning/renderer-capabilities.md) records
 
 Supporting evidence is intentionally outside that path: [RESEARCH.md](RESEARCH.md) is the attributed bibliography; the [decision register](docs/planning/decision-register.md) records proposed choices; [open questions](docs/planning/open-questions.md) records unresolved blockers; and the benchmark, conformance, payload, compression, and Slug audit documents explain how claims will be verified.
 
+The planning corpus under [`docs`](docs) is an [Open Knowledge Format v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: frontmatter and links make it portable to agents, while Diátaxis keeps each page focused on a reader task.
+
+## Work locally
+
 ```sh
 mise install
-pnpm install --frozen-lockfile
+pnpm install
 pnpm check
 ```
 
-After `mise install`, use ordinary `pnpm` and `cargo` commands. This project does not define mise tasks; package scripts and Cargo commands remain the canonical command surface. Contributors who do not use mise can rely on rustup's native handling of `rust-toolchain.toml`, then run the same validation commands.
-
-```sh
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test:types
-pnpm build
-```
-
-These commands validate the compile-only API surface and intentional type errors. The fixtures cover literal-preserving font tokens, optionless and configurable external rasters, explicit and baked-only font paths, raw-versus-composed `<Text>` props, required package-owned raster options, typed artifact mismatches, key-only raster lookup, and static bitmap strike tuples. Positive integer and duplicate checks also run at future JavaScript/untyped runtime boundaries because TypeScript does not prove numeric value ranges or tuple uniqueness. These commands do not exercise production font behavior yet.
+Use mise to install the pinned toolchains, or supply compatible Node.js and Rust toolchains through the platform tools you already use.

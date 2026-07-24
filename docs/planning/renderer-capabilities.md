@@ -2,8 +2,8 @@
 type: Reference
 title: Renderer capability matrix
 description: Compares planned game-text features and limitations across bitmap, MSDF, and Slug rasters.
-status: proposed-product-matrix
 tags: [rendering, bitmap, msdf, mtsdf, slug, games]
+timestamp: 2026-07-24T13:39:55Z
 ---
 
 # Renderer capability matrix
@@ -99,9 +99,12 @@ Switching raster must never reshape text or change line breaks. V1 selects one r
 - Use **Slug** for large or deeply zoomed text, high-fidelity vector layers, and SVG icon fonts.
 - Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
 
-## Sources
+# Citations
 
-- [msdfgen](https://github.com/Chlumsky/msdfgen) and the [author's preview shader](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553)
-- OpenType [COLR](https://learn.microsoft.com/en-us/typography/opentype/spec/colr), [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg), [CBDT](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt), and [`sbix`](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix)
-- [Research bibliography](../../RESEARCH.md)
-- [Three Flatland Slug audit](slug-audit.md)
+[1] [msdfgen](https://github.com/Chlumsky/msdfgen) and the [author's preview shader](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553) — MSDF/MTSDF generation and shader behavior.
+
+[2] OpenType [COLR](https://learn.microsoft.com/en-us/typography/opentype/spec/colr), [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg), [CBDT](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt), and [`sbix`](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix) — normative color-vector, SVG, and bitmap glyph formats.
+
+[3] [Research bibliography](../../RESEARCH.md) — broader rendering-technique evidence and annotated sources.
+
+[4] [Three Flatland Slug audit](slug-audit.md) — repository-local Slug capability and implementation evidence.

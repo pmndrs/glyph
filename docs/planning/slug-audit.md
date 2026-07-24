@@ -1,9 +1,9 @@
 ---
 type: Research Audit
 title: Three Flatland Slug audit
-description: Identifies reusable prior art, required rewrites, and migration order from the Three Flatland Slug package.
-status: research-snapshot
-tags: [slug, migration, prior-art]
+description: Identifies reusable prior art, required rewrites, and the reuse plan for the Three Flatland Slug implementation.
+tags: [slug, audit, prior-art]
+timestamp: 2026-07-24T13:41:02Z
 ---
 
 # Three Flatland Slug audit
@@ -12,7 +12,7 @@ Status: research snapshot
 Audited revision: [`c596ac2313e33cace825fe197a6d730269019175`](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug)  
 Audit date: 2026-07-22
 
-This document identifies concrete prior art in `@three-flatland/slug` and assigns a migration disposition. It is not a criticism of the existing package: the current code deliberately targets a smaller problem and is valuable evidence for the new architecture.
+This document identifies concrete prior art in `@three-flatland/slug` and assigns a reuse disposition for pmndrs/text. It is not a criticism of the existing package: the current code deliberately targets a smaller problem and is valuable evidence for the new architecture.
 
 ## Executive finding
 
@@ -56,7 +56,7 @@ The runtime `opentype.js` path in [`textShaper.ts`](https://github.com/thejustin
 
 Disposition:
 
-- preserve tests that define current simple-Latin behavior as migration fixtures;
+- preserve tests that define current simple-Latin behavior as regression fixtures;
 - replace the shaping implementation and output type;
 - do not port its combined shape/wrap loop;
 - use its baked/runtime equivalence intent, not its algorithm, as prior art.
@@ -281,7 +281,7 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 | `SlugGeometry.ts` | Adapter-specific | Slug renderer adapter | technique-independent layout reuse |
 | React components | Defer | framework binding | core API stability |
 
-## Migration order
+## Prior-art reuse order
 
 1. Freeze the current Slug revision used for comparison and retain its tests/fixtures.
 2. Establish the new shaped output and packed glyph-ID contracts without rendering.
@@ -290,7 +290,6 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 5. Add MSDF and bitmap rasters against the same glyph IDs; the MSDF resource is MTSDF-encoded.
 6. Add the worker fallback and prove it emits the same canonical sections.
 7. Integrate the JS paragraph engine and renderer adapters.
-8. Migrate Three Flatland only after the standalone package has equivalent demonstrations and diagnostics.
 
 ## Audit follow-ups
 
@@ -299,4 +298,11 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 - Measure current loader allocations and load time for ASCII, Latin, and full Inter GLBs.
 - Determine whether the current cubic approximation is visually acceptable for the broader font corpus.
 - Inventory Three Flatland's loader architecture separately before designing the final public loader API.
-- Decide whether compatibility with the old `.slug.glb` is useful or whether an explicit one-time rebake is cleaner.
+
+# Citations
+
+[1] [Three Flatland Slug at the audited revision](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug) — source of the shaping, paragraph, GLB, curve, band, shader, loader, and rendering findings.
+
+[2] [Three Flatland uikit fork at the reviewed revision](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60) — optimized packing and SVG icon-baking prior art.
+
+[3] [Research bibliography](../../RESEARCH.md) — related Slug, Windfoil, sparse-strip, and rendering sources.

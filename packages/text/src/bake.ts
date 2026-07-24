@@ -1,6 +1,16 @@
 import type { RasterKey, Sha256Hex } from './identity.js'
 
-export type RasterPackaging = 'embedded' | 'external'
+export interface RasterPackagingV0 {
+  readonly artifact: 'embedded' | 'external'
+  readonly pages: 'embedded' | 'external'
+}
+
+export interface BakeArtifactV0 {
+  readonly role: 'font' | 'raster' | 'raster-page'
+  readonly id: string
+  readonly bytes: Uint8Array
+  readonly sha256: Sha256Hex
+}
 
 export interface RasterBakeFontContext {
   readonly source: Uint8Array
@@ -12,7 +22,7 @@ export interface RasterBakeFontContext {
 export interface RasterBakeRequest<Descriptor> {
   readonly font: RasterBakeFontContext
   readonly rasterKey: RasterKey
-  readonly packaging: RasterPackaging
+  readonly packaging: RasterPackagingV0
   readonly descriptor: Descriptor
   readonly signal?: AbortSignal
 }
@@ -21,6 +31,16 @@ export interface RasterPayloadReport {
   readonly metadataBytes: number
   readonly serializedBytes: number
   readonly gpuBytes: number
+  readonly pages: readonly RasterPagePayloadReport[]
+}
+
+export interface RasterPagePayloadReport {
+  readonly width: number
+  readonly height: number
+  readonly format: string
+  readonly mipBytes: number
+  readonly source: 'embedded' | 'external'
+  readonly encodedBytes: number
 }
 
 export interface FontPayloadReport {
@@ -31,19 +51,20 @@ export interface FontPayloadReport {
     readonly metadataBytes: number
     readonly serializedBytes: number
     readonly gpuBytes: number
-    readonly pages: readonly {
-      readonly width: number
-      readonly height: number
-      readonly format: string
-      readonly mipBytes: number
-    }[]
+    readonly pages: readonly RasterPagePayloadReport[]
   }[]
-  readonly container: {
+  readonly containers: readonly {
+    readonly artifactId: string
+    readonly role: BakeArtifactV0['role']
     readonly jsonBytes: number
     readonly paddingBytes: number
     readonly totalBytes: number
-  }
-  readonly transport: readonly { readonly format: string; readonly bytes: number }[]
+  }[]
+  readonly transport: readonly {
+    readonly artifactId: string
+    readonly format: string
+    readonly bytes: number
+  }[]
 }
 
 export interface BakeWarning {
@@ -63,7 +84,7 @@ export interface RasterBakeArtifact<Kind extends string = string> {
   readonly kind: Kind
   readonly extension: string
   readonly version: number
-  readonly bytes: Uint8Array
+  readonly artifacts: readonly BakeArtifactV0[]
   readonly report: RasterPayloadReport
 }
 
@@ -101,7 +122,7 @@ export function defineRasterBaker<
 
 export interface RasterBakePlan<Module extends AnyRasterBakerModule> {
   readonly baker: Module
-  readonly packaging: RasterPackaging
+  readonly packaging: RasterPackagingV0
   readonly options: RasterBakeOptionsOf<Module>
 }
 

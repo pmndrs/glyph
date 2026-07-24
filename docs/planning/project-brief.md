@@ -2,8 +2,8 @@
 type: Project Brief
 title: Project brief
 description: Defines the product outcome, users, current one-font slice, later product horizon, non-goals, and success criteria.
-status: proposed
 tags: [product, scope, roadmap]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 # Project brief
@@ -23,7 +23,7 @@ Terminology in the planning set is strict: the **integration slice** is the pre-
 
 `pmndrs/text` will be a Three.js-first, raster-independent text system for JavaScript, WebGPU, and WebGL. It will shape modern Unicode text once, lay it out within application-controlled regions, and render the resulting glyph stream through interchangeable Slug, MSDF, or bitmap raster modules.
 
-The package is the shipping successor to the text/font work explored in Three Flatland's Slug package. Selected Slug algorithms and formats may be ported or rewritten. UIKit v2 is a required consumer through a small adapter around its existing `CustomLayouting` and resolved content-box signals, and Three Flatland should eventually depend on `pmndrs/text` as well. Core remains independent of Yoga, Preact Signals, and UIKit rendering types.
+The package is the shipping product informed by the text/font work explored in Three Flatland's Slug package. Selected Slug algorithms and formats may be adapted or reimplemented from that prior art. uikit is a required consumer through a small adapter around its existing `CustomLayouting` and resolved content-box signals. Core remains independent of Yoga, Preact Signals, and uikit rendering types.
 
 ## Problem
 
@@ -43,9 +43,8 @@ We need:
 ## Primary users
 
 - pmndrs renderer and framework maintainers;
-- UIKit v2, with its existing layout system supplying content constraints and `pmndrs/text` supplying allocation-light paragraph measurement and positioned glyphs;
+- uikit, with its existing layout system supplying content constraints and `pmndrs/text` supplying allocation-light paragraph measurement and positioned glyphs;
 - Three.js and React Three Fiber applications;
-- Three Flatland as an initial downstream consumer;
 - applications with UI text, 3D labels, icons, bitmap styles, or mixed raster needs;
 - library authors who need shaping/layout without adopting one renderer.
 
@@ -58,7 +57,7 @@ We need:
 5. Verify shaping output against pinned HarfRust and HarfBuzz references.
 6. Upload raster buffers without per-glyph JavaScript reconstruction or numeric repacking.
 7. Declare a font and raster once in application source, then let Node pre-baking and Worker fallback derive the same package-owned descriptor.
-8. Let any retained layout system synchronously measure a prepared paragraph without producing glyph arrays, then request positioned output for its final content box. Validate that neutral contract against current UIKit.
+8. Let any retained layout system synchronously measure a prepared paragraph without producing glyph arrays, then request positioned output for its final content box. Validate that neutral contract against current uikit.
 
 ## Current one-font slice
 
@@ -84,7 +83,8 @@ We need:
 - optional dense packed glyph-ID remapping after source subsetting and shaping closure are proven;
 - pre-baked GLB and lazy worker fallback;
 - Slug, MTSDF-backed MSDF, and generated bitmap rasters;
-- post-V1 Slug support for color emoji and SVG icon fonts through baked vector paint/layer and image records;
+- post-V1 large-coverage paging for CJK, private-use icon fonts, OpenType-SVG icon fonts, and manifest-backed standalone SVG icon sets;
+- later Slug and bitmap support for color emoji through baked vector paint/layer and image records;
 - JS paragraph engine with greedy wrapping, alignment, height/max-lines, clipping, and ellipsis;
 - batched boundary reshaping;
 - conformance fixtures and benchmark harnesses.
@@ -118,7 +118,7 @@ We need:
 - Static discovery never executes application code, never guesses ambiguous local files, and produces the same raster key as runtime configuration.
 - Public type fixtures preserve literal font inputs and raster capabilities while rejecting missing raster options and dynamic bitmap strikes.
 - Paragraph layout makes at most one batched shaping call for a text/style change and zero or one for width-only reflow.
-- A current-UIKit-shaped fixture derives `CustomLayouting`, maps unconstrained, at-most, and exact measurements, exposes baselines, lays out the authoritative final content box from size signals, and never imports UIKit, Yoga, or Preact Signals from core.
+- A current-uikit-shaped fixture derives `CustomLayouting`, maps unconstrained, at-most, and exact measurements, exposes baselines, lays out the authoritative final content box from size signals, and never imports uikit, Yoga, or Preact Signals from core.
 
 ### Loading and rendering
 

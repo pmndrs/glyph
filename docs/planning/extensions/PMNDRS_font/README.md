@@ -2,8 +2,8 @@
 type: glTF Extension Specification
 title: PMNDRS_font
 description: Defines the core font, shaping payload, metrics, provenance, and raster directory extension.
-status: draft-v0
 tags: [gltf, extension, font, shaping]
+timestamp: 2026-07-24T14:01:29Z
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -110,6 +110,8 @@ Raster keys MUST be unique within the font. A key is the lowercase deterministic
 
 An embedded raster is stored at the root `extensions` object in the same GLB. Because glTF permits one root value per extension name, a combined GLB MUST NOT embed more than one raster using the same companion extension; additional entries using that extension MUST be external. The embedded root's reciprocal `rasterKey` MUST equal its elected directory entry. An external source URI resolves relative to the core GLB. When an external source omits `uri`, the application supplies bytes through its resolver. `artifactHash`, when present, is lowercase SHA-256 over the complete external artifact; it is REQUIRED for cross-origin artifacts and RECOMMENDED for all external artifacts.
 
+Companion extensions own a logical raster-page directory. Page payloads may remain embedded in the companion asset or use independently addressed URI, byte-length, and SHA-256 sources relative to that companion asset. Core does not interpret those pages or equate their indexes with GPU binding state.
+
 The top-level glTF `extensionsRequired` array is the sole required-extension mechanism. Raster entries do not duplicate it.
 
 ## glTF Schema Updates
@@ -126,9 +128,12 @@ The extension adds a `PMNDRS_font` object to the root glTF `extensions` object. 
 
 Three Flatland Slug is prior art for baked GLB font delivery but does not implement this extension.
 
-## Resources
+# Citations
 
-- [V0 shaping data contract](../../shaping-data-contract.md)
-- [V0 raster data contract](../../raster-data-contract.md)
-- [Runtime/bake API fixture](../../api-shapes.md)
-- [Payload budget](../../payload-budget.md)
+[1] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — extension placement, buffers, buffer views, URI resolution, and required-extension behavior.
+
+[2] [V0 shaping data contract](../../shaping-data-contract.md) — normative shaping profile, metrics, identity hash, and validation rules.
+
+[3] [V0 raster data contract](../../raster-data-contract.md) — raster directory, keys, reciprocal bindings, and packaging rules.
+
+[4] [Runtime and bake API fixture](../../api-shapes.md) and [payload budget](../../payload-budget.md) — repository-local loading contract and byte accounting.

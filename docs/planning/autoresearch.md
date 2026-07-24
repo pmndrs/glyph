@@ -2,8 +2,8 @@
 type: Optimization Protocol
 title: Autoresearch optimization protocol
 description: Governs evidence-based optimization experiments that cannot trade away rendering quality or text correctness.
-status: deferred-until-baseline
 tags: [optimization, benchmarks, quality]
+timestamp: 2026-07-24T13:41:02Z
 ---
 
 # Autoresearch optimization protocol
@@ -151,7 +151,7 @@ Large raw artifacts may use an external immutable artifact store later, but thei
 
 ## Initial Slug hypothesis queue
 
-### Baseline-port queue
+### Prior-art baseline queue
 
 These were already measured or structurally validated in the Three Flatland fork and should be reproduced in the new architecture before novel search begins:
 
