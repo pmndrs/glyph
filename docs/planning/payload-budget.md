@@ -1,40 +1,31 @@
 ---
 type: Budget Model
 title: Font payload budget
-description: Separates shaping bytes, presentation records, transport bytes, decoded textures, and GPU residency.
+description: Separates shaping bytes, raster records, transport bytes, decoded textures, and GPU residency.
 status: measured-and-modeled
 tags: [payload, memory, fonts]
 ---
 
 # Font payload budget
 
-Status: measured baseline plus modeled presentation estimates  
-Purpose: keep shaping, serialized presentation data, transport bytes, and GPU memory distinct while the first baker is designed.
+Status: measured baseline plus modeled raster estimates
+Purpose: keep shaping, serialized raster data, transport bytes, and GPU memory distinct while the first baker is designed.
 
 ## What is being counted
 
 A font package has costs that must not be collapsed into one number:
 
-```text
-shared font data
-  closed shaping-only static SFNT used by HarfRust
-  + small core-extension metrics, provenance, and presentation directory
-
-selected presentation data
-  bitmap records + pixels
-  or MSDF/MTSDF records + distance-field texels
-  or Slug records + curve/band data
-
-delivery overhead
-  GLB JSON, section alignment, image containers, and compression
-
-runtime memory
-  Wasm font/shaper state + decoded or uploaded GPU resources
+```mermaid
+flowchart TD
+  Total["font-package cost"] --> Shared["shared font data<br/>shaping SFNT, metrics, provenance, directory"]
+  Total --> Raster["selected raster<br/>bitmap, MSDF, or Slug records/resources"]
+  Total --> Delivery["delivery overhead<br/>GLB, alignment, containers, compression"]
+  Total --> Runtime["runtime memory<br/>Wasm font state and GPU resources"]
 ```
 
-The payloads for bitmap, MSDF/MTSDF, and Slug are alternatives unless an asset deliberately contains more than one presentation. The shaping data is paid once and is shared by every presentation.
+The payloads for bitmap, MSDF, and Slug are alternatives unless an asset deliberately contains more than one raster. The shaping data is paid once and is shared by every raster. V1 MSDF resources are always MTSDF-encoded RGBA8.
 
-The HarfRust Wasm shaper is shared application code, not repeated per font. Its current pre-build envelope is 250–600 KiB raw / 90–250 KiB compressed and must be replaced by the first compiled artifact report. Presentation modules, KTX2 transcoders, and renderer adapters are likewise reported as independently loaded code chunks rather than charged to every font.
+The HarfRust Wasm shaper is shared application code, not repeated per font. Its current pre-build envelope is 250–600 KiB raw / 90–250 KiB compressed and must be replaced by the first compiled artifact report. Raster modules, KTX2 transcoders, and renderer adapters are likewise reported as independently loaded code chunks rather than charged to every font.
 
 “Texture bytes” below means the uncompressed GPU-resident storage implied by dimensions and texel format. It is not a network-size estimate. Network bytes depend on the final PNG/KTX2/container choice and must be measured without applying lossy compression that changes rendering quality.
 
@@ -49,22 +40,24 @@ Measured source revisions:
 
 Measurements read the checked-in TTF/GLB bytes and their accessor ranges directly. Compression figures use gzip and Brotli quality 11 over the complete file. Derived Slug GPU figures apply the texture formats and power-of-two packing rules in the reviewed fork; modeled atlas figures are identified separately.
 
-| Fixture | Kind | Coverage | Why it is useful |
-| --- | --- | ---: | --- |
-| Inter Regular | common UI font | 2,871 source glyphs; 907 in legacy Slug bake | Existing source font and a smaller presentation artifact; exposes why V0 must not confuse presentation coverage with shaping closure. |
-| Font Awesome Solid | icon font | 1,403 source glyphs; 350 in legacy Slug bake | Existing source font and a smaller PUA presentation artifact with trivial shaping but substantial outline complexity. |
-| Lucide | standalone SVG icons | 1,594 baked shapes | Actual `feat/uikit-fork` SVG-to-Slug artifact and a realistic full-library stress case. |
+| Fixture | Kind | Coverage |
+| --- | --- | ---: |
+| Inter Regular | UI font | 2,871 source; 907 legacy Slug glyphs |
+| Font Awesome Solid | Icon font | 1,403 source; 350 legacy Slug glyphs |
+| Lucide | SVG icons | 1,594 baked shapes |
+
+Inter exposes the difference between source/shaping coverage and a smaller raster artifact. Font Awesome combines trivial PUA shaping with substantial outline complexity. The checked-in Lucide bake is a realistic full-library Slug stress case.
 
 The first integration fixture remains one pinned Inter file. Font Awesome and Lucide are payload/tooling fixtures; they do not expand the first vertical slice into automatic icon discovery or a second shaping system.
 
 ## Shared glyph and shaping data
 
-V0 uses the closed [`opentype-sfnt-harfrust-v0`](shaping-data-contract.md) profile. It keeps the standard metrics and layout tables HarfRust consumes and removes outlines, hinting, font-authored presentation data, variation data, names, AAT, and Graphite. It does not duplicate cmap, advances, or kerning into another serialized representation.
+V0 uses the closed [`opentype-sfnt-harfrust-v0`](shaping-data-contract.md) profile. It keeps the standard metrics and layout tables HarfRust consumes and removes outlines, hinting, font-authored raster data, variation data, names, AAT, and Graphite. It does not duplicate cmap, advances, or kerning into another serialized representation.
 
-| Fixture | Full source font | Canonical shaping SFNT | Dense extents | V0 raw subtotal before sparse points |
+| Fixture | Full source font | Canonical shaping SFNT | Dense extents + availability | V0 raw shaping payload |
 | --- | ---: | ---: | ---: | ---: |
-| Inter, 2,871 glyphs | 324,820 B | 145,344 B | 22,968 B | 168,312 B (164.4 KiB) |
-| Font Awesome, 1,403 glyphs | 426,112 B | 24,624 B | 11,224 B | 35,848 B (35.0 KiB) |
+| Inter, 2,871 glyphs | 324,820 B | 145,344 B | 23,327 B | 168,671 B (164.7 KiB) |
+| Font Awesome, 1,403 glyphs | 426,112 B | 24,624 B | 11,400 B | 36,024 B (35.2 KiB) |
 
 Transport measurements for the source and earlier shaping-only experiment remain compression proxies; the canonical V0 SFNT plus font-function views must be recompressed by the first baker:
 
@@ -73,11 +66,11 @@ Transport measurements for the source and earlier shaping-only experiment remain
 | Inter | 153,302 B | 122,540 B | 58,610 B | 44,006 B |
 | Font Awesome | 172,729 B | 147,594 B | 11,234 B | 8,017 B |
 
-The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents are exact contract costs; sparse GPOS contour-point records add 8 bytes per referenced point. Sample shaping-only `hb-shape` outputs matched, but the finalized reconstruction and three-way corpus still require fixture proof. Every bake report lists directory, per-table, extents, and point bytes.
+The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. Sample shaping-only `hb-shape` outputs matched, but the finalized reconstruction and three-way corpus still require fixture proof. Every bake report lists directory, per-table, extents, and availability bytes.
 
 Lucide is not a font and has no shaping payload. Its shared records are icon identity, view box, fill/paint, and shape indexes. The existing artifact spends 237,704 B on GLB JSON, largely for named icon metadata; the pmndrs format should measure a compact binary name/index representation rather than inherit that JSON cost by default.
 
-## Measured Slug presentation data
+## Measured Slug raster data
 
 ### Existing font artifacts
 
@@ -99,11 +92,9 @@ The source CPU columns and final GPU textures are shown separately. `PMNDRS_font
 
 The Three Flatland uikit fork already implements:
 
-```text
-SVG file or directory
-  → @three-flatland/slug SVG parser
-  → one shared SlugShapeSet
-  → FL_slug_shapes GLB
+```mermaid
+flowchart LR
+  SVG["SVG file or directory"] --> Parser["@three-flatland/slug SVG parser"] --> Shapes["shared SlugShapeSet"] --> GLB["FL_slug_shapes GLB"]
 ```
 
 The full checked-in Lucide artifact contains 1,594 named shapes and measures:
@@ -134,7 +125,7 @@ Relevant prior art:
 - [Glyph paging design](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md)
 - [uikit Lucide package](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/uikit-lucide)
 
-## Modeled bitmap and MSDF/MTSDF budgets
+## Modeled bitmap and MSDF budgets
 
 These are capacity estimates, not measured baker outputs. They make proposed defaults and fixture expectations reviewable before implementation. Exact atlas dimensions, occupancy, edge padding, distance range, and transport compression become benchmark results as soon as the generators exist.
 
@@ -142,16 +133,16 @@ Assumptions:
 
 - one bitmap grayscale strike uses R8;
 - color bitmap/emoji pages use RGBA8 and therefore cost four times an equal-sized R8 page;
-- MSDF uses RGB8 and MTSDF uses RGBA8;
+- the MSDF engine uses MTSDF RGBA8: RGB is multi-channel distance and alpha is true signed distance;
 - distance-field estimates use a representative 32–48 px/em generation range;
 - per-glyph plane/atlas/page metadata is budgeted at approximately 20 B per represented glyph;
 - atlas dimensions include normal padding but are rounded to plausible power-of-two pages.
 
-| Fixture | Presentation metadata | Bitmap R8, one representative strike | MSDF RGB8 | MTSDF RGBA8 |
-| --- | ---: | ---: | ---: | ---: |
-| Inter legacy subset, 907 glyphs | 18,140 B | ~1 MiB (modeled 1024²) | ~3–6 MiB | ~4–8 MiB |
-| Font Awesome legacy subset, 350 glyphs | 7,000 B | ~1 MiB (modeled 1024²) | ~3–6 MiB | ~4–8 MiB |
-| Lucide, 1,594 SVG icons | ~31 KiB | ~4 MiB (modeled 2048²) | ~12 MiB (modeled 2048²) | ~16 MiB (modeled 2048²) |
+| Fixture | Raster metadata | Bitmap R8, one representative strike | MSDF raster, MTSDF RGBA8 |
+| --- | ---: | ---: | ---: |
+| Inter legacy subset, 907 glyphs | 18,140 B | ~1 MiB (modeled 1024²) | ~4–8 MiB |
+| Font Awesome legacy subset, 350 glyphs | 7,000 B | ~1 MiB (modeled 1024²) | ~4–8 MiB |
+| Lucide, 1,594 SVG icons | ~31 KiB | ~4 MiB (modeled 2048²) | ~16 MiB (modeled 2048²) |
 
 The distance-field ranges span a 1024² to 2048×1024 page for the font fixtures. Icon shapes are often near-square and consume more atlas area per entry than proportional text glyphs, so glyph count alone is not a reliable predictor.
 
@@ -161,8 +152,7 @@ Useful exact formulas:
 
 ```text
 bitmap GPU bytes = Σ(pageWidth × pageHeight × bytesPerPixel)
-MSDF GPU bytes   = Σ(pageWidth × pageHeight × 3)
-MTSDF GPU bytes  = Σ(pageWidth × pageHeight × 4)
+MSDF GPU bytes   = Σ(pageWidth × pageHeight × 4) // MTSDF RGBA8
 metadata bytes   = glyphRecordStride × representedGlyphCount + page directory
 ```
 
@@ -170,34 +160,34 @@ Mipmaps add approximately one third to the base texture size when a full chain i
 
 ## Planning totals
 
-For the non-subsetted 2,871-glyph Inter V0 face, the shared cost is fixed while presentation textures require first-generator measurement:
+For the non-subsetted 2,871-glyph Inter V0 face, the shared cost is fixed while raster textures require first-generator measurement:
 
-| Selected representation | Shared raw baseline | Presentation GPU storage | Notes |
+| Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
-| Generated bitmap, one strike | 164.4 KiB + sparse points | generator report required | 20 B × 2,871 = 57,420 B records. |
-| MTSDF | 164.4 KiB + sparse points | generator report required | 57,420 B records; legacy subset was modeled at 4–8 MiB. |
-| Slug | 164.4 KiB + sparse points | generator report required | 40 B × 2,871 = 114,840 B records; legacy subset derived near 2 MiB. |
+| Generated bitmap, one strike | 164.7 KiB | generator report required | 20 B × 2,871 = 57,420 B records. |
+| MSDF | 164.7 KiB | generator report required | MTSDF RGBA8; 57,420 B records; legacy subset was modeled at 4–8 MiB. |
+| Slug | 164.7 KiB | generator report required | 40 B × 2,871 = 114,840 B records; legacy subset derived near 2 MiB. |
 
 For the non-subsetted 1,403-glyph Font Awesome V0 face:
 
-| Selected representation | Shared raw baseline | Presentation GPU storage | Notes |
+| Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
-| Generated bitmap, one strike | 35.0 KiB + sparse points | generator report required | 20 B × 1,403 = 28,060 B records. |
-| MTSDF | 35.0 KiB + sparse points | generator report required | 28,060 B records; legacy subset was modeled at 4–8 MiB. |
-| Slug | 35.0 KiB + sparse points | generator report required | 40 B × 1,403 = 56,120 B records; legacy subset derived near 1 MiB. |
+| Generated bitmap, one strike | 35.2 KiB | generator report required | 20 B × 1,403 = 28,060 B records. |
+| MSDF | 35.2 KiB | generator report required | MTSDF RGBA8; 28,060 B records; legacy subset was modeled at 4–8 MiB. |
+| Slug | 35.2 KiB | generator report required | 40 B × 1,403 = 56,120 B records; legacy subset derived near 1 MiB. |
 
 These columns are intentionally not added into a fake single “download size.” Shared raw bytes, compressed transport, and GPU allocations have different lifetimes and compression behavior.
 
 ## Required measurement artifact
 
-The first baker and every later presentation generator must emit a machine-readable section report:
+The first baker and every later raster generator must emit a machine-readable section report:
 
 ```ts
 interface FontPayloadReport {
   source: { bytes: number }
   shared: Record<string, { rawBytes: number }>
-  presentations: Array<{
-    kind: 'bitmap' | 'msdf' | 'mtsdf' | 'slug'
+  rasters: Array<{
+    kind: string
     metadataBytes: number
     serializedBytes: number
     gpuBytes: number
@@ -218,7 +208,9 @@ The benchmark corpus must eventually produce this report for:
 1. the pinned Inter source and agreed subset;
 2. Font Awesome as an icon-font fixture;
 3. a selected subset and the full 1,594-shape Lucide SVG library;
-4. each presentation independently and an intentionally combined asset;
+4. each raster independently and an intentionally combined asset;
 5. Node and Worker bakes, which must agree on canonical section sizes and pixels.
 
 No modeled number becomes a product claim until a checked-in generator, descriptor, source hash, visual reference, and raw report reproduce it.
+
+Plain RGB MSDF is not part of the V1 totals. A later compression experiment may compare an RGB-capable native block format against the MTSDF baseline, including transport bytes, GPU residency, visual error, effect loss, and extra batch/module complexity. It becomes a supported encoding only if that complete comparison proves a material win.

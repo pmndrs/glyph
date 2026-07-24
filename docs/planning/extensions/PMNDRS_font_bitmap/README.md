@@ -26,9 +26,9 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 `PMNDRS_font_bitmap` stores generated grayscale or color bitmap strikes indexed by the local glyph IDs of a `PMNDRS_font`. Each strike contains one dense 20-byte record per glyph and KTX2 atlas pages. Layout metrics remain in the core font.
 
-The extension repeats `presentationId`, `shapingHash`, `glyphCount`, and `glyphIdWidth`; all MUST match the core presentation reference before upload.
+The extension repeats `rasterKey`, `shapingHash`, `glyphCount`, and `glyphIdWidth`; all MUST match the core raster reference before upload. Its strike array MUST exactly satisfy the canonical strike tuple encoded by that raster key. A missing requested strike makes the artifact incompatible and triggers the ordinary automatic runtime-bake path when source bytes are available.
 
-Each 20-byte glyph record contains four signed fixed-point plane bounds, four unsigned pixel-edge atlas bounds, a page index, and flags. `page = 0xffff` marks an absent image. Bounds and byte offsets are defined in the [presentation contract](../../presentation-data-contract.md).
+Each 20-byte glyph record contains four signed fixed-point plane bounds, four unsigned pixel-edge atlas bounds, a page index, and flags. `page = 0xffff` marks an absent image. Bounds and byte offsets are defined in the [raster contract](../../raster-data-contract.md).
 
 Grayscale V0 requires a lossless linear R8 KTX2 variant. Color image strikes use a separate sRGB RGBA8 resource. Native compressed variants may be added with a retained baseline fallback.
 
@@ -46,4 +46,4 @@ The extension adds a `PMNDRS_font_bitmap` object to the root glTF `extensions` o
 
 ## Resources
 
-- [Presentation data contract](../../presentation-data-contract.md)
+- [Raster data contract](../../raster-data-contract.md)

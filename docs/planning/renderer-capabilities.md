@@ -1,107 +1,107 @@
 ---
 type: Reference
 title: Renderer capability matrix
-description: Compares planned game-text features and limitations across bitmap, MSDF/MTSDF, and Slug presentations.
+description: Compares planned game-text features and limitations across bitmap, MSDF, and Slug rasters.
 status: proposed-product-matrix
-tags: [rendering, bitmap, mtsdf, slug, games]
+tags: [rendering, bitmap, msdf, mtsdf, slug, games]
 ---
 
 # Renderer capability matrix
 
-Status: proposed product support matrix  
-Purpose: show which game-text features each presentation technique can support, how it supports them, and where another presentation is required
+This is the intended `pmndrs/text` feature set, not a claim about implemented behavior. The public MSDF raster uses one MTSDF RGBA atlas; MTSDF is its encoding, not another selectable engine.
 
-This matrix treats MSDF and MTSDF as one technique. It describes the intended `pmndrs/text` feature set, not capabilities already implemented.
-
-Legend:
-
-- **Yes**: natural runtime capability of the technique.
-- **Limited**: feasible with a stored range, baked variant, extra records, extra draw, or quality/performance constraint.
-- **No**: not represented by that technique; use another presentation.
+| Symbol | Meaning |
+| :---: | --- |
+| ✅ | Natural, fully intended capability |
+| ⚠️ | Supported with a bounded range, extra pass/data, or documented constraint |
+| ❌ | Not represented by this technique; choose another raster |
 
 ## Styling and effects
 
-| Feature | Generated bitmap | MSDF/MTSDF | Slug | Product stance |
-| --- | --- | --- | --- | --- |
-| Runtime solid fill/tint | Yes for mask strikes; multiplication only for RGBA art | Yes | Yes | Required. Color is a run/glyph instance attribute, not baked into monochrome geometry. |
-| Per-span or per-glyph color | Yes | Yes | Yes | Required without reshaping. |
-| Gradient or texture fill | Yes through a monochrome mask | Yes through reconstructed coverage | Yes through analytic coverage | Supported by renderer paint inputs; source-authored paint is covered separately below. |
-| Runtime opacity/fade | Yes | Yes | Yes | Required. |
-| Adjustable text outline | Limited: dilation or a baked outline strike; quality and scale are bounded | Yes within the encoded distance range | Limited: render baked stroked contours or a second outline payload/pass | Required API feature. MSDF/MTSDF is the preferred dynamic-outline implementation. |
-| Multiple outline bands | Limited: pre-baked or repeated dilation | Limited: multiple thresholds within the distance range | Limited: multiple stroked payloads/passes | Optional advanced style. |
-| Hard drop shadow | Yes with a displaced draw | Yes with a displaced draw/sample | Yes with a displaced draw | Required. |
-| Soft shadow or glow | Limited: extra samples, pre-bake, or blur pass | Yes within the stored distance/padding range | Limited: offscreen blur or a separate effect pass | Supported, but not promised as one identical shader path. |
-| Weight/thickness adjustment without reshaping | Limited and visually fragile | Limited within the distance range | No; use a real font instance or baked stroked/offset geometry | Cosmetic effect only; it must not masquerade as correct variable-font weight. |
-| 3D extrusion/bevel geometry | No | No | No | Separate mesh-generation feature, outside the 2D presentation contract. |
+| Feature | Bitmap | MSDF | Slug |
+| --- | :---: | :---: | :---: |
+| Runtime solid fill/tint | ✅ | ✅ | ✅ |
+| Per-span or per-glyph color | ✅ | ✅ | ✅ |
+| Gradient or texture fill | ✅ | ✅ | ✅ |
+| Runtime opacity/fade | ✅ | ✅ | ✅ |
+| Adjustable outline | ⚠️ | ✅ | ⚠️ |
+| Multiple outline bands | ⚠️ | ⚠️ | ⚠️ |
+| Hard drop shadow | ✅ | ✅ | ✅ |
+| Soft shadow or glow | ⚠️ | ✅ | ⚠️ |
+| Cosmetic weight adjustment | ⚠️ | ⚠️ | ❌ |
+| 3D extrusion/bevel | ❌ | ❌ | ❌ |
 
-## Font-authored color and icon content
+Notes:
 
-| Feature | Generated bitmap | MSDF/MTSDF | Slug | Product stance |
-| --- | --- | --- | --- | --- |
-| Monochrome OpenType outlines | Yes, rasterized per strike | Yes | Yes | Required source path. |
-| Standalone SVG icon set with manifest | Limited: rasterize each icon | Limited: convert supported closed paths to fields | Yes: convert the supported vector/paint subset | Required after the first vertical slice. |
-| OpenType `SVG ` glyphs | Limited: rasterized output | Limited: path-only subset or raster fallback | Yes for the validated vector/paint subset | Required after the first vertical slice; never execute arbitrary SVG at render time. |
-| COLRv0 layered vectors | Limited: flatten to RGBA strikes | Limited: layered distance masks and draws | Yes: Slug glyph layers plus palette records | Required after the first vertical slice. |
-| COLRv1 paint graph | Limited: flatten to RGBA strikes | Limited: flatten or layer only the supported subset | Limited: compile the supported paint subset to flat paint/layer records | Required capability with an explicit supported-operation matrix, not a promise of every paint node initially. |
-| Palette selection for vector color glyphs | No after flattening unless variants are baked | Limited with retained layers | Yes with retained palette/paint records | Required for retained vector color presentations. |
-| CBDT/CBLC or `sbix` color emoji | Yes as RGBA image strikes | No | No | Required through the bitmap/image presentation selected for that glyph. |
-| Mixed vector and raster artwork inside an SVG glyph | Yes after flattening | No as a pure distance field | Limited: vector layers plus referenced baked images | Support only through the declared safe SVG subset. |
-| SVG scripting, animation, filters, or external resources | No | No | No | Explicitly unsupported for security, determinism, size, and runtime cost. |
+1. Bitmap outlines require dilation or another strike; Slug requires stroked contours or another payload/pass. MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range.
+2. Soft effects may require extra samples, padding, or an offscreen blur. The API must report limits rather than imply identical output.
+3. Cosmetic thickness is not a substitute for shaping a real font weight.
+4. Extruded geometry is a separate mesh-generation feature, outside this 2D raster contract.
 
-## Scale, quality, and workload fit
+## Font-authored color and icons
 
-| Capability | Generated bitmap | MSDF/MTSDF | Slug | Product stance |
-| --- | --- | --- | --- | --- |
-| Tiny pixel-aligned text | Yes; best candidate when a suitable hinted strike exists | Limited: field reconstruction cannot replace real hinting | Limited: accurate outline coverage does not provide hinting and costs more | Prefer bitmap strikes. |
-| Ordinary scalable game/UI text | Limited to the useful range around available strikes | Yes; proposed default | Yes, with higher and shape-dependent fragment cost | Prefer MSDF/MTSDF by default. |
-| Large text and extreme magnification | No without a larger strike | Limited by atlas resolution and encoded range | Yes | Prefer Slug. |
-| Heavy minification | Yes with suitable filtering/mips | Yes with suitable filtering/mips and field range | Limited: remains accurate but fragment work is shape/coverage dependent | Prefer bitmap or MSDF/MTSDF. |
-| Perspective and changing projected scale | Limited by source resolution | Yes with derivative-aware reconstruction | Yes, subject to measured analytic-renderer cost | Required benchmark lane for MSDF/MTSDF and Slug. |
-| Sharp corners | Yes at the baked strike | Yes; core advantage over monochrome SDF | Yes from source curves | Required visual fixture. |
-| Intricate outlines and self-intersections | Yes after rasterization | Limited by field generation, atlas resolution, and error correction | Yes for supported font fill rules; performance remains complexity-dependent | Prefer Slug when fidelity dominates. |
-| Runtime font-size changes without rebaking | Limited by available strikes | Yes within the useful field scale range | Yes | Presentation policy remains explicit. |
-| Predictable low fragment cost | Yes | Yes | Limited: depends on covered pixels and relevant curve/band work | Record GPU time by font complexity and scale. |
-| Smallest texture payload | Limited: every strike consumes pixels | Limited: one atlas spans a useful scale range | Limited: curves/bands are often compact but complexity-dependent | Measure per corpus; no universal size claim. |
+| Feature | Bitmap | MSDF | Slug |
+| --- | :---: | :---: | :---: |
+| Monochrome OpenType outlines | ✅ | ✅ | ✅ |
+| Standalone SVG icon manifest | ✅ | ⚠️ | ✅ |
+| OpenType `SVG ` glyphs | ✅ | ⚠️ | ⚠️ |
+| COLRv0 layered vectors | ✅ | ⚠️ | ✅ |
+| COLRv1 paint graph | ✅ | ⚠️ | ⚠️ |
+| Runtime palette selection | ❌ | ⚠️ | ✅ |
+| CBDT/CBLC or `sbix` emoji | ✅ | ❌ | ❌ |
+| Mixed vector/raster SVG artwork | ✅ | ❌ | ⚠️ |
+| SVG scripts, animation, filters, external resources | ❌ | ❌ | ❌ |
 
-## Renderer-independent features
+Notes:
 
-These capabilities belong to shaping or paragraph layout and must work identically regardless of presentation:
+1. Bitmap can flatten supported source artwork to RGBA strikes, but loses vector palette behavior.
+2. The MSDF raster accepts supported closed paths or layered masks; arbitrary SVG paint and embedded images are not distance fields.
+3. Slug compiles a safe vector/paint subset into flat geometry, layer, palette, and image-reference records. It never executes source SVG at runtime.
+4. Color bitmap emoji uses the bitmap/image raster for that glyph while preserving the paragraph's shaped glyph identity.
 
-| Shared feature | Bitmap | MSDF/MTSDF | Slug |
-| --- | --- | --- | --- |
-| HarfRust shaping, ligatures, kerning, marks, and contextual substitution | Same shaped result | Same shaped result | Same shaped result |
-| UTF-16 clusters, caret/source mapping, and unsafe-break flags | Same layout data | Same layout data | Same layout data |
-| LTR/RTL runs, bidi ordering, wrapping, alignment, clipping, and ellipsis | Same paragraph result | Same paragraph result | Same paragraph result |
-| Font fallback and mixed-font spans | Same font-scoped glyph identities | Same font-scoped glyph identities | Same font-scoped glyph identities |
+## Scale and workload fit
 
-Switching presentation must never reshape text or change line breaks.
+| Capability | Bitmap | MSDF | Slug |
+| --- | :---: | :---: | :---: |
+| Tiny pixel-aligned text | ✅ | ⚠️ | ⚠️ |
+| Ordinary scalable UI/game text | ⚠️ | ✅ | ✅ |
+| Large text and extreme zoom | ❌ | ⚠️ | ✅ |
+| Heavy minification | ✅ | ✅ | ⚠️ |
+| Perspective/changing projected scale | ⚠️ | ✅ | ✅ |
+| Sharp corners | ✅ | ✅ | ✅ |
+| Intricate/self-intersecting outlines | ✅ | ⚠️ | ✅ |
+| Size changes without rebaking | ⚠️ | ✅ | ✅ |
+| Predictable low fragment cost | ✅ | ✅ | ⚠️ |
+| Universally smallest payload | ❌ | ❌ | ❌ |
 
-## Recommended game-facing baseline
+Notes:
 
-The common game-text style contract should expose:
+1. Bitmap quality is tied to available strikes; it is preferred for tiny hinted or deliberately pixel-authored text.
+2. MSDF with MTSDF encoding is the proposed general-purpose default, subject to accepted scale, transform, atlas, and effects benchmarks.
+3. Slug is preferred when large-size or zoomed outline fidelity dominates. Its cost remains shape- and coverage-dependent.
+4. Payload size depends on glyph coverage, strikes, atlas resolution, outline complexity, mipmaps, and compression. It must be measured per corpus.
 
-- solid or per-glyph fill color;
-- opacity;
-- outline color and width;
-- hard shadow color and offset;
-- optional soft shadow/glow parameters;
-- optional gradient or texture paint;
-- source palette selection for retained color glyphs.
+## Raster-independent behavior
 
-Backends report capabilities and limits. The API must not silently claim an effect is equivalent across techniques: MSDF/MTSDF outlines are distance thresholds, bitmap outlines are raster operations, and Slug outlines require stroked geometry or another pass.
+All rasters consume the same result for:
 
-Recommended defaults:
+- HarfRust shaping, ligatures, kerning, marks, and contextual substitution;
+- UTF-16 clusters, caret/source mapping, and unsafe-break flags;
+- bidi ordering, wrapping, alignment, clipping, and ellipsis;
+- font-scoped glyph identity and, after its roadmap milestone, mixed-font fallback.
 
-- **MSDF/MTSDF** for ordinary scalable game text and inexpensive runtime outlines/effects;
-- **bitmap strikes** for tiny or deliberately pixel-authored text and embedded color emoji;
-- **Slug** for large/high-fidelity text, COLR/SVG vector layers, and SVG icon fonts.
+Switching raster must never reshape text or change line breaks. One paragraph may use different rasters per glyph—for example Slug text with RGBA bitmap emoji—without changing shaping or paragraph layout.
 
-A paragraph may contain glyphs using different presentations while preserving one shaped/layout result—for example Slug text plus an RGBA bitmap emoji.
+## Recommendation
 
-## Source basis
+- Use **MSDF** for ordinary scalable game and UI text and inexpensive runtime outlines/effects. Its V1 atlas encoding is MTSDF.
+- Use **bitmap strikes** for tiny or intentionally pixel-authored text and embedded color emoji.
+- Use **Slug** for large or deeply zoomed text, high-fidelity vector layers, and SVG icon fonts.
+- Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
 
-- [msdfgen](https://github.com/Chlumsky/msdfgen): distance-field representation, linear sampling, encoded range, derivative-aware perspective reconstruction, and SVG/font outline inputs.
-- [MSDF author preview shader](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553): demonstrated thickness, border, gradient, and shadow operations over an MSDF.
-- [OpenType color glyph overview](https://learn.microsoft.com/en-us/typography/opentype/spec/overview), [COLR](https://learn.microsoft.com/en-us/typography/opentype/spec/colr), [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg), [CBDT](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt), and [`sbix`](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix): source-authored vector and bitmap color formats.
-- [`RESEARCH.md`](../../RESEARCH.md): maintained summaries of Slug, the Alvin renderer comparison, msdfgen, and the source-format research.
-- [`slug-audit.md`](slug-audit.md): current Slug pipeline, quality constraints, and performance findings inherited from Three Flatland.
+## Sources
+
+- [msdfgen](https://github.com/Chlumsky/msdfgen) and the [author's preview shader](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553)
+- OpenType [COLR](https://learn.microsoft.com/en-us/typography/opentype/spec/colr), [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg), [CBDT](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt), and [`sbix`](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix)
+- [Research bibliography](../../RESEARCH.md)
+- [Three Flatland Slug audit](slug-audit.md)

@@ -1,7 +1,7 @@
 ---
 type: glTF Extension Specification
 title: PMNDRS_font_distance_field
-description: Defines MSDF and MTSDF glyph records and linear texture resources bound to a PMNDRS font.
+description: Defines MTSDF glyph records and linear texture resources for the MSDF raster module.
 status: draft-v0
 tags: [gltf, extension, font, msdf, mtsdf]
 ---
@@ -24,11 +24,13 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 ## Overview
 
-`PMNDRS_font_distance_field` stores an MSDF or MTSDF glyph atlas indexed by `PMNDRS_font` local glyph IDs. Both techniques use linear RGBA8 pages: MSDF writes an opaque alpha channel, while MTSDF stores true signed distance in alpha.
+`PMNDRS_font_distance_field` stores the MTSDF glyph atlas consumed by the public MSDF raster module. V0 requires `encoding: "mtsdf"`: linear RGBA8 with multi-channel distance in RGB and true signed distance in alpha. Plain MSDF is not a V0 resource variant.
 
 The extension declares generation em size, encoded pixel range, fixed-point plane units, one dense 20-byte glyph-record view, and KTX2 texture pages. Records share the bitmap plane/atlas/page layout. Advances and kerning are never duplicated.
 
-Lossless RGBA8 is the V0 baseline. UASTC or native BC7, ETC2, and ASTC variants are quality-gated because channel error changes reconstructed edges.
+The extension repeats the deterministic `rasterKey` and core shaping identity declared by its `PMNDRS_font` directory entry. Those values MUST match before upload.
+
+Lossless RGBA8 is the V0 baseline. One atlas and one batch support sharp fill edges from RGB and true-distance effects from alpha. UASTC or native BC7, ETC2, and ASTC variants are quality-gated because channel error changes reconstructed edges.
 
 ## glTF Schema Updates
 
@@ -44,5 +46,5 @@ The extension adds a `PMNDRS_font_distance_field` object to the root glTF `exten
 
 ## Resources
 
-- [Presentation data contract](../../presentation-data-contract.md)
+- [Raster data contract](../../raster-data-contract.md)
 - [msdfgen](https://github.com/Chlumsky/msdfgen)

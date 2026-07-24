@@ -17,17 +17,9 @@
           "properties": {
             "glyphExtentsBufferView": { "type": "integer", "minimum": 0 },
             "glyphExtentsStride": { "type": "integer", "enum": [8] },
-            "contourPoints": {
-              "type": "object",
-              "properties": {
-                "bufferView": { "type": "integer", "minimum": 0 },
-                "count": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
-                "stride": { "type": "integer", "enum": [8] }
-              },
-              "required": ["bufferView", "count", "stride"]
-            }
+            "glyphExtentsAvailabilityBufferView": { "type": "integer", "minimum": 0 }
           },
-          "required": ["glyphExtentsBufferView", "glyphExtentsStride"]
+          "required": ["glyphExtentsBufferView", "glyphExtentsStride", "glyphExtentsAvailabilityBufferView"]
         }
       },
       "required": ["format", "bufferView", "hash", "fontFunctions"]
@@ -58,16 +50,16 @@
       },
       "required": ["sourceHash", "descriptorHash", "bakerVersion", "harfrustVersion", "harfbuzzReferenceVersion", "unicodeVersion"]
     },
-    "presentations": {
+    "rasters": {
       "type": "array",
       "items": {
         "type": "object",
         "allOf": [{ "$ref": "glTFProperty.schema.json" }],
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "kind": { "type": "string", "enum": ["bitmap", "distance-field", "slug"] },
-          "extension": { "type": "string", "enum": ["PMNDRS_font_bitmap", "PMNDRS_font_distance_field", "PMNDRS_font_slug"] },
-          "version": { "type": "integer", "enum": [0] },
+          "rasterKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "kind": { "type": "string", "minLength": 1 },
+          "extension": { "type": "string", "minLength": 1 },
+          "version": { "type": "integer", "minimum": 0 },
           "source": {
             "oneOf": [
               {
@@ -89,9 +81,9 @@
             ]
           }
         },
-        "required": ["id", "kind", "extension", "version", "source"]
+        "required": ["rasterKey", "kind", "extension", "version", "source"]
       }
     }
   },
-  "required": ["version", "shaping", "metrics", "provenance", "presentations"]
+  "required": ["version", "shaping", "metrics", "provenance", "rasters"]
 }

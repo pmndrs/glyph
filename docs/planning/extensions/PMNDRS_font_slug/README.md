@@ -24,9 +24,11 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 ## Overview
 
-`PMNDRS_font_slug` stores analytic quadratic-curve presentation data indexed by `PMNDRS_font` local glyph IDs. It is commonly delivered as its own GLB so applications that select bitmap or MTSDF never download or initialize Slug resources.
+`PMNDRS_font_slug` stores analytic quadratic-curve raster data indexed by `PMNDRS_font` local glyph IDs. It is commonly delivered as its own GLB so applications that select bitmap or MSDF never download or initialize Slug resources.
 
-V0 stores only final GPU data: dense 40-byte glyph records, RGBA16F endpoint-sharing curve pages, exact u32 band headers, and exact glyph-local u16 curve references. It incorporates the quality-preserving layout improvements proven in Three Flatland's uikit fork and planning research; it does not retain duplicate float32 source curves or nested band objects.
+The extension repeats the deterministic `rasterKey` and core shaping identity declared by its `PMNDRS_font` directory entry. Those values MUST match before upload.
+
+V0 stores only final GPU data: dense 40-byte glyph records, RGBA16F endpoint-sharing curve pages, exact u32 band headers, and exact glyph-local u16 curve references. Integer arrays declare their two-dimensional R32UI/R16UI upload grids, including zeroed tail texels, so WebGL2 requires no CPU repacking. It incorporates the quality-preserving layout improvements proven in Three Flatland's uikit fork and planning research; it does not retain duplicate float32 source curves or nested band objects.
 
 The header encoding is `(curveCount << 16) | referenceOffset`. References are u16 texel offsets relative to the glyph's curve-base texel. Pages never split glyphs, and any u16 capacity overflow rejects the bake rather than truncating.
 
@@ -47,6 +49,6 @@ The extension adds a `PMNDRS_font_slug` object to the root glTF `extensions` obj
 
 ## Resources
 
-- [Presentation data contract](../../presentation-data-contract.md)
+- [Raster data contract](../../raster-data-contract.md)
 - [Slug audit](../../slug-audit.md)
 - [GPU compression and compact Slug storage](../../gpu-compression.md)

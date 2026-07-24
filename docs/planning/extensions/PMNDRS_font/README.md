@@ -1,7 +1,7 @@
 ---
 type: glTF Extension Specification
 title: PMNDRS_font
-description: Defines the core font, shaping payload, metrics, provenance, and presentation directory extension.
+description: Defines the core font, shaping payload, metrics, provenance, and raster directory extension.
 status: draft-v0
 tags: [gltf, extension, font, shaping]
 ---
@@ -24,13 +24,13 @@ Written against the glTF 2.0 specification.
 
 ## Overview
 
-`PMNDRS_font` stores one baked font face for runtime text shaping. It owns a canonical static OpenType shaping payload, authoritative font metrics, deterministic provenance, and a directory of renderer-specific presentations. Glyph IDs are local to this face and are shared by all attached presentations.
+`PMNDRS_font` stores one baked font face for runtime text shaping. It owns a canonical static OpenType shaping payload, authoritative font metrics, deterministic provenance, and a directory of renderer-specific rasters. Glyph IDs are local to this face and are shared by all attached rasters.
 
-The extension separates shaping from drawing. Shaping yields glyph IDs, UTF-16 clusters, advances, offsets, and flags. Bitmap, distance-field, and Slug companion extensions draw those glyph IDs without duplicating advances or kerning.
+The extension separates shaping from drawing. Shaping yields glyph IDs, UTF-16 clusters, advances, offsets, and flags. Raster packages draw those glyph IDs without duplicating advances or kerning. Bitmap, MTSDF-backed MSDF, and Slug are the companion extensions currently specified by this project, not an exhaustive registry.
 
-Presentations may be embedded in the same GLB, fetched as independent presentation GLBs, or supplied by an application resolver. The font identity and presentation records are unchanged by that packaging choice.
+Rasters may be embedded in the same GLB, fetched as independent raster GLBs, or supplied by an application resolver. The font identity and raster records are unchanged by that packaging choice.
 
-This extension does not define text strings, paragraph layout, line breaking, renderer-selection policy, or scene nodes.
+This extension does not define text strings, paragraph layout, line breaking, raster-module selection policy, or scene nodes.
 
 ### Root extension object
 
@@ -45,7 +45,8 @@ This extension does not define text strings, paragraph layout, line breaking, re
         "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "fontFunctions": {
           "glyphExtentsBufferView": 1,
-          "glyphExtentsStride": 8
+          "glyphExtentsStride": 8,
+          "glyphExtentsAvailabilityBufferView": 2
         }
       },
       "metrics": {
@@ -64,16 +65,16 @@ This extension does not define text strings, paragraph layout, line breaking, re
         "harfbuzzReferenceVersion": "13.0.0",
         "unicodeVersion": "17.0"
       },
-      "presentations": [
+      "rasters": [
         {
-          "id": "ui-mtsdf",
-          "kind": "distance-field",
+          "rasterKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "kind": "msdf",
           "extension": "PMNDRS_font_distance_field",
           "version": 0,
-          "source": { "type": "external", "uri": "inter.ui-mtsdf.glb" }
+          "source": { "type": "external", "uri": "inter.ui-msdf.glb" }
         },
         {
-          "id": "display-slug",
+          "rasterKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "kind": "slug",
           "extension": "PMNDRS_font_slug",
           "version": 0,
@@ -89,13 +90,13 @@ This extension does not define text strings, paragraph layout, line breaking, re
 
 `shaping.bufferView` MUST contain exactly one static, single-face SFNT conforming to profile `opentype-sfnt-harfrust-v0`.
 
-Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, `GSUB`, `GPOS`, and `kern` are retained when present. The profile excludes outlines, vertical-only tables, hinting, font-authored presentation data, variable-font tables, AAT, Graphite, collections, WOFF, and WOFF2.
+Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, `GSUB`, `GPOS`, and `kern` are retained when present. The profile excludes outlines, vertical-only tables, hinting, font-authored raster data, variable-font tables, AAT, Graphite, collections, WOFF, and WOFF2.
 
-`fontFunctions` preserves geometry queries needed during shaping after outlines are removed. `glyphExtentsBufferView` contains one dense 8-byte `(xMin, yMin, xMax, yMax)` i16 record per glyph. Optional contour-point records contain sorted 8-byte `(glyphId, pointIndex, x, y)` values for every point referenced by GPOS Anchor Format 2.
+`fontFunctions` preserves the optional glyph-extents query used by HarfRust fallback positioning after outlines are removed. `glyphExtentsBufferView` contains one dense 8-byte `(xMin, yMin, xMax, yMax)` i16 record per glyph. `glyphExtentsAvailabilityBufferView` contains exactly one bit per glyph, rounded up to a byte; a clear bit makes the adapter return no extents and requires a zeroed record. HarfRust 0.12.0 exposes no contour-point callback, so Anchor Format 2 point records are not serialized.
 
 The exact whitelist, metric policy, checksums, and validation rules are normative in the [V0 shaping contract](../../shaping-data-contract.md) while this extension is incubated in `pmndrs/text`.
 
-`shaping.hash` is lowercase SHA-256 over the domain-separated, length-prefixed SFNT, glyph-extents, and contour-point bytes defined by the shaping contract. Companion presentation artifacts MUST repeat this hash.
+`shaping.hash` is lowercase SHA-256 over the domain-separated, length-prefixed SFNT, glyph-extents, and extents-availability bytes defined by the shaping contract. Companion raster artifacts MUST repeat this hash.
 
 ### Metrics
 
@@ -103,13 +104,13 @@ The exact whitelist, metric policy, checksums, and validation rules are normativ
 
 When `OS/2.fsSelection.USE_TYPO_METRICS` is set, the serialized line metrics come from the OS/2 typographic fields. Otherwise they come from `hhea`. Serialized metrics are authoritative for consumers and MUST agree with that policy.
 
-### Presentation directory
+### Raster directory
 
-Presentation IDs MUST be unique. `kind`, `extension`, and `version` MUST agree with the attached companion extension.
+Raster keys MUST be unique within the font. A key is the lowercase deterministic SHA-256 over the raster kind, companion extension/version, and canonical package-owned descriptor defined by the [raster contract](../../raster-data-contract.md); it is not a caller-authored alias. `kind` is an open identifier owned by the raster module. `extension` names the companion glTF extension that defines its data, and `version` selects that companion contract. Core consumers MUST NOT reject an otherwise valid font merely because the directory contains an unknown optional raster kind. `rasterKey`, `kind`, `extension`, and `version` MUST agree with an attached raster that the consumer elects to load.
 
-An embedded presentation is stored at the root `extensions` object in the same GLB. An external source URI resolves relative to the core GLB. When an external source omits `uri`, the application supplies bytes through its resolver. `artifactHash`, when present, is lowercase SHA-256 over the complete external artifact.
+An embedded raster is stored at the root `extensions` object in the same GLB. An external source URI resolves relative to the core GLB. When an external source omits `uri`, the application supplies bytes through its resolver. `artifactHash`, when present, is lowercase SHA-256 over the complete external artifact.
 
-The top-level glTF `extensionsRequired` array is the sole required-extension mechanism. Presentation entries do not duplicate it.
+The top-level glTF `extensionsRequired` array is the sole required-extension mechanism. Raster entries do not duplicate it.
 
 ## glTF Schema Updates
 
@@ -128,6 +129,6 @@ Three Flatland Slug is prior art for baked GLB font delivery but does not implem
 ## Resources
 
 - [V0 shaping data contract](../../shaping-data-contract.md)
-- [V0 presentation data contract](../../presentation-data-contract.md)
+- [V0 raster data contract](../../raster-data-contract.md)
 - [Runtime/bake API fixture](../../api-shapes.md)
 - [Payload budget](../../payload-budget.md)

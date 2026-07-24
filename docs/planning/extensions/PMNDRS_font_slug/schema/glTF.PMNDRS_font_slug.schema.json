@@ -5,7 +5,7 @@
   "allOf": [{ "$ref": "glTFProperty.schema.json" }],
   "properties": {
     "version": { "type": "integer", "enum": [0] },
-    "presentationId": { "type": "string", "minLength": 1 },
+    "rasterKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "shapingHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
     "glyphIdWidth": { "type": "integer", "enum": [16] },
@@ -19,17 +19,19 @@
       "items": {
         "type": "object",
         "properties": {
-          "curveWidth": { "type": "integer", "minimum": 2, "maximum": 65535 },
-          "curveHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "curve": { "$ref": "../../schema/textureResource.PMNDRS_font.schema.json" },
           "headerCount": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+          "headerWidth": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "headerHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "headerBufferView": { "type": "integer", "minimum": 0 },
           "referenceCount": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+          "referenceWidth": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "referenceHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "referenceBufferView": { "type": "integer", "minimum": 0 }
         },
-        "required": ["curveWidth", "curveHeight", "curve", "headerCount", "headerBufferView", "referenceCount", "referenceBufferView"]
+        "required": ["curve", "headerCount", "headerWidth", "headerHeight", "headerBufferView", "referenceCount", "referenceWidth", "referenceHeight", "referenceBufferView"]
       }
     }
   },
-  "required": ["version", "presentationId", "shapingHash", "glyphCount", "glyphIdWidth", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
+  "required": ["version", "rasterKey", "shapingHash", "glyphCount", "glyphIdWidth", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
 }

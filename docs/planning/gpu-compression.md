@@ -1,30 +1,26 @@
 ---
 type: Technical Explanation
 title: GPU compression and compact Slug storage
-description: Distinguishes transport, decoded, and GPU compression and records quality constraints for font presentations.
+description: Distinguishes transport, decoded, and GPU compression and records quality constraints for font rasters.
 status: mixed-adopted-and-experimental
 tags: [gpu, compression, slug, mtsdf, bitmap]
 ---
 
 # GPU compression and compact Slug storage
 
-Status: exact band packing adopted by the V0 presentation contract; lossy curve and atlas compression remain experiments
-Purpose: distinguish smaller downloads from smaller GPU resources and identify which font-presentation data can tolerate GPU-native compression.
+Status: exact band packing adopted by the V0 raster contract; lossy curve and atlas compression remain experiments
+Purpose: distinguish smaller downloads from smaller GPU resources and identify which font-raster data can tolerate GPU-native compression.
 
 ## Position
 
-GPU compression is valuable for bitmap, color-emoji, and potentially MSDF/MTSDF presentations. It is also worth testing for Slug curve control points. It must not be applied indiscriminately to Slug band data.
+GPU compression is valuable for bitmap, color-emoji, and potentially the MTSDF atlas used by the MSDF raster. It is also worth testing for Slug curve control points. It must not be applied indiscriminately to Slug band data.
 
 The Slug textures are random-access data structures rather than ordinary images:
 
-```text
-curve texture
-  approximate geometric coordinates
-  potentially compressible under a strict visual-quality gate
-
-band texture
-  exact counts, offsets, and curve references
-  must remain bit-exact
+```mermaid
+flowchart LR
+  Slug["Slug GPU data"] --> Curves["curve coordinates<br/>compression requires visual-quality gates"]
+  Slug --> Bands["counts, offsets, references<br/>must remain bit-exact"]
 ```
 
 The primary Slug optimization should therefore combine:
@@ -46,7 +42,7 @@ The primary Slug optimization should therefore combine:
 
 KTX2 is a container, not one compression algorithm. Basis Universal payloads are portable transmission formats that are transcoded to a device-supported GPU format; they are not uploaded unchanged as universal blocks. A KTX2 payload already containing native BC, ETC2, or ASTC blocks can be uploaded directly only when the device supports that format.
 
-The compressed-texture/transcoder module belongs behind the same optional dynamic-import boundary as its presentation generator. The baked-first path must not pull KTX2/Basis code into an application whose assets and selected presentation do not require it.
+The compressed-texture/transcoder module belongs behind the same optional dynamic-import boundary as its raster generator. The baked-first path must not pull KTX2/Basis code into an application whose assets and selected raster do not require it.
 
 ## Platform boundary
 
@@ -54,7 +50,7 @@ WebGPU exposes optional `texture-compression-bc`, `texture-compression-etc2`, an
 
 Three.js `KTX2Loader` already detects WebGPU/WebGL renderer capabilities and transcodes Basis Universal data to a supported GPU format. Using it for ordinary atlas/color payloads is established prior art. Slug data textures still require a compatibility spike because they use exact `textureLoad` access and custom linear-data semantics rather than color sampling.
 
-All presentation data is linear. No Slug, MSDF/MTSDF, or grayscale-coverage payload may receive an sRGB conversion.
+All raster data is linear. No Slug, MTSDF, or grayscale-coverage payload may receive an sRGB conversion.
 
 ## Slug band data must remain exact
 
@@ -81,7 +77,7 @@ glyph record:     curve base/address
 resolved address = glyphCurveBase + localCurveTexelOffset
 ```
 
-This keeps headers exact and reduces the dominant reference list from four bytes to two bytes per entry. The offset addresses the first/control texel and therefore remains valid across endpoint sharing, contour endpoints, and row padding. WebGL2 and WebGPU can expose the bytes as unsigned integer textures or storage buffers without changing serialization.
+This keeps headers exact and reduces the dominant reference list from four bytes to two bytes per entry. The offset addresses the first/control texel and therefore remains valid across endpoint sharing, contour endpoints, and row padding. The serialized page declares R32UI/R16UI grid dimensions and includes zeroed tail texels, so WebGL2 can upload the bytes as integer textures without repacking and WebGPU can use the same grid bytes in integer textures or storage buffers.
 
 V0 overflow behavior is fixed: a glyph whose curve span, local reference, band count, per-band reference count, or reference offset exceeds `u16` fails baking. It never truncates.
 
@@ -169,11 +165,11 @@ Even without lossy curve compression, exact band packing models at about 2.04 Mi
 
 ## Bitmap, emoji, and distance-field payloads
 
-| Presentation | Compression stance |
+| Raster | Compression stance |
 | --- | --- |
 | Grayscale bitmap strike | Test R/EAC/ASTC-capable targets where the loader can select a compatible single-channel format; retain R8 fallback. |
 | Color bitmap/emoji | Strong KTX2 Basis candidate. Use UASTC for quality-sensitive artwork and measure ETC1S where smaller transport matters more. |
-| MSDF/MTSDF | Test UASTC and high-quality native targets only. Channel errors move reconstructed edges and can reduce the usable distance/effect range. |
+| MSDF (MTSDF RGBA) | Test UASTC and high-quality native targets only. Channel errors move reconstructed edges and can reduce the usable distance/effect range. |
 | Slug curves | Experimental UASTC/BC7/ASTC path with RGBA16F fallback. |
 | Slug bands | Never use lossy block compression; use exact integer structural packing. |
 
@@ -183,15 +179,11 @@ The generated atlas and reference images must be compared after GPU decoding, no
 
 The compression spike must produce variants from identical source glyphs:
 
-```text
-Slug baseline
-  RGBA16F curves + R32F bands
-
-Slug exact-pack
-  RGBA16F curves + u32 headers + u16 local references
-
-Slug compressed-curve
-  UASTC/native compressed curves + exact packed bands
+```mermaid
+flowchart LR
+  Source["identical source glyphs"] --> Baseline["baseline<br/>RGBA16F curves + R32F bands"]
+  Source --> Exact["exact pack<br/>RGBA16F curves + u32 headers + u16 references"]
+  Source --> Compressed["compressed curve<br/>UASTC/native curves + exact packed bands"]
 ```
 
 Measure:
@@ -213,7 +205,9 @@ Acceptance rules:
 3. A compressed-curve variant cannot replace RGBA16F unless it passes the established visual/geometric gate on every supported target.
 4. A device without the selected compressed format receives a declared fallback, never silently missing text.
 5. Headline size claims include dynamic transcoder bytes and report transport and GPU savings separately.
-6. No compression path is loaded when the selected presentation/assets do not require it.
+6. No compression path is loaded when the selected raster/assets do not require it.
+
+Plain RGB MSDF is not a V1 storage option. A smaller RGB-native compressed variant is an experiment only: it must include the loss of true-distance effects, additional format/shader/batch complexity, platform coverage, transport bytes, and GPU bytes in the comparison. It cannot replace the MTSDF baseline from an isolated texture-size result.
 
 ## Sources
 
