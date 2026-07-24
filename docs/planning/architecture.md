@@ -160,6 +160,9 @@ The generic Node and Worker hosts dynamically load raster packages, pass them th
 
 ### JS paragraph engine owns
 
+- paragraph-level UAX #9 bidi analysis and line-level visual reordering;
+- UAX #24 script itemization, UAX #14 break opportunities, and UAX #29 grapheme boundaries;
+- versioned JS Unicode property tables pinned to the same Unicode version recorded by `PMNDRS_font.provenance.unicodeVersion`;
 - text/styles, region constraints, and break selection;
 - alignment, clipping, max lines, ellipsis, and reflow caches;
 - batching boundary-sensitive reshapes.
@@ -296,7 +299,7 @@ sequenceDiagram
   Y-->>U: final content-box geometry
   U->>P: layout(exact final content box)
   P-->>U: positioned layout
-  U->>R: buildBatches(committed layout, resource)
+  U->>R: buildBatches(committed layout, resource, glyph paint)
 ```
 
 The core modes are `unconstrained`, `at-most`, and `exactly`; each host translates its own constraint vocabulary. Adapters install only after asynchronous font/shaper readiness when their measurement callbacks are synchronous. Final host geometry is authoritative even when measurement was skipped or produced a different candidate. Paragraph positions remain local to the content box; the host applies node transforms and clipping afterward.

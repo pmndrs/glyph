@@ -2,6 +2,7 @@ import type { RegisteredFont } from './font.js'
 import type { ParagraphLayout } from './layout.js'
 import type { FontHandle, FontSlot, RasterHandle, RasterKey, Sha256Hex } from './identity.js'
 import type { RasterBakeArtifact } from './bake.js'
+import type { GlyphPaint } from './paint.js'
 
 export type RasterKind = string
 
@@ -47,6 +48,10 @@ export interface RegisteredRaster<Kind extends string = string> {
   readonly kind: Kind
   readonly extension: string
   readonly version: number
+  /** Validated companion-extension JSON owned semantically by the raster module. */
+  readonly extensionData: JsonValue
+  /** Return a bounds-checked immutable view of an artifact bufferView. */
+  view(bufferView: number): Uint8Array
   dispose(): void
 }
 
@@ -111,7 +116,9 @@ export interface RasterModule<
     layout: ParagraphLayout,
     resource: Resource,
     fontSlot: FontSlot,
+    paint: GlyphPaint,
   ): DrawBatch
+  updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void
   dispose(resource: Resource): void
 }
 

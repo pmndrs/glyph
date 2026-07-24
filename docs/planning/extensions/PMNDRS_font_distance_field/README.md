@@ -28,6 +28,8 @@ glTF 2.0 and a matching `PMNDRS_font` resource, embedded or registered separatel
 
 The extension declares generation em size, encoded pixel range, fixed-point plane units, one dense 20-byte glyph-record view, and KTX2 texture pages. Records share the bitmap plane/atlas/page layout. Advances and kerning are never duplicated.
 
+The records are two-byte-aligned CPU-side typed-array inputs for bulk instance generation; texture pages, not these 20-byte records, are the direct GPU-upload resource.
+
 The extension repeats the deterministic `rasterKey` and core shaping identity declared by its `PMNDRS_font` directory entry. Those values MUST match before upload.
 
 Lossless RGBA8 is the V0 baseline. One atlas and one batch support sharp fill edges from RGB and true-distance effects from alpha. UASTC or native BC7, ETC2, and ASTC variants are quality-gated because channel error changes reconstructed edges.

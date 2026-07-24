@@ -90,7 +90,7 @@ All rasters consume the same result for:
 - bidi ordering, wrapping, alignment, clipping, and ellipsis;
 - font-scoped glyph identity and, after its roadmap milestone, mixed-font fallback.
 
-Switching raster must never reshape text or change line breaks. One paragraph may use different rasters per glyph—for example Slug text with RGBA bitmap emoji—without changing shaping or paragraph layout.
+Switching raster must never reshape text or change line breaks. V1 selects one raster per font slot. The additive color-emoji/SVG lane may later assign a raster per glyph by combining each artifact's `page = 0xffff` availability sentinel with an explicit raster-priority policy and passing the resulting glyph mask to `buildBatches`; that mechanism is not part of the first release contract.
 
 ## Recommendation
 

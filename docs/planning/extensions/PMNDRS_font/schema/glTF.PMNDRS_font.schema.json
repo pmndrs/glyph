@@ -30,7 +30,7 @@
       "properties": {
         "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "glyphIdWidth": { "type": "integer", "enum": [16] },
-        "unitsPerEm": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "unitsPerEm": { "type": "integer", "minimum": 16, "maximum": 16384 },
         "ascender": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
         "descender": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
         "lineGap": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }

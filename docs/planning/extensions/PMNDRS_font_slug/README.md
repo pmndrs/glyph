@@ -30,6 +30,8 @@ The extension repeats the deterministic `rasterKey` and core shaping identity de
 
 V0 stores only final GPU data: dense 40-byte glyph records, RGBA16F endpoint-sharing curve pages, exact u32 band headers, and exact glyph-local u16 curve references. Integer arrays declare their two-dimensional R32UI/R16UI upload grids, including zeroed tail texels, so WebGL2 requires no CPU repacking. It incorporates the quality-preserving layout improvements proven in Three Flatland's uikit fork and planning research; it does not retain duplicate float32 source curves or nested band objects.
 
+The dense glyph-record buffer view is four-byte aligned because its 40-byte records contain u32 members. Curve/header/reference page resources retain their independently declared upload alignment.
+
 The header encoding is `(curveCount << 16) | referenceOffset`. References are u16 texel offsets relative to the glyph's curve-base texel. Pages never split glyphs, and any u16 capacity overflow rejects the bake rather than truncating.
 
 Curve half-float bits may use lossless KTX2 supercompression. Lossy block-compressed curves are not part of V0. Headers and references are exact integer data and MUST NOT use lossy compression.

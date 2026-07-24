@@ -36,7 +36,7 @@ Bundling or splitting MUST NOT change the binary records. A raster is attached t
 The core `PMNDRS_font.rasters` directory describes availability. Each entry contains:
 
 ```ts
-interface RasterReferenceV0 {
+interface RasterReference {
   rasterKey: string
   kind: string
   extension: string
@@ -60,7 +60,9 @@ interface RasterReferenceV0 {
 
 The package supplies the actual `descriptor`. It MUST include every option that changes required payload content and its generator compatibility version; it MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. Object member order in source code is irrelevant because RFC 8785 defines the hashed serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
 
-An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. If `uri` is absent, the application must provide the raster through its resolver API. `artifactHash`, when present, is lowercase SHA-256 of the complete external artifact. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
+An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. If `uri` is absent, the application must provide the raster through its resolver API. `artifactHash`, when present, is lowercase SHA-256 of the complete external artifact. It is REQUIRED when the resolved artifact is cross-origin and RECOMMENDED for every external artifact. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
+
+A combined GLB may embed at most one raster for a given companion extension name because a glTF root has only one value for each extension key. Additional raster definitions using that extension MUST be external. Registration verifies that the embedded extension root's `rasterKey` equals the elected directory entry; an unrelated root object never satisfies an embedded reference.
 
 Every raster extension root contains the reciprocal binding:
 
@@ -83,7 +85,7 @@ interface RasterBindingV0 {
 - Atlas coordinates are unsigned pixel-edge coordinates with upper-left origin, X right, Y down, and right/bottom exclusive.
 - Texture data is linear. No grayscale, distance-field, or Slug data is sampled as sRGB.
 - Shared advances, kerning, clusters, and line metrics never occur in a raster.
-- Record buffer views are two-byte aligned, tightly packed, and have exactly `glyphCount × recordStride` bytes.
+- Record buffer views are aligned to their widest member, tightly packed, and have exactly `glyphCount × recordStride` bytes. Bitmap/distance-field records are two-byte aligned with 20-byte stride; Slug records are four-byte aligned with 40-byte stride.
 - Extension-owned record and texture buffer views MUST omit core glTF `byteStride` and `target`; their layout is defined only by the companion extension.
 - Texture resources declare dimensions, mip count, exact GPU format, encoding, and KTX2 buffer-view source.
 
@@ -121,11 +123,15 @@ interface TextureVariantV0 {
 
 KTX2 bytes occupy the complete referenced glTF `bufferView`; the raster GLB is the independently addressable unit. A variant whose KTX2 `vkFormat` names a native GPU format can be uploaded directly only when the device supports it. A Basis payload requires a dynamically imported transcoder and is not described as direct upload. The runtime selects the first supported variant in listed order.
 
+Before decompression, transcoding, or upload, the loader MUST parse every KTX2 level and prove that its decoded byte count equals the size implied by the declared dimensions, mip count, and GPU format. Dimensions MUST fit the active device limits and the configured per-font/per-raster GPU-byte budget. Reversible supercompression and Basis/native transcoding run off the main thread. A size mismatch, unsupported dimension, arithmetic overflow, or budget excess rejects the artifact before allocation or GPU submission.
+
 Every V0 raster MUST provide a lossless baseline variant. GPU-native block-compressed variants are additive. They cannot be the sole variant until the supported platform matrix guarantees them.
 
 `quality: 'lossless'` means GPU sampling reconstructs the baseline texels exactly. An uncompressed Vulkan-format KTX2 payload and reversible KTX2 supercompression may use it. BC, ETC/EAC, ASTC, UASTC, and Basis-derived block payloads are lossy for these rasters and MUST be `quality-gated`, even when their source encoder is configured at its highest quality.
 
 For a combined GLB, `extensionsUsed` lists the core and every embedded companion; `extensionsRequired` lists only those whose absence makes that GLB unusable. For a split raster GLB, that document lists its companion extension in both arrays. Merely naming an external companion in the core directory does not mean the companion extension object is used by the core GLB.
+
+JSON Schema cannot express every cross-field requirement. The companion validator additionally enforces unique bitmap `(ppemX, ppemY)` pairs and requires `requiredFeature` to match compressed `gpuFormat` (`bc*` → `texture-compression-bc`, `eac`/`etc2` → `texture-compression-etc2`, `astc` → `texture-compression-astc`). Schema references to `glTFProperty.schema.json` resolve against the Khronos glTF 2.0 schema set.
 
 ## `PMNDRS_font_bitmap` V0
 
@@ -317,16 +323,22 @@ The caller explicitly selects a configured raster definition, normally through a
 
 Switching or attaching a raster does not reshape text and cannot change paragraph measurement. Multiple raster artifacts may be attached concurrently, but V1 never attaches both plain-MSDF and MTSDF versions of the same MSDF raster.
 
+Bitmap and distance-field glyph records are CPU-consumed typed-array data used to gather quad/UV/page values during bulk instance generation. They require no per-glyph objects, but their 20-byte layout is not claimed as a direct GPU metadata format. Slug headers/references and all selected texture variants are upload-formatted resources.
+
 ## Validation fixtures
 
 Every raster format requires golden-byte, range, and GPU-readback fixtures covering:
 
 - bundled and external packaging producing identical records;
+- rejecting two embedded raster references with the same companion extension name or an embedded root with the wrong `rasterKey`;
 - application-resolved external bytes with no URI;
+- missing or mismatched required external `artifactHash`;
 - wrong shaping hash, glyph count, ID width, and raster key;
 - bitmap artifacts missing a declared strike, containing an undeclared strike, or ordering a non-canonical strike tuple;
 - missing pages and the `0xffff` sentinel;
 - out-of-range atlas rectangles and page indexes;
 - unsupported compressed variants with successful lossless fallback;
+- mismatched KTX2 decoded sizes, oversized dimensions, decompression bombs, format/feature mismatches, and configured GPU-budget overflow;
+- misaligned bitmap/distance-field two-byte records and Slug four-byte records;
 - Slug header/reference overflow, page-boundary, row-padding, and exact address reconstruction;
 - Node/Worker bake parity for records and decoded texture pixels.

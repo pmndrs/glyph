@@ -51,6 +51,7 @@ D-004/005 follow the established uikit split: the core owns every feature and Re
 | D-044 | Third-party layout systems consume allocation-light synchronous `measure` results and request positioned `layout` output only for a box that needs drawing. | Proposed |
 | D-045 | Paragraph axes model unconstrained, at-most, and exact sizing without importing a host layout vocabulary; host adapters own translation, invalidation, padding, transforms, and clipping. | Proposed |
 | D-069 | UIKit v2 owns an incremental adapter from its current `CustomLayouting` and content-box signals; no UIKit, Yoga, or Preact Signal types enter core. | Proposed |
+| D-072 | The JavaScript paragraph engine owns UAX #9, #14, #24, and #29 using Unicode data pinned to the core font provenance version. | Proposed |
 
 The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [UIKit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
 
@@ -79,7 +80,7 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | D-035 | Raster modules and generators are optional imports. | Proposed |
 | D-036 | Baked assets are data; baker surfaces are libraries/modules. | Proposed |
 | D-066 | The CLI resolves baker modules through an imported or explicitly named package's flat `pmndrs.text` map and public ESM exports; package semver governs compatibility and the CLI never scans dependency directories. | Settled for V0 |
-| D-069 | The Node baker statically discovers `defineFont` uses and literal raster descriptors without executing application code; dynamic font origins remain valid when an unambiguous local pathname can be resolved, otherwise runtime fallback remains authoritative. | Proposed |
+| D-071 | The Node baker statically discovers `defineFont` uses and literal raster descriptors without executing application code; dynamic font origins remain valid when an unambiguous local pathname can be resolved, otherwise runtime fallback remains authoritative. | Proposed |
 | D-070 | Bitmap strike tuples are non-empty, duplicate-free static positive integer literals and are part of raster identity; a missing declared strike makes a baked raster incompatible. | Proposed |
 
 The [architecture](architecture.md) owns loading behavior and dependency rules. The [API contract](api-shapes.md) owns host and Worker shapes.
@@ -101,6 +102,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-061 | Slug bands compress exactly; curve compression remains quality-gated. | Proposed |
 | D-064 | V1 does not support plain MSDF assets or parallel MSDF/MTSDF batches. | Proposed |
 | D-065 | First-party raster packages use TSL internally; the core raster API is shader-system and backend agnostic. | Proposed |
+| D-073 | V1 assigns one selected raster per font slot; per-glyph raster mixing is additive color/SVG work after the first release. | Proposed |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
@@ -115,7 +117,7 @@ The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md)
 
 ## Decisions required before implementation
 
-1. Accept or revise all proposed decisions, including D-067–070; D-016 and D-066 are already settled for V0.
+1. Accept or revise all proposed decisions, including D-067–073; D-016 and D-066 are already settled for V0.
 2. Pin HarfRust, HarfBuzz, Unicode, glTF schema, and generator versions.
 3. Confirm the provisional `PMNDRS` prefix and assign its Khronos request.
 4. Choose the first font fixture and target browser/GPU matrix.

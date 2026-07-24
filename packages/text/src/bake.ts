@@ -23,6 +23,41 @@ export interface RasterPayloadReport {
   readonly gpuBytes: number
 }
 
+export interface FontPayloadReport {
+  readonly source: { readonly bytes: number }
+  readonly shared: Readonly<Record<string, { readonly rawBytes: number }>>
+  readonly rasters: readonly {
+    readonly kind: string
+    readonly metadataBytes: number
+    readonly serializedBytes: number
+    readonly gpuBytes: number
+    readonly pages: readonly {
+      readonly width: number
+      readonly height: number
+      readonly format: string
+      readonly mipBytes: number
+    }[]
+  }[]
+  readonly container: {
+    readonly jsonBytes: number
+    readonly paddingBytes: number
+    readonly totalBytes: number
+  }
+  readonly transport: readonly { readonly format: string; readonly bytes: number }[]
+}
+
+export interface BakeWarning {
+  readonly code: string
+  readonly message: string
+  readonly path?: string
+}
+
+export interface SerializedBakeError {
+  readonly code: string
+  readonly message: string
+  readonly path?: string
+}
+
 export interface RasterBakeArtifact<Kind extends string = string> {
   readonly rasterKey: RasterKey
   readonly kind: Kind

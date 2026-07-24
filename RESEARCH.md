@@ -104,6 +104,7 @@ Sources:
 - [`hb-shape` and utilities](https://harfbuzz.github.io/utilities.html)
 - [`hb-subset`](https://harfbuzz.github.io/harfbuzz-hb-subset.html)
 - [HarfBuzz repository](https://github.com/harfbuzz/harfbuzz)
+- [HarfBuzz experimental libraries overview](https://github.com/harfbuzz/harfbuzz#experimental-libraries)
 
 Type: authoritative tool/API documentation and source repository
 
@@ -113,7 +114,7 @@ Extracted:
 
 - `hb-shape` is suitable for generating and inspecting oracle output.
 - Subsetting must preserve reachable shaping behavior, not only cmap-selected glyphs.
-- HarfBuzz's current repository includes GPU Slug work and experimental raster/vector components; renderer comparisons should use current upstream rather than assumptions from older architecture surveys.
+- HarfBuzz's current experimental-library overview explicitly lists `libharfbuzz-gpu` as a Slug-algorithm GPU encoder alongside raster and vector libraries; renderer comparisons should use current upstream rather than assumptions from older architecture surveys.
 
 ### HarfRust
 

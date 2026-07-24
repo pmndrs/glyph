@@ -20,7 +20,10 @@ export interface ParagraphMeasurement {
   readonly overflowed: boolean
 }
 
-/** Positioned glyph output for rendering and text interaction. */
+/**
+ * Positioned glyph output in paragraph-local coordinates. The origin is the
+ * paragraph box's top-left corner; positive X is right and positive Y is down.
+ */
 export interface ParagraphLayout extends ParagraphMeasurement {
   readonly fontHandles: Uint32Array
   readonly glyphFontSlots: Uint16Array

@@ -101,7 +101,7 @@ The exact directories are created with the first tooling issue. This document de
   "glyphIds": "source",
   "bakerVersion": "<pinned>",
   "bakeDescriptorHash": "<required>",
-  "rasters": [{ "kind": "bitmap", "ppem": 16 }],
+  "rasters": [{ "kind": "bitmap", "strikes": [16] }],
   "unicodeVersion": "<pinned>",
   "harfbuzzVersion": "<pinned>",
   "harfrustCommit": "<pinned>"

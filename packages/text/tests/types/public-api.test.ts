@@ -6,6 +6,7 @@ import {
   type AnyRasterModule,
   type FontInputOf,
   type FontRasterModuleOf,
+  type GlyphPaint,
   type RasterKey,
   type RasterBatchOf,
   type RasterKindOf,
@@ -13,6 +14,7 @@ import {
   type RasterResourceOf,
   type RasterRequest,
   type RasterRuntime,
+  type RasterModule,
   type RegisteredFont,
   type RegisteredRaster,
   type StaticNumberTuple,
@@ -52,6 +54,7 @@ const msdf = defineRaster({
   buildBatches(_layout, _resource): MsdfBatch {
     return { instances: 0 }
   },
+  updatePaint(_batch, _paint, _fontSlot) {},
   dispose(_resource) {},
 })
 
@@ -72,6 +75,7 @@ const external = defineRaster({
   buildBatches() {
     return { draws: 1 }
   },
+  updatePaint() {},
   dispose() {},
 })
 
@@ -88,6 +92,7 @@ const configurable = defineRaster({
   buildBatches() {
     return { draws: 1 }
   },
+  updatePaint() {},
   dispose() {},
 })
 type _ConfigurableOptions = Expect<
@@ -100,6 +105,11 @@ void acceptsExternal
 declare const font: RegisteredFont
 declare const runtime: RasterRuntime
 declare const slugArtifact: RegisteredRaster<'slug'>
+declare const glyphPaint: GlyphPaint
+void glyphPaint
+void slugArtifact.extensionData
+const slugBytes: Uint8Array = slugArtifact.view(0)
+void slugBytes
 
 const loaded = runtime.load(font, { module: msdf })
 type _LoadedKind = Expect<Equal<Awaited<typeof loaded>['artifact']['kind'], 'msdf'>>
@@ -280,11 +290,24 @@ interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
   readonly strikes: StaticNumberTuple<Strikes>
 }
 
-declare const bitmapModule: AnyRasterModule
+interface BitmapResource {
+  readonly texture: unknown
+}
+
+interface BitmapBatch {
+  readonly instances: number
+}
+
+type BitmapModule<Strikes extends readonly [number, ...number[]]> = RasterModule<
+  'bitmap',
+  BitmapResource,
+  BitmapBatch,
+  BitmapOptions<Strikes>
+>
 
 declare function bitmap<const Strikes extends readonly [number, ...number[]]>(
   options: BitmapOptions<Strikes>,
-): RasterRequest<typeof bitmapModule>
+): RasterRequest<BitmapModule<Strikes>>
 
 const proseFont = defineFont(
   '/fonts/Inter-Regular.ttf',

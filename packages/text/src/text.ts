@@ -41,10 +41,12 @@ export interface TextPaintProperties {
   readonly opacity?: number
   readonly outline?: {
     readonly color: ColorRepresentation
+    /** Paragraph-local layout units. */
     readonly width: number
   }
   readonly shadow?: {
     readonly color: ColorRepresentation
+    /** Paragraph-local layout units: positive X is right and positive Y is down. */
     readonly offset: readonly [number, number]
   }
 }

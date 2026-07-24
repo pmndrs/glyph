@@ -155,7 +155,7 @@ Fixtures must cover:
 
 - Run the version-matched Unicode `LineBreakTest.txt`.
 - Run `GraphemeBreakTest.txt` for extended grapheme boundaries.
-- Run `BidiTest.txt` and `BidiCharacterTest.txt` if bidi analysis is owned by the package.
+- Run the version-matched `BidiTest.txt` and `BidiCharacterTest.txt`; bidi analysis is owned by the package's JavaScript paragraph engine.
 - Record any tailoring as a named profile, never an undocumented deviation.
 
 ### Reflow cases

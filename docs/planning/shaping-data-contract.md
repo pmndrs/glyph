@@ -151,7 +151,7 @@ interface FontMetricsV0 {
 The serialized values are authoritative for paragraph metrics and MUST agree with the shaping face:
 
 - `glyphCount` equals `maxp.numGlyphs`;
-- `unitsPerEm` equals `head.unitsPerEm`;
+- `unitsPerEm` equals `head.unitsPerEm` and is within OpenType's 16–16,384 range;
 - V0 SFNT glyph IDs are 16-bit, so `glyphIdWidth` MUST be `16`;
 - `ascender`, `descender`, and `lineGap` are signed design-unit values selected by the baker and used directly by layout.
 
@@ -177,15 +177,37 @@ JavaScript and Wasm exchange one batch, never one glyph. All integers are little
 | 0 | `u32` | font handle |
 | 4 | `u32` | UTF-16 text start, inclusive |
 | 8 | `u32` | UTF-16 text end, exclusive |
-| 12 | `u32` | script tag |
-| 16 | `u32` | language-table byte offset; zero means default language |
+| 12 | `u32` | ISO 15924 script tag, using HarfBuzz `hb_script_t` tag semantics and big-endian tag bytes (`Latn`, `Arab`, `Deva`) |
+| 16 | `u32` | language-table byte offset; `0xffffffff` means default language |
 | 20 | `u32` | first feature record |
 | 24 | `u16` | feature count |
 | 26 | `u8` | direction: `0` LTR, `1` RTL; all other values invalid in V0 |
-| 27 | `u8` | cluster level using HarfRust's pinned numeric mapping |
-| 28 | `u32` | buffer flags using HarfRust's pinned bit mapping |
+| 27 | `u8` | cluster level using the V0 mapping below |
+| 28 | `u32` | buffer flags using the V0 mapping below |
 
-Language strings are UTF-8, length-prefixed by `u16`, and deduplicated within a batch. Text is a contiguous `u16` UTF-16 array. Public clusters always refer to offsets in that original array.
+Language strings are UTF-8, length-prefixed by `u16`, and deduplicated within a batch. Offset zero is a valid first language record; only `0xffffffff` selects the default language. Text is a contiguous `u16` UTF-16 array. Public clusters always refer to offsets in that original array.
+
+V0 cluster levels mirror the pinned HarfBuzz/HarfRust ABI:
+
+| Value | Name |
+| ---: | --- |
+| 0 | `MONOTONE_GRAPHEMES` (default) |
+| 1 | `MONOTONE_CHARACTERS` |
+| 2 | `CHARACTERS` |
+| 3 | `GRAPHEMES` |
+
+V0 buffer flags are a bitset; unlisted bits MUST be zero:
+
+| Bit | Value | Name |
+| ---: | ---: | --- |
+| 0 | `0x01` | `BOT` |
+| 1 | `0x02` | `EOT` |
+| 2 | `0x04` | `PRESERVE_DEFAULT_IGNORABLES` |
+| 3 | `0x08` | `REMOVE_DEFAULT_IGNORABLES` |
+| 4 | `0x10` | `DO_NOT_INSERT_DOTTED_CIRCLE` |
+| 5 | `0x20` | `VERIFY` |
+| 6 | `0x40` | `PRODUCE_UNSAFE_TO_CONCAT` |
+| 7 | `0x80` | `PRODUCE_SAFE_TO_INSERT_TATWEEL` |
 
 ### Result structure-of-arrays
 
@@ -194,7 +216,7 @@ Language strings are UTF-8, length-prefixed by `u16`, and deduplicated within a 
 | `runFontSlots` | `u16` | run count | Index into the result font-handle table. |
 | `runGlyphStarts` | `u32` | run count | First glyph in every glyph array. |
 | `runGlyphCounts` | `u32` | run count | Glyph count in the run. |
-| `glyphIds` | `u16` or `u32` | glyph count | Font-local glyph identity; width is declared per result. |
+| `glyphIds` | `u16` | glyph count | V0 font-local glyph identity. |
 | `clusters` | `u32` | glyph count | Original UTF-16 source offset. |
 | `xAdvances` | `i32` | glyph count | Horizontal advance in design units. |
 | `yAdvances` | `i32` | glyph count | Vertical advance in design units. |
@@ -211,7 +233,9 @@ V0 glyph flags are:
 | 2 | `SAFE_TO_INSERT_TATWEEL` | HarfRust reports safe kashida insertion. |
 | 3–15 | reserved | MUST be zero when written and ignored when read. |
 
-The result costs exactly `22 + glyphIdBytes` bytes per glyph across the SoA arrays: 24 bytes for V0 `u16` IDs and 26 bytes if a later asset uses `u32`. Run indexes cost 10 bytes per run before arena alignment.
+The V0 result costs exactly 24 bytes per glyph across the SoA arrays. A wider glyph-ID space requires a format revision and corresponding typed-view API revision. Run indexes cost 10 bytes per run before arena alignment.
+
+Result arrays borrow the Wasm shaper's result arena. They remain valid only until the next call on that shaper instance. Any subsequent shape, reshape, font registration, or Wasm-memory growth may invalidate all earlier views. The JavaScript paragraph engine MUST copy data retained for caching or public `ParagraphLayout` output into paragraph-owned SoA storage before another shaper call.
 
 ## Byte accounting
 
@@ -272,6 +296,7 @@ Registration MUST reject:
 - absent required tables or a table outside the whitelist;
 - overlapping/out-of-range tables, invalid alignment, invalid checksums, or inconsistent duplicated metrics;
 - `glyphIdWidth != 16` for this shaping format;
+- a run with an invalid ISO 15924 script tag, cluster-level value, language offset, direction, or unknown buffer-flag bit;
 - variable, AAT, Graphite, or deprecated `mort` shaping dependencies;
 - invalid GSUB/GPOS/GDEF references as reported by the pinned font reader;
 - missing/misaligned extents or availability views, nonzero unused availability bits, nonzero bytes for an absent extent, or an extent coordinate outside the serialized i16 range;

@@ -118,9 +118,10 @@ Deliver:
 - interactive browser lab with shareable URL state and phase/result panels;
 - headless local/CI runner importing the same scenario registry and policies;
 - independent package-size lane and raw result export;
+- a dedicated package-size entry for the version-pinned JS Unicode property tables used by bidi, script itemization, line breaking, and grapheme segmentation;
 - authorized Inter Regular fixture with exact URL, license, version, and SHA-256;
 - UTF-16 text corpus and HarfBuzz/HarfRust expected outputs;
-- bitmap strike, paragraph layout, GLB, malformed input, and GPU readback fixtures;
+- pinned contracts and source inputs for bitmap-strike, paragraph-layout, GLB, malformed-input, and GPU-readback fixtures;
 - benchmark environment manifest and result schema;
 - empty multi-font/multi-raster contract fixtures that test identity without adding product behavior.
 
@@ -139,6 +140,7 @@ Deliver:
 - core-owned `PMNDRS_font` writer/validator and bitmap-package-owned `PMNDRS_font_bitmap` writer/validator;
 - `@pmndrs/text/bake` Node API and thin CLI;
 - bake timing, peak memory, and byte report.
+- generated canonical GLB/bitmap goldens and malformed-input fixtures from the same bake core used by the Worker host; GPU readback goldens become executable with the Milestone 6 renderer.
 
 Explicitly exclude subsetting, shaping closure, dense remapping, compiled layout IR, MSDF, and Slug.
 
@@ -175,6 +177,7 @@ HarfRust reads the retained SFNT tables in Wasm. The milestone does not claim co
 Deliver:
 
 - paragraph, span, style, and constraint models;
+- version-matched UAX #9 bidi analysis/reordering, UAX #24 script itemization, UAX #14 break opportunities, and UAX #29 grapheme boundaries;
 - measured clusters and legal break representation;
 - greedy wrapping, alignment, clipping, max-lines, and ellipsis for the fixture scope;
 - broad-shape and width-layout caches;

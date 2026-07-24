@@ -94,8 +94,16 @@ interface TextShapingProperties {
 interface TextPaintProperties {
   color?: ColorRepresentation
   opacity?: number
+  /** Width is in paragraph-local layout units. */
   outline?: { color: ColorRepresentation; width: number }
+  /** Offset is in paragraph-local units; positive X is right, positive Y down. */
   shadow?: { color: ColorRepresentation; offset: readonly [number, number] }
+}
+
+interface TextSpan extends TextShapingProperties, TextPaintProperties {
+  start: number
+  end: number
+  font?: AnyFontToken | FontInput | RegisteredFont
 }
 
 type TextFontProperties =
@@ -271,6 +279,18 @@ declare function defineFont<
   raster: Module & ([RasterOptionsOf<Module>] extends [never] ? unknown : never),
 ): FontToken<Module, Input>
 
+type RasterSource =
+  | { type: 'embedded' }
+  | { type: 'external'; uri?: string; artifactHash?: Sha256Hex }
+
+interface RasterReference<Kind extends string = string> {
+  rasterKey: RasterKey
+  kind: Kind
+  extension: string
+  version: number
+  source: RasterSource
+}
+
 declare function defineFont<
   const Input extends FontInput,
   const Module extends AnyRasterModule,
@@ -286,7 +306,7 @@ interface RasterSelection<Kind extends string = string> {
 
 interface RasterResolverContext {
   font: RegisteredFont
-  reference: RasterReferenceV0
+  reference: RasterReference
   signal?: AbortSignal
 }
 
@@ -295,6 +315,11 @@ type RasterResolver = (
 ) => Promise<ArrayBufferView | undefined>
 
 interface FontLoadOptions {
+  signal?: AbortSignal
+}
+
+interface RasterLoadOptions {
+  resolve?: RasterResolver
   signal?: AbortSignal
 }
 
@@ -317,7 +342,7 @@ The string/`URL` form is the normal API. Resolution is deterministic:
 3. Otherwise treat it as the canonical source-font URL. Derive the baked sibling by replacing a final `.ttf`, `.otf`, `.woff`, or `.woff2` suffix, case-insensitively, with `.font.glb`. For another pathname, append `.font.glb`.
 4. Preserve the source URL's query string on the derived baked URL so cache-busting/version parameters remain aligned.
 5. Probe the baked sibling. A valid compatible core asset enters canonical registration immediately.
-6. On a missing, invalid, or incompatible sibling, emit one development warning, fetch the canonical source URL, and dynamically load the Worker baker. Production takes the same fallback without the warning.
+6. On a missing sibling, emit one development warning, fetch the canonical source URL, and dynamically load the Worker baker. An invalid or incompatible sibling emits a structured diagnostic before taking the same fallback. Production takes the same fallback without the missing-asset warning but retains invalid/incompatible diagnostics.
 7. If the canonical source uses a non-hierarchical URL such as `data:` or `blob:`, skip sibling probing and enter fallback directly.
 
 Examples:
@@ -345,6 +370,8 @@ Resolution order for a selected raster is fixed:
 
 `FontLoader.load` registers only the core font. `RasterRuntime.load` accepts the selected module and resolves or generates its artifact later. Loading or attaching a raster never re-registers or reshapes the font.
 
+`FontLoader.attachRaster(font, bytes)` is the validated byte-registration primitive. `RegisteredFont.loadRaster(selection, options)` resolves and attaches a directory entry by stable raster key but does not decode a module resource. `RasterRuntime.load(font, request, options)` is the module-typed path: it resolves or runtime-bakes bytes, delegates attachment to the loader/registry, then calls that module's `decode`. These are layered entry points, not competing loaders.
+
 There is no `forceRuntime`, `skipBaked`, or equivalent option. A missing baked core asset warns once in development, loads `runtime-bake`, bakes in a Worker, and feeds the result through the same validator.
 
 ## Registered resources
@@ -364,8 +391,12 @@ interface RegisteredFont {
   readonly glyphCount: number
   readonly glyphIdWidth: 16
   readonly metrics: FontMetrics
-  readonly rasterReferences: readonly RasterReferenceV0[]
+  readonly rasterReferences: readonly RasterReference[]
   getRaster(rasterKey: RasterKey | string): RegisteredRaster | undefined
+  loadRaster(
+    selection: RasterSelection,
+    options?: RasterLoadOptions,
+  ): Promise<RegisteredRaster>
   dispose(): void
 }
 
@@ -374,6 +405,12 @@ interface RegisteredRaster<Kind extends string = string> {
   readonly handle: RasterHandle
   readonly font: FontHandle
   readonly kind: Kind
+  readonly extension: string
+  readonly version: number
+  /** Validated companion-extension JSON; semantics remain module-owned. */
+  readonly extensionData: JsonValue
+  /** Bounds-checked immutable access to an artifact bufferView. */
+  view(bufferView: number): Uint8Array
   dispose(): void
 }
 
@@ -390,6 +427,14 @@ interface FontRegistry {
   registerAsset(bytes: ArrayBufferView): Promise<RegisteredFont>
   get(key: FontKey): RegisteredFont | undefined
   getByHandle(handle: FontHandle): RegisteredFont | undefined
+}
+
+interface RasterRuntime {
+  load<const Module extends AnyRasterModule>(
+    font: RegisteredFont,
+    request: RasterRequest<Module>,
+    options?: RasterLoadOptions,
+  ): Promise<LoadedRaster<Module>>
 }
 ```
 
@@ -417,8 +462,39 @@ interface BakeArtifactV0 {
 
 interface BakeResultV0 {
   artifacts: readonly BakeArtifactV0[]
-  report: FontPayloadReportV0
-  warnings: readonly BakeWarningV0[]
+  report: FontPayloadReport
+  warnings: readonly BakeWarning[]
+}
+
+interface BakeWarning {
+  code: string
+  message: string
+  path?: string
+}
+
+interface SerializedBakeError {
+  code: string
+  message: string
+  path?: string
+}
+
+interface FontPayloadReport {
+  source: { bytes: number }
+  shared: Record<string, { rawBytes: number }>
+  rasters: readonly {
+    kind: string
+    metadataBytes: number
+    serializedBytes: number
+    gpuBytes: number
+    pages: readonly {
+      width: number
+      height: number
+      format: string
+      mipBytes: number
+    }[]
+  }[]
+  container: { jsonBytes: number; paddingBytes: number; totalBytes: number }
+  transport: readonly { format: string; bytes: number }[]
 }
 ```
 
@@ -439,7 +515,7 @@ interface NodeBakeOptions<
   rasters?: Rasters
 }
 
-declare function bakeFont(options: NodeBakeOptions): Promise<FontPayloadReportV0>
+declare function bakeFont(options: NodeBakeOptions): Promise<FontPayloadReport>
 
 interface ProjectBakeOptions {
   entries?: readonly (string | URL)[]
@@ -450,7 +526,7 @@ interface ProjectBakeOptions {
 }
 
 interface ProjectBakeReport {
-  fonts: readonly FontPayloadReportV0[]
+  fonts: readonly FontPayloadReport[]
   mappings: readonly {
     expression: string
     sourceFile: string
@@ -458,7 +534,7 @@ interface ProjectBakeReport {
     publicPathname: string
     outputFile: string
   }[]
-  diagnostics: readonly BakeWarningV0[]
+  diagnostics: readonly BakeWarning[]
 }
 
 declare function bakeProject(options?: ProjectBakeOptions): Promise<ProjectBakeReport>
@@ -534,19 +610,19 @@ interface RuntimeBakeSuccessV0 {
   id: number
   ok: true
   artifacts: readonly {
-    role: 'font' | 'raster'
+    role: 'font'
     id: string
     bytes: ArrayBuffer
     sha256: Sha256Hex
   }[]
-  report: FontPayloadReportV0
+  report: FontPayloadReport
 }
 
 interface RuntimeBakeFailureV0 {
   type: 'bake-font-result-v0'
   id: number
   ok: false
-  error: SerializedBakeErrorV0
+  error: SerializedBakeError
 }
 ```
 
@@ -620,6 +696,8 @@ interface ShapedBatchViews {
   readonly glyphFlags: Uint16Array
 }
 ```
+
+`ShapedBatchViews` borrows the shaper's result arena. A view remains valid only until the next call on that `RuntimeShaper` instance; `shapeBatch`, `reshapeRanges`, font registration, or Wasm-memory growth may invalidate every earlier view. The paragraph engine MUST copy ranges it caches or exposes through `ParagraphLayout` into paragraph-owned SoA storage before making another shaper call.
 
 Author-facing `FontFeature` defaults `value` to `1`, `start` to the containing root/span range start, and `end` to that range's exclusive end. Feature ranges are absolute UTF-16 paragraph offsets. Paragraph analysis intersects them with shaping runs and produces required `ResolvedFontFeature` records before packing. The implementation packs those resolved values into the exact 16-byte feature and 32-byte run records in the [shaping ABI](shaping-data-contract.md). One API call crosses into Wasm per batch.
 
@@ -708,7 +786,7 @@ Omitting an axis is equivalent to `{ mode: 'unconstrained' }`. `unconstrained` r
 
 The JavaScript engine selects breaks in UTF-16 source coordinates. Width changes always reflow. A simple reflow makes zero Wasm calls; all boundary-sensitive line ranges are reshaped in one batch. `measure` and `layout` are synchronous after font and shared-shaper dependencies are ready and share paragraph analysis, broad shaping, line breaking, and caches. `measure` returns only allocation-light box metrics; it does not materialize the parallel positioned-glyph arrays. `layout` materializes those arrays for the final box. The full output cache is keyed by paragraph revision plus the complete constraint value. A separate line-layout cache is keyed by paragraph revision, line policy, and effective break width; an exact final-box layout may reuse a measured line result only after proving its existing breaks fit the final width. Box sizing, clipping, and alignment are then recomputed for the exact constraints. The API never promises that differently modeled constraints return the same `ParagraphLayout` object.
 
-`ParagraphSpan.start/end` and line text ranges are UTF-16 offsets. Glyph arrays are parallel and have identical lengths; line arrays are parallel and have identical lengths. `glyphFontSlots[i]` indexes `fontHandles` for glyph `i`. `glyphFontSizes[i]` is the effective em size in local layout units and lets a raster scale its em-relative plane bounds without inspecting spans. `x`, `y`, line baselines, width, and height are local layout units. `width` and `height` are the resolved paragraph box returned to the caller; `contentWidth` and `contentHeight` preserve the text's required extents before exact/at-most clamping. Non-empty lines are top-anchored even when an exact height exceeds `contentHeight`; `firstBaseline` and `lastBaseline` are the first and final entries in `lineBaselines`. An empty string produces zero lines and glyphs, zero intrinsic/content size, and both baselines equal to `0`; exact axes may still give its box nonzero dimensions. Paint is absent from the low-level paragraph input and output.
+`ParagraphSpan.start/end` and line text ranges are UTF-16 offsets. Glyph arrays are parallel and have identical lengths; line arrays are parallel and have identical lengths. `glyphFontSlots[i]` indexes `fontHandles` for glyph `i`. `glyphFontSizes[i]` is the effective em size in local layout units and lets a raster scale its em-relative plane bounds without inspecting spans. Paragraph-local coordinates originate at the box's top-left corner, with X increasing right and Y increasing down. `x`, `y`, line baselines, width, and height use those local layout units. `width` and `height` are the resolved paragraph box returned to the caller; `contentWidth` and `contentHeight` preserve the text's required extents before exact/at-most clamping. Non-empty lines are top-anchored even when an exact height exceeds `contentHeight`; `firstBaseline` and `lastBaseline` are the first and final entries in `lineBaselines`. An empty string produces zero lines and glyphs, zero intrinsic/content size, and both baselines equal to `0`; exact axes may still give its box nonzero dimensions. Paint is absent from the low-level paragraph input and output.
 
 ### Third-party layout systems
 
@@ -757,8 +835,26 @@ interface RasterModule<Kind extends string, Resource, DrawBatch, Options = never
     layout: ParagraphLayout,
     resource: Resource,
     fontSlot: FontSlot,
+    paint: GlyphPaint,
   ): DrawBatch
+  updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void
   dispose(resource: Resource): void
+}
+
+type LinearRgba = readonly [number, number, number, number]
+
+interface ResolvedPaint {
+  color: LinearRgba
+  /** Width is in paragraph-local layout units. */
+  outline?: { color: LinearRgba; width: number }
+  /** Offset is in paragraph-local units; positive X is right, positive Y down. */
+  shadow?: { color: LinearRgba; offset: readonly [number, number] }
+}
+
+interface GlyphPaint {
+  /** One palette index per ParagraphLayout glyph. */
+  paintIndices: Uint16Array
+  palette: readonly ResolvedPaint[]
 }
 
 type AnyRasterModule = RasterModule<string, any, any, any>
@@ -775,13 +871,13 @@ type RasterOptionsArgument<Options> =
   [Options] extends [never] ? undefined : Options
 
 type RasterKindOf<M extends AnyRasterModule> =
-  M extends RasterModule<infer Kind, any, any> ? Kind : never
+  M extends RasterModule<infer Kind, any, any, any> ? Kind : never
 
 type RasterResourceOf<M extends AnyRasterModule> =
-  M extends RasterModule<any, infer Resource, any> ? Resource : never
+  M extends RasterModule<any, infer Resource, any, any> ? Resource : never
 
 type RasterBatchOf<M extends AnyRasterModule> =
-  M extends RasterModule<any, any, infer Batch> ? Batch : never
+  M extends RasterModule<any, any, infer Batch, any> ? Batch : never
 
 type RasterOptionsOf<M extends AnyRasterModule> =
   M extends RasterModule<any, any, any, infer Options> ? Options : never
@@ -836,7 +932,7 @@ const deferredMsdf = lazyRaster(() =>
 )
 ```
 
-`decode` validates and uploads flat records and texture variants. It may dynamically import a KTX2 transcoder when the chosen variant requires one. It cannot alter shaping metrics, glyph identity, line breaks, or layout positions.
+`decode` validates flat records and uploads texture variants. Bitmap and distance-field records remain CPU-side typed-array inputs for bulk instance generation; they are not repacked into a second GPU metadata format. Slug's integer grids and every texture payload are direct-upload resources. A module may dynamically import a KTX2 transcoder when the chosen variant requires one. It cannot alter shaping metrics, glyph identity, line breaks, or layout positions.
 
 ### Raster baker capability
 
@@ -895,7 +991,7 @@ interface RasterBakePlan<M extends AnyRasterBakerModule> {
 
 The raster module does not statically import its baker. Its optional `runtimeBaker` function is the dynamic boundary and returns a package-owned browser host that MUST execute generation off the main thread. It may reuse `@pmndrs/text/runtime-bake` Worker utilities, but core never resolves a package specifier or transfers a module/function through `postMessage`. If an artifact is absent or its descriptor does not satisfy the configured raster definition, the loader emits one development warning and invokes that package's runtime baker automatically. For bitmap, a baked artifact missing any statically declared strike is therefore an incompatible miss, not a partial success. If the selected module has no runtime-baker capability—or the font was loaded baked-only and has no source bytes—loading rejects with a structured missing-raster error. `options` describes the raster itself and participates in its deterministic key; it is not a fallback policy switch. It is required in `RuntimeRasterBakeRequest` whenever the module's option type is not `never`.
 
-Core invokes `buildBatches` once for each `(fontSlot, raster resource)` represented in the paragraph. A module MUST emit only glyphs whose `glyphFontSlots` equal the supplied slot. This makes span fonts and future fallback fonts compatible with one non-generic `ParagraphLayout`, including paragraphs whose slots select different raster modules; raster code never interprets another font's local glyph IDs.
+Core resolves root/span paint into a palette and a per-glyph `paintIndices` array by mapping shaped clusters back to source spans. Paint never enters paragraph measurement. Core invokes `buildBatches` once for each `(fontSlot, raster resource)` represented in the paragraph and supplies that `GlyphPaint`. A module MUST emit only glyphs whose `glyphFontSlots` equal the supplied slot. `updatePaint` updates module-owned instance data or uniforms without reshaping or relayout. This makes span fonts and future fallback fonts compatible with one non-generic `ParagraphLayout`, including paragraphs whose slots select different raster modules; raster code never interprets another font's local glyph IDs.
 
 The Node host receives explicit `RasterBakePlan` values and imports no unselected baker. Matching literal kinds make incorrect pairings visible to TypeScript without merging runtime and Node dependency graphs. Raster-specific descriptor fields do not appear in core. Shader systems also do not appear here: first-party packages use TSL internally, while external packages may use TypeGPU or another implementation.
 

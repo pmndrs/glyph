@@ -9,6 +9,9 @@ export type {
   RasterBakerModule,
   RasterPackaging,
   RasterPayloadReport,
+  BakeWarning,
+  FontPayloadReport,
+  SerializedBakeError,
 } from './bake.js'
 export { defineRasterBaker, rasterBake } from './bake.js'
 
@@ -36,6 +39,10 @@ export type {
 } from './identity.js'
 
 export type { FontSlotRecord, ParagraphLayout, ParagraphMeasurement } from './layout.js'
+
+export type { FontLoadOptions, FontLoader, FontRegistry } from './loader.js'
+
+export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js'
 
 export type {
   Paragraph,

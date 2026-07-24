@@ -45,22 +45,21 @@ Status: unresolved unless marked otherwise.
 
 ## Paragraph engine
 
-1. Does V1 own bidi analysis or accept pre-segmented directional runs from a caller?
-2. Which UAX #14 implementation and tailoring strategy should be used in JS?
-3. How much surrounding context is necessary when reshaping final line slices?
-4. Which scripts always trigger boundary reshaping versus relying on unsafe-break flags?
-5. Is balanced wrapping a post-V1 strategy behind the same interface?
-6. What is the font-fallback unit: code point, grapheme, shaping cluster, or script run?
-7. How are selections, carets, and hit testing represented in the first public layout output?
-8. What is the emergency-break policy for a single cluster wider than the region?
+V1 owns UAX #9 bidi analysis/reordering, UAX #14 break opportunities, UAX #24 script itemization, and UAX #29 grapheme boundaries in the JavaScript paragraph engine.
+
+1. Which UAX #14 implementation and tailoring strategy should be used in JS?
+2. How much surrounding context is necessary when reshaping final line slices?
+3. Which scripts always trigger boundary reshaping versus relying on unsafe-break flags?
+4. Is balanced wrapping a post-V1 strategy behind the same interface?
+5. What is the font-fallback unit: code point, grapheme, shaping cluster, or script run?
+6. How are selections, carets, and hit testing represented in the first public layout output?
+7. What is the emergency-break policy for a single cluster wider than the region?
 
 ## Rasters
 
 1. Which pieces of Three Flatland Slug are legally and technically suitable to port?
-2. Can Slug, MSDF, and bitmap use one canonical plane-bounds convention without losing technique-specific padding?
-3. Can a renderer switch technique per glyph, or only per run/font in V1?
-4. How are missing glyph rasters reported and substituted?
-5. Which COLR paint operations, OpenType SVG subset, standalone SVG-icon manifest contract, and embedded bitmap formats must the first color/SVG milestone support?
+2. How are missing glyph rasters reported and substituted within the V1 per-font-slot raster assignment?
+3. Which COLR paint operations, OpenType SVG subset, standalone SVG-icon manifest contract, and embedded bitmap formats must the first color/SVG milestone support?
 
 ## Product and package shape
 

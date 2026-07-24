@@ -30,6 +30,8 @@ The extension repeats `rasterKey`, `shapingHash`, `glyphCount`, and `glyphIdWidt
 
 Each 20-byte glyph record contains four signed fixed-point plane bounds, four unsigned pixel-edge atlas bounds, a page index, and flags. `page = 0xffff` marks an absent image. Bounds and byte offsets are defined in the [raster contract](../../raster-data-contract.md).
 
+The records are two-byte-aligned CPU-side typed-array inputs for bulk instance generation; texture pages, not these 20-byte records, are the direct GPU-upload resource. The validator enforces unique `(ppemX, ppemY)` pairs in addition to JSON Schema validation.
+
 Grayscale V0 requires a lossless linear R8 KTX2 variant. Color image strikes use a separate sRGB RGBA8 resource. Native compressed variants may be added with a retained baseline fallback.
 
 ## glTF Schema Updates
