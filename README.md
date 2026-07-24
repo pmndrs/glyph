@@ -165,7 +165,7 @@ The [renderer capability matrix](docs/planning/renderer-capabilities.md) records
 
 Supporting evidence is intentionally outside that path: [RESEARCH.md](RESEARCH.md) is the attributed bibliography; the [decision register](docs/planning/decision-register.md) records proposed choices; [open questions](docs/planning/open-questions.md) records unresolved blockers; and the benchmark, conformance, payload, compression, and Slug audit documents explain how claims will be verified.
 
-The planning corpus under [`docs`](docs) is an [Open Knowledge Format v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: frontmatter and links make it portable to agents, while Diátaxis keeps each page focused on a reader task.
+The planning corpus under [`docs`](docs/index.md) is an [Open Knowledge Format v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: reserved indexes provide progressive disclosure, frontmatter and links make concepts portable to agents, and Diátaxis keeps each page focused on a reader task.
 
 ## Work locally
 
