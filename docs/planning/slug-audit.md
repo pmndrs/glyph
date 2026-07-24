@@ -16,7 +16,7 @@ This document identifies concrete prior art in `@three-flatland/slug` and assign
 
 ## Executive finding
 
-The reusable value is concentrated in the presentation pipeline and operational lessons:
+The reusable value is concentrated in the raster pipeline and operational lessons:
 
 - outline normalization to quadratic curves;
 - band acceleration and texture packing;
@@ -34,10 +34,10 @@ The package currently combines five responsibilities:
 1. source font parsing through `opentype.js`;
 2. basic cmap/advance/pair-kerning text placement;
 3. word wrapping, paragraph measurement, and alignment;
-4. Slug curve/band presentation generation;
+4. Slug curve/band raster generation;
 5. Three.js/React rendering objects and loader integration.
 
-The new package should split these into a font compiler, Wasm shaper, JS paragraph engine, presentation payloads, and renderer adapters.
+The new package should split these into a font compiler, Wasm shaper, JS paragraph engine, raster payloads, and renderer adapters.
 
 ## Findings by subsystem
 
@@ -102,7 +102,7 @@ This is strong prior art for avoiding a general glTF runtime dependency. The new
 Disposition:
 
 - port the narrow-reader philosophy;
-- rewrite around `PMNDRS_font` section directories and presentation references;
+- rewrite around `PMNDRS_font` section directories and raster references;
 - keep fuzz/corrupt-input tests from the beginning;
 - decide whether GPU-oriented sections remain accessors while CPU shaping sections use one custom block.
 
@@ -122,8 +122,8 @@ Disposition:
 
 - do not port the object graph;
 - register flat shared shaping sections with Wasm;
-- expose only small JS font/presentation handles;
-- keep presentation metadata in typed views or GPU buffers.
+- expose only small JS font/raster handles;
+- keep raster metadata in typed views or GPU buffers.
 
 ### Slug outline conversion: port with validation
 
@@ -139,7 +139,7 @@ The cubic-to-quadratic approximation needs explicit visual/error tests at extrem
 
 Disposition:
 
-- port the mathematical behavior into a renderer-independent Rust presentation generator if licensing permits;
+- port the mathematical behavior into a raster-independent Rust generator if licensing permits;
 - add approximation-error and pathological-outline fixtures;
 - keep source parsing out of the TypeScript runtime path.
 
@@ -152,7 +152,7 @@ The current architecture documents a default of 16 bands and a maximum of 40 cur
 Disposition:
 
 - preserve the algorithm and tests as the initial Slug generator candidate;
-- store chosen band counts/limits in presentation metadata where necessary;
+- store chosen band counts/limits in raster metadata where necessary;
 - benchmark font corpus distributions before fixing V1 limits;
 - reject or adapt glyphs that exceed shader/runtime capacity instead of truncating.
 
@@ -173,7 +173,7 @@ This is the strongest direct port candidate. The hard-coded width of 4096 and po
 Disposition:
 
 - port the packing model and shader agreement tests;
-- make texture dimensions and formats explicit presentation metadata;
+- make texture dimensions and formats explicit raster metadata;
 - validate all counts/offsets before upload;
 - benchmark alternative storage-buffer layout if renderer targets permit it.
 
@@ -237,7 +237,7 @@ Constraints to avoid inheriting:
 - all cmap entries limited to `u16`;
 - band offsets encoded as floats;
 - flat explicit kerning only;
-- presentation and shaping data in one Slug-specific extension;
+- raster and shaping data in one Slug-specific extension;
 - `extensionsRequired` causing unaware glTF tools to reject the asset even when font data is ignorable to scene processing;
 - runtime object reconstruction after reading flat data.
 
@@ -252,7 +252,7 @@ The package includes valuable test categories:
 - baked versus runtime shaping/measurement equivalence;
 - paragraph measurement and font-stack behavior.
 
-The README records an Inter Regular Slug-presentation baseline:
+The README records an Inter Regular Slug-raster baseline:
 
 | Subset | Glyphs | Raw | Gzip | Brotli |
 | --- | ---: | ---: | ---: | ---: |
@@ -260,18 +260,18 @@ The README records an Inter Regular Slug-presentation baseline:
 | Latin | 523 | 2.15 MB | 208 KB | 208 KB |
 | ASCII | 95 | 412 KB | 44 KB | 32 KB |
 
-These numbers are useful only as a snapshot of the existing complete Slug GLB; they do not isolate shaping data from presentation data. Future benchmarks must report those sections separately.
+These numbers are useful only as a snapshot of the existing complete Slug GLB; they do not isolate shaping data from raster data. Future benchmarks must report those sections separately.
 
 ## File disposition matrix
 
 | Existing area | Disposition | Destination concept | First required proof |
 | --- | --- | --- | --- |
 | `pipeline/fontParser.ts` | Port/rewrite | Rust canonical outline + Slug generator | outline equivalence and cubic error tests |
-| `pipeline/bandBuilder.ts` | Port | Slug presentation baker | corpus capacity statistics |
+| `pipeline/bandBuilder.ts` | Port | Slug raster baker | corpus capacity statistics |
 | `pipeline/texturePacker.ts` | Port/revise | Slug GPU payload packer | upload and shader agreement |
 | `shaders/*` | Port after audit | renderer adapter | CPU reference + visual snapshots |
 | `glb.ts` | Port philosophy | narrow `PMNDRS_font` reader/validator | corrupt-input suite |
-| `format.ts`, `bake.ts` | Redesign | shared extension + presentation schemas | golden bytes and version rules |
+| `format.ts`, `bake.ts` | Redesign | shared extension + raster schemas | golden bytes and version rules |
 | `baked.ts` object hydration | Retire | flat Wasm/GPU views | allocation/startup benchmark |
 | `textShaper*.ts` | Replace | HarfRust Wasm shaper | three-way conformance |
 | `wrapLines*.ts` | Replace | JS paragraph engine | UAX and reflow fixtures |
@@ -285,9 +285,9 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 
 1. Freeze the current Slug revision used for comparison and retain its tests/fixtures.
 2. Establish the new shaped output and packed glyph-ID contracts without rendering.
-3. Produce a tiny `PMNDRS_font` with shared metrics plus a revised Slug presentation.
+3. Produce a tiny `PMNDRS_font` with shared metrics plus a revised Slug raster.
 4. Compare old and new Slug GPU bytes or rendered output for the same source outlines.
-5. Add MTSDF and bitmap presentations against the same glyph IDs.
+5. Add MSDF and bitmap rasters against the same glyph IDs; the MSDF resource is MTSDF-encoded.
 6. Add the worker fallback and prove it emits the same canonical sections.
 7. Integrate the JS paragraph engine and renderer adapters.
 8. Migrate Three Flatland only after the standalone package has equivalent demonstrations and diagnostics.

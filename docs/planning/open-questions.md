@@ -20,8 +20,8 @@ Status: unresolved unless marked otherwise.
 ## Baker
 
 1. Should subsetting use Skera/Fontations, HarfBuzz subset in native tooling, or a project-owned closure pass?
-2. What deterministic outline representation feeds Slug, MTSDF, and bitmap generation?
-3. Which MTSDF implementation is suitable for safe Rust/Wasm, deterministic output, size, and licensing?
+2. What deterministic outline representation feeds Slug, MSDF, and bitmap generation?
+3. Which MTSDF generator is suitable for the MSDF module's safe Rust/Wasm, deterministic output, size, and licensing requirements?
 4. Does V1 bitmap rendering include TrueType hinting, or use deterministic unhinted oversampling?
 5. What are default runtime-bake glyph ranges, time limits, memory limits, and atlas limits?
 6. Can WOFF2 decoding remain out of the always-loaded shaper module and live only in the baker?
@@ -31,7 +31,7 @@ Status: unresolved unless marked otherwise.
 
 1. Which exact KTX2 encodings and GPU-native compressed variants make the initial WebGL2/WebGPU support matrix?
 2. What versioning change requires a new extension name versus a declared format version?
-3. Should independently fetched presentation artifacts support progressive range requests beyond whole-resource loading?
+3. Should independently fetched raster artifacts support progressive range requests beyond whole-resource loading?
 
 ## Shaper and compiled data
 
@@ -54,29 +54,26 @@ Status: unresolved unless marked otherwise.
 7. How are selections, carets, and hit testing represented in the first public layout output?
 8. What is the emergency-break policy for a single cluster wider than the region?
 
-## Presentations
+## Rasters
 
 1. Which pieces of Three Flatland Slug are legally and technically suitable to port?
-2. Can Slug, MTSDF, and bitmap use one canonical plane-bounds convention without losing technique-specific padding?
+2. Can Slug, MSDF, and bitmap use one canonical plane-bounds convention without losing technique-specific padding?
 3. Can a renderer switch technique per glyph, or only per run/font in V1?
-4. What is the default presentation-selection policy by projected pixel height?
-5. How are missing glyph presentations reported and substituted?
-6. Which COLR paint operations, OpenType SVG subset, standalone SVG-icon manifest contract, and embedded bitmap formats must the first color/SVG milestone support?
+4. How are missing glyph rasters reported and substituted?
+5. Which COLR paint operations, OpenType SVG subset, standalone SVG-icon manifest contract, and embedded bitmap formats must the first color/SVG milestone support?
 
 ## Product and package shape
 
-1. Is the initial package framework-neutral core only, or does it ship React Three Fiber bindings concurrently?
-2. Which bundlers form the initial package-graph test matrix for the required dynamic `runtime-bake` boundary?
-3. What final names should be used for the Node bake subpath, Worker chunk, and standalone CLI?
-4. Which APIs are public versus experimental while the binary format changes?
-5. What compatibility promise does Three Flatland need during migration?
+1. Which bundlers form the initial package-graph test matrix for the required dynamic `runtime-bake` boundary and optional React/raster subpaths?
+2. Which APIs are public versus experimental while the binary format changes?
+3. What compatibility promise does Three Flatland need during migration?
 
 ## Required prototypes before decisions
 
 - Compare at least two cmap page-directory designs.
 - Measure minimal HarfRust Wasm raw/compressed size.
 - Measure one coarse Wasm call versus repeated small calls.
-- Produce one tiny golden GLB with two presentations and one glyph-ID space.
+- Produce one tiny golden GLB with two rasters and one glyph-ID space.
 - Upload raw and compressed atlas candidates through target WebGL/WebGPU paths.
 - Bake one font natively and in a worker, comparing deterministic sections.
 - Reflow a Latin and Arabic paragraph while recording Wasm call counts.

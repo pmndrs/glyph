@@ -1,112 +1,349 @@
 ---
 type: API Reference
 title: Runtime and bake API fixture V0
-description: Defines the canonical proposed package, loader, baker, shaper, paragraph, presentation, and cache interfaces.
+description: Defines the canonical proposed package, loader, baker, shaper, paragraph, raster, and cache interfaces.
 status: contract-candidate
-tags: [api, loader, baker, shaping, paragraph, presentation]
+tags: [api, loader, baker, shaping, paragraph, raster]
 ---
 
 # Runtime and bake API fixture V0
 
 Status: contract candidate; names may be polished, ownership and data flow may not remain implicit
-Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScript paragraph layout, and explicit presentation loading
+Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScript paragraph layout, and explicit raster loading
 
 ## Package boundaries
 
-```text
-@pmndrs/text
-  browser-safe loader, registry, shaping bridge, paragraph engine
-
-@pmndrs/text/bake
-  Node host and CLI over the shared bake core
-
-@pmndrs/text/runtime-bake
-  dynamically imported Worker host over the same bake core
-
-@pmndrs/text/presentation/bitmap
-@pmndrs/text/presentation/mtsdf
-@pmndrs/text/presentation/slug
-  independently imported generator/decoder/renderer modules
+```mermaid
+flowchart TD
+  Core["@pmndrs/text<br/>Three.js Text, loader, registry, shaper bridge, paragraph engine"]
+  React["@pmndrs/text/react<br/>thin React Three Fiber wrapper"] --> Core
+  Bake["@pmndrs/text/bake<br/>Node host and CLI"] --> BakeCore["shared portable bake core"]
+  Runtime["@pmndrs/text/runtime-bake<br/>dynamically loaded Worker host"] --> BakeCore
+  Bitmap["@pmndrs/text/raster/bitmap"] --> Core
+  Msdf["@pmndrs/text/raster/msdf"] --> Core
+  Slug["@pmndrs/text/raster/slug"] --> Core
 ```
 
-A baked core-font hit does not load the runtime baker or any unselected presentation engine.
+A baked core-font hit does not load the runtime baker or any unselected raster engine. The core package has no React dependency. The React subpath has `react`, `three`, and `@react-three/fiber` as peer dependencies and adds no shaping, layout, baking, or rendering behavior.
+
+### ESM-only package contract
+
+All JavaScript entry points are native ESM. The package declares `"type": "module"`, publishes an explicit export map, and provides `types` and `import` targets without a `require` target or CommonJS compatibility build. Source examples, generated declarations, tests, the CLI host, Worker host, optional raster engines, and external plugins use ESM imports. Lazy boundaries use `import()`; browser workers are created as module workers.
+
+The initial export-map shape is:
+
+```json
+{
+  "type": "module",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./react": { "types": "./dist/react.d.ts", "import": "./dist/react.js" },
+    "./bake": { "types": "./dist/bake.d.ts", "import": "./dist/bake.js" },
+    "./runtime-bake": {
+      "types": "./dist/runtime-bake.d.ts",
+      "import": "./dist/runtime-bake.js"
+    },
+    "./raster/bitmap": {
+      "types": "./dist/raster/bitmap.d.ts",
+      "import": "./dist/raster/bitmap.js"
+    },
+    "./raster/msdf": {
+      "types": "./dist/raster/msdf.d.ts",
+      "import": "./dist/raster/msdf.js"
+    },
+    "./raster/slug": {
+      "types": "./dist/raster/slug.d.ts",
+      "import": "./dist/raster/slug.js"
+    }
+  }
+}
+```
+
+The exact output filenames may follow the selected build tool, but the public subpaths and ESM-only conditions are contract fixtures. Node-only behavior remains isolated behind `@pmndrs/text/bake`; importing the core in a browser must not expose Node built-ins. The CLI may use an ESM `bin` entry without creating a second CommonJS API.
+
+### Type-system contract
+
+Runtime capability values preserve the types they introduce. A raster module's literal kind, decoded resource, draw batch, and corresponding baker descriptor remain related through generic inference rather than being erased into a central registry. This follows Koota's value-oriented TypeScript pattern: users pass an ordinary runtime value, while conditional and generic types recover its associated data without requiring explicit type arguments.
+
+The type system is strict at public composition seams and deliberately ordinary around runtime-sized binary data. `Text` and paragraph layouts do not become generic over fonts, glyph counts, or raster modules. Font-local glyph identity and typed-array lengths remain runtime invariants validated by the binary contract.
+
+## Three.js text object
+
+The normal framework-neutral API is one Three.js object. Lower-level loader, paragraph, and raster interfaces remain public for integrations that need them.
+
+```ts
+interface TextLayoutProperties {
+  width?: number
+  height?: number
+  maxLines?: number
+  wrap?: 'none' | 'word' | 'character'
+  overflow?: 'visible' | 'clip' | 'ellipsis'
+  textAlign?: 'start' | 'center' | 'end' | 'justify'
+}
+
+interface TextShapingProperties {
+  fontSize?: number
+  /** Unitless multiplier of fontSize. */
+  lineHeight?: number
+  letterSpacing?: number
+  language?: string
+  direction?: 'auto' | 'ltr' | 'rtl'
+  features?: readonly FontFeature[]
+}
+
+interface TextPaintProperties {
+  color?: ColorRepresentation
+  opacity?: number
+  outline?: { color: ColorRepresentation; width: number }
+  shadow?: { color: ColorRepresentation; offset: readonly [number, number] }
+}
+
+type TextFontProperties =
+  | { font: AnyFontToken; raster?: never }
+  | {
+      font: FontInput | RegisteredFont
+      raster: AnyRasterInput
+    }
+  | { font?: undefined; raster?: undefined }
+
+type TextContentProperties =
+  | { text?: string; spans?: never }
+  | { text: string; spans: readonly TextSpan[] }
+
+type TextProperties = TextLayoutProperties &
+  TextShapingProperties &
+  TextPaintProperties &
+  TextFontProperties &
+  TextContentProperties & {
+    onLayout?: (layout: ParagraphLayout) => void
+  }
+
+declare class Text extends Group {
+  constructor(properties?: TextProperties)
+  readonly ready: Promise<void>
+  readonly layout: ParagraphLayout | undefined
+  setProperties(properties: TextUpdateProperties): void
+  dispose(): void
+}
+```
+
+`width` and `height` are local Three.js units. A supplied dimension maps to an `exactly` paragraph axis; an omitted dimension maps to `unconstrained`. Standard `Object3D` transforms remain standard Three.js/R3F properties rather than being duplicated in `TextProperties`. Direct text properties follow Drei and uikit conventions; there is no second CSS-like `style` object in V0. React users can create styled wrapper components with ordinary component composition. `lineHeight` is a unitless multiplier of the effective `fontSize`.
+
+`Text` owns a paragraph instance, the raster resources required by its font slots, and raster-specific Three.js draw objects. The normal `font` value is a composed `FontToken`; callers may instead provide a raw font input plus a raster definition for one-off use. Both forms normalize through the same caches. Because the framework-neutral `Text` class is deliberately non-generic, the raw form is runtime-validated; reusable `defineFont` tokens and `RasterRuntime.load` retain package-owned option types at compile time. The token's raster definition resolves a deterministic serialized raster key; callers never invent that key. `ready` waits for every distinct root/span font, shared-shaper initialization, and selected raster dependency; raw or registered span fonts inherit the root raster definition, while a span `FontToken` carries its own. Once those exist, span inputs are resolved to `FontHandle`s before paragraph creation. The object computes its initial shape and layout from its actual text, inherited styles, and downstream constraints. It stays hidden until that first computation completes, but shaping and layout do not introduce another Suspense resource. Updating only transform or paint uniforms does not reflow; updating width reflows; updating text or shaping styles invalidates the affected shaping cache.
+
+`setProperties` uses an atomic `TextUpdateProperties` patch rather than `Partial<TextProperties>`. Replacing spans requires supplying their source `text`; replacing a raw font requires its raster in the same patch; a composed token replaces both together. The complete merged state, span ordering, UTF-16 ranges, and raster configuration are validated before any change is committed.
+
+## React subpath
+
+`@pmndrs/text/react` exposes a deliberately small declarative layer:
+
+```tsx
+import { Text, useFont } from '@pmndrs/text/react'
+import { defineFont } from '@pmndrs/text'
+import { msdf } from '@pmndrs/text/raster/msdf'
+
+const Inter = '/fonts/Inter-Regular.ttf'
+const TitleFont = defineFont(Inter, msdf)
+
+function Label() {
+  return (
+    <Text
+      font={TitleFont}
+      width={4}
+      maxLines={2}
+      overflow="ellipsis"
+      textAlign="center"
+      fontSize={0.24}
+      color="white"
+      position={[0, 1, 0]}
+    >
+      Fast <Text color="#ff8a00">accurate</Text> text
+    </Text>
+  )
+}
+```
+
+The outer `<Text>` creates and reconciles the core Three.js `Text` object. A `<Text>` nested inside another `<Text>` is an inline span: React children are flattened into one string plus ordered `TextSpan` records before they reach the paragraph engine. A nested text node does not create an `Object3D`, paragraph, shaper call, or draw object.
+
+For a one-off label, the equivalent raw form is intentionally available:
+
+```tsx
+<Text font="/fonts/Inter-Regular.ttf" raster={msdf}>
+  One-off label
+</Text>
+```
+
+The raw form resolves through the same request, core, and raster caches. Reusable application typography should prefer `defineFont` so the source and raster configuration are declared once.
+
+This deliberately adopts React Native's familiar nested-text and inherited-inline-style model while retaining Drei/uikit's direct props and Three.js object semantics. Text-style inheritance is restricted to the text subtree. Non-text R3F children are rejected in V0.
+
+```ts
+type TextChild = string | number | null | false | ReactElement<ReactTextProps>
+
+type ReactTextProps =
+  & Omit<ThreeElements['group'], keyof TextProperties | 'children'>
+  & Omit<TextProperties, 'text' | 'spans'>
+  & { children?: TextChild | readonly TextChild[] }
+
+interface UseFont {
+  (input: FontInput, options?: FontLoadOptions): RegisteredFont
+  <Input extends FontInput, Module extends AnyRasterModule>(
+    token: FontToken<Module, Input>,
+  ): LoadedFont<Module, Input>
+  preload(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>
+  preload<Input extends FontInput, Module extends AnyRasterModule>(
+    token: FontToken<Module, Input>,
+  ): Promise<LoadedFont<Module, Input>>
+  clear(input: FontInput | AnyFontToken): void
+}
+
+declare const useFont: UseFont
+
+declare function lazyRaster<T extends AnyRasterModule>(
+  load: () => Promise<T | { default: T }>,
+): T
+```
+
+`useFont` suspends on the core-font `FontLoader` promise and deduplicates through the registry. A `FontToken` additionally resolves, automatically runtime-bakes when necessary, and decodes its selected raster into the same raster-runtime cache used by `<Text>`. A later hook or text object performs no second probe, fetch, bake, or decode. Preloading also initializes the shared shaper module, but it does not shape or lay out a paragraph because text, inherited spans, and constraints are downstream inputs. Once dependencies are ready, shaping, line breaking, boundary reshaping, and positioning are computation rather than Suspense resources. `clear` removes the React preload/cache entry but does not dispose a registered font still owned elsewhere. `lazyRaster` preserves the configured raster value while deferring an engine's module graph. Static imports remain the simplest tree-shakable default. A forwarded ref exposes the core `Text` object; the React wrapper adds no parallel imperative handle.
 
 ## Identity
 
 ```ts
-type FontKey = string
-type PresentationId = string
-type Sha256Hex = string
+declare const brand: unique symbol
+type Brand<Value, Name extends string> = Value & { readonly [brand]: Name }
 
-declare const fontHandleBrand: unique symbol
-type FontHandle = number & { readonly [fontHandleBrand]: true }
-
-declare const presentationHandleBrand: unique symbol
-type PresentationHandle = number & { readonly [presentationHandleBrand]: true }
+type FontKey = Brand<string, 'FontKey'>
+type RasterKey = Brand<string, 'RasterKey'>
+type Sha256Hex = Brand<string, 'Sha256Hex'>
+type FontHandle = Brand<number, 'FontHandle'>
+type RasterHandle = Brand<number, 'RasterHandle'>
 
 type LocalGlyphId = number
 type FontSlot = number
 ```
 
-`LocalGlyphId` is meaningful only with a font. Presentations attach only after matching the core font's shaping hash, glyph count, and ID width.
+`LocalGlyphId` is meaningful only with a font. Rasters attach only after matching the core font's shaping hash, glyph count, and ID width.
 
 ## Loader
 
 ```ts
-type PresentationKind = 'bitmap' | 'distance-field' | 'slug'
+type RasterKind = string
 
-interface FontSource {
+interface FontSourceOverride {
   source: string | URL
   baked?: string | URL
 }
 
-interface PresentationSelection {
-  id?: PresentationId
-  kind?: PresentationKind
-  required?: boolean
+interface BakedFontSource {
+  baked: string | URL
+  source?: never
 }
 
-interface PresentationResolverContext {
+type FontInput = string | URL | FontSourceOverride | BakedFontSource
+
+interface FontToken<
+  Module extends AnyRasterModule,
+  Input extends FontInput = FontInput,
+> {
+  input: Input
+  raster: RasterRequest<Module>
+}
+
+interface AnyFontToken {
+  input: FontInput
+  raster: {
+    module: AnyRasterModule
+    options?: unknown
+  }
+}
+
+type FontInputOf<Token extends AnyFontToken> =
+  Token['input']
+
+type FontRasterModuleOf<Token extends AnyFontToken> =
+  Token['raster']['module']
+
+declare function defineFont<
+  const Input extends FontInput,
+  const Module extends AnyRasterModule,
+>(
+  input: Input,
+  raster: Module & ([RasterOptionsOf<Module>] extends [never] ? unknown : never),
+): FontToken<Module, Input>
+
+declare function defineFont<
+  const Input extends FontInput,
+  const Module extends AnyRasterModule,
+>(
+  input: Input,
+  raster: RasterRequest<Module>,
+): FontToken<Module, Input>
+
+interface RasterSelection<Kind extends string = string> {
+  rasterKey: RasterKey | string
+  kind?: Kind
+}
+
+interface RasterResolverContext {
   font: RegisteredFont
-  reference: PresentationReferenceV0
+  reference: RasterReferenceV0
   signal?: AbortSignal
 }
 
-type PresentationResolver = (
-  context: PresentationResolverContext,
+type RasterResolver = (
+  context: RasterResolverContext,
 ) => Promise<ArrayBufferView | undefined>
 
 interface FontLoadOptions {
-  presentations?: readonly PresentationSelection[]
-  resolvePresentation?: PresentationResolver
   signal?: AbortSignal
 }
 
-interface FontLoader {
-  load(source: FontSource | string | URL, options?: FontLoadOptions): Promise<RegisteredFont>
-  loadPresentation(
-    font: RegisteredFont,
-    selection: PresentationSelection,
-    options?: { resolve?: PresentationResolver; signal?: AbortSignal },
-  ): Promise<RegisteredPresentation>
-  attachPresentation(
+declare class FontLoader {
+  constructor(options?: { registry?: FontRegistry })
+  load(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>
+  attachRaster(
     font: RegisteredFont,
     bytes: ArrayBufferView,
-  ): Promise<RegisteredPresentation>
+  ): Promise<RegisteredRaster>
 }
-
-declare function createFontLoader(): FontLoader
 ```
 
-Resolution order for a selected presentation is fixed:
+### Canonical URL resolution
+
+The string/`URL` form is the normal API. Resolution is deterministic:
+
+1. Normalize the URL against the caller's environment and remove its fragment from fetch/cache identity.
+2. If its pathname ends in `.glb`, treat it as baked-only. Fetch and validate it; never infer or fetch a source font.
+3. Otherwise treat it as the canonical source-font URL. Derive the baked sibling by replacing a final `.ttf`, `.otf`, `.woff`, or `.woff2` suffix, case-insensitively, with `.font.glb`. For another pathname, append `.font.glb`.
+4. Preserve the source URL's query string on the derived baked URL so cache-busting/version parameters remain aligned.
+5. Probe the baked sibling. A valid compatible core asset enters canonical registration immediately.
+6. On a missing, invalid, or incompatible sibling, emit one development warning, fetch the canonical source URL, and dynamically load the Worker baker. Production takes the same fallback without the warning.
+7. If the canonical source uses a non-hierarchical URL such as `data:` or `blob:`, skip sibling probing and enter fallback directly.
+
+Examples:
+
+| Input | Baked probe | Fallback source |
+| --- | --- | --- |
+| `/fonts/Inter.ttf` | `/fonts/Inter.font.glb` | `/fonts/Inter.ttf` |
+| `/fonts/Inter.woff2?v=4` | `/fonts/Inter.font.glb?v=4` | `/fonts/Inter.woff2?v=4` |
+| `/api/font/Inter` | `/api/font/Inter.font.glb` | `/api/font/Inter` |
+| `/fonts/Inter.font.glb` | same URL | none |
+
+The object form only overrides those rules. `{ source }` still derives a sibling. `{ source, baked }` probes the explicit baked URL—even on another path or origin—and falls back to `source` when that baked asset is missing, invalid, or incompatible. `{ baked }` is baked-only and rejects on any fetch or validation failure. An explicitly configured baked URL never changes the source URL used by fallback.
+
+Probe, preload, and load share one normalized cache key containing the normalized source URL when present, the resolved or explicit baked URL, and relevant loader/format versions. Concurrent calls reuse the same promise, and a successful preload returns the same registered font generation as a later `load` or `useFont` call. Changing an explicit baked URL intentionally creates a different load key.
+
+Registration has a second identity layer. Request keys deduplicate equivalent probes and fetches; after validation, `shapingHash` deduplicates the registered core resource. Consequently a string, equivalent `URL`, equivalent object input, and another load path that produce the same canonical shaping payload converge on one core resource within a registry. JavaScript object identity is never part of either key. Separate registries remain isolated ownership domains.
+
+Resolution order for a selected raster is fixed:
 
 1. use the companion extension already embedded in the loaded GLB;
 2. fetch the directory entry's external URI;
 3. call the application resolver when no URI exists or application policy intercepts it;
-4. if no baked presentation exists, dynamically import that technique's runtime generator and bake in the Worker;
-5. reject when the selection is required and no conforming resource can be produced.
+4. if no baked raster exists, call the selected module's lazy `runtimeBaker` capability, which bakes in its package-owned Worker and returns a canonical raster artifact;
+5. reject when no conforming resource can be produced.
 
-The main `load` call may request zero or more presentations. Loading or attaching one later never re-registers or reshapes the font.
+`FontLoader.load` registers only the core font. `RasterRuntime.load` accepts the selected module and resolves or generates its artifact later. Loading or attaching a raster never re-registers or reshapes the font.
 
 There is no `forceRuntime`, `skipBaked`, or equivalent option. A missing baked core asset warns once in development, loads `runtime-bake`, bakes in a Worker, and feeds the result through the same validator.
 
@@ -127,17 +364,26 @@ interface RegisteredFont {
   readonly glyphCount: number
   readonly glyphIdWidth: 16
   readonly metrics: FontMetrics
-  readonly presentationReferences: readonly PresentationReferenceV0[]
-  getPresentation(id: PresentationId): RegisteredPresentation | undefined
+  readonly rasterReferences: readonly RasterReferenceV0[]
+  getRaster(rasterKey: RasterKey | string): RegisteredRaster | undefined
   dispose(): void
 }
 
-interface RegisteredPresentation {
-  readonly id: PresentationId
-  readonly handle: PresentationHandle
+interface RegisteredRaster<Kind extends string = string> {
+  readonly rasterKey: RasterKey
+  readonly handle: RasterHandle
   readonly font: FontHandle
-  readonly kind: PresentationKind
+  readonly kind: Kind
   dispose(): void
+}
+
+interface LoadedFont<
+  Module extends AnyRasterModule,
+  Input extends FontInput = FontInput,
+> {
+  readonly token: FontToken<Module, Input>
+  readonly core: RegisteredFont
+  readonly raster: LoadedRaster<Module>
 }
 
 interface FontRegistry {
@@ -147,67 +393,23 @@ interface FontRegistry {
 }
 ```
 
-Disposal increments the font generation and invalidates stale presentation, shape, layout, and GPU-resource cache entries.
+Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
 
 ## Shared bake core
 
 ```ts
-interface BakeRequestV0 {
+interface FontBakeRequestV0 {
   source: Uint8Array
-  descriptor: BakeDescriptorV0
+  descriptor: FontBakeDescriptorV0
 }
 
-interface BakeDescriptorV0 {
+interface FontBakeDescriptorV0 {
   formatVersion: 0
   fontFaceIndex: number
-  presentations: readonly PresentationBakeDescriptorV0[]
-}
-
-type PresentationBakeDescriptorV0 =
-  | BitmapBakeDescriptorV0
-  | DistanceFieldBakeDescriptorV0
-  | SlugBakeDescriptorV0
-
-interface BitmapBakeDescriptorV0 {
-  id: PresentationId
-  kind: 'bitmap'
-  ppemX: number
-  ppemY: number
-  oversample: number
-  padding: number
-  hinting: 'none'
-  coverage: 'grayscale'
-  packaging: 'embedded' | 'external'
-}
-
-interface DistanceFieldBakeDescriptorV0 {
-  id: PresentationId
-  kind: 'distance-field'
-  technique: 'msdf' | 'mtsdf'
-  emSize: number
-  pixelRange: number
-  padding: number
-  edgeColoring: 'simple'
-  edgeColoringAngle: number
-  edgeColoringSeed: number
-  overlapSupport: true
-  packaging: 'embedded' | 'external'
-}
-
-interface SlugBakeDescriptorV0 {
-  id: PresentationId
-  kind: 'slug'
-  bandCount: 16
-  bandEpsilon: 0.0009765625
-  textureWidth: 4096
-  curvePageRowBudget: 2048
-  curveFormat: 'rgba16float'
-  bandFormat: 'u32-headers-u16-local-texel-offsets'
-  packaging: 'embedded' | 'external'
 }
 
 interface BakeArtifactV0 {
-  role: 'font' | 'presentation'
+  role: 'font' | 'raster'
   id: string
   bytes: Uint8Array
   sha256: Sha256Hex
@@ -220,23 +422,102 @@ interface BakeResultV0 {
 }
 ```
 
-All size, range, padding, oversample, and ppem values are finite and positive; `padding` may be zero. `edgeColoringAngle` is radians, `edgeColoringSeed` is an unsigned 32-bit integer, and the generator must produce identical edge colors for identical outlines and descriptors. Slug V0 constants are literal contract values derived from the reviewed uikit packer; changing one requires a descriptor/format version analysis.
+The font bake core owns only shaping data, shared metrics, glyph identity, provenance, and the read-only source-font context offered to raster bakers. It has no raster descriptor union. Bitmap, MSDF, Slug, and external packages each own their options, descriptor schema, generator, artifact schema, writer, validator, and diagnostics.
 
-`packaging: 'embedded'` places the companion extension in the core font GLB. `external` produces a core font GLB plus one presentation GLB; their internal shaping and presentation bytes are identical to the embedded form. The core is host-independent. Node and Worker hosts add no font-domain defaults. V0 implements the bitmap descriptor first, while the MTSDF and Slug descriptors already fix the configuration and dynamic-module boundary their implementations must honor.
+The Node and Worker hosts orchestrate selected raster baker modules and compose their returned artifacts. `packaging: 'embedded' | 'external'` belongs to that generic composition envelope, not to a raster's internal data schema. Descriptor bodies remain opaque to core.
 
 ## Node host
 
 ```ts
-interface NodeBakeOptions {
+interface NodeBakeOptions<
+  Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[] =
+    readonly RasterBakePlan<AnyRasterBakerModule>[],
+> {
   input: string | URL
   output: string | URL
-  descriptor: Omit<BakeDescriptorV0, 'formatVersion'>
+  font: Omit<FontBakeDescriptorV0, 'formatVersion'>
+  rasters?: Rasters
 }
 
 declare function bakeFont(options: NodeBakeOptions): Promise<FontPayloadReportV0>
+
+interface ProjectBakeOptions {
+  entries?: readonly (string | URL)[]
+  projectRoot?: string | URL
+  assetRoots?: readonly (string | URL)[]
+  outputRoot?: string | URL
+  signal?: AbortSignal
+}
+
+interface ProjectBakeReport {
+  fonts: readonly FontPayloadReportV0[]
+  mappings: readonly {
+    expression: string
+    sourceFile: string
+    assetRoot: string
+    publicPathname: string
+    outputFile: string
+  }[]
+  diagnostics: readonly BakeWarningV0[]
+}
+
+declare function bakeProject(options?: ProjectBakeOptions): Promise<ProjectBakeReport>
 ```
 
-For external packaging, `output` names the core artifact and presentation artifact names are deterministically derived from presentation IDs. The Node host owns filesystem work only.
+`bakeProject` is the normal application command:
+
+```ts
+import { bakeProject } from '@pmndrs/text/bake'
+
+const report = await bakeProject()
+```
+
+With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names are deterministically derived from raster keys. The Node host owns filesystem work only.
+
+### CLI baker discovery
+
+The programmatic Node API receives explicit `RasterBakePlan` module values. The CLI additionally resolves package-owned shorthand names through one manifest in the selected package's published `package.json`:
+
+```json
+{
+  "name": "@pmndrs/text",
+  "exports": {
+    "./package.json": "./package.json",
+    "./bakers/bitmap": "./dist/bakers/bitmap.js",
+    "./bakers/msdf": "./dist/bakers/msdf.js",
+    "./bakers/slug": "./dist/bakers/slug.js"
+  },
+  "pmndrs": {
+    "text": {
+      "bitmap": "./bakers/bitmap",
+      "msdf": "./bakers/msdf",
+      "slug": "./bakers/slug"
+    }
+  }
+}
+```
+
+The CLI knows `@pmndrs/text` as its default first-party package, resolves `@pmndrs/text/package.json` through Node, validates the `pmndrs.text` baker map, converts a relative manifest value such as `./bakers/slug` to the public specifier `@pmndrs/text/bakers/slug`, and dynamically imports only that entry. Project discovery applies the same procedure to the exact package imported by a discovered raster factory. Values MUST begin with `./`, name an exported ESM subpath, and resolve within the same package. Duplicate kinds, malformed manifests, CommonJS entries, and package-name/path mismatches are errors. The package's own semantic version governs compatibility; the manifest does not carry a redundant version.
+
+Naming a package with exactly one `pmndrs.text` entry selects that entry. A package with multiple entries requires an explicit `package#kind` selector. This keeps discovery deterministic without another manifest level.
+
+There is no dependency-tree or `node_modules` walk. npm's `npm query` can inspect package metadata but is a package-manager-specific subprocess rather than a portable runtime API. A third-party package is considered only when it is imported by a discovered raster definition or explicitly named to the CLI; the same exported-package-json and `pmndrs.text` rules then apply. npm always includes `package.json` in a published package, so the custom field survives packing; the explicit `./package.json` export keeps access compatible with package encapsulation.
+
+### Static project discovery
+
+The default Node command accepts project entry points and discovers composed definitions rather than requiring users to repeat font and raster configuration in a second manifest:
+
+```ts
+const origin = getAssetOrigin()
+const Inter = `${origin}/fonts/Inter-Regular.ttf`
+const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }))
+```
+
+The analyzer follows imports and `const` bindings, identifies the `defineFont` export by symbol rather than spelling, and statically evaluates the raster options as JSON. It resolves the selected raster package through `package.json#pmndrs.text` and lets that package canonicalize its descriptor. It does not execute application modules.
+
+For the example above, the origin is dynamic but the pathname suffix is stable. The analyzer strips an absolute or dynamic origin and attempts `/fonts/Inter-Regular.ttf` against configured local asset roots. It likewise supports literal and concatenated paths and `new URL(relativeLiteral, import.meta.url)`. A local source is accepted only when one existing file matches; every successful mapping is printed in the bake report. Missing and ambiguous mappings are diagnostics, never guesses.
+
+Dynamic font URLs remain valid. When discovery cannot establish a local source, it emits no baked file for that definition; the deployed loader follows the same baked-first request and mandatory Worker fallback as any other baked miss. The explicit Node `bakeFont` API remains available for pipelines that already know the local input and public output paths. The complete evaluator and path-safety contract is in [tooling fixtures](tooling-fixtures.md#static-font-discovery).
 
 ## Worker protocol
 
@@ -245,7 +526,7 @@ interface RuntimeBakeRequestV0 {
   type: 'bake-font-v0'
   id: number
   source: ArrayBuffer
-  descriptor: BakeDescriptorV0
+  font: FontBakeDescriptorV0
 }
 
 interface RuntimeBakeSuccessV0 {
@@ -253,7 +534,7 @@ interface RuntimeBakeSuccessV0 {
   id: number
   ok: true
   artifacts: readonly {
-    role: 'font' | 'presentation'
+    role: 'font' | 'raster'
     id: string
     bytes: ArrayBuffer
     sha256: Sha256Hex
@@ -269,12 +550,19 @@ interface RuntimeBakeFailureV0 {
 }
 ```
 
-Source and artifact buffers are transferred. The Worker imports only the generators named by the descriptor.
+Source and artifact buffers are transferred. This Worker bakes only `PMNDRS_font`; it never resolves a raster package name or interprets an external descriptor. A raster module that supports missing-artifact generation owns a separate lazy runtime-baker capability, including its Worker/import implementation. This is the only implementable extension boundary for arbitrary ESM packages because functions and imported module identities cannot be transferred through `postMessage`.
 
 ## Shaping API
 
 ```ts
 interface FontFeature {
+  tag: string
+  value?: number
+  start?: number
+  end?: number
+}
+
+interface ResolvedFontFeature {
   tag: string
   value: number
   start: number
@@ -297,7 +585,7 @@ interface ShapeRunRequest {
 interface ShapeBatchRequest {
   textUtf16: Uint16Array
   runs: readonly ShapeRunRequest[]
-  features: readonly FontFeature[]
+  features: readonly ResolvedFontFeature[]
 }
 
 interface ReshapeRange {
@@ -333,15 +621,31 @@ interface ShapedBatchViews {
 }
 ```
 
-The implementation packs these public values into the exact 16-byte feature and 32-byte run records in the [shaping ABI](shaping-data-contract.md). One API call crosses into Wasm per batch.
+Author-facing `FontFeature` defaults `value` to `1`, `start` to the containing root/span range start, and `end` to that range's exclusive end. Feature ranges are absolute UTF-16 paragraph offsets. Paragraph analysis intersects them with shaping runs and produces required `ResolvedFontFeature` records before packing. The implementation packs those resolved values into the exact 16-byte feature and 32-byte run records in the [shaping ABI](shaping-data-contract.md). One API call crosses into Wasm per batch.
 
 ## Paragraph API
 
 ```ts
+interface ParagraphStyle {
+  fontSize?: number
+  /** Unitless multiplier of fontSize. */
+  lineHeight?: number
+  letterSpacing?: number
+  language?: string
+  direction?: 'auto' | 'ltr' | 'rtl'
+  features?: readonly FontFeature[]
+}
+
+interface ParagraphSpan extends ParagraphStyle {
+  start: number
+  end: number
+  font?: FontHandle
+}
+
 interface ParagraphInput {
   text: string
   font: FontHandle
-  spans?: readonly TextSpan[]
+  spans?: readonly ParagraphSpan[]
   style?: ParagraphStyle
 }
 
@@ -351,58 +655,261 @@ interface ParagraphEngine {
 
 declare function createParagraphEngine(): ParagraphEngine
 
+type ParagraphAxisConstraint =
+  | { mode: 'unconstrained' }
+  | { mode: 'at-most'; size: number }
+  | { mode: 'exactly'; size: number }
+
 interface ParagraphConstraints {
-  width: number
-  height?: number
+  width?: ParagraphAxisConstraint
+  height?: ParagraphAxisConstraint
   maxLines?: number
   wrap?: 'none' | 'word' | 'character'
   align?: 'start' | 'center' | 'end' | 'justify'
   overflow?: 'visible' | 'clip' | 'ellipsis'
 }
 
+interface ParagraphMeasurement {
+  readonly width: number
+  readonly height: number
+  readonly contentWidth: number
+  readonly contentHeight: number
+  readonly firstBaseline: number
+  readonly lastBaseline: number
+  readonly overflowed: boolean
+}
+
+interface ParagraphLayout extends ParagraphMeasurement {
+  readonly fontHandles: Uint32Array
+  readonly glyphFontSlots: Uint16Array
+  readonly glyphIds: Uint16Array
+  readonly clusters: Uint32Array
+  readonly glyphFontSizes: Float32Array
+  readonly x: Float32Array
+  readonly y: Float32Array
+  readonly glyphFlags: Uint16Array
+  readonly lineTextStarts: Uint32Array
+  readonly lineTextEnds: Uint32Array
+  readonly lineGlyphStarts: Uint32Array
+  readonly lineGlyphCounts: Uint32Array
+  readonly lineBaselines: Float32Array
+  readonly lineAdvances: Float32Array
+}
+
 interface Paragraph {
-  layout(constraints: ParagraphConstraints): ParagraphLayout
+  measure(constraints?: ParagraphConstraints): ParagraphMeasurement
+  layout(constraints?: ParagraphConstraints): ParagraphLayout
   update(input: ParagraphInput): void
   dispose(): void
 }
 ```
 
-The JavaScript engine selects breaks in UTF-16 source coordinates. Width changes always reflow. A simple reflow makes zero Wasm calls; all boundary-sensitive line ranges are reshaped in one batch.
+Omitting an axis is equivalent to `{ mode: 'unconstrained' }`. `unconstrained` returns the maximum natural size on that axis, `at-most` returns no more than `size`, and `exactly` resolves the paragraph box to `size`. A constrained width participates in line breaking; a constrained height participates in clipping, max-line, and overflow resolution. Defaults are `wrap: 'word'`, `align: 'start'`, `overflow: 'visible'`, and no `maxLines` limit. Invalid sizes, negative sizes, and non-finite sizes throw `RangeError` before shaping or cache lookup.
 
-## Presentation module boundary
+The JavaScript engine selects breaks in UTF-16 source coordinates. Width changes always reflow. A simple reflow makes zero Wasm calls; all boundary-sensitive line ranges are reshaped in one batch. `measure` and `layout` are synchronous after font and shared-shaper dependencies are ready and share paragraph analysis, broad shaping, line breaking, and caches. `measure` returns only allocation-light box metrics; it does not materialize the parallel positioned-glyph arrays. `layout` materializes those arrays for the final box. The full output cache is keyed by paragraph revision plus the complete constraint value. A separate line-layout cache is keyed by paragraph revision, line policy, and effective break width; an exact final-box layout may reuse a measured line result only after proving its existing breaks fit the final width. Box sizing, clipping, and alignment are then recomputed for the exact constraints. The API never promises that differently modeled constraints return the same `ParagraphLayout` object.
+
+`ParagraphSpan.start/end` and line text ranges are UTF-16 offsets. Glyph arrays are parallel and have identical lengths; line arrays are parallel and have identical lengths. `glyphFontSlots[i]` indexes `fontHandles` for glyph `i`. `glyphFontSizes[i]` is the effective em size in local layout units and lets a raster scale its em-relative plane bounds without inspecting spans. `x`, `y`, line baselines, width, and height are local layout units. `width` and `height` are the resolved paragraph box returned to the caller; `contentWidth` and `contentHeight` preserve the text's required extents before exact/at-most clamping. Non-empty lines are top-anchored even when an exact height exceeds `contentHeight`; `firstBaseline` and `lastBaseline` are the first and final entries in `lineBaselines`. An empty string produces zero lines and glyphs, zero intrinsic/content size, and both baselines equal to `0`; exact axes may still give its box nonzero dimensions. Paint is absent from the low-level paragraph input and output.
+
+### Third-party layout systems
+
+The paragraph contract has no dependency on Yoga, DOM layout, Preact Signals, React, or a scene graph. A host prepares asynchronous font/shaper resources first, then uses synchronous `measure` calls while resolving its boxes and one `layout` call when positioned glyphs are required. Both calls use the same neutral axis constraints and line policy.
+
+This is a low-level integration surface. Ordinary Three.js and React consumers set `width`, `height`, and text properties on `Text`; they do not construct axis constraints or coordinate a measurement lifecycle themselves.
+
+Hosts own padding, borders, transforms, clipping, invalidation scheduling, and coordinate conversion. They pass content-box constraints into the paragraph and must not derive measurement from raster artifacts. Text, font, span, shaping-style, or line-policy changes update the paragraph and invalidate host measurement. Paint, raster, transform, and clipping changes do not.
+
+UIKit is the first required third-party integration, but its `CustomLayouting`, Yoga modes, signals, and centered coordinate system remain in a UIKit-owned adapter. The evidence from current UIKit and its incremental migration are specified separately in [UIKit integration](uikit-integration.md).
+
+## Raster module boundary
 
 ```ts
-interface PresentationModule<Resource, DrawBatch> {
-  readonly kind: PresentationKind
+interface RuntimeRasterBakeRequest<Options> {
+  source: Uint8Array
+  font: RegisteredFont
+  fontFaceIndex: number
+  rasterKey: RasterKey | string
+  options?: Options
+  signal?: AbortSignal
+}
+
+interface RuntimeRasterBakerModule<Kind extends string, Options> {
+  readonly kind: Kind
+  bake(request: RuntimeRasterBakeRequest<Options>): Promise<RasterBakeArtifact<Kind>>
+}
+
+type RuntimeRasterBakerLoader<Kind extends string, Options> = () => Promise<
+  | RuntimeRasterBakerModule<Kind, Options>
+  | { default: RuntimeRasterBakerModule<Kind, Options> }
+>
+
+interface RasterModule<Kind extends string, Resource, DrawBatch, Options = never> {
+  readonly kind: Kind
+  readonly extension: string
+  readonly version: number
+  readonly runtimeBaker?: RuntimeRasterBakerLoader<Kind, Options>
+  descriptor(options: RasterOptionsArgument<Options>): JsonValue
   decode(
     font: RegisteredFont,
-    presentation: RegisteredPresentation,
+    raster: RegisteredRaster<Kind>,
     signal?: AbortSignal,
   ): Promise<Resource>
-  buildBatches(layout: ParagraphLayout, resource: Resource): DrawBatch
+  buildBatches(
+    layout: ParagraphLayout,
+    resource: Resource,
+    fontSlot: FontSlot,
+  ): DrawBatch
   dispose(resource: Resource): void
+}
+
+type AnyRasterModule = RasterModule<string, any, any, any>
+
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue }
+
+type RasterOptionsArgument<Options> =
+  [Options] extends [never] ? undefined : Options
+
+type RasterKindOf<M extends AnyRasterModule> =
+  M extends RasterModule<infer Kind, any, any> ? Kind : never
+
+type RasterResourceOf<M extends AnyRasterModule> =
+  M extends RasterModule<any, infer Resource, any> ? Resource : never
+
+type RasterBatchOf<M extends AnyRasterModule> =
+  M extends RasterModule<any, any, infer Batch> ? Batch : never
+
+type RasterOptionsOf<M extends AnyRasterModule> =
+  M extends RasterModule<any, any, any, infer Options> ? Options : never
+
+declare function defineRaster<const M extends AnyRasterModule>(module: M): M
+
+type RasterRequest<M extends AnyRasterModule> = {
+  module: M
+} & ([RasterOptionsOf<M>] extends [never]
+  ? { options?: never }
+  : { options: RasterOptionsOf<M> })
+
+type RasterInput<M extends AnyRasterModule> =
+  [RasterOptionsOf<M>] extends [never]
+    ? M | RasterRequest<M>
+    : RasterRequest<M>
+
+type AnyRasterInput =
+  | AnyRasterModule
+  | { module: AnyRasterModule; options?: unknown }
+
+interface LoadedRaster<M extends AnyRasterModule> {
+  module: M
+  artifact: RegisteredRaster<RasterKindOf<M>>
+  resource: RasterResourceOf<M>
 }
 ```
 
-Each presentation subpath exports a module singleton named for the technique:
+Each raster package owns its configuration surface and returns a typed raster definition. A raster with no required configuration may export a ready-made module value. A module whose descriptor has options cannot be passed bare: its configured request requires those options. Bitmap exposes only its factory because its fixed strike set is mandatory:
 
 ```ts
-export const bitmap: PresentationModule<BitmapResource, BitmapDrawBatch>
-export const mtsdf: PresentationModule<DistanceFieldResource, DistanceFieldDrawBatch>
-export const slug: PresentationModule<SlugResource, SlugDrawBatch>
+type StaticNumberTuple<Values extends readonly [number, ...number[]]> =
+  number extends Values[number] ? never : Values
+
+declare function bitmap<const Strikes extends readonly [number, ...number[]]>(
+  options: { strikes: StaticNumberTuple<Strikes> },
+): RasterRequest<BitmapModule>
+
+export const msdf: MsdfModule
+export const slug: SlugModule
 ```
 
-The resource and draw-batch types are owned by their optional presentation packages. The shared package depends only on `PresentationModule` and never imports these concrete engines.
+Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
+
+The resource and draw-batch types are owned by their optional raster packages. `defineRaster` captures the literal `kind` and associated types from the module value; consumers do not supply generic arguments. Core has no closed raster-kind union and does not assume which raster packages are installed or shipped. Each optional package owns its literal kind and companion data contract. Adding a first-party or external raster requires no change to the core type declarations. The shared package depends only on `RasterModule` and never imports concrete engines.
+
+Raster module values and package-created raster definitions are the only public selection mechanisms. The API does not accept `raster="msdf"`, maintain a built-in name registry, or automatically replace the caller's selected module. External packages implement the same interfaces and own their option types. The built-in MSDF module consumes one MTSDF resource and one batch: fill coverage uses the median of RGB, while outlines and other true-distance effects may use alpha. It never creates parallel MSDF and MTSDF batches.
+
+```ts
+const deferredMsdf = lazyRaster(() =>
+  import('@pmndrs/text/raster/msdf').then((module) => module.msdf),
+)
+```
 
 `decode` validates and uploads flat records and texture variants. It may dynamically import a KTX2 transcoder when the chosen variant requires one. It cannot alter shaping metrics, glyph identity, line breaks, or layout positions.
 
+### Raster baker capability
+
+Runtime raster modules and their dynamically loaded generators remain separate modules, but their literal kind connects their contracts:
+
+```ts
+interface RasterBakerModule<
+  Kind extends string,
+  Options,
+  Descriptor,
+> {
+  readonly kind: Kind
+  readonly extension: string
+  readonly version: number
+  descriptor(options: Options): Descriptor
+  bake(request: RasterBakeRequest<Descriptor>): Promise<RasterBakeArtifact<Kind>>
+}
+
+interface RasterBakeFontContext {
+  source: Uint8Array
+  fontFaceIndex: number
+  glyphCount: number
+  shapingHash: string
+}
+
+interface RasterBakeRequest<Descriptor> {
+  font: RasterBakeFontContext
+  rasterKey: string
+  packaging: 'embedded' | 'external'
+  descriptor: Descriptor
+  signal?: AbortSignal
+}
+
+interface RasterBakeArtifact<Kind extends string = string> {
+  rasterKey: string
+  kind: Kind
+  extension: string
+  version: number
+  bytes: Uint8Array
+  report: RasterPayloadReport
+}
+
+declare function defineRasterBaker<
+  const Kind extends string,
+  Options,
+  Descriptor,
+>(module: RasterBakerModule<Kind, Options, Descriptor>):
+  RasterBakerModule<Kind, Options, Descriptor>
+
+interface RasterBakePlan<M extends AnyRasterBakerModule> {
+  baker: M
+  packaging: 'embedded' | 'external'
+  options: RasterBakeOptionsOf<M>
+}
+```
+
+The raster module does not statically import its baker. Its optional `runtimeBaker` function is the dynamic boundary and returns a package-owned browser host that MUST execute generation off the main thread. It may reuse `@pmndrs/text/runtime-bake` Worker utilities, but core never resolves a package specifier or transfers a module/function through `postMessage`. If an artifact is absent or its descriptor does not satisfy the configured raster definition, the loader emits one development warning and invokes that package's runtime baker automatically. For bitmap, a baked artifact missing any statically declared strike is therefore an incompatible miss, not a partial success. If the selected module has no runtime-baker capability—or the font was loaded baked-only and has no source bytes—loading rejects with a structured missing-raster error. `options` describes the raster itself and participates in its deterministic key; it is not a fallback policy switch. It is required in `RuntimeRasterBakeRequest` whenever the module's option type is not `never`.
+
+Core invokes `buildBatches` once for each `(fontSlot, raster resource)` represented in the paragraph. A module MUST emit only glyphs whose `glyphFontSlots` equal the supplied slot. This makes span fonts and future fallback fonts compatible with one non-generic `ParagraphLayout`, including paragraphs whose slots select different raster modules; raster code never interprets another font's local glyph IDs.
+
+The Node host receives explicit `RasterBakePlan` values and imports no unselected baker. Matching literal kinds make incorrect pairings visible to TypeScript without merging runtime and Node dependency graphs. Raster-specific descriptor fields do not appear in core. Shader systems also do not appear here: first-party packages use TSL internally, while external packages may use TypeGPU or another implementation.
+
+## Type-contract fixtures
+
+Public inference is tested as API behavior. Compile-only fixtures must prove that built-in and external raster modules retain literal kinds, resources, batches, and baker descriptors; lazy loading preserves the exact module type; mismatched artifacts fail; raw fonts without a raster fail; dynamic bitmap strikes fail through a concrete bitmap module fixture; invalid source/baked combinations fail; atomic `TextUpdateProperties` rejects span-only and raster-only patches; and React props remain derived from core properties. Positive assertions and intentional `@ts-expect-error` cases are required before runtime implementation. The deliberately non-generic raw `Text` form receives runtime validation for package-owned raster options; the compile-time required-options claim applies to `defineFont`, `RasterRuntime.load`, and statically typed raster requests.
+
 ## Cache keys
 
-- core loads: source URL/hash + core format + baker version;
+- core loads: normalized source URL/hash when present + resolved/explicit baked URL + core format + baker version;
 - runtime bakes: source hash + descriptor hash + baker/generator versions;
 - shape plans: font generation + direction + script + language + features;
 - shaped runs: font generation + text range/content + run properties;
 - layouts: paragraph version + constraints;
-- presentations: font generation + presentation ID + artifact hash + device capability key.
+- rasters: font generation + raster key + artifact hash + device capability key.
 
 Persistent storage is not required in the first slice; in-flight and completed in-memory deduplication is required.

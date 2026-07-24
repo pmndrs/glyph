@@ -74,7 +74,7 @@ Compare all fields, not rendered appearance alone:
 - direction and resolved segment properties;
 - success/error category.
 
-Design-unit integer outputs require exact equality. Floating presentation/layout coordinates are tested separately with documented tolerances.
+Design-unit integer outputs require exact equality. Floating raster/layout coordinates are tested separately with documented tolerances.
 
 ## Three-way stages
 
@@ -113,7 +113,7 @@ Verify that line fitting and boundary reshaping preserve:
 - source-to-glyph mapping;
 - bidi visual order;
 - inserted hyphen/ellipsis mapping;
-- identical shaped glyphs across presentation selection.
+- identical shaped glyphs across raster selection.
 
 ## Required script/behavior matrix
 
@@ -225,13 +225,13 @@ Fuzz:
 
 ## Visual tests
 
-Shaping conformance is data equality; visual tests cover presentation and integration.
+Shaping conformance is data equality; visual tests cover raster and integration.
 
 Required views:
 
-- reference raster versus Slug/MTSDF/bitmap at representative sizes;
+- reference raster versus Slug/MSDF/bitmap at representative sizes;
 - extreme zoom/perspective for Slug;
-- tiny text for bitmap and MTSDF;
+- tiny text for bitmap and MSDF;
 - marks and cursive connections;
 - clipping, ellipsis, alignment, and mixed direction;
 - technique switching from one positioned run.
