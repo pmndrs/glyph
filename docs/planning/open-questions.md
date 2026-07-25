@@ -4,8 +4,8 @@ title: Open questions
 description: Tracks unresolved decisions, blockers, and prototype questions for the contracts and roadmap.
 tags: [questions, governance, blockers]
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:43:45Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-25T18:00:06Z"
 ---
 
 # Open questions
@@ -36,6 +36,8 @@ Status: unresolved unless marked otherwise.
 3. Should independently fetched raster artifacts support progressive range requests beyond whole-resource loading?
 
 ## Shaper and compiled data
+
+The [shaping compilation research note](shaping-compilation-research.md) owns the candidate architecture, break-even model, research ladder, and acceptance matrix. This register retains only the unresolved decisions.
 
 1. What internal HarfRust boundary can accept baked cmap, metrics, classes, and lookup execution without a long-lived fork?
 2. Which HarfRust behaviors rely on source table structure rather than lookup semantics?
@@ -77,4 +79,4 @@ V1 owns UAX #9 bidi analysis/reordering, UAX #14 break opportunities, UAX #24 sc
 - Upload raw and compressed atlas candidates through target WebGL/WebGPU paths.
 - Bake one font natively and in a worker, comparing deterministic sections.
 - Reflow a Latin and Arabic paragraph while recording Wasm call counts.
-- Compare shaping-only OpenType versus one compiled lookup representation for size and speed.
+- Compare shaping-only OpenType versus one semantic-bytecode and one specialized CPU/Wasm lowering for total portfolio size, speed, and layout-ready latency.

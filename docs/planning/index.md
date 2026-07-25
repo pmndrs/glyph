@@ -25,6 +25,10 @@
 - [Tooling fixtures](tooling-fixtures.md) — reproducible sources, goldens, and validators.
 - [Autoresearch protocol](autoresearch.md) — controlled optimization workflow.
 
+## Shaping research
+
+- [Shaping compilation and execution research](shaping-compilation-research.md) — closed-corpus baking, semantic bytecode, per-font CPU/Wasm specialization, and WebGPU execution research.
+
 ## Rendering analysis
 
 - [Renderer capabilities](renderer-capabilities.md) — feature matrix and developer guidance.

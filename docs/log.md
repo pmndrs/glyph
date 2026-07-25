@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Research** — Added a non-binding shaping-compilation concept covering the closed-corpus limit of static baking; total-portfolio break-even for semantic bytecode; an MLIR-based multi-target compiler direction; CPU/Wasm-first validation; WebGPU batching and CPU-readback constraints; and exact conformance, size, latency, memory, robustness, and maintenance gates.
 - **Governance** — Established one canonical engineering house style for Rust, TypeScript, React, Wasm boundaries, lifecycle ownership, deterministic testing, comments, and documentation. A lean root agent guide routes to that OKF concept; the maintainability skill now owns only the review procedure, avoiding repeated context while keeping deliberate review available on demand.
 - **Hardening** — Closed partial-acquisition cleanup gaps in both direct-memory baker bridges and the benchmark lifecycle, replaced cast-shaped Wasm/ABI trust with exact validation, narrowed the runtime Worker predicate to the shape it proves, and retained typed WebGPU availability through presentation.
 - **Performance** — Accepted a measured 0.61 KiB Brotli increase in the lazy runtime-baker Worker for one-time ABI/result validation and allocation rollback, raised only its reviewed lazy-boundary ceilings, and kept the initial browser graph, Wasm artifacts, and shaping/layout/rendering loops unchanged.
