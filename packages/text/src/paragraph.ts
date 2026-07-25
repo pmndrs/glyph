@@ -3,6 +3,7 @@ import type { ParagraphLayout, ParagraphMeasurement } from './layout.js'
 import type { FontFeature, ResolvedFontFeature } from './text.js'
 import type { RegisteredFont } from './font.js'
 import type {
+  BidiAnalysisViews,
   ReshapeRange,
   RuntimeShaper,
   ShapeBatchRequest,
@@ -84,6 +85,7 @@ interface ResolvedStyle {
   readonly letterSpacing: number
   readonly language?: string
   readonly direction: 'auto' | 'ltr' | 'rtl'
+  readonly bidiOverride?: 'ltr' | 'rtl'
   readonly features: readonly ResolvedFontFeature[]
 }
 
@@ -96,6 +98,15 @@ interface StyleSegment {
 interface PreparedRun extends StyleSegment {
   readonly script: string
   readonly direction: 'ltr' | 'rtl'
+  readonly bidiLevel: number
+}
+
+interface OwnedBidiAnalysis {
+  readonly levels: Uint8Array
+  readonly classes: Uint8Array
+  readonly paragraphStarts: Uint32Array
+  readonly paragraphEnds: Uint32Array
+  readonly paragraphLevels: Uint8Array
 }
 
 interface OwnedShape {
@@ -133,15 +144,37 @@ interface LinePlan extends LineMetrics {
   readonly textStart: number
   readonly textEnd: number
   readonly advance: number
+  readonly hardBreak: boolean
+  readonly ellipsis?: EllipsisPlan
+}
+
+interface EllipsisPlan {
+  readonly sourceRun: number
+  readonly shapeRun: number
+  readonly textStart: number
+  readonly textEnd: number
+  readonly cluster: number
+  readonly advance: number
+  readonly level: number
+}
+
+interface PreparedEllipsis {
+  readonly sourceRun: number
+  readonly shapeRun: number
+  readonly textStart: number
+  readonly textEnd: number
+  readonly advance: number
 }
 
 interface PreparedParagraph {
   readonly input: ParagraphInput
   readonly unicode: UnicodeTextAnalysis
+  readonly bidi: OwnedBidiAnalysis
   readonly styles: readonly StyleSegment[]
   readonly runs: readonly PreparedRun[]
   readonly request: ShapeBatchRequest
   readonly shape: OwnedShape
+  readonly ellipses: readonly PreparedEllipsis[]
   readonly clusters: readonly MeasuredCluster[]
 }
 
@@ -165,6 +198,8 @@ interface LineFragment {
   readonly start: number
   readonly end: number
   readonly flags: number
+  readonly level: number
+  readonly ellipsis?: EllipsisPlan
   readonly reshape: boolean
 }
 
@@ -185,12 +220,30 @@ interface PositionedGeometry {
   readonly lineAdvances: Float32Array
 }
 
+interface PreparedPositioning {
+  readonly fragments: readonly LineFragment[]
+  readonly reshaped?: OwnedShape
+}
+
 const DEFAULT_FONT_SIZE = 16
 const PRODUCE_UNSAFE_TO_CONCAT = 0x40
 const BEGINNING_OF_TEXT = 0x01
 const END_OF_TEXT = 0x02
 const GLYPH_UNSAFE_TO_BREAK = 0x01
 const GLYPH_UNSAFE_TO_CONCAT = 0x02
+const BIDI_BN = 9
+const BIDI_B = 10
+const BIDI_S = 11
+const BIDI_WS = 12
+const BIDI_LRE = 14
+const BIDI_LRO = 15
+const BIDI_RLE = 16
+const BIDI_RLO = 17
+const BIDI_PDF = 18
+const BIDI_LRI = 19
+const BIDI_RLI = 20
+const BIDI_FSI = 21
+const BIDI_PDI = 22
 
 export function createParagraphEngine(options: ParagraphEngineOptions): ParagraphEngine {
   if (options?.shaper === undefined) throw new TypeError('paragraph engine requires a shaper')
@@ -213,6 +266,7 @@ class ParagraphImpl implements Paragraph {
   readonly #shaper: RuntimeShaper
   readonly #measurements = new Map<string, MeasuredPlan>()
   readonly #linePlans = new Map<string, readonly LinePlan[]>()
+  readonly #positioning = new Map<string, PreparedPositioning>()
   readonly #positionedLines = new Map<string, PositionedGeometry>()
   readonly #layouts = new Map<string, ParagraphLayout>()
   #prepared: PreparedParagraph
@@ -236,10 +290,23 @@ class ParagraphImpl implements Paragraph {
     let layout = this.#layouts.get(key)
     if (layout !== undefined) return layout
     const measured = this.#measurePlan(normalized)
-    const lineKey = lineConstraintKey(normalized)
+    const positioningKey = positioningLinesKey(measured.lines)
+    const lineKey = geometryLinesKey(positioningKey, normalized.align, measured.measurement.width)
     let geometry = this.#positionedLines.get(lineKey)
     if (geometry === undefined) {
-      geometry = positionPrepared(this.#shaper, this.#prepared, measured.lines)
+      let positioning = this.#positioning.get(positioningKey)
+      if (positioning === undefined) {
+        positioning = preparePositioning(this.#shaper, this.#prepared, measured.lines)
+        this.#positioning.set(positioningKey, positioning)
+      }
+      geometry = positionPrepared(
+        this.#shaper,
+        this.#prepared,
+        measured.lines,
+        positioning,
+        normalized,
+        measured.measurement.width,
+      )
       this.#positionedLines.set(lineKey, geometry)
     }
     layout = Object.freeze({
@@ -255,6 +322,7 @@ class ParagraphImpl implements Paragraph {
     this.#prepared = prepareParagraph(this.#shaper, input)
     this.#measurements.clear()
     this.#linePlans.clear()
+    this.#positioning.clear()
     this.#positionedLines.clear()
     this.#layouts.clear()
   }
@@ -264,6 +332,7 @@ class ParagraphImpl implements Paragraph {
     this.#disposed = true
     this.#measurements.clear()
     this.#linePlans.clear()
+    this.#positioning.clear()
     this.#positionedLines.clear()
     this.#layouts.clear()
   }
@@ -272,7 +341,7 @@ class ParagraphImpl implements Paragraph {
     const key = constraintKey(constraints)
     let plan = this.#measurements.get(key)
     if (plan === undefined) {
-      const lineKey = lineConstraintKey(constraints)
+      const lineKey = linePlanConstraintKey(constraints)
       let lines = this.#linePlans.get(lineKey)
       if (lines === undefined) {
         lines = planLines(this.#shaper, this.#prepared, constraints)
@@ -293,14 +362,18 @@ function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): Prepare
   const ownedInput = copyInput(input)
   const unicode = analyzeUnicodeText(ownedInput.text)
   const styles = resolveStyles(shaper, ownedInput, unicode.graphemeBoundaries)
-  const runs = prepareRuns(ownedInput.text, styles, unicode)
-  const request = shapeRequest(ownedInput.text, runs)
+  const textUtf16 = utf16(ownedInput.text)
+  const bidi = ownBidi(shaper.analyzeBidi(textUtf16, ownedInput.style?.direction ?? 'auto'))
+  const runs = prepareRuns(ownedInput.text, styles, unicode, bidi)
+  const shapedRequest = shapeRequest(ownedInput.text, runs)
+  const request = shapedRequest.request
   const borrowed = request.runs.length === 0
     ? emptyShape()
     : shaper.shapeBatch(request)
   const shape = ownShape(borrowed)
+  const ellipses = measureEllipses(shaper, runs, shape, shapedRequest.ellipses)
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape)
-  return { input: ownedInput, unicode, styles, runs, request, shape, clusters }
+  return { input: ownedInput, unicode, bidi, styles, runs, request, shape, ellipses, clusters }
 }
 
 function copyInput(input: ParagraphInput): ParagraphInput {
@@ -345,6 +418,7 @@ function resolveStyles(
   }
   const sorted = [...boundaries].sort((left, right) => left - right)
   const root = resolveStyle(shaper, input.font, input.style ?? {}, 0, input.text.length)
+  if (input.text.length === 0) return [{ start: 0, end: 0, style: root }]
   const segments: StyleSegment[] = []
   for (let index = 0; index + 1 < sorted.length; index += 1) {
     const start = sorted[index]
@@ -420,6 +494,9 @@ function mergeStyle(
     letterSpacing,
     ...(language === undefined ? {} : { language }),
     direction: span.direction ?? base.direction,
+    ...(span.direction === undefined
+      ? (base.bidiOverride === undefined ? {} : { bidiOverride: base.bidiOverride })
+      : (span.direction === 'auto' ? {} : { bidiOverride: span.direction })),
     features: span.features === undefined ? base.features : resolveFeatures(span.features, start, end),
   }
 }
@@ -446,40 +523,95 @@ function prepareRuns(
   text: string,
   styles: readonly StyleSegment[],
   unicode: UnicodeTextAnalysis,
+  bidi: OwnedBidiAnalysis,
 ): readonly PreparedRun[] {
   const runs: PreparedRun[] = []
   for (const style of styles) {
     for (const script of unicode.scriptItems) {
-      const start = Math.max(style.start, script.start)
-      const end = Math.min(style.end, script.end)
-      if (start >= end) continue
-      for (const fragment of drawableFragments(text, start, end)) {
-        const run: PreparedRun = {
-          ...fragment,
-          style: style.style,
-          script: script.script,
-          direction: style.style.direction === 'rtl' ? 'rtl' : 'ltr',
-        }
-        const previous = runs.at(-1)
-        if (
-          previous !== undefined &&
-          previous.end === run.start &&
-          previous.script === run.script &&
-          previous.direction === run.direction &&
-          equalStyles(previous.style, run.style)
-        ) {
-          runs[runs.length - 1] = { ...previous, end: run.end }
-        } else {
-          runs.push(run)
+      for (const bidiRun of bidiRuns(bidi.levels)) {
+        const start = Math.max(style.start, script.start, bidiRun.start)
+        const end = Math.min(style.end, script.end, bidiRun.end)
+        if (start >= end) continue
+        for (const fragment of drawableFragments(text, start, end)) {
+          const direction = style.style.bidiOverride ?? directionForLevel(bidiRun.level)
+          const bidiLevel = style.style.bidiOverride === undefined
+            ? bidiRun.level
+            : forceLevelDirection(bidiRun.level, direction)
+          const run: PreparedRun = {
+            ...fragment,
+            style: style.style,
+            script: script.script,
+            direction,
+            bidiLevel,
+          }
+          const previous = runs.at(-1)
+          if (
+            previous !== undefined &&
+            previous.end === run.start &&
+            previous.script === run.script &&
+            previous.direction === run.direction &&
+            previous.bidiLevel === run.bidiLevel &&
+            equalStyles(previous.style, run.style)
+          ) {
+            runs[runs.length - 1] = { ...previous, end: run.end }
+          } else {
+            runs.push(run)
+          }
         }
       }
     }
   }
   runs.sort((left, right) => left.start - right.start || left.end - right.end)
+  if (runs.length === 0) {
+    const fallback = styles[0]
+    if (fallback !== undefined) {
+      const level = bidi.levels[0] ?? bidi.paragraphLevels[0] ?? 0
+      runs.push({
+        start: fallback.start,
+        end: fallback.start,
+        style: fallback.style,
+        script: 'Zyyy',
+        direction: fallback.style.bidiOverride ?? directionForLevel(level),
+        bidiLevel: level,
+      })
+    }
+  }
   return runs
 }
 
-function shapeRequest(text: string, runs: readonly PreparedRun[]): ShapeBatchRequest {
+function bidiRuns(levels: Uint8Array): readonly {
+  readonly start: number
+  readonly end: number
+  readonly level: number
+}[] {
+  const runs = []
+  let start = 0
+  while (start < levels.length) {
+    const level = levels[start]
+    if (level === undefined) break
+    let end = start + 1
+    while (end < levels.length && levels[end] === level) end += 1
+    runs.push({ start, end, level })
+    start = end
+  }
+  return runs
+}
+
+function directionForLevel(level: number): 'ltr' | 'rtl' {
+  return (level & 1) === 0 ? 'ltr' : 'rtl'
+}
+
+function forceLevelDirection(level: number, direction: 'ltr' | 'rtl'): number {
+  return directionForLevel(level) === direction ? level : level + 1
+}
+
+function shapeRequest(
+  text: string,
+  runs: readonly PreparedRun[],
+): {
+  readonly request: ShapeBatchRequest
+  readonly ellipses: readonly Omit<PreparedEllipsis, 'advance'>[]
+} {
   const features: ResolvedFontFeature[] = []
   const shapeRuns = runs.map((run) => {
     const selected = run.style.features.filter(
@@ -500,9 +632,50 @@ function shapeRequest(text: string, runs: readonly PreparedRun[]): ShapeBatchReq
       featureCount: selected.length,
     }
   })
-  const textUtf16 = new Uint16Array(text.length)
-  for (let index = 0; index < text.length; index += 1) textUtf16[index] = text.charCodeAt(index)
-  return { textUtf16, runs: shapeRuns, features }
+  const ellipses = runs.map((run, sourceRun) => {
+    const textStart = text.length + sourceRun
+    const shapeRun = shapeRuns.length
+    shapeRuns.push({
+      font: run.style.font,
+      textStart,
+      textEnd: textStart + 1,
+      direction: run.direction,
+      script: run.script,
+      ...(run.style.language === undefined ? {} : { language: run.style.language }),
+      clusterLevel: 0 as const,
+      flags: PRODUCE_UNSAFE_TO_CONCAT,
+      featureStart: features.length,
+      featureCount: 0,
+    })
+    return { sourceRun, shapeRun, textStart, textEnd: textStart + 1 }
+  })
+  return {
+    request: { textUtf16: utf16(`${text}${'…'.repeat(runs.length)}`), runs: shapeRuns, features },
+    ellipses,
+  }
+}
+
+function measureEllipses(
+  shaper: RuntimeShaper,
+  runs: readonly PreparedRun[],
+  shape: OwnedShape,
+  ellipses: readonly Omit<PreparedEllipsis, 'advance'>[],
+): readonly PreparedEllipsis[] {
+  return ellipses.map((ellipsis) => {
+    const run = runs[ellipsis.sourceRun]
+    const glyphStart = shape.runGlyphStarts[ellipsis.shapeRun]
+    const glyphCount = shape.runGlyphCounts[ellipsis.shapeRun]
+    if (run === undefined || glyphStart === undefined || glyphCount === undefined) {
+      throw new Error('shaper returned an incomplete ellipsis run')
+    }
+    const font = requireFont(shaper, run.style.font)
+    const scale = run.style.fontSize / font.metrics.unitsPerEm
+    let advance = 0
+    for (let glyph = glyphStart; glyph < glyphStart + glyphCount; glyph += 1) {
+      advance += Math.abs(shape.xAdvances[glyph] ?? 0) * scale
+    }
+    return { ...ellipsis, advance }
+  })
 }
 
 function measureClusters(
@@ -595,12 +768,18 @@ function planLines(
 function measurePrepared(
   prepared: PreparedParagraph,
   constraints: NormalizedConstraints,
-  lines: readonly LinePlan[],
+  allLines: readonly LinePlan[],
 ): MeasuredPlan {
-  const contentWidth = lines.reduce((maximum, line) => Math.max(maximum, line.advance), 0)
-  const contentHeight = lines.reduce((sum, line) => sum + line.height, 0)
-  const width = resolveAxis(constraints.width, contentWidth)
-  const height = resolveAxis(constraints.height, contentHeight)
+  const lines = visibleLines(prepared, constraints, allLines)
+  const naturalContentWidth = allLines.reduce((maximum, line) => Math.max(maximum, line.advance), 0)
+  const contentHeight = allLines.reduce((sum, line) => sum + line.height, 0)
+  const displayAdvances = lines.map((line, index) =>
+    measuredLineAdvance(prepared, constraints, lines, line, index))
+  const visibleWidth = displayAdvances.reduce((maximum, advance) => Math.max(maximum, advance), 0)
+  const contentWidth = Math.max(naturalContentWidth, visibleWidth)
+  const visibleHeight = lines.reduce((sum, line) => sum + line.height, 0)
+  const width = resolveAxis(constraints.width, visibleWidth)
+  const height = resolveAxis(constraints.height, visibleHeight)
   let blockOffset = 0
   const baselines = lines.map((line) => {
     const baseline = blockOffset + line.baseline
@@ -614,9 +793,104 @@ function measurePrepared(
     contentHeight,
     firstBaseline: baselines[0] ?? 0,
     lastBaseline: baselines.at(-1) ?? 0,
-    overflowed: contentWidth > width || contentHeight > height,
+    overflowed: lines.length < allLines.length || contentWidth > width || contentHeight > height,
   })
   return { measurement, lines }
+}
+
+function measuredLineAdvance(
+  prepared: PreparedParagraph,
+  constraints: NormalizedConstraints,
+  lines: readonly LinePlan[],
+  line: LinePlan,
+  index: number,
+): number {
+  if (
+    constraints.align !== 'justify' ||
+    constraints.width.mode !== 'exactly' ||
+    line.hardBreak ||
+    index >= lines.length - 1 ||
+    justificationSpaces(prepared, line, line.textStart, line.textEnd) === 0
+  ) {
+    return line.advance
+  }
+  return Math.max(line.advance, constraints.width.size)
+}
+
+function visibleLines(
+  prepared: PreparedParagraph,
+  constraints: NormalizedConstraints,
+  allLines: readonly LinePlan[],
+): readonly LinePlan[] {
+  let count = constraints.maxLines === undefined
+    ? allLines.length
+    : Math.min(allLines.length, constraints.maxLines)
+  if (constraints.overflow === 'ellipsis' && constraints.height.mode !== 'unconstrained') {
+    let height = 0
+    let fitting = 0
+    for (const line of allLines) {
+      if (height + line.height > constraints.height.size) break
+      height += line.height
+      fitting += 1
+    }
+    count = Math.min(count, fitting)
+  }
+  const lines = allLines.slice(0, count)
+  if (constraints.overflow !== 'ellipsis' || lines.length === 0) return lines
+  const last = lines.at(-1)
+  if (last === undefined) return lines
+  const widthLimit = constraints.width.mode === 'unconstrained'
+    ? Number.POSITIVE_INFINITY
+    : constraints.width.size
+  const truncated = count < allLines.length
+  if (!truncated && last.advance <= widthLimit) return lines
+  return [...lines.slice(0, -1), ellipsizeLine(prepared, last, widthLimit)]
+}
+
+function ellipsizeLine(
+  prepared: PreparedParagraph,
+  line: LinePlan,
+  widthLimit: number,
+): LinePlan {
+  let clusterEnd = line.clusterEnd
+  let advance = line.advance
+  let selected = ellipsisAt(prepared, line.textEnd)
+  while (
+    clusterEnd > line.clusterStart &&
+    Number.isFinite(widthLimit) &&
+    advance + selected.advance > widthLimit
+  ) {
+    clusterEnd -= 1
+    const removed = prepared.clusters[clusterEnd]
+    if (removed !== undefined) advance -= removed.advance
+    const offset = prepared.clusters[clusterEnd]?.start ?? line.textStart
+    selected = ellipsisAt(prepared, offset)
+  }
+  const textEnd = prepared.clusters[clusterEnd]?.start ?? line.textStart
+  const levelOffset = Math.max(line.textStart, textEnd - 1)
+  const level = prepared.bidi.levels[levelOffset] ?? paragraphLevelAt(prepared.bidi, textEnd)
+  return {
+    ...line,
+    clusterEnd,
+    textEnd,
+    advance: Math.max(0, advance) + selected.advance,
+    hardBreak: false,
+    ellipsis: {
+      ...selected,
+      cluster: textEnd,
+      level,
+    },
+  }
+}
+
+function ellipsisAt(prepared: PreparedParagraph, offset: number): PreparedEllipsis {
+  const sourceRun = prepared.runs.findIndex((run) => run.start < offset && offset <= run.end)
+  const fallbackRun = prepared.runs.findIndex((run) => run.start <= offset && offset < run.end)
+  const run = sourceRun >= 0 ? sourceRun : fallbackRun
+  const ellipsis = prepared.ellipses.find((entry) => entry.sourceRun === run)
+    ?? prepared.ellipses[0]
+  if (ellipsis === undefined) throw new Error('paragraph has no ellipsis shaping run')
+  return ellipsis
 }
 
 function breakLines(
@@ -695,6 +969,7 @@ function breakLines(
       textStart: first.start,
       textEnd: last.hardBreak ? last.start : last.end,
       advance: lineAdvance,
+      hardBreak: last.hardBreak,
       ...metrics,
     })
     lineStart = lineEnd
@@ -707,6 +982,7 @@ function breakLines(
       textStart: prepared.input.text.length,
       textEnd: prepared.input.text.length,
       advance: 0,
+      hardBreak: false,
       ...metrics,
     })
   }
@@ -743,13 +1019,25 @@ function normalizeConstraints(constraints: ParagraphConstraints = {}): Normalize
   if (maxLines !== undefined && (!Number.isSafeInteger(maxLines) || maxLines <= 0)) {
     throw new RangeError('maxLines must be a positive safe integer')
   }
+  const wrap = constraints.wrap ?? 'word'
+  if (wrap !== 'none' && wrap !== 'word' && wrap !== 'character') {
+    throw new RangeError('wrap must be none, word, or character')
+  }
+  const align = constraints.align ?? 'start'
+  if (align !== 'start' && align !== 'center' && align !== 'end' && align !== 'justify') {
+    throw new RangeError('align must be start, center, end, or justify')
+  }
+  const overflow = constraints.overflow ?? 'visible'
+  if (overflow !== 'visible' && overflow !== 'clip' && overflow !== 'ellipsis') {
+    throw new RangeError('overflow must be visible, clip, or ellipsis')
+  }
   return {
     width,
     height,
     ...(maxLines === undefined ? {} : { maxLines }),
-    wrap: constraints.wrap ?? 'word',
-    align: constraints.align ?? 'start',
-    overflow: constraints.overflow ?? 'visible',
+    wrap,
+    align,
+    overflow,
   }
 }
 
@@ -760,6 +1048,9 @@ function normalizeAxis(
   if (constraint === undefined || constraint.mode === 'unconstrained') {
     return { mode: 'unconstrained' }
   }
+  if (constraint.mode !== 'at-most' && constraint.mode !== 'exactly') {
+    throw new RangeError(`${name} mode must be unconstrained, at-most, or exactly`)
+  }
   return { mode: constraint.mode, size: finiteNonnegative(constraint.size, `${name} size`) }
 }
 
@@ -767,41 +1058,62 @@ function constraintKey(constraints: NormalizedConstraints): string {
   return JSON.stringify(constraints)
 }
 
-function lineConstraintKey(constraints: NormalizedConstraints): string {
+function linePlanConstraintKey(constraints: NormalizedConstraints): string {
   return JSON.stringify({
     width: constraints.width,
     wrap: constraints.wrap,
-    ...(constraints.maxLines === undefined ? {} : { maxLines: constraints.maxLines }),
-    overflow: constraints.overflow,
   })
+}
+
+function geometryLinesKey(
+  positioningKey: string,
+  align: NormalizedConstraints['align'],
+  boxWidth: number,
+): string {
+  return JSON.stringify({
+    positioningKey,
+    align,
+    boxWidth,
+  })
+}
+
+function positioningLinesKey(lines: readonly LinePlan[]): string {
+  return JSON.stringify(lines.map((line) => ({
+    clusterStart: line.clusterStart,
+    clusterEnd: line.clusterEnd,
+    textStart: line.textStart,
+    textEnd: line.textEnd,
+    hardBreak: line.hardBreak,
+    ...(line.ellipsis === undefined
+      ? {}
+      : {
+          ellipsis: {
+            sourceRun: line.ellipsis.sourceRun,
+            shapeRun: line.ellipsis.shapeRun,
+            cluster: line.ellipsis.cluster,
+            level: line.ellipsis.level,
+          },
+        }),
+  })))
 }
 
 function positionPrepared(
   shaper: RuntimeShaper,
   prepared: PreparedParagraph,
   lines: readonly LinePlan[],
+  positioning: PreparedPositioning,
+  constraints: NormalizedConstraints,
+  boxWidth: number,
 ): PositionedGeometry {
   if (lines.length === 0) return emptyGeometry()
-  const fragments = collectLineFragments(prepared, lines)
-  const ranges: ReshapeRange[] = []
+  const { fragments, reshaped } = positioning
   const reshapeRunByFragment = new Map<number, number>()
+  let reshapeRun = 0
   for (const [fragmentIndex, fragment] of fragments.entries()) {
     if (!fragment.reshape) continue
-    reshapeRunByFragment.set(fragmentIndex, ranges.length)
-    const run = prepared.runs[fragment.run]
-    if (run === undefined) throw new Error('line fragment references a missing shaping run')
-    ranges.push({
-      run: fragment.run,
-      itemStart: fragment.start,
-      itemEnd: fragment.end,
-      contextStart: run.start,
-      contextEnd: run.end,
-      flags: fragment.flags,
-    })
+    reshapeRunByFragment.set(fragmentIndex, reshapeRun)
+    reshapeRun += 1
   }
-  const reshaped = ranges.length === 0
-    ? undefined
-    : ownShape(shaper.reshapeRanges({ ...prepared.request, ranges }))
 
   const fontHandles: number[] = []
   const fontSlots = new Map<FontHandle, number>()
@@ -823,6 +1135,8 @@ function positionPrepared(
 
   for (const [lineIndex, line] of lines.entries()) {
     const lineGlyphStart = glyphIds.length
+    const justificationCounts: number[] = []
+    let passedSpaces = 0
     let cursor = 0
     const baseline = blockOffset + line.baseline
     while (fragments[fragmentIndex]?.line === lineIndex) {
@@ -830,9 +1144,9 @@ function positionPrepared(
       if (fragment === undefined) break
       const run = prepared.runs[fragment.run]
       if (run === undefined) throw new Error('line fragment references a missing shaping run')
-      const reshapeRun = reshapeRunByFragment.get(fragmentIndex)
-      const source = reshapeRun === undefined ? prepared.shape : reshaped
-      const sourceRun = reshapeRun ?? fragment.run
+      const reshapedRun = reshapeRunByFragment.get(fragmentIndex)
+      const source = reshapedRun === undefined ? prepared.shape : reshaped
+      const sourceRun = fragment.ellipsis?.shapeRun ?? reshapedRun ?? fragment.run
       if (source === undefined) throw new Error('boundary reshape result is missing')
       const glyphStart = source.runGlyphStarts[sourceRun]
       const glyphCount = source.runGlyphCounts[sourceRun]
@@ -847,7 +1161,10 @@ function positionPrepared(
       }
       const font = requireFont(shaper, run.style.font)
       const scale = run.style.fontSize / font.metrics.unitsPerEm
-      const selected = glyphIndexes(source, glyphStart, glyphCount, fragment.start, fragment.end)
+      const selectedStart = fragment.ellipsis?.textStart ?? fragment.start
+      const selectedEnd = fragment.ellipsis?.textEnd ?? fragment.end
+      const selected = glyphIndexes(source, glyphStart, glyphCount, selectedStart, selectedEnd)
+      let clusterBoundary = run.direction === 'ltr' ? fragment.start : fragment.end
       for (const [selectedIndex, glyph] of selected.entries()) {
         const cluster = source.clusters[glyph]
         const glyphId = source.glyphIds[glyph]
@@ -867,19 +1184,49 @@ function positionPrepared(
         }
         glyphFontSlots.push(slot)
         glyphIds.push(glyphId)
-        clusters.push(cluster)
+        clusters.push(fragment.ellipsis?.cluster ?? cluster)
         glyphFontSizes.push(run.style.fontSize)
+        justificationCounts.push(passedSpaces)
         x.push(cursor + xOffset * scale)
         y.push(baseline - yOffset * scale)
         glyphFlags.push(flags)
         cursor += Math.abs(xAdvance) * scale
         const nextGlyph = selected[selectedIndex + 1]
-        const nextCluster = nextGlyph === undefined ? fragment.end : source.clusters[nextGlyph]
-        if (nextCluster !== cluster) {
-          cursor += spacingBetween(prepared.clusters, cluster, nextCluster ?? fragment.end)
+        const nextCluster = nextGlyph === undefined ? selectedEnd : source.clusters[nextGlyph]
+        if (nextCluster !== cluster && fragment.ellipsis === undefined) {
+          const rangeStart = run.direction === 'ltr'
+            ? cluster
+            : Math.min(cluster, clusterBoundary)
+          const rangeEnd = run.direction === 'ltr'
+            ? (nextCluster ?? fragment.end)
+            : Math.max(cluster, clusterBoundary)
+          cursor += spacingBetween(prepared.clusters, rangeStart, rangeEnd)
+          passedSpaces += justificationSpaces(prepared, line, rangeStart, rangeEnd)
+          clusterBoundary = cluster
         }
       }
       fragmentIndex += 1
+    }
+    const available = Math.max(0, boxWidth - cursor)
+    if (
+      constraints.align === 'justify' &&
+      !line.hardBreak &&
+      lineIndex < lines.length - 1 &&
+      passedSpaces > 0
+    ) {
+      const perSpace = available / passedSpaces
+      for (let glyph = lineGlyphStart; glyph < glyphIds.length; glyph += 1) {
+        x[glyph] = (x[glyph] ?? 0) + (justificationCounts[glyph - lineGlyphStart] ?? 0) * perSpace
+      }
+      cursor += available
+    } else {
+      const paragraphDirection = directionForLevel(paragraphLevelAt(prepared.bidi, line.textStart))
+      const offset = alignmentOffset(constraints.align, paragraphDirection, available)
+      if (offset !== 0) {
+        for (let glyph = lineGlyphStart; glyph < glyphIds.length; glyph += 1) {
+          x[glyph] = (x[glyph] ?? 0) + offset
+        }
+      }
     }
     lineTextStarts.push(line.textStart)
     lineTextEnds.push(line.textEnd)
@@ -908,36 +1255,223 @@ function positionPrepared(
   }
 }
 
+function preparePositioning(
+  shaper: RuntimeShaper,
+  prepared: PreparedParagraph,
+  lines: readonly LinePlan[],
+): PreparedPositioning {
+  const fragments = collectLineFragments(prepared, lines)
+  const ranges: ReshapeRange[] = []
+  for (const fragment of fragments) {
+    if (!fragment.reshape) continue
+    const run = prepared.runs[fragment.run]
+    if (run === undefined) throw new Error('line fragment references a missing shaping run')
+    ranges.push({
+      run: fragment.run,
+      itemStart: fragment.start,
+      itemEnd: fragment.end,
+      contextStart: run.start,
+      contextEnd: run.end,
+      flags: fragment.flags,
+    })
+  }
+  const reshaped = ranges.length === 0
+    ? undefined
+    : ownShape(shaper.reshapeRanges({ ...prepared.request, ranges }))
+  return { fragments, ...(reshaped === undefined ? {} : { reshaped }) }
+}
+
+function alignmentOffset(
+  align: NormalizedConstraints['align'],
+  direction: 'ltr' | 'rtl',
+  available: number,
+): number {
+  if (align === 'center') return available / 2
+  if (align === 'end') return direction === 'ltr' ? available : 0
+  if (align === 'start') return direction === 'rtl' ? available : 0
+  return direction === 'rtl' ? available : 0
+}
+
+function justificationSpaces(
+  prepared: PreparedParagraph,
+  line: LinePlan,
+  start: number,
+  end: number,
+): number {
+  let trimmedEnd = line.textEnd
+  while (trimmedEnd > line.textStart && prepared.input.text.charCodeAt(trimmedEnd - 1) === 0x20) {
+    trimmedEnd -= 1
+  }
+  let count = 0
+  for (const cluster of prepared.clusters) {
+    if (
+      cluster.start >= start &&
+      cluster.start < end &&
+      cluster.start < trimmedEnd &&
+      prepared.input.text.charCodeAt(cluster.start) === 0x20
+    ) {
+      count += 1
+    }
+  }
+  return count
+}
+
 function collectLineFragments(
   prepared: PreparedParagraph,
   lines: readonly LinePlan[],
 ): readonly LineFragment[] {
   const fragments: LineFragment[] = []
   for (const [lineIndex, line] of lines.entries()) {
-    const lineFragments = prepared.runs
-      .map((run, runIndex) => ({
-        run: runIndex,
-        start: Math.max(line.textStart, run.start),
-        end: Math.min(line.textEnd, run.end),
-      }))
-      .filter(({ start, end }) => start < end)
-    for (const [localIndex, fragment] of lineFragments.entries()) {
-      const first = localIndex === 0
-      const last = localIndex === lineFragments.length - 1
-      const boundaryLine = lines.length > 1 && (first || last)
+    const levels = reorderedLineLevels(prepared.bidi, line.textStart, line.textEnd)
+    const logical = []
+    for (const [runIndex, run] of prepared.runs.entries()) {
+      const start = Math.max(line.textStart, run.start)
+      const end = Math.min(line.textEnd, run.end)
+      if (start >= end) continue
+      let fragmentStart = start
+      while (fragmentStart < end) {
+        const localStart = fragmentStart - line.textStart
+        const resolvedLevel = levels[localStart] ?? run.bidiLevel
+        const level = run.style.bidiOverride === undefined
+          ? resolvedLevel
+          : forceLevelDirection(resolvedLevel, run.direction)
+        let fragmentEnd = fragmentStart + 1
+        while (fragmentEnd < end) {
+          const nextResolved = levels[fragmentEnd - line.textStart] ?? run.bidiLevel
+          const nextLevel = run.style.bidiOverride === undefined
+            ? nextResolved
+            : forceLevelDirection(nextResolved, run.direction)
+          if (nextLevel !== level) break
+          fragmentEnd += 1
+        }
+        logical.push({ run: runIndex, start: fragmentStart, end: fragmentEnd, level })
+        fragmentStart = fragmentEnd
+      }
+    }
+    const decorated: Omit<LineFragment, 'line'>[] = logical.map((fragment, logicalIndex) => {
+      const first = logicalIndex === 0
+      const last = logicalIndex === logical.length - 1
+      const run = prepared.runs[fragment.run]
+      if (run === undefined) throw new Error('line fragment references a missing shaping run')
+      const boundaryLine = (first && line.textStart > run.start) || (last && line.textEnd < run.end)
       const unsafe = fragmentHasFlag(prepared, fragment.run, fragment.start, fragment.end, GLYPH_UNSAFE_TO_CONCAT)
-      fragments.push({
-        line: lineIndex,
+      return {
         ...fragment,
         flags:
           PRODUCE_UNSAFE_TO_CONCAT |
           (first ? BEGINNING_OF_TEXT : 0) |
           (last ? END_OF_TEXT : 0),
         reshape: boundaryLine && unsafe,
+      }
+    })
+    if (line.ellipsis !== undefined) {
+      decorated.push({
+        run: line.ellipsis.sourceRun,
+        start: line.ellipsis.cluster,
+        end: line.ellipsis.cluster,
+        level: line.ellipsis.level,
+        flags: PRODUCE_UNSAFE_TO_CONCAT,
+        reshape: false,
+        ellipsis: line.ellipsis,
       })
+    }
+    for (const fragment of reorderFragments(decorated)) {
+      fragments.push({ line: lineIndex, ...fragment })
     }
   }
   return fragments
+}
+
+function reorderedLineLevels(
+  bidi: OwnedBidiAnalysis,
+  start: number,
+  end: number,
+): Uint8Array {
+  const levels = bidi.levels.slice(start, end)
+  const classes = bidi.classes.subarray(start, end)
+  const paragraphLevel = paragraphLevelAt(bidi, start)
+  let resetFrom: number | undefined = 0
+  let resetTo: number | undefined
+  let previousLevel = paragraphLevel
+  for (let index = 0; index < classes.length; index += 1) {
+    const bidiClass = classes[index]
+    if (bidiClass === BIDI_B || bidiClass === BIDI_S) {
+      resetTo = index + 1
+      resetFrom ??= index
+    } else if (
+      bidiClass === BIDI_WS ||
+      bidiClass === BIDI_FSI ||
+      bidiClass === BIDI_LRI ||
+      bidiClass === BIDI_RLI ||
+      bidiClass === BIDI_PDI
+    ) {
+      resetFrom ??= index
+    } else if (
+      bidiClass === BIDI_RLE ||
+      bidiClass === BIDI_LRE ||
+      bidiClass === BIDI_RLO ||
+      bidiClass === BIDI_LRO ||
+      bidiClass === BIDI_PDF ||
+      bidiClass === BIDI_BN
+    ) {
+      resetFrom ??= index
+      levels[index] = previousLevel
+    } else {
+      resetFrom = undefined
+    }
+    if (resetFrom !== undefined && resetTo !== undefined) {
+      levels.fill(paragraphLevel, resetFrom, resetTo)
+      resetFrom = undefined
+      resetTo = undefined
+    }
+    previousLevel = levels[index] ?? paragraphLevel
+  }
+  if (resetFrom !== undefined) levels.fill(paragraphLevel, resetFrom)
+  return levels
+}
+
+function paragraphLevelAt(bidi: OwnedBidiAnalysis, offset: number): number {
+  for (let index = 0; index < bidi.paragraphStarts.length; index += 1) {
+    const start = bidi.paragraphStarts[index]
+    const end = bidi.paragraphEnds[index]
+    if (start !== undefined && end !== undefined && start <= offset && offset < end) {
+      return bidi.paragraphLevels[index] ?? 0
+    }
+  }
+  return bidi.paragraphLevels.at(-1) ?? 0
+}
+
+function reorderFragments<Fragment extends { readonly level: number }>(
+  logical: readonly Fragment[],
+): readonly Fragment[] {
+  const visual = [...logical]
+  let maximum = 0
+  let lowestOdd = Number.POSITIVE_INFINITY
+  for (const fragment of visual) {
+    maximum = Math.max(maximum, fragment.level)
+    if ((fragment.level & 1) === 1) lowestOdd = Math.min(lowestOdd, fragment.level)
+  }
+  if (!Number.isFinite(lowestOdd)) return visual
+  for (let level = maximum; level >= lowestOdd; level -= 1) {
+    let start = 0
+    while (start < visual.length) {
+      while (start < visual.length && (visual[start]?.level ?? -1) < level) start += 1
+      let end = start
+      while (end < visual.length && (visual[end]?.level ?? -1) >= level) end += 1
+      reverse(visual, start, end)
+      start = end
+    }
+  }
+  return visual
+}
+
+function reverse<Value>(values: Value[], start: number, end: number): void {
+  for (let left = start, right = end - 1; left < right; left += 1, right -= 1) {
+    const value = values[left]
+    if (value === undefined) break
+    values[left] = values[right] as Value
+    values[right] = value
+  }
 }
 
 function fragmentHasFlag(
@@ -993,16 +1527,17 @@ function measurementForGeometry(
   geometry: PositionedGeometry,
 ): ParagraphMeasurement {
   const contentWidth = maxArray(geometry.lineAdvances)
+  const requiredContentWidth = Math.max(contentWidth, measured.contentWidth)
   const width = resolveAxis(constraints.width, contentWidth)
-  const height = resolveAxis(constraints.height, measured.contentHeight)
+  const height = measured.height
   return {
     width,
     height,
-    contentWidth,
+    contentWidth: requiredContentWidth,
     contentHeight: measured.contentHeight,
     firstBaseline: geometry.lineBaselines[0] ?? 0,
     lastBaseline: geometry.lineBaselines.at(-1) ?? 0,
-    overflowed: contentWidth > width || measured.contentHeight > height,
+    overflowed: measured.overflowed || requiredContentWidth > width || measured.contentHeight > height,
   }
 }
 
@@ -1090,6 +1625,7 @@ function equalStyles(left: ResolvedStyle, right: ResolvedStyle): boolean {
     left.letterSpacing === right.letterSpacing &&
     left.language === right.language &&
     left.direction === right.direction &&
+    left.bidiOverride === right.bidiOverride &&
     equalFeatures(left.features, right.features)
 }
 
@@ -1117,6 +1653,22 @@ function ownShape(shape: ShapedBatchViews): OwnedShape {
     yOffsets: shape.yOffsets.slice(),
     glyphFlags: shape.glyphFlags.slice(),
   }
+}
+
+function ownBidi(bidi: BidiAnalysisViews): OwnedBidiAnalysis {
+  return {
+    levels: bidi.levels.slice(),
+    classes: bidi.classes.slice(),
+    paragraphStarts: bidi.paragraphStarts.slice(),
+    paragraphEnds: bidi.paragraphEnds.slice(),
+    paragraphLevels: bidi.paragraphLevels.slice(),
+  }
+}
+
+function utf16(text: string): Uint16Array {
+  const result = new Uint16Array(text.length)
+  for (let index = 0; index < text.length; index += 1) result[index] = text.charCodeAt(index)
+  return result
 }
 
 function emptyShape(): OwnedShape {

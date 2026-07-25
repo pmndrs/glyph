@@ -1,0 +1,556 @@
+{
+  "cases": [
+    {
+      "glyphs": [
+        {
+          "cluster": 19,
+          "flags": 3,
+          "glyphId": 98,
+          "xAdvance": 0,
+          "xOffset": 57,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 19,
+          "flags": 3,
+          "glyphId": 5474,
+          "xAdvance": 497,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 17,
+          "flags": 3,
+          "glyphId": 95,
+          "xAdvance": 0,
+          "xOffset": -83,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 17,
+          "flags": 3,
+          "glyphId": 2739,
+          "xAdvance": 467,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 15,
+          "flags": 3,
+          "glyphId": 98,
+          "xAdvance": 0,
+          "xOffset": -99,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 15,
+          "flags": 3,
+          "glyphId": 1645,
+          "xAdvance": 244,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 13,
+          "flags": 3,
+          "glyphId": 94,
+          "xAdvance": 0,
+          "xOffset": -208,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 13,
+          "flags": 3,
+          "glyphId": 1849,
+          "xAdvance": 197,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 11,
+          "flags": 2,
+          "glyphId": 94,
+          "xAdvance": 0,
+          "xOffset": -159,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 11,
+          "flags": 2,
+          "glyphId": 3871,
+          "xAdvance": 390,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 10,
+          "flags": 2,
+          "glyphId": 1,
+          "xAdvance": 292,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 8,
+          "flags": 2,
+          "glyphId": 95,
+          "xAdvance": 0,
+          "xOffset": -83,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 8,
+          "flags": 2,
+          "glyphId": 85,
+          "xAdvance": 452,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 7,
+          "flags": 3,
+          "glyphId": 3080,
+          "xAdvance": 446,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 5,
+          "flags": 3,
+          "glyphId": 94,
+          "xAdvance": 0,
+          "xOffset": -212,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 5,
+          "flags": 3,
+          "glyphId": 3075,
+          "xAdvance": 245,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 2,
+          "flags": 3,
+          "glyphId": 1439,
+          "xAdvance": 0,
+          "xOffset": 236,
+          "yAdvance": 0,
+          "yOffset": 51
+        },
+        {
+          "cluster": 2,
+          "flags": 3,
+          "glyphId": 97,
+          "xAdvance": 0,
+          "xOffset": 36,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 2,
+          "flags": 3,
+          "glyphId": 1930,
+          "xAdvance": 568,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 1,
+          "flags": 2,
+          "glyphId": 1843,
+          "xAdvance": 175,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 0,
+          "flags": 2,
+          "glyphId": 55,
+          "xAdvance": 217,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        }
+      ],
+      "id": "arabic-joining",
+      "segment": {
+        "direction": "rtl",
+        "features": [],
+        "language": "ar",
+        "script": "Arab"
+      },
+      "text": "السَّلَامُ عَلَيْكُمْ"
+    },
+    {
+      "glyphs": [
+        {
+          "cluster": 10,
+          "flags": 3,
+          "glyphId": 2522,
+          "xAdvance": 340,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 9,
+          "flags": 2,
+          "glyphId": 2513,
+          "xAdvance": 302,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 8,
+          "flags": 2,
+          "glyphId": 1,
+          "xAdvance": 292,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 7,
+          "flags": 3,
+          "glyphId": 2517,
+          "xAdvance": 340,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 6,
+          "flags": 2,
+          "glyphId": 2513,
+          "xAdvance": 302,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 5,
+          "flags": 2,
+          "glyphId": 1,
+          "xAdvance": 292,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 4,
+          "flags": 3,
+          "glyphId": 2521,
+          "xAdvance": 340,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 3,
+          "flags": 2,
+          "glyphId": 2513,
+          "xAdvance": 302,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 2,
+          "flags": 2,
+          "glyphId": 1,
+          "xAdvance": 292,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 1,
+          "flags": 3,
+          "glyphId": 2518,
+          "xAdvance": 340,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 0,
+          "flags": 2,
+          "glyphId": 2513,
+          "xAdvance": 302,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        }
+      ],
+      "id": "lam-alef",
+      "segment": {
+        "direction": "rtl",
+        "features": [],
+        "language": "ar",
+        "script": "Arab"
+      },
+      "text": "لا لأ لإ لآ"
+    },
+    {
+      "glyphs": [
+        {
+          "cluster": 11,
+          "flags": 2,
+          "glyphId": 117,
+          "xAdvance": 585,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 10,
+          "flags": 2,
+          "glyphId": 116,
+          "xAdvance": 585,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 9,
+          "flags": 2,
+          "glyphId": 123,
+          "xAdvance": 299,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 8,
+          "flags": 2,
+          "glyphId": 115,
+          "xAdvance": 585,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 7,
+          "flags": 2,
+          "glyphId": 114,
+          "xAdvance": 585,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 6,
+          "flags": 2,
+          "glyphId": 113,
+          "xAdvance": 585,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 5,
+          "flags": 2,
+          "glyphId": 1,
+          "xAdvance": 292,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 4,
+          "flags": 3,
+          "glyphId": 1888,
+          "xAdvance": 343,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 3,
+          "flags": 3,
+          "glyphId": 1571,
+          "xAdvance": 366,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 2,
+          "flags": 3,
+          "glyphId": 1930,
+          "xAdvance": 568,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 1,
+          "flags": 2,
+          "glyphId": 1843,
+          "xAdvance": 175,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 0,
+          "flags": 2,
+          "glyphId": 55,
+          "xAdvance": 217,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        }
+      ],
+      "id": "arabic-numbers",
+      "segment": {
+        "direction": "rtl",
+        "features": [],
+        "language": "ar",
+        "script": "Arab"
+      },
+      "text": "السعر ١٢٣٫٤٥"
+    },
+    {
+      "glyphs": [
+        {
+          "cluster": 0,
+          "flags": 2,
+          "glyphId": 6270,
+          "xAdvance": 497,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 1,
+          "flags": 2,
+          "glyphId": 6631,
+          "xAdvance": 795,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 4,
+          "flags": 0,
+          "glyphId": 6258,
+          "xAdvance": 413,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 5,
+          "flags": 0,
+          "glyphId": 6260,
+          "xAdvance": 419,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 6,
+          "flags": 0,
+          "glyphId": 1,
+          "xAdvance": 292,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 7,
+          "flags": 2,
+          "glyphId": 6227,
+          "xAdvance": 612,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 8,
+          "flags": 2,
+          "glyphId": 6248,
+          "xAdvance": 623,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 9,
+          "flags": 2,
+          "glyphId": 6227,
+          "xAdvance": 612,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 10,
+          "flags": 2,
+          "glyphId": 6246,
+          "xAdvance": 611,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 11,
+          "flags": 2,
+          "glyphId": 6227,
+          "xAdvance": 612,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        },
+        {
+          "cluster": 12,
+          "flags": 2,
+          "glyphId": 6244,
+          "xAdvance": 606,
+          "xOffset": 0,
+          "yAdvance": 0,
+          "yOffset": 0
+        }
+      ],
+      "id": "latin",
+      "segment": {
+        "direction": "ltr",
+        "features": [],
+        "language": "en",
+        "script": "Latn"
+      },
+      "text": "office AVATAR"
+    }
+  ],
+  "clusterUnit": "utf16",
+  "engine": {
+    "commit": "60b28ea22b5261710018d69c168a762bcb28794c",
+    "name": "HarfRust",
+    "version": "0.12.0"
+  },
+  "fontFixture": "amiri-regular-v0",
+  "positionUnit": "font-unit",
+  "schemaVersion": 0
+}

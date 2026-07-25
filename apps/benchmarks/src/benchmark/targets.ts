@@ -4,8 +4,10 @@ import {
   FontLoader,
   FontRegistry,
   type Paragraph,
+  type ParagraphConstraints,
   type ParagraphLayout,
   type ParagraphMeasurement,
+  type ParagraphStyle,
   type RegisteredFont,
   type RuntimeShaper,
   type ShapeBatchRequest,
@@ -15,10 +17,13 @@ import { createFontBaker, type FontBakeCore } from '@pmndrs/text-font-baker'
 import wasmUrl from '@pmndrs/text-font-baker/font-baker.wasm?url'
 import shaperWasmUrl from '@pmndrs/text/text-shaper.wasm?url'
 import canonicalFontUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url'
+import amiriFontUrl from '../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url'
 import canonicalFontManifest from '../../fixtures/fonts/inter-v4.1/manifest.json'
+import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json'
 import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-v0.json'
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
+import { createUikitLayoutFixture, YogaMeasureMode } from './uikit-layout-fixture'
 
 function stableSyntheticHash(sample: number): string {
   let value = 2166136261
@@ -297,6 +302,7 @@ async function loadParagraphFixture(): Promise<void> {
     registry: shaper.registry,
     registerFont: (registered) => shaper.registerFont(registered),
     disposeFont: (registered) => shaper.disposeFont(registered),
+    analyzeBidi: (text, direction) => shaper.analyzeBidi(text, direction),
     shapeBatch: (request) => {
       paragraphShapeCalls += 1
       return shaper.shapeBatch(request)
@@ -417,6 +423,249 @@ const paragraphLayoutTarget: BenchmarkTarget = {
   dispose: disposeParagraphFixture,
 }
 
+interface ContractLayout {
+  readonly measurement: ParagraphMeasurement
+  readonly hash: string
+  readonly glyphFontSlots?: readonly number[]
+  readonly glyphIds: readonly number[]
+  readonly clusters: readonly number[]
+  readonly glyphFontSizes?: readonly number[]
+  readonly x: readonly number[]
+  readonly y?: readonly number[]
+  readonly glyphFlags?: readonly number[]
+  readonly lineTextStarts: readonly number[]
+  readonly lineTextEnds: readonly number[]
+  readonly lineGlyphStarts: readonly number[]
+  readonly lineGlyphCounts: readonly number[]
+  readonly lineBaselines: readonly number[]
+  readonly lineAdvances: readonly number[]
+}
+
+type ParagraphBidiContract = typeof paragraphBidiContract
+
+let policyShaper: RuntimeShaper | undefined
+let policyFonts: readonly RegisteredFont[] = []
+let bidiParagraphs: readonly Paragraph[] = []
+let policyParagraph: Paragraph | undefined
+let uikitParagraph: Paragraph | undefined
+let policyShapeCalls = 0
+let policyReshapeCalls = 0
+
+async function loadParagraphPolicyFixture(): Promise<void> {
+  if (policyShaper !== undefined) return
+  const [bakerResponse, shaperResponse, interResponse, amiriResponse] = await Promise.all([
+    fetch(wasmUrl),
+    fetch(shaperWasmUrl),
+    fetch(canonicalFontUrl),
+    fetch(amiriFontUrl),
+  ])
+  for (const [label, response] of [
+    ['font baker Wasm', bakerResponse],
+    ['text shaper Wasm', shaperResponse],
+    ['Inter fixture', interResponse],
+    ['Amiri fixture', amiriResponse],
+  ] as const) {
+    if (!response.ok) throw new Error(`Unable to load ${label} (${response.status})`)
+  }
+  const [bakerBytes, shaperBytes, interSource, amiriSource] = await Promise.all([
+    bakerResponse.arrayBuffer(),
+    shaperResponse.arrayBuffer(),
+    interResponse.arrayBuffer(),
+    amiriResponse.arrayBuffer(),
+  ])
+  const directBaker = await createFontBaker(bakerBytes)
+  const bakeArtifact = (source: ArrayBuffer) => {
+    const artifact = directBaker.bake({
+      source: new Uint8Array(source),
+      descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+    }).artifacts[0]
+    if (artifact === undefined) throw new Error('Font baker returned no paragraph policy artifact')
+    return artifact
+  }
+  const interArtifact = bakeArtifact(interSource)
+  const amiriArtifact = bakeArtifact(amiriSource)
+  const registry = new FontRegistry()
+  const [inter, amiri] = await Promise.all([
+    registry.registerAsset(interArtifact.bytes),
+    registry.registerAsset(amiriArtifact.bytes),
+  ])
+  if (
+    inter.shapingHash !== paragraphBidiContract.fonts.inter.shapingHash ||
+    amiri.shapingHash !== paragraphBidiContract.fonts.amiri.shapingHash
+  ) {
+    throw new Error('Paragraph policy fixtures retained unexpected shaping identities')
+  }
+  const shaper = await createRuntimeShaper({ registry, wasm: shaperBytes })
+  const observed: RuntimeShaper = {
+    registry,
+    registerFont: (font) => shaper.registerFont(font),
+    disposeFont: (font) => shaper.disposeFont(font),
+    analyzeBidi: (text, direction) => shaper.analyzeBidi(text, direction),
+    shapeBatch: (request) => {
+      policyShapeCalls += 1
+      return shaper.shapeBatch(request)
+    },
+    reshapeRanges: (request) => {
+      policyReshapeCalls += 1
+      return shaper.reshapeRanges(request)
+    },
+    memoryReport: () => shaper.memoryReport(),
+    dispose: () => shaper.dispose(),
+  }
+  const engine = createParagraphEngine({ shaper: observed })
+  bidiParagraphs = Object.values(paragraphBidiContract.bidi).map((fixture) =>
+    engine.create({
+      text: fixture.text,
+      font: amiri.handle,
+      style: fixture.style as ParagraphStyle,
+    }),
+  )
+  policyParagraph = engine.create({
+    text: paragraphBidiContract.policies.text,
+    font: inter.handle,
+    style: paragraphBidiContract.policies.style as ParagraphStyle,
+  })
+  uikitParagraph = engine.create({
+    text: paragraphBidiContract.uikit.input.text,
+    font: inter.handle,
+    style: paragraphBidiContract.uikit.input.style as ParagraphStyle,
+  })
+  policyShaper = shaper
+  policyFonts = [inter, amiri]
+}
+
+async function disposeParagraphPolicyFixture(): Promise<void> {
+  for (const paragraph of [...bidiParagraphs, policyParagraph, uikitParagraph]) paragraph?.dispose()
+  policyShaper?.dispose()
+  for (const font of policyFonts) font.dispose()
+  policyShaper = undefined
+  policyFonts = []
+  bidiParagraphs = []
+  policyParagraph = undefined
+  uikitParagraph = undefined
+  policyShapeCalls = 0
+  policyReshapeCalls = 0
+}
+
+const paragraphPolicyTarget: BenchmarkTarget = {
+  id: 'paragraph-bidi-policy',
+  label: 'Bidi + paragraph policies',
+  detail: 'Amiri GLB · UAX #9 · alignment · truncation · uikit seam',
+  color: 'amber',
+  capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph']),
+  status: (input) => (input.fontBytes === undefined ? 'ready' : 'needs-fixture'),
+  load: loadParagraphPolicyFixture,
+  run: async () => {
+    if (policyParagraph === undefined || uikitParagraph === undefined) {
+      throw new Error('Paragraph policy target was not loaded')
+    }
+    const layouts: ParagraphLayout[] = []
+    for (const [index, fixture] of Object.values(paragraphBidiContract.bidi).entries()) {
+      const layout = bidiParagraphs[index]?.layout(fixture.constraints as ParagraphConstraints)
+      if (layout === undefined) throw new Error('Bidi paragraph fixture is missing')
+      exactContractLayout(`bidi.${index}`, layout, fixture.layout)
+      layouts.push(layout)
+    }
+    for (const [id, fixture] of Object.entries(paragraphBidiContract.policies.cases)) {
+      const layout = policyParagraph.layout(fixture.constraints as ParagraphConstraints)
+      exactContractLayout(`policy.${id}`, layout, fixture.layout)
+      layouts.push(layout)
+    }
+
+    const uikit = createUikitLayoutFixture(
+      uikitParagraph,
+      paragraphBidiContract.uikit.policy as ParagraphConstraints,
+    )
+    const custom = uikit.customLayouting()
+    exactObject(
+      'uikit.customLayouting',
+      {
+        minWidth: custom.minWidth,
+        minHeight: custom.minHeight,
+        firstBaseline: custom.firstBaseline,
+      },
+      paragraphBidiContract.uikit.customLayouting,
+    )
+    const natural = custom.measure(NaN, YogaMeasureMode.Undefined, NaN, YogaMeasureMode.Undefined)
+    const atMost = custom.measure(360, YogaMeasureMode.AtMost, 90, YogaMeasureMode.AtMost)
+    const exactWidth = custom.measure(
+      420.001,
+      YogaMeasureMode.Exactly,
+      NaN,
+      YogaMeasureMode.Undefined,
+    )
+    for (let index = 0; index < 20; index += 1) {
+      exactObject(
+        'uikit.repeatedAtMost',
+        custom.measure(360, YogaMeasureMode.AtMost, 90, YogaMeasureMode.AtMost),
+        paragraphBidiContract.uikit.measurements.atMost,
+      )
+    }
+    exactObject('uikit.natural', natural, paragraphBidiContract.uikit.measurements.natural)
+    exactObject('uikit.atMost', atMost, paragraphBidiContract.uikit.measurements.atMost)
+    exactObject('uikit.exactWidth', exactWidth, paragraphBidiContract.uikit.measurements.exactWidth)
+    exactObject(
+      'uikit.definite',
+      uikit.resolveYogaLeaf(401.237, YogaMeasureMode.Exactly, 150.111, YogaMeasureMode.Exactly),
+      paragraphBidiContract.uikit.measurements.definite,
+    )
+    if (uikit.calls.layout !== 0) throw new Error('uikit measurement materialized glyph arrays')
+    const resolved = uikit.layoutResolvedBox(
+      paragraphBidiContract.uikit.resolved.outerSize as unknown as readonly [number, number],
+      paragraphBidiContract.uikit.resolved.padding as unknown as readonly [
+        number,
+        number,
+        number,
+        number,
+      ],
+      paragraphBidiContract.uikit.resolved.border as unknown as readonly [
+        number,
+        number,
+        number,
+        number,
+      ],
+    )
+    exactObject(
+      'uikit.contentBox',
+      resolved.contentBox,
+      paragraphBidiContract.uikit.resolved.contentBox,
+    )
+    exactArray(
+      'uikit.centeredX',
+      resolved.centeredX,
+      paragraphBidiContract.uikit.resolved.centeredX,
+    )
+    exactArray(
+      'uikit.centeredY',
+      resolved.centeredY,
+      paragraphBidiContract.uikit.resolved.centeredY,
+    )
+    exactContractLayout(
+      'uikit.layout',
+      resolved.layout,
+      paragraphBidiContract.uikit.resolved.layout,
+    )
+    layouts.push(resolved.layout)
+
+    return {
+      bytes:
+        layouts.reduce((sum, layout) => sum + layoutBytes(layout), 0) +
+        resolved.centeredX.byteLength +
+        resolved.centeredY.byteLength,
+      hash: paragraphPolicyContractHash(paragraphBidiContract),
+      metrics: {
+        bidiLayoutCount: 2,
+        policyLayoutCount: 9,
+        uikitMeasurementCount: uikit.calls.measure,
+        uikitLayoutCount: uikit.calls.layout,
+        shapeBoundaryCrossings: policyShapeCalls,
+        reshapeBoundaryCrossings: policyReshapeCalls,
+      },
+    }
+  },
+  dispose: disposeParagraphPolicyFixture,
+}
+
 interface ParagraphLayoutGolden {
   readonly hash: string
   readonly glyphCount: number
@@ -470,6 +719,49 @@ function exactParagraphLayout(
   const hash = hashParagraphLayout(layout)
   if (hash !== golden.hash)
     throw new Error(`${label} paragraph layout hash ${hash} != ${golden.hash}`)
+}
+
+function exactContractLayout(label: string, layout: ParagraphLayout, golden: ContractLayout): void {
+  exactMeasurement(label, layout, golden.measurement)
+  for (const field of [
+    'glyphIds',
+    'clusters',
+    'x',
+    'lineTextStarts',
+    'lineTextEnds',
+    'lineGlyphStarts',
+    'lineGlyphCounts',
+    'lineBaselines',
+    'lineAdvances',
+  ] as const) {
+    exactArray(`${label}.${field}`, layout[field], golden[field])
+  }
+  for (const field of ['glyphFontSlots', 'glyphFontSizes', 'y', 'glyphFlags'] as const) {
+    const expected = golden[field]
+    if (expected !== undefined) exactArray(`${label}.${field}`, layout[field], expected)
+  }
+  const hash = hashParagraphLayout(layout)
+  if (hash !== golden.hash) throw new Error(`${label} hash ${hash} != ${golden.hash}`)
+}
+
+function exactObject(
+  label: string,
+  actual: Readonly<Record<string, unknown>>,
+  expected: Readonly<Record<string, unknown>>,
+): void {
+  const actualSource = JSON.stringify(actual)
+  const expectedSource = JSON.stringify(expected)
+  if (actualSource !== expectedSource) {
+    throw new Error(`${label} differs: ${actualSource} != ${expectedSource}`)
+  }
+}
+
+function paragraphPolicyContractHash(contract: ParagraphBidiContract): string {
+  return [
+    ...Object.values(contract.bidi).map(({ layout }) => layout.hash),
+    ...Object.values(contract.policies.cases).map(({ layout }) => layout.hash),
+    contract.uikit.resolved.layout.hash,
+  ].join(':')
 }
 
 function layoutArrays(layout: ParagraphLayout): readonly ArrayBufferView[] {
@@ -715,6 +1007,7 @@ export const targets: readonly BenchmarkTarget[] = [
   harfrustShaperTarget,
   paragraphTarget,
   paragraphLayoutTarget,
+  paragraphPolicyTarget,
   unavailableTarget('bitmap', 'Bitmap atlas', 'capability not landed', 'amber'),
   unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),

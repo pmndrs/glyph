@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 0,
+  "id": "amiri-regular-v0",
+  "source": {
+    "family": "Amiri",
+    "style": "Regular",
+    "version": "1.002",
+    "releaseCommit": "39d11bc313031c9f68e21a297ce5e4a15cc5365e",
+    "upstreamCommit": "04d40ee68cc6b8cb6870eca81a8a7451165aa95a",
+    "url": "https://raw.githubusercontent.com/google/fonts/39d11bc313031c9f68e21a297ce5e4a15cc5365e/ofl/amiri/Amiri-Regular.ttf",
+    "fontFile": "Amiri-Regular.ttf",
+    "fontBytes": 431116,
+    "fontSha256": "ab391c4147d054c48976e98322ad0eefe1427aa0e0502a12a4c75d80a70cfcd7",
+    "metadataFile": "METADATA.pb",
+    "metadataSha256": "3df4f62489d9b01bb900d36e73120c06dfed0c49b585ff4398fd8a11410fd114",
+    "license": "OFL-1.1",
+    "licenseFile": "OFL.txt",
+    "licenseSha256": "72de68e5954f4fdd24702292ef5a32f003ca960ec9330dc86e5eefb5dffb9b22"
+  },
+  "face": { "fontIndex": 0, "variations": {} },
+  "glyphIds": "source",
+  "bake": {
+    "bakerVersion": "0.0.0",
+    "formatVersion": 0,
+    "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
+    "expectedCore": {
+      "artifactBytes": 179048,
+      "artifactSha256": "561ab2d495374a943a77e61761fbfa0a59a1caf6a2061e8d1e96043daa837917",
+      "shapingHash": "2e29d8d1378084212287efa84db35066310164048a6b4495aff97512d46336d5",
+      "shapingSfntBytes": 123444,
+      "extentsBytes": 53680,
+      "extentsAvailabilityBytes": 839,
+      "glyphCount": 6710,
+      "unitsPerEm": 1000,
+      "ascender": 1124,
+      "descender": -634,
+      "lineGap": 0,
+      "tables": [
+        { "tag": "GDEF", "rawBytes": 832, "paddedBytes": 832 },
+        { "tag": "GPOS", "rawBytes": 55080, "paddedBytes": 55080 },
+        { "tag": "GSUB", "rawBytes": 35972, "paddedBytes": 35972 },
+        { "tag": "OS/2", "rawBytes": 96, "paddedBytes": 96 },
+        { "tag": "cmap", "rawBytes": 4386, "paddedBytes": 4388 },
+        { "tag": "head", "rawBytes": 54, "paddedBytes": 56 },
+        { "tag": "hhea", "rawBytes": 36, "paddedBytes": 36 },
+        { "tag": "hmtx", "rawBytes": 26794, "paddedBytes": 26796 },
+        { "tag": "maxp", "rawBytes": 32, "paddedBytes": 32 }
+      ]
+    }
+  },
+  "versions": {
+    "rust": "1.97.1",
+    "unicode": "17.0.0",
+    "harfbuzz": "13.0.0",
+    "harfbuzzCommit": "a0fc099681a69ae40665fbea74982a2e9d7a5260",
+    "harfrust": "0.12.0",
+    "harfrustCommit": "60b28ea22b5261710018d69c168a762bcb28794c",
+    "gltfSchemaRevision": "77b44be7bef26e01fb0b140e3d5bb1716421c5e9",
+    "gltfValidator": "2.0.0-dev.3.10",
+    "binaryen": "129.0.0"
+  },
+  "contracts": {
+    "corpus": "../../shaping/amiri-regular/cases.json",
+    "harfbuzzOracle": "../../shaping/amiri-regular/harfbuzz.json",
+    "harfrustOracle": "../../shaping/amiri-regular/harfrust.json",
+    "paragraphLayout": "../../contracts/paragraph-bidi-layout-v0.json"
+  }
+}

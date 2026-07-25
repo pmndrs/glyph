@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T08:38:57Z"
+  at: "2026-07-25T09:53:00Z"
 ---
 
 # Benchmark plan
@@ -64,7 +64,7 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
-| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, pinned real-font direct-baker, public loader/module-Worker, exact eight-case/one-call HarfRust shaping, prepare-once/zero-reflow-Wasm measurement, and exact positioned/batched-reshape paragraph lanes pass. Item-5.3 policy and rendering lanes remain open. |
+| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, pinned real-font direct-baker, public loader/module-Worker, exact eight-case/one-call HarfRust shaping, prepare-once/zero-reflow-Wasm measurement, exact positioned/batched-reshape paragraph, and item-5.3 bidi/policy/uikit lanes pass. Rendering remains open for Milestone 6. |
 | Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; Worker and shaper JavaScript exclude separately measured Wasm assets. Unicode analysis is 139,752 bytes minified and the complete milestone-4 shaper is 27,859 bytes minified JavaScript plus 645,666 bytes optimized Wasm. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
@@ -72,6 +72,8 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 The lab is both the benchmark product and the canonical product-level test harness described by the [test ownership ladder](conformance-plan.md#test-layers-and-ownership). A scenario first validates semantic output, artifact hashes or schema, lifecycle cleanup, and visual output where relevant; only a passing sample may contribute performance numbers. Synthetic scenarios protect contracts and stress limits, but every user-facing milestone also needs a real-font scenario through public package surfaces. A separate demo, private test hook, or mocked adapter cannot close that end-to-end gate.
 
 The harness does not wait for a raster implementation to become useful. Its deterministic synthetic target first proves registry, runner, validation, URL-state, export, and interactive/automated parity. The existing portable font-baker target then contributes real cold/warm Wasm startup, source-to-GLB correctness, payload, memory, diagnostics, and deterministic-artifact scenarios without claiming that it renders text. Bitmap, MSDF, and Slug remain visible but capability-gated and unsupported until their real adapters exist; the UI never fills unavailable panels with fabricated metrics.
+
+The completed paragraph-policy scenario consumes the generated `paragraph-bidi-layout-v0.json` contract through the same registry used by the interactive and automated surfaces. Chromium 149 repeats two complete Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final layout three times with the same twelve hashes and 8,098-byte aggregate output. The Vitexec lane repeats that contract with WebGPU active. These results prove shaping and reflow correctness; they intentionally do not claim a rendered GPU frame before Milestone 6.
 
 ## Application stack
 

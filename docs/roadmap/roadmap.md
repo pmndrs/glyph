@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T08:38:57Z"
+  at: "2026-07-25T09:53:00Z"
 ---
 
 # Canonical implementation roadmap
@@ -48,14 +48,14 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | ✅ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | 🟡 | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
-| 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
+| 5 | ✅ | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
+| 6 | 🟡 | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
 | 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–4 and items 5.1–5.2 are closed. Milestone 5 continues at active item 5.3.
+Milestones 0–5 are closed. Milestone 6 is active at item 6.1.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -99,8 +99,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 4.2 | ✅ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
 | 5.1 | ✅ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
 | 5.2 | ✅ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
-| 5.3 | 🟡 | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
-| 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
+| 5.3 | ✅ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
+| 6.1 | 🟡 | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
 | 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
@@ -390,16 +390,18 @@ Item 5.1 is closed; the positioned output and boundary-sensitive reshape evidenc
 - [x] Integration tests derive natural x/y placement from the checked-in HarfRust glyph advances/offsets and GLB-extracted font metrics, compare every shaped identity field after boundary reshape, prove borrowed-arena invalidation cannot mutate cached layout arrays, and prove shaping-policy updates invalidate both measurement and layout caches.
 - [x] Chromium records three deterministic 3,786-byte aggregate outputs with one broad shape and two total reshape crossings; the GPU Vitexec probe runs measurement and positioned scenarios sequentially, which caught and removed registry-scoped font handles from the portable golden hash while still validating the live handle separately.
 
-Item 5.2 is closed. Item 5.3 is active; bidi, alignment, clipping, max-lines, ellipsis, and the current-uikit-shaped external-layout fixture remain required before Milestone 5 can close.
+Item 5.2 is closed. Item 5.3 closure evidence follows.
 
 ### 5.3 closure checklist
 
 - [x] The package-owned `no_std + alloc` shaper uses `unicode-bidi` 0.3.18's maintained UAX #9 algorithm with its bundled Unicode 16 data disabled and repository-generated Unicode 17 `Bidi_Class`/paired-bracket data supplied through the crate's custom data-source seam.
 - [x] Rust executes all 770,241 direction-expanded `BidiTest.txt` cases and all 91,707 `BidiCharacterTest.txt` cases from hash-pinned Unicode 17 gzip fixtures, comparing paragraph levels, every specified resolved level, and complete visual index order; direct-memory Wasm integration separately proves UTF-16/supplementary-plane indexing and explicit/automatic direction.
-- [ ] Paragraph preparation intersects resolved style/script ranges with bidi level runs, shapes each run in its resolved direction, applies line-specific UAX #9 L1/L2 ordering, and fixes exact mixed-direction glyph identity/position goldens through the retained-GLB HarfRust path.
-- [ ] Start/center/end/justify alignment, clipping, max-lines, and ellipsis have exact policy fixtures, cache/invalidation evidence, and no unreported shaping boundary crossings.
-- [ ] A current-uikit-shaped fixture proves repeated allocation-light measurement, Yoga-mode translation, final content-box layout, point-scale rounding ownership, and dirtying without a Yoga dependency in core.
-- [ ] The real Chromium benchmark and GPU Vitexec lane execute the bidi/policy fixtures with deterministic recorded output before item 5.3 and Milestone 5 close.
+- [x] Paragraph preparation intersects resolved style/script ranges with bidi level runs, shapes each run in its resolved direction, applies line-specific UAX #9 L1/L2 ordering, and fixes exact mixed-direction glyph identity/position goldens through the retained-GLB HarfRust path.
+- [x] Start/center/end/justify alignment, clipping, max-lines, and ellipsis have exact policy fixtures, cache/invalidation evidence, and no unreported shaping boundary crossings.
+- [x] A current-uikit-shaped fixture proves repeated allocation-light measurement, Yoga-mode translation, final content-box layout, point-scale rounding ownership, and dirtying without a Yoga dependency in core.
+- [x] The real Chromium benchmark and GPU Vitexec lane execute the bidi/policy fixtures with deterministic recorded output before item 5.3 and Milestone 5 close.
+
+Item 5.3 and Milestone 5 are closed. The generated contract fixes two Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final content-box layout with complete glyph/line arrays and twelve portable hashes. Amiri 1.002 separately proves source-font HarfRust equals HarfRust over the reduced SFNT extracted from the validated GLB, while pinned HarfBuzz 13 agrees on every Arabic/Latin glyph field. Chromium 149 records three deterministic 8,098-byte runs with four preparation shapes and five batched reshapes; the GPU Vitexec lane repeats the same contract with WebGPU active.
 
 Deliver:
 

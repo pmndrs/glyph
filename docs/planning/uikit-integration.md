@@ -28,7 +28,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T09:53:00Z"
 ---
 
 # uikit integration
@@ -193,6 +193,21 @@ Current selection code indexes one layout entry per JavaScript character. Replac
 ### 5. Remove the legacy text subsystem
 
 Delete the BMFont-specific `Font`, wrappers, positioned character entries, and MSDF-only instancing only after text, textarea, selection, clipping, and lifecycle fixtures pass through the new path.
+
+## Paragraph-boundary fixture status
+
+The repository now carries a current-uikit-shaped fixture at the paragraph boundary. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
+
+| Paragraph-boundary proof | Status | Evidence |
+| --- | :---: | --- |
+| Intrinsic measurement and first baseline | ✅ | Exact `minWidth`, `minHeight`, and first-baseline values come from a prepared Inter paragraph. |
+| Yoga mode translation | ✅ | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path. |
+| Allocation-light repeated measurement | ✅ | Twenty-five measurements reuse paragraph analysis and never materialize positioned glyph arrays. |
+| Final content-box layout | ✅ | Padding and border are removed from the resolved outer box before one final layout; host translation produces the exact centered-coordinate golden. |
+| Point-scale rounding and invalidation ownership | ✅ | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not. |
+| Real-product execution | ✅ | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash. |
+
+Renderer batching, clipping integration, React reconciliation, and cluster-aware interaction remain later integration gates. Closing this paragraph boundary does not claim those production-uikit migration stages are complete.
 
 ## Validation gates
 

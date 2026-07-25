@@ -1,0 +1,62 @@
+{
+  "targetId": "paragraph-bidi-policy",
+  "scenarioId": "paragraph-bidi-policy",
+  "status": "passed",
+  "validation": "3/3 exact bidi/policy outputs · current-uikit-shaped flow",
+  "measurements": [
+    {
+      "sample": 0,
+      "durationMs": 0.20000000298023224,
+      "outputBytes": 8098,
+      "hash": "8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c",
+      "metrics": {
+        "bidiLayoutCount": 2,
+        "policyLayoutCount": 9,
+        "uikitMeasurementCount": 25,
+        "uikitLayoutCount": 1,
+        "shapeBoundaryCrossings": 4,
+        "reshapeBoundaryCrossings": 5
+      }
+    },
+    {
+      "sample": 1,
+      "durationMs": 0.3999999910593033,
+      "outputBytes": 8098,
+      "hash": "8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c",
+      "metrics": {
+        "bidiLayoutCount": 2,
+        "policyLayoutCount": 9,
+        "uikitMeasurementCount": 25,
+        "uikitLayoutCount": 1,
+        "shapeBoundaryCrossings": 4,
+        "reshapeBoundaryCrossings": 5
+      }
+    },
+    {
+      "sample": 2,
+      "durationMs": 0.20000000298023224,
+      "outputBytes": 8098,
+      "hash": "8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c",
+      "metrics": {
+        "bidiLayoutCount": 2,
+        "policyLayoutCount": 9,
+        "uikitMeasurementCount": 25,
+        "uikitLayoutCount": 1,
+        "shapeBoundaryCrossings": 4,
+        "reshapeBoundaryCrossings": 5
+      }
+    }
+  ],
+  "medianMs": 0.20000000298023224,
+  "p95Ms": 0.3999999910593033,
+  "minMs": 0.20000000298023224,
+  "maxMs": 0.3999999910593033,
+  "outputBytes": 8098,
+  "completedAt": "2026-07-25T09:51:33.700Z",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  }
+}

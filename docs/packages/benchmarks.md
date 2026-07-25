@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:158b46f7c195d8f6e3941c54355ab830bf93238a66a67b9350e3969a39c62d53"
+source_digest: "sha256:eb6f7f36cc74e0e1d1433770c6ec213187fc7f6bfbb6e6f8e82effe4df81906c"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,14 +16,14 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T08:38:57Z"
+  at: "2026-07-25T09:53:00Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: 🟡 usable harness shell; rendering targets not implemented
 
-This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, real HarfRust shaping-conformance target, and real paragraph measurement/positioned-layout targets. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override only where a fixture oracle exists. Before timing loader fallback, the browser target hashes the actual module-Worker GLB against the canonical Node artifact and validates/registers it. Chromium 149 passes synthetic, direct-baker, loader-Worker, eight-case one-call shaper, paragraph-measurement, and positioned-layout scenarios with three deterministic samples after one warmup. The checked shaping result records exact hash `dc30c21c`, 97 glyphs, one boundary crossing, three plans, retained/Wasm memory, and cold/warm timings. Measurement records hash `79874b9d`, exact natural/wide/narrow HarfRust-derived metrics, one preparation shape, zero reflow/reshape calls, and zero positioned-glyph bytes. Positioned layout records normalized hashes `bb15bbcc:4f111a3f:e8c0e9d5`, 165 glyph instances across three layouts, and one batched reshape call for each changed width.
+This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, real HarfRust shaping-conformance target, and real paragraph measurement/positioned-layout/policy targets. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. Inter 4.1 remains the default benchmark fixture. Amiri 1.002 is the immutable complex-script fixture: its font, metadata, and OFL bytes are retrieved from one Google Fonts commit by a hash-enforcing synchronizer, and its checked HarfRust oracle matches the exact-version HarfBuzz 13 oracle across every glyph field. A local font is an explicit override only where a fixture oracle exists. Before timing loader fallback, the browser target hashes the actual module-Worker GLB against the canonical Node artifact and validates/registers it. Chromium 149 passes synthetic, direct-baker, loader-Worker, eight-case one-call shaper, paragraph-measurement, positioned-layout, and bidi/policy/uikit scenarios with three deterministic samples after one warmup. The checked shaping result records exact hash `dc30c21c`, 97 glyphs, one boundary crossing, three plans, retained/Wasm memory, and cold/warm timings. Measurement records hash `79874b9d`, exact natural/wide/narrow HarfRust-derived metrics, one preparation shape, zero reflow/reshape calls, and zero positioned-glyph bytes. Positioned layout records normalized hashes `bb15bbcc:4f111a3f:e8c0e9d5`, 165 glyph instances across three layouts, and one batched reshape call for each changed width. The item-5.3 lane fixes two complete Amiri bidi layouts, nine Inter line-policy layouts, and one current-uikit-shaped layout under twelve portable hashes; its aggregate output is 8,098 bytes with four preparation shapes, five batched reshapes, and WebGPU-active Vitexec parity.
 
 The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated. The current positioned-paragraph initial graph is 194,175 minified bytes; Unicode analysis is independently 139,752 minified / 41,999 gzip / 31,018 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,061, 3,371, 5,576, 430,662, 27,859, and 645,666 minified/raw bytes respectively. The production app likewise emits separate runtime-host, Worker, validator, and Wasm assets without an ineffective dynamic-import warning.
 
@@ -39,7 +39,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `typecheck` | Build the baker dependency and type-check browser and Node script projects. |
 | `test` | Run deterministic Vitest suites and the shared-registry browser smoke test. |
 | `test:unit` | Run deterministic Vitest suites without starting a browser. |
-| `test:headless` | Run synthetic, direct-baker, loader/Worker, exact shaping, paragraph measurement, and positioned-layout scenarios through the browser CLI. |
+| `test:headless` | Run synthetic, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, and bidi/policy/uikit scenarios through the browser CLI. |
 | `lint` | Run Oxlint with warnings denied. |
 | `format:check` | Verify Oxfmt output. |
 | `size` | Produce deterministic independent package-size JSON for the report UI. |
@@ -47,6 +47,9 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `admit:live` | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record. |
 | `capture:browser-reference` | Regenerate the pinned Chromium HTML/CSS reference and metadata. |
 | `generate:harfbuzz-oracle` | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable. |
+| `sync:amiri-fixture` | Fetch the immutable Amiri font/metadata/license or verify checked-in bytes with `--check`. |
+| `generate:paragraph-bidi-contract` | Regenerate the reviewed Amiri/Inter bidi, line-policy, and current-uikit-shaped exact layout contract. |
+| `check:paragraph-bidi-contract` | Recompute the contract without writing and fail if any checked-in exact value is stale. |
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 

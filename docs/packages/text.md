@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:6612fe937e6ded718968e12f9c607616c82919c04a8d4fb49a49665e0d626edc"
+source_digest: "sha256:cc419402e8856d831765ca42645c20208e3f2509aa24652023bd3ed357d67e7b"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -55,12 +55,12 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T09:06:35Z"
+  at: "2026-07-25T09:53:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 implementation slice; roadmap items 5.1–5.2 complete and item 5.3 active
+Status: ✅ paragraph and external-layout slice complete through Milestone 5
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -94,7 +94,11 @@ Item 5.2 implements final positioned `ParagraphLayout`. It caches line plans ind
 
 Item 5.3 now has a conformant Unicode 17 bidi foundation. The package-owned shaper reuses `unicode-bidi` 0.3.18's maintained post–Unicode-15 UAX #9 algorithm under `no_std + alloc`, disables its Unicode 16 tables, and supplies generated Unicode 17 `Bidi_Class` and normalized paired-bracket data through the crate's custom data-source seam. The Rust-generated JSON ABI describes one direct-memory UTF-16 analysis call and borrowed SoA levels/classes/paragraph arrays; no browser ICU, WASI, binding generator, or ambient Unicode version participates. Hash-pinned official inputs cover `DerivedBidiClass.txt`, `BidiTest.txt`, and `BidiCharacterTest.txt`. Ordinary integration tests expand the generic corpus to all 770,241 requested paragraph-direction cases and execute all 91,707 character-specific cases, comparing paragraph level, every specified resolved level, and complete visual order. Wasm integration separately proves supplementary-plane code units and explicit/automatic paragraph directions.
 
-Paragraph-level bidi shaping/reordering, alignment, clipping, max-lines, ellipsis, and the uikit compatibility fixture remain open in item 5.3; the conformant analysis boundary is not being misreported as completed layout policy.
+Item 5.3 completes paragraph-level bidi and line policy. Preparation intersects style, UAX #24 script, and resolved UAX #9 level runs, shapes each run in its resolved direction, copies borrowed analysis/shaping data, applies line-specific L1 reset and L2 visual ordering, and batches only unsafe changed boundaries. A pinned Amiri 1.002 fixture covers joining, combining marks, lam-alef forms, Arabic numbers, and Latin: HarfRust over the source font equals HarfRust over the reduced SFNT extracted from the validated GLB exactly, and pinned HarfBuzz 13 independently agrees on every glyph ID, UTF-16 cluster, advance, offset, and flag.
+
+The generated `paragraph-bidi-layout-v0.json` contract owns complete SoA values for two mixed-direction Amiri layouts plus exact start/center/end/justify, clip, max-lines, and width/height ellipsis policies over Inter. Alignment-only and height-only compatible layouts share cached boundary shaping; every changed boundary is reported as one batched reshape. Fixed-seed fuzzing mutates Unicode text—including expected malformed UTF-16 rejection—axis modes, widths/heights, wrapping, alignment, truncation, letter spacing, line height, and direction twice, requiring finite, internally consistent, deterministic output.
+
+The current-uikit-shaped fixture lives in the benchmark application rather than core. It derives `CustomLayouting` intrinsics, maps Yoga Undefined/AtMost/Exactly modes, ignores the numeric `NaN` payload of undefined axes, preserves uikit's 1/100-point upward rounding, skips measurement for two definite axes, subtracts padding/border from the authoritative resolved box, and translates content-local positions into centered host coordinates. Twenty repeated measurements materialize no glyph arrays. Text and shaping-policy updates dirty layout; paint and raster updates do not. Chromium 149 fixes the twelve-layout aggregate hash at `8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c`, with 8,098 output bytes, four broad shapes, and five reshape crossings; the GPU Vitexec lane repeats it with WebGPU active.
 
 The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
@@ -107,7 +111,7 @@ The public runtime bitmap upload/module belongs to milestone 6.1 after layout de
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `test:unit` | Run focused Rust bitmap and HarfRust-shaper unit tests. |
 | `test:integration` | Verify pinned Unicode fixture hashes, then run both Rust public boundaries plus Wasm/package, registration, shaping/paragraph goldens, all 861,948 Unicode 17 bidi cases, UAX #14/#29 conformance, and malformed-artifact integration tests. |
-| `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, and raw shaper-request mutations twice and require deterministic, trap-free outcomes. |
+| `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, raw shaper-request, and Unicode paragraph-policy mutations twice and require deterministic, trap-free outcomes. |
 | `build` | Emit ESM/declarations, compile the no-WASI bitmap and shaper Wasm modules, optimize them with pinned Binaryen, and publish both generated ABIs. |
 
 The [API contract](../planning/api-shapes.md) remains authoritative for proposed public behavior; this concept explains the package that currently embodies its compile-time subset.[^api-contract]

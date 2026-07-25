@@ -188,7 +188,11 @@ test('validates spans, constraints, empty text, and lifecycle deterministically'
     /extended-grapheme boundaries/,
   )
   assert.throws(() => empty.measure({ width: { mode: 'at-most', size: Number.NaN } }), /finite/)
+  assert.throws(() => empty.measure({ width: { mode: 'invalid', size: 10 } }), /width mode/)
   assert.throws(() => empty.measure({ maxLines: 0 }), /positive safe integer/)
+  assert.throws(() => empty.measure({ wrap: 'invalid' }), /wrap must/)
+  assert.throws(() => empty.measure({ align: 'invalid' }), /align must/)
+  assert.throws(() => empty.measure({ overflow: 'invalid' }), /overflow must/)
   const emptyLayout = empty.layout()
   assert.deepEqual(emptyLayout, {
     width: 0,
@@ -243,6 +247,7 @@ function observeShaper(shaper, calls, reshapeRequests = []) {
     registry: shaper.registry,
     registerFont: (font) => shaper.registerFont(font),
     disposeFont: (font) => shaper.disposeFont(font),
+    analyzeBidi: (text, direction) => shaper.analyzeBidi(text, direction),
     shapeBatch: (request) => {
       calls.shape += 1
       return shaper.shapeBatch(request)

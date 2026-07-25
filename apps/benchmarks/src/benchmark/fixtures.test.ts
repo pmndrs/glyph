@@ -168,4 +168,74 @@ describe('canonical Inter fixtures', () => {
       ),
     ).toBe(true)
   })
+
+  it('records exact browser bidi, policy, and current-uikit-shaped output', async () => {
+    const result = JSON.parse(
+      await readFile(
+        new URL('results/paragraph-bidi-policy-chromium149.json', fixtureRoot),
+        'utf8',
+      ),
+    )
+    const expectedHash =
+      '8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c'
+
+    expect(result).toMatchObject({
+      targetId: 'paragraph-bidi-policy',
+      scenarioId: 'paragraph-bidi-policy',
+      status: 'passed',
+      outputBytes: 8098,
+    })
+    expect(result.measurements).toHaveLength(3)
+    expect(new Set(result.measurements.map(({ hash }: { hash: string }) => hash))).toEqual(
+      new Set([expectedHash]),
+    )
+    expect(
+      result.measurements.every(
+        ({ metrics }: { metrics: Record<string, number> }) =>
+          metrics.bidiLayoutCount === 2 &&
+          metrics.policyLayoutCount === 9 &&
+          metrics.uikitMeasurementCount === 25 &&
+          metrics.uikitLayoutCount === 1 &&
+          metrics.shapeBoundaryCrossings === 4 &&
+          metrics.reshapeBoundaryCrossings === 5,
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('canonical Amiri fixtures', () => {
+  it('binds font, metadata, and license bytes to the immutable import', async () => {
+    const directory = new URL('fonts/amiri-1.002/', fixtureRoot)
+    const [manifestSource, font, metadata, license] = await Promise.all([
+      readFile(new URL('manifest.json', directory), 'utf8'),
+      readFile(new URL('Amiri-Regular.ttf', directory)),
+      readFile(new URL('METADATA.pb', directory)),
+      readFile(new URL('OFL.txt', directory)),
+    ])
+    const manifest = JSON.parse(manifestSource)
+
+    expect(font.byteLength).toBe(manifest.source.fontBytes)
+    expect(createHash('sha256').update(font).digest('hex')).toBe(manifest.source.fontSha256)
+    expect(createHash('sha256').update(metadata).digest('hex')).toBe(manifest.source.metadataSha256)
+    expect(createHash('sha256').update(license).digest('hex')).toBe(manifest.source.licenseSha256)
+  })
+
+  it('matches pinned HarfBuzz 13 exactly for Arabic, joining, marks, numbers, and Latin', async () => {
+    const directory = new URL('shaping/amiri-regular/', fixtureRoot)
+    const [harfrust, harfbuzz] = (await Promise.all(
+      ['harfrust.json', 'harfbuzz.json'].map(async (name) =>
+        JSON.parse(await readFile(new URL(name, directory), 'utf8')),
+      ),
+    )) as [Oracle, Oracle]
+
+    expect(harfrust.engine).toMatchObject({ name: 'HarfRust', version: '0.12.0' })
+    expect(harfbuzz.engine).toMatchObject({ name: 'HarfBuzz', version: '13.0.0' })
+    expect(harfrust.cases.map(({ id }) => id)).toEqual([
+      'arabic-joining',
+      'lam-alef',
+      'arabic-numbers',
+      'latin',
+    ])
+    expect(harfrust.cases).toEqual(harfbuzz.cases)
+  })
 })

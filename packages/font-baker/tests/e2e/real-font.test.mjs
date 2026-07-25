@@ -108,3 +108,80 @@ test("the canonical Inter fixture bakes deterministically and retains HarfRust s
     JSON.parse(expectedOracleSource),
   );
 });
+
+test("the canonical Amiri fixture preserves exact complex shaping through the GLB", async (t) => {
+  const directory = new URL(
+    "../../../../apps/benchmarks/fixtures/fonts/amiri-1.002/",
+    import.meta.url,
+  );
+  const casesDirectory = new URL(
+    "../../../../apps/benchmarks/fixtures/shaping/amiri-regular/",
+    import.meta.url,
+  );
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "pmndrs-text-amiri-reduced-sfnt-"));
+  t.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  const [wasm, source, manifestSource, expectedOracleSource] = await Promise.all([
+    readFile(new URL("../../dist/font_baker.wasm", import.meta.url)),
+    readFile(new URL("Amiri-Regular.ttf", directory)),
+    readFile(new URL("manifest.json", directory), "utf8"),
+    readFile(new URL("harfrust.json", casesDirectory), "utf8"),
+  ]);
+  const manifest = JSON.parse(manifestSource);
+  assert.equal(source.byteLength, manifest.source.fontBytes);
+  assert.equal(createHash("sha256").update(source).digest("hex"), manifest.source.fontSha256);
+
+  const baker = await createFontBaker(wasm);
+  const first = baker.bake({
+    source,
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  });
+  const second = baker.bake({
+    source,
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  });
+  const artifact = first.artifacts[0];
+  const expected = manifest.bake.expectedCore;
+  assert.equal(artifact.bytes.byteLength, expected.artifactBytes);
+  assert.equal(artifact.sha256, expected.artifactSha256);
+  assert.deepEqual(artifact.bytes, second.artifacts[0].bytes);
+  assert.deepEqual(first.report.shared.shaping.tables, expected.tables);
+
+  const inspected = await validateFontArtifact(artifact.bytes);
+  const extension = inspected.document.extensions.PMNDRS_font;
+  assert.equal(inspected.shapingSfnt.byteLength, expected.shapingSfntBytes);
+  assert.equal(extension.shaping.hash, expected.shapingHash);
+  assert.deepEqual(extension.metrics, {
+    ascender: expected.ascender,
+    descender: expected.descender,
+    glyphCount: expected.glyphCount,
+    glyphIdWidth: 16,
+    lineGap: expected.lineGap,
+    unitsPerEm: expected.unitsPerEm,
+  });
+  assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
+
+  const reducedFont = join(temporaryDirectory, "Amiri-Regular.shaping.ttf");
+  const reducedOracle = join(temporaryDirectory, "harfrust.json");
+  await writeFile(reducedFont, inspected.shapingSfnt);
+  await executeFile("cargo", [
+    "run",
+    "--manifest-path",
+    fileURLToPath(new URL("../../rust/Cargo.toml", import.meta.url)),
+    "--bin",
+    "generate-shaping-oracle",
+    "--features",
+    "oracle",
+    "--locked",
+    "--quiet",
+    "--",
+    reducedFont,
+    fileURLToPath(new URL("cases.json", casesDirectory)),
+    "--output",
+    reducedOracle,
+  ]);
+  assert.deepEqual(
+    JSON.parse(await readFile(reducedOracle, "utf8")),
+    JSON.parse(expectedOracleSource),
+    "the reduced SFNT extracted from the validated GLB must shape exactly like the source font",
+  );
+});

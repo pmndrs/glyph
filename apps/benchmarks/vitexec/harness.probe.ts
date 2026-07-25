@@ -112,4 +112,39 @@ console.log(
   }),
 )
 
+const paragraphPolicyHash =
+  '8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c'
+const policy = await runRegisteredBenchmark({
+  targetId: 'paragraph-bidi-policy',
+  scenarioId: 'paragraph-bidi-policy',
+  input: {},
+  controls: { samples: 3, warmup: 1 },
+  environment: await environmentResource(),
+})
+if (
+  policy.status !== 'passed' ||
+  policy.measurements.length !== 3 ||
+  policy.measurements.some(
+    (measurement: BenchmarkMeasurement) =>
+      measurement.hash !== paragraphPolicyHash ||
+      measurement.outputBytes !== 8098 ||
+      measurement.metrics?.bidiLayoutCount !== 2 ||
+      measurement.metrics.policyLayoutCount !== 9 ||
+      measurement.metrics.uikitMeasurementCount !== 25 ||
+      measurement.metrics.uikitLayoutCount !== 1 ||
+      measurement.metrics.shapeBoundaryCrossings !== 4 ||
+      measurement.metrics.reshapeBoundaryCrossings !== 5,
+  )
+) {
+  throw new Error('Live bidi/policy probe did not preserve its exact GLB and uikit contract')
+}
+console.log(
+  'paragraph-policy-ready',
+  JSON.stringify({
+    hash: policy.measurements[0]?.hash,
+    validation: policy.validation,
+    webgpu: policy.environment.webgpu,
+  }),
+)
+
 export {}

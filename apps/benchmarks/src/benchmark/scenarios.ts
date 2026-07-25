@@ -1,4 +1,11 @@
 import type { BenchmarkScenario } from './contracts'
+import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json'
+
+const paragraphPolicyHash = [
+  ...Object.values(paragraphBidiContract.bidi).map(({ layout }) => layout.hash),
+  ...Object.values(paragraphBidiContract.policies.cases).map(({ layout }) => layout.hash),
+  paragraphBidiContract.uikit.resolved.layout.hash,
+].join(':')
 
 function deterministicValidation(hashes: readonly string[]): string {
   if (hashes.length === 0) throw new Error('Scenario produced no measurements')
@@ -58,6 +65,28 @@ function paragraphLayoutValidation(
   return `${values.length}/${values.length} exact positioned outputs · 1 reshape batch/changed width`
 }
 
+function paragraphPolicyValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    if (
+      value.hash !== paragraphPolicyHash ||
+      value.metrics?.bidiLayoutCount !== 2 ||
+      value.metrics.policyLayoutCount !== 9 ||
+      value.metrics.uikitMeasurementCount !== 25 ||
+      value.metrics.uikitLayoutCount !== 1 ||
+      value.metrics.shapeBoundaryCrossings !== 4 ||
+      value.metrics.reshapeBoundaryCrossings !== 5
+    ) {
+      throw new Error(
+        'Paragraph policy sample did not preserve its bidi, policy, and uikit contract',
+      )
+    }
+  }
+  return `${values.length}/${values.length} exact bidi/policy outputs · current-uikit-shaped flow`
+}
+
 export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'overview',
@@ -100,6 +129,13 @@ export const scenarios: readonly BenchmarkScenario[] = [
     description: 'Exact natural, wide, and narrow SoA output with cached batched boundary reshape.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
     validate: paragraphLayoutValidation,
+  },
+  {
+    id: 'paragraph-bidi-policy',
+    label: 'Bidi + paragraph policies',
+    description: 'Exact Amiri bidi, line policies, and current-uikit-shaped retained layout.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
+    validate: paragraphPolicyValidation,
   },
 ]
 

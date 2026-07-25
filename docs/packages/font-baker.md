@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:d8f6b8a922b226152114256a374b3282995f4f86d514529d8ddd23be5502b3f5"
+source_digest: "sha256:074eeb94c815643ab1e2a2263a0f08e6f9f3efb45bad30c93d8bab78a53fd06f"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T05:47:27Z"
+  at: "2026-07-25T09:31:40Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -37,7 +37,7 @@ The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. At i
 
 Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract.
 
-The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, discover application fonts, or provide a filesystem/Worker host. The public Node host now wraps it from `@pmndrs/text/bake`; the Worker and runtime shaper remain separate roadmap gates. Its host-only `generate-shaping-oracle` binary uses pinned HarfRust 0.12.0 to produce deterministic UTF-16 fixture JSON and is not linked into the `no_std` Wasm artifact. The mandatory package E2E verifies canonical Inter 4.1 identity before exercising the compiled Wasm API; it has no environment-dependent skip.
+The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, discover application fonts, or provide a filesystem/Worker host. The public Node host now wraps it from `@pmndrs/text/bake`; the Worker and runtime shaper remain separate roadmap gates. Its host-only `generate-shaping-oracle` binary uses pinned HarfRust 0.12.0 to produce deterministic UTF-16 fixture JSON and is not linked into the `no_std` Wasm artifact. Mandatory package E2E lanes verify canonical Inter 4.1 and Amiri 1.002 identity before exercising the compiled Wasm API; neither can skip based on the environment. Amiri's source SFNT and the reduced SFNT extracted back out of its validated GLB produce byte-identical HarfRust glyph IDs, UTF-16 clusters, advances, offsets, and flags for Arabic joining, marks, lam-alef forms, Arabic numbers, and Latin.
 
 ## Package scripts
 
@@ -47,7 +47,7 @@ The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, 
 | `test:unit` | Run Rust unit tests. |
 | `test:integration` | Run public Rust, compiled Wasm/TypeScript, package-isolation, schema, and malformed-artifact tests. |
 | `test:fuzz-smoke` | Run deterministic artifact-mutation smoke; Rust arbitrary-byte smoke is part of `test:integration`. |
-| `test:e2e` | Verify, bake, validate, and shape the canonical licensed Inter fixture through packaged APIs. |
+| `test:e2e` | Verify, bake, validate, and shape the canonical licensed Inter and Amiri fixtures through packaged APIs. |
 | `test` | Build and run unit, integration, fuzz-smoke, and real-font end-to-end layers. |
 | `fuzz:validator` | Run the longer seeded TypeScript validator mutation driver locally. |
 | `fuzz:rust` | Run pinned cargo-fuzz/libFuzzer against the public bake boundary using the nested mise-owned nightly workspace. |
