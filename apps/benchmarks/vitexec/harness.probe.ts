@@ -1,6 +1,4 @@
 import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
-import paragraphBidiContract from '../fixtures/contracts/paragraph-bidi-layout-v0.json'
-import { paragraphPolicyContractHash } from '../src/benchmark/paragraph-layout-digest'
 
 function elementByText(selector: string, value: string): HTMLElement {
   const element = [...document.querySelectorAll<HTMLElement>(selector)].find(
@@ -51,9 +49,18 @@ console.log('harness-ready', JSON.stringify({ url: location.search, metrics }))
 
 const executionPath = '/src/benchmark/execution.ts'
 const environmentPath = '/src/benchmark/environment.ts'
-const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
+const contractPath = '/fixtures/contracts/paragraph-bidi-layout-v0.json'
+const digestPath = '/src/benchmark/paragraph-layout-digest.ts'
+const [
+  { runRegisteredBenchmark },
+  { environmentResource },
+  { default: paragraphBidiContract },
+  { paragraphPolicyContractHash },
+] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
+  import(/* @vite-ignore */ contractPath),
+  import(/* @vite-ignore */ digestPath),
 ])
 const paragraph = await runRegisteredBenchmark({
   targetId: 'paragraph-engine',
