@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maintainability Review"
+  short_description: "Audit code for clarity, safety, and local reasoning"
+  default_prompt: "Use $maintainability-review to audit this milestone and implement only evidence-backed improvements."
