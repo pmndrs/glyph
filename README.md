@@ -176,6 +176,9 @@ pnpm check
 ```
 
 Use mise to install the pinned toolchains, or supply compatible Node.js and Rust toolchains through the platform tools you already use.
+The product uses the root stable Rust pin. The optional coverage-guided font-baker fuzzer is isolated
+under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and
+`cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
 
 Run the Figma-backed benchmark product from the monorepo app tree:
 
@@ -187,4 +190,10 @@ The ordinary `pnpm check` path runs deterministic CI-safe tests. The maintainer-
 
 ```sh
 pnpm --filter @pmndrs/text-benchmarks test:live
+```
+
+Run the package-owned coverage-guided Rust fuzzer locally with:
+
+```sh
+pnpm --filter @pmndrs/text-font-baker fuzz:rust
 ```

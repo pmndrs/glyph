@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:43:45Z"
+  at: "2026-07-25T04:17:03Z"
 ---
 
 # Decision register
@@ -41,7 +41,7 @@ Implementation and passing fixtures are evidence, not approval. A proposed row c
 | D-009 | `Text` and paragraph layouts remain non-generic; compile-time precision is concentrated at composition seams. | Accepted |
 | D-067 | `defineFont(input, raster)` is the recommended reusable token; equivalent string, URL, and object inputs deduplicate by normalized request and validated shaping identities rather than object identity. | Accepted |
 | D-068 | Raster identity is the RFC 8785 canonical package descriptor's SHA-256 `rasterKey`; callers never provide arbitrary raster IDs. | Accepted |
-| D-016 | `rust-toolchain.toml` is the sole Rust toolchain authority. `mise.toml` consumes that idiomatic file instead of duplicating Rust configuration; pnpm and Cargo remain the normal command interface. | Settled for V0 |
+| D-016 | The root `rust-toolchain.toml` is the sole product Rust authority. The isolated coverage-fuzz workspace has one exact dated nightly authority because libFuzzer needs unstable compiler instrumentation. Root and nested mise configurations consume their contextual idiomatic files instead of duplicating Rust versions; pnpm and Cargo remain the normal command interface. | Settled for V0 |
 
 D-004/005 follow the established uikit split: the core owns every feature and React only reconciles lifecycle and props. Nested text follows React Native's attributed-text model; direct props and Suspense match uikit/Drei conventions. D-006 makes the short string form canonical while preserving explicit source/baked overrides and preload identity. D-007 fixes native ESM, explicit subpath exports, module workers, and `import()`-based lazy boundaries as package invariants. D-008/009 adopt Koota's value-oriented inference at raster/plugin boundaries without applying type-level models to runtime binary data. See the [API contract](api-shapes.md).
 

@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:e49f4ab137385822585168d013ebb6a6147a8a0b9e8bd5439b73f4e91ac28956"
+source_digest: "sha256:4ac943785993b67f4bc4b22193c67c4b2525e2758433f7b7b244f47861bc1736"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T03:24:49Z"
+  at: "2026-07-25T04:18:36Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -46,8 +46,12 @@ The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, 
 | `build` | Compile the `no_std` Wasm module, apply pinned `wasm-opt -Oz`, generate the ABI JSON, and emit the TypeScript package. |
 | `test:unit` | Run Rust unit tests. |
 | `test:integration` | Run public Rust, compiled Wasm/TypeScript, package-isolation, schema, and malformed-artifact tests. |
+| `test:fuzz-smoke` | Run deterministic artifact-mutation smoke; Rust arbitrary-byte smoke is part of `test:integration`. |
 | `test:e2e` | Verify, bake, validate, and shape the canonical licensed Inter fixture through packaged APIs. |
-| `test` | Run all three test layers. |
+| `test` | Build and run unit, integration, fuzz-smoke, and real-font end-to-end layers. |
+| `fuzz:validator` | Run the longer seeded TypeScript validator mutation driver locally. |
+| `fuzz:rust` | Run pinned cargo-fuzz/libFuzzer against the public bake boundary using the nested mise-owned nightly workspace. |
+| `fuzz:rust-mutation` | Run the longer deterministic stable-Rust source-font mutation driver. |
 | `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths. |
 
 See the [implementation status](../planning/font-baker-implementation.md) for evidence and open gates.[^implementation-status]

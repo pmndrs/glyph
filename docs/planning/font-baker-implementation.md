@@ -32,7 +32,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T03:24:49Z"
+  at: "2026-07-25T04:17:03Z"
 ---
 
 # Font baker implementation status
@@ -50,6 +50,7 @@ Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not s
 | TypeScript wrapper | ✅ | Implements the accepted `FontBakeRequestV0 → FontBakeResultV0` boundary, instantiates the raw Wasm module, reads generated ABI JSON, transfers bytes through linear memory, returns typed bytes/reports, and maps structured errors. | Reuse this exact core in the Node and Worker hosts. |
 | Unit verification | ✅ | Rust unit tests isolate checksum padding, outward V0 bounds encoding, and GLB alignment behavior. | Add a focused regression with every internal defect or policy branch. |
 | Package integration | ✅ | Public Rust tests validate ABI fields, source/container/table policy, TTC face selection, and structured errors. Compiled-Wasm tests validate the pinned optimized module, zero imports, generated/published ABI identity, direct-memory behavior, and errors. The reusable validation entry adds strict GLB framing, exact Khronos-report admission, Draft-04 required/union coverage, schema-copy identity, semantic identity, and hostile payload mutation tests. | Extend the same layered validator contract to the bitmap-owned companion. |
+| Fuzz verification | ✅ | CI runs deterministic arbitrary-byte Rust bake smoke and artifact-mutation validation smoke with seed `0x504d4e44`. Longer source/artifact mutation drivers remain stable-toolchain tools. The isolated coverage target uses mise-owned `nightly-2026-06-01`, cargo-fuzz 0.13.2, and libfuzzer-sys 0.4.13 against the same public bake boundary, seeded from pinned Inter without copying fixture bytes. Minimized failures must enter the malformed corpus. | Add package-owned targets whenever bitmap, loader, shaping, layout, or renderer trust boundaries arrive. |
 | Real-font vertical slice | ✅ | The mandatory package E2E verifies canonical Inter identity, deterministic exact artifact/report values, validates the artifact through the shipped layered validator, and proves source-versus-reduced HarfRust equality over every checked-in case. | Item 2.3 adds bitmap generation and composition to this real-font path. |
 | Product end-to-end | ⬜ | The package test stops at the produced GLB and is not presented as real-product coverage. | Exercise discovery/load, Node/Worker parity, shaping, layout, and rendering through public APIs in `apps/benchmarks`. |
 | TypeScript verification | ✅ | Generated/embedded ABI equality, zero-import, structured-error handling, declaration generation, package build, and workspace type checks pass with the pinned workspace dependencies. | Keep these checks mandatory as public host surfaces are added. |

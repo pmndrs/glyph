@@ -1,0 +1,22 @@
+[package]
+name = "pmndrs-text-font-baker-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+pmndrs-text-font-baker = { path = "../rust", default-features = false, features = ["std"] }
+
+[[bin]]
+name = "bake_font"
+path = "fuzz_targets/bake_font.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

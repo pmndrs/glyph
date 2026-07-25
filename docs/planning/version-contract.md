@@ -29,9 +29,15 @@ sources:
   - id: binaryen
     resource: https://www.npmjs.com/package/binaryen/v/129.0.0
     title: Binaryen 129.0.0
+  - id: cargo-fuzz
+    resource: https://crates.io/crates/cargo-fuzz/0.13.2
+    title: cargo-fuzz 0.13.2
+  - id: libfuzzer-sys
+    resource: https://crates.io/crates/libfuzzer-sys/0.4.13
+    title: libfuzzer-sys 0.4.13
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T03:24:49Z"
+  at: "2026-07-25T04:18:36Z"
 ---
 
 # V0 toolchain and format version pins
@@ -51,6 +57,8 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | JSON Schema Draft-04 evaluator | Ajv `6.15.0` | npm package; exact extension-schema negative matrix |
 | Binaryen / `wasm-opt` | `129.0.0` | npm package; `-Oz`, bulk memory, nontrapping float-to-int |
 | TypeScript discovery compiler | `7.0.2` | npm package; exact runtime assertion and isolated unstable-API adapter |
+| Rust mutation fuzzer | Font baker `0.0.0` | host-only binary compiled by the canonical Rust toolchain; seed `0x504d4e44` |
+| Coverage-guided Rust fuzzer | `nightly-2026-06-01` (`14210df0e`) + cargo-fuzz `0.13.2` + libfuzzer-sys `0.4.13` | nested mise-owned fuzz workspace; fixed default seed `0x504d4e44`; excluded from product builds |
 | `PMNDRS_font` format | `0` | extension schema and shaping contract |
 | Portable baker ABI | `0` | generated `font-baker-abi-v0.json` |
 | Font baker | `0.0.0` | Cargo/npm package version during the integration slice |
@@ -71,6 +79,7 @@ Every raster generator stamps its exact owning package semantic version into its
 | glTF schema or validator | Schema/validator report diff with reviewed extension-only allowlist changes; vendored schema archive SHA-256 is `0f1e200bb081d1fcc7a976ee40f05f95b406ed80f43836550af96b73e5a64bef`. |
 | Binaryen | Raw/compressed module diff plus zero-import, ABI, deterministic artifact, and real-font equivalence. |
 | TypeScript discovery compiler | Adapter compatibility, unstable-import isolation, typed/plain-JavaScript discovery, and complete discovery fixture suite. |
+| Fuzz harness | Deterministic seed replay, fixed-seed stable smoke, bounded cargo-fuzz execution, exact root/nested toolchain authorities, mise/cargo-fuzz/libFuzzer drift guards, and minimized-crash promotion. |
 | ABI or font format | Explicit version increment, compatibility decision, and old/new fixture coverage. |
 | Baker or raster generator | Deterministic artifact diff, payload report, and Node/Worker parity run. |
 

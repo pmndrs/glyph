@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{string::String, vec::Vec};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "compression")]
 use std::io::Write;
 
 use crate::error::{BakeError, BakeErrorCode};
@@ -154,13 +154,13 @@ pub struct TransportPayloadReport {
 }
 
 pub(crate) fn compressed_lengths(bytes: &[u8]) -> Result<Option<(usize, usize)>, BakeError> {
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "compression"))]
     {
         let _ = bytes;
         Ok(None)
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "compression")]
     {
         let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
         gzip.write_all(bytes).map_err(compression_error)?;
@@ -175,7 +175,7 @@ pub(crate) fn compressed_lengths(bytes: &[u8]) -> Result<Option<(usize, usize)>,
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "compression")]
 fn compression_error(error: std::io::Error) -> BakeError {
     BakeError::new(
         BakeErrorCode::SerializationFailed,

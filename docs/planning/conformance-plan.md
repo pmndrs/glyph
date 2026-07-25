@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:56:50Z"
+  at: "2026-07-25T04:17:03Z"
 ---
 
 # Shaping and layout conformance plan
@@ -298,11 +298,21 @@ Status key: ✅ available · 🟡 partial or conditional · ⬜ not started
 | Package integration | 🟡 | The compiled artifact is exercised through its public package boundary, including generated ABI equality, zero Wasm imports, direct-memory round trips, structured failures, deterministic bytes, and format validation. | The producing package; currently `packages/font-baker`. |
 | Product end-to-end | 🟡 | The pinned source now flows through the real browser/public Wasm baker path; discovery/loading, Worker parity, registration, shaping, layout, and rendering remain open. | The shared interactive/headless app under `apps/benchmarks`. |
 | Differential conformance | 🟡 | Pinned HarfRust/HarfBuzz source oracles have field-level comparison and an exact flag-delta inventory; every checked-in case now also matches the reduced shaping SFNT exactly. Runtime registered-font equivalence closes with the milestone-4 shaping ABI. | The conformance runner and fixture corpus. |
+| Fuzzing | 🟡 | Fixed-seed Rust source-byte and TypeScript artifact-mutation smoke tests run in normal CI. Longer seeded mutation drivers and a pinned cargo-fuzz/libFuzzer target exercise the public bake boundary; minimized findings must become checked-in malformed fixtures. Bitmap, loader, shaping, layout, and renderer targets remain open. | Each package owns its target and regression corpus. |
 | Performance regression | ⬜ | Only correctness-passing scenarios contribute timings, payload, allocation, and device measurements. Raw samples and environment metadata are retained. | The shared benchmark scenario registry and runners. |
 
 Every implementation change adds the lowest-cost unit regression that identifies the defect. A package-boundary change also adds or updates an integration case. Any user-visible vertical slice must add a scenario to the shared benchmark registry and an end-to-end assertion in the appropriate automated or local live-probe lane before its roadmap item can be marked complete. The interactive lab, automated runner, and local probes consume the same scenario contract; duplicating the workload in an ad hoc demo or benchmark script does not satisfy the gate.
 
 Generated contract fixtures are appropriate for overflow, malformed-input, and maximum-cardinality coverage. They never substitute for a licensed, hash-pinned real font in a product end-to-end gate. Until the canonical font is pinned, real-font smoke tests may accept an explicit local path and report a skip when absent, but that conditional lane cannot close a roadmap exit criterion.
+
+### Fuzzing tiers
+
+Fuzzing supplements the explicit malformed corpus; it never replaces schema, semantic, integration, or real-product assertions.
+
+- Hermetic CI runs bounded fixed-seed mutation/property smoke tests at the Rust bake and TypeScript validation boundaries. The same input must produce the same structured result, and any panic, trap, unstructured exception, or nondeterministic outcome fails the test.
+- Maintainer-local mutation runs use explicit seeds and the public production boundary. Coverage-guided Rust runs use exact cargo-fuzz/libFuzzer pins and the exact dated nightly in the isolated fuzz workspace; nested mise consumes that contextual `rust-toolchain.toml`. The product crate and distributed Wasm remain governed solely by the root stable pin.
+- Every run records its seed and bounded inputs. A crash is minimized, copied into the owning package's checked-in malformed corpus, and paired with an ordinary regression test before the transient fuzz artifact is cleared.
+- Unseeded random CI, retry-on-failure behavior, elapsed-time assertions, and treating an unreproduced long fuzz run as a release guarantee are forbidden.
 
 ## Execution environments
 
@@ -365,6 +375,7 @@ Repeated success is supporting evidence, not a substitute for causal synchroniza
 - HarfRust differential fixtures;
 - Unicode targeted subset;
 - saved fuzz regressions;
+- fixed-seed Rust input and TypeScript artifact-mutation smoke tests;
 - deterministic benchmark-app smoke scenarios through public APIs for CI-supported capabilities;
 - no network downloads.
 

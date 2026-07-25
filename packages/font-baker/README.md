@@ -50,12 +50,20 @@ pnpm --filter @pmndrs/text-font-baker build
 pnpm --filter @pmndrs/text-font-baker test
 ```
 
-The test command keeps three lanes explicit: Rust unit tests, public Rust and
-compiled Wasm/package/schema/malformed-input integration tests, and a real-font vertical-slice test.
+The test command keeps four lanes explicit: Rust unit tests, public Rust and
+compiled Wasm/package/schema/malformed-input integration tests, deterministic
+fixed-seed fuzz smoke, and a real-font vertical-slice test.
 The real-font lane never substitutes generated font bytes for product evidence;
 it always verifies and bakes the checked-in, licensed, hash-pinned Inter 4.1
 fixture. The resulting reduced SFNT is validated structurally and shaped through
 the complete checked-in corpus with HarfRust 0.12.0.
+
+Run longer seeded validator and source-font mutation campaigns locally with
+`fuzz:validator` and `fuzz:rust-mutation`. The primary coverage-guided `fuzz:rust`
+lane uses nested mise configuration to isolate exact `nightly-2026-06-01`,
+cargo-fuzz 0.13.2, and libfuzzer-sys 0.4.13 from the stable product toolchain.
+Any minimized finding must become a checked-in malformed fixture and ordinary
+stable-toolchain regression test.
 
 Emit the exact ABI JSON generated into the current Rust build:
 

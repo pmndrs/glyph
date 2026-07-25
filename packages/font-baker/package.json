@@ -2,11 +2,11 @@
   "name": "@pmndrs/text-font-baker",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "sideEffects": false,
   "files": [
     "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -26,17 +26,21 @@
     "generate:abi": "cargo run --manifest-path rust/Cargo.toml --bin generate-abi --locked --quiet",
     "generate:shaping-oracle": "cargo run --manifest-path rust/Cargo.toml --bin generate-shaping-oracle --features oracle --locked --quiet --",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke && pnpm test:e2e",
     "test:unit": "cargo test --manifest-path rust/Cargo.toml --lib --locked",
-    "test:integration": "cargo test --manifest-path rust/Cargo.toml --test public_api --locked && node --test tests/integration/*.test.mjs",
-    "test:e2e": "node --test tests/e2e/*.test.mjs"
-  },
-  "devDependencies": {
-    "binaryen": "129.0.0",
-    "typescript": "7.0.2"
+    "test:integration": "cargo test --manifest-path rust/Cargo.toml --tests --locked && node --test tests/integration/*.test.mjs",
+    "test:fuzz-smoke": "node --test tests/fuzz/*.test.mjs",
+    "test:e2e": "node --test tests/e2e/*.test.mjs",
+    "fuzz:validator": "pnpm build && node scripts/fuzz-validator.mjs",
+    "fuzz:rust": "node scripts/fuzz-rust.mjs",
+    "fuzz:rust-mutation": "node scripts/fuzz-rust-mutation.mjs"
   },
   "dependencies": {
     "ajv": "6.15.0",
     "gltf-validator": "2.0.0-dev.3.10"
+  },
+  "devDependencies": {
+    "binaryen": "129.0.0",
+    "typescript": "7.0.2"
   }
 }

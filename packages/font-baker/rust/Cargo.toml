@@ -20,16 +20,21 @@ name = "generate-shaping-oracle"
 path = "src/bin/generate-shaping-oracle.rs"
 required-features = ["oracle"]
 
+[[bin]]
+name = "fuzz-bake"
+path = "src/bin/fuzz-bake.rs"
+required-features = ["fuzzing"]
+
 [features]
-default = ["std"]
+default = ["compression"]
 std = [
-  "dep:brotli",
-  "dep:flate2",
   "read-fonts/std",
   "serde/std",
   "serde_json/std",
   "skrifa/std",
 ]
+compression = ["std", "dep:brotli", "dep:flate2"]
+fuzzing = ["std"]
 oracle = ["std", "dep:harfrust"]
 
 [dependencies]
