@@ -5,8 +5,11 @@ use core::{
 };
 
 use crate::{
-    STATUS_INVALID_REQUEST, ShaperRegistry,
-    wire::{pack_result, parse_reshape_request, parse_shape_request},
+    STATUS_INVALID_REQUEST, ShaperRegistry, bidi,
+    wire::{
+        pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
+        parse_shape_request,
+    },
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -138,6 +141,32 @@ pub unsafe extern "C" fn pmndrs_text_shaper_reshape_ranges(pointer: u32, length:
             Err(status) => return status,
         };
         match pack_result(&output) {
+            Ok(result) => {
+                state.set_result(result);
+                0
+            }
+            Err(status) => status,
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_shaper_analyze_bidi(pointer: u32, length: u32) -> u32 {
+    // SAFETY: same request allocation contract as `pmndrs_text_shaper_shape_batch`.
+    let Some(bytes) = (unsafe { bytes(pointer, length) }) else {
+        return STATUS_INVALID_REQUEST;
+    };
+    with_state(|state| {
+        state.set_result(Vec::new());
+        let (text, direction) = match parse_bidi_request(bytes) {
+            Ok(request) => request,
+            Err(status) => return status,
+        };
+        let output = match bidi::analyze(&text, direction) {
+            Ok(output) => output,
+            Err(()) => return STATUS_INVALID_REQUEST,
+        };
+        match pack_bidi_result(&output) {
             Ok(result) => {
                 state.set_result(result);
                 0

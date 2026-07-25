@@ -8,6 +8,7 @@ import {
   FontRegistry,
   rasterBake,
   type AnyRasterModule,
+  type BidiAnalysisViews,
   type FontInputOf,
   type FontRasterModuleOf,
   type LoadedFont,
@@ -72,12 +73,16 @@ const shapeRequest: ShapeBatchRequest = {
 const shapedPromise: Promise<ShapedBatchViews> = shaperPromise.then((shaper) =>
   shaper.shapeBatch(shapeRequest),
 );
+const bidiPromise: Promise<BidiAnalysisViews> = shaperPromise.then((shaper) =>
+  shaper.analyzeBidi(Uint16Array.of(0x05d0), "auto"),
+);
 const preparedParagraph: Promise<Paragraph> = shaperPromise.then((shaper) =>
   createParagraphEngine({ shaper }).create({ text: "Hello", font: fontHandle }),
 );
 void registeredPromise;
 void shaperPromise;
 void shapedPromise;
+void bidiPromise;
 void preparedParagraph;
 
 interface MsdfResource {

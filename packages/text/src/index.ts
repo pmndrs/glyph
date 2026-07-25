@@ -97,6 +97,8 @@ export type {
 export { defineRaster } from "./raster.js";
 
 export type {
+  BidiAnalysisViews,
+  BidiDirection,
   RuntimeShaper,
   RuntimeShaperMemoryReport,
   RuntimeShaperOptions,

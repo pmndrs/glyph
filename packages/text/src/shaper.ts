@@ -64,10 +64,22 @@ export interface ShapedBatchViews {
   readonly glyphFlags: Uint16Array;
 }
 
+export type BidiDirection = "auto" | "ltr" | "rtl";
+
+/** Borrowed direct-memory UAX #9 output, indexed by UTF-16 code unit. */
+export interface BidiAnalysisViews {
+  readonly levels: Uint8Array;
+  readonly classes: Uint8Array;
+  readonly paragraphStarts: Uint32Array;
+  readonly paragraphEnds: Uint32Array;
+  readonly paragraphLevels: Uint8Array;
+}
+
 export interface RuntimeShaper {
   readonly registry: FontRegistry;
   registerFont(font: RegisteredFont): void;
   disposeFont(font: RegisteredFont): void;
+  analyzeBidi(textUtf16: Uint16Array, direction?: BidiDirection): BidiAnalysisViews;
   shapeBatch(request: ShapeBatchRequest): ShapedBatchViews;
   reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews;
   memoryReport(): RuntimeShaperMemoryReport;
@@ -93,6 +105,12 @@ interface ShapeRequestLayout extends LayoutBase {
 interface ReshapeRequestLayout extends LayoutBase {
   readonly rangesOffset: number;
   readonly rangeCount: number;
+}
+
+interface BidiRequestLayout extends LayoutBase {
+  readonly textOffset: number;
+  readonly textLength: number;
+  readonly direction: number;
 }
 
 interface FeatureLayout extends LayoutBase {
@@ -142,13 +160,26 @@ interface ResultLayout extends LayoutBase {
   readonly glyphCount: number;
 }
 
+interface BidiResultLayout extends LayoutBase {
+  readonly byteLength: number;
+  readonly levelsOffset: number;
+  readonly classesOffset: number;
+  readonly textLength: number;
+  readonly paragraphStartsOffset: number;
+  readonly paragraphEndsOffset: number;
+  readonly paragraphLevelsOffset: number;
+  readonly paragraphCount: number;
+}
+
 interface ShaperAbiLayouts {
   readonly shapeRequest: ShapeRequestLayout;
   readonly reshapeRequest: ReshapeRequestLayout;
+  readonly bidiRequest: BidiRequestLayout;
   readonly feature: FeatureLayout;
   readonly run: RunLayout;
   readonly reshapeRange: ReshapeRangeLayout;
   readonly result: ResultLayout;
+  readonly bidiResult: BidiResultLayout;
 }
 
 interface ShaperAbiV0 {
@@ -174,10 +205,15 @@ interface ShaperAbiV0 {
     readonly planCount: string;
     readonly shapeBatch: string;
     readonly reshapeRanges: string;
+    readonly analyzeBidi: string;
     readonly resultPointer: string;
     readonly resultLength: string;
   };
   readonly layouts: ShaperAbiLayouts;
+  readonly bidi: {
+    readonly directions: { readonly auto: 0; readonly ltr: 1; readonly rtl: 2 };
+    readonly classes: Readonly<Record<string, number>>;
+  };
   readonly status: { readonly ok: 0 };
 }
 
@@ -200,6 +236,7 @@ interface ShaperExports {
   readonly planCount: () => number;
   readonly shapeBatch: (pointer: number, length: number) => number;
   readonly reshapeRanges: (pointer: number, length: number) => number;
+  readonly analyzeBidi: (pointer: number, length: number) => number;
   readonly resultPointer: () => number;
   readonly resultLength: () => number;
 }
@@ -271,6 +308,19 @@ class RuntimeShaperImpl implements RuntimeShaper {
   disposeFont(font: RegisteredFont): void {
     this.#assertActive();
     if (this.#registered.get(font.handle) === font) this.#disposeHandle(font.handle);
+  }
+
+  analyzeBidi(textUtf16: Uint16Array, direction: BidiDirection = "auto"): BidiAnalysisViews {
+    this.#assertActive();
+    const bytes = packBidiRequest(this.#layouts.bidiRequest, textUtf16, direction);
+    const allocation = copyIntoWasm(this.#exports, bytes);
+    try {
+      const status = this.#exports.analyzeBidi(allocation.pointer, allocation.length);
+      if (status !== 0) throw shaperStatusError(status, "analyze bidi text");
+      return readBidiResultViews(this.#exports, this.#layouts.bidiResult);
+    } finally {
+      this.#exports.deallocate(allocation.pointer, allocation.length);
+    }
   }
 
   shapeBatch(request: ShapeBatchRequest): ShapedBatchViews {
@@ -367,6 +417,10 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
     abi.versions.fontFormat !== 0 ||
     abi.functions === undefined ||
     abi.layouts === undefined ||
+    abi.bidi?.directions.auto !== 0 ||
+    abi.bidi.directions.ltr !== 1 ||
+    abi.bidi.directions.rtl !== 2 ||
+    !validBidiClasses(abi.bidi.classes) ||
     abi.status?.ok !== 0
   ) {
     throw new TypeError("unsupported text shaper ABI");
@@ -385,6 +439,7 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       planCount: exportedFunction(instance, functions.planCount),
       shapeBatch: exportedFunction(instance, functions.shapeBatch),
       reshapeRanges: exportedFunction(instance, functions.reshapeRanges),
+      analyzeBidi: exportedFunction(instance, functions.analyzeBidi),
       resultPointer: exportedFunction(instance, functions.resultPointer),
       resultLength: exportedFunction(instance, functions.resultLength),
     },
@@ -406,6 +461,7 @@ function validateLayouts(layouts: ShaperAbiLayouts): void {
       languagesLength: 28,
     },
     reshapeRequest: { size: 40, rangesOffset: 32, rangeCount: 36 },
+    bidiRequest: { size: 12, textOffset: 0, textLength: 4, direction: 8 },
     feature: { size: 16, tag: 0, value: 4, start: 8, end: 12 },
     run: {
       size: 32,
@@ -447,6 +503,17 @@ function validateLayouts(layouts: ShaperAbiLayouts): void {
       glyphFlagsOffset: 52,
       glyphCount: 56,
     },
+    bidiResult: {
+      size: 32,
+      byteLength: 0,
+      levelsOffset: 4,
+      classesOffset: 8,
+      textLength: 12,
+      paragraphStartsOffset: 16,
+      paragraphEndsOffset: 20,
+      paragraphLevelsOffset: 24,
+      paragraphCount: 28,
+    },
   };
   for (const name of Object.keys(expected) as (keyof ShaperAbiLayouts)[]) {
     const layout = layouts[name];
@@ -454,6 +521,32 @@ function validateLayouts(layouts: ShaperAbiLayouts): void {
       if (layout[field] !== value) throw new TypeError(`unsupported ${name}.${field} layout`);
     }
   }
+}
+
+function packBidiRequest(
+  layout: BidiRequestLayout,
+  textUtf16: Uint16Array,
+  direction: BidiDirection,
+): Uint8Array {
+  if (!(textUtf16 instanceof Uint16Array)) {
+    throw new TypeError("bidi textUtf16 must be a Uint16Array");
+  }
+  const directions: Readonly<Record<BidiDirection, number>> = { auto: 0, ltr: 1, rtl: 2 };
+  const directionCode = directions[direction];
+  if (directionCode === undefined) throw new RangeError("bidi direction must be auto, ltr, or rtl");
+  uint32(textUtf16.length, "bidi text UTF-16 length");
+  const textOffset = align(layout.size, 2);
+  const bytes = new Uint8Array(
+    checkedAdd(textOffset, checkedMultiply(textUtf16.length, 2, "bidi text bytes")),
+  );
+  const view = new DataView(bytes.buffer);
+  writeUint32(view, layout.textOffset, textOffset);
+  writeUint32(view, layout.textLength, textUtf16.length);
+  view.setUint8(layout.direction, directionCode);
+  for (let index = 0; index < textUtf16.length; index += 1) {
+    view.setUint16(textOffset + index * 2, textUtf16[index]!, true);
+  }
+  return bytes;
 }
 
 function packRequest(
@@ -680,12 +773,52 @@ function readResultViews(exports: ShaperExports, layout: ResultLayout): ShapedBa
   };
 }
 
-type ResultArrayConstructor<ArrayType extends Uint16Array | Uint32Array | Int32Array> = {
+function readBidiResultViews(
+  exports: ShaperExports,
+  layout: BidiResultLayout,
+): BidiAnalysisViews {
+  const pointer = exports.resultPointer();
+  const length = exports.resultLength();
+  if (length < layout.size) throw new TypeError("text shaper returned a truncated bidi header");
+  const bytes = checkedMemoryView(exports.memory, pointer, length);
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (readUint32(header, layout.byteLength) !== length) {
+    throw new TypeError("text shaper bidi result length does not match its header");
+  }
+  const textLength = readUint32(header, layout.textLength);
+  const paragraphCount = readUint32(header, layout.paragraphCount);
+  return {
+    levels: resultArray(Uint8Array, bytes, readUint32(header, layout.levelsOffset), textLength),
+    classes: resultArray(Uint8Array, bytes, readUint32(header, layout.classesOffset), textLength),
+    paragraphStarts: resultArray(
+      Uint32Array,
+      bytes,
+      readUint32(header, layout.paragraphStartsOffset),
+      paragraphCount,
+    ),
+    paragraphEnds: resultArray(
+      Uint32Array,
+      bytes,
+      readUint32(header, layout.paragraphEndsOffset),
+      paragraphCount,
+    ),
+    paragraphLevels: resultArray(
+      Uint8Array,
+      bytes,
+      readUint32(header, layout.paragraphLevelsOffset),
+      paragraphCount,
+    ),
+  };
+}
+
+type ResultArrayConstructor<
+  ArrayType extends Uint8Array | Uint16Array | Uint32Array | Int32Array,
+> = {
   readonly BYTES_PER_ELEMENT: number;
   new (buffer: ArrayBuffer, byteOffset: number, length: number): ArrayType;
 };
 
-function resultArray<ArrayType extends Uint16Array | Uint32Array | Int32Array>(
+function resultArray<ArrayType extends Uint8Array | Uint16Array | Uint32Array | Int32Array>(
   Constructor: ResultArrayConstructor<ArrayType>,
   result: Uint8Array<ArrayBuffer>,
   offset: number,
@@ -696,6 +829,14 @@ function resultArray<ArrayType extends Uint16Array | Uint32Array | Int32Array>(
     throw new TypeError("text shaper returned an invalid result-array range");
   }
   return new Constructor(result.buffer, result.byteOffset + offset, count);
+}
+
+function validBidiClasses(classes: Readonly<Record<string, number>> | undefined): boolean {
+  const expected = [
+    "L", "R", "AL", "EN", "ES", "ET", "AN", "CS", "NSM", "BN", "B", "S", "WS",
+    "ON", "LRE", "LRO", "RLE", "RLO", "PDF", "LRI", "RLI", "FSI", "PDI",
+  ];
+  return classes !== undefined && expected.every((name, index) => classes[name] === index);
 }
 
 function exportedFunction(

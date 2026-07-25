@@ -13,6 +13,8 @@ pub const FEATURE_RECORD_SIZE: u32 = 16;
 pub const RUN_RECORD_SIZE: u32 = 32;
 pub const RESHAPE_RANGE_RECORD_SIZE: u32 = 24;
 pub const RESULT_HEADER_SIZE: u32 = 60;
+pub const BIDI_REQUEST_HEADER_SIZE: u32 = 12;
+pub const BIDI_RESULT_HEADER_SIZE: u32 = 32;
 
 pub fn json() -> String {
     json!({
@@ -38,6 +40,7 @@ pub fn json() -> String {
             "planCount": "pmndrs_text_shaper_plan_count",
             "shapeBatch": "pmndrs_text_shaper_shape_batch",
             "reshapeRanges": "pmndrs_text_shaper_reshape_ranges",
+            "analyzeBidi": "pmndrs_text_shaper_analyze_bidi",
             "resultPointer": "pmndrs_text_shaper_result_ptr",
             "resultLength": "pmndrs_text_shaper_result_len"
         },
@@ -57,6 +60,12 @@ pub fn json() -> String {
                 "size": RESHAPE_REQUEST_HEADER_SIZE,
                 "rangesOffset": 32,
                 "rangeCount": 36
+            },
+            "bidiRequest": {
+                "size": BIDI_REQUEST_HEADER_SIZE,
+                "textOffset": 0,
+                "textLength": 4,
+                "direction": 8
             },
             "feature": {
                 "size": FEATURE_RECORD_SIZE,
@@ -104,6 +113,27 @@ pub fn json() -> String {
                 "yOffsetsOffset": 48,
                 "glyphFlagsOffset": 52,
                 "glyphCount": 56
+            },
+            "bidiResult": {
+                "size": BIDI_RESULT_HEADER_SIZE,
+                "byteLength": 0,
+                "levelsOffset": 4,
+                "classesOffset": 8,
+                "textLength": 12,
+                "paragraphStartsOffset": 16,
+                "paragraphEndsOffset": 20,
+                "paragraphLevelsOffset": 24,
+                "paragraphCount": 28
+            }
+        },
+        "bidi": {
+            "directions": { "auto": 0, "ltr": 1, "rtl": 2 },
+            "classes": {
+                "L": 0, "R": 1, "AL": 2, "EN": 3, "ES": 4, "ET": 5,
+                "AN": 6, "CS": 7, "NSM": 8, "BN": 9, "B": 10, "S": 11,
+                "WS": 12, "ON": 13, "LRE": 14, "LRO": 15, "RLE": 16,
+                "RLO": 17, "PDF": 18, "LRI": 19, "RLI": 20, "FSI": 21,
+                "PDI": 22
             }
         },
         "status": {

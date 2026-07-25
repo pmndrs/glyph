@@ -4,12 +4,33 @@ use crate::{
     FeatureRecord, ReshapeRange, RunRequest, STATUS_INVALID_REQUEST, STATUS_RESULT_TOO_LARGE,
     ShapeBatchOutput, ShapeBatchRequest,
     abi_contract::{
-        FEATURE_RECORD_SIZE, RESHAPE_RANGE_RECORD_SIZE, RESHAPE_REQUEST_HEADER_SIZE,
-        RESULT_HEADER_SIZE, RUN_RECORD_SIZE, SHAPE_REQUEST_HEADER_SIZE,
+        BIDI_REQUEST_HEADER_SIZE, BIDI_RESULT_HEADER_SIZE, FEATURE_RECORD_SIZE,
+        RESHAPE_RANGE_RECORD_SIZE, RESHAPE_REQUEST_HEADER_SIZE, RESULT_HEADER_SIZE,
+        RUN_RECORD_SIZE, SHAPE_REQUEST_HEADER_SIZE,
     },
+    bidi::BidiAnalysis,
 };
 
 const NO_LANGUAGE: u32 = u32::MAX;
+
+pub fn parse_bidi_request(bytes: &[u8]) -> Result<(Vec<u16>, u8), u32> {
+    if bytes.len() < BIDI_REQUEST_HEADER_SIZE as usize {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let text_offset = read_u32(bytes, 0)?;
+    let text_length = read_u32(bytes, 4)?;
+    let direction = *bytes.get(8).ok_or(STATUS_INVALID_REQUEST)?;
+    if bytes.get(9..12) != Some(&[0, 0, 0]) {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let text_bytes = array(bytes, text_offset, text_length, 2, 2)?;
+    let mut text =
+        Vec::with_capacity(usize::try_from(text_length).map_err(|_| STATUS_INVALID_REQUEST)?);
+    for unit in text_bytes.chunks_exact(2) {
+        text.push(u16::from_le_bytes([unit[0], unit[1]]));
+    }
+    Ok((text, direction))
+}
 
 pub fn parse_shape_request(bytes: &[u8]) -> Result<ShapeBatchRequest, u32> {
     parse_request(bytes, false).map(|(request, _)| request)
@@ -196,6 +217,42 @@ pub fn pack_result(output: &ShapeBatchOutput) -> Result<Vec<u8>, u32> {
     Ok(bytes)
 }
 
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub fn pack_bidi_result(output: &BidiAnalysis) -> Result<Vec<u8>, u32> {
+    let text_length = output.levels.len();
+    let paragraph_count = output.paragraph_starts.len();
+    if output.classes.len() != text_length
+        || output.paragraph_ends.len() != paragraph_count
+        || output.paragraph_levels.len() != paragraph_count
+    {
+        return Err(STATUS_RESULT_TOO_LARGE);
+    }
+    let mut bytes = vec![0; BIDI_RESULT_HEADER_SIZE as usize];
+    let levels_offset = append_u8(&mut bytes, &output.levels)?;
+    let classes_offset = append_u8(&mut bytes, &output.classes)?;
+    let paragraph_starts_offset = append_u32(&mut bytes, &output.paragraph_starts)?;
+    let paragraph_ends_offset = append_u32(&mut bytes, &output.paragraph_ends)?;
+    let paragraph_levels_offset = append_u8(&mut bytes, &output.paragraph_levels)?;
+    let byte_length = u32::try_from(bytes.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+    write_u32(&mut bytes, 0, byte_length);
+    write_u32(&mut bytes, 4, levels_offset);
+    write_u32(&mut bytes, 8, classes_offset);
+    write_u32(
+        &mut bytes,
+        12,
+        u32::try_from(text_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
+    );
+    write_u32(&mut bytes, 16, paragraph_starts_offset);
+    write_u32(&mut bytes, 20, paragraph_ends_offset);
+    write_u32(&mut bytes, 24, paragraph_levels_offset);
+    write_u32(
+        &mut bytes,
+        28,
+        u32::try_from(paragraph_count).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
+    );
+    Ok(bytes)
+}
+
 fn array(bytes: &[u8], offset: u32, count: u32, stride: u32, alignment: u32) -> Result<&[u8], u32> {
     if !offset.is_multiple_of(alignment) {
         return Err(STATUS_INVALID_REQUEST);
@@ -245,6 +302,13 @@ fn append_u16(bytes: &mut Vec<u8>, values: &[u16]) -> Result<u32, u32> {
     Ok(offset)
 }
 
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn append_u8(bytes: &mut Vec<u8>, values: &[u8]) -> Result<u32, u32> {
+    let offset = u32::try_from(bytes.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+    bytes.extend_from_slice(values);
+    Ok(offset)
+}
+
 fn append_u32(bytes: &mut Vec<u8>, values: &[u32]) -> Result<u32, u32> {
     let offset = align(bytes, 4)?;
     for value in values {
@@ -273,6 +337,10 @@ mod tests {
         ));
         assert!(matches!(
             parse_reshape_request(&[]),
+            Err(STATUS_INVALID_REQUEST)
+        ));
+        assert!(matches!(
+            parse_bidi_request(&[]),
             Err(STATUS_INVALID_REQUEST)
         ));
         let mut bytes = vec![0; SHAPE_REQUEST_HEADER_SIZE as usize];

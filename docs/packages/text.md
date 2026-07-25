@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:e3bd17df30e91e037e9bfef03d820ecab02542feef6851444ad6457745564ace"
+source_digest: "sha256:6612fe937e6ded718968e12f9c607616c82919c04a8d4fb49a49665e0d626edc"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -55,7 +55,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T08:38:57Z"
+  at: "2026-07-25T09:06:35Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -92,7 +92,9 @@ The canonical integration lane derives its natural width directly from the check
 
 Item 5.2 implements final positioned `ParagraphLayout`. It caches line plans independently from full constraint results, materializes paragraph-owned typed arrays only when requested, scales the exact HarfRust advances/offsets through retained GLB metrics, and emits parallel glyph and line SoA arrays in top-left/positive-down coordinates. Boundary-sensitive line fragments are gathered into one `reshapeRanges` call per changed width with full shaping context and line BOT/EOT flags. The canonical fixture fixes every glyph ID, UTF-16 cluster, flag, line range, baseline, advance, x/y placement, and normalized byte hash for natural, wide, and narrow layouts. The live Chromium aggregate is 3,786 bytes with hashes `bb15bbcc:4f111a3f:e8c0e9d5`, one broad shape, and two reshape calls total. Registry-scoped handles are validated separately and deliberately excluded from the portable hash.
 
-Alignment, bidi, clipping, max-lines, and ellipsis remain item 5.3 rather than silently behaving as implemented options.
+Item 5.3 now has a conformant Unicode 17 bidi foundation. The package-owned shaper reuses `unicode-bidi` 0.3.18's maintained post–Unicode-15 UAX #9 algorithm under `no_std + alloc`, disables its Unicode 16 tables, and supplies generated Unicode 17 `Bidi_Class` and normalized paired-bracket data through the crate's custom data-source seam. The Rust-generated JSON ABI describes one direct-memory UTF-16 analysis call and borrowed SoA levels/classes/paragraph arrays; no browser ICU, WASI, binding generator, or ambient Unicode version participates. Hash-pinned official inputs cover `DerivedBidiClass.txt`, `BidiTest.txt`, and `BidiCharacterTest.txt`. Ordinary integration tests expand the generic corpus to all 770,241 requested paragraph-direction cases and execute all 91,707 character-specific cases, comparing paragraph level, every specified resolved level, and complete visual order. Wasm integration separately proves supplementary-plane code units and explicit/automatic paragraph directions.
+
+Paragraph-level bidi shaping/reordering, alignment, clipping, max-lines, ellipsis, and the uikit compatibility fixture remain open in item 5.3; the conformant analysis boundary is not being misreported as completed layout policy.
 
 The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
@@ -104,7 +106,7 @@ The public runtime bitmap upload/module belongs to milestone 6.1 after layout de
 | `test` | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, both Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts. |
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `test:unit` | Run focused Rust bitmap and HarfRust-shaper unit tests. |
-| `test:integration` | Verify pinned Unicode fixture hashes, then run both Rust public boundaries plus Wasm/package, registration, shaping/paragraph goldens, Unicode conformance, and malformed-artifact integration tests. |
+| `test:integration` | Verify pinned Unicode fixture hashes, then run both Rust public boundaries plus Wasm/package, registration, shaping/paragraph goldens, all 861,948 Unicode 17 bidi cases, UAX #14/#29 conformance, and malformed-artifact integration tests. |
 | `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, and raw shaper-request mutations twice and require deterministic, trap-free outcomes. |
 | `build` | Emit ESM/declarations, compile the no-WASI bitmap and shaper Wasm modules, optimize them with pinned Binaryen, and publish both generated ABIs. |
 
