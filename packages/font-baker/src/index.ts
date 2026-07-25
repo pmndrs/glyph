@@ -88,6 +88,18 @@ export interface FontBakerAbiV0 {
   readonly endianness: 'little'
   readonly pointerWidth: 32
   readonly memory: string
+  readonly versions: {
+    readonly baker: '0.0.0'
+    readonly fontFormat: 0
+    readonly harfrust: '0.12.0'
+    readonly harfrustCommit: '60b28ea22b5261710018d69c168a762bcb28794c'
+    readonly harfbuzzReference: '13.0.0'
+    readonly harfbuzzReferenceCommit: 'a0fc099681a69ae40665fbea74982a2e9d7a5260'
+    readonly unicode: '17.0.0'
+    readonly gltfSpec: '2.0'
+    readonly gltfSchemaRevision: '77b44be7bef26e01fb0b140e3d5bb1716421c5e9'
+    readonly gltfValidator: '2.0.0-dev.3.10'
+  }
   readonly functions: {
     readonly allocate: AbiFunction
     readonly deallocate: AbiFunction
@@ -187,6 +199,19 @@ export function readFontBakerAbi(
     value.endianness !== 'little' ||
     value.pointerWidth !== 32 ||
     typeof value.memory !== 'string' ||
+    value.versions?.baker !== '0.0.0' ||
+    value.versions.fontFormat !== 0 ||
+    value.versions.harfrust !== '0.12.0' ||
+    value.versions.harfrustCommit !==
+      '60b28ea22b5261710018d69c168a762bcb28794c' ||
+    value.versions.harfbuzzReference !== '13.0.0' ||
+    value.versions.harfbuzzReferenceCommit !==
+      'a0fc099681a69ae40665fbea74982a2e9d7a5260' ||
+    value.versions.unicode !== '17.0.0' ||
+    value.versions.gltfSpec !== '2.0' ||
+    value.versions.gltfSchemaRevision !==
+      '77b44be7bef26e01fb0b140e3d5bb1716421c5e9' ||
+    value.versions.gltfValidator !== '2.0.0-dev.3.10' ||
     value.functions === undefined ||
     value.response === undefined
   ) {

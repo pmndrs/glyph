@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T01:43:45Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -140,12 +140,16 @@ The exact directories are created with the first tooling issue. This document de
   "fontIndex": 0,
   "variation": {},
   "glyphIds": "source",
-  "bakerVersion": "<pinned>",
+  "bakerVersion": "0.0.0",
   "bakeDescriptorHash": "<required>",
   "rasters": [{ "kind": "bitmap", "strikes": [16] }],
-  "unicodeVersion": "<pinned>",
-  "harfbuzzVersion": "<pinned>",
-  "harfrustCommit": "<pinned>"
+  "unicodeVersion": "17.0.0",
+  "harfbuzzVersion": "13.0.0",
+  "harfbuzzCommit": "a0fc099681a69ae40665fbea74982a2e9d7a5260",
+  "harfrustVersion": "0.12.0",
+  "harfrustCommit": "60b28ea22b5261710018d69c168a762bcb28794c",
+  "gltfSchemaRevision": "77b44be7bef26e01fb0b140e3d5bb1716421c5e9",
+  "gltfValidatorVersion": "2.0.0-dev.3.10"
 }
 ```
 

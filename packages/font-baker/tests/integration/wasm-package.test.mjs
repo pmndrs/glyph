@@ -26,6 +26,22 @@ test('the published and embedded ABI contracts are identical', async () => {
   assert.deepEqual(embedded, published)
 })
 
+test('the direct-memory shim rejects incompatible version pins', async () => {
+  const module = await WebAssembly.compile(wasm)
+  const instance = await WebAssembly.instantiate(module, {})
+  const pointer = instance.exports.pmndrs_font_baker_abi_ptr()
+  const length = instance.exports.pmndrs_font_baker_abi_len()
+  const bytes = new Uint8Array(instance.exports.memory.buffer, pointer, length)
+  const text = new TextDecoder().decode(bytes)
+  const incompatible = new TextEncoder().encode(
+    text.replace('"harfrust": "0.12.0"', '"harfrust": "0.11.0"'),
+  )
+  assert.equal(incompatible.byteLength, bytes.byteLength)
+  bytes.set(incompatible)
+
+  assert.throws(() => readFontBakerAbi(instance), /unsupported font baker ABI/)
+})
+
 test('the TypeScript wrapper returns structured Rust errors', async () => {
   const baker = await createFontBaker(wasm)
   assert.throws(

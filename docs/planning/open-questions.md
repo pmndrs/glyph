@@ -5,7 +5,7 @@ description: Tracks unresolved decisions, blockers, and prototype questions for 
 tags: [questions, governance, blockers]
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T01:43:45Z"
 ---
 
 # Open questions
@@ -14,10 +14,10 @@ Status: unresolved unless marked otherwise.
 
 ## Blocking before Phase 1
 
-1. Which exact HarfRust, HarfBuzz, and Unicode versions become the first reference set?
-2. Which authorized Poimandres maintainer will submit the prepared [`PMNDRS` prefix request](gltf-extension-registration.md), and should the registry identify the project as `Poimandres` or `pmndrs`?
-3. Which source-font licenses permit checked-in fixtures and generated derivatives in CI?
-4. Which browsers and GPU APIs define the initial support matrix?
+- [x] Pin HarfRust `0.12.0`, HarfBuzz `13.0.0`, and Unicode `17.0.0` in the [version contract](version-contract.md).
+- [ ] Identify the authorized Poimandres maintainer who will submit the prepared [`PMNDRS` prefix request](gltf-extension-registration.md), and whether the registry should identify the project as `Poimandres` or `pmndrs`.
+- [ ] Confirm which source-font licenses permit checked-in fixtures and generated derivatives in CI.
+- [ ] Fix the initial browser and GPU API support matrix.
 
 ## Baker
 

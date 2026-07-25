@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T01:43:45Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -82,7 +82,7 @@ This extension does not define text strings, paragraph layout, line breaking, ra
         "bakerVersion": "0.1.0",
         "harfrustVersion": "0.12.0",
         "harfbuzzReferenceVersion": "13.0.0",
-        "unicodeVersion": "17.0"
+        "unicodeVersion": "17.0.0"
       },
       "rasters": [
         {

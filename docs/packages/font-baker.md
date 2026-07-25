@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:6a688ec19f514bbd7cb2a78ef1bed0fc4a62dfaa4e2f695cd0016a6788379ff6"
+source_digest: "sha256:a9336c237c0352a9f1d62c2b6a4980cda1c5b6e21a23a7eb4e9fe449829efce7"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -19,14 +19,14 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T01:15:06Z"
+  at: "2026-07-25T01:43:45Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
 
 Status: 🟡 internal bake-core slice; paused behind roadmap dependencies
 
-This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, and tiered tests together. It emits a deterministic shaping-only core GLB.
+This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, and validator pins consumed by provenance and fixtures.
 
 Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract.
 

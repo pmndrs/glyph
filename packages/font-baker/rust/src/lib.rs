@@ -6,7 +6,6 @@
 #[macro_use]
 extern crate alloc as std;
 
-#[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 #[allow(dead_code)]
 mod abi_contract;
 mod error;
@@ -44,10 +43,10 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
         ProvenanceV0 {
             source_hash,
             descriptor_hash,
-            baker_version: env!("CARGO_PKG_VERSION").to_owned(),
-            harfrust_version: "0.12.0".to_owned(),
-            harfbuzz_reference_version: "13.0.0".to_owned(),
-            unicode_version: "17.0".to_owned(),
+            baker_version: abi_contract::BAKER_VERSION.to_owned(),
+            harfrust_version: abi_contract::HARFRUST_VERSION.to_owned(),
+            harfbuzz_reference_version: abi_contract::HARFBUZZ_REFERENCE_VERSION.to_owned(),
+            unicode_version: abi_contract::UNICODE_VERSION.to_owned(),
         },
     )?;
     let artifact_hash = hex_sha256(&artifact.bytes);

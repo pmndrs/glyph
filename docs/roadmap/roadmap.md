@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:34:41Z"
+  at: "2026-07-25T01:43:45Z"
 ---
 
 # Canonical implementation roadmap
@@ -43,7 +43,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 
 | Order | Status | Milestone | Effort | Depends on | Exit result |
 | ---: | :---: | --- | --- | --- | --- |
-| 0 | 🟡 | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
+| 0 | ✅ | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
 | 1 | 🟡 | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
 | 2 | 🟡 | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | ⬜ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
@@ -84,7 +84,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | --- | :---: | --- | :---: | --- |
 | 0.1 | ✅ | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
 | 0.2 | ✅ | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
-| 0.3 | 🟡 | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
+| 0.3 | ✅ | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
 | 1.2 | 🟡 | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
 | 1.3 | ⬜ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
@@ -131,7 +131,18 @@ Item 0.1 is closed; the 0.2 evidence is recorded below.
 - [x] `useFont`, preload, and lazy-raster contract types preserve exact font and raster types.
 - [x] A package test rejects CommonJS fields, `require` conditions, or non-ESM JavaScript export targets.
 
-Item 0.2 is closed. Item 0.3 is now the active dependency.
+Item 0.2 is closed; the 0.3 evidence is recorded below.
+
+### 0.3 closure checklist
+
+- [x] The maintainer accepted the identity, GLB, shaping payload, Worker boundary, loading, package-ownership, and version contracts through item 3.3.
+- [x] Font-local glyph identity is `(FontHandle, LocalGlyphId)` with one selected face per core artifact and `u16` V0 glyph IDs.
+- [x] Core and raster GLBs retain identical schemas whether embedded or external and bind through shaping/raster hashes.
+- [x] Node and module-Worker hosts share one portable core; baked hits cannot reach the Worker, Wasm baker, or optional generators.
+- [x] Exact HarfRust, HarfBuzz, Unicode, glTF schema, validator, ABI, format, and initial generator versions are recorded in the [version contract](../planning/version-contract.md).
+- [x] The generated ABI JSON exposes those pins, and Rust provenance consumes the same constants.
+
+Milestone 0 is closed. Milestone 1 is now the active dependency.
 
 Deliver:
 

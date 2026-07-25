@@ -6,6 +6,14 @@ fn generated_abi_is_valid_and_names_the_public_exports() {
 
     assert_eq!(abi["name"], "pmndrs-text-font-baker");
     assert_eq!(abi["version"], 0);
+    assert_eq!(abi["versions"]["harfrust"], "0.12.0");
+    assert_eq!(
+        abi["versions"]["harfrustCommit"],
+        "60b28ea22b5261710018d69c168a762bcb28794c"
+    );
+    assert_eq!(abi["versions"]["harfbuzzReference"], "13.0.0");
+    assert_eq!(abi["versions"]["unicode"], "17.0.0");
+    assert_eq!(abi["versions"]["gltfSpec"], "2.0");
     assert_eq!(abi["pointerWidth"], 32);
     assert_eq!(abi["functions"]["bake"]["export"], "pmndrs_font_baker_bake");
     assert_eq!(abi["response"]["payloadOffset"], 16);

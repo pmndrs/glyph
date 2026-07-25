@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Decision** — Closed milestone 0 after maintainer approval of all contract decisions and acceptance criteria through 3.3; pinned HarfRust 0.12.0, HarfBuzz 13.0.0, Unicode 17.0.0, the glTF schema revision and validator, ABI/format versions, and initial generator versions in a generated code contract and Diátaxis reference.
 - **Implementation** — Closed roadmap item 0.2 with distributive React props checked against React 19 and React Three Fiber, exact `useFont`/lazy-raster inference, expanded negative composition fixtures, and an executable ESM-only manifest contract test.
 - **Decision** — Accepted milestone 0.1's Three.js-first core, thin nested-text React wrapper, canonical baked-sibling URL rules, ESM-only exports, open typed raster capabilities, non-generic runtime objects, `defineFont` composition, canonical raster identity, and static bitmap strike contracts for V0.
 - **Governance** — Added an in-place milestone-0.1 acceptance checklist and evidence matrix that distinguish mechanically proven TypeScript/ESM contracts from decisions still awaiting explicit maintainer approval.
