@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 0,
+  "id": "empty-identities-v0",
+  "fontHandles": [],
+  "fontSlots": [],
+  "rasterHandles": [],
+  "rasterBindings": [],
+  "drawBatches": [],
+  "assertions": {
+    "fontCount": 0,
+    "rasterCount": 0,
+    "batchCount": 0,
+    "crossFontGlyphAliasing": false
+  }
+}

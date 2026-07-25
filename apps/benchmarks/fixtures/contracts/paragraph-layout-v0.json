@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 0,
+  "id": "inter-regular-paragraph-v0",
+  "fontFixture": "inter-regular-v0",
+  "shapingCase": "paragraph",
+  "style": {
+    "fontSize": 32,
+    "lineHeight": 1.3,
+    "language": "en",
+    "direction": "ltr",
+    "features": []
+  },
+  "constraints": [
+    { "id": "wide", "width": 720, "height": null },
+    { "id": "narrow", "width": 360, "height": null }
+  ],
+  "clusterUnit": "utf16",
+  "positionUnit": "css-pixel",
+  "lineBreaks": "uax14-unicode-17.0.0",
+  "status": "source-contract"
+}

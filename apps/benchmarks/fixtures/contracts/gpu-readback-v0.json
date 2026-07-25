@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 0,
+  "id": "inter-regular-bitmap-gpu-readback-v0",
+  "fontFixture": "inter-regular-v0",
+  "bitmapFixture": "inter-regular-bitmap-16-v0",
+  "viewport": { "width": 1024, "height": 512, "devicePixelRatio": 1 },
+  "clearColor": "#0a0a0a",
+  "textColor": "#f5f5f5",
+  "backends": ["webgpu", "webgl2"],
+  "synchronization": {
+    "webgpu": ["queue.onSubmittedWorkDone", "mapAsync"],
+    "webgl2": ["fenceSync", "clientWaitSync", "readPixels"]
+  },
+  "reference": "../visual/inter-regular/browser-html.json",
+  "status": "capability-gated-until-renderer"
+}

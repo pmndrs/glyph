@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm size && vite build",
+    "admit:live": "node ./scripts/run-admission.mts",
     "capture:browser-reference": "node ./scripts/capture-browser-reference.mts",
     "dev": "pnpm --filter @pmndrs/text-font-baker build && vite",
     "format": "oxfmt .",

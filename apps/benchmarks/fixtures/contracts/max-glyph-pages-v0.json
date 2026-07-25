@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 0,
+  "id": "max-glyph-pages-v0",
+  "glyphCount": 65535,
+  "glyphIdWidth": 2,
+  "recordStride": 20,
+  "expectedRecordBytes": 1310700,
+  "logicalPageCount": 4,
+  "pageCapacity": 16384,
+  "residentPages": [0, 2],
+  "resources": [
+    { "page": 0, "source": "embedded" },
+    { "page": 1, "source": "external" },
+    { "page": 2, "source": "embedded" },
+    { "page": 3, "source": "external" }
+  ],
+  "absentGlyphIds": [0, 65534],
+  "boundaryGlyphIds": [1, 16383, 16384, 32767, 32768, 49151, 49152, 65533],
+  "absenceSentinel": 65535
+}

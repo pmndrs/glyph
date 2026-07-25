@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:10:04Z"
+  at: "2026-07-25T02:21:40Z"
 ---
 
 # Canonical implementation roadmap
@@ -180,7 +180,7 @@ Item 1.2 is closed. Item 1.3 is now the active dependency; it replaces local/con
 - [x] Repository commands generate HarfRust 0.12.0 and HarfBuzz 13.0.0 JSON oracles and refuse incompatible engine inputs.
 - [x] A differential test proves core shaping equality and fixes the exact unsafe-to-concat flag-delta inventory.
 - [x] The deterministic HTML/CSS reference records exact font/text/style/viewport/browser inputs and a hashed PNG.
-- [ ] Pin the remaining bitmap, paragraph, GLB, malformed-input, GPU-readback, maximum-cardinality, and empty identity contract fixtures.
+- [x] Pin the remaining bitmap, paragraph, GLB, malformed-input, GPU-readback, maximum-cardinality, and empty identity contract fixtures.
 - [ ] Admit the no-retry Vitexec probe with the required repetition, fresh-lifecycle, and environment evidence.
 
 Item 1.3 remains open until the last two gates close; no milestone-2 expansion resumes before then.

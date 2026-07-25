@@ -303,7 +303,11 @@ function Scene({
   const target = targetById(location.target)
   const scenario = scenarioById(location.scenario)
   return (
-    <section className="mx-auto grid max-w-[1100px] gap-3" data-testid="scene">
+    <section
+      className="mx-auto grid max-w-[1100px] gap-3"
+      data-completed-at={summary?.completedAt}
+      data-testid="scene"
+    >
       <header className="flex min-h-[62px] items-start justify-between gap-4">
         <div>
           <p className="eyebrow">Scenario · {scenario.id}</p>

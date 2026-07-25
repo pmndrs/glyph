@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:4e5af7770d35d8a66caa0b84fb80d339c8d0b7c4d965cf0db3e1f1b02124fd90"
+source_digest: "sha256:6937d90400d543c988022ca346657da926100a98b156412af4da5f686077ab8d"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:10:04Z"
+  at: "2026-07-25T02:21:40Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -40,6 +40,7 @@ Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabri
 | `format:check` | Verify Oxfmt output. |
 | `size` | Produce deterministic independent package-size JSON for the report UI. |
 | `test:live` | Run the explicit maintainer-local Vitexec and Playwright product probes. |
+| `admit:live` | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record. |
 | `capture:browser-reference` | Regenerate the pinned Chromium HTML/CSS reference and metadata. |
 | `generate:harfbuzz-oracle` | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable. |
 

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 0,
+  "id": "malformed-input-v0",
+  "expectedOutcome": "deterministic-rejection",
+  "cases": [
+    "truncated-header",
+    "bad-magic",
+    "unsupported-version",
+    "declared-length-short",
+    "declared-length-long",
+    "misaligned-json-chunk",
+    "misaligned-bin-chunk",
+    "duplicate-json-chunk",
+    "trailing-chunk",
+    "buffer-view-out-of-range",
+    "record-length-mismatch",
+    "bad-glyph-count",
+    "bad-page-index",
+    "source-byte-length-mismatch",
+    "source-hash-mismatch",
+    "raster-identity-mismatch",
+    "resource-limit-exceeded"
+  ],
+  "mustNot": ["trap", "retry", "unbounded-allocation", "network-fetch"],
+  "status": "source-contract"
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 0,
+  "id": "inter-regular-bitmap-16-v0",
+  "fontFixture": "inter-regular-v0",
+  "descriptor": {
+    "kind": "bitmap",
+    "strikes": [16]
+  },
+  "strike": {
+    "ppemX": 16,
+    "ppemY": 16,
+    "planeUnitsPerEm": 2048,
+    "recordStride": 20,
+    "gpuFormat": "r8unorm",
+    "colorSpace": "linear",
+    "encoding": "ktx2-lossless"
+  },
+  "status": "source-contract"
+}
