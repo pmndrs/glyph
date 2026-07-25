@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Decision** — Accepted milestone 0.1's Three.js-first core, thin nested-text React wrapper, canonical baked-sibling URL rules, ESM-only exports, open typed raster capabilities, non-generic runtime objects, `defineFont` composition, canonical raster identity, and static bitmap strike contracts for V0.
 - **Governance** — Added an in-place milestone-0.1 acceptance checklist and evidence matrix that distinguish mechanically proven TypeScript/ESM contracts from decisions still awaiting explicit maintainer approval.
 - **Governance** — Added one enforced OKF concept per workspace package; validation now fails for missing, duplicate, misdirected, nonexistent, or source-stale package entries, while deterministic digest generation excludes build outputs and installed dependencies.
 - **Correction** — Confirmed the baker already delegates font parsing to Fontations `read-fonts`/`skrifa`, replaced its custom outline-bounds pen with Skrifa's maintained glyph bounds, and explicitly paused out-of-order milestone-2 expansion until milestones 0–1 close.

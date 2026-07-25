@@ -13,12 +13,12 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:23:19Z"
+  at: "2026-07-25T01:29:09Z"
 ---
 
 # Decision register
 
-Status: proposed decisions awaiting maintainer review  
+Status: mixed; accepted choices and remaining proposals are recorded per row
 
 This register records choices, not their full rationale. The linked API, architecture, data contracts, roadmap, and research are authoritative for detail. Accepted choices receive an ADR with the exact decision, alternatives, consequences, and date.
 
@@ -30,17 +30,17 @@ Implementation and passing fixtures are evidence, not approval. A proposed row c
 
 | ID | Decision | Status |
 | --- | --- | :---: |
-| D-001 | `pmndrs/text` is the product | Proposed |
+| D-001 | `pmndrs/text` is the product | Accepted |
 | D-002 | Slug is one raster, not the shaping or package identity. | Proposed |
 | D-003 | V1 targets horizontal LTR/RTL text and static font instances. | Proposed |
-| D-004 | `@pmndrs/text` is Three.js-first; `@pmndrs/text/react` is a thin optional wrapper. | Proposed |
-| D-005 | React uses one root `<Text>` with nested `<Text>` inline spans and direct props. | Proposed |
-| D-006 | A canonical source-font URL infers its `.font.glb` sibling; `.glb` is baked-only. | Proposed |
-| D-007 | Every package entry point is native ESM; no CommonJS build or `require` export ships. | Proposed |
-| D-008 | Runtime raster and baker modules are typed capability values; core has no closed raster list or mandatory raster package. | Proposed |
-| D-009 | `Text` and paragraph layouts remain non-generic; compile-time precision is concentrated at composition seams. | Proposed |
-| D-067 | `defineFont(input, raster)` is the recommended reusable token; equivalent string, URL, and object inputs deduplicate by normalized request and validated shaping identities rather than object identity. | Proposed |
-| D-068 | Raster identity is the RFC 8785 canonical package descriptor's SHA-256 `rasterKey`; callers never provide arbitrary raster IDs. | Proposed |
+| D-004 | `@pmndrs/text` is Three.js-first; `@pmndrs/text/react` is a thin optional wrapper. | Accepted |
+| D-005 | React uses one root `<Text>` with nested `<Text>` inline spans and direct props. | Accepted |
+| D-006 | A canonical source-font URL infers its `.font.glb` sibling; `.glb` is baked-only. | Accepted |
+| D-007 | Every package entry point is native ESM; no CommonJS build or `require` export ships. | Accepted |
+| D-008 | Runtime raster and baker modules are typed capability values; core has no closed raster list or mandatory raster package. | Accepted |
+| D-009 | `Text` and paragraph layouts remain non-generic; compile-time precision is concentrated at composition seams. | Accepted |
+| D-067 | `defineFont(input, raster)` is the recommended reusable token; equivalent string, URL, and object inputs deduplicate by normalized request and validated shaping identities rather than object identity. | Accepted |
+| D-068 | Raster identity is the RFC 8785 canonical package descriptor's SHA-256 `rasterKey`; callers never provide arbitrary raster IDs. | Accepted |
 | D-016 | `rust-toolchain.toml` is the sole Rust toolchain authority. `mise.toml` consumes that idiomatic file instead of duplicating Rust configuration; pnpm and Cargo remain the normal command interface. | Settled for V0 |
 
 D-004/005 follow the established uikit split: the core owns every feature and React only reconciles lifecycle and props. Nested text follows React Native's attributed-text model; direct props and Suspense match uikit/Drei conventions. D-006 makes the short string form canonical while preserving explicit source/baked overrides and preload identity. D-007 fixes native ESM, explicit subpath exports, module workers, and `import()`-based lazy boundaries as package invariants. D-008/009 adopt Koota's value-oriented inference at raster/plugin boundaries without applying type-level models to runtime binary data. See the [API contract](api-shapes.md).
@@ -92,7 +92,7 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | D-036 | Baked assets are data; baker surfaces are libraries/modules. | Proposed |
 | D-066 | The CLI resolves baker modules through an imported or explicitly named package's flat `pmndrs.text` map and public ESM exports; package semver governs compatibility and the CLI never scans dependency directories. | Settled for V0 |
 | D-071 | The Node baker statically discovers `defineFont` uses and literal raster descriptors without executing application code; dynamic font origins remain valid when an unambiguous local pathname can be resolved, otherwise runtime fallback remains authoritative. | Proposed |
-| D-070 | Bitmap strike tuples are non-empty, duplicate-free static positive integer literals and are part of raster identity; a missing declared strike makes a baked raster incompatible. | Proposed |
+| D-070 | Bitmap strike tuples are non-empty, duplicate-free static positive integer literals and are part of raster identity; a missing declared strike makes a baked raster incompatible. | Accepted |
 | D-077 | The portable bake core ships one `wasm32-unknown-unknown` module behind a versioned JSON-described C ABI and direct linear-memory TypeScript shim; it ships no platform binaries, WASI dependency, Embind, or binding-generator runtime. | Settled for V0 |
 | D-078 | The bake Wasm uses `no_std + alloc` and aborting panics; its allocator is ABI-private. `dlmalloc` is the baseline, `rlsf` is the primary challenger, and any replacement requires representative benchmark evidence. Host code owns gzip/Brotli measurement. | Experiment |
 | D-084 | Font format parsing and outline/metric interpretation use maintained Fontations `read-fonts` and `skrifa`; project code owns bake policy and artifact contracts, not a parallel OpenType parser or geometry engine. | Settled for V0 |
@@ -139,7 +139,7 @@ The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md)
 
 ## Decisions required before implementation
 
-1. Accept or revise all proposed decisions, including D-067–076; D-016 and D-066 are already settled for V0.
+1. Accept or revise the remaining proposed decisions; D-001, D-004–009, D-067, D-068, and D-070 are accepted for V0 alongside the rows already settled for V0.
 2. Pin HarfRust, HarfBuzz, Unicode, glTF schema, and generator versions.
 3. Confirm the provisional `PMNDRS` prefix and assign its Khronos request.
 4. Choose the first font fixture and target browser/GPU matrix.

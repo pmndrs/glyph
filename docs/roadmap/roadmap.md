@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:23:19Z"
+  at: "2026-07-25T01:29:09Z"
 ---
 
 # Canonical implementation roadmap
@@ -82,7 +82,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 
 | ID | Status | Work | Size | Depends on |
 | --- | :---: | --- | :---: | --- |
-| 0.1 | 🟡 | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
+| 0.1 | ✅ | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
 | 0.2 | 🟡 | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
 | 0.3 | 🟡 | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
@@ -118,10 +118,10 @@ These rows replace the former separate backlog. Each is intended to become one f
 - [x] Core font/raster capability inference and positive/negative composition cases have compile-only evidence.
 - [x] Canonical URL forms and invalid source/baked combinations have compile-only evidence.
 - [x] The current root package export is ESM-only and contains no CommonJS condition.
-- [ ] Maintainer explicitly accepts or revises D-001, D-004–009, D-067, D-068, and D-070 in the [decision register](../planning/decision-register.md#product-and-public-api).
+- [x] Maintainer explicitly accepted D-001, D-004–009, D-067, D-068, and D-070 for V0 in the [decision register](../planning/decision-register.md#product-and-public-api).
 - [ ] Item 0.2 adds the remaining React-prop and package/export contract fixtures after those public choices are accepted.
 
-The checked items establish review evidence only. Item 0.1 remains 🟡 until its maintainer-decision checkbox closes; item 0.2 remains dependency-ordered after it.
+Item 0.1 is closed. Item 0.2 now proceeds with the remaining compile-only React-prop and package/export fixtures.
 
 Deliver:
 

@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:23:19Z"
+  at: "2026-07-25T01:29:09Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -33,11 +33,11 @@ This table reports contract evidence; it does not turn implementation or prose i
 
 | Contract surface | Status | Current evidence | Remaining gate |
 | --- | :---: | --- | --- |
-| Framework-neutral core API | 🟡 | `packages/text` compiles the non-generic text, font, paragraph, raster, and baker seams. | Maintainer review of D-001, D-004, D-008, D-009, D-067, and D-068. |
-| React API | 🟡 | The thin wrapper, nested-span model, direct props, Suspense behavior, and forwarded core ref are specified below. | Maintainer review of D-004 and D-005; compile-only React props fixture belongs to 0.2. |
-| Typed raster capabilities | ✅ evidence ready | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors. | Maintainer acceptance of D-008, D-068, and D-070. |
-| Canonical URL resolution | ✅ evidence ready | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below. | Maintainer acceptance of D-006 and D-067; runtime behavior belongs to milestone 3. |
-| ESM-only package contract | 🟡 | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition. | Maintainer acceptance of D-007; 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
+| Framework-neutral core API | ✅ accepted | `packages/text` compiles the non-generic text, font, paragraph, raster, and baker seams. | Runtime behavior remains milestone-gated. |
+| React API | ✅ accepted | The thin wrapper, nested-span model, direct props, Suspense behavior, and forwarded core ref are specified below. | Compile-only React props fixture belongs to 0.2. |
+| Typed raster capabilities | ✅ accepted | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors. | Concrete first-party packages remain later milestones. |
+| Canonical URL resolution | ✅ accepted | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below. | Runtime behavior belongs to milestone 3. |
+| ESM-only package contract | ✅ accepted | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition. | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
 
 ## Package boundaries
 
