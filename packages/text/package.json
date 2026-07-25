@@ -33,7 +33,7 @@
     "build:typescript": "tsc -p tsconfig.build.json",
     "build:bitmap-rust": "cargo build --manifest-path rust/bitmap-baker/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
     "generate:bitmap-abi": "cargo run --manifest-path rust/bitmap-baker/Cargo.toml --bin generate-bitmap-abi --locked --quiet",
-    "generate:bitmap-fixture": "pnpm build && node ./scripts/generate-bitmap-fixture.mjs",
+    "generate:bitmap-fixture": "pnpm --filter @pmndrs/text-font-baker build && pnpm build && node ./scripts/generate-bitmap-fixture.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
     "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked",

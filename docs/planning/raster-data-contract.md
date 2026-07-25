@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T05:27:09Z"
 ---
 
 # Raster data contract V0
@@ -106,6 +106,7 @@ interface RasterBindingV0 {
 - Shared advances, kerning, clusters, and line metrics never occur in a raster.
 - Record buffer views are aligned to their widest member, tightly packed, and have exactly `glyphCount × recordStride` bytes. Bitmap/distance-field records are two-byte aligned with 20-byte stride; Slug records are four-byte aligned with 40-byte stride.
 - Extension-owned record and texture buffer views MUST omit core glTF `byteStride` and `target`; their layout is defined only by the companion extension.
+- Every integer property that references a glTF buffer view MUST be named exactly `bufferView` or end in `BufferView`. The generic Node/Worker composer uses this convention to range-check and rebase opaque package-owned extension JSON without maintaining a closed extension registry.
 - Texture resources declare dimensions, mip count, exact GPU format, encoding, and an embedded or independently addressable KTX2 source.
 
 ## Texture resource

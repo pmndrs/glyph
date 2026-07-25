@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: "@pmndrs/text"
-description: Defines public core contracts, the portable bitmap baker and validator, and internal Node static discovery.
+description: Defines public core contracts, static discovery, portable bitmap artifacts, validation, and generic composition.
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:1130e402cd8ea3294f0e59fc67abf5d6ec1aa497c2e7290ff373f4633ab72170"
+source_digest: "sha256:00a77ffc73ba2b7fe90ef5fd812a579bbff8adc7eb83ce96bfa49c9317373a47"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -29,14 +29,17 @@ sources:
   - id: bitmap-validator
     resource: ../../packages/text/src/bakers/bitmap-validator.ts
     title: Layered bitmap artifact validator
+  - id: composition
+    resource: ../../packages/text/src/internal/compose-bake.ts
+    title: Generic core/raster artifact composer
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T05:13:47Z"
+  at: "2026-07-25T05:30:43Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 public contract scaffold with static discovery and the bitmap artifact core implemented
+Status: 🟡 public contract scaffold; roadmap item 2.3 artifact pipeline complete and item 2.4 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -46,9 +49,11 @@ The optional `@pmndrs/text/bakers/bitmap` subpath wraps a zero-import `no_std + 
 
 The isolated `@pmndrs/text/bakers/bitmap/validate` entry reuses the core package's strict GLB framing and pinned Khronos validator, evaluates byte-identical Draft-04 bitmap/resource schemas, parses every declared page variant with `ktx-parse` 1.1.0, and enforces reciprocal identity, exact strikes, dense records, page bounds, KTX2 dimensions/format/levels, GPU-format/feature/quality mapping, external length/hash, arithmetic limits, and GPU budgets. Rust independently parses every native-test KTX2 through `ktx2` 0.5.0. Canonical Inter source/Wasm/artifact/report/record/page identities, embedded/external parity, 65,535-glyph boundaries, generated/published ABI identity, deterministic arbitrary-font Rust fuzz smoke, and fixed-seed artifact mutation fuzz smoke are executable fixtures.[^bitmap-baker]
 
+The internal generic composer authenticates every returned artifact, checks reciprocal shaping/glyph/raster identity, retains external companions and pages, and embeds package-owned companion data without interpreting its semantics. Integer glTF buffer-view references are rebased through the shared naming convention, so multiple distinct extension types compose without a closed registry. Exact Inter goldens cover combined embedded, combined external, and the identity-neutral empty raster set; both the core and bitmap validators round-trip the combined bytes.
+
 Its Node-only internal discovery module completes roadmap item 2.1 with pinned TypeScript 7 AST and symbol analysis over TypeScript, TSX, JavaScript, and JSX projects. It finds composed tokens and statically visible core/React raw forms, reduces immutable font/raster expressions, maps URL pathnames into canonical asset roots, and validates only the exact imported raster package's ESM baker manifest. It never executes application modules. One internal compiler adapter owns every unstable TypeScript import, project snapshot, symbol handle, alias, and declaration-resolution operation; an exact-version assertion and source-boundary test make compiler upgrades explicit. The module is intentionally absent from the package export map until item 2.4 supplies the complete `@pmndrs/text/bake` API.
 
-It does not currently compose the companion into a core artifact, load/register fonts, shape text at runtime, perform paragraph layout, or render glyphs. The [roadmap](../roadmap/roadmap.md) owns the implementation order for those behaviors.
+It does not currently expose the filesystem Node host/CLI, load/register fonts, shape text at runtime, perform paragraph layout, or render glyphs. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an item-2.3 artifact shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
@@ -66,4 +71,4 @@ The [API contract](../planning/api-shapes.md) remains authoritative for proposed
 
 [^api-contract]: The implementation must not be inferred to exist merely because its types compile.
 [^bitmap-identity]: Raster-specific descriptor fields remain owned by this subpath and never enter a closed core union.
-[^bitmap-baker]: Artifact-level generation and validation are implemented; combined-core composition and the runtime bitmap module remain the two open item-2.3 gates.
+[^bitmap-baker]: Artifact generation, validation, and generic composition are complete; GPU resource creation is deliberately deferred to the renderer milestone.

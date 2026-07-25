@@ -45,7 +45,9 @@ export interface RasterPagePayloadReport {
 
 export interface FontPayloadReport {
   readonly source: { readonly bytes: number }
-  readonly shared: Readonly<Record<string, { readonly rawBytes: number }>>
+  readonly shared: Readonly<
+    Record<string, { readonly rawBytes: number; readonly [key: string]: unknown }>
+  >
   readonly rasters: readonly {
     readonly kind: string
     readonly metadataBytes: number
@@ -88,11 +90,7 @@ export interface RasterBakeArtifact<Kind extends string = string> {
   readonly report: RasterPayloadReport
 }
 
-export interface RasterBakerModule<
-  Kind extends string,
-  Options,
-  Descriptor,
-> {
+export interface RasterBakerModule<Kind extends string, Options, Descriptor> {
   readonly kind: Kind
   readonly extension: string
   readonly version: number
@@ -106,15 +104,9 @@ export type RasterBakeOptionsOf<Module extends AnyRasterBakerModule> =
   Module extends RasterBakerModule<any, infer Options, any> ? Options : never
 
 export type RasterBakeDescriptorOf<Module extends AnyRasterBakerModule> =
-  Module extends RasterBakerModule<any, any, infer Descriptor>
-    ? Descriptor
-    : never
+  Module extends RasterBakerModule<any, any, infer Descriptor> ? Descriptor : never
 
-export function defineRasterBaker<
-  const Kind extends string,
-  Options,
-  Descriptor,
->(
+export function defineRasterBaker<const Kind extends string, Options, Descriptor>(
   module: RasterBakerModule<Kind, Options, Descriptor>,
 ): RasterBakerModule<Kind, Options, Descriptor> {
   return module

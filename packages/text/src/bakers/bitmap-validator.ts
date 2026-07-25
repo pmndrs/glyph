@@ -179,14 +179,15 @@ async function validateBitmapSemantics(
   const document = parsed.document
   const used = stringArray(document.extensionsUsed, '/extensionsUsed')
   const required = stringArray(document.extensionsRequired, '/extensionsRequired')
-  if (!used.includes(BITMAP_EXTENSION) || !required.includes(BITMAP_EXTENSION)) {
+  const extensions = asRecord(document.extensions, '/extensions')
+  const combined = extensions.PMNDRS_font !== undefined
+  if (!used.includes(BITMAP_EXTENSION) || (!combined && !required.includes(BITMAP_EXTENSION))) {
     fail(
       'BITMAP_EXTENSION_REQUIRED',
-      'split bitmap GLB must use and require PMNDRS_font_bitmap',
+      'bitmap GLB must use its extension, and a split companion must require it',
       '/extensionsRequired',
     )
   }
-  const extensions = asRecord(document.extensions, '/extensions')
   const extension = asRecord(extensions[BITMAP_EXTENSION], `/extensions/${BITMAP_EXTENSION}`)
   const schemaIssues = evaluateExtensionSchema(
     extension,
@@ -227,6 +228,7 @@ async function validateBitmapSemantics(
 
   const views = validateBufferViews(parsed)
   const claimedViews = new Set<number>()
+  if (combined) claimCoreViews(extensions.PMNDRS_font, claimedViews, views.length)
   const strikeValues = asArray(extension.strikes, `/extensions/${BITMAP_EXTENSION}/strikes`)
   if (strikeValues.length !== expectedDescriptor.strikes.length) {
     fail('STRIKE_TUPLE', 'artifact does not contain the exact declared strike tuple')
@@ -263,7 +265,7 @@ async function validateBitmapSemantics(
       0,
       views.length - 1,
     )
-    claimView(claimedViews, recordView, `${path}/recordBufferView`)
+    claimView(claimedViews, views, recordView, `${path}/recordBufferView`)
     const expectedRecordBytes = checkedProduct(context.glyphCount, RECORD_STRIDE, `${path}/records`)
     if (views[recordView]?.byteLength !== expectedRecordBytes) {
       fail(
@@ -349,6 +351,7 @@ async function validateBitmapSemantics(
     validateRecords(records, pages, context.glyphCount, path)
     strikes.push({ ppem, planeUnitsPerEm, records, pages })
   }
+  if (combined) claimOtherExtensionViews(extensions, claimedViews, views.length)
   if (claimedViews.size !== views.length) {
     fail(
       'BUFFER_VIEW_UNCLAIMED',
@@ -370,6 +373,8 @@ async function validateBitmapSemantics(
 interface BufferView {
   readonly byteOffset: number
   readonly byteLength: number
+  readonly byteStride?: unknown
+  readonly target?: unknown
 }
 
 function validateBufferViews(parsed: ParsedGlb): readonly BufferView[] {
@@ -377,20 +382,19 @@ function validateBufferViews(parsed: ParsedGlb): readonly BufferView[] {
   const views = values.map((value, index) => {
     const path = `/bufferViews/${index}`
     const view = asRecord(value, path)
-    if (view.buffer !== 0 || view.byteStride !== undefined || view.target !== undefined) {
-      fail(
-        'BUFFER_VIEW_CONTRACT',
-        'extension buffer views must reference buffer 0 and omit byteStride/target',
-        path,
-      )
-    }
+    if (view.buffer !== 0) fail('BUFFER_VIEW_CONTRACT', 'buffer view must reference buffer 0', path)
     const byteOffset =
       view.byteOffset === undefined ? 0 : asInteger(view.byteOffset, `${path}/byteOffset`, 0)
     const byteLength = asInteger(view.byteLength, `${path}/byteLength`, 1)
-    if ((byteOffset & 3) !== 0 || byteOffset > parsed.declaredBinLength - byteLength) {
+    if (byteOffset % 4 !== 0 || byteOffset > parsed.declaredBinLength - byteLength) {
       fail('BUFFER_VIEW_RANGE', 'bitmap buffer view is misaligned or outside the BIN range', path)
     }
-    return { byteOffset, byteLength }
+    return {
+      byteOffset,
+      byteLength,
+      ...(view.byteStride === undefined ? {} : { byteStride: view.byteStride }),
+      ...(view.target === undefined ? {} : { target: view.target }),
+    }
   })
   const sorted = [...views].sort((left, right) => left.byteOffset - right.byteOffset)
   let end = 0
@@ -474,7 +478,7 @@ async function resolvePageSource(
 ): Promise<{ bytes: Uint8Array; source: 'embedded' | 'external'; uri?: string }> {
   if (source.type === 'bufferView') {
     const viewIndex = asInteger(source.bufferView, `${path}/source/bufferView`, 0, views.length - 1)
-    claimView(claimedViews, viewIndex, `${path}/source/bufferView`)
+    claimView(claimedViews, views, viewIndex, `${path}/source/bufferView`)
     return { bytes: sliceView(parsed, views[viewIndex]!), source: 'embedded' }
   }
   if (source.type === 'external') {
@@ -556,10 +560,89 @@ function sliceView(parsed: ParsedGlb, view: BufferView): Uint8Array {
   return parsed.bin.subarray(view.byteOffset, view.byteOffset + view.byteLength)
 }
 
-function claimView(claimed: Set<number>, index: number, path: string): void {
+function claimView(
+  claimed: Set<number>,
+  views: readonly BufferView[],
+  index: number,
+  path: string,
+): void {
   if (claimed.has(index))
     fail('BUFFER_VIEW_ALIAS', 'bitmap resources must use distinct views', path)
+  const view = views[index]
+  if (view?.byteStride !== undefined || view?.target !== undefined) {
+    fail('BUFFER_VIEW_CONTRACT', 'bitmap buffer views must omit byteStride and target', path)
+  }
   claimed.add(index)
+}
+
+function claimCoreViews(value: unknown, claimed: Set<number>, viewCount: number): void {
+  const font = asRecord(value, '/extensions/PMNDRS_font')
+  const shaping = asRecord(font.shaping, '/extensions/PMNDRS_font/shaping')
+  const functions = asRecord(shaping.fontFunctions, '/extensions/PMNDRS_font/shaping/fontFunctions')
+  for (const [candidate, path] of [
+    [shaping.bufferView, '/extensions/PMNDRS_font/shaping/bufferView'],
+    [
+      functions.glyphExtentsBufferView,
+      '/extensions/PMNDRS_font/shaping/fontFunctions/glyphExtentsBufferView',
+    ],
+    [
+      functions.glyphExtentsAvailabilityBufferView,
+      '/extensions/PMNDRS_font/shaping/fontFunctions/glyphExtentsAvailabilityBufferView',
+    ],
+  ] as const) {
+    const index = asInteger(candidate, path, 0, viewCount - 1)
+    if (claimed.has(index))
+      fail('CORE_BUFFER_VIEW_ALIAS', 'core font buffer views must be distinct', path)
+    claimed.add(index)
+  }
+  const rasters = asArray(font.rasters, '/extensions/PMNDRS_font/rasters')
+  const matches = rasters.filter((entry) => {
+    const raster = asRecord(entry, '/extensions/PMNDRS_font/rasters')
+    const source = asRecord(raster.source, '/extensions/PMNDRS_font/rasters/source')
+    return raster.extension === BITMAP_EXTENSION && source.type === 'embedded'
+  })
+  if (matches.length !== 1) {
+    fail(
+      'BITMAP_DIRECTORY',
+      'combined font GLB must contain exactly one embedded bitmap directory entry',
+      '/extensions/PMNDRS_font/rasters',
+    )
+  }
+}
+
+function claimOtherExtensionViews(
+  extensions: Readonly<Record<string, unknown>>,
+  claimed: Set<number>,
+  viewCount: number,
+): void {
+  for (const [name, extension] of Object.entries(extensions)) {
+    if (name === 'PMNDRS_font' || name === BITMAP_EXTENSION) continue
+    visit(extension, `/extensions/${name}`)
+  }
+
+  function visit(value: unknown, path: string): void {
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => visit(entry, `${path}/${index}`))
+      return
+    }
+    if (typeof value !== 'object' || value === null) return
+    for (const [key, child] of Object.entries(value)) {
+      const childPath = `${path}/${key}`
+      if (key === 'bufferView' || key.endsWith('BufferView')) {
+        const index = asInteger(child, childPath, 0, viewCount - 1)
+        if (claimed.has(index)) {
+          fail(
+            'BUFFER_VIEW_ALIAS',
+            'companion extensions must own distinct buffer views',
+            childPath,
+          )
+        }
+        claimed.add(index)
+      } else {
+        visit(child, childPath)
+      }
+    }
+  }
 }
 
 function equalNumbers(left: readonly number[], right: readonly number[]): boolean {

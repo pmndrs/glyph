@@ -123,7 +123,7 @@ export function parseGlb(bytes: Uint8Array): ParsedGlb {
   if (chunks.length !== 2 || chunks[0]?.type !== JSON_CHUNK || chunks[1]?.type !== BIN_CHUNK) {
     fail(
       "GLB_CHUNK_ORDER",
-      "font GLB must contain exactly one JSON chunk followed by one BIN chunk",
+      "GLB must contain exactly one JSON chunk followed by one BIN chunk",
     );
   }
 
@@ -144,7 +144,7 @@ export function parseGlb(bytes: Uint8Array): ParsedGlb {
   const root = asRecord(document, "GLB JSON root", "/json");
   const buffers = asArray(root.buffers, "buffers", "/buffers");
   if (buffers.length !== 1)
-    fail("BUFFER_COUNT", "font GLB must contain exactly one buffer", "/buffers");
+    fail("BUFFER_COUNT", "GLB must contain exactly one buffer", "/buffers");
   const buffer = asRecord(buffers[0], "buffer", "/buffers/0");
   if (buffer.uri !== undefined) fail("BUFFER_URI", "GLB buffer must be embedded", "/buffers/0/uri");
   const declaredBinLength = asInteger(
@@ -209,7 +209,7 @@ function khronosAllowlist(document: Readonly<Record<string, unknown>>): Readonly
   const extensionsUsed = asArray(document.extensionsUsed, "extensionsUsed", "/extensionsUsed");
   for (let index = 0; index < extensionsUsed.length; index += 1) {
     const extension = extensionsUsed[index];
-    if (extension !== "PMNDRS_font" && extension !== "PMNDRS_font_bitmap") continue;
+    if (typeof extension !== "string") continue;
     allowed.add(
       messageIdentity({
         code: "UNSUPPORTED_EXTENSION",

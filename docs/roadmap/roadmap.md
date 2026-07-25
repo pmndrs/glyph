@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T04:17:03Z"
+  at: "2026-07-25T05:27:09Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0 and 1 and items 2.1–2.2 are closed. Milestone 2 continues in issue order at active item 2.3.
+Milestones 0 and 1 and items 2.1–2.3 are closed. Milestone 2 continues in issue order at active item 2.4.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -90,8 +90,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 1.3 | ✅ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
 | 2.1 | ✅ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | ✅ | Implement the host-independent font bake request/result core. | M | 2.1 |
-| 2.3 | 🟡 | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
-| 2.4 | ⬜ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
+| 2.3 | ✅ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
+| 2.4 | 🟡 | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
 | 3.1 | ⬜ | Implement baked probing, validation, and registration. | M | 2.4 |
 | 3.2 | ⬜ | Add the dynamically imported Worker bake path. | M | 3.1 |
 | 3.3 | ⬜ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
@@ -234,7 +234,7 @@ Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the com
 - [x] Every checked-in shaping case produces identical HarfRust 0.12.0 glyph IDs, UTF-16 clusters, positions, and flags from the source and reduced SFNT.
 - [x] Pinned Binaryen 129.0.0 `-Oz` optimization reduces the distributed module while zero-import, ABI, deterministic artifact, and real-font tests remain unchanged.
 
-Item 2.2 is closed. Item 2.3 is the active dependency and adds the core/raster validators plus the package-owned bitmap descriptor, baker, artifact, and goldens.
+Item 2.2 is closed. Item 2.3 adds the core/raster validators plus the package-owned bitmap descriptor, baker, artifact, composition seam, and goldens.
 
 ### 2.3 closure checklist
 
@@ -245,9 +245,11 @@ Item 2.2 is closed. Item 2.3 is the active dependency and adds the core/raster v
 - [x] The canonical Inter product path uses the shipped validator, while the baker-only entry remains import-isolated from Ajv and `gltf-validator`.
 - [x] Fixed-seed Rust-input and TypeScript artifact-mutation fuzz smoke tests run in the ordinary suite; longer mutation drivers plus pinned cargo-fuzz/libFuzzer coverage promote minimized findings into permanent malformed fixtures.
 - [x] The bitmap-owned module canonicalizes static strike tuples and derives the RFC 8785 raster key without a parallel core descriptor union.
-- [ ] The bitmap baker emits deterministic unhinted grayscale strikes, dense 20-byte records, lossless R8 KTX2 pages, reports, and embedded/external packaging.
+- [x] The bitmap baker emits deterministic unhinted grayscale strikes, dense 20-byte records, lossless R8 KTX2 pages, reports, and embedded/external packaging.
 - [x] The bitmap-owned validator covers schema, reciprocal identity, exact strikes, records, pages/KTX2, limits, and one-invalid-field-at-a-time malformed artifacts.
-- [ ] Canonical Inter bitmap bytes and synthetic maximum-cardinality/empty identities are pinned and round-trip through the same core used by later hosts.
+- [x] Canonical Inter bitmap bytes and synthetic maximum-cardinality/empty identities are pinned and round-trip through the same core used by later hosts.
+
+Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-external, and empty-raster artifacts; the generic composer proves opaque buffer-view rebasing across multiple distinct extension types. Item 2.4 is the active dependency and exposes these same units through the Node API and CLI.
 
 Deliver:
 

@@ -111,5 +111,337 @@
         "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
       }
     ]
+  },
+  "composed": {
+    "embedded": {
+      "artifacts": [
+        {
+          "role": "font",
+          "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+          "bytes": 927148,
+          "sha256": "420e7c0d597fa3f5a458fb1e8e134ee0d7d4411c7aab3f28088322ff323e42fe"
+        }
+      ],
+      "report": {
+        "source": {
+          "bytes": 411640
+        },
+        "shared": {
+          "shaping": {
+            "format": "opentype-sfnt-harfrust-v0",
+            "sfntDirectoryBytes": 156,
+            "tables": [
+              {
+                "tag": "GDEF",
+                "rawBytes": 1036,
+                "paddedBytes": 1036
+              },
+              {
+                "tag": "GPOS",
+                "rawBytes": 83724,
+                "paddedBytes": 83724
+              },
+              {
+                "tag": "GSUB",
+                "rawBytes": 24406,
+                "paddedBytes": 24408
+              },
+              {
+                "tag": "OS/2",
+                "rawBytes": 96,
+                "paddedBytes": 96
+              },
+              {
+                "tag": "cmap",
+                "rawBytes": 25900,
+                "paddedBytes": 25900
+              },
+              {
+                "tag": "head",
+                "rawBytes": 54,
+                "paddedBytes": 56
+              },
+              {
+                "tag": "hhea",
+                "rawBytes": 36,
+                "paddedBytes": 36
+              },
+              {
+                "tag": "hmtx",
+                "rawBytes": 11748,
+                "paddedBytes": 11748
+              },
+              {
+                "tag": "maxp",
+                "rawBytes": 32,
+                "paddedBytes": 32
+              }
+            ],
+            "extentsBytes": 23496,
+            "extentsAvailabilityBytes": 368,
+            "totalRawBytes": 171056,
+            "rawBytes": 171056
+          }
+        },
+        "rasters": [
+          {
+            "kind": "bitmap",
+            "metadataBytes": 58740,
+            "serializedBytes": 755064,
+            "gpuBytes": 695296,
+            "pages": [
+              {
+                "width": 1024,
+                "height": 679,
+                "format": "r8unorm",
+                "mipBytes": 695296,
+                "source": "embedded",
+                "encodedBytes": 695444
+              }
+            ]
+          }
+        ],
+        "containers": [
+          {
+            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "role": "font",
+            "jsonBytes": 1879,
+            "paddingBytes": 1,
+            "totalBytes": 927148
+          }
+        ],
+        "transport": [
+          {
+            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "format": "raw",
+            "bytes": 927148
+          }
+        ]
+      }
+    },
+    "external": {
+      "artifacts": [
+        {
+          "role": "font",
+          "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+          "bytes": 172476,
+          "sha256": "4ecd8c73335e06d554c0b0b3e7b67bcdadaba821d0c87290ba282247a4e7cbe2"
+        },
+        {
+          "role": "raster",
+          "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+          "bytes": 59744,
+          "sha256": "d83adf040f7fee140d0304302975774b61f1d029c6ae11c1b0b001c6494a9863"
+        },
+        {
+          "role": "raster-page",
+          "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+          "bytes": 695444,
+          "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
+        }
+      ],
+      "report": {
+        "source": {
+          "bytes": 411640
+        },
+        "shared": {
+          "shaping": {
+            "format": "opentype-sfnt-harfrust-v0",
+            "sfntDirectoryBytes": 156,
+            "tables": [
+              {
+                "tag": "GDEF",
+                "rawBytes": 1036,
+                "paddedBytes": 1036
+              },
+              {
+                "tag": "GPOS",
+                "rawBytes": 83724,
+                "paddedBytes": 83724
+              },
+              {
+                "tag": "GSUB",
+                "rawBytes": 24406,
+                "paddedBytes": 24408
+              },
+              {
+                "tag": "OS/2",
+                "rawBytes": 96,
+                "paddedBytes": 96
+              },
+              {
+                "tag": "cmap",
+                "rawBytes": 25900,
+                "paddedBytes": 25900
+              },
+              {
+                "tag": "head",
+                "rawBytes": 54,
+                "paddedBytes": 56
+              },
+              {
+                "tag": "hhea",
+                "rawBytes": 36,
+                "paddedBytes": 36
+              },
+              {
+                "tag": "hmtx",
+                "rawBytes": 11748,
+                "paddedBytes": 11748
+              },
+              {
+                "tag": "maxp",
+                "rawBytes": 32,
+                "paddedBytes": 32
+              }
+            ],
+            "extentsBytes": 23496,
+            "extentsAvailabilityBytes": 368,
+            "totalRawBytes": 171056,
+            "rawBytes": 171056
+          }
+        },
+        "rasters": [
+          {
+            "kind": "bitmap",
+            "metadataBytes": 58740,
+            "serializedBytes": 755188,
+            "gpuBytes": 695296,
+            "pages": [
+              {
+                "width": 1024,
+                "height": 679,
+                "format": "r8unorm",
+                "mipBytes": 695296,
+                "source": "external",
+                "encodedBytes": 695444
+              }
+            ]
+          }
+        ],
+        "containers": [
+          {
+            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "role": "font",
+            "jsonBytes": 1389,
+            "paddingBytes": 3,
+            "totalBytes": 172476
+          },
+          {
+            "artifactId": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+            "role": "raster",
+            "jsonBytes": 975,
+            "paddingBytes": 1,
+            "totalBytes": 59744
+          }
+        ],
+        "transport": [
+          {
+            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "format": "raw",
+            "bytes": 172476
+          },
+          {
+            "artifactId": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+            "format": "raw",
+            "bytes": 59744
+          },
+          {
+            "artifactId": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+            "format": "raw",
+            "bytes": 695444
+          }
+        ]
+      }
+    },
+    "empty": {
+      "artifacts": [
+        {
+          "role": "font",
+          "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+          "bytes": 172140,
+          "sha256": "296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8"
+        }
+      ],
+      "report": {
+        "source": {
+          "bytes": 411640
+        },
+        "shared": {
+          "shaping": {
+            "format": "opentype-sfnt-harfrust-v0",
+            "sfntDirectoryBytes": 156,
+            "tables": [
+              {
+                "tag": "GDEF",
+                "rawBytes": 1036,
+                "paddedBytes": 1036
+              },
+              {
+                "tag": "GPOS",
+                "rawBytes": 83724,
+                "paddedBytes": 83724
+              },
+              {
+                "tag": "GSUB",
+                "rawBytes": 24406,
+                "paddedBytes": 24408
+              },
+              {
+                "tag": "OS/2",
+                "rawBytes": 96,
+                "paddedBytes": 96
+              },
+              {
+                "tag": "cmap",
+                "rawBytes": 25900,
+                "paddedBytes": 25900
+              },
+              {
+                "tag": "head",
+                "rawBytes": 54,
+                "paddedBytes": 56
+              },
+              {
+                "tag": "hhea",
+                "rawBytes": 36,
+                "paddedBytes": 36
+              },
+              {
+                "tag": "hmtx",
+                "rawBytes": 11748,
+                "paddedBytes": 11748
+              },
+              {
+                "tag": "maxp",
+                "rawBytes": 32,
+                "paddedBytes": 32
+              }
+            ],
+            "extentsBytes": 23496,
+            "extentsAvailabilityBytes": 368,
+            "totalRawBytes": 171056,
+            "rawBytes": 171056
+          }
+        },
+        "rasters": [],
+        "containers": [
+          {
+            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "role": "font",
+            "jsonBytes": 1053,
+            "paddingBytes": 3,
+            "totalBytes": 172140
+          }
+        ],
+        "transport": [
+          {
+            "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
+            "format": "raw",
+            "bytes": 172140
+          }
+        ]
+      }
+    }
   }
 }
