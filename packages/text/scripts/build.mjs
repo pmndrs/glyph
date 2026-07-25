@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -45,6 +45,9 @@ await writeFile(
     '--quiet',
   ]),
 )
+if (process.platform !== 'win32') {
+  await chmod(new URL('../dist/node/cli.js', import.meta.url), 0o755)
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {

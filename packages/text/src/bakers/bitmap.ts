@@ -379,19 +379,27 @@ export function bitmapBakerFromCore(
 
 let defaultBaker: Promise<ReturnType<typeof bitmapBakerFromCore>> | undefined
 
+async function loadDefaultBitmapBaker(): Promise<ReturnType<typeof bitmapBakerFromCore>> {
+  const wasmUrl = new URL('../bitmap_baker.wasm', import.meta.url)
+  let bytes: BufferSource
+  if (wasmUrl.protocol === 'file:') {
+    const { readFile } = await import('node:fs/promises')
+    bytes = await readFile(wasmUrl)
+  } else {
+    const response = await fetch(wasmUrl)
+    if (!response.ok) throw new Error(`Unable to load bitmap baker Wasm (${response.status})`)
+    bytes = await response.arrayBuffer()
+  }
+  return bitmapBakerFromCore(await createBitmapBaker(bytes))
+}
+
 export const bitmapBaker: RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptorV0> = {
   kind: BITMAP_KIND,
   extension: BITMAP_EXTENSION,
   version: BITMAP_FORMAT_VERSION,
   descriptor: bitmapDescriptor,
   async bake(request) {
-    defaultBaker ??= fetch(new URL('../bitmap_baker.wasm', import.meta.url))
-      .then((response) => {
-        if (!response.ok) throw new Error(`Unable to load bitmap baker Wasm (${response.status})`)
-        return response.arrayBuffer()
-      })
-      .then(createBitmapBaker)
-      .then(bitmapBakerFromCore)
+    defaultBaker ??= loadDefaultBitmapBaker()
     return (await defaultBaker).bake(request)
   },
 }

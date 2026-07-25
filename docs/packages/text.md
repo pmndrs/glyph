@@ -5,7 +5,7 @@ description: Defines public core contracts, static discovery, portable bitmap ar
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:00a77ffc73ba2b7fe90ef5fd812a579bbff8adc7eb83ce96bfa49c9317373a47"
+source_digest: "sha256:5b5390b8d5e135c4052d05143e63ab6592b67ffaa2eacd3c3bebee2e96cc2b0d"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -32,14 +32,17 @@ sources:
   - id: composition
     resource: ../../packages/text/src/internal/compose-bake.ts
     title: Generic core/raster artifact composer
+  - id: node-host
+    resource: ../../packages/text/src/node/bake.ts
+    title: Node bake API and filesystem host
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T05:30:43Z"
+  at: "2026-07-25T05:47:27Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 public contract scaffold; roadmap item 2.3 artifact pipeline complete and item 2.4 active
+Status: 🟡 implementation slice; Milestone 2 complete and roadmap item 3.1 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -51,16 +54,18 @@ The isolated `@pmndrs/text/bakers/bitmap/validate` entry reuses the core package
 
 The internal generic composer authenticates every returned artifact, checks reciprocal shaping/glyph/raster identity, retains external companions and pages, and embeds package-owned companion data without interpreting its semantics. Integer glTF buffer-view references are rebased through the shared naming convention, so multiple distinct extension types compose without a closed registry. Exact Inter goldens cover combined embedded, combined external, and the identity-neutral empty raster set; both the core and bitmap validators round-trip the combined bytes.
 
-Its Node-only internal discovery module completes roadmap item 2.1 with pinned TypeScript 7 AST and symbol analysis over TypeScript, TSX, JavaScript, and JSX projects. It finds composed tokens and statically visible core/React raw forms, reduces immutable font/raster expressions, maps URL pathnames into canonical asset roots, and validates only the exact imported raster package's ESM baker manifest. It never executes application modules. One internal compiler adapter owns every unstable TypeScript import, project snapshot, symbol handle, alias, and declaration-resolution operation; an exact-version assertion and source-boundary test make compiler upgrades explicit. The module is intentionally absent from the package export map until item 2.4 supplies the complete `@pmndrs/text/bake` API.
+The Node-only `@pmndrs/text/bake` subpath closes roadmap item 2.4 around the item-2.1 TypeScript 7 AST/symbol discovery engine. `bakeFont` handles an explicit filesystem input/output pair and retains each selected raster package's exact option type. `bakeProject` finds composed tokens and statically visible core/React raw forms across TypeScript, TSX, JavaScript, and JSX; reduces immutable font/raster expressions; maps URL pathnames into canonical asset roots; groups identical sources; and dynamically imports only the exact verified raster-package ESM entry. It never executes application modules. One internal compiler adapter owns every unstable TypeScript import, project snapshot, symbol handle, alias, and declaration-resolution operation; an exact-version assertion and source-boundary test make compiler upgrades explicit.
 
-It does not currently expose the filesystem Node host/CLI, load/register fonts, shape text at runtime, perform paragraph layout, or render glyphs. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an item-2.3 artifact shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The host writes exclusive same-directory temporary files and atomically renames them only after every artifact is ready, rejects input/output overlap and unsafe package-owned filenames, and cleans temporary files on cancellation. Its report adds phase/total timing, before/after RSS, explicitly process-lifetime peak RSS, output paths and hashes, and raw/gzip/Brotli transport sizes to the authoritative core/raster/container byte report. Exact Inter goldens plus repeated mixed-raster project runs bind deterministic output. The core validator also has a Node `Buffer` purity regression so validation cannot mutate the SFNT checksum field through aliasing slice semantics.[^node-host]
+
+It does not yet load/register fonts, run the Worker fallback, shape text at runtime, perform paragraph layout, or render glyphs. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
 | Script | Purpose |
 | --- | --- |
 | `typecheck` | Type-check package source without emission. |
-| `test` | Build, run compile-only API fixtures, discovery tests, Rust/Wasm bitmap generation, layered validators, goldens, and malformed artifacts. |
+| `test` | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, Rust/Wasm bitmap generation, layered validators, goldens, deterministic project bakes, and malformed artifacts. |
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `test:unit` | Run focused Rust bitmap-core unit tests. |
 | `test:integration` | Run Rust public-boundary, Wasm/package, golden, and malformed-artifact integration tests. |
@@ -72,3 +77,4 @@ The [API contract](../planning/api-shapes.md) remains authoritative for proposed
 [^api-contract]: The implementation must not be inferred to exist merely because its types compile.
 [^bitmap-identity]: Raster-specific descriptor fields remain owned by this subpath and never enter a closed core union.
 [^bitmap-baker]: Artifact generation, validation, and generic composition are complete; GPU resource creation is deliberately deferred to the renderer milestone.
+[^node-host]: The Node host trusts selected installed baker code but authenticates every returned artifact; hostile baked assets are independently revalidated at the loader boundary.

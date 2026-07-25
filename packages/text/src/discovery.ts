@@ -26,6 +26,7 @@ export interface ResolvedRasterBaker {
   readonly packageName: string
   readonly kind: string
   readonly specifier: string
+  readonly resolvedFile: string
   readonly options: unknown
 }
 
@@ -70,7 +71,9 @@ interface ResolveResult {
   readonly reason?: string
 }
 
-export async function discoverProjectFonts(options: DiscoveryOptions = {}): Promise<DiscoveryReport> {
+export async function discoverProjectFonts(
+  options: DiscoveryOptions = {},
+): Promise<DiscoveryReport> {
   options.signal?.throwIfAborted()
   const projectRoot = await canonicalDirectory(pathValue(options.projectRoot ?? process.cwd()))
   const entries = await resolveEntries(projectRoot, options.entries)
@@ -84,14 +87,27 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
       const checker = project.checker
       for (const fileName of project.program.getSourceFileNames()) {
         const sourceFile = project.program.getSourceFile(fileName)
-        if (sourceFile === undefined || sourceFile.isDeclarationFile || !within(projectRoot, fileName)) continue
+        if (
+          sourceFile === undefined ||
+          sourceFile.isDeclarationFile ||
+          !within(projectRoot, fileName)
+        )
+          continue
         options.signal?.throwIfAborted()
         const visit = (node: ts.Node): void => {
           if (ts.isCallExpression(node)) {
             const binding = importedBinding(node.expression, checker, project)
             if (binding?.module === '@pmndrs/text' && binding.exported === 'defineFont') {
               analyses.push(
-                analyzeDefinition(node.arguments[0], node.arguments[1], node.getText(sourceFile), sourceFile, checker, project, assetRoots).then((result) => {
+                analyzeDefinition(
+                  node.arguments[0],
+                  node.arguments[1],
+                  node.getText(sourceFile),
+                  sourceFile,
+                  checker,
+                  project,
+                  assetRoots,
+                ).then((result) => {
                   if (result === undefined) return
                   if ('font' in result) fonts.push(result.font)
                   else diagnostics.push(result.diagnostic)
@@ -113,7 +129,15 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
               const raster = objectPropertyExpression(object, 'raster')
               if (input !== undefined && raster !== undefined) {
                 analyses.push(
-                  analyzeDefinition(input, raster, node.getText(sourceFile), sourceFile, checker, project, assetRoots).then((result) => {
+                  analyzeDefinition(
+                    input,
+                    raster,
+                    node.getText(sourceFile),
+                    sourceFile,
+                    checker,
+                    project,
+                    assetRoots,
+                  ).then((result) => {
                     if (result === undefined) return
                     if ('font' in result) fonts.push(result.font)
                     else diagnostics.push(result.diagnostic)
@@ -129,7 +153,15 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
               const raster = jsxAttributeExpression(node, 'raster')
               if (input !== undefined && raster !== undefined) {
                 analyses.push(
-                  analyzeDefinition(input, raster, node.getText(sourceFile), sourceFile, checker, project, assetRoots).then((result) => {
+                  analyzeDefinition(
+                    input,
+                    raster,
+                    node.getText(sourceFile),
+                    sourceFile,
+                    checker,
+                    project,
+                    assetRoots,
+                  ).then((result) => {
                     if (result === undefined) return
                     if ('font' in result) fonts.push(result.font)
                     else diagnostics.push(result.diagnostic)
@@ -166,7 +198,8 @@ async function analyzeDefinition(
   }
   const selection = fontSourceSelection(input, checker, project)
   if (selection?.baked === true) return undefined
-  const source = selection === undefined ? undefined : staticString(selection.source, checker, project)
+  const source =
+    selection === undefined ? undefined : staticString(selection.source, checker, project)
   if (source === undefined) {
     return failure(
       'dynamic-font-source',
@@ -203,7 +236,10 @@ function fontSourceSelection(
   checker: Checker,
   project: Project,
   seen = new Set<number>(),
-): { readonly source: ts.Expression; readonly baked?: false } | { readonly baked: true } | undefined {
+):
+  | { readonly source: ts.Expression; readonly baked?: false }
+  | { readonly baked: true }
+  | undefined {
   const value = unwrap(expression)
   if (ts.isIdentifier(value)) {
     const initializer = constantInitializer(value, checker, project, seen)
@@ -222,9 +258,15 @@ async function resolveRaster(
   sourceFile: ts.SourceFile,
 ): Promise<{ raster: ResolvedRasterBaker } | { diagnostic: DiscoveryDiagnostic }> {
   const text = expression?.getText(sourceFile) ?? '<missing raster>'
-  const value = expression === undefined ? undefined : constantExpression(expression, checker, project)
+  const value =
+    expression === undefined ? undefined : constantExpression(expression, checker, project)
   if (value === undefined) {
-    return failure('invalid-raster-options', 'raster must be a statically visible factory call', sourceFile, text)
+    return failure(
+      'invalid-raster-options',
+      'raster must be a statically visible factory call',
+      sourceFile,
+      text,
+    )
   }
   const moduleExpression = ts.isCallExpression(value)
     ? value.expression
@@ -236,13 +278,25 @@ async function resolveRaster(
     : ts.isObjectLiteralExpression(value)
       ? objectPropertyExpression(value, 'options')
       : undefined
-  const binding = moduleExpression === undefined ? undefined : importedBinding(moduleExpression, checker, project)
+  const binding =
+    moduleExpression === undefined ? undefined : importedBinding(moduleExpression, checker, project)
   if (binding === undefined) {
-    return failure('invalid-raster-options', 'raster factory is not an imported ESM binding', sourceFile, text)
+    return failure(
+      'invalid-raster-options',
+      'raster factory is not an imported ESM binding',
+      sourceFile,
+      text,
+    )
   }
-  const options = optionsExpression === undefined ? {} : staticJson(optionsExpression, checker, project)
+  const options =
+    optionsExpression === undefined ? {} : staticJson(optionsExpression, checker, project)
   if (options === undefined) {
-    return failure('invalid-raster-options', 'raster options are not immutable JSON literals', sourceFile, text)
+    return failure(
+      'invalid-raster-options',
+      'raster options are not immutable JSON literals',
+      sourceFile,
+      text,
+    )
   }
   try {
     const manifest = await rasterManifest(binding, sourceFile.fileName)
@@ -265,7 +319,8 @@ async function rasterManifest(
   const require = createRequire(sourceFile)
   const manifestPath = require.resolve(`${packageName}/package.json`)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
-  if (manifest.name !== packageName) throw new Error(`raster manifest name does not match ${packageName}`)
+  if (manifest.name !== packageName)
+    throw new Error(`raster manifest name does not match ${packageName}`)
   const packageRoot = await canonicalDirectory(dirname(manifestPath))
   const pmndrs = record(manifest.pmndrs)
   const map = record(pmndrs?.text)
@@ -276,7 +331,8 @@ async function rasterManifest(
   const exports = record(manifest.exports)
   const exported = exports?.[target]
   const importTarget = esmExportTarget(exported, manifest.type)
-  if (importTarget === undefined) throw new Error(`raster baker ${target} is not an exported ESM subpath`)
+  if (importTarget === undefined)
+    throw new Error(`raster baker ${target} is not an exported ESM subpath`)
   const bakerFile = await realpath(resolve(packageRoot, importTarget))
   if (!within(packageRoot, bakerFile) || !(await stat(bakerFile)).isFile()) {
     throw new Error(`raster baker ${target} resolves outside its package`)
@@ -285,12 +341,15 @@ async function rasterManifest(
     packageName,
     kind: binding.exported,
     specifier: `${packageName}${target.slice(1)}`,
+    resolvedFile: bakerFile,
   }
 }
 
 function esmExportTarget(value: unknown, packageType: unknown): string | undefined {
   if (typeof value === 'string') {
-    return value.endsWith('.mjs') || (value.endsWith('.js') && packageType === 'module') ? value : undefined
+    return value.endsWith('.mjs') || (value.endsWith('.js') && packageType === 'module')
+      ? value
+      : undefined
   }
   const object = record(value)
   const target = object?.import
@@ -301,7 +360,12 @@ function esmExportTarget(value: unknown, packageType: unknown): string | undefin
     : undefined
 }
 
-function staticString(expression: ts.Expression, checker: Checker, project: Project, seen = new Set<number>()): StaticString | undefined {
+function staticString(
+  expression: ts.Expression,
+  checker: Checker,
+  project: Project,
+  seen = new Set<number>(),
+): StaticString | undefined {
   const value = unwrap(expression)
   if (ts.isStringLiteralLikeNode(value)) return { exact: value.text, suffix: value.text }
   if (ts.isIdentifier(value)) {
@@ -326,8 +390,12 @@ function staticString(expression: ts.Expression, checker: Checker, project: Proj
     let suffix = value.head.text
     for (const span of value.templateSpans) {
       const part = staticString(span.expression, checker, project, new Set(seen))
-      exact = exact === undefined || part?.exact === undefined ? undefined : exact + part.exact + span.literal.text
-      suffix = part?.exact === undefined ? span.literal.text : suffix + part.exact + span.literal.text
+      exact =
+        exact === undefined || part?.exact === undefined
+          ? undefined
+          : exact + part.exact + span.literal.text
+      suffix =
+        part?.exact === undefined ? span.literal.text : suffix + part.exact + span.literal.text
     }
     return exact === undefined ? (suffix === '' ? undefined : { suffix }) : { exact, suffix: exact }
   }
@@ -337,10 +405,15 @@ function staticString(expression: ts.Expression, checker: Checker, project: Proj
     value.expression.text === 'URL' &&
     value.arguments !== undefined
   ) {
-    const first = value.arguments[0] === undefined
-      ? undefined
-      : staticString(value.arguments[0], checker, project, new Set(seen))
-    if (first?.exact !== undefined && value.arguments.length === 2 && isImportMetaUrl(value.arguments[1]!)) {
+    const first =
+      value.arguments[0] === undefined
+        ? undefined
+        : staticString(value.arguments[0], checker, project, new Set(seen))
+    if (
+      first?.exact !== undefined &&
+      value.arguments.length === 2 &&
+      isImportMetaUrl(value.arguments[1]!)
+    ) {
       return { moduleRelative: first.exact }
     }
     if (first?.exact !== undefined && value.arguments.length === 1) {
@@ -355,14 +428,23 @@ function staticString(expression: ts.Expression, checker: Checker, project: Proj
   return undefined
 }
 
-function staticJson(expression: ts.Expression, checker: Checker, project: Project, seen = new Set<number>()): unknown | undefined {
+function staticJson(
+  expression: ts.Expression,
+  checker: Checker,
+  project: Project,
+  seen = new Set<number>(),
+): unknown | undefined {
   const value = unwrap(expression)
   if (ts.isStringLiteralLikeNode(value)) return value.text
   if (ts.isNumericLiteral(value)) return Number(value.text)
   if (value.kind === ts.SyntaxKind.TrueKeyword) return true
   if (value.kind === ts.SyntaxKind.FalseKeyword) return false
   if (value.kind === ts.SyntaxKind.NullKeyword) return null
-  if (ts.isPrefixUnaryExpression(value) && value.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(value.operand)) {
+  if (
+    ts.isPrefixUnaryExpression(value) &&
+    value.operator === ts.SyntaxKind.MinusToken &&
+    ts.isNumericLiteral(value.operand)
+  ) {
     return -Number(value.operand.text)
   }
   if (ts.isIdentifier(value)) {
@@ -412,18 +494,27 @@ function staticJsonInitializer(
   return initializer === undefined ? undefined : staticJson(initializer, checker, project, seen)
 }
 
-async function resolveFontSource(source: StaticString, sourceFile: string, assetRoots: readonly string[]): Promise<ResolveResult> {
+async function resolveFontSource(
+  source: StaticString,
+  sourceFile: string,
+  assetRoots: readonly string[],
+): Promise<ResolveResult> {
   let candidates: { file: string; root: string; pathname: string }[] = []
   try {
     if (source.moduleRelative !== undefined) {
       const pathname = safePathname(source.moduleRelative)
-      const file = resolve(dirname(sourceFile), `.${pathname.startsWith('/') ? pathname : `/${pathname}`}`)
-      for (const root of assetRoots) if (within(root, file)) candidates.push({ file, root, pathname: publicPath(root, file) })
+      const file = resolve(
+        dirname(sourceFile),
+        `.${pathname.startsWith('/') ? pathname : `/${pathname}`}`,
+      )
+      for (const root of assetRoots)
+        if (within(root, file)) candidates.push({ file, root, pathname: publicPath(root, file) })
     } else {
       const pathname = safePathname(source.exact ?? source.suffix ?? '')
       if (source.exact?.startsWith('.') === true) {
         const file = resolve(dirname(sourceFile), pathname)
-        for (const root of assetRoots) if (within(root, file)) candidates.push({ file, root, pathname: publicPath(root, file) })
+        for (const root of assetRoots)
+          if (within(root, file)) candidates.push({ file, root, pathname: publicPath(root, file) })
       } else {
         for (const root of assetRoots) {
           const file = join(root, pathname.replace(/^\/+/, ''))
@@ -432,7 +523,10 @@ async function resolveFontSource(source: StaticString, sourceFile: string, asset
       }
     }
   } catch (error) {
-    return { code: 'invalid-font-source', reason: error instanceof Error ? error.message : String(error) }
+    return {
+      code: 'invalid-font-source',
+      reason: error instanceof Error ? error.message : String(error),
+    }
   }
   const existing: typeof candidates = []
   for (const candidate of candidates) {
@@ -445,8 +539,13 @@ async function resolveFontSource(source: StaticString, sourceFile: string, asset
     }
   }
   const unique = [...new Map(existing.map((candidate) => [candidate.file, candidate])).values()]
-  if (unique.length === 0) return { code: 'missing-font-source', reason: 'no configured asset root contains the source' }
-  if (unique.length > 1) return { code: 'ambiguous-font-source', reason: 'more than one configured asset root contains the source' }
+  if (unique.length === 0)
+    return { code: 'missing-font-source', reason: 'no configured asset root contains the source' }
+  if (unique.length > 1)
+    return {
+      code: 'ambiguous-font-source',
+      reason: 'more than one configured asset root contains the source',
+    }
   const match = unique[0]!
   return { resolvedFile: match.file, assetRoot: match.root, publicPathname: match.pathname }
 }
@@ -495,14 +594,19 @@ function constantExpression(
   return initializer === undefined ? value : constantExpression(initializer, checker, project, seen)
 }
 
-function objectPropertyExpression(object: ts.ObjectLiteralExpression, name: string): ts.Expression | undefined {
+function objectPropertyExpression(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.Expression | undefined {
   for (const property of object.properties) {
-    if (ts.isPropertyAssignment(property) && propertyName(property.name) === name) return property.initializer
+    if (ts.isPropertyAssignment(property) && propertyName(property.name) === name)
+      return property.initializer
     if (
       ts.isShorthandPropertyAssignment(property) &&
       ts.isIdentifier(property.name) &&
       property.name.text === name
-    ) return property.name
+    )
+      return property.name
   }
   return undefined
 }
@@ -517,7 +621,8 @@ function jsxAttributeExpression(
       !ts.isIdentifier(property.name) ||
       property.name.text !== name ||
       property.initializer === undefined
-    ) continue
+    )
+      continue
     if (ts.isStringLiteral(property.initializer)) return property.initializer
     if (ts.isJsxExpression(property.initializer)) return property.initializer.expression
   }
@@ -557,7 +662,10 @@ function failure(
   return { diagnostic: { code, message, sourceFile: sourceFile.fileName, expression } }
 }
 
-async function resolveEntries(projectRoot: string, values: DiscoveryOptions['entries']): Promise<string[]> {
+async function resolveEntries(
+  projectRoot: string,
+  values: DiscoveryOptions['entries'],
+): Promise<string[]> {
   if (values !== undefined) return values.map((value) => resolve(projectRoot, pathValue(value)))
   const sourceRoot = join(projectRoot, 'src')
   return collectSourceFiles(sourceRoot)
@@ -580,8 +688,14 @@ async function collectSourceFiles(directory: string): Promise<string[]> {
   return files.sort()
 }
 
-async function resolveAssetRoots(projectRoot: string, values: DiscoveryOptions['assetRoots']): Promise<string[]> {
-  if (values !== undefined) return Promise.all(values.map((value) => canonicalDirectory(resolve(projectRoot, pathValue(value)))))
+async function resolveAssetRoots(
+  projectRoot: string,
+  values: DiscoveryOptions['assetRoots'],
+): Promise<string[]> {
+  if (values !== undefined)
+    return Promise.all(
+      values.map((value) => canonicalDirectory(resolve(projectRoot, pathValue(value)))),
+    )
   try {
     return [await canonicalDirectory(join(projectRoot, 'public'))]
   } catch (error) {
@@ -613,6 +727,9 @@ function publicPath(root: string, file: string): string {
   return `/${relative(root, file).split(sep).join('/')}`
 }
 
-function compareSourcePosition(a: { sourceFile: string; expression: string }, b: { sourceFile: string; expression: string }): number {
+function compareSourcePosition(
+  a: { sourceFile: string; expression: string },
+  b: { sourceFile: string; expression: string },
+): number {
   return a.sourceFile.localeCompare(b.sourceFile) || a.expression.localeCompare(b.expression)
 }

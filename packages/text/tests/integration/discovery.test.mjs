@@ -46,7 +46,10 @@ async function project() {
     join(root, 'node_modules', '@fixture', 'raster', 'index.d.ts'),
     'export declare function bitmap(options: { strikes: readonly number[] }): unknown\n',
   )
-  await writeFile(join(root, 'node_modules', '@fixture', 'raster', 'index.js'), 'export const bitmap = (x) => x\n')
+  await writeFile(
+    join(root, 'node_modules', '@fixture', 'raster', 'index.js'),
+    'export const bitmap = (x) => x\n',
+  )
   await writeFile(join(root, 'node_modules', '@fixture', 'raster', 'baker.js'), 'export {}\n')
   return root
 }
@@ -82,6 +85,7 @@ test('discovers aliased defineFont and immutable raster options through TypeScri
     packageName: '@fixture/raster',
     kind: 'bitmap',
     specifier: '@fixture/raster/bakers/bitmap',
+    resolvedFile: await realpath(join(root, 'node_modules', '@fixture', 'raster', 'baker.js')),
     options: { strikes: [16, 32] },
   })
 })
@@ -159,7 +163,10 @@ test('follows imported constants and resolves literal, concatenated, and absolut
     writeFile(join(assetRoot, 'fonts', 'Combined.ttf'), 'combined'),
     writeFile(join(assetRoot, 'fonts', 'Remote.ttf'), 'remote'),
   ])
-  await writeFile(join(root, 'src', 'paths.ts'), "export const moduleFont = '/fonts/Literal.ttf' as const\n")
+  await writeFile(
+    join(root, 'src', 'paths.ts'),
+    "export const moduleFont = '/fonts/Literal.ttf' as const\n",
+  )
   await writeFile(
     join(root, 'src', 'main.ts'),
     `
@@ -177,10 +184,11 @@ test('follows imported constants and resolves literal, concatenated, and absolut
   const report = await discoverProjectFonts({ projectRoot: root, assetRoots: [assetRoot] })
 
   assert.deepEqual(report.diagnostics, [])
-  assert.deepEqual(
-    report.fonts.map(({ publicPathname }) => publicPathname).sort(),
-    ['/fonts/Combined.ttf', '/fonts/Literal.ttf', '/fonts/Remote.ttf'],
-  )
+  assert.deepEqual(report.fonts.map(({ publicPathname }) => publicPathname).sort(), [
+    '/fonts/Combined.ttf',
+    '/fonts/Literal.ttf',
+    '/fonts/Remote.ttf',
+  ])
 })
 
 test('discovers core and React raw forms, resolves source overrides, and skips baked-only inputs', async (t) => {
@@ -208,10 +216,11 @@ test('discovers core and React raw forms, resolves source overrides, and skips b
   const report = await discoverProjectFonts({ projectRoot: root })
 
   assert.deepEqual(report.diagnostics, [])
-  assert.deepEqual(
-    report.fonts.map(({ publicPathname }) => publicPathname).sort(),
-    ['/fonts/Core.ttf', '/fonts/Override.ttf', '/fonts/React.ttf'],
-  )
+  assert.deepEqual(report.fonts.map(({ publicPathname }) => publicPathname).sort(), [
+    '/fonts/Core.ttf',
+    '/fonts/Override.ttf',
+    '/fonts/React.ttf',
+  ])
 })
 
 test('reports ambiguity, unsafe paths, missing files, dynamic options, and dynamic sources', async (t) => {
@@ -242,16 +251,13 @@ test('reports ambiguity, unsafe paths, missing files, dynamic options, and dynam
     assetRoots: [join(root, 'public'), secondRoot],
   })
 
-  assert.deepEqual(
-    report.diagnostics.map(({ code }) => code).sort(),
-    [
-      'ambiguous-font-source',
-      'dynamic-font-source',
-      'invalid-font-source',
-      'invalid-raster-options',
-      'missing-font-source',
-    ],
-  )
+  assert.deepEqual(report.diagnostics.map(({ code }) => code).sort(), [
+    'ambiguous-font-source',
+    'dynamic-font-source',
+    'invalid-font-source',
+    'invalid-raster-options',
+    'missing-font-source',
+  ])
   assert.equal(report.fonts.length, 0)
 })
 
@@ -310,10 +316,10 @@ test('rejects CommonJS and package-escaping raster baker manifests', async (t) =
   const report = await discoverProjectFonts({ projectRoot: root })
 
   assert.equal(report.fonts.length, 0)
-  assert.deepEqual(report.diagnostics.map(({ code }) => code), [
-    'invalid-raster-manifest',
-    'invalid-raster-manifest',
-  ])
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    ['invalid-raster-manifest', 'invalid-raster-manifest'],
+  )
   assert.match(report.diagnostics[0].message, /exported ESM subpath|outside its package/)
   assert.match(report.diagnostics[1].message, /exported ESM subpath|outside its package/)
 })

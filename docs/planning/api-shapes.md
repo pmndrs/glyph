@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T05:27:09Z"
+  at: "2026-07-25T05:47:27Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -562,9 +562,39 @@ interface NodeBakeOptions<
   output: string | URL
   font: Omit<FontBakeDescriptorV0, 'formatVersion'>
   rasters?: Rasters
+  signal?: AbortSignal
 }
 
-declare function bakeFont(options: NodeBakeOptions): Promise<FontPayloadReport>
+interface NodeBakeExecutionReport {
+  timingsMs: {
+    read: number
+    coreBake: number
+    rasterBake: number
+    compose: number
+    validate: number
+    transport: number
+    write: number
+    total: number
+  }
+  memory: {
+    rssBeforeBytes: number
+    rssAfterBytes: number
+    /** Process-lifetime peak reported by Node, not isolated-operation allocation. */
+    processMaxRssBytes: number
+  }
+  outputs: readonly {
+    role: BakeArtifactV0['role']
+    file: string
+    bytes: number
+    sha256: string
+  }[]
+}
+
+interface NodeFontBakeReport extends FontPayloadReport {
+  execution: NodeBakeExecutionReport
+}
+
+declare function bakeFont(options: NodeBakeOptions): Promise<NodeFontBakeReport>
 
 interface ProjectBakeOptions {
   entries?: readonly (string | URL)[]
@@ -575,7 +605,7 @@ interface ProjectBakeOptions {
 }
 
 interface ProjectBakeReport {
-  fonts: readonly FontPayloadReport[]
+  fonts: readonly NodeFontBakeReport[]
   mappings: readonly {
     expression: string
     sourceFile: string
@@ -597,7 +627,9 @@ import { bakeProject } from '@pmndrs/text/bake'
 const report = await bakeProject()
 ```
 
-With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names are deterministically derived from raster keys. The Node host owns filesystem work only.
+With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names are deterministically derived from raster keys. The host writes same-directory temporary files and renames them only after every artifact is ready; it rejects source/output overlap, duplicate targets, and package-owned artifact IDs that are not single filenames. Cancellation is checked between every asynchronous or coarse Wasm phase and before publication. The Node host owns filesystem work only.
+
+The portable core reports authoritative raw byte counts. A completed Node report adds gzip and Brotli sizes for GLB transport, raw page bytes, phase and total timings, before/after RSS, Node's process-lifetime peak RSS, and the exact path/role/size/hash of every output. The peak is deliberately labeled as process-wide lifetime evidence rather than an isolated allocation measurement.
 
 ### CLI baker discovery
 

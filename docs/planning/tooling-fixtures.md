@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T04:17:03Z"
+  at: "2026-07-25T05:47:27Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -161,7 +161,7 @@ The full executable manifest lives beside the font. No fixture may silently foll
 
 ### Static font discovery
 
-Status: ✅ roadmap item 2.1 is implemented and verified behind the future Node host boundary
+Status: ✅ roadmap item 2.1 is implemented, verified, and exposed only through the completed Node host boundary
 
 The Node baker analyzes TypeScript, TSX, JavaScript, and JSX module graphs with the exact-pinned TypeScript 7 parser and a symbol-aware constant evaluator. It never uses regular expressions as the source of truth and never executes application modules. Its target is a `defineFont(fontInput, rasterInput)` call imported from `@pmndrs/text` (including aliased imports), plus the equivalent one-off raw-font/raster form when that form is statically visible. Every unstable compiler import and snapshot/symbol-handle operation is isolated in one internal adapter; tests assert the exact compiler version, reject unstable imports elsewhere in the package, and run the same discovery semantics over typed and plain-JavaScript fixtures.
 
@@ -184,7 +184,7 @@ Dynamic URLs remain legal API values. Static discovery is an optimization that c
 
 Fixtures cover TypeScript and JavaScript entries, literal strings, `URL` objects, module constants, aliased imports, concatenation, templates, stripped absolute domains, dynamic origins with static suffixes, query/fragment removal, percent-encoded filenames, configured roots, ambiguous matches, traversal attempts, missing files, dynamic bitmap strikes, and third-party raster packages.
 
-The executable package-integration suite additionally covers statically visible core/React raw forms, source overrides, baked-only exclusion, immutable shorthand options, CommonJS rejection, and package-escape rejection. It imports the internal analyzer directly; the public `@pmndrs/text/bake` subpath remains gated on the complete Node API in item 2.4.
+The executable package-integration suite additionally covers statically visible core/React raw forms, source overrides, baked-only exclusion, immutable shorthand options, CommonJS rejection, and package-escape rejection. Focused analyzer tests import the internal boundary directly, while Node API/CLI integration fixtures exercise the same report through the public `@pmndrs/text/bake` subpath.
 
 ### Oracle capture
 

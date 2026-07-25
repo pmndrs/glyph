@@ -2,6 +2,9 @@
   "name": "@pmndrs/text",
   "version": "0.0.0",
   "private": true,
+  "bin": {
+    "pmndrs-text-bake": "./dist/node/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -23,6 +26,10 @@
     "./bakers/bitmap/validate": {
       "types": "./dist/bakers/bitmap-validator.d.ts",
       "import": "./dist/bakers/bitmap-validator.js"
+    },
+    "./bake": {
+      "types": "./dist/node/bake.d.ts",
+      "import": "./dist/node/bake.js"
     },
     "./bitmap-baker.wasm": "./dist/bitmap_baker.wasm",
     "./bitmap-abi.json": "./dist/bitmap-baker-abi-v0.json",
@@ -66,6 +73,11 @@
     },
     "react": {
       "optional": true
+    }
+  },
+  "pmndrs": {
+    "text": {
+      "bitmap": "./bakers/bitmap"
     }
   }
 }

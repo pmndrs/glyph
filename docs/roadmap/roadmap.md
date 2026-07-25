@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T05:27:09Z"
+  at: "2026-07-25T05:47:27Z"
 ---
 
 # Canonical implementation roadmap
@@ -45,8 +45,8 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | ---: | :---: | --- | --- | --- | --- |
 | 0 | ✅ | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
 | 1 | ✅ | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
-| 2 | 🟡 | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
-| 3 | ⬜ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
+| 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
+| 3 | 🟡 | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | ⬜ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
 | 5 | ⬜ | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
 | 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0 and 1 and items 2.1–2.3 are closed. Milestone 2 continues in issue order at active item 2.4.
+Milestones 0–2 are closed. Milestone 3 continues in issue order at active item 3.1.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -91,8 +91,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 2.1 | ✅ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | ✅ | Implement the host-independent font bake request/result core. | M | 2.1 |
 | 2.3 | ✅ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
-| 2.4 | 🟡 | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
-| 3.1 | ⬜ | Implement baked probing, validation, and registration. | M | 2.4 |
+| 2.4 | ✅ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
+| 3.1 | 🟡 | Implement baked probing, validation, and registration. | M | 2.4 |
 | 3.2 | ⬜ | Add the dynamically imported Worker bake path. | M | 3.1 |
 | 3.3 | ⬜ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
 | 4.1 | ⬜ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
@@ -249,7 +249,21 @@ Item 2.2 is closed. Item 2.3 adds the core/raster validators plus the package-ow
 - [x] The bitmap-owned validator covers schema, reciprocal identity, exact strikes, records, pages/KTX2, limits, and one-invalid-field-at-a-time malformed artifacts.
 - [x] Canonical Inter bitmap bytes and synthetic maximum-cardinality/empty identities are pinned and round-trip through the same core used by later hosts.
 
-Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-external, and empty-raster artifacts; the generic composer proves opaque buffer-view rebasing across multiple distinct extension types. Item 2.4 is the active dependency and exposes these same units through the Node API and CLI.
+Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-external, and empty-raster artifacts; the generic composer proves opaque buffer-view rebasing across multiple distinct extension types.
+
+### 2.4 closure checklist
+
+- [x] `@pmndrs/text/bake` exports the filesystem-oriented `bakeFont` and discovery-oriented `bakeProject` Node APIs without adding Node built-ins to browser-safe entry points.
+- [x] The generic `bakeFont` tuple preserves each selected raster package's exact option and packaging types; compile-only fixtures reject an empty bitmap strike tuple and unsupported packaging.
+- [x] `bakeProject` consumes the canonical TypeScript discovery report, groups and deduplicates one source deterministically, and dynamically imports only each already-verified ESM baker entry.
+- [x] The thin native-ESM `pmndrs-text-bake` command covers conventional project defaults, repeatable entry/asset-root options, mirrored output roots, human output, JSON output, help, malformed arguments, and diagnostic exit status.
+- [x] Exact Inter embedded/external goldens, mixed embedded/external raster composition, and repeated project runs prove authoritative byte and output-report determinism.
+- [x] Writes use same-directory exclusive temporary files, file synchronization, atomic rename, cancellation cleanup, source/output overlap checks, unique targets, and single-filename artifact IDs.
+- [x] The completed report records phase and total timing, before/after RSS, explicitly labeled process-lifetime peak RSS, output paths/roles/bytes/hashes, container bytes, and raw/gzip/Brotli transport bytes.
+- [x] Node `Buffer` validation is repeatable and non-mutating; a regression protects SFNT `checksumAdjustment` from Buffer's aliasing `slice` semantics.
+- [x] Package and integration tests cover the public subpath/bin/manifest, exact CLI/API behavior, selected-baker loading, path escape rejection before filesystem mutation, cancellation, and deterministic output mirroring.
+
+Item 2.4 and Milestone 2 are closed. Item 3.1 is active and must validate and register baked assets without making the runtime baker graph reachable on a hit.
 
 Deliver:
 
