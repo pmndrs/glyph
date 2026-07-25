@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:15:06Z"
+  at: "2026-07-25T01:23:19Z"
 ---
 
 # Canonical implementation roadmap
@@ -111,6 +111,17 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 10.2 | ⬜ | Complete release validation, guidance, and migration material. | M | 10.1 |
 
 ## Milestone 0 — accept contracts and versions
+
+### 0.1 closure checklist
+
+- [x] Candidate core and React surfaces are documented in the [API reference](../planning/api-shapes.md#milestone-01-acceptance-evidence).
+- [x] Core font/raster capability inference and positive/negative composition cases have compile-only evidence.
+- [x] Canonical URL forms and invalid source/baked combinations have compile-only evidence.
+- [x] The current root package export is ESM-only and contains no CommonJS condition.
+- [ ] Maintainer explicitly accepts or revises D-001, D-004–009, D-067, D-068, and D-070 in the [decision register](../planning/decision-register.md#product-and-public-api).
+- [ ] Item 0.2 adds the remaining React-prop and package/export contract fixtures after those public choices are accepted.
+
+The checked items establish review evidence only. Item 0.1 remains 🟡 until its maintainer-decision checkbox closes; item 0.2 remains dependency-ordered after it.
 
 Deliver:
 

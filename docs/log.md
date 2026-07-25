@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Governance** — Added an in-place milestone-0.1 acceptance checklist and evidence matrix that distinguish mechanically proven TypeScript/ESM contracts from decisions still awaiting explicit maintainer approval.
 - **Governance** — Added one enforced OKF concept per workspace package; validation now fails for missing, duplicate, misdirected, nonexistent, or source-stale package entries, while deterministic digest generation excludes build outputs and installed dependencies.
 - **Correction** — Confirmed the baker already delegates font parsing to Fontations `read-fonts`/`skrifa`, replaced its custom outline-bounds pen with Skrifa's maintained glyph bounds, and explicitly paused out-of-order milestone-2 expansion until milestones 0–1 close.
 - **Migration** — Upgraded the complete documentation bundle and its repository-local maintenance skill to OKF v0.2: concepts now carry `generated.by`/`generated.at` and frontmatter `sources`, the root declares v0.2, the log uses its reserved structure, and the reusable migration/validation commands reject legacy metadata.

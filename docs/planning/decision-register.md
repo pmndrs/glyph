@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:15:06Z"
+  at: "2026-07-25T01:23:19Z"
 ---
 
 # Decision register
@@ -23,6 +23,8 @@ Status: proposed decisions awaiting maintainer review
 This register records choices, not their full rationale. The linked API, architecture, data contracts, roadmap, and research are authoritative for detail. Accepted choices receive an ADR with the exact decision, alternatives, consequences, and date.
 
 Status vocabulary: **Proposed**, **Experiment**, **Deferred**, **Settled for V0**, **Accepted**.
+
+Implementation and passing fixtures are evidence, not approval. A proposed row changes to **Accepted** only after explicit maintainer review; the roadmap therefore remains open even where a candidate contract already compiles.
 
 ## Product and public API
 
