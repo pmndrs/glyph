@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:23:01Z"
+  at: "2026-07-25T02:42:19Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -160,6 +160,8 @@ The full executable manifest lives beside the font. No fixture may silently foll
 
 ### Static font discovery
 
+Status: ✅ roadmap item 2.1 is implemented and verified behind the future Node host boundary
+
 The Node baker analyzes the TypeScript/JavaScript module graph with a parser and symbol-aware constant evaluator. It never uses regular expressions as the source of truth and never executes application modules. Its target is a `defineFont(fontInput, rasterInput)` call imported from `@pmndrs/text` (including aliased imports), plus the equivalent one-off raw-font/raster form when that form is statically visible.
 
 The analyzer extracts the selected raster package and a JSON-literal options value. It resolves the package's exported baker through the flat `package.json#pmndrs.text` map, then asks that package to canonicalize the descriptor and `rasterKey`. Bitmap `strikes` must be a statically known tuple; aliases to `const` literal tuples are allowed, while broad numbers, environment values, function results, mutation, and other runtime-only values are rejected by TypeScript when typed and diagnosed by the analyzer otherwise.
@@ -178,6 +180,8 @@ Percent-decoding is applied per URL path segment after removing the query and fr
 Dynamic URLs remain legal API values. Static discovery is an optimization that creates the baked sibling before deployment; inability to prove a local source never changes runtime semantics. A user may instead supply the Node API with an explicit local input/output pair when application URL construction cannot be resolved statically.
 
 Fixtures cover literal strings, `URL` objects, module constants, aliased imports, concatenation, templates, stripped absolute domains, dynamic origins with static suffixes, query/fragment removal, percent-encoded filenames, configured roots, ambiguous matches, traversal attempts, missing files, dynamic bitmap strikes, and third-party raster packages.
+
+The executable package-integration suite additionally covers statically visible core/React raw forms, source overrides, baked-only exclusion, immutable shorthand options, CommonJS rejection, and package-escape rejection. It imports the internal analyzer directly; the public `@pmndrs/text/bake` subpath remains gated on the complete Node API in item 2.4.
 
 ### Oracle capture
 

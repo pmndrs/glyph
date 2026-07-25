@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:23:01Z"
+  at: "2026-07-25T02:42:19Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0 and 1 are closed. Milestone 2 resumes in issue order at active item 2.1; the pre-existing 2.2 core remains in progress and does not bypass discovery.
+Milestones 0 and 1 and item 2.1 are closed. Milestone 2 continues in issue order at active item 2.2.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -88,7 +88,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
 | 1.2 | ✅ | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
 | 1.3 | ✅ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
-| 2.1 | 🟡 | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
+| 2.1 | ✅ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | 🟡 | Implement the host-independent font bake request/result core. | M | 2.1 |
 | 2.3 | ⬜ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
 | 2.4 | ⬜ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
@@ -210,6 +210,17 @@ Deliver:
 Exit only when the Figma-backed lab is usable, synthetic and portable-baker targets produce the same validated results through interactive and automated paths, unavailable raster targets remain honestly capability-gated, every oracle can be regenerated deterministically, and the initial live probes pass their zero-retry admission runs. Later milestones extend this harness through public package adapters and real-font scenarios; none creates a parallel benchmark or demo architecture, and no user-visible slice closes without its capability-appropriate automated or admitted local product-E2E case.
 
 ## Milestone 2 — font bake core, bitmap baker package, and Node host
+
+### 2.1 closure checklist
+
+- [x] TypeScript 7 parser and symbol APIs identify aliased `defineFont`, core `Text`, and React `Text` raw forms without regular-expression matching or application-module execution.
+- [x] The immutable evaluator follows local/imported `const` values, concatenations, templates, URL objects, source overrides, JSON raster options, and baked-only inputs.
+- [x] Module-relative, root-relative, absolute-web, and dynamic-origin path suffixes resolve conservatively through canonical configured asset roots.
+- [x] Query/fragment removal, segment-wise percent decoding, traversal rejection, missing files, ambiguity, and exact resolved spelling have executable fixtures.
+- [x] Third-party raster selection is limited to the exact imported package and an exported ESM baker entry that resolves inside that package.
+- [x] Package integration tests cover successful mappings plus dynamic input, dynamic strikes, unsafe paths, malformed manifests, CommonJS targets, and package escape attempts.
+
+Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the complete `@pmndrs/text/bake` Node API and CLI; item 2.2 is the active dependency.
 
 Deliver:
 

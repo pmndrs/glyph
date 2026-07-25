@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm test:types && node --test tests/package/*.test.mjs",
+    "test": "pnpm build && pnpm test:types && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"
   },
   "peerDependencies": {
@@ -35,9 +35,13 @@
   },
   "devDependencies": {
     "@react-three/fiber": "9.6.1",
+    "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.1",
     "react": "19.2.8",
     "three": "0.185.1"
+  },
+  "dependencies": {
+    "typescript": "7.0.2"
   }
 }

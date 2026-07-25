@@ -92,10 +92,17 @@ importers:
         version: 7.0.2
 
   packages/text:
+    dependencies:
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
     devDependencies:
       '@react-three/fiber':
         specifier: 9.6.1
         version: 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
       '@types/react':
         specifier: 19.2.14
         version: 19.2.14

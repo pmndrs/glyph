@@ -32,7 +32,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:15:06Z"
+  at: "2026-07-25T02:42:19Z"
 ---
 
 # Font baker implementation status
@@ -54,7 +54,8 @@ Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not s
 | Product end-to-end | ⬜ | The package test stops at the produced GLB and is not presented as real-product coverage. | Exercise discovery/load, Node/Worker parity, shaping, layout, and rendering through public APIs in `apps/benchmarks`. |
 | TypeScript verification | ✅ | Generated/embedded ABI equality, zero-import, structured-error handling, declaration generation, package build, and workspace type checks pass with the pinned workspace dependencies. | Keep these checks mandatory as public host surfaces are added. |
 | Roadmap item 2.2 | 🟡 | The core request/result path and canonical core artifact have an implementation, but fixture and host parity evidence is incomplete. | Complete the 2.2 fixture gate before marking it ✅. |
-| Roadmap items 2.1 and 2.3–2.4 | ⬜ | Static discovery, bitmap composition, the public Node host, filesystem output, and CLI are intentionally absent. | Follow the canonical dependency and exit gates. |
+| Roadmap item 2.1 | ✅ | `@pmndrs/text` now has a TypeScript 7 AST/symbol analyzer with the complete static-source, raw-form, raster-manifest, path-safety, and negative fixture matrix; it remains internal until the complete Node host ships. | Reuse its report in item 2.4 without creating a second manifest or analyzer. |
+| Roadmap items 2.3–2.4 | ⬜ | Bitmap composition, the public Node host, filesystem output, and CLI remain intentionally absent. | Follow the canonical dependency and exit gates. |
 | Runtime shaping (milestone 4) | ⬜ | This package bakes shaping input; it does not yet embed or call HarfRust for runtime shaping. | Start only at the milestone 4 gate. |
 
 The TypeScript package is intentionally internal. The public API remains the planned `@pmndrs/text/bake` Node subpath, and the runtime path remains a dynamically imported Worker host. Both will reuse this portable core without exposing its raw allocation protocol.
