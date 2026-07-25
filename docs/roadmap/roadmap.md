@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:21:40Z"
+  at: "2026-07-25T02:23:01Z"
 ---
 
 # Canonical implementation roadmap
@@ -44,7 +44,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | Order | Status | Milestone | Effort | Depends on | Exit result |
 | ---: | :---: | --- | --- | --- | --- |
 | 0 | ✅ | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
-| 1 | 🟡 | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
+| 1 | ✅ | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
 | 2 | 🟡 | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | ⬜ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | ⬜ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestone 2 and item 2.2 show 🟡 because implementation exists, but that work was started before its declared dependencies closed. It is paused: no additional milestone-2 scope proceeds until milestones 0 and 1 pass their exit gates, after which work resumes in issue order at 2.1. Existing code is corrective-only until then.
+Milestones 0 and 1 are closed. Milestone 2 resumes in issue order at active item 2.1; the pre-existing 2.2 core remains in progress and does not bypass discovery.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -87,8 +87,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 0.3 | ✅ | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
 | 1.2 | ✅ | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
-| 1.3 | 🟡 | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
-| 2.1 | ⬜ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
+| 1.3 | ✅ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
+| 2.1 | 🟡 | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | 🟡 | Implement the host-independent font bake request/result core. | M | 2.1 |
 | 2.3 | ⬜ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
 | 2.4 | ⬜ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
@@ -181,9 +181,9 @@ Item 1.2 is closed. Item 1.3 is now the active dependency; it replaces local/con
 - [x] A differential test proves core shaping equality and fixes the exact unsafe-to-concat flag-delta inventory.
 - [x] The deterministic HTML/CSS reference records exact font/text/style/viewport/browser inputs and a hashed PNG.
 - [x] Pin the remaining bitmap, paragraph, GLB, malformed-input, GPU-readback, maximum-cardinality, and empty identity contract fixtures.
-- [ ] Admit the no-retry Vitexec probe with the required repetition, fresh-lifecycle, and environment evidence.
+- [x] Admit the no-retry Vitexec probe with the required repetition, fresh-lifecycle, and environment evidence.
 
-Item 1.3 remains open until the last two gates close; no milestone-2 expansion resumes before then.
+Item 1.3 and Milestone 1 are closed. The admission record binds commit `016078cecee3daaf90243c1473aa9c0168fadbc5`, the probe hash, 100 zero-retry executions, 10 fresh browser/server lifecycles, exact environment metadata, and two intentional-failure controls. Its GPU-friendly Chromium runs report WebGPU availability but correctly make no GPU-rendering claim before a renderer exists. Item 2.1 is now active.
 
 Deliver:
 

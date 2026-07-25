@@ -31,12 +31,12 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:10:04Z"
+  at: "2026-07-25T02:23:01Z"
 ---
 
 # Tooling and fixtures for the first pipeline
 
-Status: 🟡 active; canonical font, shaping, and browser-reference fixtures are pinned
+Status: ✅ first-pipeline source contracts and initial harness admission are pinned
 Goal: make one-font results reproducible before expanding implementation surface
 
 ## Reference font

@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 0,
+  "id": "harness-v0",
+  "appCommit": "016078cecee3daaf90243c1473aa9c0168fadbc5",
+  "probe": {
+    "file": "./vitexec/admission.probe.ts",
+    "sha256": "77d6620a5eac677a62301b271b28d0c638dab184423ee518681947a07b29c92b"
+  },
+  "policy": {
+    "retries": 0,
+    "executions": 100,
+    "freshBrowserServerLifecycles": 10,
+    "executionsPerLifecycle": 10
+  },
+  "negativeControls": {
+    "wrongExpectation": "failed-as-required",
+    "withheldCompletion": "watchdog-failed-as-required"
+  },
+  "capabilityClaim": {
+    "workload": "deterministic-browser-runner",
+    "gpuWorkload": false,
+    "note": "GPU-friendly Chromium launch records WebGPU availability but does not claim a GPU rendering pass."
+  },
+  "lifecycles": [
+    {
+      "index": 0,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 1,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 2,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 3,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 4,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 5,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 6,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 7,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 8,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    },
+    {
+      "index": 9,
+      "schemaVersion": 0,
+      "executions": 10,
+      "uniqueCompletions": 10,
+      "environment": {
+        "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+        "hardwareConcurrency": 10,
+        "webgpu": true,
+        "crossOriginIsolated": false
+      }
+    }
+  ]
+}

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:6937d90400d543c988022ca346657da926100a98b156412af4da5f686077ab8d"
+source_digest: "sha256:cbbbd742ab3d71b1f78645af431ef832776c96f93ce90994f0e7504a6a87aab4"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:21:40Z"
+  at: "2026-07-25T02:24:01Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -26,6 +26,8 @@ Status: 🟡 usable harness shell; rendering targets not implemented
 This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, and real portable-baker target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override. Its independent package-size lane measures public core JavaScript, baker JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders.
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. The first real rendered font frame must land here after its loader, shaping, paragraph, and bitmap dependencies close.
+
+The initial deterministic browser probe is admitted with a checked-in record: 100 executions across 10 fresh GPU-friendly Chromium/Vite lifecycles, zero retries/failures, unique causal completion identities, and wrong-expectation plus withheld-completion negative controls. The record reports WebGPU availability while explicitly declining to claim a GPU workload before rendering lands.
 
 ## Package scripts
 

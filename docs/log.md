@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Verification** — Closed roadmap item 1.3 and Milestone 1 after 100 zero-retry deterministic UI executions across 10 fresh GPU-friendly Chromium/Vite lifecycles; every lifecycle reported 10 unique causal completions and WebGPU availability, both negative controls failed as required, and the evidence explicitly makes no pre-renderer GPU-workload claim.
 - **Implementation** — Added executable milestone-1 source contracts for bitmap strikes, paragraph layout, GLB, malformed input, and GPU readback; proved the 65,535-glyph dense multi-page record boundary and empty multi-font/multi-raster identity; added causal UI-run admission and intentional-failure probes without readiness timers or retries.
 - **Implementation** — Pinned licensed Inter Regular 4.1 bytes and provenance; added deterministic HarfRust 0.12.0 and exact-version-gated HarfBuzz 13.0.0 oracle producers, explicit UTF-16 corpus/differential evidence, a hashed Chromium HTML/CSS visual reference, mandatory package E2E, and the shared browser baker scenario over the canonical fixture.
 - **Implementation** — Closed roadmap item 1.2 with one strict registry execution path shared by interactive, Vitest, Vitexec, and browser-headless surfaces; added stdout/file raw export and nonzero independent core/baker JavaScript and Wasm size reports with explicit unavailable future entries.

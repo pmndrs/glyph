@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 
 import { describe, expect, it } from 'vitest'
 
@@ -62,5 +63,28 @@ describe('milestone-one fixture contracts', () => {
       batchCount: 0,
       crossFontGlyphAliasing: false,
     })
+  })
+
+  it('keeps the admission record bound to the exact causal probe', async () => {
+    const record = JSON.parse(
+      await readFile(new URL('../../fixtures/admission/harness-v0.json', import.meta.url), 'utf8'),
+    )
+    const probe = await readFile(new URL('../../vitexec/admission.probe.ts', import.meta.url))
+
+    expect(createHash('sha256').update(probe).digest('hex')).toBe(record.probe.sha256)
+    expect(record.policy).toEqual({
+      retries: 0,
+      executions: 100,
+      freshBrowserServerLifecycles: 10,
+      executionsPerLifecycle: 10,
+    })
+    expect(record.lifecycles).toHaveLength(10)
+    expect(
+      record.lifecycles.every(
+        (lifecycle: { executions: number; uniqueCompletions: number }) =>
+          lifecycle.executions === 10 && lifecycle.uniqueCompletions === 10,
+      ),
+    ).toBe(true)
+    expect(record.capabilityClaim.gpuWorkload).toBe(false)
   })
 })
