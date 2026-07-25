@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T12:30:58Z"
+  at: "2026-07-25T14:19:44Z"
 ---
 
 # Font payload budget
@@ -57,17 +57,18 @@ Measured source revisions:
 - Three Flatland `main`: `c596ac2313e33cace825fe197a6d730269019175`;
 - Three Flatland `feat/uikit-fork`: `2935a89fcd9999e8a8b3d3b733f7f7302285cd60`.
 
-Measurements read the checked-in TTF/GLB bytes and their accessor ranges directly. Compression figures use gzip and Brotli quality 11 over the complete file. Derived Slug GPU figures apply the texture formats and power-of-two packing rules in the reviewed fork; modeled atlas figures are identified separately.
+Measurements read the checked-in TTF/GLB bytes and their accessor ranges directly. Legacy/Latin fixture compression figures use gzip and Brotli quality 11 over the complete file; the full 16 MiB Noto lane uses explicit gzip 9 and Brotli 9 to keep generation memory bounded. Derived Slug GPU figures apply the texture formats and power-of-two packing rules in the reviewed fork; modeled atlas figures are identified separately.
 
 | Fixture | Kind | Coverage |
 | --- | --- | ---: |
 | Inter Regular 4.1 | UI font | 2,937 source; 907 legacy Slug glyphs |
+| Noto Sans CJK JP 2.004 | Shaping/paragraph conformance | 65,535 source glyphs; no raster |
 | Font Awesome Solid | Icon font | 1,403 source; 350 legacy Slug glyphs |
 | Lucide | SVG icons | 1,594 baked shapes |
 
 Inter exposes the difference between source/shaping coverage and a smaller raster artifact. Font Awesome combines trivial PUA shaping with substantial outline complexity. The checked-in Lucide bake is a realistic full-library Slug stress case.
 
-The first integration fixture remains one pinned Inter file. Font Awesome and Lucide are payload/tooling fixtures; they do not expand the first vertical slice into automatic icon discovery or a second shaping system.
+The first rendering fixture remains pinned Inter. Noto is the pre-render CJK shaping/paragraph conformance fixture; Font Awesome and Lucide are payload/tooling fixtures and do not expand the first rendering slice into automatic icon discovery.
 
 ## Shared glyph and shaping data
 
@@ -77,15 +78,17 @@ V0 uses the closed [`opentype-sfnt-harfrust-v0`](shaping-data-contract.md) profi
 | --- | ---: | ---: | ---: | ---: |
 | Inter 4.1, 2,937 glyphs | 411,640 B | 147,192 B | 23,864 B | 171,056 B (167.0 KiB) |
 | Font Awesome, 1,403 glyphs | 426,112 B | 24,624 B | 11,400 B | 36,024 B (35.2 KiB) |
+| Noto Sans CJK JP 2.004, 65,535 glyphs | 16,467,736 B | 1,006,900 B | 532,472 B | 1,539,372 B (1.47 MiB) |
 
-The Inter row measures the canonical V0 SFNT plus font-function views outside the portable Wasm core. Font Awesome remains the earlier shaping-only proxy until that licensed fixture enters the canonical baker lane:
+The Inter and Noto rows measure the canonical V0 SFNT plus font-function views outside the portable Wasm core. Font Awesome remains the earlier shaping-only proxy until that licensed fixture enters the canonical baker lane:
 
 | Fixture | Full source gzip | Full source Brotli | V0/proxy shaping gzip | V0/proxy shaping Brotli |
 | --- | ---: | ---: | ---: | ---: |
 | Inter 4.1 | 200,540 B | 157,517 B | 75,789 B | 55,586 B |
 | Font Awesome | 172,729 B | 147,594 B | 11,234 B | 8,017 B |
+| Noto Sans CJK JP 2.004 (gzip 9 / Brotli 9) | 13,629,545 B | 12,365,597 B | 654,925 B | 514,547 B |
 
-The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. The mandatory Inter fixture now proves the complete checked-in HarfRust corpus is identical between the source and reduced SFNT; the later runtime shaping ABI supplies the third registration path. Every bake report lists directory, per-table, extents, and availability bytes.
+The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. Inter and Noto prove their complete checked-in HarfRust corpora are identical between source and reduced SFNT; Noto additionally agrees with HarfBuzz 13 on every field. Every bake report lists directory, per-table, extents, and availability bytes. The complete Noto core GLB is 1,540,460 raw bytes, 655,920 gzip-9 bytes, and 515,421 Brotli-9 bytes.
 
 Lucide is not a font and has no shaping payload. Its shared records are icon identity, view box, fill/paint, and shape indexes. The existing artifact spends 237,704 B on GLB JSON, largely for named icon metadata; the pmndrs format should measure a compact binary name/index representation rather than inherit that JSON cost by default.
 

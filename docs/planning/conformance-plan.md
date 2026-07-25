@@ -37,13 +37,13 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T12:30:58Z"
+  at: "2026-07-25T14:19:44Z"
 ---
 
 # Shaping and layout conformance plan
 
-Status: proposed  
-Purpose: define correctness before implementation or optimization.
+Status: active; executable through roadmap item 5.4
+Purpose: define correctness before each implementation or optimization.
 
 ## Conformance target
 
@@ -174,7 +174,7 @@ call; an unrelated subsequent shaper call proves the layout owns its arrays.
 | Controls | LF, CRLF, paragraph separator, tabs policy, default ignorables, ZWJ/ZWNJ, soft hyphen |
 | Invalid input | unpaired UTF-16 surrogates and replacement policy at JS boundary |
 
-The CJK row is split across two gates. Roadmap item 5.4 requires horizontal CJK source/reduced shaping, HarfBuzz agreement, UTF-16 clustering, language-sensitive substitutions, variation handling, and paragraph layout before rendering starts. It does not require CJK raster coverage. Milestone 12 later combines large-coverage CJK raster paging with icon paging, residency, and payload stress; that later work does not block the Latin-first bitmap/MSDF/Slug V1 renderer gate. Before those raster contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK rendering support.
+The CJK row is split across two gates. Roadmap item 5.4 now proves exact horizontal CJK source/reduced HarfRust and HarfBuzz agreement, UTF-16 clustering, language-sensitive substitutions, variation handling, and paragraph layout. It conditionally retains source `BASE`, `VORG`, `vhea`, and `vmtx` without fabrication while leaving vertical layout deferred. It does not require CJK raster coverage. Milestone 12 later combines large-coverage CJK raster paging with icon paging, residency, and payload stress; that later work does not block the Latin-first bitmap/MSDF/Slug V1 renderer gate. Before those raster contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK rendering support.
 
 ### Large-coverage page invariants
 
@@ -308,11 +308,11 @@ Status key: ✅ available · 🟡 partial or conditional · ⬜ not started
 | Layer | Status | Required evidence | Canonical owner |
 | --- | :---: | --- | --- |
 | Unit | 🟡 | Deterministic tests for parsing, arithmetic, bounds, hashing, serialization, error mapping, and other isolated policy. Tests may use generated values and inspect package internals. | The package that owns the implementation. |
-| Package integration | 🟡 | The baker, bitmap generator, loader, and shaper compiled artifacts are exercised through public package boundaries with generated ABI equality, zero Wasm imports, direct-memory round trips, structured failures, deterministic bytes/results, and format validation. Layout and render packages remain open. | The package that owns each boundary. |
-| Product end-to-end | 🟡 | The pinned source flows through the real browser/public Wasm baker, Worker loader, registry, and one-call HarfRust shaping paths. Layout and rendering remain open. | The shared interactive/headless app under `apps/benchmarks`. |
-| Differential conformance | 🟡 | Pinned HarfRust/HarfBuzz source oracles have field-level comparison and an exact flag-delta inventory; every checked-in Latin-first case matches the reduced SFNT and registered-font Wasm paths through both batch calls. The broader required script matrix remains open. | The conformance runner and fixture corpus. |
-| Fuzzing | 🟡 | Fixed-seed Rust source, bitmap/loader artifact, and raw shaper-request mutations run twice in normal CI. A pinned cargo-fuzz/libFuzzer target exercises the public bake boundary; minimized findings become checked-in fixtures. Layout and renderer targets remain open. | Each package owns its target and regression corpus. |
-| Performance regression | 🟡 | Correctness-passing browser scenarios now retain baker, loader, and shaper timings/payload/memory/call evidence; reviewed noise thresholds, paragraph, and renderer baselines remain open. | The shared benchmark scenario registry and runners. |
+| Package integration | 🟡 | The baker, bitmap generator, loader, shaper, and paragraph engine are exercised through public package boundaries with generated ABI equality, zero Wasm imports, direct-memory round trips, structured failures, deterministic bytes/results, and format validation. Rendering remains open. | The package that owns each boundary. |
+| Product end-to-end | 🟡 | Inter, Amiri, and Noto CJK flow through real public baker/loader/registry/shaper/paragraph paths with exact Node, Chromium, and GPU-enabled Vitexec evidence. Rendering remains open. | The shared interactive/headless app under `apps/benchmarks`. |
+| Differential conformance | 🟡 | Pinned HarfRust/HarfBuzz source oracles compare every glyph field; Inter records its exact flag inventory while Amiri and all thirteen CJK cases agree exactly. Each also matches the reduced SFNT, and runtime Inter/CJK paths use registered GLB views. Rendering-era script additions remain open. | The conformance runner and fixture corpus. |
+| Fuzzing | 🟡 | Fixed-seed Rust source, bitmap/loader artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations run twice in normal CI. Pinned cargo-fuzz/libFuzzer exercises the public bake boundary; minimized findings become checked-in fixtures. Renderer targets remain open. | Each package owns its target and regression corpus. |
+| Performance regression | 🟡 | Correctness-passing browser scenarios retain baker, loader, shaper, paragraph, bidi/policy, and CJK timings/payload/memory/call evidence; reviewed noise thresholds and renderer baselines remain open. | The shared benchmark scenario registry and runners. |
 
 Every implementation change adds the lowest-cost unit regression that identifies the defect. A package-boundary change also adds or updates an integration case. Any user-visible vertical slice must add a scenario to the shared benchmark registry and an end-to-end assertion in the appropriate automated or local live-probe lane before its roadmap item can be marked complete. The interactive lab, automated runner, and local probes consume the same scenario contract; duplicating the workload in an ad hoc demo or benchmark script does not satisfy the gate.
 

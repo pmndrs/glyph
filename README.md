@@ -128,7 +128,7 @@ Select the preview to open the editable [benchmark harness wireframe in Figma](h
 
 The benchmark harness is the first executable product surface, not a reporting layer added afterward. Every later implementation enters through its target/scenario contracts, and the first bitmap frame is rendered in that harness. Bitmap is the easiest end-to-end proof, not the eventual universal default. The package does not ship until bitmap, MSDF, and Slug pass their gates. See the [canonical roadmap](docs/roadmap/roadmap.md) for dependencies, deliverables, issue-sized work, and exit criteria.
 
-After that Latin-first V1 gate, the first additive milestone lands CJK and icons together over the paging contract already protected by V0 fixtures; color emoji remains the following independent milestone.
+After that Latin-first V1 gate, the first additive milestone expands the already-proven horizontal CJK shaping/layout fixture into large-coverage CJK and icon raster paging; color emoji remains the following independent milestone.
 
 ### uikit and layout integrations
 

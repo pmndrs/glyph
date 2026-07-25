@@ -1,0 +1,746 @@
+{
+  "schemaVersion": 0,
+  "engine": {
+    "name": "HarfBuzz",
+    "version": "13.0.0",
+    "commit": "a0fc099681a69ae40665fbea74982a2e9d7a5260",
+    "sourceArchiveSha256": "1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a"
+  },
+  "fontFixture": "noto-sans-cjk-jp-regular-v0",
+  "clusterUnit": "utf16",
+  "positionUnit": "font-unit",
+  "cases": [
+    {
+      "id": "locl-zh-hans",
+      "text": "骨直辺",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "zh-Hans",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45133,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 27874,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 40041,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "locl-zh-hant",
+      "text": "骨直辺",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "zh-Hant",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45134,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 27874,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 40042,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "locl-ja",
+      "text": "骨直辺",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "ja",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45132,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 27873,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 40040,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "locl-ko",
+      "text": "骨直辺",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "ko",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45132,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 27873,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 40040,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "simplified-chinese",
+      "text": "骨骼发展，标点测试。",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "zh-Hans",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45133,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 45191,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 11872,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 15844,
+          "cluster": 3,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 59058,
+          "cluster": 4,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 21085,
+          "cluster": 5,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 24992,
+          "cluster": 6,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 23422,
+          "cluster": 7,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 38482,
+          "cluster": 8,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 1398,
+          "cluster": 9,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "traditional-chinese",
+      "text": "骨骼發展，標點測試。",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "zh-Hant",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45134,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 45192,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 27690,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 15844,
+          "cluster": 3,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 63148,
+          "cluster": 4,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 22022,
+          "cluster": 5,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 47045,
+          "cluster": 6,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 23790,
+          "cluster": 7,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 37746,
+          "cluster": 8,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 63146,
+          "cluster": 9,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "japanese-kana-kanji",
+      "text": "骨格かなカナ",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hira",
+        "language": "ja",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 45132,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 21170,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 1470,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 2
+        },
+        {
+          "glyphId": 1501,
+          "cluster": 3,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 2
+        },
+        {
+          "glyphId": 1564,
+          "cluster": 4,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 2
+        },
+        {
+          "glyphId": 1595,
+          "cluster": 5,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 2
+        }
+      ]
+    },
+    {
+      "id": "korean-precomposed",
+      "text": "한글과漢字",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hang",
+        "language": "ko",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 58199,
+          "cluster": 0,
+          "xAdvance": 920,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 48123,
+          "cluster": 1,
+          "xAdvance": 920,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 47863,
+          "cluster": 2,
+          "xAdvance": 920,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 58935,
+          "cluster": 3,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 15364,
+          "cluster": 4,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "korean-jamo",
+      "text": "한글과漢字",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hang",
+        "language": "ko",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 58199,
+          "cluster": 0,
+          "xAdvance": 920,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 48123,
+          "cluster": 3,
+          "xAdvance": 920,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 47863,
+          "cluster": 6,
+          "xAdvance": 920,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 58935,
+          "cluster": 7,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 15364,
+          "cluster": 8,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "supplementary-han",
+      "text": "甲𠀋乙",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "ja",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 27067,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 59477,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 9601,
+          "cluster": 3,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "standardized-variations",
+      "text": "、︀。︁",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "ja",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 1397,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 63146,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "ideographic-variation",
+      "text": "禰󠄀",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "ja",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 61979,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    },
+    {
+      "id": "punctuation-space",
+      "text": "甲、乙。丙（丁）　戊",
+      "segment": {
+        "direction": "ltr",
+        "script": "Hani",
+        "language": "zh-Hans",
+        "features": []
+      },
+      "glyphs": [
+        {
+          "glyphId": 27067,
+          "cluster": 0,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 1397,
+          "cluster": 1,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 9601,
+          "cluster": 2,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 1398,
+          "cluster": 3,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 9518,
+          "cluster": 4,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 59054,
+          "cluster": 5,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 9482,
+          "cluster": 6,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 59055,
+          "cluster": 7,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 1396,
+          "cluster": 8,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        },
+        {
+          "glyphId": 18511,
+          "cluster": 9,
+          "xAdvance": 1000,
+          "yAdvance": 0,
+          "xOffset": 0,
+          "yOffset": 0,
+          "flags": 0
+        }
+      ]
+    }
+  ]
+}

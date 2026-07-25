@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T13:06:23Z"
+  at: "2026-07-25T14:19:44Z"
 ---
 
 # Decision register
@@ -66,6 +66,7 @@ D-004/005 follow the established uikit split: the core owns every feature and Re
 | D-069 | uikit owns an incremental adapter from its current `CustomLayouting` and content-box signals; no uikit, Yoga, or Preact Signal types enter core. | Accepted |
 | D-072 | The JavaScript paragraph engine owns UAX #9, #14, #24, and #29 using Unicode data pinned to the core font provenance version. | Accepted |
 | D-085 | Roadmap item 5.4 makes horizontal CJK bake, source/reduced HarfRust equivalence, independent HarfBuzz agreement, and paragraph layout a pre-render gate; raster paging, CJK rendering coverage, fallback, and vertical layout remain separate later work. | Accepted |
+| D-088 | V0 conditionally retains source `BASE`, `VORG`, `vhea`, and `vmtx` tables without fabrication so baking does not destroy vertical-form data; vertical shaping and paragraph layout remain deferred. | Accepted |
 
 The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [uikit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
 
@@ -142,7 +143,7 @@ The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md)
 
 ## Decisions required before implementation
 
-1. ✅ The maintainer accepted all contract decisions and acceptance criteria through roadmap item 3.3; deferred and experiment rows retain those lifecycle states.
+1. ✅ The maintainer accepted all contract decisions and acceptance criteria through roadmap item 5.4; deferred and experiment rows retain those lifecycle states.
 2. ✅ HarfRust, HarfBuzz, Unicode, glTF schema, validator, ABI, format, and initial generator versions are fixed in the [version contract](version-contract.md).
 3. ⬜ Assign an authorized maintainer to submit the accepted provisional `PMNDRS` prefix request.
-4. ⬜ Pin the first font fixture and target browser/GPU matrix in milestone 1.
+4. ✅ Inter Regular 4.1 and the target Chromium/GPU matrix are pinned; Amiri and Noto CJK add complex-script and universality evidence without changing the first rendering fixture.

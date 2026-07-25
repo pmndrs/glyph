@@ -1,0 +1,101 @@
+{
+  "targetId": "cjk-universality",
+  "scenarioId": "cjk-universality",
+  "status": "passed",
+  "validation": "3/3 exact CJK corpus + horizontal paragraph outputs",
+  "measurements": [
+    {
+      "sample": 0,
+      "durationMs": 0.800000011920929,
+      "outputBytes": 10622,
+      "hash": "a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68",
+      "metrics": {
+        "sourceUtf16Units": 208,
+        "corpusCaseCount": 13,
+        "corpusGlyphCount": 64,
+        "paragraphCaseCount": 4,
+        "layoutCount": 12,
+        "directShapeBoundaryCrossings": 1,
+        "paragraphShapeBoundaryCrossings": 4,
+        "reshapeBoundaryCrossings": 0,
+        "planCount": 8,
+        "retainedFontBytes": 1539372,
+        "wasmMemoryBytes": 4587520,
+        "sourceFontBytes": 16467736,
+        "artifactBytes": 1540460,
+        "shapingPayloadRawBytes": 1539372,
+        "shapingPayloadGzipBytes": 654925,
+        "shapingPayloadBrotliBytes": 514547,
+        "coldBakeMs": 574.5,
+        "coldRegistrationMs": 95.30000001192093,
+        "coldShaperInitializationMs": 3.0999999940395355
+      }
+    },
+    {
+      "sample": 1,
+      "durationMs": 0.699999988079071,
+      "outputBytes": 10622,
+      "hash": "a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68",
+      "metrics": {
+        "sourceUtf16Units": 208,
+        "corpusCaseCount": 13,
+        "corpusGlyphCount": 64,
+        "paragraphCaseCount": 4,
+        "layoutCount": 12,
+        "directShapeBoundaryCrossings": 1,
+        "paragraphShapeBoundaryCrossings": 4,
+        "reshapeBoundaryCrossings": 0,
+        "planCount": 8,
+        "retainedFontBytes": 1539372,
+        "wasmMemoryBytes": 4587520,
+        "sourceFontBytes": 16467736,
+        "artifactBytes": 1540460,
+        "shapingPayloadRawBytes": 1539372,
+        "shapingPayloadGzipBytes": 654925,
+        "shapingPayloadBrotliBytes": 514547,
+        "coldBakeMs": 574.5,
+        "coldRegistrationMs": 95.30000001192093,
+        "coldShaperInitializationMs": 3.0999999940395355
+      }
+    },
+    {
+      "sample": 2,
+      "durationMs": 0.5999999940395355,
+      "outputBytes": 10622,
+      "hash": "a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68",
+      "metrics": {
+        "sourceUtf16Units": 208,
+        "corpusCaseCount": 13,
+        "corpusGlyphCount": 64,
+        "paragraphCaseCount": 4,
+        "layoutCount": 12,
+        "directShapeBoundaryCrossings": 1,
+        "paragraphShapeBoundaryCrossings": 4,
+        "reshapeBoundaryCrossings": 0,
+        "planCount": 8,
+        "retainedFontBytes": 1539372,
+        "wasmMemoryBytes": 4587520,
+        "sourceFontBytes": 16467736,
+        "artifactBytes": 1540460,
+        "shapingPayloadRawBytes": 1539372,
+        "shapingPayloadGzipBytes": 654925,
+        "shapingPayloadBrotliBytes": 514547,
+        "coldBakeMs": 574.5,
+        "coldRegistrationMs": 95.30000001192093,
+        "coldShaperInitializationMs": 3.0999999940395355
+      }
+    }
+  ],
+  "medianMs": 0.699999988079071,
+  "p95Ms": 0.800000011920929,
+  "minMs": 0.5999999940395355,
+  "maxMs": 0.800000011920929,
+  "outputBytes": 10622,
+  "completedAt": "2026-07-25T14:09:40.674Z",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  }
+}

@@ -4,3 +4,4 @@ dist/
 target/
 *.tsbuildinfo
 coverage/
+apps/benchmarks/.cache/

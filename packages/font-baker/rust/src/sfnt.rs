@@ -30,11 +30,15 @@ const REQUIRED_TABLES: [Tag; 6] = [
     Tag::new(b"hmtx"),
     Tag::new(b"OS/2"),
 ];
-const OPTIONAL_TABLES: [Tag; 4] = [
+const OPTIONAL_TABLES: [Tag; 8] = [
+    Tag::new(b"BASE"),
     Tag::new(b"GDEF"),
     Tag::new(b"GSUB"),
     Tag::new(b"GPOS"),
+    Tag::new(b"VORG"),
     Tag::new(b"kern"),
+    Tag::new(b"vhea"),
+    Tag::new(b"vmtx"),
 ];
 const VARIABLE_TABLES: [Tag; 8] = [
     Tag::new(b"fvar"),
@@ -346,6 +350,9 @@ fn overflow() -> BakeError {
 mod tests {
     use super::*;
 
+    const INTER: &[u8] =
+        include_bytes!("../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+
     #[test]
     fn checksum_pads_partial_words() {
         assert_eq!(checksum(&[1, 2, 3]), 0x0102_0300);
@@ -357,5 +364,79 @@ mod tests {
             encode_bounds([-1.25, -2.5, 3.25, 4.5]).unwrap(),
             [-2, -3, 4, 5]
         );
+    }
+
+    #[test]
+    fn optional_cjk_layout_tables_are_absent_when_the_source_omits_them() {
+        let payload = build_shaping_payload(INTER, 0).unwrap();
+        let retained_tags = payload
+            .report
+            .tables
+            .iter()
+            .map(|table| table.tag.as_str())
+            .collect::<Vec<_>>();
+
+        for tag in ["BASE", "VORG", "vhea", "vmtx"] {
+            assert!(!retained_tags.contains(&tag));
+        }
+    }
+
+    #[test]
+    fn optional_cjk_layout_tables_survive_as_exact_bounded_views() {
+        let mut source = INTER.to_vec();
+        let substitutions = [
+            (*b"cvt ", *b"BASE"),
+            (*b"fpgm", *b"vhea"),
+            (*b"gasp", *b"vmtx"),
+            (*b"name", *b"VORG"),
+        ];
+        let expected = substitutions
+            .map(|(source_tag, retained_tag)| {
+                let record = table_record(&source, source_tag);
+                let offset = read_u32(&source[record + 8..record + 12]) as usize;
+                let length = read_u32(&source[record + 12..record + 16]) as usize;
+                let bytes = source[offset..offset + length].to_vec();
+                source[record..record + 4].copy_from_slice(&retained_tag);
+                (Tag::new(&retained_tag), bytes)
+            })
+            .to_vec();
+
+        let payload = build_shaping_payload(&source, 0).unwrap();
+        let reduced = FontRef::new(&payload.sfnt).unwrap();
+        for (tag, expected_bytes) in expected {
+            assert_eq!(
+                reduced.table_data(tag).unwrap().as_bytes(),
+                expected_bytes,
+                "{tag} bytes must survive without interpretation"
+            );
+        }
+        assert_eq!(
+            payload.report.sfnt_directory_bytes,
+            12 + payload.report.tables.len() * 16
+        );
+        assert_eq!(
+            payload
+                .report
+                .tables
+                .iter()
+                .map(|table| table.tag.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "BASE", "GDEF", "GPOS", "GSUB", "OS/2", "VORG", "cmap", "head", "hhea", "hmtx",
+                "maxp", "vhea", "vmtx"
+            ]
+        );
+    }
+
+    fn table_record(font: &[u8], wanted: [u8; 4]) -> usize {
+        let count = u16::from_be_bytes(font[4..6].try_into().unwrap());
+        (0..usize::from(count))
+            .map(|index| 12 + index * 16)
+            .find(|record| font[*record..*record + 4] == wanted)
+            .unwrap()
+    }
+
+    fn read_u32(bytes: &[u8]) -> u32 {
+        u32::from_be_bytes(bytes.try_into().unwrap())
     }
 }

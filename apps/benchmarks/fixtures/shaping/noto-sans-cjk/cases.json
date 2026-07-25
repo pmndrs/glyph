@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 0,
+  "fontFixture": "noto-sans-cjk-jp-regular-v0",
+  "clusterUnit": "utf16",
+  "defaults": {
+    "direction": "ltr",
+    "script": "Hani",
+    "language": "ja",
+    "features": []
+  },
+  "cases": [
+    {
+      "id": "locl-zh-hans",
+      "text": "骨直辺",
+      "utf16Length": 3,
+      "script": "Hani",
+      "language": "zh-Hans",
+      "codePoints": ["U+9AA8@0", "U+76F4@1", "U+8FBA@2"]
+    },
+    {
+      "id": "locl-zh-hant",
+      "text": "骨直辺",
+      "utf16Length": 3,
+      "script": "Hani",
+      "language": "zh-Hant",
+      "codePoints": ["U+9AA8@0", "U+76F4@1", "U+8FBA@2"]
+    },
+    {
+      "id": "locl-ja",
+      "text": "骨直辺",
+      "utf16Length": 3,
+      "script": "Hani",
+      "language": "ja",
+      "codePoints": ["U+9AA8@0", "U+76F4@1", "U+8FBA@2"]
+    },
+    {
+      "id": "locl-ko",
+      "text": "骨直辺",
+      "utf16Length": 3,
+      "script": "Hani",
+      "language": "ko",
+      "codePoints": ["U+9AA8@0", "U+76F4@1", "U+8FBA@2"]
+    },
+    {
+      "id": "simplified-chinese",
+      "text": "骨骼发展，标点测试。",
+      "utf16Length": 10,
+      "script": "Hani",
+      "language": "zh-Hans",
+      "codePoints": [
+        "U+9AA8@0",
+        "U+9ABC@1",
+        "U+53D1@2",
+        "U+5C55@3",
+        "U+FF0C@4",
+        "U+6807@5",
+        "U+70B9@6",
+        "U+6D4B@7",
+        "U+8BD5@8",
+        "U+3002@9"
+      ]
+    },
+    {
+      "id": "traditional-chinese",
+      "text": "骨骼發展，標點測試。",
+      "utf16Length": 10,
+      "script": "Hani",
+      "language": "zh-Hant",
+      "codePoints": [
+        "U+9AA8@0",
+        "U+9ABC@1",
+        "U+767C@2",
+        "U+5C55@3",
+        "U+FF0C@4",
+        "U+6A19@5",
+        "U+9EDE@6",
+        "U+6E2C@7",
+        "U+8A66@8",
+        "U+3002@9"
+      ]
+    },
+    {
+      "id": "japanese-kana-kanji",
+      "text": "骨格かなカナ",
+      "utf16Length": 6,
+      "script": "Hira",
+      "language": "ja",
+      "codePoints": ["U+9AA8@0", "U+683C@1", "U+304B@2", "U+306A@3", "U+30AB@4", "U+30CA@5"]
+    },
+    {
+      "id": "korean-precomposed",
+      "text": "한글과漢字",
+      "utf16Length": 5,
+      "script": "Hang",
+      "language": "ko",
+      "codePoints": ["U+D55C@0", "U+AE00@1", "U+ACFC@2", "U+6F22@3", "U+5B57@4"]
+    },
+    {
+      "id": "korean-jamo",
+      "text": "한글과漢字",
+      "utf16Length": 9,
+      "script": "Hang",
+      "language": "ko",
+      "codePoints": [
+        "U+1112@0",
+        "U+1161@1",
+        "U+11AB@2",
+        "U+1100@3",
+        "U+1173@4",
+        "U+11AF@5",
+        "U+ACFC@6",
+        "U+6F22@7",
+        "U+5B57@8"
+      ]
+    },
+    {
+      "id": "supplementary-han",
+      "text": "甲𠀋乙",
+      "utf16Length": 4,
+      "script": "Hani",
+      "language": "ja",
+      "codePoints": ["U+7532@0", "U+2000B@1", "U+4E59@3"]
+    },
+    {
+      "id": "standardized-variations",
+      "text": "、︀。︁",
+      "utf16Length": 4,
+      "script": "Hani",
+      "language": "ja",
+      "codePoints": ["U+3001@0", "U+FE00@1", "U+3002@2", "U+FE01@3"]
+    },
+    {
+      "id": "ideographic-variation",
+      "text": "禰󠄀",
+      "utf16Length": 3,
+      "script": "Hani",
+      "language": "ja",
+      "codePoints": ["U+79B0@0", "U+E0100@1"]
+    },
+    {
+      "id": "punctuation-space",
+      "text": "甲、乙。丙（丁）　戊",
+      "utf16Length": 10,
+      "script": "Hani",
+      "language": "zh-Hans",
+      "codePoints": [
+        "U+7532@0",
+        "U+3001@1",
+        "U+4E59@2",
+        "U+3002@3",
+        "U+4E19@4",
+        "U+FF08@5",
+        "U+4E01@6",
+        "U+FF09@7",
+        "U+3000@8",
+        "U+620A@9"
+      ]
+    }
+  ]
+}

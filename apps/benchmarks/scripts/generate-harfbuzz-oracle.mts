@@ -48,6 +48,10 @@ const executable = option('--hb-shape') ?? process.env.PMNDRS_TEXT_HB_SHAPE ?? '
 const fontPath = resolve(option('--font') ?? 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf')
 const casesPath = resolve(option('--cases') ?? 'fixtures/shaping/inter-regular/cases.json')
 const outputPath = option('--output')
+const check = process.argv.includes('--check')
+if (check && outputPath === undefined) {
+  throw new Error('--check requires --output <committed-oracle.json>')
+}
 const versionOutput = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim()
 if (versionOutput !== 'hb-shape (HarfBuzz) 13.0.0') {
   throw new Error(`expected pinned HarfBuzz 13.0.0, received ${JSON.stringify(versionOutput)}`)
@@ -121,7 +125,10 @@ const document = {
   cases,
 }
 const output = `${JSON.stringify(document, undefined, 2)}\n`
-if (outputPath === undefined) {
+if (check) {
+  const expected = await readFile(resolve(outputPath!), 'utf8')
+  if (output !== expected) throw new Error(`${resolve(outputPath!)} is stale; regenerate it`)
+} else if (outputPath === undefined) {
   process.stdout.write(output)
 } else {
   await writeFile(resolve(outputPath), output)

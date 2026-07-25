@@ -10,6 +10,7 @@ const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
 const BIN_CHUNK = 0x004e4942;
 let artifact;
+let cjkProfileArtifact;
 
 before(async () => {
   const [source, wasm] = await Promise.all([
@@ -24,6 +25,20 @@ before(async () => {
   const baker = await createFontBaker(wasm);
   artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0]
     .bytes;
+  const cjkProfileSource = source.slice();
+  for (const [sourceTag, retainedTag] of [
+    ["cvt ", "BASE"],
+    ["fpgm", "vhea"],
+    ["gasp", "vmtx"],
+    ["name", "VORG"],
+  ]) {
+    const record = sourceTableRecord(cjkProfileSource, sourceTag);
+    cjkProfileSource.write(retainedTag, record, 4, "ascii");
+  }
+  cjkProfileArtifact = baker.bake({
+    source: cjkProfileSource,
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  }).artifacts[0].bytes;
 });
 
 test("validates the canonical Inter artifact through every core layer", async () => {
@@ -63,6 +78,35 @@ test("validates Node Buffer inputs repeatedly without mutating artifact bytes", 
   assert.deepEqual(input, before);
   assert.equal(second.shapingHash, first.shapingHash);
   assert.deepEqual(second.shapingSfnt, first.shapingSfnt);
+});
+
+test("accepts only the expanded closed CJK shaping-table profile", async () => {
+  const validated = await validateFontArtifact(cjkProfileArtifact);
+  assert.deepEqual(sourceTableTags(validated.shapingSfnt), [
+    "BASE",
+    "GDEF",
+    "GPOS",
+    "GSUB",
+    "OS/2",
+    "VORG",
+    "cmap",
+    "head",
+    "hhea",
+    "hmtx",
+    "maxp",
+    "vhea",
+    "vmtx",
+  ]);
+
+  const outsideProfile = artifact.slice();
+  const decoded = decodeDocument(outsideProfile);
+  const shaping = decoded.document.extensions.PMNDRS_font.shaping;
+  const shapingView = decoded.document.bufferViews[shaping.bufferView];
+  outsideProfile.set(
+    new TextEncoder().encode("JSTF"),
+    decoded.binStart + shapingView.byteOffset + 12,
+  );
+  await rejectsWithCode(outsideProfile, "SFNT_TABLE_PROFILE");
 });
 
 test("keeps the packaged extension schema byte-identical to the canonical schema", async () => {
@@ -298,4 +342,21 @@ function encodeDocument(source, document) {
 
 function atPath(root, path) {
   return path.slice(0, -1).reduce((value, key) => value[key], root);
+}
+
+function sourceTableRecord(font, wanted) {
+  const count = font.readUInt16BE(4);
+  for (let index = 0; index < count; index += 1) {
+    const record = 12 + index * 16;
+    if (font.toString("ascii", record, record + 4) === wanted) return record;
+  }
+  throw new Error(`missing source table ${wanted}`);
+}
+
+function sourceTableTags(font) {
+  const view = new DataView(font.buffer, font.byteOffset, font.byteLength);
+  const count = view.getUint16(4, false);
+  return Array.from({ length: count }, (_, index) =>
+    new TextDecoder().decode(font.subarray(12 + index * 16, 16 + index * 16)),
+  );
 }

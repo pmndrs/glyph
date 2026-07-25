@@ -1,5 +1,8 @@
 import type { BenchmarkScenario } from './contracts'
 import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json'
+import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json'
+import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json'
+import cjkOracle from '../../fixtures/shaping/noto-sans-cjk/harfrust.json'
 
 const paragraphPolicyHash = [
   ...Object.values(paragraphBidiContract.bidi).map(({ layout }) => layout.hash),
@@ -87,6 +90,55 @@ function paragraphPolicyValidation(
   return `${values.length}/${values.length} exact bidi/policy outputs · current-uikit-shaped flow`
 }
 
+function cjkUniversalityValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  const corpusGlyphCount = cjkOracle.cases.reduce((sum, fixture) => sum + fixture.glyphs.length, 0)
+  const sourceUtf16Units =
+    cjkOracle.cases.reduce((sum, fixture) => sum + fixture.text.length, 0) +
+    Object.values(cjkContract.cases).reduce((sum, fixture) => sum + fixture.text.length, 0)
+  for (const value of values) {
+    const metrics = value.metrics
+    if (
+      metrics?.sourceUtf16Units !== sourceUtf16Units ||
+      metrics.corpusCaseCount !== cjkOracle.cases.length ||
+      metrics.corpusGlyphCount !== corpusGlyphCount ||
+      metrics.paragraphCaseCount !== Object.keys(cjkContract.cases).length ||
+      metrics.layoutCount !== Object.keys(cjkContract.cases).length * 3 ||
+      metrics.directShapeBoundaryCrossings !== 1 ||
+      metrics.paragraphShapeBoundaryCrossings !== 4 ||
+      metrics.reshapeBoundaryCrossings !== 0 ||
+      metrics.retainedFontBytes !==
+        cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
+      metrics.sourceFontBytes !== cjkManifest.source.fontBytes ||
+      metrics.artifactBytes !== cjkManifest.bake.expectedCore.artifactBytes ||
+      metrics.shapingPayloadRawBytes !==
+        cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
+      metrics.shapingPayloadGzipBytes !==
+        cjkManifest.bake.expectedCore.transport.shapingPayload.gzipBytes ||
+      metrics.shapingPayloadBrotliBytes !==
+        cjkManifest.bake.expectedCore.transport.shapingPayload.brotliBytes ||
+      typeof metrics.planCount !== 'number' ||
+      !Number.isFinite(metrics.planCount) ||
+      metrics.planCount < 4 ||
+      typeof metrics.wasmMemoryBytes !== 'number' ||
+      !Number.isFinite(metrics.wasmMemoryBytes) ||
+      metrics.wasmMemoryBytes <= 0 ||
+      !finiteNonnegative(metrics.coldBakeMs) ||
+      !finiteNonnegative(metrics.coldRegistrationMs) ||
+      !finiteNonnegative(metrics.coldShaperInitializationMs)
+    ) {
+      throw new Error('CJK sample did not preserve its exact shaping, layout, and payload contract')
+    }
+  }
+  return `${values.length}/${values.length} exact CJK corpus + horizontal paragraph outputs`
+}
+
+function finiteNonnegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
 export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'overview',
@@ -136,6 +188,13 @@ export const scenarios: readonly BenchmarkScenario[] = [
     description: 'Exact Amiri bidi, line policies, and current-uikit-shaped retained layout.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
     validate: paragraphPolicyValidation,
+  },
+  {
+    id: 'cjk-universality',
+    label: 'CJK universality',
+    description: 'Exact pan-CJK source/reduced shaping and horizontal no-space reflow.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
+    validate: cjkUniversalityValidation,
   },
 ]
 

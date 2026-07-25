@@ -358,11 +358,10 @@ fn validate_request(
             || !valid_script(run.script)
             || !valid_utf16_boundary(&request.text, run.text_start)
             || !valid_utf16_boundary(&request.text, run.text_end)
-            || run.language.as_ref().is_some_and(|value| {
-                value.is_empty()
-                    || core::str::from_utf8(value).is_err()
-                    || value.len() > u16::MAX as usize
-            })
+            || run
+                .language
+                .as_ref()
+                .is_some_and(|value| parse_language(value).is_none())
         {
             return Err(STATUS_INVALID_REQUEST);
         }
@@ -417,7 +416,11 @@ fn shape_segment(
     };
     let script = harfrust::Script::from_iso15924_tag(Tag::from_be_bytes(run.script.to_be_bytes()))
         .ok_or(STATUS_INVALID_REQUEST)?;
-    let language = run.language.as_ref().and_then(Language::new);
+    let language = run
+        .language
+        .as_ref()
+        .map(|value| parse_language(value).ok_or(STATUS_INVALID_REQUEST))
+        .transpose()?;
     let features = run
         .features
         .iter()
@@ -598,6 +601,35 @@ fn decode_scalar(units: &[u16], index: usize) -> (char, usize) {
     }
 }
 
+fn parse_language(bytes: &[u8]) -> Option<Language> {
+    if bytes.len() > u16::MAX as usize {
+        return None;
+    }
+
+    let mut subtags = bytes.split(|byte| *byte == b'-');
+    let primary = subtags.next()?;
+    let primary_is_private_or_grandfathered = matches!(primary, [b'x' | b'X'] | [b'i' | b'I']);
+    if !(2..=8).contains(&primary.len()) && !primary_is_private_or_grandfathered {
+        return None;
+    }
+    if !primary.iter().all(u8::is_ascii_alphabetic) {
+        return None;
+    }
+
+    let mut subtag_count = 0;
+    for subtag in subtags {
+        if subtag.is_empty() || subtag.len() > 8 || !subtag.iter().all(u8::is_ascii_alphanumeric) {
+            return None;
+        }
+        subtag_count += 1;
+    }
+    if primary_is_private_or_grandfathered && subtag_count == 0 {
+        return None;
+    }
+
+    Language::new(bytes)
+}
+
 fn valid_tag(tag: u32) -> bool {
     tag.to_be_bytes()
         .iter()
@@ -693,6 +725,32 @@ mod tests {
         assert!(!valid_tag(u32::from_be_bytes([b'L', 0, b't', b'n'])));
         assert!(valid_script(u32::from_be_bytes(*b"Latn")));
         assert!(!valid_script(u32::from_be_bytes(*b"LATN")));
+    }
+
+    #[test]
+    fn languages_preserve_canonical_cjk_tags_and_reject_malformed_bytes() {
+        for language in [b"zh-hans".as_slice(), b"zh-hant", b"ja", b"ko"] {
+            let parsed = parse_language(language).expect("canonical language tag");
+            assert_eq!(parsed.as_bytes(), language);
+        }
+
+        for language in [
+            b"".as_slice(),
+            b"x",
+            b"en-",
+            b"en--us",
+            b"en_us",
+            b"en\0us",
+            b"en\nus",
+            b"123",
+            b"englishish",
+            &[0xff],
+        ] {
+            assert!(parse_language(language).is_none(), "accepted {language:?}");
+        }
+
+        let excessive = alloc::vec![b'a'; u16::MAX as usize + 1];
+        assert!(parse_language(&excessive).is_none());
     }
 
     #[test]

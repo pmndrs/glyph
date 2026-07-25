@@ -2,5 +2,5 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "all",
-  "ignorePatterns": ["dist/**"]
+  "ignorePatterns": [".cache/**", "dist/**"]
 }

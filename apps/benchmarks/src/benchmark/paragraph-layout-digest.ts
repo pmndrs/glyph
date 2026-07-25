@@ -25,6 +25,50 @@ interface ParagraphPolicyHashContract {
   readonly uikit: { readonly resolved: { readonly layout: { readonly hash: string } } }
 }
 
+export function paragraphLayoutContract(layout: ParagraphLayout, full = true) {
+  const contract: Record<string, unknown> = {
+    measurement: {
+      width: layout.width,
+      height: layout.height,
+      contentWidth: layout.contentWidth,
+      contentHeight: layout.contentHeight,
+      firstBaseline: layout.firstBaseline,
+      lastBaseline: layout.lastBaseline,
+      overflowed: layout.overflowed,
+    },
+    hash: hashParagraphLayout(layout),
+  }
+  const fields = full
+    ? ([
+        'glyphFontSlots',
+        'glyphIds',
+        'clusters',
+        'glyphFontSizes',
+        'x',
+        'y',
+        'glyphFlags',
+        'lineTextStarts',
+        'lineTextEnds',
+        'lineGlyphStarts',
+        'lineGlyphCounts',
+        'lineBaselines',
+        'lineAdvances',
+      ] as const)
+    : ([
+        'glyphIds',
+        'clusters',
+        'x',
+        'lineTextStarts',
+        'lineTextEnds',
+        'lineGlyphStarts',
+        'lineGlyphCounts',
+        'lineBaselines',
+        'lineAdvances',
+      ] as const)
+  for (const field of fields) contract[field] = [...layout[field]]
+  return contract
+}
+
 export function hashParagraphLayout(layout: PortableParagraphLayout): string {
   let hash = 2_166_136_261
   for (const values of portableLayoutArrays(layout)) {

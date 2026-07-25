@@ -190,6 +190,36 @@ test("rejects malformed batch fields before or at the Wasm trust boundary", asyn
       }),
     /outside its run context/,
   );
+
+  for (const language of ["zh-hans", "zh-hant", "ja", "ko"]) {
+    assert.doesNotThrow(() =>
+      shaper.shapeBatch({ ...base, runs: [{ ...base.runs[0], language }] }),
+    );
+  }
+  assert.equal(
+    shaper.memoryReport().planCount,
+    4,
+    "canonical CJK languages must remain distinct shape-plan inputs",
+  );
+  for (const language of ["en\0us", "en\nus", "en--us"]) {
+    assert.throws(
+      () => shaper.shapeBatch({ ...base, runs: [{ ...base.runs[0], language }] }),
+      /invalid batch request/,
+    );
+  }
+  assert.throws(
+    () => shaper.shapeBatch({ ...base, runs: [{ ...base.runs[0], language: "" }] }),
+    /must encode to 1\.\.65535 UTF-8 bytes/,
+  );
+  assert.throws(
+    () =>
+      shaper.shapeBatch({
+        ...base,
+        runs: [{ ...base.runs[0], language: "a".repeat(0x1_0000) }],
+      }),
+    /must encode to 1\.\.65535 UTF-8 bytes/,
+  );
+  assert.equal(shaper.memoryReport().planCount, 4, "invalid languages must not create plans");
   shaper.dispose();
   font.dispose();
 });

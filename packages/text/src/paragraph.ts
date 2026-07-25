@@ -1679,7 +1679,7 @@ function measurementForGeometry(
 ): ParagraphMeasurement {
   const contentWidth = maxArray(geometry.lineAdvances)
   const requiredContentWidth = Math.max(contentWidth, measured.contentWidth)
-  const width = resolveAxis(constraints.width, contentWidth)
+  const width = resolveAxis(constraints.width, requiredContentWidth)
   const height = measured.height
   return {
     width,

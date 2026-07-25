@@ -109,7 +109,7 @@ This extension does not define text strings, paragraph layout, line breaking, ra
 
 `shaping.bufferView` MUST contain exactly one static, single-face SFNT conforming to profile `opentype-sfnt-harfrust-v0`.
 
-Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, `GSUB`, `GPOS`, and `kern` are retained when present. The profile excludes outlines, vertical-only tables, hinting, font-authored raster data, variable-font tables, AAT, Graphite, collections, WOFF, and WOFF2.
+Required tables are `head`, `maxp`, `cmap`, `hhea`, `hmtx`, and `OS/2`. `GDEF`, `GSUB`, `GPOS`, `kern`, `BASE`, `vhea`, `vmtx`, and `VORG` are retained when present. The profile does not fabricate optional tables and excludes outlines, hinting, font-authored raster data, variable-font tables, AAT, Graphite, collections, WOFF, and WOFF2. Retaining vertical-form source data does not enable vertical shaping or paragraph layout.
 
 `fontFunctions` preserves the optional glyph-extents query used by HarfRust fallback positioning after outlines are removed. `glyphExtentsBufferView` contains one dense 8-byte `(xMin, yMin, xMax, yMax)` i16 record per glyph. `glyphExtentsAvailabilityBufferView` contains exactly one bit per glyph, rounded up to a byte; a clear bit makes the adapter return no extents and requires a zeroed record. HarfRust 0.12.0 exposes no contour-point callback, so Anchor Format 2 point records are not serialized.
 

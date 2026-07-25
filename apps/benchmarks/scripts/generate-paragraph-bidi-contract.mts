@@ -5,13 +5,12 @@ import {
   createRuntimeShaper,
   FontRegistry,
   type ParagraphConstraints,
-  type ParagraphLayout,
   type ParagraphStyle,
 } from '@pmndrs/text'
 import { createFontBaker } from '@pmndrs/text-font-baker'
 
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts'
-import { hashParagraphLayout } from '../src/benchmark/paragraph-layout-digest.ts'
+import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts'
 
 const root = new URL('../', import.meta.url)
 const output = new URL('../fixtures/contracts/paragraph-bidi-layout-v0.json', import.meta.url)
@@ -39,54 +38,6 @@ async function runtime(sourceUrl: URL) {
   return { font, shaper }
 }
 
-function measurement(layout: ParagraphLayout) {
-  return {
-    width: layout.width,
-    height: layout.height,
-    contentWidth: layout.contentWidth,
-    contentHeight: layout.contentHeight,
-    firstBaseline: layout.firstBaseline,
-    lastBaseline: layout.lastBaseline,
-    overflowed: layout.overflowed,
-  }
-}
-
-function values(layout: ParagraphLayout, full: boolean) {
-  const document: Record<string, unknown> = {
-    measurement: measurement(layout),
-    hash: hashParagraphLayout(layout),
-  }
-  const fields = full
-    ? ([
-        'glyphFontSlots',
-        'glyphIds',
-        'clusters',
-        'glyphFontSizes',
-        'x',
-        'y',
-        'glyphFlags',
-        'lineTextStarts',
-        'lineTextEnds',
-        'lineGlyphStarts',
-        'lineGlyphCounts',
-        'lineBaselines',
-        'lineAdvances',
-      ] as const)
-    : ([
-        'glyphIds',
-        'clusters',
-        'x',
-        'lineTextStarts',
-        'lineTextEnds',
-        'lineGlyphStarts',
-        'lineGlyphCounts',
-        'lineBaselines',
-        'lineAdvances',
-      ] as const)
-  for (const field of fields) document[field] = [...layout[field]]
-  return document
-}
-
 const amiri = await runtime(
   new URL('../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf', import.meta.url),
 )
@@ -112,7 +63,7 @@ for (const [id, text] of [
     text,
     style: bidiStyle,
     constraints: bidiConstraints,
-    layout: values(paragraph.layout(bidiConstraints), true),
+    layout: paragraphLayoutContract(paragraph.layout(bidiConstraints)),
   }
 }
 
@@ -161,7 +112,10 @@ const policyInputs = {
 } as const satisfies Record<string, ParagraphConstraints>
 const policyCases: Record<string, unknown> = {}
 for (const [id, constraints] of Object.entries(policyInputs)) {
-  policyCases[id] = { constraints, layout: values(paragraph.layout(constraints), false) }
+  policyCases[id] = {
+    constraints,
+    layout: paragraphLayoutContract(paragraph.layout(constraints), false),
+  }
 }
 
 const uikitInput = {
@@ -238,7 +192,7 @@ const document = {
       contentBox: uikitResolved.contentBox,
       centeredX: [...uikitResolved.centeredX],
       centeredY: [...uikitResolved.centeredY],
-      layout: values(uikitResolved.layout, false),
+      layout: paragraphLayoutContract(uikitResolved.layout, false),
     },
   },
 }

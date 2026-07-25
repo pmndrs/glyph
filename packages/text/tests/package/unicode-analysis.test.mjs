@@ -60,6 +60,21 @@ test('itemizes scripts at grapheme boundaries and records mandatory breaks', () 
   ])
 })
 
+test('resolves CJK Script_Extensions from surrounding shaping context', () => {
+  assert.deepEqual(itemizeScripts('漢、字'), [{ start: 0, end: 3, script: 'Hani' }])
+  assert.deepEqual(itemizeScripts('あ、ア'), [
+    { start: 0, end: 2, script: 'Hira' },
+    { start: 2, end: 3, script: 'Kana' },
+  ])
+  assert.deepEqual(itemizeScripts('한、글'), [{ start: 0, end: 3, script: 'Hang' }])
+  assert.deepEqual(itemizeScripts('「日本語」'), [{ start: 0, end: 5, script: 'Hani' }])
+  assert.deepEqual(itemizeScripts('あーア'), [
+    { start: 0, end: 2, script: 'Hira' },
+    { start: 2, end: 3, script: 'Kana' },
+  ])
+  assert.deepEqual(itemizeScripts('漢\u{E0100}字'), [{ start: 0, end: 4, script: 'Hani' }])
+})
+
 async function conformanceCases(file) {
   const compressed = await readFile(new URL(file, fixtureDirectory))
   const contents = gunzipSync(compressed).toString('utf8')

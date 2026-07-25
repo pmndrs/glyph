@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T12:30:58Z"
+  at: "2026-07-25T14:19:44Z"
 ---
 
 # Canonical implementation roadmap
@@ -48,14 +48,14 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | ✅ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | 🟡 | Implement paragraph reflow and validate universal shaping assumptions | L | 4 | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence. |
+| 5 | ✅ | Implement paragraph reflow and validate universal shaping assumptions | L | 4 | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence. |
 | 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
 | 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–4 are closed. Items 5.1–5.3 are complete; item 5.4 is active and extends Milestone 5 with focused CJK universality evidence before Milestone 6 rendering begins.
+Milestones 0–5 are closed. Milestone 6 is the next dependency and begins the first bitmap rendering proof in the benchmark harness.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -100,7 +100,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 5.1 | ✅ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
 | 5.2 | ✅ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
 | 5.3 | ✅ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
-| 5.4 | 🟡 | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
+| 5.4 | ✅ | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
 | 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.4 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
@@ -338,7 +338,7 @@ Item 4.1 is closed.
 - [x] Every one of the eight pinned Inter HarfRust cases travels source TTF → portable baker GLB → independent hostile-input validator → `FontRegistry` shaping-view extraction → Wasm registration → both public shaping calls, then compares glyph count, IDs, clusters, advances, offsets, and flags bit-for-bit.
 - [x] A two-run fixture proves run/font indexes, absolute clusters, one-call batching, and plan reuse; UTF-16 surrogate boundaries, tags, ranges, flags, ownership, zero-import ABI identity, extents decoding, and fixed-seed raw request mutations have focused failures.
 - [x] The real benchmark product runs all eight cases as one 97-glyph Chromium batch, validates hash `dc30c21c`, records 2,412 output bytes, one boundary crossing, three plans, 171,056 retained font bytes, 1,638,400 linear-memory bytes, and raw cold/warm timings after correctness passes.
-- [x] The complete optimized module and bridge are measured independently at 645,666 raw / 239,303 gzip / 188,862 Brotli Wasm bytes and 27,859 minified / 8,190 gzip / 7,320 Brotli JavaScript bytes.
+- [x] The complete optimized module and bridge are measured independently at 692,018 raw / 257,537 gzip / 201,934 Brotli Wasm bytes and 30,406 minified / 8,737 gzip / 7,794 Brotli JavaScript bytes.
 
 Item 4.2 and Milestone 4 are closed. Item 5.1 closure evidence is recorded under Milestone 5.
 
@@ -378,7 +378,7 @@ HarfRust reads the retained SFNT tables in Wasm. The milestone does not claim co
 - [x] One broad HarfRust shape is copied immediately out of the borrowed Wasm arena and converted into font-scaled, letter-spaced measured grapheme clusters with unsafe-break information, explicit hard breaks, line metrics, and baselines.
 - [x] Greedy word/character wrapping handles mandatory breaks, trailing empty lines, over-wide clusters, and shaping-safe emergency boundaries. Equivalent unconstrained/at-most/exactly measurements reuse one frozen result and never materialize positioned glyph arrays.
 - [x] Canonical Inter travels source TTF → portable baker GLB → hostile-input validator → retained shaping views → HarfRust Wasm → paragraph measurement. Exact HarfRust-derived natural, 720 px, and 360 px widths are `847.625`, `696.734375`, and `356.546875`; unrelated shaper calls prove cached ownership.
-- [x] The real Chromium benchmark repeats the three exact layouts with hash `79874b9d`, one preparation shape, zero reshapes/reflow boundary crossings, zero positioned-glyph bytes, and a measured independent Unicode-analysis size lane of 139,752 minified / 41,999 gzip / 31,018 Brotli bytes.
+- [x] The real Chromium benchmark repeats the three exact layouts with hash `79874b9d`, one preparation shape, zero reshapes/reflow boundary crossings, zero positioned-glyph bytes, and a measured independent Unicode-analysis size lane of 139,936 minified / 42,047 gzip / 30,989 Brotli bytes.
 
 Item 5.1 is closed; the positioned output and boundary-sensitive reshape evidence that followed is recorded below.
 
@@ -402,7 +402,7 @@ Item 5.2 is closed. Item 5.3 closure evidence follows.
 - [x] A current-uikit-shaped fixture proves repeated allocation-light measurement, Yoga-mode translation, final content-box layout, point-scale rounding ownership, and dirtying without a Yoga dependency in core.
 - [x] The real Chromium benchmark and GPU Vitexec lane execute the bidi/policy fixtures with deterministic recorded output before item 5.3 closes.
 
-Item 5.3 is closed. The generated contract fixes two Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final content-box layout with complete glyph/line arrays and twelve portable hashes. Amiri 1.002 separately proves source-font HarfRust equals HarfRust over the reduced SFNT extracted from the validated GLB, while pinned HarfBuzz 13 agrees on every Arabic/Latin glyph field. Chromium 149 records three deterministic 8,098-byte runs with four preparation shapes and five batched reshapes; the GPU Vitexec lane repeats the same contract with WebGPU active. Milestone 5 remains open for item 5.4.
+Item 5.3 is closed. The generated contract fixes two Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final content-box layout with complete glyph/line arrays and twelve portable hashes. Amiri 1.002 separately proves source-font HarfRust equals HarfRust over the reduced SFNT extracted from the validated GLB, while pinned HarfBuzz 13 agrees on every Arabic/Latin glyph field. Chromium 149 records three deterministic 8,098-byte runs with four preparation shapes and five batched reshapes; the GPU Vitexec lane repeats the same contract with WebGPU active. Item 5.4 closure evidence follows.
 
 Deliver:
 
@@ -437,6 +437,18 @@ Deliver:
 Exit only when the complete horizontal corpus is byte-exact through the source and reduced-font HarfRust paths, the independent HarfBuzz oracle agrees under the documented normalization policy, and Node/Chromium/Vitexec paragraph outputs are deterministic. Any genuine mismatch in the retained SFNT profile, UTF-16 clustering, language selection, variation handling, glyph-width assumptions, or line layout blocks rendering work.
 
 Large-coverage raster paging remains in Milestone 12. Vertical-form source tables must survive baking when present, but vertical shaping/layout remains deferred.
+
+### 5.4 closure checklist
+
+- [x] Noto Sans CJK JP Regular 2.004 is checked in with immutable upstream commit, selected face index, OFL text, byte lengths, and SHA-256 identities.
+- [x] The fixture inspector uses Fontations `read-fonts` and proves 65,535 glyphs, `cmap` formats 4/6/12/14, supplementary Han, SVS, IVS, and the retained source-table inventory.
+- [x] Thirteen language-tagged CJK cases match source and reduced-font HarfRust exactly and agree field-for-field with authenticated HarfBuzz 13.0.0 output.
+- [x] `BASE`, `VORG`, `vhea`, and `vmtx` survive baking exactly when present; the baker does not fabricate them and vertical shaping/layout remains deferred.
+- [x] Four public-pipeline paragraphs produce twelve exact natural/wide/narrow layouts with contextual Script_Extensions, grapheme/UTF-16-safe clusters, no-space breaks, deterministic ownership, and zero reshapes for the fixed corpus.
+- [x] Malformed language/surrogate/variation/constraint cases and fixed-seed CJK mutations are deterministic and trap-free.
+- [x] Node integration, Chromium 149 headless, GPU-enabled Vitexec, and the mobile Playwright flow pass through the shared benchmark registry without timers, retries, renderer metrics, or paging claims.
+
+Item 5.4 and Milestone 5 are closed. Milestone 6 is next.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 

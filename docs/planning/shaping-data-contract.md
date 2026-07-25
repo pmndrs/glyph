@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T12:30:58Z"
+  at: "2026-07-25T14:19:44Z"
 ---
 
 # Shaping data contract V0
@@ -70,7 +70,7 @@ The font artifact does not duplicate Unicode or script-shaper tables. The dynami
 
 Its Unicode and HarfBuzz-equivalence versions are pinned in the package and repeated in font provenance so an incompatible font/runtime pairing can be diagnosed. Script, language, direction, features, cluster level, and buffer flags are request data, not font data. Bidi resolution, line-break data, and paragraph policy live outside the font artifact.
 
-The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-features = false` and `libm`, matching `read-fonts` 0.41.0, `dlmalloc`, `panic = abort`, and `wasm32-unknown-unknown`. Its Rust-generated V0 ABI has no imports or WASI surface and describes every request/result record and offset consumed by TypeScript. Pinned Binaryen 129.0.0 `-Oz` produces a 645,666-byte complete module (239,303 gzip; 188,862 Brotli). Canonical Inter proves that only the exact GLB-extracted 147,192-byte SFNT, 23,496-byte dense-extents view, and 368-byte availability view enter HarfRust-owned state, then matches all eight source-oracle cases bit-for-bit through `shapeBatch` and `reshapeRanges`. The Chromium product record keeps correctness ahead of timing and reports one boundary crossing, 97 glyphs, three cached plans, 1,638,400 linear-memory bytes, a 2.6 ms cold initialization, and approximately 0.1 ms warm shaping calls in that captured environment.
+The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-features = false` and `libm`, matching `read-fonts` 0.41.0, `dlmalloc`, `panic = abort`, and `wasm32-unknown-unknown`. Its Rust-generated V0 ABI has no imports or WASI surface and describes every request/result record and offset consumed by TypeScript. Pinned Binaryen 129.0.0 `-Oz` produces a 692,018-byte complete module (257,537 gzip; 201,934 Brotli). Canonical Inter proves that only the exact GLB-extracted 147,192-byte SFNT, 23,496-byte dense-extents view, and 368-byte availability view enter HarfRust-owned state, then matches all eight source-oracle cases bit-for-bit through `shapeBatch` and `reshapeRanges`. The Chromium product record keeps correctness ahead of timing and reports one boundary crossing, 97 glyphs, three cached plans, 1,703,936 linear-memory bytes, a 2.6 ms cold initialization, and approximately 0.1 ms warm shaping calls in that captured environment.
 
 ### Required tables
 
@@ -91,6 +91,8 @@ The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-featur
 | `GSUB` | Retain when present. All supported scripts, language systems, features, lookups, and feature variations remain intact. |
 | `GPOS` | Retain when present. All supported scripts, language systems, features, lookups, anchors, value records, and variation references remain intact. |
 | `kern` | Retain only when present and not made redundant by the bake policy. HarfRust remains authoritative about when legacy kerning applies. |
+| `BASE` | Retain when present so baseline data survives the shaping artifact even though V0 paragraph layout uses the explicit serialized horizontal metrics. |
+| `vhea`, `vmtx`, `VORG` | Retain each table exactly when present so vertical advances/origins survive baking. V0 does not fabricate missing tables or expose vertical paragraph layout. |
 
 OpenType extension lookup types are retained inside `GSUB` or `GPOS`; they are not separate tables. All GSUB lookup types 1–8 and GPOS lookup types 1–9 that HarfRust supports remain representable because their original normative table encoding is preserved.
 
@@ -107,7 +109,6 @@ The shaping payload MUST NOT contain:
 - outline and hinting data: `glyf`, `loca`, `CFF `, `CFF2`, `VARC`, `cvt `, `fpgm`, `prep`, `gasp`;
 - source glyph-art tables: `COLR`, `CPAL`, `SVG `, `CBDT`, `CBLC`, `EBDT`, `EBLC`, `sbix`;
 - metadata unused by shaping: `name`, `post`, `DSIG`;
-- vertical-only tables: `vhea`, `vmtx`, `VORG`;
 - Apple Advanced Typography tables: `morx`, `kerx`, `ankr`, `trak`, `feat`, `ltag`;
 - Graphite tables and deprecated `mort`.
 
@@ -177,7 +178,7 @@ The metric selection policy is fixed: when `OS/2.fsSelection.USE_TYPO_METRICS` i
 
 CJK does not require a wider per-face glyph ID: OpenType glyph IDs and `maxp.numGlyphs` remain 16-bit, and V0 supports `glyphCount` through 65,535. Every byte-length and offset calculation uses checked `u32`/`usize` arithmetic before allocation; no implementation may multiply dense record counts in `u16`. A TTC/OTC or other collection still registers one selected face per `PMNDRS_font`, identified by the existing face index and source provenance.
 
-The shaping payload remains complete for the selected face in V0. Raster paging and sparse raster availability do not change cmap, shaping behavior, clusters, or glyph identity. Roadmap item 5.4 makes this contract executable for one pinned pan-CJK face through exact source/reduced HarfRust comparison, an independent HarfBuzz oracle, and horizontal paragraph layout before rendering starts. Later source-font subsetting may reduce a large CJK shaping payload only after shaping closure and differential conformance are proven; the Latin-first implementation does not depend on that compiler work.
+The shaping payload remains complete for the selected face in V0. Raster paging and sparse raster availability do not change cmap, shaping behavior, clusters, or glyph identity. Roadmap item 5.4 has proven this contract with Noto Sans CJK JP Regular 2.004 at 65,535 glyphs through exact source/reduced HarfRust and HarfBuzz agreement plus horizontal paragraph layout. Later source-font subsetting may reduce a large CJK shaping payload only after shaping closure and differential conformance are proven; the Latin-first implementation does not depend on that compiler work.
 
 ## Runtime shape ABI
 

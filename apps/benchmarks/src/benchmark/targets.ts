@@ -11,7 +11,6 @@ import {
   type RegisteredFont,
   type RuntimeShaper,
   type ShapeBatchRequest,
-  type ShapedBatchViews,
 } from '@pmndrs/text'
 import { createFontBaker, type FontBakeCore } from '@pmndrs/text-font-baker'
 import wasmUrl from '@pmndrs/text-font-baker/font-baker.wasm?url'
@@ -24,7 +23,15 @@ import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
 import { hashParagraphLayout, hashParagraphLayouts } from './paragraph-layout-digest'
+import {
+  assertShapingFixture,
+  hashShapedFixture,
+  shapedFixtureBytes,
+  shapingFixtureBatch,
+  type ShapingOracleCase,
+} from './shaping-fixture'
 import { createUikitLayoutFixture, YogaMeasureMode } from './uikit-layout-fixture'
+import { cjkUniversalityTarget } from './cjk-universality'
 
 function stableSyntheticHash(sample: number): string {
   let value = 2166136261
@@ -138,29 +145,7 @@ const loaderWorkerTarget: BenchmarkTarget = {
   dispose: async () => undefined,
 }
 
-interface OracleGlyph {
-  readonly glyphId: number
-  readonly cluster: number
-  readonly xAdvance: number
-  readonly yAdvance: number
-  readonly xOffset: number
-  readonly yOffset: number
-  readonly flags: number
-}
-
-interface OracleCase {
-  readonly id: string
-  readonly text: string
-  readonly segment: {
-    readonly direction: 'ltr' | 'rtl'
-    readonly script: string
-    readonly language: string
-    readonly features: readonly string[]
-  }
-  readonly glyphs: readonly OracleGlyph[]
-}
-
-const shapingCases = canonicalShapingOracle.cases as readonly OracleCase[]
+const shapingCases = canonicalShapingOracle.cases as readonly ShapingOracleCase[]
 let runtimeShaper: RuntimeShaper | undefined
 let runtimeShaperFont: RegisteredFont | undefined
 let runtimeShapingRequest: ShapeBatchRequest | undefined
@@ -211,7 +196,7 @@ const harfrustShaperTarget: BenchmarkTarget = {
     runtimeShaperColdStartMs = performance.now() - coldStart
     runtimeShaper = shaper
     runtimeShaperFont = font
-    runtimeShapingRequest = shapingBatch(font.handle)
+    runtimeShapingRequest = shapingFixtureBatch(shapingCases, font.handle)
   },
   run: async () => {
     if (
@@ -224,11 +209,11 @@ const harfrustShaperTarget: BenchmarkTarget = {
     const shapeStart = performance.now()
     const shaped = runtimeShaper.shapeBatch(runtimeShapingRequest)
     const shapeCallMs = performance.now() - shapeStart
-    validateShapingGoldens(shaped, runtimeShaperFont.handle)
+    assertShapingFixture(shaped, runtimeShaperFont.handle, shapingCases)
     const memory = runtimeShaper.memoryReport()
     return {
-      bytes: shapedOutputBytes(shaped),
-      hash: hashShapedOutput(shaped),
+      bytes: shapedFixtureBytes(shaped),
+      hash: hashShapedFixture(shaped),
       metrics: {
         boundaryCrossings: 1,
         coldStartMs: runtimeShaperColdStartMs,
@@ -819,77 +804,6 @@ function hashMeasurements(measurements: readonly ParagraphMeasurement[]): string
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-function shapingBatch(font: RegisteredFont['handle']): ShapeBatchRequest {
-  const codeUnits: number[] = []
-  const features: { tag: string; value: number; start: number; end: number }[] = []
-  const runs: ShapeBatchRequest['runs'][number][] = []
-  for (const fixture of shapingCases) {
-    const start = codeUnits.length
-    for (let index = 0; index < fixture.text.length; index++) {
-      codeUnits.push(fixture.text.charCodeAt(index))
-    }
-    const end = codeUnits.length
-    const featureStart = features.length
-    for (const source of fixture.segment.features) {
-      const match = /^(.{4})(?:=(\d+))?$/.exec(source)
-      if (match === null) throw new Error(`Unsupported shaping fixture feature ${source}`)
-      features.push({
-        tag: match[1]!,
-        value: match[2] === undefined ? 1 : Number(match[2]),
-        start,
-        end,
-      })
-    }
-    runs.push({
-      font,
-      textStart: start,
-      textEnd: end,
-      direction: fixture.segment.direction,
-      script: fixture.segment.script,
-      language: fixture.segment.language,
-      clusterLevel: 0,
-      flags: 0x40,
-      featureStart,
-      featureCount: features.length - featureStart,
-    })
-  }
-  return { textUtf16: Uint16Array.from(codeUnits), runs, features }
-}
-
-function validateShapingGoldens(shaped: ShapedBatchViews, font: RegisteredFont['handle']): void {
-  exactArray('fontHandles', shaped.fontHandles, [font])
-  exactArray(
-    'runFontSlots',
-    shaped.runFontSlots,
-    shapingCases.map(() => 0),
-  )
-  let glyphStart = 0
-  let textStart = 0
-  for (const [run, fixture] of shapingCases.entries()) {
-    if (shaped.runGlyphStarts[run] !== glyphStart) {
-      throw new Error(`Shaping golden ${fixture.id} has an unexpected glyph start`)
-    }
-    if (shaped.runGlyphCounts[run] !== fixture.glyphs.length) {
-      throw new Error(`Shaping golden ${fixture.id} has an unexpected glyph count`)
-    }
-    for (const [local, expected] of fixture.glyphs.entries()) {
-      const glyph = glyphStart + local
-      exactValue(fixture.id, 'glyphId', local, shaped.glyphIds[glyph], expected.glyphId)
-      exactValue(fixture.id, 'cluster', local, shaped.clusters[glyph], expected.cluster + textStart)
-      exactValue(fixture.id, 'xAdvance', local, shaped.xAdvances[glyph], expected.xAdvance)
-      exactValue(fixture.id, 'yAdvance', local, shaped.yAdvances[glyph], expected.yAdvance)
-      exactValue(fixture.id, 'xOffset', local, shaped.xOffsets[glyph], expected.xOffset)
-      exactValue(fixture.id, 'yOffset', local, shaped.yOffsets[glyph], expected.yOffset)
-      exactValue(fixture.id, 'flags', local, shaped.glyphFlags[glyph], expected.flags)
-    }
-    glyphStart += fixture.glyphs.length
-    textStart += fixture.text.length
-  }
-  if (glyphStart !== shaped.glyphIds.length) {
-    throw new Error('Shaping output contains trailing glyphs outside the pinned corpus')
-  }
-}
-
 function exactArray(label: string, actual: ArrayLike<number>, expected: readonly number[]): void {
   if (actual.length !== expected.length) throw new Error(`${label} length differs from its golden`)
   for (let index = 0; index < expected.length; index++) {
@@ -909,46 +823,6 @@ function exactValue(
       `Shaping golden ${fixture}.${field}[${index}] differs: ${String(actual)} !== ${String(expected)}`,
     )
   }
-}
-
-function shapedOutputBytes(shaped: ShapedBatchViews): number {
-  return (
-    shaped.fontHandles.byteLength +
-    shaped.runFontSlots.byteLength +
-    shaped.runGlyphStarts.byteLength +
-    shaped.runGlyphCounts.byteLength +
-    shaped.glyphIds.byteLength +
-    shaped.clusters.byteLength +
-    shaped.xAdvances.byteLength +
-    shaped.yAdvances.byteLength +
-    shaped.xOffsets.byteLength +
-    shaped.yOffsets.byteLength +
-    shaped.glyphFlags.byteLength
-  )
-}
-
-function hashShapedOutput(shaped: ShapedBatchViews): string {
-  let hash = 2_166_136_261
-  const arrays: readonly ArrayLike<number>[] = [
-    shaped.fontHandles,
-    shaped.runFontSlots,
-    shaped.runGlyphStarts,
-    shaped.runGlyphCounts,
-    shaped.glyphIds,
-    shaped.clusters,
-    shaped.xAdvances,
-    shaped.yAdvances,
-    shaped.xOffsets,
-    shaped.yOffsets,
-    shaped.glyphFlags,
-  ]
-  for (const values of arrays) {
-    hash = Math.imul(hash ^ values.length, 16_777_619)
-    for (let index = 0; index < values.length; index++) {
-      hash = Math.imul(hash ^ (values[index]! >>> 0), 16_777_619)
-    }
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 async function sha256(bytes: ArrayBufferView): Promise<string> {
@@ -988,6 +862,7 @@ export const targets: readonly BenchmarkTarget[] = [
   paragraphTarget,
   paragraphLayoutTarget,
   paragraphPolicyTarget,
+  cjkUniversalityTarget,
   unavailableTarget('bitmap', 'Bitmap atlas', 'capability not landed', 'amber'),
   unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),

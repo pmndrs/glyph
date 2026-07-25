@@ -21,6 +21,11 @@ path = "src/bin/generate-shaping-oracle.rs"
 required-features = ["oracle"]
 
 [[bin]]
+name = "inspect-font-fixture"
+path = "src/bin/inspect-font-fixture.rs"
+required-features = ["oracle"]
+
+[[bin]]
 name = "fuzz-bake"
 path = "src/bin/fuzz-bake.rs"
 required-features = ["fuzzing"]

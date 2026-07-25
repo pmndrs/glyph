@@ -34,6 +34,7 @@ interface GraphemeScript {
   readonly start: number
   readonly end: number
   script: number
+  readonly candidates: readonly number[]
 }
 
 const lineBreakRules = new Rules()
@@ -51,7 +52,8 @@ export function analyzeUnicodeText(text: string): UnicodeTextAnalysis {
 export function findGraphemeBoundaries(text: string): Uint32Array {
   assertWellFormed(text)
   const boundaries = [0]
-  for (const segment of graphemeSegments(text)) boundaries.push(segment.index + segment.segment.length)
+  for (const segment of graphemeSegments(text))
+    boundaries.push(segment.index + segment.segment.length)
   return Uint32Array.from(boundaries)
 }
 
@@ -69,10 +71,11 @@ export function itemizeScripts(text: string): readonly ScriptItem[] {
   const graphemes: GraphemeScript[] = []
   for (const segment of graphemeSegments(text)) {
     const end = segment.index + segment.segment.length
+    const resolved = resolveGraphemeScript(segment.segment)
     graphemes.push({
       start: segment.index,
       end,
-      script: resolveGraphemeScript(segment.segment),
+      ...resolved,
     })
   }
   resolveNeutralScripts(graphemes)
@@ -111,7 +114,10 @@ export function scriptsForCodePoint(codePoint: number): readonly string[] {
   return scripts
 }
 
-function resolveGraphemeScript(text: string): number {
+function resolveGraphemeScript(text: string): {
+  readonly script: number
+  readonly candidates: readonly number[]
+} {
   let candidates: number[] | undefined
   let preferred = commonScript
   for (const scalar of text) {
@@ -121,27 +127,43 @@ function resolveGraphemeScript(text: string): number {
     if (!isNeutralScript(primary) && preferred === commonScript) preferred = primary
     const extensions = extensionSet(codePoint).filter((script) => !isNeutralScript(script))
     if (extensions.length === 0) continue
-    candidates = candidates === undefined
-      ? extensions
-      : candidates.filter((script) => extensions.includes(script))
+    candidates =
+      candidates === undefined
+        ? extensions
+        : candidates.filter((script) => extensions.includes(script))
   }
-  if (candidates === undefined || candidates.length === 0) return preferred
-  return candidates.includes(preferred) ? preferred : (candidates[0] ?? preferred)
+  if (candidates === undefined || candidates.length === 0 || candidates.includes(preferred)) {
+    return { script: preferred, candidates: [] }
+  }
+  return { script: preferred, candidates }
 }
 
 function resolveNeutralScripts(graphemes: GraphemeScript[]): void {
   let previous = commonScript
   for (const grapheme of graphemes) {
-    if (isNeutralScript(grapheme.script)) grapheme.script = previous
-    else previous = grapheme.script
+    if (isNeutralScript(grapheme.script)) {
+      if (acceptsContext(grapheme, previous)) grapheme.script = previous
+    } else {
+      previous = grapheme.script
+    }
   }
   let next = commonScript
   for (let index = graphemes.length - 1; index >= 0; index -= 1) {
     const grapheme = graphemes[index]
     if (grapheme === undefined) continue
-    if (isNeutralScript(grapheme.script)) grapheme.script = next
-    else next = grapheme.script
+    if (isNeutralScript(grapheme.script)) {
+      if (acceptsContext(grapheme, next)) grapheme.script = next
+    } else {
+      next = grapheme.script
+    }
   }
+}
+
+function acceptsContext(grapheme: GraphemeScript, script: number): boolean {
+  return (
+    !isNeutralScript(script) &&
+    (grapheme.candidates.length === 0 || grapheme.candidates.includes(script))
+  )
 }
 
 function extensionSet(codePoint: number): number[] {
@@ -174,7 +196,12 @@ function isNeutralScript(script: number): boolean {
 }
 
 function uint32ToTag(value: number): string {
-  return String.fromCharCode(value >>> 24, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff)
+  return String.fromCharCode(
+    value >>> 24,
+    (value >>> 16) & 0xff,
+    (value >>> 8) & 0xff,
+    value & 0xff,
+  )
 }
 
 function assertScalar(codePoint: number): void {

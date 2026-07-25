@@ -574,16 +574,20 @@ function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string,
     fail("SFNT_SEARCH_FIELDS", "SFNT search fields are inconsistent");
   }
   const allowed = new Set([
+    "BASE",
     "GDEF",
     "GPOS",
     "GSUB",
     "OS/2",
+    "VORG",
     "cmap",
     "head",
     "hhea",
     "hmtx",
     "kern",
     "maxp",
+    "vhea",
+    "vmtx",
   ]);
   const tables = new Map<string, Uint8Array>();
   const ranges: [number, number][] = [];

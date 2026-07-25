@@ -31,7 +31,7 @@ async function runProbe(path: string): Promise<void> {
   }
 }
 
-for (const probe of ['./vitexec/harness.probe.ts']) {
+for (const probe of ['./vitexec/harness.probe.ts', './vitexec/cjk-universality.probe.ts']) {
   await runProbe(probe)
 }
 

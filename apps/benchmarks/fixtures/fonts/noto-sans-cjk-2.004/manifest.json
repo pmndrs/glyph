@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 0,
+  "id": "noto-sans-cjk-jp-regular-v0",
+  "source": {
+    "family": "Noto Sans CJK JP",
+    "style": "Regular",
+    "version": "2.004",
+    "releaseTag": "Sans2.004",
+    "releaseCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf",
+    "fontFile": "NotoSansCJKjp-Regular.otf",
+    "fontBytes": 16467736,
+    "fontSha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
+    "license": "OFL-1.1",
+    "licenseFile": "LICENSE.txt",
+    "licenseSha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+    "transport": {
+      "compression": { "gzipLevel": 9, "brotliQuality": 9 },
+      "rawBytes": 16467736,
+      "gzipBytes": 13629545,
+      "brotliBytes": 12365597
+    }
+  },
+  "face": { "fontIndex": 0, "variations": {}, "glyphCount": 65535, "glyphIdWidth": 16 },
+  "inspection": {
+    "cmapFormats": [4, 6, 12, 14],
+    "tables": [
+      { "tag": "BASE", "bytes": 240 },
+      { "tag": "CFF ", "bytes": 15458582 },
+      { "tag": "DSIG", "bytes": 8 },
+      { "tag": "GDEF", "bytes": 28 },
+      { "tag": "GPOS", "bytes": 47386 },
+      { "tag": "GSUB", "bytes": 177152 },
+      { "tag": "OS/2", "bytes": 96 },
+      { "tag": "VORG", "bytes": 920 },
+      { "tag": "cmap", "bytes": 257193 },
+      { "tag": "head", "bytes": 54 },
+      { "tag": "hhea", "bytes": 36 },
+      { "tag": "hmtx", "bytes": 262134 },
+      { "tag": "maxp", "bytes": 6 },
+      { "tag": "name", "bytes": 2146 },
+      { "tag": "post", "bytes": 32 },
+      { "tag": "vhea", "bytes": 36 },
+      { "tag": "vmtx", "bytes": 261386 }
+    ],
+    "mappings": [
+      { "codePoints": ["U+2000B"], "mapping": { "kind": "nominal", "glyphId": 59477 } },
+      {
+        "codePoints": ["U+3001", "U+FE00"],
+        "mapping": { "kind": "useDefault", "glyphId": 1397 }
+      },
+      {
+        "codePoints": ["U+3002", "U+FE01"],
+        "mapping": { "kind": "variant", "glyphId": 63146 }
+      },
+      {
+        "codePoints": ["U+79B0", "U+E0100"],
+        "mapping": { "kind": "variant", "glyphId": 61979 }
+      }
+    ]
+  },
+  "glyphIds": "source",
+  "bake": {
+    "bakerVersion": "0.0.0",
+    "formatVersion": 0,
+    "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d",
+    "expectedCore": {
+      "artifactBytes": 1540460,
+      "artifactSha256": "6de5b0d787d9f47c0f8103bc70725cab881821d78f9294ac5ab783d3e9752310",
+      "shapingHash": "f4e77de31444f3ee9e4a7cbdded5d0c3077455275bf81ec5def82e31f6379d58",
+      "shapingSfntBytes": 1006900,
+      "shapingSfntSha256": "0461316ade447b891e027b2deb4d8cdde0a6a31feb5dc7a529d556be311118d7",
+      "extentsBytes": 524280,
+      "extentsAvailabilityBytes": 8192,
+      "glyphCount": 65535,
+      "unitsPerEm": 1000,
+      "ascender": 1160,
+      "descender": -288,
+      "lineGap": 0,
+      "tables": [
+        { "tag": "BASE", "rawBytes": 240, "paddedBytes": 240 },
+        { "tag": "GDEF", "rawBytes": 28, "paddedBytes": 28 },
+        { "tag": "GPOS", "rawBytes": 47386, "paddedBytes": 47388 },
+        { "tag": "GSUB", "rawBytes": 177152, "paddedBytes": 177152 },
+        { "tag": "OS/2", "rawBytes": 96, "paddedBytes": 96 },
+        { "tag": "VORG", "rawBytes": 920, "paddedBytes": 920 },
+        { "tag": "cmap", "rawBytes": 257193, "paddedBytes": 257196 },
+        { "tag": "head", "rawBytes": 54, "paddedBytes": 56 },
+        { "tag": "hhea", "rawBytes": 36, "paddedBytes": 36 },
+        { "tag": "hmtx", "rawBytes": 262134, "paddedBytes": 262136 },
+        { "tag": "maxp", "rawBytes": 6, "paddedBytes": 8 },
+        { "tag": "vhea", "rawBytes": 36, "paddedBytes": 36 },
+        { "tag": "vmtx", "rawBytes": 261386, "paddedBytes": 261388 }
+      ],
+      "transport": {
+        "compression": { "gzipLevel": 9, "brotliQuality": 9 },
+        "shapingPayload": { "rawBytes": 1539372, "gzipBytes": 654925, "brotliBytes": 514547 },
+        "artifact": { "rawBytes": 1540460, "gzipBytes": 655920, "brotliBytes": 515421 }
+      }
+    }
+  },
+  "versions": {
+    "rust": "1.97.1",
+    "unicode": "17.0.0",
+    "harfbuzz": "13.0.0",
+    "harfbuzzCommit": "a0fc099681a69ae40665fbea74982a2e9d7a5260",
+    "harfbuzzSourceArchiveSha256": "1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a",
+    "harfrust": "0.12.0",
+    "harfrustCommit": "60b28ea22b5261710018d69c168a762bcb28794c",
+    "gltfSchemaRevision": "77b44be7bef26e01fb0b140e3d5bb1716421c5e9",
+    "gltfValidator": "2.0.0-dev.3.10",
+    "binaryen": "129.0.0"
+  },
+  "contracts": {
+    "corpus": "../../shaping/noto-sans-cjk/cases.json",
+    "harfbuzzOracle": "../../shaping/noto-sans-cjk/harfbuzz.json",
+    "harfrustOracle": "../../shaping/noto-sans-cjk/harfrust.json",
+    "paragraphLayout": "../../contracts/paragraph-cjk-layout-v0.json"
+  }
+}
