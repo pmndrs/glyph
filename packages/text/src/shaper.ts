@@ -283,10 +283,13 @@ class RuntimeShaperImpl implements RuntimeShaper {
     }
     if (this.#registered.get(font.handle) === font) return;
     const data = getRegisteredFontData(font);
-    const sfnt = copyIntoWasm(this.#exports, data.shapingSfnt);
-    const extents = copyIntoWasm(this.#exports, data.glyphExtents);
-    const availability = copyIntoWasm(this.#exports, data.glyphExtentsAvailability);
+    let sfnt: { readonly pointer: number; readonly length: number } | undefined;
+    let extents: { readonly pointer: number; readonly length: number } | undefined;
+    let availability: { readonly pointer: number; readonly length: number } | undefined;
     try {
+      sfnt = copyIntoWasm(this.#exports, data.shapingSfnt);
+      extents = copyIntoWasm(this.#exports, data.glyphExtents);
+      availability = copyIntoWasm(this.#exports, data.glyphExtentsAvailability);
       const status = this.#exports.registerFont(
         font.handle,
         sfnt.pointer,
@@ -299,9 +302,11 @@ class RuntimeShaperImpl implements RuntimeShaper {
       if (status !== 0) throw shaperStatusError(status, "register font");
       this.#registered.set(font.handle, font);
     } finally {
-      this.#exports.deallocate(sfnt.pointer, sfnt.length);
-      this.#exports.deallocate(extents.pointer, extents.length);
-      this.#exports.deallocate(availability.pointer, availability.length);
+      if (availability !== undefined) {
+        this.#exports.deallocate(availability.pointer, availability.length);
+      }
+      if (extents !== undefined) this.#exports.deallocate(extents.pointer, extents.length);
+      if (sfnt !== undefined) this.#exports.deallocate(sfnt.pointer, sfnt.length);
     }
   }
 

@@ -1,14 +1,14 @@
-use core::{
-    mem,
-    sync::atomic::{AtomicU32, Ordering},
-};
-use std::{string::ToString, vec::Vec};
+use core::sync::atomic::{AtomicUsize, Ordering};
+use std::{boxed::Box, string::ToString, vec::Vec};
 
 use serde::Serialize;
 
 use crate::{BakeDescriptorV0, BakeResultV0, bake_font};
 
-static RESULT_LEN: AtomicU32 = AtomicU32::new(0);
+const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
+const MAX_RESPONSE_BYTES: usize = MAX_REQUEST_ALLOCATION_BYTES as usize;
+
+static STATE: AtomicUsize = AtomicUsize::new(0);
 static ABI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/font-baker-abi-v0.json"));
 
 #[global_allocator]
@@ -36,18 +36,12 @@ struct WasmArtifactMetadata<'a> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_alloc(len: u32) -> u32 {
-    let mut bytes = Vec::<u8>::with_capacity(len as usize);
-    let pointer = bytes.as_mut_ptr();
-    mem::forget(bytes);
-    pointer as u32
+    with_state(|state| state.allocate(len))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_font_baker_dealloc(pointer: u32, len: u32) {
-    if pointer != 0 && len != 0 {
-        // SAFETY: JavaScript returns only pointers and lengths obtained from this module.
-        unsafe { drop(Vec::from_raw_parts(pointer as *mut u8, 0, len as usize)) };
-    }
+    with_state(|state| state.deallocate(pointer, len));
 }
 
 #[unsafe(no_mangle)]
@@ -57,34 +51,41 @@ pub unsafe extern "C" fn pmndrs_font_baker_bake(
     descriptor_pointer: u32,
     descriptor_len: u32,
 ) -> u32 {
-    // SAFETY: The wrapper allocates both regions in this module and writes exactly their lengths.
-    let source =
-        unsafe { std::slice::from_raw_parts(source_pointer as *const u8, source_len as usize) };
-    // SAFETY: Same allocation contract as source.
-    let descriptor_bytes = unsafe {
-        std::slice::from_raw_parts(descriptor_pointer as *const u8, descriptor_len as usize)
-    };
-    let result = serde_json::from_slice::<BakeDescriptorV0>(descriptor_bytes)
-        .map_err(|error| {
-            crate::BakeError::new(crate::BakeErrorCode::InvalidDescriptor, error.to_string())
-        })
-        .and_then(|descriptor| bake_font(source, descriptor));
+    let result = with_state(|state| {
+        let Some(source) = state.owned_bytes(source_pointer, source_len) else {
+            return Err(crate::BakeError::new(
+                crate::BakeErrorCode::InvalidDescriptor,
+                "font baker source range is not an active module allocation",
+            ));
+        };
+        let Some(descriptor_bytes) = state.owned_bytes(descriptor_pointer, descriptor_len) else {
+            return Err(crate::BakeError::new(
+                crate::BakeErrorCode::InvalidDescriptor,
+                "font baker descriptor range is not an active module allocation",
+            ));
+        };
+        serde_json::from_slice::<BakeDescriptorV0>(descriptor_bytes)
+            .map_err(|error| {
+                crate::BakeError::new(crate::BakeErrorCode::InvalidDescriptor, error.to_string())
+            })
+            .and_then(|descriptor| bake_font(source, descriptor))
+    });
     leak_response(encode_response(result))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_result_len() -> u32 {
-    RESULT_LEN.load(Ordering::Relaxed)
+    with_state(|state| state.result_len)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_abi_ptr() -> u32 {
-    ABI_JSON.as_ptr() as u32
+    u32::try_from(ABI_JSON.as_ptr() as usize).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_font_baker_abi_len() -> u32 {
-    ABI_JSON.len() as u32
+    u32::try_from(ABI_JSON.len()).unwrap_or(0)
 }
 
 fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
@@ -103,7 +104,19 @@ fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
                 report: &result.report,
                 warnings: &result.warnings,
             };
-            (crate::abi_contract::RESPONSE_SUCCESS_STATUS, serde_json::to_vec(&metadata).unwrap_or_else(|_| b"{\"code\":\"SERIALIZATION_FAILED\",\"message\":\"failed to serialize result\"}".to_vec()), result.artifacts.into_iter().next().map(|value| value.bytes).unwrap_or_default())
+            (
+                crate::abi_contract::RESPONSE_SUCCESS_STATUS,
+                serde_json::to_vec(&metadata).unwrap_or_else(|_| {
+                    b"{\"code\":\"SERIALIZATION_FAILED\",\"message\":\"failed to serialize result\"}"
+                        .to_vec()
+                }),
+                result
+                    .artifacts
+                    .into_iter()
+                    .next()
+                    .map(|value| value.bytes)
+                    .unwrap_or_default(),
+            )
         }
         Err(error) => (
             1_u32,
@@ -115,7 +128,30 @@ fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
         ),
     };
     let header_len = crate::abi_contract::RESPONSE_HEADER_BYTES as usize;
-    let mut response = vec![0_u8; header_len];
+    let Ok(metadata_len) = u32::try_from(metadata.len()) else {
+        return encode_response(Err(crate::BakeError::new(
+            crate::BakeErrorCode::IntegerOverflow,
+            "font baker response metadata exceeds the ABI address space",
+        )));
+    };
+    let Ok(artifact_len) = u32::try_from(artifact.len()) else {
+        return encode_response(Err(crate::BakeError::new(
+            crate::BakeErrorCode::IntegerOverflow,
+            "font baker response artifact exceeds the ABI address space",
+        )));
+    };
+    let Some(total_length) = response_total_length(header_len, metadata.len(), artifact.len())
+    else {
+        return encode_response(Err(crate::BakeError::new(
+            crate::BakeErrorCode::IntegerOverflow,
+            "font baker response length exceeds the ABI address space",
+        )));
+    };
+    let mut response = Vec::new();
+    if response.try_reserve_exact(total_length).is_err() {
+        return Vec::new();
+    }
+    response.resize(header_len, 0);
     response[..crate::abi_contract::RESPONSE_MAGIC.len()]
         .copy_from_slice(crate::abi_contract::RESPONSE_MAGIC.as_bytes());
     write_header_u32(
@@ -126,12 +162,12 @@ fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
     write_header_u32(
         &mut response,
         crate::abi_contract::RESPONSE_METADATA_LEN_OFFSET,
-        metadata.len() as u32,
+        metadata_len,
     );
     write_header_u32(
         &mut response,
         crate::abi_contract::RESPONSE_ARTIFACT_LEN_OFFSET,
-        artifact.len() as u32,
+        artifact_len,
     );
     debug_assert_eq!(
         header_len,
@@ -142,16 +178,126 @@ fn encode_response(result: Result<BakeResultV0, crate::BakeError>) -> Vec<u8> {
     response
 }
 
+fn response_total_length(header: usize, metadata: usize, artifact: usize) -> Option<usize> {
+    let total = header.checked_add(metadata)?.checked_add(artifact)?;
+    (total <= MAX_RESPONSE_BYTES && u32::try_from(total).is_ok()).then_some(total)
+}
+
 fn write_header_u32(response: &mut [u8], offset: u32, value: u32) {
-    let offset = offset as usize;
+    let Ok(offset) = usize::try_from(offset) else {
+        return;
+    };
     response[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
 }
 
 fn leak_response(bytes: Vec<u8>) -> u32 {
-    let mut bytes = bytes.into_boxed_slice();
-    let len = bytes.len() as u32;
-    let pointer = bytes.as_mut_ptr();
-    mem::forget(bytes);
-    RESULT_LEN.store(len, Ordering::Relaxed);
-    pointer as u32
+    with_state(|state| {
+        state.result_pointer = 0;
+        state.result_len = 0;
+        let Some((pointer, length)) = state.adopt(bytes) else {
+            return 0;
+        };
+        state.result_pointer = pointer;
+        state.result_len = length;
+        pointer
+    })
+}
+
+struct WasmState {
+    allocations: Vec<Allocation>,
+    result_pointer: u32,
+    result_len: u32,
+}
+
+struct Allocation {
+    pointer: u32,
+    requested_length: u32,
+    bytes: Vec<u8>,
+}
+
+impl WasmState {
+    fn allocate(&mut self, length: u32) -> u32 {
+        if length == 0 {
+            return 0;
+        }
+        if length > MAX_REQUEST_ALLOCATION_BYTES {
+            return 0;
+        }
+        if self.allocations.try_reserve(1).is_err() {
+            return 0;
+        }
+        let mut bytes = Vec::<u8>::new();
+        if bytes.try_reserve_exact(length as usize).is_err() {
+            return 0;
+        }
+        bytes.resize(length as usize, 0);
+        self.adopt(bytes).map_or(0, |(pointer, _)| pointer)
+    }
+
+    fn adopt(&mut self, mut bytes: Vec<u8>) -> Option<(u32, u32)> {
+        let length = u32::try_from(bytes.len()).ok()?;
+        if length == 0 || self.allocations.try_reserve(1).is_err() {
+            return None;
+        }
+        let pointer = u32::try_from(bytes.as_mut_ptr() as usize).ok()?;
+        if pointer == 0
+            || self
+                .allocations
+                .iter()
+                .any(|entry| entry.pointer == pointer)
+        {
+            return None;
+        }
+        self.allocations.push(Allocation {
+            pointer,
+            requested_length: length,
+            bytes,
+        });
+        Some((pointer, length))
+    }
+
+    fn deallocate(&mut self, pointer: u32, length: u32) {
+        if let Some(index) = self
+            .allocations
+            .iter()
+            .position(|entry| entry.pointer == pointer && entry.requested_length == length)
+        {
+            self.allocations.swap_remove(index);
+            if self.result_pointer == pointer {
+                self.result_pointer = 0;
+                self.result_len = 0;
+            }
+        }
+    }
+
+    fn owned_bytes(&self, pointer: u32, length: u32) -> Option<&[u8]> {
+        if length == 0 {
+            return (pointer == 0).then_some(&[]);
+        }
+        self.allocations
+            .iter()
+            .find(|entry| entry.pointer == pointer && entry.requested_length == length)
+            .map(|entry| entry.bytes.as_slice())
+    }
+}
+
+fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {
+    let mut pointer = STATE.load(Ordering::Acquire);
+    if pointer == 0 {
+        let candidate = Box::into_raw(Box::new(WasmState {
+            allocations: Vec::new(),
+            result_pointer: 0,
+            result_len: 0,
+        })) as usize;
+        match STATE.compare_exchange(0, candidate, Ordering::AcqRel, Ordering::Acquire) {
+            Ok(_) => pointer = candidate,
+            Err(existing) => {
+                // SAFETY: this allocation was not published because another invocation won.
+                drop(unsafe { Box::from_raw(candidate as *mut WasmState) });
+                pointer = existing;
+            }
+        }
+    }
+    // SAFETY: V0 Wasm is single-threaded; state is initialized once and never freed.
+    operation(unsafe { &mut *(pointer as *mut WasmState) })
 }

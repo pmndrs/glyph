@@ -14,6 +14,12 @@ pub const DIRECTION_AUTO: u8 = 0;
 pub const DIRECTION_LTR: u8 = 1;
 pub const DIRECTION_RTL: u8 = 2;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BidiError {
+    InvalidDirection,
+    ResultTooLarge,
+}
+
 pub struct BidiAnalysis {
     pub levels: Vec<u8>,
     pub classes: Vec<u8>,
@@ -22,12 +28,12 @@ pub struct BidiAnalysis {
     pub paragraph_levels: Vec<u8>,
 }
 
-pub fn analyze(text: &[u16], direction: u8) -> Result<BidiAnalysis, ()> {
+pub fn analyze(text: &[u16], direction: u8) -> Result<BidiAnalysis, BidiError> {
     let default_level = match direction {
         DIRECTION_AUTO => None,
         DIRECTION_LTR => Some(LTR_LEVEL),
         DIRECTION_RTL => Some(RTL_LEVEL),
-        _ => return Err(()),
+        _ => return Err(BidiError::InvalidDirection),
     };
     let info = BidiInfo::new_with_data_source(&Unicode17BidiData, text, default_level);
     let mut paragraph_starts = Vec::with_capacity(info.paragraphs.len().max(1));
@@ -39,8 +45,10 @@ pub fn analyze(text: &[u16], direction: u8) -> Result<BidiAnalysis, ()> {
         paragraph_levels.push(default_level.unwrap_or(LTR_LEVEL).number());
     } else {
         for paragraph in &info.paragraphs {
-            paragraph_starts.push(u32::try_from(paragraph.range.start).map_err(|_| ())?);
-            paragraph_ends.push(u32::try_from(paragraph.range.end).map_err(|_| ())?);
+            paragraph_starts
+                .push(u32::try_from(paragraph.range.start).map_err(|_| BidiError::ResultTooLarge)?);
+            paragraph_ends
+                .push(u32::try_from(paragraph.range.end).map_err(|_| BidiError::ResultTooLarge)?);
             paragraph_levels.push(paragraph.level.number());
         }
     }

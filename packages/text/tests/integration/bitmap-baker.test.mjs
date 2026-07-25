@@ -122,3 +122,40 @@ test('rejects mismatched shaping context and honors pre-bake cancellation', asyn
     /cancelled by fixture/,
   )
 })
+
+test('direct-memory allocations reject forged releases and recover after invalid requests', async () => {
+  const { instance } = await setup()
+  const {
+    memory,
+    pmndrs_bitmap_baker_alloc: allocate,
+    pmndrs_bitmap_baker_dealloc: deallocate,
+    pmndrs_bitmap_baker_bake: bake,
+    pmndrs_bitmap_baker_result_len: resultLength,
+  } = instance.exports
+  assert.ok(memory instanceof WebAssembly.Memory)
+  assert.equal(typeof allocate, 'function')
+  assert.equal(typeof deallocate, 'function')
+  assert.equal(typeof bake, 'function')
+  assert.equal(typeof resultLength, 'function')
+
+  assert.equal(allocate(64 * 1024 * 1024 + 1), 0)
+  const pointer = allocate(8)
+  assert.notEqual(pointer, 0)
+  new Uint8Array(memory.buffer, pointer, 8).fill(0x20)
+  deallocate(pointer + 1, 7)
+  deallocate(pointer, 7)
+  const response = bake(pointer, 8, pointer, 8)
+  const responseLength = resultLength()
+  assert.notEqual(response, 0)
+  assert.ok(responseLength > 0)
+  deallocate(pointer, 8)
+  deallocate(pointer, 8)
+  deallocate(response, responseLength - 1)
+  assert.equal(resultLength(), responseLength)
+  deallocate(response, responseLength)
+  assert.equal(resultLength(), 0)
+
+  const recovered = allocate(8)
+  assert.notEqual(recovered, 0)
+  deallocate(recovered, 8)
+})

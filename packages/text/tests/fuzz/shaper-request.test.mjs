@@ -18,6 +18,35 @@ test("fixed-seed shaper request mutations fail safely and deterministically", as
   assert.ok(first.every((status) => status === 5 || status === 6));
 });
 
+test("raw shaper allocations reject forged releases and recover after invalid requests", async () => {
+  const wasm = await readFile(wasmUrl);
+  const module = await WebAssembly.compile(wasm);
+  const instance = await WebAssembly.instantiate(module, {});
+  const memory = instance.exports.memory;
+  const allocate = instance.exports.pmndrs_text_shaper_alloc;
+  const deallocate = instance.exports.pmndrs_text_shaper_dealloc;
+  const shapeBatch = instance.exports.pmndrs_text_shaper_shape_batch;
+  assert.ok(memory instanceof WebAssembly.Memory);
+  assert.equal(typeof allocate, "function");
+  assert.equal(typeof deallocate, "function");
+  assert.equal(typeof shapeBatch, "function");
+
+  assert.equal(allocate(64 * 1024 * 1024 + 1), 0);
+  const bytes = shapeRequest();
+  const pointer = allocate(bytes.byteLength);
+  assert.notEqual(pointer, 0);
+  new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+  deallocate(pointer + 1, bytes.byteLength - 1);
+  deallocate(pointer, bytes.byteLength - 1);
+  assert.equal(shapeBatch(pointer, bytes.byteLength), 5);
+  deallocate(pointer, bytes.byteLength);
+  deallocate(pointer, bytes.byteLength);
+
+  const recovered = allocate(bytes.byteLength);
+  assert.notEqual(recovered, 0);
+  deallocate(recovered, bytes.byteLength);
+});
+
 async function execute(module, abi, corpus) {
   const instance = await WebAssembly.instantiate(module, {});
   const memory = instance.exports.memory;
