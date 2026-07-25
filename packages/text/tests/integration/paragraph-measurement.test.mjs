@@ -8,6 +8,7 @@ import {
   FontRegistry,
 } from '@pmndrs/text'
 import { createFontBaker } from '@pmndrs/text-font-baker'
+import { hashParagraphLayout } from '../../../../apps/benchmarks/src/benchmark/paragraph-layout-digest.ts'
 
 const fontDirectory = new URL(
   '../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/',
@@ -79,7 +80,7 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
     expected.glyphs.map(({ yOffset }) => Math.fround(naturalLayout.firstBaseline - yOffset * 32 / font.metrics.unitsPerEm)),
   )
   assertLayoutLines(naturalLayout, layoutGoldens.natural.layout)
-  assert.equal(hashLayout(naturalLayout), layoutGoldens.natural.layout.hash)
+  assert.equal(hashParagraphLayout(naturalLayout), layoutGoldens.natural.layout.hash)
 
   const wideLayout = paragraph.layout(wideConstraints)
   assert.deepEqual(calls, { shape: 2, reshape: 1 }, 'all wide boundaries reshape in one batch')
@@ -88,7 +89,7 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
   assert.deepEqual([...wideLayout.glyphIds], expected.glyphs.map(({ glyphId }) => glyphId))
   assert.deepEqual([...wideLayout.clusters], expected.glyphs.map(({ cluster }) => cluster))
   assert.deepEqual([...wideLayout.glyphFlags], expected.glyphs.map(({ flags }) => flags))
-  assert.equal(hashLayout(wideLayout), layoutGoldens.wide.layout.hash)
+  assert.equal(hashParagraphLayout(wideLayout), layoutGoldens.wide.layout.hash)
 
   const narrowConstraints = { width: { mode: 'at-most', size: 360 } }
   const narrowLayout = paragraph.layout(narrowConstraints)
@@ -104,7 +105,7 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
     { run: 0, itemStart: 47, itemEnd: 56, contextStart: 0, contextEnd: 56, flags: 0x43 },
   ])
   assertLayoutLines(narrowLayout, layoutGoldens.narrow.layout)
-  assert.equal(hashLayout(narrowLayout), layoutGoldens.narrow.layout.hash)
+  assert.equal(hashParagraphLayout(narrowLayout), layoutGoldens.narrow.layout.hash)
   const exactHeight = paragraph.layout({
     ...narrowConstraints,
     height: { mode: 'exactly', size: 200 },
@@ -114,7 +115,7 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
   assert.equal(exactHeight.glyphIds, narrowLayout.glyphIds)
   const postLayoutInterfering = engine.create({ text: 'ffi', font: font.handle })
   assert.equal(
-    hashLayout(narrowLayout),
+    hashParagraphLayout(narrowLayout),
     layoutGoldens.narrow.layout.hash,
     'positioned arrays own their Wasm results',
   )
@@ -193,6 +194,30 @@ test('validates spans, constraints, empty text, and lifecycle deterministically'
   assert.throws(() => empty.measure({ wrap: 'invalid' }), /wrap must/)
   assert.throws(() => empty.measure({ align: 'invalid' }), /align must/)
   assert.throws(() => empty.measure({ overflow: 'invalid' }), /overflow must/)
+  assert.throws(() => engine.create(null), /paragraph input must be an object/)
+  assert.throws(
+    () => engine.create({ text: 'a', font: font.handle, style: null }),
+    /paragraph style must be an object/,
+  )
+  assert.throws(
+    () => engine.create({ text: 'a', font: font.handle, spans: null }),
+    /paragraph spans must be an array/,
+  )
+  assert.throws(
+    () => engine.create({ text: 'a', font: font.handle, spans: [null] }),
+    /paragraph span must be an object/,
+  )
+  assert.throws(
+    () => engine.create({ text: 'a', font: font.handle, style: { features: null } }),
+    /paragraph style features must be an array/,
+  )
+  assert.throws(() => empty.measure(null), /paragraph constraints must be an object/)
+  assert.throws(() => empty.layout([]), /paragraph constraints must be an object/)
+  assert.throws(() => empty.measure({ width: null }), /width constraint must be an object/)
+  assert.throws(
+    () => engine.create({ text: 'a', font: font.handle, style: { language: null } }),
+    /language must be a string/,
+  )
   const emptyLayout = empty.layout()
   assert.deepEqual(emptyLayout, {
     width: 0,
@@ -221,6 +246,39 @@ test('validates spans, constraints, empty text, and lifecycle deterministically'
   const trailingBreak = engine.create({ text: 'a\n', font: font.handle }).measure()
   assert.equal(trailingBreak.contentHeight, singleLine.contentHeight * 2)
   assert.equal(trailingBreak.lastBaseline, singleLine.lastBaseline + singleLine.contentHeight)
+  shaper.dispose()
+  font.dispose()
+})
+
+test('sweeps nested spans without repeatedly resolving active styles', async () => {
+  const { font, shaper } = await runtime()
+  let registrations = 0
+  const observed = {
+    registry: shaper.registry,
+    registerFont: (registered) => {
+      registrations += 1
+      return shaper.registerFont(registered)
+    },
+    disposeFont: (registered) => shaper.disposeFont(registered),
+    analyzeBidi: (text, direction) => shaper.analyzeBidi(text, direction),
+    shapeBatch: (request) => shaper.shapeBatch(request),
+    reshapeRanges: (request) => shaper.reshapeRanges(request),
+    memoryReport: () => shaper.memoryReport(),
+    dispose: () => shaper.dispose(),
+  }
+  const text = 'a'.repeat(320)
+  const spans = Array.from({ length: 128 }, (_, index) => ({
+    start: index,
+    end: text.length - index,
+  }))
+  const engine = createParagraphEngine({ shaper: observed })
+  const nested = engine.create({ text, font: font.handle, spans })
+  assert.equal(registrations, 1, 'the root style is registered once, not once per active span')
+  const plain = engine.create({ text, font: font.handle })
+  assert.deepEqual(nested.measure(), plain.measure())
+  assert.deepEqual(nested.layout(), plain.layout())
+  nested.dispose()
+  plain.dispose()
   shaper.dispose()
   font.dispose()
 })
@@ -283,30 +341,6 @@ function assertLayoutLines(layout, golden) {
   ]) {
     assert.deepEqual([...layout[key]], golden[key])
   }
-}
-
-function hashLayout(layout) {
-  let hash = 2_166_136_261
-  for (const values of [
-    layout.glyphFontSlots,
-    layout.glyphIds,
-    layout.clusters,
-    layout.glyphFontSizes,
-    layout.x,
-    layout.y,
-    layout.glyphFlags,
-    layout.lineTextStarts,
-    layout.lineTextEnds,
-    layout.lineGlyphStarts,
-    layout.lineGlyphCounts,
-    layout.lineBaselines,
-    layout.lineAdvances,
-  ]) {
-    hash = Math.imul(hash ^ values.length, 16_777_619)
-    const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
-    for (const value of bytes) hash = Math.imul(hash ^ value, 16_777_619)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 async function readJson(url) {

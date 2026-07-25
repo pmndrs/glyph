@@ -23,6 +23,7 @@ import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layou
 import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-v0.json'
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
+import { hashParagraphLayout, hashParagraphLayouts } from './paragraph-layout-digest'
 import { createUikitLayoutFixture, YogaMeasureMode } from './uikit-layout-fixture'
 
 function stableSyntheticHash(sample: number): string {
@@ -410,7 +411,7 @@ const paragraphLayoutTarget: BenchmarkTarget = {
     exactParagraphLayout('narrow', narrow, paragraphLayoutGolden.narrow, paragraphFont.handle)
     return {
       bytes: layoutBytes(natural) + layoutBytes(wide) + layoutBytes(narrow),
-      hash: [natural, wide, narrow].map(hashParagraphLayout).join(':'),
+      hash: hashParagraphLayouts([natural, wide, narrow]),
       metrics: {
         batchedBoundaryLayouts: 2,
         glyphCount: natural.glyphIds.length + wide.glyphIds.length + narrow.glyphIds.length,
@@ -440,8 +441,6 @@ interface ContractLayout {
   readonly lineBaselines: readonly number[]
   readonly lineAdvances: readonly number[]
 }
-
-type ParagraphBidiContract = typeof paragraphBidiContract
 
 let policyShaper: RuntimeShaper | undefined
 let policyFonts: readonly RegisteredFont[] = []
@@ -652,7 +651,7 @@ const paragraphPolicyTarget: BenchmarkTarget = {
         layouts.reduce((sum, layout) => sum + layoutBytes(layout), 0) +
         resolved.centeredX.byteLength +
         resolved.centeredY.byteLength,
-      hash: paragraphPolicyContractHash(paragraphBidiContract),
+      hash: hashParagraphLayouts(layouts),
       metrics: {
         bidiLayoutCount: 2,
         policyLayoutCount: 9,
@@ -756,14 +755,6 @@ function exactObject(
   }
 }
 
-function paragraphPolicyContractHash(contract: ParagraphBidiContract): string {
-  return [
-    ...Object.values(contract.bidi).map(({ layout }) => layout.hash),
-    ...Object.values(contract.policies.cases).map(({ layout }) => layout.hash),
-    contract.uikit.resolved.layout.hash,
-  ].join(':')
-}
-
 function layoutArrays(layout: ParagraphLayout): readonly ArrayBufferView[] {
   return [
     layout.fontHandles,
@@ -781,17 +772,6 @@ function layoutArrays(layout: ParagraphLayout): readonly ArrayBufferView[] {
     layout.lineBaselines,
     layout.lineAdvances,
   ]
-}
-
-function hashParagraphLayout(layout: ParagraphLayout): string {
-  let hash = 2_166_136_261
-  for (const values of layoutArrays(layout).slice(1)) {
-    const length = 'length' in values ? Number(values.length) : values.byteLength
-    hash = Math.imul(hash ^ length, 16_777_619)
-    const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
-    for (const value of bytes) hash = Math.imul(hash ^ value, 16_777_619)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 function layoutBytes(layout: ParagraphLayout): number {

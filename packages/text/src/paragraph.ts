@@ -95,6 +95,25 @@ interface StyleSegment {
   readonly style: ResolvedStyle
 }
 
+interface ResolvedSpanStyle {
+  readonly index: number
+  readonly start: number
+  readonly end: number
+  readonly font?: FontHandle
+  readonly fontSize?: number
+  readonly lineHeight?: number
+  readonly letterSpacing?: number
+  readonly language?: string
+  readonly direction?: 'auto' | 'ltr' | 'rtl'
+  readonly features?: readonly ResolvedFontFeature[]
+}
+
+interface ActiveStyleValue<Value> {
+  readonly index: number
+  readonly end: number
+  readonly value: Value
+}
+
 interface PreparedRun extends StyleSegment {
   readonly script: string
   readonly direction: 'ltr' | 'rtl'
@@ -377,18 +396,42 @@ function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): Prepare
 }
 
 function copyInput(input: ParagraphInput): ParagraphInput {
-  if (typeof input?.text !== 'string') throw new TypeError('paragraph text must be a string')
+  if (!isNonArrayObject(input)) throw new TypeError('paragraph input must be an object')
+  if (typeof input.text !== 'string') throw new TypeError('paragraph text must be a string')
+  if (input.style !== undefined && !isNonArrayObject(input.style)) {
+    throw new TypeError('paragraph style must be an object')
+  }
+  if (input.spans !== undefined && !Array.isArray(input.spans)) {
+    throw new TypeError('paragraph spans must be an array')
+  }
   return {
     text: input.text,
     font: input.font,
-    ...(input.style === undefined ? {} : { style: copyStyle(input.style) }),
+    ...(input.style === undefined ? {} : { style: copyStyle(input.style, 'paragraph style') }),
     ...(input.spans === undefined
       ? {}
-      : { spans: input.spans.map((span) => ({ ...copyStyle(span), start: span.start, end: span.end, ...(span.font === undefined ? {} : { font: span.font }) })) }),
+      : {
+          spans: input.spans.map((span) => {
+            if (!isNonArrayObject(span)) throw new TypeError('paragraph span must be an object')
+            return {
+              ...copyStyle(span, 'paragraph span'),
+              start: span.start,
+              end: span.end,
+              ...(span.font === undefined ? {} : { font: span.font }),
+            }
+          }),
+        }),
   }
 }
 
-function copyStyle(style: ParagraphStyle): ParagraphStyle {
+function copyStyle(style: ParagraphStyle, name: string): ParagraphStyle {
+  if (!isNonArrayObject(style)) throw new TypeError(`${name} must be an object`)
+  if (style.features !== undefined && !Array.isArray(style.features)) {
+    throw new TypeError(`${name} features must be an array`)
+  }
+  if (style.direction !== undefined && style.direction !== 'auto' && style.direction !== 'ltr' && style.direction !== 'rtl') {
+    throw new RangeError(`${name} direction must be auto, ltr, or rtl`)
+  }
   return {
     ...(style.fontSize === undefined ? {} : { fontSize: style.fontSize }),
     ...(style.lineHeight === undefined ? {} : { lineHeight: style.lineHeight }),
@@ -397,7 +440,12 @@ function copyStyle(style: ParagraphStyle): ParagraphStyle {
     ...(style.direction === undefined ? {} : { direction: style.direction }),
     ...(style.features === undefined
       ? {}
-      : { features: style.features.map((feature) => ({ ...feature })) }),
+      : {
+          features: style.features.map((feature) => {
+            if (!isNonArrayObject(feature)) throw new TypeError(`${name} feature must be an object`)
+            return { ...feature }
+          }),
+        }),
   }
 }
 
@@ -408,28 +456,30 @@ function resolveStyles(
 ): readonly StyleSegment[] {
   const boundaries = new Set<number>([0, input.text.length])
   const legalBoundaries = new Set(graphemeBoundaries)
-  for (const span of input.spans ?? []) {
+  const spansByStart = new Map<number, ResolvedSpanStyle[]>()
+  for (const [index, span] of (input.spans ?? []).entries()) {
     assertTextRange(span.start, span.end, input.text.length, 'paragraph span')
     if (!legalBoundaries.has(span.start) || !legalBoundaries.has(span.end)) {
       throw new RangeError('paragraph span boundaries must be extended-grapheme boundaries')
     }
     boundaries.add(span.start)
     boundaries.add(span.end)
+    const resolved = resolveSpanStyle(shaper, span, index)
+    const starting = spansByStart.get(span.start)
+    if (starting === undefined) spansByStart.set(span.start, [resolved])
+    else starting.push(resolved)
   }
   const sorted = [...boundaries].sort((left, right) => left - right)
   const root = resolveStyle(shaper, input.font, input.style ?? {}, 0, input.text.length)
   if (input.text.length === 0) return [{ start: 0, end: 0, style: root }]
+  const sweep = new StyleSweep(root)
   const segments: StyleSegment[] = []
   for (let index = 0; index + 1 < sorted.length; index += 1) {
     const start = sorted[index]
     const end = sorted[index + 1]
     if (start === undefined || end === undefined || start === end) continue
-    let style = root
-    for (const span of input.spans ?? []) {
-      if (span.start <= start && span.end >= end) {
-        style = mergeStyle(shaper, style, span, span.start, span.end)
-      }
-    }
+    for (const span of spansByStart.get(start) ?? []) sweep.add(span)
+    const style = sweep.styleAt(start)
     const previous = segments.at(-1)
     if (previous !== undefined && previous.end === start && equalStyles(previous.style, style)) {
       segments[segments.length - 1] = { ...previous, end }
@@ -438,6 +488,125 @@ function resolveStyles(
     }
   }
   return segments
+}
+
+function resolveSpanStyle(
+  shaper: RuntimeShaper,
+  span: ParagraphSpan,
+  index: number,
+): ResolvedSpanStyle {
+  if (span.font !== undefined) shaper.registerFont(requireFont(shaper, span.font))
+  const lineHeight = span.lineHeight === undefined
+    ? undefined
+    : finitePositive(span.lineHeight, 'lineHeight')
+  const direction = span.direction
+  const language = span.language === undefined ? undefined : normalizeLanguage(span.language)
+  return {
+    index,
+    start: span.start,
+    end: span.end,
+    ...(span.font === undefined ? {} : { font: span.font }),
+    ...(span.fontSize === undefined ? {} : { fontSize: finitePositive(span.fontSize, 'fontSize') }),
+    ...(lineHeight === undefined ? {} : { lineHeight }),
+    ...(span.letterSpacing === undefined ? {} : { letterSpacing: finite(span.letterSpacing, 'letterSpacing') }),
+    ...(language === undefined ? {} : { language }),
+    ...(direction === undefined ? {} : { direction }),
+    ...(span.features === undefined ? {} : { features: resolveFeatures(span.features, span.start, span.end) }),
+  }
+}
+
+/**
+ * At each boundary, the last input span that is still active wins each style
+ * property. Per-property max-heaps preserve that cascade without re-scanning
+ * all spans for every segment; expired entries are discarded when observed.
+ */
+class StyleSweep {
+  readonly #root: ResolvedStyle
+  readonly #font = new LatestActiveValue<FontHandle>()
+  readonly #fontSize = new LatestActiveValue<number>()
+  readonly #lineHeight = new LatestActiveValue<number>()
+  readonly #letterSpacing = new LatestActiveValue<number>()
+  readonly #language = new LatestActiveValue<string>()
+  readonly #direction = new LatestActiveValue<'auto' | 'ltr' | 'rtl'>()
+  readonly #features = new LatestActiveValue<readonly ResolvedFontFeature[]>()
+
+  constructor(root: ResolvedStyle) {
+    this.#root = root
+  }
+
+  add(span: ResolvedSpanStyle): void {
+    const entry = <Value>(value: Value): ActiveStyleValue<Value> => ({
+      index: span.index,
+      end: span.end,
+      value,
+    })
+    if (span.font !== undefined) this.#font.add(entry(span.font))
+    if (span.fontSize !== undefined) this.#fontSize.add(entry(span.fontSize))
+    if (span.lineHeight !== undefined) this.#lineHeight.add(entry(span.lineHeight))
+    if (span.letterSpacing !== undefined) this.#letterSpacing.add(entry(span.letterSpacing))
+    if (span.language !== undefined) this.#language.add(entry(span.language))
+    if (span.direction !== undefined) this.#direction.add(entry(span.direction))
+    if (span.features !== undefined) this.#features.add(entry(span.features))
+  }
+
+  styleAt(offset: number): ResolvedStyle {
+    const font = this.#font.valueAt(offset) ?? this.#root.font
+    const fontSize = this.#fontSize.valueAt(offset) ?? this.#root.fontSize
+    const lineHeight = this.#lineHeight.valueAt(offset) ?? this.#root.lineHeight
+    const letterSpacing = this.#letterSpacing.valueAt(offset) ?? this.#root.letterSpacing
+    const language = this.#language.valueAt(offset) ?? this.#root.language
+    const override = this.#direction.valueAt(offset)
+    const direction = override ?? this.#root.direction
+    const features = this.#features.valueAt(offset) ?? this.#root.features
+    return {
+      font,
+      fontSize,
+      ...(lineHeight === undefined ? {} : { lineHeight }),
+      letterSpacing,
+      ...(language === undefined ? {} : { language }),
+      direction,
+      ...(override === undefined || direction === 'auto' ? {} : { bidiOverride: direction }),
+      features,
+    }
+  }
+}
+
+class LatestActiveValue<Value> {
+  readonly #heap: ActiveStyleValue<Value>[] = []
+
+  add(value: ActiveStyleValue<Value>): void {
+    this.#heap.push(value)
+    let child = this.#heap.length - 1
+    while (child > 0) {
+      const parent = (child - 1) >>> 1
+      if ((this.#heap[parent]?.index ?? -1) >= value.index) break
+      this.#heap[child] = this.#heap[parent] as ActiveStyleValue<Value>
+      child = parent
+    }
+    this.#heap[child] = value
+  }
+
+  valueAt(offset: number): Value | undefined {
+    while (this.#heap[0]?.end !== undefined && this.#heap[0].end <= offset) this.#removeTop()
+    return this.#heap[0]?.value
+  }
+
+  #removeTop(): void {
+    const last = this.#heap.pop()
+    if (last === undefined || this.#heap.length === 0) return
+    let parent = 0
+    while (true) {
+      const left = parent * 2 + 1
+      const right = left + 1
+      const child = (this.#heap[right]?.index ?? -1) > (this.#heap[left]?.index ?? -1)
+        ? right
+        : left
+      if ((this.#heap[child]?.index ?? -1) <= last.index) break
+      this.#heap[parent] = this.#heap[child] as ActiveStyleValue<Value>
+      parent = child
+    }
+    this.#heap[parent] = last
+  }
 }
 
 function resolveStyle(
@@ -467,40 +636,6 @@ function resolveStyle(
   }
 }
 
-function mergeStyle(
-  shaper: RuntimeShaper,
-  base: ResolvedStyle,
-  span: ParagraphSpan,
-  start: number,
-  end: number,
-): ResolvedStyle {
-  const fontHandle = span.font ?? base.font
-  const font = requireFont(shaper, fontHandle)
-  shaper.registerFont(font)
-  const fontSize = span.fontSize === undefined
-    ? base.fontSize
-    : finitePositive(span.fontSize, 'fontSize')
-  const lineHeight = span.lineHeight === undefined
-    ? base.lineHeight
-    : finitePositive(span.lineHeight, 'lineHeight')
-  const letterSpacing = span.letterSpacing === undefined
-    ? base.letterSpacing
-    : finite(span.letterSpacing, 'letterSpacing')
-  const language = span.language === undefined ? base.language : normalizeLanguage(span.language)
-  return {
-    font: fontHandle,
-    fontSize,
-    ...(lineHeight === undefined ? {} : { lineHeight }),
-    letterSpacing,
-    ...(language === undefined ? {} : { language }),
-    direction: span.direction ?? base.direction,
-    ...(span.direction === undefined
-      ? (base.bidiOverride === undefined ? {} : { bidiOverride: base.bidiOverride })
-      : (span.direction === 'auto' ? {} : { bidiOverride: span.direction })),
-    features: span.features === undefined ? base.features : resolveFeatures(span.features, start, end),
-  }
-}
-
 function resolveFeatures(
   features: readonly FontFeature[],
   containingStart: number,
@@ -526,42 +661,41 @@ function prepareRuns(
   bidi: OwnedBidiAnalysis,
 ): readonly PreparedRun[] {
   const runs: PreparedRun[] = []
-  for (const style of styles) {
-    for (const script of unicode.scriptItems) {
-      for (const bidiRun of bidiRuns(bidi.levels)) {
-        const start = Math.max(style.start, script.start, bidiRun.start)
-        const end = Math.min(style.end, script.end, bidiRun.end)
-        if (start >= end) continue
-        for (const fragment of drawableFragments(text, start, end)) {
-          const direction = style.style.bidiOverride ?? directionForLevel(bidiRun.level)
-          const bidiLevel = style.style.bidiOverride === undefined
-            ? bidiRun.level
-            : forceLevelDirection(bidiRun.level, direction)
-          const run: PreparedRun = {
-            ...fragment,
-            style: style.style,
-            script: script.script,
-            direction,
-            bidiLevel,
-          }
-          const previous = runs.at(-1)
-          if (
-            previous !== undefined &&
-            previous.end === run.start &&
-            previous.script === run.script &&
-            previous.direction === run.direction &&
-            previous.bidiLevel === run.bidiLevel &&
-            equalStyles(previous.style, run.style)
-          ) {
-            runs[runs.length - 1] = { ...previous, end: run.end }
-          } else {
-            runs.push(run)
-          }
-        }
+  const bidiItems = bidiRuns(bidi.levels)
+  let styleIndex = 0
+  let scriptIndex = 0
+  let bidiIndex = 0
+  while (
+    styleIndex < styles.length &&
+    scriptIndex < unicode.scriptItems.length &&
+    bidiIndex < bidiItems.length
+  ) {
+    const style = styles[styleIndex]
+    const script = unicode.scriptItems[scriptIndex]
+    const bidiRun = bidiItems[bidiIndex]
+    if (style === undefined || script === undefined || bidiRun === undefined) break
+    const start = Math.max(style.start, script.start, bidiRun.start)
+    const end = Math.min(style.end, script.end, bidiRun.end)
+    if (start < end) {
+      const direction = style.style.bidiOverride ?? directionForLevel(bidiRun.level)
+      const bidiLevel = style.style.bidiOverride === undefined
+        ? bidiRun.level
+        : forceLevelDirection(bidiRun.level, direction)
+      for (const fragment of drawableFragments(text, start, end)) {
+        appendPreparedRun(runs, {
+          ...fragment,
+          style: style.style,
+          script: script.script,
+          direction,
+          bidiLevel,
+        })
       }
     }
+    const boundary = Math.min(style.end, script.end, bidiRun.end)
+    if (style.end === boundary) styleIndex += 1
+    if (script.end === boundary) scriptIndex += 1
+    if (bidiRun.end === boundary) bidiIndex += 1
   }
-  runs.sort((left, right) => left.start - right.start || left.end - right.end)
   if (runs.length === 0) {
     const fallback = styles[0]
     if (fallback !== undefined) {
@@ -577,6 +711,22 @@ function prepareRuns(
     }
   }
   return runs
+}
+
+function appendPreparedRun(runs: PreparedRun[], run: PreparedRun): void {
+  const previous = runs.at(-1)
+  if (
+    previous !== undefined &&
+    previous.end === run.start &&
+    previous.script === run.script &&
+    previous.direction === run.direction &&
+    previous.bidiLevel === run.bidiLevel &&
+    equalStyles(previous.style, run.style)
+  ) {
+    runs[runs.length - 1] = { ...previous, end: run.end }
+  } else {
+    runs.push(run)
+  }
 }
 
 function bidiRuns(levels: Uint8Array): readonly {
@@ -1013,6 +1163,7 @@ function metricsForLine(
 }
 
 function normalizeConstraints(constraints: ParagraphConstraints = {}): NormalizedConstraints {
+  if (!isNonArrayObject(constraints)) throw new TypeError('paragraph constraints must be an object')
   const width = normalizeAxis(constraints.width, 'width')
   const height = normalizeAxis(constraints.height, 'height')
   const maxLines = constraints.maxLines
@@ -1045,9 +1196,9 @@ function normalizeAxis(
   constraint: ParagraphAxisConstraint | undefined,
   name: string,
 ): ParagraphAxisConstraint {
-  if (constraint === undefined || constraint.mode === 'unconstrained') {
-    return { mode: 'unconstrained' }
-  }
+  if (constraint === undefined) return { mode: 'unconstrained' }
+  if (!isNonArrayObject(constraint)) throw new TypeError(`${name} constraint must be an object`)
+  if (constraint.mode === 'unconstrained') return { mode: 'unconstrained' }
   if (constraint.mode !== 'at-most' && constraint.mode !== 'exactly') {
     throw new RangeError(`${name} mode must be unconstrained, at-most, or exactly`)
   }
@@ -1698,6 +1849,10 @@ function finite(value: number, name: string): number {
   return value
 }
 
+function isNonArrayObject<T>(value: T): value is T & object {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function finitePositive(value: number, name: string): number {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be finite and positive`)
   return value
@@ -1710,6 +1865,7 @@ function finiteNonnegative(value: number, name: string): number {
 
 function normalizeLanguage(language: string | undefined): string | undefined {
   if (language === undefined) return undefined
+  if (typeof language !== 'string') throw new TypeError('language must be a string')
   const normalized = language.trim().toLowerCase()
   if (normalized.length === 0) throw new RangeError('language must not be empty')
   return normalized

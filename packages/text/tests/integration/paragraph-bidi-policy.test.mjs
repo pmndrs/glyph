@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import { createParagraphEngine, createRuntimeShaper, FontRegistry } from '@pmndrs/text'
 import { createFontBaker } from '@pmndrs/text-font-baker'
+import { hashParagraphLayout } from '../../../../apps/benchmarks/src/benchmark/paragraph-layout-digest.ts'
 
 const contractUrl = new URL(
   '../../../../apps/benchmarks/fixtures/contracts/paragraph-bidi-layout-v0.json',
@@ -32,6 +33,7 @@ test('lays out exact mixed-direction Amiri goldens through retained GLB shaping 
     })
     const layout = paragraph.layout(fixture.constraints)
     assertGoldenLayout(layout, fixture.layout, true)
+    assertLineTopology(layout, fixture.text)
     if (retainedLayout === undefined) retainedLayout = layout
   }
 
@@ -59,7 +61,7 @@ test('lays out exact mixed-direction Amiri goldens through retained GLB shaping 
     ],
   )
   assert.equal(
-    hashLayout(retainedLayout),
+    hashParagraphLayout(retainedLayout),
     contract.bidi.ltr.layout.hash,
     'later borrowed Wasm results must not mutate an earlier paragraph layout',
   )
@@ -97,6 +99,7 @@ test('applies exact alignment, clipping, max-lines, and ellipsis policies withou
     const layout = paragraph.layout(fixture.constraints)
     layouts[id] = layout
     assertGoldenLayout(layout, fixture.layout, false)
+    assertLineTopology(layout, contract.policies.text)
     assert.equal(calls.reshape, expectedCrossings[id], `${id} reshape boundary count`)
   }
 
@@ -109,6 +112,21 @@ test('applies exact alignment, clipping, max-lines, and ellipsis policies withou
   assert.equal(layouts.ellipsisOne.clusters.at(-1), 8)
   assert.equal(layouts.ellipsisHeightOne.glyphIds, layouts.ellipsisOne.glyphIds)
   assert.notEqual(layouts.ellipsisHeightTwo.glyphIds, layouts.ellipsisHeightOne.glyphIds)
+  assertAlignmentOffsets(layouts.start, layouts.center, layouts.end, 180)
+  assert.deepEqual(
+    [...layouts.justify.lineAdvances].slice(0, -1),
+    Array(layouts.justify.lineAdvances.length - 1).fill(180),
+    'justification fills every non-final soft-wrapped line',
+  )
+  assert.ok(
+    (layouts.justify.lineAdvances.at(-1) ?? 180) < 180,
+    'justification leaves the final line at its natural advance',
+  )
+  for (const layout of [layouts.ellipsisOne, layouts.ellipsisHeightOne, layouts.ellipsisHeightTwo]) {
+    const end = layout.lineTextEnds.at(-1) ?? contract.policies.text.length
+    assert.ok(end < contract.policies.text.length, 'ellipsis truncates a source range')
+    assert.equal(layout.clusters.at(-1), end, 'ellipsis glyph is anchored at the truncation boundary')
+  }
   assert.deepEqual(
     requests.filter(({ ranges }) => ranges !== undefined).map(({ ranges }) => ranges.length),
     [4, 2, 1, 2],
@@ -194,29 +212,46 @@ function assertGoldenLayout(layout, golden, full) {
         'lineAdvances',
       ]
   for (const field of fields) assert.deepEqual([...layout[field]], golden[field], field)
-  assert.equal(hashLayout(layout), golden.hash)
+  assert.equal(hashParagraphLayout(layout), golden.hash)
 }
 
-function hashLayout(layout) {
-  let hash = 2_166_136_261
-  for (const values of [
-    layout.glyphFontSlots,
-    layout.glyphIds,
-    layout.clusters,
-    layout.glyphFontSizes,
-    layout.x,
-    layout.y,
-    layout.glyphFlags,
-    layout.lineTextStarts,
-    layout.lineTextEnds,
-    layout.lineGlyphStarts,
-    layout.lineGlyphCounts,
-    layout.lineBaselines,
-    layout.lineAdvances,
-  ]) {
-    hash = Math.imul(hash ^ values.length, 16_777_619)
-    const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
-    for (const value of bytes) hash = Math.imul(hash ^ value, 16_777_619)
+function assertLineTopology(layout, text) {
+  assert.equal(layout.lineTextStarts.length, layout.lineTextEnds.length)
+  assert.equal(layout.lineTextStarts.length, layout.lineGlyphStarts.length)
+  assert.equal(layout.lineTextStarts.length, layout.lineGlyphCounts.length)
+  let previousEnd = 0
+  let previousGlyphEnd = 0
+  let previousBaseline = -Infinity
+  for (let index = 0; index < layout.lineTextStarts.length; index += 1) {
+    const start = layout.lineTextStarts[index]
+    const end = layout.lineTextEnds[index]
+    const glyphStart = layout.lineGlyphStarts[index]
+    const glyphCount = layout.lineGlyphCounts[index]
+    const baseline = layout.lineBaselines[index]
+    const advance = layout.lineAdvances[index]
+    assert.ok(start >= previousEnd && start <= end && end <= text.length, `line ${index} text range`)
+    assert.equal(glyphStart, previousGlyphEnd, `line ${index} glyph range is contiguous`)
+    assert.ok(glyphStart + glyphCount <= layout.glyphIds.length, `line ${index} glyph range is bounded`)
+    assert.ok(baseline > previousBaseline, `line ${index} baseline is strictly increasing`)
+    assert.ok(Number.isFinite(advance) && advance >= 0, `line ${index} advance is finite`)
+    previousEnd = end
+    previousGlyphEnd = glyphStart + glyphCount
+    previousBaseline = baseline
   }
-  return (hash >>> 0).toString(16).padStart(8, '0')
+  assert.equal(previousGlyphEnd, layout.glyphIds.length, 'line glyph ranges cover the positioned output')
+}
+
+function assertAlignmentOffsets(start, center, end, width) {
+  for (let line = 0; line < start.lineGlyphStarts.length; line += 1) {
+    const glyph = start.lineGlyphStarts[line]
+    if (glyph === undefined || start.lineGlyphCounts[line] === 0) continue
+    const naturalX = start.x[glyph]
+    const advance = start.lineAdvances[line]
+    assertClose(center.x[glyph] - naturalX, (width - advance) / 2, `center line ${line}`)
+    assertClose(end.x[glyph] - naturalX, width - advance, `end line ${line}`)
+  }
+}
+
+function assertClose(actual, expected, label) {
+  assert.ok(Math.abs(actual - expected) < 0.0001, `${label}: ${actual} != ${expected}`)
 }

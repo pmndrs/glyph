@@ -1,4 +1,6 @@
 import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
+import paragraphBidiContract from '../fixtures/contracts/paragraph-bidi-layout-v0.json'
+import { paragraphPolicyContractHash } from '../src/benchmark/paragraph-layout-digest'
 
 function elementByText(selector: string, value: string): HTMLElement {
   const element = [...document.querySelectorAll<HTMLElement>(selector)].find(
@@ -112,8 +114,7 @@ console.log(
   }),
 )
 
-const paragraphPolicyHash =
-  '8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c'
+const paragraphPolicyHash = paragraphPolicyContractHash(paragraphBidiContract)
 const policy = await runRegisteredBenchmark({
   targetId: 'paragraph-bidi-policy',
   scenarioId: 'paragraph-bidi-policy',

@@ -11,6 +11,7 @@ import {
 import { createFontBaker } from '@pmndrs/text-font-baker'
 
 import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts'
+import { hashParagraphLayout } from '../src/benchmark/paragraph-layout-digest.ts'
 
 const root = new URL('../', import.meta.url)
 const output = new URL('../fixtures/contracts/paragraph-bidi-layout-v0.json', import.meta.url)
@@ -53,7 +54,7 @@ function measurement(layout: ParagraphLayout) {
 function values(layout: ParagraphLayout, full: boolean) {
   const document: Record<string, unknown> = {
     measurement: measurement(layout),
-    hash: hashLayout(layout),
+    hash: hashParagraphLayout(layout),
   }
   const fields = full
     ? ([
@@ -84,30 +85,6 @@ function values(layout: ParagraphLayout, full: boolean) {
       ] as const)
   for (const field of fields) document[field] = [...layout[field]]
   return document
-}
-
-function hashLayout(layout: ParagraphLayout): string {
-  let hash = 2_166_136_261
-  for (const field of [
-    layout.glyphFontSlots,
-    layout.glyphIds,
-    layout.clusters,
-    layout.glyphFontSizes,
-    layout.x,
-    layout.y,
-    layout.glyphFlags,
-    layout.lineTextStarts,
-    layout.lineTextEnds,
-    layout.lineGlyphStarts,
-    layout.lineGlyphCounts,
-    layout.lineBaselines,
-    layout.lineAdvances,
-  ]) {
-    hash = Math.imul(hash ^ field.length, 16_777_619)
-    const bytes = new Uint8Array(field.buffer, field.byteOffset, field.byteLength)
-    for (const byte of bytes) hash = Math.imul(hash ^ byte, 16_777_619)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 const amiri = await runtime(
