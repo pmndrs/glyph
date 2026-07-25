@@ -80,6 +80,15 @@ Run the bundled validator when Ruby is available:
 ruby scripts/validate_okf.rb /path/to/bundle
 ```
 
+For a repository that maintains `Workspace Package` concepts, require complete package coverage and source freshness:
+
+```sh
+ruby scripts/validate_okf.rb /path/to/bundle --workspace-root /path/to/repository
+ruby scripts/generate_package_digests.rb /path/to/repository
+```
+
+The validator discovers `apps/*/package.json` and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
+
 Report:
 
 - **Conformance errors:** violations of the three hard requirements.

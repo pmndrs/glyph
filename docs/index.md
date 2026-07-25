@@ -21,6 +21,7 @@ okf_version: "0.2"
 
 ## Verification and evidence
 
+- [Workspace package catalog](packages/index.md) — enforced package roles, boundaries, status, and source-freshness digests.
 - [Font baker implementation status](planning/font-baker-implementation.md) — implemented Rust/Wasm/TypeScript core and remaining verification gates.
 - [Wasm allocator experiment](planning/font-baker-allocator.md) — evidence plan for the ABI-private Wasm allocator choice.
 - [Benchmark plan](planning/benchmark-plan.md) — interactive/headless harness, scenarios, metrics, and reports.

@@ -5,7 +5,8 @@
   "packageManager": "pnpm@11.15.1",
   "scripts": {
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
-    "check": "pnpm typecheck && pnpm test",
+    "check": "pnpm typecheck && pnpm test && pnpm docs:check",
+    "docs:check": "ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .",
     "typecheck": "pnpm --filter './packages/*' typecheck && pnpm --filter './apps/*' typecheck",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",
     "benchmarks": "pnpm --filter @pmndrs/text-benchmarks dev",

@@ -4,13 +4,21 @@ require 'date'
 require 'pathname'
 require 'time'
 require 'yaml'
+require_relative 'package_digest'
 
-root = Pathname(ARGV.fetch(0, '.')).expand_path
+root = Pathname(ARGV.shift || '.').expand_path
 abort "bundle root does not exist: #{root}" unless root.directory?
+workspace_root = nil
+until ARGV.empty?
+  option = ARGV.shift
+  abort "unknown option: #{option}" unless option == '--workspace-root'
+  workspace_root = Pathname(ARGV.shift || abort('--workspace-root requires a path')).expand_path
+end
 
 conformance = []
 profile = []
 warnings = []
+package_concepts = Hash.new { |entries, name| entries[name] = [] }
 
 actor = %r{\A(?:[^/:\s]+/[^\s]+|human:[^\s]+|process:[^\s]+)\z}
 date = /\A\d{4}-\d{2}-\d{2}\z/
@@ -78,6 +86,8 @@ concepts.each do |path|
 
   data, body = parse_frontmatter.call(path, text, conformance)
   next unless data
+
+  package_concepts[data['workspace_package']] << [path, data] if data['workspace_package'].is_a?(String)
 
   conformance << "#{path}: missing non-empty type" unless data['type'].is_a?(String) && !data['type'].strip.empty?
   profile << "#{path}: legacy timestamp field" if data.key?('timestamp')
@@ -161,6 +171,41 @@ concepts.each do |path|
 
   warnings << "#{path}: missing title" unless data['title'].is_a?(String) && !data['title'].empty?
   warnings << "#{path}: missing description" unless data['description'].is_a?(String) && !data['description'].empty?
+end
+
+if workspace_root
+  abort "workspace root does not exist: #{workspace_root}" unless workspace_root.directory?
+  begin
+    workspace_packages = OkfPackageDigest.workspace_packages(workspace_root).to_h
+  rescue StandardError => error
+    abort error.message
+  end
+
+  workspace_packages.each do |name, package_root|
+    entries = package_concepts.fetch(name, [])
+    if entries.empty?
+      profile << "workspace package #{name}: missing OKF Workspace Package concept"
+      next
+    end
+    if entries.length > 1
+      profile << "workspace package #{name}: duplicate concepts #{entries.map(&:first).join(', ')}"
+      next
+    end
+
+    path, data = entries.first
+    profile << "#{path}: workspace package concept must use type Workspace Package" unless data['type'] == 'Workspace Package'
+    profile << "#{path}: workspace package concept must use documentation_type reference" unless data['documentation_type'] == 'reference'
+    expected_resource = package_root.relative_path_from(path.dirname).to_s
+    profile << "#{path}: resource must identify #{expected_resource}" unless data['resource'] == expected_resource
+    expected_digest = OkfPackageDigest.digest(package_root)
+    profile << "#{path}: stale source_digest; expected #{expected_digest}" unless data['source_digest'] == expected_digest
+  end
+
+  (package_concepts.keys - workspace_packages.keys).each do |name|
+    package_concepts[name].each do |path, _data|
+      profile << "#{path}: workspace_package #{name} does not exist in apps/* or packages/*"
+    end
+  end
 end
 
 root_index = root.join('index.md')
