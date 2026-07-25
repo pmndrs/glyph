@@ -55,12 +55,12 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T12:12:44Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: ✅ paragraph and external-layout slice complete through Milestone 5
+Status: 🟡 Milestone 5 items 5.1–5.3 complete; CJK universality item 5.4 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Plugin-produced raster descriptors are revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal.
 
@@ -100,7 +100,9 @@ The generated `paragraph-bidi-layout-v0.json` contract owns complete SoA values 
 
 The current-uikit-shaped fixture lives in the benchmark application rather than core. It derives `CustomLayouting` intrinsics, maps Yoga Undefined/AtMost/Exactly modes, ignores the numeric `NaN` payload of undefined axes, preserves uikit's 1/100-point upward rounding, skips measurement for two definite axes, subtracts padding/border from the authoritative resolved box, and translates content-local positions into centered host coordinates. Twenty repeated measurements materialize no glyph arrays. Text and shaping-policy updates dirty layout; paint and raster updates do not. Chromium 149 fixes the twelve-layout aggregate hash at `8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c`, with 8,098 output bytes, four broad shapes, and five reshape crossings; the GPU Vitexec lane repeats it with WebGPU active.
 
-The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+Roadmap item 5.4 now extends this same bake → retained-SFNT → HarfRust → paragraph path with a pinned pan-CJK face, exact HarfBuzz comparison, horizontal CJK line-layout evidence, deterministic fuzzing, and Node/Chromium/Vitexec parity. It does not add raster paging, rendering, fallback, or vertical layout.
+
+The public runtime bitmap upload/module belongs to milestone 6.1 after item 5.4 closes; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 

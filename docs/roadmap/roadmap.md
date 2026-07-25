@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T09:53:00Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Canonical implementation roadmap
@@ -48,14 +48,14 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | ✅ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | ✅ | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
-| 6 | 🟡 | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
+| 5 | 🟡 | Implement paragraph reflow and validate universal shaping assumptions | L | 4 | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence. |
+| 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
 | 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–5 are closed. Milestone 6 is active at item 6.1.
+Milestones 0–4 are closed. Items 5.1–5.3 are complete; item 5.4 is active and extends Milestone 5 with focused CJK universality evidence before Milestone 6 rendering begins.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -100,7 +100,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 5.1 | ✅ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
 | 5.2 | ✅ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
 | 5.3 | ✅ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
-| 6.1 | 🟡 | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
+| 5.4 | 🟡 | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
+| 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.4 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
 | 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
@@ -399,9 +400,9 @@ Item 5.2 is closed. Item 5.3 closure evidence follows.
 - [x] Paragraph preparation intersects resolved style/script ranges with bidi level runs, shapes each run in its resolved direction, applies line-specific UAX #9 L1/L2 ordering, and fixes exact mixed-direction glyph identity/position goldens through the retained-GLB HarfRust path.
 - [x] Start/center/end/justify alignment, clipping, max-lines, and ellipsis have exact policy fixtures, cache/invalidation evidence, and no unreported shaping boundary crossings.
 - [x] A current-uikit-shaped fixture proves repeated allocation-light measurement, Yoga-mode translation, final content-box layout, point-scale rounding ownership, and dirtying without a Yoga dependency in core.
-- [x] The real Chromium benchmark and GPU Vitexec lane execute the bidi/policy fixtures with deterministic recorded output before item 5.3 and Milestone 5 close.
+- [x] The real Chromium benchmark and GPU Vitexec lane execute the bidi/policy fixtures with deterministic recorded output before item 5.3 closes.
 
-Item 5.3 and Milestone 5 are closed. The generated contract fixes two Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final content-box layout with complete glyph/line arrays and twelve portable hashes. Amiri 1.002 separately proves source-font HarfRust equals HarfRust over the reduced SFNT extracted from the validated GLB, while pinned HarfBuzz 13 agrees on every Arabic/Latin glyph field. Chromium 149 records three deterministic 8,098-byte runs with four preparation shapes and five batched reshapes; the GPU Vitexec lane repeats the same contract with WebGPU active.
+Item 5.3 is closed. The generated contract fixes two Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final content-box layout with complete glyph/line arrays and twelve portable hashes. Amiri 1.002 separately proves source-font HarfRust equals HarfRust over the reduced SFNT extracted from the validated GLB, while pinned HarfBuzz 13 agrees on every Arabic/Latin glyph field. Chromium 149 records three deterministic 8,098-byte runs with four preparation shapes and five batched reshapes; the GPU Vitexec lane repeats the same contract with WebGPU active. Milestone 5 remains open for item 5.4.
 
 Deliver:
 
@@ -418,6 +419,24 @@ Deliver:
 Width changes always reflow. Simple reflow crosses into Wasm zero times; boundary-sensitive changes cross once for the batch.
 
 The milestone is not complete until a retained-layout leaf can repeatedly measure a prepared paragraph without materializing positioned glyph arrays, then obtain final glyph positions for its resolved content box without implementing line breaking. The concrete compatibility fixture mirrors current uikit's `CustomLayouting → FlexNode/Yoga → size signal → positioned layout` flow; the production adapter remains owned by uikit.
+
+### 5.4 CJK shaping and paragraph universality
+
+This item validates the existing bake, shaping, Unicode, and paragraph contracts against CJK before rendering begins. It must not add renderer integration, raster paging, sparse glyph coverage, font fallback, or vertical layout.
+
+Deliver:
+
+- one pinned redistributable pan-CJK face with immutable bytes, license, upstream provenance, selected face index, glyph/table inventory, and source/shaping payload budgets;
+- a focused horizontal corpus covering Simplified and Traditional Chinese, Japanese kana/kanji, precomposed and Jamo Korean, CJK punctuation and ideographic spaces, mixed Latin/CJK, supplementary-plane Han, standardized variation sequences, ideographic variation sequences where the fixture supports them, and paragraphs without spaces;
+- exact HarfRust source-font oracles and exact-version HarfBuzz structured oracles with UTF-16 clusters, glyph IDs, advances, offsets, and flags;
+- source font → portable bake → validated GLB → extracted reduced SFNT → HarfRust equality, including `cmap` formats 12/14, language-sensitive `locl`, GSUB/GPOS behavior, selected-face provenance, `u16` glyph identity, and checked payload/offset arithmetic;
+- deterministic paragraph measurement and positioned-layout fixtures covering grapheme-safe spans, UAX #14 no-space line opportunities and punctuation boundaries, mixed scripts, supplementary clusters, variation sequences, width reflow, and safe batched boundary reshaping;
+- deterministic CJK-focused malformed-input and fixed-seed fuzz smoke for surrogate/variation-selector boundaries, language tags, line constraints, and repeated shaping/layout;
+- Node integration plus the shared Chromium headless and GPU-capable Vitexec lanes, reporting exact hashes, shaping calls, glyph counts, retained bytes, Wasm memory, raw/compressed shaping payload, and cold/warm timings before any rendering metric exists.
+
+Exit only when the complete horizontal corpus is byte-exact through the source and reduced-font HarfRust paths, the independent HarfBuzz oracle agrees under the documented normalization policy, and Node/Chromium/Vitexec paragraph outputs are deterministic. Any genuine mismatch in the retained SFNT profile, UTF-16 clustering, language selection, variation handling, glyph-width assumptions, or line layout blocks rendering work.
+
+Large-coverage raster paging remains in Milestone 12. Vertical-form source tables must survive baking when present, but vertical shaping/layout remains deferred.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 
@@ -498,25 +517,25 @@ The order below preserves lanes without pretending the work is part of V1:
 | Order | Workstream | Effort | Why next |
 | ---: | --- | --- | --- |
 | 11 | Mixed-font spans and explicit font fallback | XL | Extend the multi-font identity smoke proof into paragraph behavior. |
-| 12 | Large-coverage CJK and icons | XL | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates. |
+| 12 | Large-coverage CJK raster paging and icons | XL | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
 | 13 | Color emoji | XL | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout. |
 | 14 | Raster effects and expanded recommendations | L | Extend outlines, colorization, shadows, and projected-size guidance with measurements. |
 | 15 | Measured optimization campaigns | ongoing | Activate autoresearch only with strict correctness and visual gates. |
 | 16 | Advanced font compiler units | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence. |
 
-### Milestone 12 — large-coverage CJK and icons
+### Milestone 12 — large-coverage CJK raster paging and icons
 
-This milestone begins only after the Latin-first V1 renderer gate. CJK and icons share the page-scale implementation while retaining separate semantic fixtures.
+This milestone begins only after the Latin-first V1 renderer gate. Item 5.4 has already proven horizontal CJK shaping and paragraph semantics; this later milestone scales raster coverage, paging, residency, and icon delivery without changing those results. CJK and icons share the page-scale implementation while retaining separate semantic fixtures.
 
 Deliver:
 
-- a pinned redistributable pan-CJK face with Chinese, Japanese, and Korean language cases, supplementary Han, variation sequences, and no-space paragraph fixtures;
+- the item 5.4 pan-CJK fixture expanded into small, medium, large, and complete raster-coverage tiers without changing its source/reduced shaping contract;
 - a pinned private-use icon font, OpenType-SVG icon font, and manifest-backed standalone SVG set with selected and complete-library cases;
 - content-aware raster coverage with explicit missing-glyph diagnostics and no change to font-local `u16` glyph identity;
 - companion raster indexes whose logical pages resolve to embedded or external payloads with byte length and SHA-256 integrity;
 - raster-module page preparation, request deduplication, cancellation, atomic generation swaps, residency accounting, and deterministic eviction tests;
 - backend batching that does not equate page index with texture-array layer, binding slot, draw, or order;
-- browser visual references plus HarfRust/HarfBuzz structured CJK shaping comparisons;
+- browser visual references plus reruns of the item 5.4 HarfRust/HarfBuzz structured CJK contract over the page-walk corpus;
 - CJK/icon payload, first-use, page-walk, cache, upload, GPU-memory, and batch-count reports at increasing coverage tiers.
 
 Vertical writing remains deferred. The milestone retains vertical-form source data and tests that it survives baking, but does not add vertical paragraph layout.

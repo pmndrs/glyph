@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T04:17:03Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Decision register
@@ -63,6 +63,7 @@ D-004/005 follow the established uikit split: the core owns every feature and Re
 | D-045 | Paragraph axes model unconstrained, at-most, and exact sizing without importing a host layout vocabulary; host adapters own translation, invalidation, padding, transforms, and clipping. | Accepted |
 | D-069 | uikit owns an incremental adapter from its current `CustomLayouting` and content-box signals; no uikit, Yoga, or Preact Signal types enter core. | Accepted |
 | D-072 | The JavaScript paragraph engine owns UAX #9, #14, #24, and #29 using Unicode data pinned to the core font provenance version. | Accepted |
+| D-085 | Roadmap item 5.4 makes horizontal CJK bake, source/reduced HarfRust equivalence, independent HarfBuzz agreement, and paragraph layout a pre-render gate; raster paging, CJK rendering coverage, fallback, and vertical layout remain separate later work. | Accepted |
 
 The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [uikit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
 
@@ -117,7 +118,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-064 | V1 does not support plain MSDF assets or parallel MSDF/MTSDF batches. | Accepted |
 | D-065 | First-party raster packages use TSL internally; the core raster API is shader-system and backend agnostic. | Accepted |
 | D-073 | V1 assigns one selected raster per font slot; per-glyph raster mixing is additive color/SVG work after the first release. | Accepted |
-| D-075 | Latin remains the V1 release priority; CJK and icon support share the next large-coverage paging milestone and cannot expand the Latin-first exit gate. | Accepted |
+| D-075 | Latin remains the V1 rendering and raster-coverage priority. Pre-render CJK shaping/layout conformance may harden universal core assumptions, but CJK raster paging and icon coverage remain a post-V1 milestone and do not expand the Latin-first renderer exit gate. | Accepted |
 | D-076 | Raster page indexes are logical IDs; page payloads may be embedded or independently addressed, and raster modules own preparation, residency, eviction, and backend batching. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.

@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T09:53:00Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Benchmark plan
@@ -64,7 +64,7 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
-| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, pinned real-font direct-baker, public loader/module-Worker, exact eight-case/one-call HarfRust shaping, prepare-once/zero-reflow-Wasm measurement, exact positioned/batched-reshape paragraph, and item-5.3 bidi/policy/uikit lanes pass. Rendering remains open for Milestone 6. |
+| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, pinned real-font direct-baker, public loader/module-Worker, exact eight-case/one-call HarfRust shaping, prepare-once/zero-reflow-Wasm measurement, exact positioned/batched-reshape paragraph, and item-5.3 bidi/policy/uikit lanes pass. Item 5.4 CJK universality and Milestone 6 rendering remain open. |
 | Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; Worker and shaper JavaScript exclude separately measured Wasm assets. Unicode analysis is 139,752 bytes minified and the complete milestone-4 shaper is 27,859 bytes minified JavaScript plus 645,666 bytes optimized Wasm. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
@@ -73,7 +73,7 @@ The lab is both the benchmark product and the canonical product-level test harne
 
 The harness does not wait for a raster implementation to become useful. Its deterministic synthetic target first proves registry, runner, validation, URL-state, export, and interactive/automated parity. The existing portable font-baker target then contributes real cold/warm Wasm startup, source-to-GLB correctness, payload, memory, diagnostics, and deterministic-artifact scenarios without claiming that it renders text. Bitmap, MSDF, and Slug remain visible but capability-gated and unsupported until their real adapters exist; the UI never fills unavailable panels with fabricated metrics.
 
-The completed paragraph-policy scenario consumes the generated `paragraph-bidi-layout-v0.json` contract through the same registry used by the interactive and automated surfaces. Chromium 149 repeats two complete Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final layout three times with the same twelve hashes and 8,098-byte aggregate output. The Vitexec lane repeats that contract with WebGPU active. These results prove shaping and reflow correctness; they intentionally do not claim a rendered GPU frame before Milestone 6.
+The completed paragraph-policy scenario consumes the generated `paragraph-bidi-layout-v0.json` contract through the same registry used by the interactive and automated surfaces. Chromium 149 repeats two complete Amiri mixed-direction layouts, nine Inter line-policy layouts, and one current-uikit-shaped final layout three times with the same twelve hashes and 8,098-byte aggregate output. The Vitexec lane repeats that contract with WebGPU active. These results prove the current shaping and reflow slice; item 5.4 adds CJK evidence and neither lane claims a rendered GPU frame before Milestone 6.
 
 ## Application stack
 
@@ -238,7 +238,7 @@ Initial environments should include one current Chromium desktop reference, one 
 | emoji/ZWJ list | supplementary decode and sequence substitution |
 | repeated private-use icon labels | simple cmap/advance and cache ceiling |
 | sparse standalone-SVG icon set | name lookup, selected/full-library paging, and residency |
-| CJK paragraph without spaces | line fitting, `locl`, variation sequences, and page working set |
+| CJK paragraph without spaces | pre-render line fitting, `locl`, supplementary clusters, and variation sequences |
 | CJK page-walk document | first-use fetch/upload, cache reuse, eviction, and page churn |
 
 Each workload has unique-text and repeated-text variants.
@@ -251,7 +251,7 @@ Each workload has unique-text and repeated-text variants.
 - Devanagari or another USE-heavy font;
 - emoji-capable font subset;
 - private-use icon font and manifest-backed standalone SVG set;
-- one pinned pan-CJK face exercised as small, medium, large, and complete coverage tiers;
+- one pinned pan-CJK face exercised as a complete shaping source in item 5.4 and as small, medium, large, and complete raster-coverage tiers in Milestone 12;
 - one font with class kerning and one with many explicit pairs.
 
 ## Shaper benchmarks
@@ -342,6 +342,12 @@ Measure:
 
 Loader scenarios compare baked-hit and Worker-fallback behavior against the declared loader contract. Current Three Flatland Slug may be measured as a labeled historical target, but it does not define correctness for loading, shaping, or visual output.
 
+### Pre-render CJK universality
+
+Item 5.4 adds one shared-registry CJK shaping and paragraph scenario before any raster work. It records exact source/reduced HarfRust and HarfBuzz-normalized hashes, UTF-16 source units, glyphs, plans, batch calls, retained font bytes, Wasm memory, shaping payload raw/gzip/Brotli bytes, and cold/warm duration. The scenario runs in Node integration, Chromium headless, and the committed Vitexec lane. It does not report first draw, texture pages, upload, GPU memory, or residency because those outputs do not exist yet.
+
+The correctness gate includes language-tagged Chinese, Japanese, and Korean cases, supplementary Han, supported standardized/ideographic variation sequences, mixed Latin/CJK, and no-space paragraph reflow. Timings are admitted only after every structured shaping field and positioned-layout hash matches the pinned contract.
+
 ### Large-coverage paging
 
 CJK and icon benchmarks share one page-stress lane. The same pinned sources are baked at 256, 2,048, 8,192, and complete selected-glyph coverage, with the final tier determined by the fixture manifest rather than assumed to fit one atlas. Report:
@@ -357,7 +363,7 @@ CJK and icon benchmarks share one page-stress lane. The same pinned sources are 
 - cancellation and stale-generation behavior when text changes during preparation;
 - selected icon subset versus complete icon-library stress case.
 
-The synthetic maximum-cardinality contract fixture and small real CJK/icon fixtures run early to protect the format. Full-face generation, long page walks, and device residency measurements belong to scheduled/manual jobs and the combined CJK/icon milestone; they do not block the Latin-first implementation or V1 renderer gate.
+The synthetic maximum-cardinality contract fixture runs early to protect the format. Full-face raster generation, long page walks, and device residency measurements belong to scheduled/manual jobs and Milestone 12; they do not block the Latin-first V1 renderer gate. Item 5.4 consumes the complete CJK source for shaping but does not create these raster tiers.
 
 ## Raster benchmarks
 

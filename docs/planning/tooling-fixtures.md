@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T09:53:00Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -74,9 +74,15 @@ The fixture must use an explicitly documented Unicode sequence, including the de
 
 Complex-script and fallback fonts are required by the broader conformance plan, but they do not block the first rendered paragraph.
 
-Post-slice raster fixtures must also pin:
+The pre-render roadmap item 5.4 shaping/paragraph lane must pin:
 
-- one redistributable pan-CJK face with pinned Chinese, Japanese, and Korean language cases, supplementary Han, and variation sequences;
+- one redistributable pan-CJK face with immutable bytes, license, upstream revision, selected face index, table/glyph inventory, and pinned Chinese, Japanese, and Korean language cases, supplementary Han, variation sequences, and no-space paragraphs;
+- exact source HarfRust, reduced-SFNT HarfRust, and exact-version HarfBuzz structured outputs over the same UTF-16 corpus;
+- deterministic Node, Chromium, and Vitexec paragraph contracts that do not require a CJK raster artifact.
+
+Post-release raster fixtures must additionally pin:
+
+- increasing raster-coverage tiers over the item 5.4 pan-CJK face;
 - one private-use icon font and one manifest-backed standalone SVG icon set, exercised as selected and complete-library coverage;
 - one COLR/CPAL color-emoji font covering layered and paint-graph vectors;
 - one CBDT/CBLC or `sbix` color-emoji font covering embedded bitmap strikes;
@@ -84,7 +90,7 @@ Post-slice raster fixtures must also pin:
 
 Payload fixtures additionally include the existing 350-glyph Font Awesome bake and the uikit fork's 1,594-shape Lucide bake. They establish icon-font and standalone-SVG baselines without expanding the first runtime slice. The selected Lucide subset and full library must be measured independently so tree-shaken application usage is not conflated with whole-library stress testing. See the [font payload budget](payload-budget.md).
 
-Each source, license, version, hash, expected baked records, and reference image is immutable. These fixtures do not expand the first one-font vertical slice.
+Each source, license, version, hash, expected baked records, and reference image is immutable. The item 5.4 fixture expands shaping and paragraph conformance only; the later assets do not expand the first one-font rendering slice.
 
 Before those real assets are introduced, a generated contract fixture declares `glyphCount = 65535`, dense zero/absent records, several logical pages, embedded and external resource sources, and glyph references that cross page boundaries. It exercises maximum arithmetic, source integrity, index decoding, and backend-independent batching without checking in a full CJK raster.
 

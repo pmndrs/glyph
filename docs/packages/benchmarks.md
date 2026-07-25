@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T12:28:27Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -27,7 +27,7 @@ This application owns the shared target/scenario runner, responsive Figma-backed
 
 The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated. The current browser graph is 209,191 minified bytes; Unicode analysis is independently 139,752 minified / 41,999 gzip / 31,018 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,124, 3,506, 5,664, 434,045, 30,406, and 691,484 minified/raw bytes respectively. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probe no longer maintain parallel digest logic.
 
-Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. The first real rendered font frame must land here after its loader, shaping, paragraph, and bitmap dependencies close.
+Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. Item 5.4 next adds a shared-registry horizontal CJK shaping and paragraph scenario with Node, Chromium, and GPU-capable Vitexec evidence but no fabricated rendering metrics. The first real rendered font frame must land here after that gate and the bitmap dependencies close.
 
 The initial deterministic browser probe is admitted with a checked-in record: 100 executions across 10 fresh GPU-friendly Chromium/Vite lifecycles, zero retries/failures, unique causal completion identities, and wrong-expectation plus withheld-completion negative controls. The current live probe also executes exact paragraph measurement and positioned-layout scenarios sequentially, checks portable hashes and boundary-call metrics, and then runs the mobile Playwright surface on its own strict port. The record reports WebGPU availability while explicitly declining to claim a GPU workload before rendering lands.
 

@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T08:38:57Z"
+  at: "2026-07-25T12:30:58Z"
 ---
 
 # Shaping and layout conformance plan
@@ -174,7 +174,7 @@ call; an unrelated subsequent shaper call proves the layout owns its arrays.
 | Controls | LF, CRLF, paragraph separator, tabs policy, default ignorables, ZWJ/ZWNJ, soft hyphen |
 | Invalid input | unpaired UTF-16 surrogates and replacement policy at JS boundary |
 
-The CJK and icons rows share the post-V1 large-coverage paging gate. They do not block the Latin-first slice or the bitmap/MSDF/Slug V1 renderer gate. Before V0 contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK product support.
+The CJK row is split across two gates. Roadmap item 5.4 requires horizontal CJK source/reduced shaping, HarfBuzz agreement, UTF-16 clustering, language-sensitive substitutions, variation handling, and paragraph layout before rendering starts. It does not require CJK raster coverage. Milestone 12 later combines large-coverage CJK raster paging with icon paging, residency, and payload stress; that later work does not block the Latin-first bitmap/MSDF/Slug V1 renderer gate. Before those raster contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK rendering support.
 
 ### Large-coverage page invariants
 
