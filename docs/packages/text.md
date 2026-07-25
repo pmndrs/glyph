@@ -5,7 +5,7 @@ description: Defines the public core and React TypeScript contracts plus the int
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:e82e29986d9e1463d6f44ec2d2ea4c5cc25f99a788ce9eb13ad602b2121d57e8"
+source_digest: "sha256:5d08c548cb53c923b2a3c4596be611b535146536c945982b05529ac1a75ba438"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -17,9 +17,12 @@ sources:
   - id: discovery
     resource: ../../packages/text/src/discovery.ts
     title: Static project discovery implementation
+  - id: compiler-adapter
+    resource: ../../packages/text/src/compiler-adapter.ts
+    title: Pinned TypeScript compiler adapter
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:42:19Z"
+  at: "2026-07-25T03:09:20Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -28,7 +31,7 @@ Status: 🟡 public contract scaffold with completed internal static discovery
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
-Its Node-only internal discovery module completes roadmap item 2.1 with TypeScript 7 AST and symbol analysis. It finds composed tokens and statically visible core/React raw forms, reduces immutable font/raster expressions, maps URL pathnames into canonical asset roots, and validates only the exact imported raster package's ESM baker manifest. It never executes application modules. The module is intentionally absent from the package export map until item 2.4 supplies the complete `@pmndrs/text/bake` API.
+Its Node-only internal discovery module completes roadmap item 2.1 with pinned TypeScript 7 AST and symbol analysis over TypeScript, TSX, JavaScript, and JSX projects. It finds composed tokens and statically visible core/React raw forms, reduces immutable font/raster expressions, maps URL pathnames into canonical asset roots, and validates only the exact imported raster package's ESM baker manifest. It never executes application modules. One internal compiler adapter owns every unstable TypeScript import, project snapshot, symbol handle, alias, and declaration-resolution operation; an exact-version assertion and source-boundary test make compiler upgrades explicit. The module is intentionally absent from the package export map until item 2.4 supplies the complete `@pmndrs/text/bake` API.
 
 It does not currently load fonts, shape text, perform paragraph layout, write baked assets, or render glyphs. The [roadmap](../roadmap/roadmap.md) owns the implementation order for those behaviors.
 
@@ -37,7 +40,7 @@ It does not currently load fonts, shape text, perform paragraph layout, write ba
 | Script | Purpose |
 | --- | --- |
 | `typecheck` | Type-check package source without emission. |
-| `test` | Build, run compile-only API fixtures, package-manifest checks, and Node discovery integration tests. |
+| `test` | Build, run compile-only API fixtures, package/adapter guards, and TypeScript/JavaScript discovery integration tests. |
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `build` | Emit the ESM package and declarations. |
 

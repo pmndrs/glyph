@@ -3,8 +3,17 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
-import { API, SymbolFlags, type Checker, type Project, type Symbol } from 'typescript/unstable/sync'
-import * as ts from 'typescript/unstable/ast'
+import {
+  ast as ts,
+  constantInitializer,
+  importedBinding,
+  openCompilerProjectSnapshot,
+  shorthandInitializer,
+  unwrapExpression as unwrap,
+  type CompilerChecker as Checker,
+  type CompilerProject as Project,
+  type ImportedBinding,
+} from './compiler-adapter.js'
 
 export interface DiscoveryOptions {
   readonly entries?: readonly (string | URL)[]
@@ -47,11 +56,6 @@ export interface DiscoveryReport {
   readonly diagnostics: readonly DiscoveryDiagnostic[]
 }
 
-interface ImportedBinding {
-  readonly module: string
-  readonly exported: string
-}
-
 interface StaticString {
   readonly exact?: string
   readonly suffix?: string
@@ -74,16 +78,9 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
   const fonts: DiscoveredFontDefinition[] = []
   const diagnostics: DiscoveryDiagnostic[] = []
   const analyses: Promise<void>[] = []
-  const api = new API({ cwd: projectRoot })
-  const snapshot = api.updateSnapshot({ openFiles: entries })
+  const snapshot = openCompilerProjectSnapshot(projectRoot, entries)
   try {
-    const projects = new Map<string, Project>()
-    for (const entry of entries) {
-      const project = snapshot.getDefaultProjectForFile(entry)
-      if (project === undefined) throw new Error(`TypeScript did not create a project for ${entry}`)
-      projects.set(project.configFileName, project)
-    }
-    for (const project of projects.values()) {
+    for (const project of snapshot.projects) {
       const checker = project.checker
       for (const fileName of project.program.getSourceFileNames()) {
         const sourceFile = project.program.getSourceFile(fileName)
@@ -148,8 +145,7 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
     }
     await Promise.all(analyses)
   } finally {
-    snapshot.dispose()
-    api.close()
+    snapshot.close()
   }
   fonts.sort(compareSourcePosition)
   diagnostics.sort(compareSourcePosition)
@@ -305,34 +301,6 @@ function esmExportTarget(value: unknown, packageType: unknown): string | undefin
     : undefined
 }
 
-function importedBinding(expression: ts.Expression, checker: Checker, project: Project): ImportedBinding | undefined {
-  const value = unwrap(expression)
-  if (ts.isIdentifier(value)) {
-    for (const handle of checker.getSymbolAtLocation(value)?.declarations ?? []) {
-      const declaration = handle.resolve(project)
-      if (declaration === undefined) continue
-      if (!ts.isImportSpecifier(declaration)) continue
-      const importDeclaration = declaration.parent.parent.parent
-      if (!ts.isImportDeclaration(importDeclaration) || !ts.isStringLiteral(importDeclaration.moduleSpecifier)) continue
-      return {
-        module: importDeclaration.moduleSpecifier.text,
-        exported: declaration.propertyName?.text ?? declaration.name.text,
-      }
-    }
-  }
-  if (ts.isPropertyAccessExpression(value) && ts.isIdentifier(value.expression)) {
-    for (const handle of checker.getSymbolAtLocation(value.expression)?.declarations ?? []) {
-      const declaration = handle.resolve(project)
-      if (declaration === undefined) continue
-      if (!ts.isNamespaceImport(declaration)) continue
-      const importDeclaration = declaration.parent.parent
-      if (!ts.isImportDeclaration(importDeclaration) || !ts.isStringLiteral(importDeclaration.moduleSpecifier)) continue
-      return { module: importDeclaration.moduleSpecifier.text, exported: value.name.text }
-    }
-  }
-  return undefined
-}
-
 function staticString(expression: ts.Expression, checker: Checker, project: Project, seen = new Set<number>()): StaticString | undefined {
   const value = unwrap(expression)
   if (ts.isStringLiteralLikeNode(value)) return { exact: value.text, suffix: value.text }
@@ -416,10 +384,16 @@ function staticJson(expression: ts.Expression, checker: Checker, project: Projec
     for (const property of value.properties) {
       if (ts.isSpreadAssignment(property)) return undefined
       const name = propertyName(property.name)
+      const propertySeen = new Set(seen)
       const item = ts.isPropertyAssignment(property)
-        ? staticJson(property.initializer, checker, project, new Set(seen))
+        ? staticJson(property.initializer, checker, project, propertySeen)
         : ts.isShorthandPropertyAssignment(property)
-          ? staticJsonSymbol(checker.getShorthandAssignmentValueSymbol(property), checker, project, new Set(seen))
+          ? staticJsonInitializer(
+              shorthandInitializer(property, checker, project, propertySeen),
+              checker,
+              project,
+              propertySeen,
+            )
           : undefined
       if (name === undefined || item === undefined) return undefined
       result[name] = item
@@ -429,49 +403,13 @@ function staticJson(expression: ts.Expression, checker: Checker, project: Projec
   return undefined
 }
 
-function constantInitializer(
-  expression: ts.Expression,
-  checker: Checker,
-  project: Project,
-  seen = new Set<number>(),
-): ts.Expression | undefined {
-  if (!ts.isIdentifier(expression)) return undefined
-  let symbol = checker.getSymbolAtLocation(expression)
-  if (symbol !== undefined && (symbol.flags & SymbolFlags.Alias) !== 0) {
-    symbol = checker.getAliasedSymbol(symbol)
-  }
-  return staticInitializer(symbol, project, seen)
-}
-
-function staticJsonSymbol(
-  symbol: Symbol | undefined,
+function staticJsonInitializer(
+  initializer: ts.Expression | undefined,
   checker: Checker,
   project: Project,
   seen: Set<number>,
 ): unknown | undefined {
-  if (symbol !== undefined && (symbol.flags & SymbolFlags.Alias) !== 0) {
-    symbol = checker.getAliasedSymbol(symbol)
-  }
-  const initializer = staticInitializer(symbol, project, seen)
   return initializer === undefined ? undefined : staticJson(initializer, checker, project, seen)
-}
-
-function staticInitializer(
-  symbol: Symbol | undefined,
-  project: Project,
-  seen: Set<number>,
-): ts.Expression | undefined {
-  if (symbol === undefined || seen.has(symbol.id)) return undefined
-  seen.add(symbol.id)
-  const declaration = symbol.valueDeclaration?.resolve(project)
-  if (
-    declaration === undefined ||
-    !ts.isVariableDeclaration(declaration) ||
-    declaration.initializer === undefined ||
-    !ts.isVariableDeclarationList(declaration.parent) ||
-    (declaration.parent.flags & ts.NodeFlags.Const) === 0
-  ) return undefined
-  return declaration.initializer
 }
 
 async function resolveFontSource(source: StaticString, sourceFile: string, assetRoots: readonly string[]): Promise<ResolveResult> {
@@ -543,17 +481,6 @@ function isImportMetaUrl(expression: ts.Expression): boolean {
     ts.isMetaProperty(expression.expression) &&
     expression.expression.keywordToken === ts.SyntaxKind.ImportKeyword
   )
-}
-
-function unwrap(expression: ts.Expression): ts.Expression {
-  let value = expression
-  while (
-    ts.isParenthesizedExpression(value) ||
-    ts.isAsExpression(value) ||
-    ts.isSatisfiesExpression(value) ||
-    ts.isNonNullExpression(value)
-  ) value = value.expression
-  return value
 }
 
 function constantExpression(

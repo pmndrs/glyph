@@ -183,7 +183,7 @@ Item 1.2 is closed. Item 1.3 is now the active dependency; it replaces local/con
 - [x] Pin the remaining bitmap, paragraph, GLB, malformed-input, GPU-readback, maximum-cardinality, and empty identity contract fixtures.
 - [x] Admit the no-retry Vitexec probe with the required repetition, fresh-lifecycle, and environment evidence.
 
-Item 1.3 and Milestone 1 are closed. The admission record binds commit `016078cecee3daaf90243c1473aa9c0168fadbc5`, the probe hash, 100 zero-retry executions, 10 fresh browser/server lifecycles, exact environment metadata, and two intentional-failure controls. Its GPU-friendly Chromium runs report WebGPU availability but correctly make no GPU-rendering claim before a renderer exists. Item 2.1 is now active.
+Item 1.3 and Milestone 1 are closed. The admission record binds commit `016078cecee3daaf90243c1473aa9c0168fadbc5`, the probe hash, 100 zero-retry executions, 10 fresh browser/server lifecycles, exact environment metadata, and two intentional-failure controls. Its GPU-friendly Chromium runs report WebGPU availability but correctly make no GPU-rendering claim before a renderer exists. Milestone 2 continues at item 2.3.
 
 Deliver:
 
@@ -219,8 +219,10 @@ Exit only when the Figma-backed lab is usable, synthetic and portable-baker targ
 - [x] Query/fragment removal, segment-wise percent decoding, traversal rejection, missing files, ambiguity, and exact resolved spelling have executable fixtures.
 - [x] Third-party raster selection is limited to the exact imported package and an exported ESM baker entry that resolves inside that package.
 - [x] Package integration tests cover successful mappings plus dynamic input, dynamic strikes, unsafe paths, malformed manifests, CommonJS targets, and package escape attempts.
+- [x] TypeScript, TSX, JavaScript, and JSX are admitted source forms; a plain-JavaScript project fixture proves alias and immutable-constant behavior without application execution.
+- [x] One exact-version adapter owns every unstable TypeScript import and snapshot/symbol-handle operation; package tests fail on version drift or imports outside that boundary.
 
-Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the complete `@pmndrs/text/bake` Node API and CLI; item 2.2 is the active dependency.
+Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the complete `@pmndrs/text/bake` Node API and CLI; item 2.3 is the active dependency after 2.2 closed.
 
 ### 2.2 closure checklist
 

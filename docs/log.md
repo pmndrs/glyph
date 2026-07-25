@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Hardening** — Isolated every TypeScript 7 unstable import and project/symbol-handle operation behind an exact-version compiler adapter; added a source-boundary sentinel and a plain-JavaScript discovery fixture so typed and untyped module support is executable rather than assumed.
 - **Implementation** — Closed roadmap item 2.2 on the exact host-independent request/result boundary; added source/container/table/face-selection fixtures, exact Inter 4.1 reduced-SFNT identities and semantic checks, full-corpus HarfRust source/reduced equivalence, and pinned Binaryen 129.0.0 `-Oz` with zero-import and artifact-equivalence gates.
 - **Implementation** — Closed roadmap item 2.1 with TypeScript 7 AST/symbol discovery for composed and raw core/React font declarations, immutable raster extraction, conservative canonical asset-root mapping, and exact-package ESM baker resolution; seven package/integration cases cover the declared positive and negative fixture inventory without exposing the partial Node API.
 - **Verification** — Closed roadmap item 1.3 and Milestone 1 after 100 zero-retry deterministic UI executions across 10 fresh GPU-friendly Chromium/Vite lifecycles; every lifecycle reported 10 unique causal completions and WebGPU availability, both negative controls failed as required, and the evidence explicitly makes no pre-renderer GPU-workload claim.

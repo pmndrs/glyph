@@ -21,6 +21,8 @@ async function project() {
         moduleResolution: 'bundler',
         target: 'es2022',
         jsx: 'preserve',
+        allowJs: true,
+        checkJs: true,
         strict: true,
       },
       include: ['src'],
@@ -82,6 +84,47 @@ test('discovers aliased defineFont and immutable raster options through TypeScri
     specifier: '@fixture/raster/bakers/bitmap',
     options: { strikes: [16, 32] },
   })
+})
+
+test('discovers plain JavaScript and JSX with the same symbol and constant semantics', async (t) => {
+  const root = await project()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const fontPath = join(root, 'public', 'fonts', 'JavaScript.ttf')
+  const jsxFontPath = join(root, 'public', 'fonts', 'JavaScriptJsx.ttf')
+  await Promise.all([
+    writeFile(fontPath, 'font'),
+    writeFile(jsxFontPath, 'font'),
+    writeFile(
+      join(root, 'src', 'main.js'),
+      `
+        import { defineFont as declareFont } from '@pmndrs/text'
+        import { bitmap as makeBitmap } from '@fixture/raster'
+        const source = '/fonts/JavaScript.ttf'
+        const strikes = [16, 32]
+        export const prose = declareFont(source, makeBitmap({ strikes }))
+      `,
+    ),
+    writeFile(
+      join(root, 'src', 'view.jsx'),
+      `
+        import { Text as ReactText } from '@pmndrs/text/react'
+        import { bitmap } from '@fixture/raster'
+        export const label = <ReactText font="/fonts/JavaScriptJsx.ttf" raster={bitmap({ strikes: [16] })} />
+      `,
+    ),
+  ])
+
+  const report = await discoverProjectFonts({ projectRoot: root })
+
+  assert.deepEqual(report.diagnostics, [])
+  assert.equal(report.fonts.length, 2)
+  assert.deepEqual(
+    report.fonts.map(({ publicPathname, raster }) => [publicPathname, raster.options]),
+    [
+      ['/fonts/JavaScript.ttf', { strikes: [16, 32] }],
+      ['/fonts/JavaScriptJsx.ttf', { strikes: [16] }],
+    ],
+  )
 })
 
 test('resolves new URL inputs relative to the declaring module', async (t) => {
