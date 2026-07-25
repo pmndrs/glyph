@@ -1,4 +1,4 @@
 interface:
   display_name: "Open Knowledge Format"
-  short_description: "Create and maintain conformant OKF bundles"
-  default_prompt: "Use $open-knowledge-format to create or validate this knowledge bundle."
+  short_description: "Create and maintain OKF v0.2 bundles"
+  default_prompt: "Use $open-knowledge-format to create, migrate, or validate this OKF v0.2 knowledge bundle."

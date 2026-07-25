@@ -1,157 +1,106 @@
 ---
 name: open-knowledge-format
-description: Create, convert, inspect, query, validate, or maintain Open Knowledge Format (OKF) knowledge bundles made from linked Markdown concept files with YAML frontmatter. Use when the user mentions OKF, Open Knowledge Format, knowledge bundles, LLM wikis, portable agent knowledge, OKF conformance, or asks to make repository knowledge interoperable across human and agent tools. Do not use for ordinary Markdown documentation unless OKF compatibility or a knowledge bundle is requested.
+description: Create, migrate, inspect, query, validate, or maintain Open Knowledge Format v0.2 bundles made from linked Markdown concepts with YAML provenance. Use when the user mentions OKF, Open Knowledge Format, knowledge bundles, LLM wikis, portable agent knowledge, OKF conformance, provenance, trust, lifecycle, attested computations, or asks to make repository knowledge interoperable across human and agent tools. Do not use for ordinary Markdown unless OKF compatibility or a knowledge bundle is requested.
 ---
 
 # Open Knowledge Format
 
-Apply the upstream OKF specification faithfully while keeping the bundle useful to humans and agents. OKF is a transport and interoperability format, not a prescribed domain taxonomy or replacement for OpenAPI, schemas, ADR formats, or documentation methods such as Diátaxis.
+Apply the current upstream OKF v0.2 specification faithfully while keeping bundles useful to humans and agents. OKF is an interoperability format, not a domain taxonomy or replacement for OpenAPI, schemas, ADRs, or Diátaxis.
 
-Read [references/okf-v0.1.md](references/okf-v0.1.md) before designing or validating a bundle. OKF v0.1 is a draft; when exact conformance matters and internet access is available, verify the current [upstream specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
+Read [references/okf-v0.2.md](references/okf-v0.2.md) completely before creating, migrating, or validating a bundle. When internet access is available and exact conformance matters, verify the current [upstream specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) before acting.
 
-## Preserve the interoperability contract
+## Preserve the conformance boundary
 
-Establish the bundle root before validating it. Only Markdown files inside that directory belong to the bundle; do not impose OKF concept rules on repository files outside it.
+Establish the bundle root first. Only Markdown inside that root belongs to the bundle.
 
-Treat only these as hard v0.1 conformance requirements:
+Treat exactly these as hard v0.2 requirements:
 
-1. Every non-reserved Markdown concept file has parseable YAML frontmatter.
-2. Every concept frontmatter block has a non-empty `type` field.
-3. Reserved `index.md` and `log.md` files follow their specified structures when present.
+1. Every non-reserved Markdown concept has parseable YAML frontmatter.
+2. Every concept frontmatter block has a non-empty `type`.
+3. Present `index.md` and `log.md` files follow their reserved structures.
 
-Treat titles, descriptions, timestamps, indexes, logs, citations, and working links as quality recommendations unless the upstream specification says otherwise. Never reject a bundle merely because it contains unknown types or fields, missing optional metadata, a missing index, or a broken link.
+Do not reject unknown types or fields, missing optional metadata, missing indexes, or broken links. Report those separately as producer-quality issues.
 
-## Apply the authoring profile
+## Apply the producer profile
 
-Keep upstream conformance distinct from this skill's stricter producer policy:
+For every concept authored or meaningfully changed with this skill:
 
-1. Require `timestamp` on every concept document authored or maintained with this skill.
-2. Set it to an ISO 8601 datetime for the last meaningful edit, refresh it whenever the concept body or frontmatter changes, and always place it as the final field in the YAML frontmatter.
-3. Strongly encourage `resource` when the concept describes a canonical asset, API, schema, dataset, package, or external system. Omit it for abstract concepts rather than inventing a URI.
-4. Require a final `# Citations` section whenever the concept makes claims derived from external or internal source material. Cite the source directly in the concept; a separate bibliography does not satisfy this requirement by itself.
-5. Use numbered citation entries in the form `[1] [OpenType specification](https://learn.microsoft.com/en-us/typography/opentype/spec/) — normative font-layout source.` Internal bundle concepts and repository files are valid sources when they are authoritative for the claim.
-6. Require every link and citation to be real, reachable, correctly targeted, and semantically relevant when authored or edited. A syntactically valid URL or HTTP success alone is insufficient.
-7. Report a missing or malformed `timestamp`, missing required citations, or an unverified/invalid link as an authoring-profile error rather than an OKF conformance error.
+1. Require `generated.by` and `generated.at`; use the truthful v0.2 actor convention and an ISO 8601 datetime for the current content revision.
+2. Do not write the legacy v0.1 `timestamp` field.
+3. Put provenance in `sources`. Every source entry requires `resource`; add a stable `id` when a body claim uses a footnote such as `[^source-id]`.
+4. Do not create a legacy body `# Citations` list. Use `sources` and claim-level footnotes when attribution materially improves trust.
+5. Strongly encourage `resource` for a concept describing a canonical asset, API, schema, dataset, package, or external system. Do not invent one for an abstract concept.
+6. Add `status`, `stale_after`, `verified`, credibility signals, or attestation fields only when evidence warrants them. Absence is meaningful; never fabricate trust. When `status` is absent, consumers treat the concept as stable.
+7. Preserve unknown producer fields.
+8. Resolve every changed local link and verify every changed external source for reachability and semantic relevance.
 
 ## Choose the operation
 
-### Create or convert a bundle
+### Create or convert
 
-1. Identify the knowledge domain, authoritative sources, intended consumers, and bundle root.
-2. Inventory atomic concepts before writing files. Use one concept per non-reserved Markdown file.
-3. Fix the proposed paths before adding cross-links; the path without `.md` is the concept ID.
-4. Preserve source material and record uncertainty. Do not invent facts, resources, timestamps, relationships, or citations.
-5. Add the required `type` and warranted optional metadata. Add `resource` whenever a canonical URI exists, then add the authoring-profile `timestamp` as the final frontmatter field.
-6. Express relationships with normal Markdown links and explanatory surrounding prose.
-7. Add a final numbered `# Citations` section for every source-backed concept.
-8. Add concise indexes for progressive disclosure and a log only when they add value.
-9. Verify every internal and external link, including citation relevance, then validate hard conformance separately from authoring-profile requirements and producer-quality warnings.
+1. Identify the domain, authoritative sources, consumers, and bundle root.
+2. Inventory atomic concepts and fix their paths before cross-linking.
+3. Write one coherent concept per non-reserved Markdown file.
+4. Add `type`, useful descriptive metadata, truthful `generated`, and warranted `sources`.
+5. Add concise indexes for progressive disclosure and a log only when useful.
+6. Verify links and sources, then validate hard conformance separately from producer-profile errors and warnings.
 
-### Maintain a bundle
+### Migrate v0.1 to v0.2
 
-1. Inspect the changed sources and the affected concepts.
-2. Update facts and relationships without deleting unknown producer-defined fields.
-3. Refresh the concept's `timestamp` to the time of the meaningful edit and keep it as the final frontmatter field.
-4. Add or correct `resource` when the concept has a canonical URI.
-5. Add or update the final numbered `# Citations` section when sourced claims change.
-6. Reverify every changed link and citation target, plus links affected by moved concepts or upstream redirects.
-7. When moving a concept, update inbound links across the bundle.
-8. Update relevant indexes and add a newest-first log entry if the bundle uses logs.
-9. Avoid rewriting historical log entries solely to repair links to moved concepts.
-10. Revalidate and report conformance errors, authoring-profile errors, and warnings separately.
+1. Read §13 of the current specification.
+2. Change the root declaration to `okf_version: "0.2"`.
+3. Replace `timestamp` with truthful `generated.by` and `generated.at`.
+4. Move final `# Citations` entries into `sources`; split entries containing multiple links into separate sources and retain their titles.
+5. Convert logs to one H1 title followed by newest-first `## YYYY-MM-DD` sections.
+6. Preserve all other fields and prose, then remove the legacy fields and citation section.
+7. Run `ruby scripts/validate_okf.rb <bundle-root>` from this skill directory and resolve every error.
 
-### Query a bundle
+### Maintain
 
-1. Start at the root `index.md` when present; otherwise inventory paths and frontmatter.
-2. Use `type`, `title`, `description`, tags, and links to select relevant concepts.
-3. Read only the bodies needed to answer the question.
-4. Cite the concept paths used and distinguish bundle facts from inference.
+1. Inspect changed sources and affected concepts.
+2. Update facts and relationships without deleting unknown fields.
+3. Refresh `generated.by` and `generated.at` for meaningful content edits.
+4. Update `sources` and claim footnotes when provenance changes.
+5. Update relevant indexes and add a newest-first log entry.
+6. Reverify affected links, sources, and fragments.
+7. Validate and report hard errors, producer-profile errors, and warnings separately.
 
-### Validate a bundle
+### Query
 
-Report three levels:
+1. Start at the root `index.md`, otherwise inventory paths and frontmatter.
+2. Use type, title, description, tags, sources, status, trust, lifecycle, and links to select concepts.
+3. Read only the bodies required to answer.
+4. Cite concept paths used and distinguish bundle facts from inference.
 
-- **Errors:** violations of the three hard conformance requirements.
-- **Authoring-profile errors:** missing or malformed concept timestamps, missing final citations for source-backed claims, or invalid/unverified links and citations.
-- **Warnings:** missing recommended metadata, orphan concepts, weak navigation, indirect sources where a primary source is available, or potentially stale claims.
+### Validate
 
-Do not label producer-quality warnings as spec violations. Fix warnings when the user requests a production-quality bundle, while preserving the consumer's permissive behavior.
+Run the bundled validator when Ruby is available:
 
-## Author concept files
-
-Use the minimal valid shape:
-
-```markdown
----
-type: Component
-title: Font Shaper
-description: Converts styled Unicode runs into positioned glyphs.
-timestamp: 2026-07-24T13:15:24Z
----
-
-The font shaper consumes validated OpenType layout data.
-
-# Citations
-
-[1] [OpenType specification](https://learn.microsoft.com/en-us/typography/opentype/spec/) — normative font-layout source.
+```sh
+ruby scripts/validate_okf.rb /path/to/bundle
 ```
 
-Apply metadata deliberately:
+Report:
 
-- `title`: human-readable display name;
-- `description`: one-sentence summary;
-- `timestamp`: required by this skill; ISO 8601 time of the last meaningful edit and always the final frontmatter field;
-- `resource`: strongly encouraged canonical URI when the concept describes an identifiable asset or system;
-- `tags`: short cross-cutting labels;
-
-Preserve all unknown fields during edits. Use descriptive free-form types and tolerate types the consumer does not recognize.
+- **Conformance errors:** violations of the three hard requirements.
+- **Producer-profile errors:** legacy v0.1 fields, missing or malformed `generated`, malformed source families, invalid or unverified links/sources, or unjustified trust fields.
+- **Warnings:** missing recommended metadata, weak navigation, orphan concepts, indirect sources, or potentially stale claims.
 
 ## Handle reserved files
 
-- Use `index.md` for concise navigation and progressive disclosure.
-- Use `log.md` for newest-first dated history with `YYYY-MM-DD` headings.
-- Do not treat either reserved filename as a concept.
-- Permit frontmatter in the bundle-root `index.md` only to declare `okf_version: "0.1"`.
-- Never add frontmatter to a nested `index.md`.
-- Keep long explanations in concept files and link to them from indexes.
+- Root `index.md` may contain only `okf_version: "0.2"` in frontmatter.
+- Nested indexes have no frontmatter and provide concise navigation.
+- Logs have one H1 title and newest-first `## YYYY-MM-DD` sections with flat prose entries.
+- Never treat `index.md` or `log.md` as concepts.
 
-## Link and cite responsibly
+## Handle provenance and trust
 
-- Use standard Markdown links with `.md` for concept targets.
-- Prefer bundle-root-relative links for cross-directory relationships and relative links for nearby concepts.
-- Explain the relationship in prose; OKF links are directed but untyped.
-- Put source-backed claims under a final `# Citations` section when appropriate.
-- Treat that section as mandatory under this authoring profile whenever source-backed claims are present.
-- Number entries and cite the most direct authoritative source available.
-- Do not rely on a repository-wide bibliography as a substitute for concept-local attribution.
-- Prefer links over duplicated knowledge, but do not fragment one coherent concept into trivia-sized files.
-- Never include credentials, secrets, or access tokens.
-
-### Verify links and citations
-
-- Resolve every repository-local path from the containing document and verify that the file or directory exists.
-- Verify local Markdown fragments against an actual heading or explicit anchor in the target document.
-- For external HTTP(S) targets, follow redirects and confirm a successful response with a bounded request. Retry with a normal GET when a server does not support HEAD.
-- Treat authentication requirements, bot protection, rate limiting, DNS failures, and timeouts as unresolved verification—not as proof that a target is missing. Report them and use another authoritative access path when possible.
-- Inspect the destination, not only its status code. Confirm the page, file, revision, issue, specification section, or repository is the intended source and supports the claim attributed to it.
-- Prefer immutable revision links for implementation evidence and current canonical links for living specifications.
-- Check URL fragments separately because HTTP responses do not validate client-side anchors.
-- Remove or replace links that are genuinely missing, misleading, superseded without value, or unrelated to their surrounding claim.
+- Use `sources[].resource` for the material a concept derives from.
+- Use the actor forms `<producer>/<version>`, `human:<id>`, and `process:<id>` for `generated.by` and `verified[].by` exactly as specified.
+- Treat `verified` as `by`/`at` verification history, not a confidence score; consumers accept a bare mapping as a one-item list.
+- Derive trust tiers and freshness from the standard fields. Do not store a subjective credibility score.
+- Keep each attested computation as its own concept and never let an agent rewrite its sanctioned computation during execution.
 
 ## Compose with Diátaxis
 
-Use OKF to make a knowledge collection portable and connected. Use Diátaxis to decide how a reader-facing documentation page should serve a user. A concept may link to tutorials, how-to guides, reference, explanations, ADRs, schemas, or source code without absorbing those formats.
-
-## Final check
-
-- Confirm the bundle root and every concept ID.
-- Confirm one coherent concept per concept file.
-- Validate frontmatter and non-empty types.
-- Require a valid timestamp, confirm it reflects the current meaningful edit, and confirm it is the final frontmatter field.
-- Confirm applicable resource-backed concepts identify their canonical URI.
-- Confirm every source-backed concept ends with a numbered `# Citations` section.
-- Verify all local targets and anchors, all external destinations and redirects, and the semantic relevance of every citation.
-- Validate reserved-file structure.
-- Preserve unknown metadata.
-- Check links, citations, indexes, and logs as producer-quality concerns.
-- Report assumptions and gaps instead of filling them with invented content.
+Use OKF for portable structure, provenance, trust, and links. Use Diátaxis to decide whether reader-facing material is a tutorial, how-to, reference, or explanation. Keep internal plans, decisions, and schemas in their native formats while representing each as a coherent OKF concept.
