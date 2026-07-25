@@ -84,7 +84,7 @@ interface AbiFunction {
 interface BitmapArtifactMetadata {
   readonly role: 'raster' | 'raster-page'
   readonly id: string
-  readonly sha256: string
+  readonly sha256: Sha256Hex
   readonly byteOffset: number
   readonly byteLength: number
 }
@@ -254,10 +254,10 @@ function decodeResponse(response: Uint8Array, abi: BitmapBakerAbiV0): RasterBake
   if (artifactEnd !== response.byteLength) {
     throw new TypeError('bitmap baker response carries undeclared trailing bytes')
   }
-  const metadata = JSON.parse(textDecoder.decode(response.subarray(metadataStart, metadataEnd)))
+  const metadata: unknown = JSON.parse(textDecoder.decode(response.subarray(metadataStart, metadataEnd)))
   if (status !== contract.successStatus) throw new BitmapBakeError(metadata as SerializedBakeError)
-  const result = metadata as BitmapResultMetadata
-  validateMetadata(result, artifactLength)
+  assertBitmapResultMetadata(metadata, artifactLength)
+  const result = metadata
   const artifacts = result.artifacts.map<BakeArtifactV0>((artifact) => ({
     role: artifact.role,
     id: artifact.id,
@@ -267,7 +267,7 @@ function decodeResponse(response: Uint8Array, abi: BitmapBakerAbiV0): RasterBake
         metadataEnd + artifact.byteOffset + artifact.byteLength,
       )
       .slice(),
-    sha256: artifact.sha256 as Sha256Hex,
+    sha256: artifact.sha256,
   }))
   return {
     rasterKey: result.rasterKey as RasterKey,
@@ -279,25 +279,26 @@ function decodeResponse(response: Uint8Array, abi: BitmapBakerAbiV0): RasterBake
   }
 }
 
-function validateMetadata(result: BitmapResultMetadata, artifactLength: number): void {
+function assertBitmapResultMetadata(
+  result: unknown,
+  artifactLength: number,
+): asserts result is BitmapResultMetadata {
   if (
+    !isNonArrayObject(result) ||
     result.kind !== BITMAP_KIND ||
     result.extension !== BITMAP_EXTENSION ||
     result.version !== BITMAP_FORMAT_VERSION ||
     !isHash(result.rasterKey) ||
     !Array.isArray(result.artifacts) ||
-    !validReport(result.report)
+    !isRasterPayloadReport(result.report)
   ) {
     throw new TypeError('bitmap baker returned invalid result metadata')
   }
   let expectedOffset = 0
   for (const artifact of result.artifacts) {
     if (
-      (artifact.role !== 'raster' && artifact.role !== 'raster-page') ||
+      !isBitmapArtifactMetadata(artifact) ||
       artifact.id.length === 0 ||
-      !isHash(artifact.sha256) ||
-      !Number.isSafeInteger(artifact.byteOffset) ||
-      !Number.isSafeInteger(artifact.byteLength) ||
       artifact.byteOffset !== expectedOffset ||
       artifact.byteLength <= 0
     ) {
@@ -310,35 +311,53 @@ function validateMetadata(result: BitmapResultMetadata, artifactLength: number):
   }
 }
 
-function validReport(report: RasterPayloadReport): boolean {
+function isBitmapArtifactMetadata(value: unknown): value is BitmapArtifactMetadata {
   return (
-    Number.isSafeInteger(report.metadataBytes) &&
-    report.metadataBytes >= 0 &&
-    Number.isSafeInteger(report.serializedBytes) &&
-    report.serializedBytes >= 0 &&
-    Number.isSafeInteger(report.gpuBytes) &&
-    report.gpuBytes >= 0 &&
-    Array.isArray(report.pages) &&
-    report.pages.every(validPageReport)
+    isNonArrayObject(value) &&
+    (value.role === 'raster' || value.role === 'raster-page') &&
+    typeof value.id === 'string' &&
+    isHash(value.sha256) &&
+    Number.isSafeInteger(value.byteOffset) &&
+    Number.isSafeInteger(value.byteLength)
   )
 }
 
-function validPageReport(page: RasterPagePayloadReport): boolean {
+function isRasterPayloadReport(value: unknown): value is RasterPayloadReport {
   return (
-    Number.isSafeInteger(page.width) &&
-    page.width > 0 &&
-    Number.isSafeInteger(page.height) &&
-    page.height > 0 &&
-    page.format === 'r8unorm' &&
-    Number.isSafeInteger(page.mipBytes) &&
-    page.mipBytes > 0 &&
-    (page.source === 'embedded' || page.source === 'external') &&
-    Number.isSafeInteger(page.encodedBytes) &&
-    page.encodedBytes > 0
+    isNonArrayObject(value) &&
+    isNonnegativeSafeInteger(value.metadataBytes) &&
+    isNonnegativeSafeInteger(value.serializedBytes) &&
+    isNonnegativeSafeInteger(value.gpuBytes) &&
+    Array.isArray(value.pages) &&
+    value.pages.every(isRasterPagePayloadReport)
   )
 }
 
-function isHash(value: unknown): value is string {
+function isRasterPagePayloadReport(value: unknown): value is RasterPagePayloadReport {
+  return (
+    isNonArrayObject(value) &&
+    isPositiveSafeInteger(value.width) &&
+    isPositiveSafeInteger(value.height) &&
+    value.format === 'r8unorm' &&
+    isPositiveSafeInteger(value.mipBytes) &&
+    (value.source === 'embedded' || value.source === 'external') &&
+    isPositiveSafeInteger(value.encodedBytes)
+  )
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNonnegativeSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function isHash(value: unknown): value is Sha256Hex {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 }
 

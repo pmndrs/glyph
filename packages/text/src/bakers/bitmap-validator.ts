@@ -179,7 +179,7 @@ async function validateBitmapSemantics(
   const document = parsed.document
   const used = stringArray(document.extensionsUsed, '/extensionsUsed')
   const required = stringArray(document.extensionsRequired, '/extensionsRequired')
-  const extensions = asRecord(document.extensions, '/extensions')
+  const extensions = requireNonArrayObject(document.extensions, '/extensions')
   const combined = extensions.PMNDRS_font !== undefined
   if (!used.includes(BITMAP_EXTENSION) || (!combined && !required.includes(BITMAP_EXTENSION))) {
     fail(
@@ -188,7 +188,7 @@ async function validateBitmapSemantics(
       '/extensionsRequired',
     )
   }
-  const extension = asRecord(extensions[BITMAP_EXTENSION], `/extensions/${BITMAP_EXTENSION}`)
+  const extension = requireNonArrayObject(extensions[BITMAP_EXTENSION], `/extensions/${BITMAP_EXTENSION}`)
   const schemaIssues = evaluateExtensionSchema(
     extension,
     withId(
@@ -250,7 +250,7 @@ async function validateBitmapSemantics(
   const strikes: ValidatedBitmapStrikeV0[] = []
   for (let strikeIndex = 0; strikeIndex < strikeValues.length; strikeIndex += 1) {
     const path = `/extensions/${BITMAP_EXTENSION}/strikes/${strikeIndex}`
-    const strike = asRecord(strikeValues[strikeIndex], path)
+    const strike = requireNonArrayObject(strikeValues[strikeIndex], path)
     const ppem = asInteger(strike.ppemX, `${path}/ppemX`, 1, 65_535)
     if (strike.ppemY !== ppem || ppem !== expectedDescriptor.strikes[strikeIndex]) {
       fail('STRIKE_TUPLE', 'bitmap strikes must be square and in exact canonical order', path)
@@ -278,7 +278,7 @@ async function validateBitmapSemantics(
     const pages: ValidatedBitmapPageV0[] = []
     for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
       const pagePath = `${path}/pages/${pageIndex}`
-      const page = asRecord(pageValues[pageIndex], pagePath)
+      const page = requireNonArrayObject(pageValues[pageIndex], pagePath)
       const width = asInteger(page.width, `${pagePath}/width`, 1, limits.maxTextureDimension2D)
       const height = asInteger(page.height, `${pagePath}/height`, 1, limits.maxTextureDimension2D)
       if (page.mipLevelCount !== 1 || page.colorSpace !== 'linear') {
@@ -293,7 +293,7 @@ async function validateBitmapSemantics(
       let baselinePage: ValidatedBitmapPageV0 | undefined
       for (let variantIndex = 0; variantIndex < variants.length; variantIndex += 1) {
         const variantPath = `${pagePath}/variants/${variantIndex}`
-        const variant = asRecord(variants[variantIndex], variantPath)
+        const variant = requireNonArrayObject(variants[variantIndex], variantPath)
         const gpuFormat = asString(variant.gpuFormat, `${variantPath}/gpuFormat`)
         if (!isBitmapGpuFormat(gpuFormat)) {
           fail(
@@ -318,7 +318,7 @@ async function validateBitmapSemantics(
             variantPath,
           )
         }
-        const source = asRecord(variant.source, `${variantPath}/source`)
+        const source = requireNonArrayObject(variant.source, `${variantPath}/source`)
         const resource = await resolvePageSource(
           source,
           variantPath,
@@ -381,7 +381,7 @@ function validateBufferViews(parsed: ParsedGlb): readonly BufferView[] {
   const values = asArray(parsed.document.bufferViews, '/bufferViews')
   const views = values.map((value, index) => {
     const path = `/bufferViews/${index}`
-    const view = asRecord(value, path)
+    const view = requireNonArrayObject(value, path)
     if (view.buffer !== 0) fail('BUFFER_VIEW_CONTRACT', 'buffer view must reference buffer 0', path)
     const byteOffset =
       view.byteOffset === undefined ? 0 : asInteger(view.byteOffset, `${path}/byteOffset`, 0)
@@ -576,9 +576,9 @@ function claimView(
 }
 
 function claimCoreViews(value: unknown, claimed: Set<number>, viewCount: number): void {
-  const font = asRecord(value, '/extensions/PMNDRS_font')
-  const shaping = asRecord(font.shaping, '/extensions/PMNDRS_font/shaping')
-  const functions = asRecord(shaping.fontFunctions, '/extensions/PMNDRS_font/shaping/fontFunctions')
+  const font = requireNonArrayObject(value, '/extensions/PMNDRS_font')
+  const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping')
+  const functions = requireNonArrayObject(shaping.fontFunctions, '/extensions/PMNDRS_font/shaping/fontFunctions')
   for (const [candidate, path] of [
     [shaping.bufferView, '/extensions/PMNDRS_font/shaping/bufferView'],
     [
@@ -597,8 +597,8 @@ function claimCoreViews(value: unknown, claimed: Set<number>, viewCount: number)
   }
   const rasters = asArray(font.rasters, '/extensions/PMNDRS_font/rasters')
   const matches = rasters.filter((entry) => {
-    const raster = asRecord(entry, '/extensions/PMNDRS_font/rasters')
-    const source = asRecord(raster.source, '/extensions/PMNDRS_font/rasters/source')
+    const raster = requireNonArrayObject(entry, '/extensions/PMNDRS_font/rasters')
+    const source = requireNonArrayObject(raster.source, '/extensions/PMNDRS_font/rasters/source')
     return raster.extension === BITMAP_EXTENSION && source.type === 'embedded'
   })
   if (matches.length !== 1) {
@@ -649,11 +649,18 @@ function equalNumbers(left: readonly number[], right: readonly number[]): boolea
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
-function asRecord(value: unknown, path: string): Record<string, unknown> {
+function requireNonArrayObject(value: unknown, path: string): Record<string, unknown> {
+  assertNonArrayObject(value, path)
+  return value
+}
+
+function assertNonArrayObject(
+  value: unknown,
+  path: string,
+): asserts value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     fail('TYPE_OBJECT', 'value must be an object', path)
   }
-  return value as Record<string, unknown>
 }
 
 function asArray(value: unknown, path: string): unknown[] {
@@ -676,10 +683,15 @@ function asInteger(
   minimum: number,
   maximum = Number.MAX_SAFE_INTEGER,
 ): number {
-  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
     fail('TYPE_INTEGER', `value must be an integer in ${minimum}..=${maximum}`, path)
   }
-  return value as number
+  return value
 }
 
 function checkedProduct(left: number, right: number, path: string): number {

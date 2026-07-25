@@ -2,6 +2,7 @@ import type { RasterKey } from '../identity.js'
 import type { JsonValue } from '../raster.js'
 
 const textEncoder = new TextEncoder()
+const MAX_JSON_DEPTH = 256
 
 function assertUnicodeScalarString(value: string, path: string): void {
   for (let index = 0; index < value.length; index += 1) {
@@ -20,7 +21,10 @@ function assertUnicodeScalarString(value: string, path: string): void {
   }
 }
 
-function canonicalize(value: unknown, path: string): string {
+function canonicalize(value: unknown, path: string, ancestors: Set<object>, depth: number): string {
+  if (depth > MAX_JSON_DEPTH) {
+    throw new TypeError(`${path} exceeds the maximum JSON nesting depth`)
+  }
   if (value === null || typeof value === 'boolean') return JSON.stringify(value)
 
   if (typeof value === 'number') {
@@ -34,17 +38,33 @@ function canonicalize(value: unknown, path: string): string {
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map((entry, index) => canonicalize(entry, `${path}/${index}`)).join(',')}]`
+    return withAncestor(
+      value,
+      path,
+      ancestors,
+      () =>
+        `[${value
+          .map((entry, index) => canonicalize(entry, `${path}/${index}`, ancestors, depth + 1))
+          .join(',')}]`,
+    )
   }
 
   if (typeof value === 'object') {
-    const object = value as Record<string, unknown>
-    const members: string[] = []
-    for (const key of Object.keys(object).sort()) {
-      assertUnicodeScalarString(key, `${path}/<key>`)
-      members.push(`${JSON.stringify(key)}:${canonicalize(object[key], `${path}/${key}`)}`)
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError(`${path} must contain only plain JSON objects`)
     }
-    return `{${members.join(',')}}`
+    const object = value as Record<string, unknown>
+    return withAncestor(value, path, ancestors, () => {
+      const members: string[] = []
+      for (const key of Object.keys(object).sort()) {
+        assertUnicodeScalarString(key, `${path}/<key>`)
+        members.push(
+          `${JSON.stringify(key)}:${canonicalize(object[key], `${path}/${key}`, ancestors, depth + 1)}`,
+        )
+      }
+      return `{${members.join(',')}}`
+    })
   }
 
   throw new TypeError(`${path} is not a JSON value`)
@@ -52,7 +72,22 @@ function canonicalize(value: unknown, path: string): string {
 
 /** RFC 8785 JSON Canonicalization Scheme serialization. */
 export function canonicalJson(value: JsonValue): string {
-  return canonicalize(value, '$')
+  return canonicalize(value, '$', new Set(), 0)
+}
+
+function withAncestor<Result>(
+  value: object,
+  path: string,
+  ancestors: Set<object>,
+  operation: () => Result,
+): Result {
+  if (ancestors.has(value)) throw new TypeError(`${path} must not contain a cycle`)
+  ancestors.add(value)
+  try {
+    return operation()
+  } finally {
+    ancestors.delete(value)
+  }
 }
 
 function hexadecimal(bytes: Uint8Array): string {

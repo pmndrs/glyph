@@ -141,11 +141,11 @@ export function parseGlb(bytes: Uint8Array): ParsedGlb {
   } catch (error) {
     fail("GLB_JSON", error instanceof Error ? error.message : String(error), "/json");
   }
-  const root = asRecord(document, "GLB JSON root", "/json");
+  const root = requireNonArrayObject(document, "GLB JSON root", "/json");
   const buffers = asArray(root.buffers, "buffers", "/buffers");
   if (buffers.length !== 1)
     fail("BUFFER_COUNT", "GLB must contain exactly one buffer", "/buffers");
-  const buffer = asRecord(buffers[0], "buffer", "/buffers/0");
+  const buffer = requireNonArrayObject(buffers[0], "buffer", "/buffers/0");
   if (buffer.uri !== undefined) fail("BUFFER_URI", "GLB buffer must be embedded", "/buffers/0/uri");
   const declaredBinLength = asInteger(
     buffer.byteLength,
@@ -240,8 +240,8 @@ function messageIdentity(message: KhronosValidationMessage): string {
 let fontSchemaValidator: ValidateFunction | undefined;
 
 function validateFontExtensionSchema(document: Readonly<Record<string, unknown>>): void {
-  const extension = asRecord(
-    asRecord(document.extensions, "extensions", "/extensions").PMNDRS_font,
+  const extension = requireNonArrayObject(
+    requireNonArrayObject(document.extensions, "extensions", "/extensions").PMNDRS_font,
     "PMNDRS_font",
     "/extensions/PMNDRS_font",
   );
@@ -334,16 +334,16 @@ async function validateFontSemantics(
   if (!extensionsUsed.includes("PMNDRS_font") || !extensionsRequired.includes("PMNDRS_font")) {
     fail("FONT_EXTENSION_REQUIRED", "PMNDRS_font must be used and required");
   }
-  const extensions = asRecord(document.extensions, "extensions", "/extensions");
-  const font = asRecord(extensions.PMNDRS_font, "PMNDRS_font", "/extensions/PMNDRS_font");
-  const shaping = asRecord(font.shaping, "shaping", "/extensions/PMNDRS_font/shaping");
-  const functions = asRecord(
+  const extensions = requireNonArrayObject(document.extensions, "extensions", "/extensions");
+  const font = requireNonArrayObject(extensions.PMNDRS_font, "PMNDRS_font", "/extensions/PMNDRS_font");
+  const shaping = requireNonArrayObject(font.shaping, "shaping", "/extensions/PMNDRS_font/shaping");
+  const functions = requireNonArrayObject(
     shaping.fontFunctions,
     "fontFunctions",
     "/extensions/PMNDRS_font/shaping/fontFunctions",
   );
-  const metrics = asRecord(font.metrics, "metrics", "/extensions/PMNDRS_font/metrics");
-  const provenance = asRecord(font.provenance, "provenance", "/extensions/PMNDRS_font/provenance");
+  const metrics = requireNonArrayObject(font.metrics, "metrics", "/extensions/PMNDRS_font/metrics");
+  const provenance = requireNonArrayObject(font.provenance, "provenance", "/extensions/PMNDRS_font/provenance");
   const glyphCount = asInteger(
     metrics.glyphCount,
     "glyphCount",
@@ -366,7 +366,7 @@ async function validateFontSemantics(
 
   const bufferViews = asArray(document.bufferViews, "bufferViews", "/bufferViews").map(
     (value, index) => {
-      const view = asRecord(value, "bufferView", `/bufferViews/${index}`);
+      const view = requireNonArrayObject(value, "bufferView", `/bufferViews/${index}`);
       if (view.buffer !== 0)
         fail(
           "BUFFER_VIEW_BUFFER",
@@ -428,8 +428,8 @@ async function validateFontSemantics(
   const rasters = asArray(font.rasters, "rasters", "/extensions/PMNDRS_font/rasters");
   const hasEmbeddedRaster = rasters.some((value, index) => {
     const path = `/extensions/PMNDRS_font/rasters/${index}`;
-    const raster = asRecord(value, "raster", path);
-    return asRecord(raster.source, "source", `${path}/source`).type === "embedded";
+    const raster = requireNonArrayObject(value, "raster", path);
+    return requireNonArrayObject(raster.source, "source", `${path}/source`).type === "embedded";
   });
   if (!hasEmbeddedRaster && bufferViews.length !== 3) {
     fail(
@@ -492,13 +492,13 @@ function validateRasterDirectory(
   const embeddedExtensions = new Set<string>();
   for (let index = 0; index < rasters.length; index += 1) {
     const path = `/extensions/PMNDRS_font/rasters/${index}`;
-    const raster = asRecord(rasters[index], "raster", path);
+    const raster = requireNonArrayObject(rasters[index], "raster", path);
     const key = asString(raster.rasterKey, "rasterKey", `${path}/rasterKey`);
     const extensionName = asString(raster.extension, "extension", `${path}/extension`);
     if (keys.has(key))
       fail("RASTER_KEY_DUPLICATE", "raster keys must be unique", `${path}/rasterKey`);
     keys.add(key);
-    const source = asRecord(raster.source, "source", `${path}/source`);
+    const source = requireNonArrayObject(raster.source, "source", `${path}/source`);
     if (source.type !== "embedded") continue;
     if (embeddedExtensions.has(extensionName))
       fail(
@@ -513,7 +513,7 @@ function validateRasterDirectory(
         "embedded companion must appear in extensionsUsed",
         `${path}/extension`,
       );
-    const companion = asRecord(
+    const companion = requireNonArrayObject(
       rootExtensions[extensionName],
       extensionName,
       `/extensions/${extensionName}`,
@@ -725,10 +725,18 @@ function stringArray(value: unknown, name: string, path: string): string[] {
   return asArray(value, name, path).map((item, index) => asString(item, name, `${path}/${index}`));
 }
 
-function asRecord(value: unknown, name: string, path: string): Record<string, unknown> {
+function requireNonArrayObject(value: unknown, name: string, path: string): Record<string, unknown> {
+  assertNonArrayObject(value, name, path);
+  return value;
+}
+
+function assertNonArrayObject(
+  value: unknown,
+  name: string,
+  path: string,
+): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     fail("TYPE_OBJECT", `${name} must be an object`, path);
-  return value as Record<string, unknown>;
 }
 
 function asArray(value: unknown, name: string, path: string): unknown[] {
@@ -748,10 +756,15 @@ function asInteger(
   minimum: number,
   maximum = Number.MAX_SAFE_INTEGER,
 ): number {
-  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
     fail("TYPE_INTEGER", `${name} must be an integer in ${minimum}..=${maximum}`, path);
   }
-  return value as number;
+  return value;
 }
 
 function fail(code: string, message: string, path?: string): never {

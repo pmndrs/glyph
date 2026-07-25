@@ -54,10 +54,10 @@ export async function composeFontBake(
 
   const parsedCore = parseGlb(coreArtifact.bytes)
   const document = structuredClone(parsedCore.document)
-  const extensions = asRecord(document.extensions, '/extensions')
-  const font = asRecord(extensions.PMNDRS_font, '/extensions/PMNDRS_font')
-  const shaping = asRecord(font.shaping, '/extensions/PMNDRS_font/shaping')
-  const metrics = asRecord(font.metrics, '/extensions/PMNDRS_font/metrics')
+  const extensions = requireNonArrayObject(document.extensions, '/extensions')
+  const font = requireNonArrayObject(extensions.PMNDRS_font, '/extensions/PMNDRS_font')
+  const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping')
+  const metrics = requireNonArrayObject(font.metrics, '/extensions/PMNDRS_font/metrics')
   const shapingHash = asHash(shaping.hash, '/extensions/PMNDRS_font/shaping/hash')
   const glyphCount = asInteger(metrics.glyphCount, '/extensions/PMNDRS_font/metrics/glyphCount')
   const glyphIdWidth = asInteger(
@@ -120,8 +120,8 @@ export async function composeFontBake(
       )
     }
     const parsedRaster = parseGlb(main.bytes)
-    const rasterExtensions = asRecord(parsedRaster.document.extensions, `${path}/extensions`)
-    const extensionData = asRecord(
+    const rasterExtensions = requireNonArrayObject(parsedRaster.document.extensions, `${path}/extensions`)
+    const extensionData = requireNonArrayObject(
       rasterExtensions[raster.extension],
       `${path}/extensions/${raster.extension}`,
     )
@@ -162,7 +162,7 @@ export async function composeFontBake(
     binaryLength = checkedSum(binaryBase, parsedRaster.declaredBinLength, `${path}/binary`)
     for (let viewIndex = 0; viewIndex < rasterViews.length; viewIndex += 1) {
       const view = structuredClone(
-        asRecord(rasterViews[viewIndex], `${path}/bufferViews/${viewIndex}`),
+        requireNonArrayObject(rasterViews[viewIndex], `${path}/bufferViews/${viewIndex}`),
       )
       const byteOffset =
         view.byteOffset === undefined
@@ -192,7 +192,7 @@ export async function composeFontBake(
 
   document.extensionsUsed = used
   document.extensionsRequired = required
-  asRecord(asArray(document.buffers, '/buffers')[0], '/buffers/0').byteLength = binaryLength
+  requireNonArrayObject(asArray(document.buffers, '/buffers')[0], '/buffers/0').byteLength = binaryLength
   const combined = encodeGlb(document, concatenate(binaryParts, binaryLength))
   const fontArtifact: BakeArtifactV0 = {
     role: 'font',
@@ -387,11 +387,18 @@ function exactlyOne<Value>(
   return values[0]!
 }
 
-function asRecord(value: unknown, path: string): Record<string, unknown> {
+function requireNonArrayObject(value: unknown, path: string): Record<string, unknown> {
+  assertNonArrayObject(value, path)
+  return value
+}
+
+function assertNonArrayObject(
+  value: unknown,
+  path: string,
+): asserts value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     fail('TYPE_OBJECT', 'value must be an object', path)
   }
-  return value as Record<string, unknown>
 }
 
 function asArray(value: unknown, path: string): unknown[] {
@@ -407,10 +414,10 @@ function stringArray(value: unknown, path: string): string[] {
 }
 
 function asInteger(value: unknown, path: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
     fail('TYPE_INTEGER', 'value must be a nonnegative safe integer', path)
   }
-  return value as number
+  return value
 }
 
 function asHash(value: unknown, path: string): Sha256Hex {
