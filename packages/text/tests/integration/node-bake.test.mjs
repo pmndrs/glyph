@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 
@@ -78,6 +78,48 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
     1,
   )
   assert.ok((await readdir(join(root, 'external'))).every((name) => !name.endsWith('.tmp')))
+})
+
+test('rolls back every earlier artifact when a later publication fails', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-text-node-rollback-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const input = join(root, 'Inter-Regular.ttf')
+  await writeFile(input, await readFile(fontUrl))
+  const referenceOutput = join(root, 'reference', 'Inter-Regular.font.glb')
+  const bakeOptions = {
+    input,
+    font: { fontFaceIndex: 0 },
+    rasters: [
+      {
+        baker: bitmapBaker,
+        packaging: { artifact: 'external', pages: 'external' },
+        options: { strikes: [16] },
+      },
+    ],
+  }
+  const reference = await bakeFont({ ...bakeOptions, output: referenceOutput })
+  const output = join(root, 'rollback', 'Inter-Regular.font.glb')
+  const previous = new Map()
+  const failedTarget = reference.execution.outputs.at(-1)
+  assert.ok(failedTarget)
+
+  for (const entry of reference.execution.outputs) {
+    const file = entry.role === 'font' ? output : join(dirname(output), basename(entry.file))
+    if (entry === failedTarget) {
+      await mkdir(file, { recursive: true })
+      await writeFile(join(file, 'keep.txt'), 'previous directory')
+    } else {
+      const bytes = Buffer.from(`previous ${entry.role}`)
+      previous.set(file, bytes)
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, bytes)
+    }
+  }
+
+  await assert.rejects(bakeFont({ ...bakeOptions, output }))
+  for (const [file, bytes] of previous) assert.deepEqual(await readFile(file), bytes)
+  assert.equal(await readFile(join(join(dirname(output), basename(failedTarget.file)), 'keep.txt'), 'utf8'), 'previous directory')
+  assert.ok((await readdir(dirname(output))).every((name) => !name.endsWith('.tmp') && !name.endsWith('.bak')))
 })
 
 test('bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs', async (t) => {

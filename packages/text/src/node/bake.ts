@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -196,7 +196,7 @@ export async function bakeFont<
 
   phase = performance.now()
   const outputs = outputTargets(output, composed.artifacts)
-  await writeArtifactsAtomically(outputs, options.signal)
+  await publishArtifactsWithRollback(outputs, options.signal)
   timings.write = performance.now() - phase
   const rssAfterBytes = process.memoryUsage.rss()
   return {
@@ -419,16 +419,26 @@ function outputTargets(
   return targets
 }
 
-async function writeArtifactsAtomically(
+interface StagedArtifactOutput {
+  readonly temporaryFile: string
+  readonly target: string
+  backupFile?: string
+  published: boolean
+}
+
+async function publishArtifactsWithRollback(
   outputs: readonly { artifact: BakeArtifactV0; file: string }[],
   signal?: AbortSignal,
 ): Promise<void> {
-  const temporary: { file: string; target: string }[] = []
+  const staged: StagedArtifactOutput[] = []
+  let publicationCompleted = false
+  let rollbackCompleted = false
   try {
     for (const { artifact, file } of outputs) {
       signal?.throwIfAborted()
       await mkdir(dirname(file), { recursive: true })
       const temporaryFile = join(dirname(file), `.${file.split(sep).at(-1)}.${randomUUID()}.tmp`)
+      staged.push({ temporaryFile, target: file, published: false })
       const handle = await open(temporaryFile, 'wx')
       try {
         await handle.writeFile(artifact.bytes)
@@ -436,14 +446,80 @@ async function writeArtifactsAtomically(
       } finally {
         await handle.close()
       }
-      temporary.push({ file: temporaryFile, target: file })
     }
     signal?.throwIfAborted()
-    for (const entry of temporary) await rename(entry.file, entry.target)
-    temporary.length = 0
+    for (const entry of staged) await preservePreviousTarget(entry)
+    for (const entry of staged) {
+      await rename(entry.temporaryFile, entry.target)
+      entry.published = true
+    }
+    publicationCompleted = true
+  } catch (error) {
+    try {
+      await rollbackPublication(staged)
+      rollbackCompleted = true
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        'artifact publication failed and rollback was incomplete',
+      )
+    }
+    throw error
   } finally {
-    await Promise.all(temporary.map(({ file }) => rm(file, { force: true })))
+    await Promise.all(
+      staged.flatMap(({ temporaryFile, backupFile }) => [
+        rm(temporaryFile, { force: true }),
+        ...(backupFile === undefined || (!publicationCompleted && !rollbackCompleted)
+          ? []
+          : [rm(backupFile, { force: true })]),
+      ]),
+    )
   }
+}
+
+async function preservePreviousTarget(entry: StagedArtifactOutput): Promise<void> {
+  try {
+    const previous = await lstat(entry.target)
+    if (previous.isDirectory()) return
+    if (!previous.isFile()) {
+      throw new NodeBakeError(
+        'OUTPUT_TARGET_TYPE',
+        'existing artifact output must be a regular file',
+        entry.target,
+      )
+    }
+    const backupFile = join(
+      dirname(entry.target),
+      `.${entry.target.split(sep).at(-1)}.${randomUUID()}.bak`,
+    )
+    await rename(entry.target, backupFile)
+    entry.backupFile = backupFile
+  } catch (error) {
+    if (isMissing(error)) return
+    throw error
+  }
+}
+
+async function rollbackPublication(staged: readonly StagedArtifactOutput[]): Promise<void> {
+  const failures: unknown[] = []
+  for (const entry of [...staged].reverse()) {
+    try {
+      if (entry.published) await rm(entry.target, { force: true })
+      if (entry.backupFile !== undefined) {
+        await rename(entry.backupFile, entry.target)
+        delete entry.backupFile
+      }
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length !== 0) {
+    throw new AggregateError(failures, 'failed to restore pre-existing artifact outputs')
+  }
+}
+
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
 function finalizeTransport(

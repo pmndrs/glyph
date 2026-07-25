@@ -71,6 +71,16 @@ interface ResolveResult {
   readonly reason?: string
 }
 
+interface OrderedFontDefinition {
+  readonly value: DiscoveredFontDefinition
+  readonly sourceOffset: number
+}
+
+interface OrderedDiagnostic {
+  readonly value: DiscoveryDiagnostic
+  readonly sourceOffset: number
+}
+
 export async function discoverProjectFonts(
   options: DiscoveryOptions = {},
 ): Promise<DiscoveryReport> {
@@ -78,8 +88,8 @@ export async function discoverProjectFonts(
   const projectRoot = await canonicalDirectory(pathValue(options.projectRoot ?? process.cwd()))
   const entries = await resolveEntries(projectRoot, options.entries)
   const assetRoots = await resolveAssetRoots(projectRoot, options.assetRoots)
-  const fonts: DiscoveredFontDefinition[] = []
-  const diagnostics: DiscoveryDiagnostic[] = []
+  const fonts: OrderedFontDefinition[] = []
+  const diagnostics: OrderedDiagnostic[] = []
   const analyses: Promise<void>[] = []
   const snapshot = openCompilerProjectSnapshot(projectRoot, entries)
   try {
@@ -98,6 +108,7 @@ export async function discoverProjectFonts(
           if (ts.isCallExpression(node)) {
             const binding = importedBinding(node.expression, checker, project)
             if (binding?.module === '@pmndrs/text' && binding.exported === 'defineFont') {
+              const sourceOffset = node.getStart(sourceFile)
               analyses.push(
                 analyzeDefinition(
                   node.arguments[0],
@@ -109,8 +120,8 @@ export async function discoverProjectFonts(
                   assetRoots,
                 ).then((result) => {
                   if (result === undefined) return
-                  if ('font' in result) fonts.push(result.font)
-                  else diagnostics.push(result.diagnostic)
+                  if ('font' in result) fonts.push({ value: result.font, sourceOffset })
+                  else diagnostics.push({ value: result.diagnostic, sourceOffset })
                 }),
               )
             }
@@ -128,6 +139,7 @@ export async function discoverProjectFonts(
               const input = objectPropertyExpression(object, 'font')
               const raster = objectPropertyExpression(object, 'raster')
               if (input !== undefined && raster !== undefined) {
+                const sourceOffset = node.getStart(sourceFile)
                 analyses.push(
                   analyzeDefinition(
                     input,
@@ -139,8 +151,8 @@ export async function discoverProjectFonts(
                     assetRoots,
                   ).then((result) => {
                     if (result === undefined) return
-                    if ('font' in result) fonts.push(result.font)
-                    else diagnostics.push(result.diagnostic)
+                    if ('font' in result) fonts.push({ value: result.font, sourceOffset })
+                    else diagnostics.push({ value: result.diagnostic, sourceOffset })
                   }),
                 )
               }
@@ -152,6 +164,7 @@ export async function discoverProjectFonts(
               const input = jsxAttributeExpression(node, 'font')
               const raster = jsxAttributeExpression(node, 'raster')
               if (input !== undefined && raster !== undefined) {
+                const sourceOffset = node.getStart(sourceFile)
                 analyses.push(
                   analyzeDefinition(
                     input,
@@ -163,8 +176,8 @@ export async function discoverProjectFonts(
                     assetRoots,
                   ).then((result) => {
                     if (result === undefined) return
-                    if ('font' in result) fonts.push(result.font)
-                    else diagnostics.push(result.diagnostic)
+                    if ('font' in result) fonts.push({ value: result.font, sourceOffset })
+                    else diagnostics.push({ value: result.diagnostic, sourceOffset })
                   }),
                 )
               }
@@ -181,7 +194,10 @@ export async function discoverProjectFonts(
   }
   fonts.sort(compareSourcePosition)
   diagnostics.sort(compareSourcePosition)
-  return { fonts, diagnostics }
+  return {
+    fonts: fonts.map(({ value }) => value),
+    diagnostics: diagnostics.map(({ value }) => value),
+  }
 }
 
 async function analyzeDefinition(
@@ -318,17 +334,20 @@ async function rasterManifest(
   const packageName = packageNameFromSpecifier(binding.module)
   const require = createRequire(sourceFile)
   const manifestPath = require.resolve(`${packageName}/package.json`)
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+  const manifest = requireNonArrayObject(
+    JSON.parse(await readFile(manifestPath, 'utf8')),
+    'raster package manifest',
+  )
   if (manifest.name !== packageName)
     throw new Error(`raster manifest name does not match ${packageName}`)
   const packageRoot = await canonicalDirectory(dirname(manifestPath))
-  const pmndrs = record(manifest.pmndrs)
-  const map = record(pmndrs?.text)
+  const pmndrs = nonArrayObjectOrUndefined(manifest.pmndrs)
+  const map = nonArrayObjectOrUndefined(pmndrs?.text)
   const target = map?.[binding.exported]
   if (typeof target !== 'string' || !target.startsWith('./')) {
     throw new Error(`raster manifest has no pmndrs.text entry for ${binding.exported}`)
   }
-  const exports = record(manifest.exports)
+  const exports = nonArrayObjectOrUndefined(manifest.exports)
   const exported = exports?.[target]
   const importTarget = esmExportTarget(exported, manifest.type)
   if (importTarget === undefined)
@@ -351,7 +370,7 @@ function esmExportTarget(value: unknown, packageType: unknown): string | undefin
       ? value
       : undefined
   }
-  const object = record(value)
+  const object = nonArrayObjectOrUndefined(value)
   const target = object?.import
   return typeof target === 'string' &&
     object?.require === undefined &&
@@ -647,10 +666,26 @@ function packageNameFromSpecifier(specifier: string): string {
   return name
 }
 
-function record(value: unknown): Record<string, unknown> | undefined {
+function requireNonArrayObject(value: unknown, name: string): Record<string, unknown> {
+  assertNonArrayObject(value, name)
+  return value
+}
+
+function assertNonArrayObject(
+  value: unknown,
+  name: string,
+): asserts value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${name} must be a non-array object`)
+  }
+}
+
+function nonArrayObjectOrUndefined(value: unknown): Record<string, unknown> | undefined {
+  return isNonArrayObject(value) ? value : undefined
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined
 }
 
 function failure(
@@ -728,8 +763,8 @@ function publicPath(root: string, file: string): string {
 }
 
 function compareSourcePosition(
-  a: { sourceFile: string; expression: string },
-  b: { sourceFile: string; expression: string },
+  a: { readonly value: { readonly sourceFile: string }; readonly sourceOffset: number },
+  b: { readonly value: { readonly sourceFile: string }; readonly sourceOffset: number },
 ): number {
-  return a.sourceFile.localeCompare(b.sourceFile) || a.expression.localeCompare(b.expression)
+  return a.value.sourceFile.localeCompare(b.value.sourceFile) || a.sourceOffset - b.sourceOffset
 }
