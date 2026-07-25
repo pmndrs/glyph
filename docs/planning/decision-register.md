@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T01:15:06Z"
 ---
 
 # Decision register
@@ -93,6 +93,7 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | D-070 | Bitmap strike tuples are non-empty, duplicate-free static positive integer literals and are part of raster identity; a missing declared strike makes a baked raster incompatible. | Proposed |
 | D-077 | The portable bake core ships one `wasm32-unknown-unknown` module behind a versioned JSON-described C ABI and direct linear-memory TypeScript shim; it ships no platform binaries, WASI dependency, Embind, or binding-generator runtime. | Settled for V0 |
 | D-078 | The bake Wasm uses `no_std + alloc` and aborting panics; its allocator is ABI-private. `dlmalloc` is the baseline, `rlsf` is the primary challenger, and any replacement requires representative benchmark evidence. Host code owns gzip/Brotli measurement. | Experiment |
+| D-084 | Font format parsing and outline/metric interpretation use maintained Fontations `read-fonts` and `skrifa`; project code owns bake policy and artifact contracts, not a parallel OpenType parser or geometry engine. | Settled for V0 |
 
 The [architecture](architecture.md) owns loading behavior and dependency rules. The [API contract](api-shapes.md) owns host and Worker shapes.
 

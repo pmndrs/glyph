@@ -6,7 +6,6 @@ use read_fonts::{
 use skrifa::{
     MetadataProvider,
     instance::{LocationRef, Size},
-    outline::{DrawSettings, OutlinePen},
 };
 use std::{
     borrow::ToOwned,
@@ -268,26 +267,12 @@ fn collect_extents(font: &FontRef<'_>, glyph_count: u16) -> Result<(Vec<u8>, Vec
         .ok_or_else(overflow)?;
     let mut extents = vec![0_u8; extents_len];
     let mut availability = vec![0_u8; usize::from(glyph_count).div_ceil(8)];
-    let outlines = font.outline_glyphs();
+    let glyph_metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
     for glyph_id in 0..glyph_count {
-        let Some(outline) = outlines.get(GlyphId::new(u32::from(glyph_id))) else {
+        let Some(bounds) = glyph_metrics.bounds(GlyphId::new(u32::from(glyph_id))) else {
             continue;
         };
-        let mut pen = ExtentsPen::default();
-        outline
-            .draw(
-                DrawSettings::unhinted(Size::unscaled(), LocationRef::default()),
-                &mut pen,
-            )
-            .map_err(|error| {
-                BakeError::new(
-                    BakeErrorCode::InvalidGlyphExtents,
-                    format!("failed to read glyph {glyph_id} outline: {error}"),
-                )
-            })?;
-        let Some(bounds) = pen.finish()? else {
-            continue;
-        };
+        let bounds = encode_bounds([bounds.x_min, bounds.y_min, bounds.x_max, bounds.y_max])?;
         let offset = usize::from(glyph_id) * 8;
         for (index, value) in bounds.into_iter().enumerate() {
             extents[offset + index * 2..offset + index * 2 + 2]
@@ -298,127 +283,27 @@ fn collect_extents(font: &FontRef<'_>, glyph_count: u16) -> Result<(Vec<u8>, Vec
     Ok((extents, availability))
 }
 
-#[derive(Default)]
-struct ExtentsPen {
-    current: Option<(f64, f64)>,
-    bounds: Option<[f64; 4]>,
-}
-
-impl ExtentsPen {
-    fn point(&mut self, x: f64, y: f64) {
-        if let Some([x_min, y_min, x_max, y_max]) = &mut self.bounds {
-            *x_min = x_min.min(x);
-            *y_min = y_min.min(y);
-            *x_max = x_max.max(x);
-            *y_max = y_max.max(y);
-        } else {
-            self.bounds = Some([x, y, x, y]);
-        }
+fn encode_bounds(bounds: [f32; 4]) -> Result<[i16; 4], BakeError> {
+    let values = [
+        bounds[0].floor(),
+        bounds[1].floor(),
+        bounds[2].ceil(),
+        bounds[3].ceil(),
+    ];
+    if values.iter().any(|value| {
+        !value.is_finite() || *value < f32::from(i16::MIN) || *value > f32::from(i16::MAX)
+    }) {
+        return Err(BakeError::new(
+            BakeErrorCode::InvalidGlyphExtents,
+            "glyph extent is outside the V0 i16 range",
+        ));
     }
-
-    fn finish(self) -> Result<Option<[i16; 4]>, BakeError> {
-        let Some([x_min, y_min, x_max, y_max]) = self.bounds else {
-            return Ok(None);
-        };
-        let values = [x_min.floor(), y_min.floor(), x_max.ceil(), y_max.ceil()];
-        if values.iter().any(|value| {
-            !value.is_finite() || *value < f64::from(i16::MIN) || *value > f64::from(i16::MAX)
-        }) {
-            return Err(BakeError::new(
-                BakeErrorCode::InvalidGlyphExtents,
-                "glyph extent is outside the V0 i16 range",
-            ));
-        }
-        Ok(Some([
-            values[0] as i16,
-            values[1] as i16,
-            values[2] as i16,
-            values[3] as i16,
-        ]))
-    }
-}
-
-impl OutlinePen for ExtentsPen {
-    fn move_to(&mut self, x: f32, y: f32) {
-        self.current = Some((x.into(), y.into()));
-        self.point(x.into(), y.into());
-    }
-    fn line_to(&mut self, x: f32, y: f32) {
-        self.current = Some((x.into(), y.into()));
-        self.point(x.into(), y.into());
-    }
-    fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
-        let (x0, y0) = self.current.unwrap_or((x.into(), y.into()));
-        let (cx, cy, x, y) = (f64::from(cx), f64::from(cy), f64::from(x), f64::from(y));
-        self.point(x, y);
-        for t in quadratic_extrema(x0, cx, x)
-            .into_iter()
-            .chain(quadratic_extrema(y0, cy, y))
-        {
-            if (0.0..1.0).contains(&t) {
-                self.point(quadratic(x0, cx, x, t), quadratic(y0, cy, y, t));
-            }
-        }
-        self.current = Some((x, y));
-    }
-    fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
-        let (x0, y0) = self.current.unwrap_or((x.into(), y.into()));
-        let (cx0, cy0, cx1, cy1, x, y) = (
-            f64::from(cx0),
-            f64::from(cy0),
-            f64::from(cx1),
-            f64::from(cy1),
-            f64::from(x),
-            f64::from(y),
-        );
-        self.point(x, y);
-        for t in cubic_extrema(x0, cx0, cx1, x)
-            .into_iter()
-            .chain(cubic_extrema(y0, cy0, cy1, y))
-        {
-            if (0.0..1.0).contains(&t) {
-                self.point(cubic(x0, cx0, cx1, x, t), cubic(y0, cy0, cy1, y, t));
-            }
-        }
-        self.current = Some((x, y));
-    }
-    fn close(&mut self) {}
-}
-
-fn quadratic_extrema(p0: f64, p1: f64, p2: f64) -> Vec<f64> {
-    let denominator = p0 - 2.0 * p1 + p2;
-    if denominator.abs() < f64::EPSILON {
-        Vec::new()
-    } else {
-        vec![(p0 - p1) / denominator]
-    }
-}
-fn quadratic(p0: f64, p1: f64, p2: f64, t: f64) -> f64 {
-    let u = 1.0 - t;
-    u * u * p0 + 2.0 * u * t * p1 + t * t * p2
-}
-fn cubic_extrema(p0: f64, p1: f64, p2: f64, p3: f64) -> Vec<f64> {
-    let a = -p0 + 3.0 * p1 - 3.0 * p2 + p3;
-    let b = 2.0 * (p0 - 2.0 * p1 + p2);
-    let c = p1 - p0;
-    if a.abs() < f64::EPSILON {
-        return if b.abs() < f64::EPSILON {
-            Vec::new()
-        } else {
-            vec![-c / b]
-        };
-    }
-    let discriminant = b * b - 4.0 * a * c;
-    if discriminant < 0.0 {
-        Vec::new()
-    } else {
-        let root = discriminant.sqrt();
-        vec![(-b + root) / (2.0 * a), (-b - root) / (2.0 * a)]
-    }
-}
-fn cubic(p0: f64, p1: f64, p2: f64, p3: f64, t: f64) -> f64 {
-    let u = 1.0 - t;
-    u * u * u * p0 + 3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t * p3
+    Ok([
+        values[0] as i16,
+        values[1] as i16,
+        values[2] as i16,
+        values[3] as i16,
+    ])
 }
 
 fn shaping_hash(sfnt: &[u8], extents: &[u8], availability: &[u8]) -> Result<String, BakeError> {
@@ -467,9 +352,10 @@ mod tests {
     }
 
     #[test]
-    fn curve_extrema_include_internal_turns() {
-        let roots = quadratic_extrema(0.0, 10.0, 0.0);
-        assert_eq!(roots, vec![0.5]);
-        assert_eq!(quadratic(0.0, 10.0, 0.0, roots[0]), 5.0);
+    fn bounds_are_rounded_outward() {
+        assert_eq!(
+            encode_bounds([-1.25, -2.5, 3.25, 4.5]).unwrap(),
+            [-2, -3, 4, 5]
+        );
     }
 }

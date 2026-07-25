@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T01:15:06Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestone 2 is 🟡 only because the host-independent 2.2 core has begun as an explicitly requested bounded slice. This does not waive milestone 0–1 gates or make the complete milestone eligible for completion.
+Milestone 2 and item 2.2 show 🟡 because implementation exists, but that work was started before its declared dependencies closed. It is paused: no additional milestone-2 scope proceeds until milestones 0 and 1 pass their exit gates, after which work resumes in issue order at 2.1. Existing code is corrective-only until then.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 

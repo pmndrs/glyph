@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Correction** — Confirmed the baker already delegates font parsing to Fontations `read-fonts`/`skrifa`, replaced its custom outline-bounds pen with Skrifa's maintained glyph bounds, and explicitly paused out-of-order milestone-2 expansion until milestones 0–1 close.
 - **Migration** — Upgraded the complete documentation bundle and its repository-local maintenance skill to OKF v0.2: concepts now carry `generated.by`/`generated.at` and frontmatter `sources`, the root declares v0.2, the log uses its reserved structure, and the reusable migration/validation commands reject legacy metadata.
 - **Implementation** — Added `apps/benchmarks` with the responsive desktop/mobile Figma shell, semantic CSS-variable-backed Tailwind utilities, local shadcn-derived controls, shared target/scenario runner, URL state, raw export, deterministic synthetic target, and fixture-driven Rust Wasm baker target; raster targets remain visibly unavailable.
 - **Verification** — Added six Vitest contract tests, a committed erasable-TypeScript Vitexec live runner probe, a 390×844 Playwright mobile scene/controls/report/export probe, browser-error-to-test-failure enforcement, and captured local desktop/mobile visual evidence without readiness timers or retries.
