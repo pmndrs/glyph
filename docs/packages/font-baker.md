@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:074eeb94c815643ab1e2a2263a0f08e6f9f3efb45bad30c93d8bab78a53fd06f"
+source_digest: "sha256:42d1019e5ebc09e9ffdc867083b79cd5c7896bf63ddfb75c625f49974ebe6460"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -22,7 +22,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T09:31:40Z"
+  at: "2026-07-25T12:12:44Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -33,7 +33,9 @@ This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON A
 
 The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
 
-The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. At item 2.2 closure, that changes 475,673 raw bytes to 430,662 while preserving zero imports, the embedded ABI, and the canonical artifact hash. Transfer compression changes much less—168,958 to 167,310 gzip bytes and 136,342 to 136,118 Brotli bytes—so reports keep raw and transport costs distinct.
+The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,045 raw bytes, 168,220 gzip bytes, and 136,955 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. Reports keep raw and transport costs distinct.
+
+The direct-memory boundary owns every request and response allocation in a module registry. Caller-controlled requests are capped at 64 MiB and use fallible reservation; use and release require the exact active pointer/length pair, forged or repeated releases are harmless, checked response arithmetic prevents truncation, and response metadata cannot outlive its owned bytes. The fixed, tiny `WasmState` allocation still uses stable Rust's infallible `Box::new` once per Wasm instance; replacing that theoretical OOM trap would require unstable allocator APIs or a disproportionate static-state design.
 
 Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract.
 
