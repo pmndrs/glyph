@@ -1,0 +1,32 @@
+{
+  "name": "@pmndrs/text-font-baker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./font-baker.wasm": "./dist/font_baker.wasm",
+    "./abi.json": "./dist/font-baker-abi-v0.json",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "build:rust": "cargo build --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
+    "generate:abi": "cargo run --manifest-path rust/Cargo.toml --bin generate-abi --locked --quiet",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "test:unit": "cargo test --manifest-path rust/Cargo.toml --lib --locked",
+    "test:integration": "cargo test --manifest-path rust/Cargo.toml --test public_api --locked && node --test tests/integration/*.test.mjs",
+    "test:e2e": "node --test tests/e2e/*.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

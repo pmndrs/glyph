@@ -4,9 +4,11 @@
   "type": "module",
   "packageManager": "pnpm@11.15.1",
   "scripts": {
-    "build": "pnpm --filter @pmndrs/text build",
-    "check": "pnpm --filter @pmndrs/text typecheck",
-    "typecheck": "pnpm --filter @pmndrs/text typecheck",
+    "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
+    "check": "pnpm typecheck && pnpm test",
+    "typecheck": "pnpm --filter './packages/*' typecheck && pnpm --filter './apps/*' typecheck",
+    "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",
+    "benchmarks": "pnpm --filter @pmndrs/text-benchmarks dev",
     "test:types": "pnpm --filter @pmndrs/text test:types"
   },
   "devDependencies": {

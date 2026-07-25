@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "plugins": ["react", "jsx-a11y", "vitest"],
+  "jsPlugins": ["eslint-plugin-react-you-might-not-need-an-effect"],
+  "categories": { "correctness": "error", "perf": "warn", "suspicious": "warn" },
+  "env": { "browser": true, "es2025": true },
+  "settings": { "react": { "version": "19.2.8" } },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/react-compiler": "error",
+    "react/rules-of-hooks": "error",
+    "eslint/no-await-in-loop": "off",
+    "react-you-might-not-need-an-effect/no-derived-state": "error",
+    "react-you-might-not-need-an-effect/no-chain-state-updates": "error",
+    "react-you-might-not-need-an-effect/no-event-handler": "error",
+    "react-you-might-not-need-an-effect/no-adjust-state-on-prop-change": "error",
+    "react-you-might-not-need-an-effect/no-reset-all-state-on-prop-change": "error",
+    "react-you-might-not-need-an-effect/no-pass-live-state-to-parent": "error",
+    "react-you-might-not-need-an-effect/no-pass-data-to-parent": "error",
+    "react-you-might-not-need-an-effect/no-external-store-subscription": "error",
+    "react-you-might-not-need-an-effect/no-initialize-state": "error"
+  },
+  "ignorePatterns": ["dist/**"]
+}

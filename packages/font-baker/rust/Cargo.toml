@@ -1,0 +1,47 @@
+[package]
+name = "pmndrs-text-font-baker"
+description = "Portable shaping-data baker for pmndrs/text"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/text"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "generate-abi"
+path = "src/bin/generate-abi.rs"
+required-features = ["std"]
+
+[features]
+default = ["std"]
+std = [
+  "dep:brotli",
+  "dep:flate2",
+  "read-fonts/std",
+  "serde/std",
+  "serde_json/std",
+  "skrifa/std",
+]
+
+[dependencies]
+brotli = { version = "8.0.4", optional = true }
+core_maths = "0.1.1"
+flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"], optional = true }
+read-fonts = { version = "0.42.1", default-features = false, features = ["libm"] }
+serde = { version = "1.0.229", default-features = false, features = ["alloc", "derive"] }
+serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.11.0", default-features = false }
+skrifa = { version = "0.45.1", default-features = false, features = ["libm"] }
+thiserror = { version = "2.0.19", default-features = false }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dlmalloc = { version = "0.2.14", features = ["global"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

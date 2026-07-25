@@ -1,0 +1,133 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+  --background: #070709;
+  --chrome: #0c0c0f;
+  --surface: #101014;
+  --surface-raised: #121217;
+  --surface-active: #15151a;
+  --panel: #0d0d11;
+  --border: #27272f;
+  --foreground: #f6f6f9;
+  --muted: #9999a8;
+  --dim: #666675;
+  --accent: #7c5dfc;
+  --accent-hover: #8e74ff;
+  --success: #34d399;
+  --cyan: #22d3ee;
+  --warning: #f59e0b;
+  --danger: #fb7185;
+  font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-chrome: var(--chrome);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-active: var(--surface-active);
+  --color-panel: var(--panel);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-success: var(--success);
+  --color-cyan: var(--cyan);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-mono: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--background);
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+
+.eyebrow {
+  font-family: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  line-height: 12px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.benchmark-grid {
+  background-color: var(--background);
+  background-position: -1px -1px;
+}
+.benchmark-grid.is-visible {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--border) 42%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--border) 42%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 16px 16px;
+}
+
+.cell {
+  min-height: 32px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+}
+.cell:nth-child(4n) {
+  border-right: 0;
+}
+.cell-head {
+  background: var(--surface-active);
+  font-family: 'Geist Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.target-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+.target-dot-violet {
+  background: var(--accent);
+}
+.target-dot-green {
+  background: var(--success);
+}
+.target-dot-cyan {
+  background: var(--cyan);
+}
+.target-dot-amber {
+  background: var(--warning);
+}
+
+@media (max-width: 1023px) {
+  :root {
+    font-size: 16px;
+  }
+  .benchmark-grid {
+    min-height: 0;
+    padding: 12px;
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@pmndrs/text-benchmarks",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @pmndrs/text-font-baker build && vite build",
+    "dev": "pnpm --filter @pmndrs/text-font-baker build && vite",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings .",
+    "test": "vitest run",
+    "test:live": "node ./scripts/run-live-probe.mts",
+    "test:watch": "vitest",
+    "typecheck": "pnpm --filter @pmndrs/text-font-baker build && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@pmndrs/text-font-baker": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@babel/core": "8.0.1",
+    "@rolldown/plugin-babel": "0.2.3",
+    "@tailwindcss/vite": "4.2.1",
+    "@types/babel__core": "7.20.5",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.1",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint-plugin-react-you-might-not-need-an-effect": "1.0.1",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "playwright": "1.61.1",
+    "tailwindcss": "4.2.1",
+    "vite": "8.1.5",
+    "vitest": "4.1.0",
+    "vitexec": "0.1.17"
+  }
+}

@@ -1,0 +1,123 @@
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+
+function classes(...values: readonly (string | false | undefined)[]): string {
+  return values.filter(Boolean).join(' ')
+}
+
+export function Button({
+  className,
+  variant = 'secondary',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  readonly variant?: 'primary' | 'secondary' | 'ghost'
+}) {
+  return (
+    <button
+      className={classes(
+        'inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45',
+        variant === 'primary' && 'bg-accent text-white hover:bg-accent-hover',
+        variant === 'secondary' &&
+          'border border-border bg-surface-raised text-foreground hover:bg-surface-active',
+        variant === 'ghost' && 'text-muted hover:bg-surface-active hover:text-foreground',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+export function Chip({
+  children,
+  tone = 'neutral',
+}: {
+  readonly children: ReactNode
+  readonly tone?: 'neutral' | 'success' | 'warning' | 'accent'
+}) {
+  return (
+    <span className="inline-flex h-6 items-center gap-2 rounded-full border border-border bg-surface px-2 font-mono text-[10px] text-muted">
+      <span
+        className={classes(
+          'size-1.5 rounded-full bg-muted',
+          tone === 'success' && 'bg-success',
+          tone === 'warning' && 'bg-warning',
+          tone === 'accent' && 'bg-accent',
+        )}
+      />
+      {children}
+    </span>
+  )
+}
+
+export function Field({
+  label,
+  className,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { readonly label: string }) {
+  return (
+    <label className={classes('grid gap-1.5', className)}>
+      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
+      <input
+        className="h-8 min-w-0 rounded-md border border-border bg-background px-2.5 text-xs text-foreground outline-none file:mr-2 file:border-0 file:bg-transparent file:text-xs file:text-muted focus:border-accent"
+        {...props}
+      />
+    </label>
+  )
+}
+
+export function SelectField({
+  label,
+  children,
+  value,
+  onChange,
+}: {
+  readonly label: string
+  readonly children: ReactNode
+  readonly value: string
+  readonly onChange: (value: string) => void
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
+      <select
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-accent"
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      >
+        {children}
+      </select>
+    </label>
+  )
+}
+
+export function Toggle({
+  checked,
+  label,
+  onChange,
+}: {
+  readonly checked: boolean
+  readonly label: string
+  readonly onChange: (value: boolean) => void
+}) {
+  return (
+    <label className="flex min-h-8 cursor-pointer items-center justify-between gap-3 text-xs text-muted">
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        checked={checked}
+        className="peer sr-only"
+        type="checkbox"
+        onChange={(event) => onChange(event.currentTarget.checked)}
+      />
+      <span className="relative h-[18px] w-8 rounded-full bg-border transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent after:absolute after:left-0.5 after:top-0.5 after:size-3.5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-3.5" />
+    </label>
+  )
+}
+
+export function Metric({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="min-w-0 border-r border-border px-3 py-2 last:border-r-0">
+      <div className="font-mono text-[9px] uppercase tracking-[0.08em] text-dim">{label}</div>
+      <div className="mt-1 truncate font-mono text-base text-foreground">{value}</div>
+    </div>
+  )
+}
