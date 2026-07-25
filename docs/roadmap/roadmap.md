@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:43:45Z"
+  at: "2026-07-25T01:54:22Z"
 ---
 
 # Canonical implementation roadmap
@@ -86,7 +86,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 0.2 | ✅ | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
 | 0.3 | ✅ | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
-| 1.2 | 🟡 | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
+| 1.2 | ✅ | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
 | 1.3 | ⬜ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
 | 2.1 | ⬜ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | 🟡 | Implement the host-independent font bake request/result core. | M | 2.1 |
@@ -158,6 +158,18 @@ Deliver:
 The contract-only TypeScript shim may contain identity factories such as `defineRaster` and `defineRasterBaker`; it must not implement loading, shaping, paragraph, baking, or rendering behavior.
 
 ## Milestone 1 — build the benchmark harness first and pin fixtures
+
+### 1.2 closure checklist
+
+- [x] The responsive Figma-backed interactive lab selects targets/scenarios, preserves URL state, reports lifecycle/correctness, and exports raw JSON.
+- [x] Interactive, Vitest, Vitexec, and browser-headless paths call the same strict target/scenario registry execution module.
+- [x] The headless CLI emits the versioned summary to stdout or an explicit output file and fails on browser console/page errors.
+- [x] Browser readiness and completion use Vite lifecycle and benchmark completion promises without sleeps, frame-count waits, retries, or polling.
+- [x] Independent library-mode builds report nonzero raw, minified, gzip, and Brotli sizes for browser core and baker JavaScript plus raw/gzip/Brotli baker Wasm.
+- [x] The future Unicode-property-table size entry is explicitly unavailable rather than reported as zero bytes.
+- [x] Vitest, production build, headless browser smoke, Vitexec GPU launch, and 390×844 Playwright navigation pass.
+
+Item 1.2 is closed. Item 1.3 is now the active dependency; it replaces local/conditional font input with licensed immutable fixtures and structured/visual oracles.
 
 Deliver:
 

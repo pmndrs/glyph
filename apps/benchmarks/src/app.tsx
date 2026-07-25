@@ -1,7 +1,8 @@
 import { Suspense, use, useState, useTransition, type ReactNode } from 'react'
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts'
 import { environmentResource } from './benchmark/environment'
-import { missingCapabilities, runBenchmark } from './benchmark/runner'
+import { defaultControls, runRegisteredBenchmark } from './benchmark/execution'
+import { missingCapabilities } from './benchmark/runner'
 import { plannedScenarios, scenarioById, scenarios } from './benchmark/scenarios'
 import { targetById, targets } from './benchmark/targets'
 import {
@@ -43,8 +44,8 @@ function Harness() {
   const [summary, setSummary] = useState<BenchmarkSummary>()
   const [event, setEvent] = useState<RunnerEvent>()
   const [error, setError] = useState<string>()
-  const [samples, setSamples] = useState(32)
-  const [warmup, setWarmup] = useState(4)
+  const [samples, setSamples] = useState(defaultControls.samples)
+  const [warmup, setWarmup] = useState(defaultControls.warmup)
   const [showGrid, setShowGrid] = useState(true)
   const [isPending, startTransition] = useTransition()
 
@@ -65,9 +66,9 @@ function Harness() {
     setError(undefined)
     startTransition(async () => {
       try {
-        const value = await runBenchmark({
-          target,
-          scenario,
+        const value = await runRegisteredBenchmark({
+          targetId: target.id,
+          scenarioId: scenario.id,
           input,
           controls: { samples, warmup },
           environment,

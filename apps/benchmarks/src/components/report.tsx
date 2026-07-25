@@ -1,4 +1,5 @@
 import type { BenchmarkSummary } from '../benchmark/contracts'
+import packageSizes from '../generated/package-sizes.json'
 import { Metric } from './ui'
 
 function ms(value: number | undefined): string {
@@ -35,6 +36,24 @@ export function Report({ summary }: { readonly summary: BenchmarkSummary | undef
           <span className="ml-auto font-mono text-[10px] text-muted">
             {summary?.validation ?? 'awaiting run'}
           </span>
+        </div>
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Independent package-size lane</p>
+        <div className="mt-2 grid gap-2">
+          {packageSizes.entries.map((entry) => (
+            <div className="flex items-center gap-3 text-xs" key={entry.id}>
+              <span
+                className={`size-2 rounded-full ${entry.status === 'measured' ? 'bg-success' : 'bg-warning'}`}
+              />
+              <span className="text-foreground">{entry.label}</span>
+              <span className="ml-auto font-mono text-[10px] text-muted">
+                {entry.status === 'measured'
+                  ? `${bytes(entry.rawBytes)} raw · ${bytes(entry.brotliBytes)} br`
+                  : 'not landed'}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">

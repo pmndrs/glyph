@@ -4,28 +4,35 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @pmndrs/text-font-baker build && vite build",
+    "build": "pnpm size && vite build",
     "dev": "pnpm --filter @pmndrs/text-font-baker build && vite",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
-    "test": "vitest run",
+    "size": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/measure-package-sizes.mts",
+    "test": "pnpm test:unit && pnpm test:headless",
+    "test:headless": "pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --samples 3 --warmup 1",
     "test:live": "node ./scripts/run-live-probe.mts",
+    "test:unit": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm --filter @pmndrs/text-font-baker build && tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --filter @pmndrs/text-font-baker build && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit"
   },
   "dependencies": {
+    "@pmndrs/text": "workspace:*",
     "@pmndrs/text-font-baker": "workspace:*",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "three": "0.185.1"
   },
   "devDependencies": {
     "@babel/core": "8.0.1",
     "@rolldown/plugin-babel": "0.2.3",
     "@tailwindcss/vite": "4.2.1",
     "@types/babel__core": "7.20.5",
+    "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@types/three": "0.185.1",
     "@vitejs/plugin-react": "6.0.1",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint-plugin-react-you-might-not-need-an-effect": "1.0.1",

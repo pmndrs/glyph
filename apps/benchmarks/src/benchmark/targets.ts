@@ -7,7 +7,7 @@ function stableSyntheticHash(sample: number): string {
   for (let index = 0; index < 4096; index += 1) {
     value = Math.imul(value ^ ((index + sample) & 0xff), 16777619)
   }
-  return value.toString(16).padStart(8, '0')
+  return (value >>> 0).toString(16).padStart(8, '0')
 }
 
 const syntheticTarget: BenchmarkTarget = {

@@ -14,6 +14,9 @@ importers:
 
   apps/benchmarks:
     dependencies:
+      '@pmndrs/text':
+        specifier: workspace:*
+        version: link:../../packages/text
       '@pmndrs/text-font-baker':
         specifier: workspace:*
         version: link:../../packages/font-baker
@@ -23,28 +26,37 @@ importers:
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
     devDependencies:
       '@babel/core':
         specifier: 8.0.1
         version: 8.0.1
       '@rolldown/plugin-babel':
         specifier: 0.2.3
-        version: 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(jiti@2.7.0))
+        version: 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       '@tailwindcss/vite':
         specifier: 4.2.1
-        version: 4.2.1(vite@8.1.5(jiti@2.7.0))
+        version: 4.2.1(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       '@types/babel__core':
         specifier: 7.20.5
         version: 7.20.5
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
       '@types/react':
         specifier: 19.2.14
         version: 19.2.14
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.14)
+      '@types/three':
+        specifier: 0.185.1
+        version: 0.185.1
       '@vitejs/plugin-react':
         specifier: 6.0.1
-        version: 6.0.1(@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(jiti@2.7.0)))(babel-plugin-react-compiler@1.0.0)(vite@8.1.5(jiti@2.7.0))
+        version: 6.0.1(@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)))(babel-plugin-react-compiler@1.0.0)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       babel-plugin-react-compiler:
         specifier: 1.0.0
         version: 1.0.0
@@ -65,13 +77,13 @@ importers:
         version: 4.2.1
       vite:
         specifier: 8.1.5
-        version: 8.1.5(jiti@2.7.0)
+        version: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
       vitest:
         specifier: 4.1.0
-        version: 4.1.0(vite@8.1.5(jiti@2.7.0))
+        version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       vitexec:
         specifier: 0.1.17
-        version: 0.1.17(vite@8.1.5(jiti@2.7.0))
+        version: 0.1.17(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
 
   packages/font-baker:
     devDependencies:
@@ -786,6 +798,9 @@ packages:
 
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
+
+  '@types/node@24.13.3':
+    resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -1610,6 +1625,9 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
+  undici-types@7.18.2:
+    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
+
   update-browserslist-db@1.2.3:
     resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
     hasBin: true
@@ -2117,14 +2135,14 @@ snapshots:
   '@rolldown/binding-win32-x64-msvc@1.1.5':
     optional: true
 
-  '@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(jiti@2.7.0))':
+  '@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))':
     dependencies:
       '@babel/core': 8.0.1
       picomatch: 4.0.5
       rolldown: 1.1.5
     optionalDependencies:
       '@babel/runtime': 7.29.7
-      vite: 8.1.5(jiti@2.7.0)
+      vite: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
 
   '@rolldown/pluginutils@1.0.0-rc.7': {}
 
@@ -2193,12 +2211,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.2.1
       '@tailwindcss/oxide-win32-x64-msvc': 4.2.1
 
-  '@tailwindcss/vite@4.2.1(vite@8.1.5(jiti@2.7.0))':
+  '@tailwindcss/vite@4.2.1(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))':
     dependencies:
       '@tailwindcss/node': 4.2.1
       '@tailwindcss/oxide': 4.2.1
       tailwindcss: 4.2.1
-      vite: 8.1.5(jiti@2.7.0)
+      vite: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
 
   '@tweenjs/tween.js@23.1.3': {}
 
@@ -2244,6 +2262,10 @@ snapshots:
   '@types/jsesc@2.5.1': {}
 
   '@types/json-schema@7.0.15': {}
+
+  '@types/node@24.13.3':
+    dependencies:
+      undici-types: 7.18.2
 
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
@@ -2330,12 +2352,12 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@vitejs/plugin-react@6.0.1(@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(jiti@2.7.0)))(babel-plugin-react-compiler@1.0.0)(vite@8.1.5(jiti@2.7.0))':
+  '@vitejs/plugin-react@6.0.1(@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)))(babel-plugin-react-compiler@1.0.0)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-rc.7
-      vite: 8.1.5(jiti@2.7.0)
+      vite: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
     optionalDependencies:
-      '@rolldown/plugin-babel': 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(jiti@2.7.0))
+      '@rolldown/plugin-babel': 0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       babel-plugin-react-compiler: 1.0.0
 
   '@vitest/expect@4.1.0':
@@ -2347,13 +2369,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.0(vite@8.1.5(jiti@2.7.0))':
+  '@vitest/mocker@4.1.0(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))':
     dependencies:
       '@vitest/spy': 4.1.0
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.1.5(jiti@2.7.0)
+      vite: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
 
   '@vitest/pretty-format@4.1.0':
     dependencies:
@@ -2949,6 +2971,8 @@ snapshots:
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
 
+  undici-types@7.18.2: {}
+
   update-browserslist-db@1.2.3(browserslist@4.28.7):
     dependencies:
       browserslist: 4.28.7
@@ -2963,7 +2987,7 @@ snapshots:
     dependencies:
       react: 19.2.8
 
-  vite@8.1.5(jiti@2.7.0):
+  vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
@@ -2971,13 +2995,14 @@ snapshots:
       rolldown: 1.1.5
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 24.13.3
       fsevents: 2.3.3
       jiti: 2.7.0
 
-  vitest@4.1.0(vite@8.1.5(jiti@2.7.0)):
+  vitest@4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)):
     dependencies:
       '@vitest/expect': 4.1.0
-      '@vitest/mocker': 4.1.0(vite@8.1.5(jiti@2.7.0))
+      '@vitest/mocker': 4.1.0(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
       '@vitest/pretty-format': 4.1.0
       '@vitest/runner': 4.1.0
       '@vitest/snapshot': 4.1.0
@@ -2994,17 +3019,19 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.1.5(jiti@2.7.0)
+      vite: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
       why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 24.13.3
     transitivePeerDependencies:
       - msw
 
-  vitexec@0.1.17(vite@8.1.5(jiti@2.7.0)):
+  vitexec@0.1.17(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)):
     dependencies:
       commander: 14.0.3
       nano-spawn: 2.1.0
       playwright: 1.61.1
-      vite: 8.1.5(jiti@2.7.0)
+      vite: 8.1.5(@types/node@24.13.3)(jiti@2.7.0)
 
   which@2.0.2:
     dependencies:

@@ -22,12 +22,12 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T01:54:22Z"
 ---
 
 # Benchmark plan
 
-Status: proposed  
+Status: accepted; implementation status is tracked by gate below
 Purpose: replace performance and payload estimates with reproducible evidence.
 
 ## Principles
@@ -64,7 +64,8 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
 | Portable baker target | 🟡 | `packages/font-baker` provides the initial Wasm package and tiered tests; its real-font lane remains conditional until the repository fixture is pinned. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
-| Headless product E2E | 🟡 | Vitexec proves the deterministic target in a live Vite browser and Playwright proves the 390×844 scene/controls/report/export flow; the pinned real-font public-package lane remains open. |
+| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module and prove deterministic desktop/mobile flows; the pinned real-font public-package lane remains open. |
+| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli core and baker JavaScript sizes plus raw/gzip/Brotli Wasm; future Unicode tables remain explicitly unavailable. |
 | Browser visual reference | ⬜ | Same-process HTML/CSS reference and candidate captures retain scores and raw diffs. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
 

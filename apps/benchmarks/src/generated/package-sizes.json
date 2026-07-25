@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 0,
+  "entries": [
+    {
+      "id": "browser-core",
+      "label": "Browser core",
+      "status": "measured",
+      "format": "javascript",
+      "rawBytes": 540,
+      "minifiedBytes": 461,
+      "gzipBytes": 222,
+      "brotliBytes": 193
+    },
+    {
+      "id": "portable-baker-js",
+      "label": "Portable baker JS",
+      "status": "measured",
+      "format": "javascript",
+      "rawBytes": 5643,
+      "minifiedBytes": 4001,
+      "gzipBytes": 1539,
+      "brotliBytes": 1352
+    },
+    {
+      "id": "portable-baker-wasm",
+      "label": "Portable baker Wasm",
+      "status": "measured",
+      "format": "wasm",
+      "rawBytes": 475609,
+      "minifiedBytes": 475609,
+      "gzipBytes": 168932,
+      "brotliBytes": 136005
+    },
+    {
+      "id": "unicode-properties",
+      "label": "Unicode property tables",
+      "status": "unavailable",
+      "reason": "Version-pinned JavaScript tables land with the paragraph engine in milestone 5."
+    }
+  ]
+}
