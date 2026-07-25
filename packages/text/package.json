@@ -2,15 +2,19 @@
   "name": "@pmndrs/text",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
-  "sideEffects": false,
   "files": [
     "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./raster/bitmap": {
+      "types": "./dist/raster/bitmap.d.ts",
+      "import": "./dist/raster/bitmap.js"
     },
     "./package.json": "./package.json"
   },
@@ -19,6 +23,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:types && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"
+  },
+  "dependencies": {
+    "typescript": "7.0.2"
+  },
+  "devDependencies": {
+    "@react-three/fiber": "9.6.1",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.14",
+    "@types/three": "0.185.1",
+    "react": "19.2.8",
+    "three": "0.185.1"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=9.6.1 <10",
@@ -32,16 +47,5 @@
     "react": {
       "optional": true
     }
-  },
-  "devDependencies": {
-    "@react-three/fiber": "9.6.1",
-    "@types/node": "24.13.3",
-    "@types/react": "19.2.14",
-    "@types/three": "0.185.1",
-    "react": "19.2.8",
-    "three": "0.185.1"
-  },
-  "dependencies": {
-    "typescript": "7.0.2"
   }
 }
