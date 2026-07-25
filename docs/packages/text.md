@@ -5,7 +5,7 @@ description: Defines public core contracts, static discovery, portable bitmap ar
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:6173f157505693b8aba36b7411d1a0e2f8cec0f6fc68f76e0abd8d5615f5d515"
+source_digest: "sha256:347bdaa9eb8e43f569cb4797312539d609f51d08a075b8b93c5d1ea60a4634a2"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -43,12 +43,12 @@ sources:
     title: Lazy module-Worker bake host
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T06:32:58Z"
+  at: "2026-07-25T06:47:06Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 implementation slice; roadmap items 3.1–3.2 complete and item 3.3 active
+Status: 🟡 implementation slice; Milestone 3 complete and roadmap item 4.1 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -66,9 +66,11 @@ The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The h
 
 The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
 
-The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers a provenance-preserving source copy and the authoritative result buffer; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus optimized Wasm in that Worker. Canonical Inter fixtures execute both the public host and Worker entry, compare the Worker artifact byte-for-byte with the direct portable core, and then send the result through loader provenance and hostile-input validation. Independent package-size lanes keep the 3,244-byte minified host, 5,576-byte minified Worker JavaScript, and 430,662-byte Wasm distinct from the 21,426-byte initial browser graph.
+The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers a provenance-preserving source copy and the authoritative result buffer; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus optimized Wasm in that Worker. Canonical Inter fixtures execute both the public host and Worker entry, compare the Worker artifact byte-for-byte with the direct portable core, and then send the result through loader provenance and hostile-input validation. Independent package-size lanes keep the 3,371-byte minified host, 5,576-byte minified Worker JavaScript, and 430,662-byte Wasm distinct from the 22,355-byte initial browser graph.
 
-It does not yet shape text at runtime, perform paragraph layout, or render glyphs. Item 3.3 adds browser-executed Node/Worker parity, underlying shared-load cancellation, and packed/bundled graph evidence. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+Milestone 3 closes with browser-executed parity and cancellation. The benchmark product's public loader target first hashes the real module-Worker artifact against the canonical Node artifact, validates and registers it, then runs the complete missing-sibling fallback in Chromium. Shared loads now reference-count consumers: one abort detaches safely, the final abort reaches fetch/stream/Worker work, and an otherwise-idle Worker terminates immediately and recreates on demand without timers. This browser gate exposed and fixed native `fetch` receiver loss that Node's implementation tolerated. Static emitted-package checks and independent Rollup closures keep the runtime host, Worker, Wasm, validator, Node host, and raster bakers out of a baked-hit graph.
+
+The package does not yet shape text at runtime, perform paragraph layout, or render glyphs. Item 4.1 consumes the exact retained GLB-extracted SFNT in HarfRust Wasm. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 

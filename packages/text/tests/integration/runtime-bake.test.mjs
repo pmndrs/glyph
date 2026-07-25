@@ -26,6 +26,7 @@ test("the runtime host transfers source and accepts one authoritative font artif
   const { source, artifact } = await fixturePromise;
   const originalWorker = globalThis.Worker;
   const workers = [];
+  let terminations = 0;
 
   class FixtureWorker {
     listeners = new Map();
@@ -67,7 +68,9 @@ test("the runtime host transfers source and accepts one authoritative font artif
       });
     }
 
-    terminate() {}
+    terminate() {
+      terminations += 1;
+    }
   }
 
   globalThis.Worker = FixtureWorker;
@@ -98,12 +101,27 @@ test("the runtime host transfers source and accepts one authoritative font artif
     "https://assets.test/Inter-Regular.font.glb",
     "https://assets.test/Inter-Regular.ttf",
   ]);
-  assert.deepEqual(workers, [
-    {
+  const controller = new AbortController();
+  const cancelled = bakeFontInWorker({
+    source: sourceCopy,
+    sourceUrl: "https://assets.test/cancelled.ttf",
+    signal: controller.signal,
+  });
+  controller.abort(new Error("cancel idle Worker"));
+  await assert.rejects(cancelled, /cancel idle Worker/);
+  assert.equal(terminations, 1);
+
+  await bakeFontInWorker({
+    source: sourceCopy,
+    sourceUrl: "https://assets.test/recovered.ttf",
+  });
+  assert.equal(workers.length, 2);
+  for (const worker of workers) {
+    assert.deepEqual(worker, {
       url: new URL("../../dist/runtime-bake-worker.js", import.meta.url).href,
       options: { name: "pmndrs-text-font-baker", type: "module" },
-    },
-  ]);
+    });
+  }
 });
 
 test("the Worker entry runs the portable baker and transfers the exact canonical artifact", async (t) => {

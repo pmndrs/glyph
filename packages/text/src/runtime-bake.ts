@@ -38,7 +38,10 @@ class RuntimeBakeWorkerHost {
     };
     return new Promise<Uint8Array>((resolve, reject) => {
       const abort = (): void => {
-        if (this.#pending.delete(id)) reject(abortReason(request.signal));
+        const pending = this.#settle(id);
+        if (pending === undefined) return;
+        pending.reject(abortReason(request.signal));
+        if (this.#pending.size === 0) this.#terminateIdleWorker();
       };
       request.signal?.addEventListener("abort", abort, { once: true });
       this.#pending.set(id, {
@@ -101,6 +104,12 @@ class RuntimeBakeWorkerHost {
     this.#worker = undefined;
     worker?.terminate();
     for (const id of [...this.#pending.keys()]) this.#settle(id)?.reject(error);
+  }
+
+  #terminateIdleWorker(): void {
+    const worker = this.#worker;
+    this.#worker = undefined;
+    worker?.terminate();
   }
 }
 

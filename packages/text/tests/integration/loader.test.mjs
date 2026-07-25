@@ -383,31 +383,72 @@ test("fetch limits reject both declared and streamed excess before registration"
   );
 });
 
-test("cancellation detaches one caller without corrupting the shared result", async () => {
+test("cancellation detaches one caller while another retains the shared request", async () => {
   let release;
+  let sharedSignal;
   const pending = new Promise((resolve) => {
     release = resolve;
   });
   const loader = new FontLoader({
-    fetch: async () => {
+    fetch: async (_input, init) => {
+      sharedSignal = init.signal;
       await pending;
       return response(embeddedBytes);
     },
   });
   const controller = new AbortController();
-  const load = loader.load(
+  const cancelled = loader.load(
     { baked: "https://assets.test/font.glb" },
     { signal: controller.signal },
   );
+  const retained = loader.load({ baked: "https://assets.test/font.glb" });
   controller.abort(new Error("fixture cancellation"));
-  await assert.rejects(load, /fixture cancellation/);
+  await assert.rejects(cancelled, /fixture cancellation/);
+  assert.equal(sharedSignal.aborted, false);
   release();
 
-  const font = await loader.load({ baked: "https://assets.test/font.glb" });
+  const font = await retained;
   assert.equal(font.glyphCount, 2937);
   font.dispose();
   const reloaded = await loader.load({ baked: "https://assets.test/font.glb" });
   assert.notEqual(reloaded.handle, font.handle);
+});
+
+test("the final detached caller aborts underlying work and a later request starts fresh", async () => {
+  const signals = [];
+  let calls = 0;
+  const loader = new FontLoader({
+    fetch: async (_input, init) => {
+      calls += 1;
+      signals.push(init.signal);
+      if (calls > 1) return response(embeddedBytes);
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+      });
+    },
+  });
+  const firstController = new AbortController();
+  const finalController = new AbortController();
+  const first = loader.load(
+    { baked: "https://assets.test/font.glb" },
+    { signal: firstController.signal },
+  );
+  const final = loader.load(
+    { baked: "https://assets.test/font.glb" },
+    { signal: finalController.signal },
+  );
+
+  firstController.abort(new Error("first detached"));
+  await assert.rejects(first, /first detached/);
+  assert.equal(signals[0].aborted, false);
+  finalController.abort(new Error("final detached"));
+  await assert.rejects(final, /final detached/);
+  assert.equal(signals[0].aborted, true);
+
+  const recovered = await loader.load({ baked: "https://assets.test/font.glb" });
+  assert.equal(recovered.glyphCount, 2937);
+  assert.equal(calls, 2);
+  assert.notEqual(signals[0], signals[1]);
 });
 
 function fixtureFetch(routes, calls) {

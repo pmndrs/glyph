@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:32:58Z"
+  at: "2026-07-25T06:47:06Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -757,7 +757,7 @@ interface RuntimeBakeFailureV0 {
 
 Source and artifact buffers are transferred. This Worker bakes only `PMNDRS_font`; it never resolves a raster package name or interprets an external descriptor. A raster module that supports missing-artifact generation owns a separate lazy runtime-baker capability, including its Worker/import implementation. This is the only implementable extension boundary for arbitrary ESM packages because functions and imported module identities cannot be transferred through `postMessage`.
 
-The standard host is cached behind the loader's `import('./runtime-bake.js')` boundary and creates a named module Worker with `{ type: 'module' }` only for an allowed fallback. It copies the source into a dedicated transfer buffer so the loader retains its authoritative bytes for provenance validation, transfers every returned artifact buffer, requires exactly one core-font artifact, and routes those bytes through the same validator as a baked hit. Item 3.3 owns underlying cancellation when all consumers detach; item 3.2 cancellation only detaches the individual caller and ignores its eventual shared response.
+The standard host is cached behind the loader's `import('./runtime-bake.js')` boundary and creates a named module Worker with `{ type: 'module' }` only for an allowed fallback. It copies the source into a dedicated transfer buffer so the loader retains its authoritative bytes for provenance validation, transfers every returned artifact buffer, requires exactly one core-font artifact, and routes those bytes through the same validator as a baked hit. Shared loads reference-count active consumers. One caller can detach without corrupting another; when the last consumer detaches, the shared controller aborts fetch/stream/Worker work. A Worker with no remaining requests terminates immediately and is recreated by the next request. This lifecycle uses no timer or retry.
 
 ## Shaping API
 

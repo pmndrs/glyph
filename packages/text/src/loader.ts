@@ -73,6 +73,13 @@ interface FontAssetContext {
   readonly fetch?: typeof fetch;
 }
 
+interface SharedFontLoad {
+  readonly controller: AbortController;
+  promise: Promise<RegisteredFont>;
+  consumers: number;
+  settled: boolean;
+}
+
 export class FontLoadError extends Error {
   readonly code: string;
   readonly url: string | undefined;
@@ -313,15 +320,16 @@ export class FontLoader {
   readonly #runtimeBake: RuntimeFontBake | undefined;
   readonly #onDiagnostic: ((diagnostic: FontLoadDiagnostic) => void) | undefined;
   readonly #onWarning: ((diagnostic: FontLoadDiagnostic) => void) | undefined;
-  readonly #loads = new Map<string, Promise<RegisteredFont>>();
+  readonly #loads = new Map<string, SharedFontLoad>();
   readonly #warnedMissing = new Set<string>();
 
   constructor(options: FontLoaderOptions = {}) {
     this.registry = options.registry ?? new FontRegistry();
-    this.#fetch = options.fetch ?? globalThis.fetch;
-    if (typeof this.#fetch !== "function") {
+    const fetcher = options.fetch ?? globalThis.fetch;
+    if (typeof fetcher !== "function") {
       throw new TypeError("FontLoader requires a fetch implementation");
     }
+    this.#fetch = (...arguments_: Parameters<typeof fetch>) => fetcher(...arguments_);
     this.#baseUrl = resolveBaseUrl(options.baseUrl);
     this.#development = options.development ?? defaultDevelopmentMode();
     this.#runtimeBake = options.runtimeBake;
@@ -334,21 +342,41 @@ export class FontLoader {
     const request = resolveFontRequest(input, this.#baseUrl);
     const key = requestKey(request);
     const shared = this.#sharedLoad(request, key);
-    const active = shared.then((font) => {
+    const active = consumeSharedLoad(shared, options.signal).then((font) => {
       if (this.registry.get(font.key) === font) return font;
       if (this.#loads.get(key) === shared) this.#loads.delete(key);
-      return this.#sharedLoad(request, key);
+      return consumeSharedLoad(this.#sharedLoad(request, key), options.signal);
     });
-    return withAbort(active, options.signal);
+    return active;
   }
 
-  #sharedLoad(request: ResolvedFontRequest, key: string): Promise<RegisteredFont> {
+  #sharedLoad(request: ResolvedFontRequest, key: string): SharedFontLoad {
     let shared = this.#loads.get(key);
+    if (shared?.controller.signal.aborted === true) {
+      this.#loads.delete(key);
+      shared = undefined;
+    }
     if (shared === undefined) {
-      shared = this.#load(request).catch((error: unknown) => {
-        this.#loads.delete(key);
-        throw error;
-      });
+      const controller = new AbortController();
+      let created!: SharedFontLoad;
+      const promise = this.#load(request, controller.signal).then(
+        (font) => {
+          created.settled = true;
+          return font;
+        },
+        (error: unknown) => {
+          created.settled = true;
+          if (this.#loads.get(key) === created) this.#loads.delete(key);
+          throw error;
+        },
+      );
+      created = {
+        controller,
+        consumers: 0,
+        settled: false,
+        promise,
+      };
+      shared = created;
       this.#loads.set(key, shared);
     }
     return shared;
@@ -358,9 +386,9 @@ export class FontLoader {
     return this.registry.attachRaster(font, bytes);
   }
 
-  async #load(request: ResolvedFontRequest): Promise<RegisteredFont> {
+  async #load(request: ResolvedFontRequest, signal: AbortSignal): Promise<RegisteredFont> {
     if (request.bakedUrl !== undefined) {
-      const probe = await this.#probe(request.bakedUrl, request.sourceUrl);
+      const probe = await this.#probe(request.bakedUrl, signal, request.sourceUrl);
       if (probe.status === "hit") return probe.font;
       if (request.sourceUrl === undefined) {
         if (probe.status === "missing") {
@@ -377,12 +405,15 @@ export class FontLoader {
       throw new FontLoadError("INVALID_FONT_INPUT", "font request has no source or baked URL");
     }
     const runtimeBake = this.#runtimeBake ?? (await loadDefaultRuntimeBake(request.sourceUrl));
-    const source = await this.#fetchRequired(request.sourceUrl, "FONT_SOURCE_FETCH");
+    signal.throwIfAborted();
+    const source = await this.#fetchRequired(request.sourceUrl, "FONT_SOURCE_FETCH", signal);
     const baked = await runtimeBake({
       source,
       sourceUrl: request.sourceUrl,
       ...(request.bakedUrl === undefined ? {} : { bakedUrl: request.bakedUrl }),
+      signal,
     });
+    signal.throwIfAborted();
     return this.registry._registerAsset(baked, {
       ...(request.bakedUrl === undefined ? {} : { artifactUrl: request.bakedUrl }),
       sourceUrl: request.sourceUrl,
@@ -391,11 +422,12 @@ export class FontLoader {
     });
   }
 
-  async #probe(url: string, sourceUrl?: string): Promise<ProbeResult> {
+  async #probe(url: string, signal: AbortSignal, sourceUrl?: string): Promise<ProbeResult> {
     let response: Response;
     try {
-      response = await this.#fetch(url);
+      response = await this.#fetch(url, { signal });
     } catch (cause) {
+      signal.throwIfAborted();
       return {
         status: "invalid",
         error: new FontLoadError("BAKED_FONT_FETCH", "baked font request failed", { url, cause }),
@@ -418,7 +450,9 @@ export class FontLoader {
         this.registry._artifactByteLimit(),
         "FONT_RESOURCE_LIMIT",
         url,
+        signal,
       );
+      signal.throwIfAborted();
       const font = await this.registry._registerAsset(bytes, {
         artifactUrl: url,
         ...(sourceUrl === undefined ? {} : { sourceUrl }),
@@ -426,6 +460,7 @@ export class FontLoader {
       });
       return { status: "hit", font };
     } catch (cause) {
+      signal.throwIfAborted();
       const incompatible = hasValidationIssue(cause, "FONT_VERSION_INCOMPATIBLE");
       const resourceLimited =
         cause instanceof FontLoadError && cause.code === "FONT_RESOURCE_LIMIT";
@@ -448,11 +483,12 @@ export class FontLoader {
     }
   }
 
-  async #fetchRequired(url: string, code: string): Promise<Uint8Array> {
+  async #fetchRequired(url: string, code: string, signal: AbortSignal): Promise<Uint8Array> {
     let response: Response;
     try {
-      response = await this.#fetch(url);
+      response = await this.#fetch(url, { signal });
     } catch (cause) {
+      signal.throwIfAborted();
       throw new FontLoadError(code, "font source request failed", { url, cause });
     }
     if (!response.ok) {
@@ -465,6 +501,7 @@ export class FontLoader {
       this.registry._artifactByteLimit(),
       "FONT_SOURCE_RESOURCE_LIMIT",
       url,
+      signal,
     );
   }
 
@@ -972,22 +1009,35 @@ function defaultDevelopmentMode(): boolean {
   return environment !== "production";
 }
 
-function withAbort<Value>(
-  promise: Promise<Value>,
+function consumeSharedLoad(
+  shared: SharedFontLoad,
   signal: AbortSignal | undefined,
-): Promise<Value> {
-  if (signal === undefined) return promise;
-  signal.throwIfAborted();
-  return new Promise<Value>((resolvePromise, reject) => {
-    const aborted = (): void => reject(signal.reason);
-    signal.addEventListener("abort", aborted, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", aborted);
-        resolvePromise(value);
+): Promise<RegisteredFont> {
+  signal?.throwIfAborted();
+  shared.consumers += 1;
+  return new Promise<RegisteredFont>((resolve, reject) => {
+    let active = true;
+    const release = (): void => {
+      if (!active) return;
+      active = false;
+      signal?.removeEventListener("abort", aborted);
+      shared.consumers -= 1;
+      if (shared.consumers === 0 && !shared.settled) shared.controller.abort(abortReason(signal));
+    };
+    const aborted = (): void => {
+      release();
+      reject(abortReason(signal));
+    };
+    signal?.addEventListener("abort", aborted, { once: true });
+    shared.promise.then(
+      (font) => {
+        if (!active) return;
+        release();
+        resolve(font);
       },
       (error: unknown) => {
-        signal.removeEventListener("abort", aborted);
+        if (!active) return;
+        release();
         reject(error);
       },
     );
@@ -1003,7 +1053,9 @@ async function readResponseBytes(
   limit: number,
   code: string,
   url: string,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> {
+  signal?.throwIfAborted();
   const declaredText = response.headers.get("content-length");
   const declared = declaredText === null ? undefined : Number(declaredText);
   if (declared !== undefined && Number.isFinite(declared) && declared > limit) {
@@ -1014,6 +1066,7 @@ async function readResponseBytes(
   }
   if (response.body === null) {
     const bytes = new Uint8Array(await response.arrayBuffer());
+    signal?.throwIfAborted();
     if (bytes.byteLength > limit) {
       throw new FontLoadError(code, `response has ${bytes.byteLength} bytes; limit is ${limit}`, {
         url,
@@ -1025,6 +1078,10 @@ async function readResponseBytes(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  const abort = (): void => {
+    void reader.cancel(abortReason(signal));
+  };
+  signal?.addEventListener("abort", abort, { once: true });
   try {
     while (true) {
       const result = await reader.read();
@@ -1040,8 +1097,10 @@ async function readResponseBytes(
       total += chunk.byteLength;
     }
   } finally {
+    signal?.removeEventListener("abort", abort);
     reader.releaseLock();
   }
+  signal?.throwIfAborted();
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
@@ -1049,6 +1108,10 @@ async function readResponseBytes(
     offset += chunk.byteLength;
   }
   return bytes;
+}
+
+function abortReason(signal: AbortSignal | undefined): unknown {
+  return signal?.reason ?? new DOMException("The operation was aborted", "AbortError");
 }
 
 function copyView(value: ArrayBufferView): Uint8Array {

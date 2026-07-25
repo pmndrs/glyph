@@ -6,10 +6,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 30190,
-      "minifiedBytes": 21426,
-      "gzipBytes": 6447,
-      "brotliBytes": 5720
+      "rawBytes": 31602,
+      "minifiedBytes": 22355,
+      "gzipBytes": 6737,
+      "brotliBytes": 5970
     },
     {
       "id": "font-validator-js",
@@ -26,10 +26,10 @@
       "label": "Runtime baker host JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 4343,
-      "minifiedBytes": 3244,
-      "gzipBytes": 1338,
-      "brotliBytes": 1193
+      "rawBytes": 4566,
+      "minifiedBytes": 3371,
+      "gzipBytes": 1363,
+      "brotliBytes": 1218
     },
     {
       "id": "runtime-baker-worker-js",

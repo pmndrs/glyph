@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:32:58Z"
+  at: "2026-07-25T06:47:06Z"
 ---
 
 # Canonical implementation roadmap
@@ -46,8 +46,8 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 0 | ✅ | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
 | 1 | ✅ | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
 | 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
-| 3 | 🟡 | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
-| 4 | ⬜ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
+| 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
+| 4 | 🟡 | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
 | 5 | ⬜ | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
 | 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–2 are closed. Milestone 3 continues in issue order at active item 3.3.
+Milestones 0–3 are closed. Milestone 4 continues in issue order at active item 4.1.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -94,8 +94,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 2.4 | ✅ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
 | 3.1 | ✅ | Implement baked probing, validation, and registration. | M | 2.4 |
 | 3.2 | ✅ | Add the dynamically imported Worker bake path. | M | 3.1 |
-| 3.3 | 🟡 | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
-| 4.1 | ⬜ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
+| 3.3 | ✅ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
+| 4.1 | 🟡 | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
 | 4.2 | ⬜ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
 | 5.1 | ⬜ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
 | 5.2 | ⬜ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
@@ -307,6 +307,18 @@ Item 3.1 is closed. Item 3.2 is active and replaces the injected fallback seam's
 - [x] Independent size lanes report the runtime host, Worker JavaScript, and portable Wasm separately instead of folding lazy code or Wasm into the initial core.
 
 Item 3.2 is closed. Item 3.3 is active and adds browser-executed Node/Worker authoritative-byte parity, shared-operation cancellation, and complete packed/bundled import-isolation evidence.
+
+### 3.3 closure checklist
+
+- [x] The benchmark product has a real `font-loader-worker` target and `worker-fallback` scenario over public package surfaces; Chromium first hashes the module-Worker artifact against the canonical Node artifact, validates/registers it, and then measures the missing-sibling loader path.
+- [x] The Chromium 149 gate passes the synthetic, direct portable-baker, and public loader-Worker scenarios with three deterministic samples after one warmup; the loader scenario returns the canonical 172,140-byte payload and shaping identity on every sample.
+- [x] Concurrent callers retain one shared request; detaching one does not abort it, while detaching the final consumer aborts the underlying fetch/stream or Worker request and the next load starts fresh.
+- [x] An idle Worker with only cancelled work is terminated immediately and recreated successfully on the next request; no delay, polling, retry, or timer controls lifecycle.
+- [x] Browser execution covers the native `fetch` receiver contract, module Worker, package-relative Wasm asset, transferred buffers, hostile-input validator, provenance check, registration, and disposal. The product test caught and permanently fixed an illegal native-fetch invocation that Node could not expose.
+- [x] Emitted-package tests prove the root loader has only dynamic runtime/validator boundaries and no static Worker, Wasm, Node-host, or raster-baker edge; independent Rollup closures report initial core, validator, runtime host, Worker JavaScript, and Wasm separately.
+- [x] Canonical source/request deduplication, missing/invalid/incompatible behavior, development warning deduplication, baked-only isolation, limits, fuzz smoke, and exact GLB shaping-view extraction remain green under the final shared-cancellation implementation.
+
+Item 3.3 and Milestone 3 are closed. Item 4.1 is active and must register the exact retained GLB-extracted SFNT in HarfRust Wasm without introducing a second font extraction path.
 
 Deliver:
 

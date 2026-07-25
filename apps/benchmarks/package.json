@@ -14,7 +14,7 @@
     "lint": "oxlint --deny-warnings .",
     "size": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/measure-package-sizes.mts",
     "test": "pnpm test:unit && pnpm test:headless",
-    "test:headless": "pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --samples 3 --warmup 1 && node ./scripts/run-headless.mts --target font-baker --scenario cold-load-payload --samples 3 --warmup 1",
+    "test:headless": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --samples 3 --warmup 1 --port 5181 && node ./scripts/run-headless.mts --target font-baker --scenario cold-load-payload --samples 3 --warmup 1 --port 5182 && node ./scripts/run-headless.mts --target font-loader-worker --scenario worker-fallback --samples 3 --warmup 1 --port 5183",
     "test:live": "node ./scripts/run-live-probe.mts",
     "test:unit": "vitest run",
     "test:watch": "vitest",
