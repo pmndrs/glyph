@@ -52,6 +52,18 @@ test("validates the canonical Inter artifact through every core layer", async ()
   );
 });
 
+test("validates Node Buffer inputs repeatedly without mutating artifact bytes", async () => {
+  const input = Buffer.from(artifact);
+  const before = Buffer.from(input);
+
+  const first = await validateFontArtifact(input);
+  const second = await validateFontArtifact(input);
+
+  assert.deepEqual(input, before);
+  assert.equal(second.shapingHash, first.shapingHash);
+  assert.deepEqual(second.shapingSfnt, first.shapingSfnt);
+});
+
 test("keeps the packaged extension schema byte-identical to the canonical schema", async () => {
   const [
     canonical,

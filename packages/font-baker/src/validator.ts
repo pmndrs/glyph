@@ -600,7 +600,10 @@ function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string,
     if ((offset & 3) !== 0 || offset < directoryBytes || offset > bytes.byteLength - byteLength)
       fail("SFNT_TABLE_RANGE", `table ${tag} has an invalid range`);
     const table = bytes.subarray(offset, offset + byteLength);
-    const checksumInput = tag === "head" ? table.slice() : table;
+    // Buffer overrides Uint8Array#slice with an aliasing view. Always make an
+    // explicit typed-array copy before zeroing checksumAdjustment so validation
+    // is observationally pure for bytes read through Node's filesystem APIs.
+    const checksumInput = tag === "head" ? new Uint8Array(table) : table;
     if (tag === "head") {
       if (checksumInput.byteLength < 12) fail("SFNT_HEAD_LENGTH", "head table is too short");
       checksumInput.fill(0, 8, 12);
