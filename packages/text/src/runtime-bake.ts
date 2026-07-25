@@ -63,31 +63,42 @@ class RuntimeBakeWorkerHost {
       type: "module",
     });
     worker.addEventListener("message", (event: MessageEvent<unknown>) => {
-      this.#receive(event.data);
+      this.#receive(worker, event.data);
     });
     worker.addEventListener("error", (event: ErrorEvent) => {
-      this.#failAll(event.error ?? new Error(event.message || "font bake Worker failed"));
+      this.#failAll(
+        worker,
+        event.error ?? new Error(event.message || "font bake Worker failed"),
+      );
     });
     worker.addEventListener("messageerror", () => {
-      this.#failAll(new TypeError("font bake Worker returned an unreadable message"));
+      this.#failAll(
+        worker,
+        new TypeError("font bake Worker returned an unreadable message"),
+      );
     });
     return worker;
   }
 
-  #receive(value: unknown): void {
+  #receive(worker: Worker, value: unknown): void {
+    if (worker !== this.#worker) return;
     if (!isRuntimeBakeResultV0(value)) {
-      this.#failAll(new TypeError("font bake Worker returned an invalid protocol message"));
+      this.#failAll(
+        worker,
+        new TypeError("font bake Worker returned an invalid protocol message"),
+      );
       return;
     }
     const pending = this.#settle(value.id);
     if (pending === undefined) return;
     if (!value.ok) {
       pending.reject(new FontBakeError(value.error));
-      return;
+    } else {
+      const artifact = soleFontArtifact(value);
+      if (artifact instanceof Error) pending.reject(artifact);
+      else pending.resolve(new Uint8Array(artifact));
     }
-    const artifact = soleFontArtifact(value);
-    if (artifact instanceof Error) pending.reject(artifact);
-    else pending.resolve(new Uint8Array(artifact));
+    if (this.#pending.size === 0) this.#terminateIdleWorker();
   }
 
   #settle(id: number): PendingBake | undefined {
@@ -99,10 +110,10 @@ class RuntimeBakeWorkerHost {
     return pending;
   }
 
-  #failAll(error: unknown): void {
-    const worker = this.#worker;
+  #failAll(worker: Worker, error: unknown): void {
+    if (worker !== this.#worker) return;
     this.#worker = undefined;
-    worker?.terminate();
+    worker.terminate();
     for (const id of [...this.#pending.keys()]) this.#settle(id)?.reject(error);
   }
 

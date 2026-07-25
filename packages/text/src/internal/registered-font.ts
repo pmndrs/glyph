@@ -33,6 +33,8 @@ export interface RegisteredFontData {
 }
 
 export interface RegisteredFontSourceCandidate {
+  /** Hash of the exact source bytes available at this candidate. */
+  readonly sourceHash: string;
   readonly sourceUrl: string;
   readonly fetch?: typeof fetch;
 }

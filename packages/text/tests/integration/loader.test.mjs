@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -283,6 +284,48 @@ test("runtime output cannot claim provenance for different source bytes", async 
     loader.load("/source.ttf"),
     (error) => error instanceof FontLoadError && error.code === "FONT_SOURCE_IDENTITY",
   );
+});
+
+test("shaping deduplication keeps differently sourced bytes qualified by provenance", async () => {
+  const registry = new FontRegistry();
+  const canonical = await registry.registerAsset(embeddedBytes);
+  const canonicalData = getRegisteredFontData(canonical);
+  const changedSource = Uint8Array.from(sourceBytes);
+  changedSource[changedSource.byteLength - 1] ^= 1;
+  const changedHash = createHash("sha256").update(changedSource).digest("hex");
+  const changedArtifact = replaceAscii(
+    embeddedBytes,
+    canonicalData.sourceHash,
+    changedHash,
+  );
+  const calls = [];
+  const loader = new FontLoader({
+    registry,
+    baseUrl: "https://assets.test/",
+    fetch: fixtureFetch(
+      new Map([["https://assets.test/variant.ttf", changedSource]]),
+      calls,
+    ),
+    async runtimeBake() {
+      return changedArtifact;
+    },
+    onWarning() {},
+  });
+
+  const deduplicated = await loader.load("variant.ttf");
+  assert.equal(deduplicated, canonical);
+  assert.equal(canonicalData.sourceBytes, undefined);
+  assert.equal(canonicalData.sourceCandidates.length, 1);
+  assert.equal(canonicalData.sourceCandidates[0].sourceHash, changedHash);
+  assert.equal(
+    canonicalData.sourceCandidates[0].sourceUrl,
+    "https://assets.test/variant.ttf",
+  );
+  assert.equal(typeof canonicalData.sourceCandidates[0].fetch, "function");
+  assert.deepEqual(calls, [
+    "https://assets.test/variant.font.glb",
+    "https://assets.test/variant.ttf",
+  ]);
 });
 
 test("registration merges embedded and external delivery without changing raster identity", async () => {

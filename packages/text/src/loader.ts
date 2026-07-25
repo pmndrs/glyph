@@ -144,12 +144,12 @@ export class FontRegistry {
       throw validationError("INVALID_FONT_ASSET", "font artifact validation failed", error);
     }
     const document = validated.document;
-    const fontExtension = record(
-      record(document.extensions, "extensions").PMNDRS_font,
+    const fontExtension = requireNonArrayObject(
+      requireNonArrayObject(document.extensions, "extensions").PMNDRS_font,
       "PMNDRS_font",
     );
-    const metricsValue = record(fontExtension.metrics, "PMNDRS_font.metrics");
-    const provenance = record(fontExtension.provenance, "PMNDRS_font.provenance");
+    const metricsValue = requireNonArrayObject(fontExtension.metrics, "PMNDRS_font.metrics");
+    const provenance = requireNonArrayObject(fontExtension.provenance, "PMNDRS_font.provenance");
     const sourceHash = string(provenance.sourceHash, "provenance.sourceHash");
     if (context.sourceBytes !== undefined && (await sha256(context.sourceBytes)) !== sourceHash) {
       throw new FontLoadError(
@@ -186,7 +186,7 @@ export class FontRegistry {
         context.artifactUrl,
         context.fetch,
       );
-      mergeSourceContext(existing, context);
+      mergeSourceContext(existing, sourceHash, context);
       return existing;
     }
 
@@ -216,6 +216,7 @@ export class FontRegistry {
           ? []
           : [
               {
+                sourceHash,
                 sourceUrl: context.sourceUrl,
                 ...(context.fetch === undefined ? {} : { fetch: context.fetch }),
               },
@@ -790,7 +791,7 @@ function mergeRasterSources(
   fetcher: typeof fetch | undefined,
 ): void {
   const data = getRegisteredFontData(font);
-  const extensions = record(document.extensions, "extensions");
+  const extensions = requireNonArrayObject(document.extensions, "extensions");
   for (const reference of references) {
     const current = data.rasterSources.get(reference.rasterKey);
     const extensionData =
@@ -846,16 +847,28 @@ function mergeRasterSources(
   }
 }
 
-function mergeSourceContext(font: RegisteredFontImpl, context: FontAssetContext): void {
+function mergeSourceContext(
+  font: RegisteredFontImpl,
+  sourceHash: string,
+  context: FontAssetContext,
+): void {
   const data = getRegisteredFontData(font);
-  if (context.sourceBytes !== undefined && data.sourceBytes === undefined) {
+  if (
+    sourceHash === data.sourceHash &&
+    context.sourceBytes !== undefined &&
+    data.sourceBytes === undefined
+  ) {
     data.sourceBytes = context.sourceBytes.slice();
   }
   if (
     context.sourceUrl !== undefined &&
-    !data.sourceCandidates.some(({ sourceUrl }) => sourceUrl === context.sourceUrl)
+    !data.sourceCandidates.some(
+      (candidate) =>
+        candidate.sourceHash === sourceHash && candidate.sourceUrl === context.sourceUrl,
+    )
   ) {
     data.sourceCandidates.push({
+      sourceHash,
       sourceUrl: context.sourceUrl,
       ...(context.fetch === undefined ? {} : { fetch: context.fetch }),
     });
@@ -866,12 +879,12 @@ function matchRasterExtension(
   font: RegisteredFontImpl,
   document: Readonly<Record<string, unknown>>,
 ): { readonly reference: RasterReference; readonly extensionData: JsonValue } {
-  const extensions = record(document.extensions, "extensions");
+  const extensions = requireNonArrayObject(document.extensions, "extensions");
   const matches: { reference: RasterReference; extensionData: JsonValue }[] = [];
   for (const source of getRegisteredFontData(font).rasterSources.values()) {
     const candidate = extensions[source.reference.extension];
     if (candidate === undefined) continue;
-    const extension = record(candidate, source.reference.extension);
+    const extension = requireNonArrayObject(candidate, source.reference.extension);
     if (
       extension.rasterKey !== source.reference.rasterKey ||
       extension.shapingHash !== font.shapingHash ||
@@ -898,8 +911,8 @@ function matchRasterExtension(
 function rasterReferences(value: unknown): readonly RasterReference[] {
   if (!Array.isArray(value)) throw new TypeError("PMNDRS_font.rasters must be an array");
   return value.map((entry, index) => {
-    const item = record(entry, `rasters[${index}]`);
-    const sourceValue = record(item.source, `rasters[${index}].source`);
+    const item = requireNonArrayObject(entry, `rasters[${index}]`);
+    const sourceValue = requireNonArrayObject(item.source, `rasters[${index}].source`);
     const source =
       sourceValue.type === "embedded"
         ? ({ type: "embedded" } as const)
@@ -933,7 +946,7 @@ function bufferViews(
 ): readonly RegisteredBufferView[] {
   if (!Array.isArray(document.bufferViews)) throw new TypeError("bufferViews must be an array");
   return document.bufferViews.map((entry, index) => {
-    const value = record(entry, `bufferViews[${index}]`);
+    const value = requireNonArrayObject(entry, `bufferViews[${index}]`);
     if (value.buffer !== 0)
       throw new FontLoadError("BUFFER_VIEW_BUFFER", "bufferView must use buffer 0");
     const byteOffset = value.byteOffset === undefined ? 0 : integer(value.byteOffset, "byteOffset");
@@ -1142,33 +1155,42 @@ function validationError(code: string, message: string, cause: unknown): FontLoa
 function hasValidationIssue(error: unknown, code: string): boolean {
   let current = error;
   const seen = new Set<unknown>();
-  while (typeof current === "object" && current !== null && !seen.has(current)) {
+  while (isNonArrayObject(current) && !seen.has(current)) {
     seen.add(current);
-    const value = current as { readonly issues?: unknown; readonly cause?: unknown };
     if (
-      Array.isArray(value.issues) &&
-      value.issues.some(
-        (issue) =>
-          typeof issue === "object" && issue !== null && record(issue, "issue").code === code,
-      )
+      Array.isArray(current.issues) &&
+      current.issues.some((issue) => isNonArrayObject(issue) && issue.code === code)
     ) {
       return true;
     }
-    current = value.cause;
+    current = current.cause;
   }
   return false;
 }
 
-function record(value: unknown, name: string): Record<string, unknown> {
+function requireNonArrayObject(value: unknown, name: string): Record<string, unknown> {
+  assertNonArrayObject(value, name);
+  return value;
+}
+
+function assertNonArrayObject(
+  value: unknown,
+  name: string,
+): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError(`${name} must be an object`);
   }
-  return value as Record<string, unknown>;
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function integer(value: unknown, name: string): number {
-  if (!Number.isSafeInteger(value)) throw new TypeError(`${name} must be a safe integer`);
-  return value as number;
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new TypeError(`${name} must be a safe integer`);
+  }
+  return value;
 }
 
 function string(value: unknown, name: string): string {
@@ -1193,7 +1215,7 @@ function jsonValue(value: unknown, name: string): JsonValue {
   }
   if (Array.isArray(value))
     return value.map((entry, index) => jsonValue(entry, `${name}[${index}]`));
-  const object = record(value, name);
+  const object = requireNonArrayObject(value, name);
   return Object.fromEntries(
     Object.entries(object).map(([key, entry]) => [key, jsonValue(entry, `${name}.${key}`)]),
   );

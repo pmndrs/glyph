@@ -86,6 +86,22 @@ test("the runtime host transfers source and accepts one authoritative font artif
 
   assert.deepEqual(result, Uint8Array.from(artifact));
   assert.deepEqual(sourceCopy, Uint8Array.from(source));
+  assert.equal(terminations, 1, "a successful idle Worker terminates immediately");
+
+  const concurrent = await Promise.all([
+    bakeFontInWorker({
+      source: sourceCopy,
+      sourceUrl: "https://assets.test/concurrent-a.ttf",
+    }),
+    bakeFontInWorker({
+      source: sourceCopy,
+      sourceUrl: "https://assets.test/concurrent-b.ttf",
+    }),
+  ]);
+  assert.deepEqual(concurrent, [Uint8Array.from(artifact), Uint8Array.from(artifact)]);
+  assert.equal(workers.length, 2, "concurrent requests share one active Worker");
+  assert.equal(terminations, 2, "the shared Worker terminates after its final result");
+
   const requests = [];
   const font = await new FontLoader({
     baseUrl: "https://assets.test/",
@@ -97,6 +113,7 @@ test("the runtime host transfers source and accepts one authoritative font artif
     },
   }).load("Inter-Regular.ttf");
   assert.equal(font.glyphCount, 2937);
+  assert.equal(terminations, 3);
   assert.deepEqual(requests, [
     "https://assets.test/Inter-Regular.font.glb",
     "https://assets.test/Inter-Regular.ttf",
@@ -109,13 +126,14 @@ test("the runtime host transfers source and accepts one authoritative font artif
   });
   controller.abort(new Error("cancel idle Worker"));
   await assert.rejects(cancelled, /cancel idle Worker/);
-  assert.equal(terminations, 1);
+  assert.equal(terminations, 4);
 
   await bakeFontInWorker({
     source: sourceCopy,
     sourceUrl: "https://assets.test/recovered.ttf",
   });
-  assert.equal(workers.length, 2);
+  assert.equal(workers.length, 5);
+  assert.equal(terminations, 5);
   for (const worker of workers) {
     assert.deepEqual(worker, {
       url: new URL("../../dist/runtime-bake-worker.js", import.meta.url).href,

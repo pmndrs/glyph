@@ -37,12 +37,12 @@ export interface RuntimeBakeFailureV0 {
 export type RuntimeBakeResultV0 = RuntimeBakeSuccessV0 | RuntimeBakeFailureV0;
 
 export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResultV0 {
-  if (!isRecord(value) || value.type !== "bake-font-result-v0" || !isRequestId(value.id)) {
+  if (!isNonArrayObject(value) || value.type !== "bake-font-result-v0" || !isRequestId(value.id)) {
     return false;
   }
   if (value.ok === false) {
     return (
-      isRecord(value.error) &&
+      isNonArrayObject(value.error) &&
       typeof value.error.code === "string" &&
       typeof value.error.message === "string" &&
       (value.error.path === undefined || typeof value.error.path === "string")
@@ -52,27 +52,28 @@ export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResul
     value.ok === true &&
     Array.isArray(value.artifacts) &&
     value.artifacts.every(isRuntimeBakeArtifactV0) &&
-    isRecord(value.report) &&
+    isNonArrayObject(value.report) &&
     Array.isArray(value.warnings)
   );
 }
 
 export function isRuntimeBakeRequestV0(value: unknown): value is RuntimeBakeRequestV0 {
   return (
-    isRecord(value) &&
+    isNonArrayObject(value) &&
     value.type === "bake-font-v0" &&
     isRequestId(value.id) &&
     value.source instanceof ArrayBuffer &&
-    isRecord(value.font) &&
+    isNonArrayObject(value.font) &&
     value.font.formatVersion === 0 &&
+    typeof value.font.fontFaceIndex === "number" &&
     Number.isSafeInteger(value.font.fontFaceIndex) &&
-    (value.font.fontFaceIndex as number) >= 0
+    value.font.fontFaceIndex >= 0
   );
 }
 
 function isRuntimeBakeArtifactV0(value: unknown): value is RuntimeBakeArtifactV0 {
   return (
-    isRecord(value) &&
+    isNonArrayObject(value) &&
     value.role === "font" &&
     typeof value.id === "string" &&
     value.bytes instanceof ArrayBuffer &&
@@ -81,9 +82,9 @@ function isRuntimeBakeArtifactV0(value: unknown): value is RuntimeBakeArtifactV0
 }
 
 function isRequestId(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) > 0;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
