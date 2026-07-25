@@ -60,10 +60,12 @@ export type {
   ParagraphAxisConstraint,
   ParagraphConstraints,
   ParagraphEngine,
+  ParagraphEngineOptions,
   ParagraphInput,
   ParagraphSpan,
   ParagraphStyle,
 } from "./paragraph.js";
+export { createParagraphEngine } from "./paragraph.js";
 
 export type {
   AnyRasterModule,

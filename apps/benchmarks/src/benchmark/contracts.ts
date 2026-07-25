@@ -4,6 +4,7 @@ export type Capability =
   | 'wasm'
   | 'loader'
   | 'shaping'
+  | 'paragraph'
   | 'raster'
   | 'gpu-timestamps'
 

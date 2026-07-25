@@ -21,6 +21,24 @@ function shapingValidation(values: readonly import('./contracts').BenchmarkMeasu
   return `${values.length}/${values.length} exact corpus outputs · 1 Wasm call/sample`
 }
 
+function paragraphValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    if (
+      value.metrics?.shapeBoundaryCrossings !== 1 ||
+      value.metrics.reshapeBoundaryCrossings !== 0 ||
+      value.metrics.reflowBoundaryCrossings !== 0 ||
+      value.metrics.measurementCount !== 3 ||
+      value.metrics.positionedGlyphBytes !== 0
+    ) {
+      throw new Error('Paragraph sample did not preserve its prepare-once, cached-reflow contract')
+    }
+  }
+  return `${values.length}/${values.length} exact paragraph outputs · 0 Wasm reflow calls/sample`
+}
+
 export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'overview',
@@ -49,6 +67,13 @@ export const scenarios: readonly BenchmarkScenario[] = [
     description: 'Eight pinned runs in one Wasm call with exact SoA output and cache accounting.',
     requiredCapabilities: new Set(['shaping', 'font-bytes', 'wasm']),
     validate: shapingValidation,
+  },
+  {
+    id: 'paragraph-measurement',
+    label: 'Paragraph measurement',
+    description: 'Exact GLB-backed broad shape followed by cached wide and narrow reflow.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
+    validate: paragraphValidation,
   },
 ]
 

@@ -2,6 +2,7 @@ import {
   defineRaster,
   defineRasterBaker,
   defineFont,
+  createParagraphEngine,
   createRuntimeShaper,
   FontLoader,
   FontRegistry,
@@ -71,9 +72,13 @@ const shapeRequest: ShapeBatchRequest = {
 const shapedPromise: Promise<ShapedBatchViews> = shaperPromise.then((shaper) =>
   shaper.shapeBatch(shapeRequest),
 );
+const preparedParagraph: Promise<Paragraph> = shaperPromise.then((shaper) =>
+  createParagraphEngine({ shaper }).create({ text: "Hello", font: fontHandle }),
+);
 void registeredPromise;
 void shaperPromise;
 void shapedPromise;
+void preparedParagraph;
 
 interface MsdfResource {
   readonly texture: unknown;

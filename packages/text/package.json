@@ -42,31 +42,39 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "node ./scripts/build.mjs",
+    "build": "pnpm check:unicode-data && node ./scripts/build.mjs",
     "build:typescript": "tsc -p tsconfig.build.json",
     "build:bitmap-rust": "cargo build --manifest-path rust/bitmap-baker/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
     "generate:bitmap-abi": "cargo run --manifest-path rust/bitmap-baker/Cargo.toml --bin generate-bitmap-abi --locked --quiet",
+    "generate:unicode-data": "node ./scripts/generate-unicode-script-data.mjs",
+    "check:unicode-data": "node ./scripts/generate-unicode-script-data.mjs --check",
+    "sync:unicode-tests": "node ./scripts/sync-unicode-test-data.mjs",
+    "check:unicode-tests": "node ./scripts/sync-unicode-test-data.mjs --check",
     "generate:bitmap-fixture": "pnpm --filter @pmndrs/text-font-baker build && pnpm build && node ./scripts/generate-bitmap-fixture.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
     "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked",
-    "test:integration": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && cargo test --manifest-path rust/shaper/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
+    "test:integration": "pnpm check:unicode-tests && cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && cargo test --manifest-path rust/shaper/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
     "test:fuzz-smoke": "node --test tests/fuzz/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"
   },
   "dependencies": {
+    "@cto.af/linebreak": "4.0.3",
     "@pmndrs/text-font-baker": "workspace:*",
     "ktx-parse": "1.1.0",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "unicode-segmenter": "0.15.0"
   },
   "devDependencies": {
     "@react-three/fiber": "9.6.1",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.1",
+    "@unicode/unicode-17.0.0": "1.6.17",
     "binaryen": "129.0.0",
     "react": "19.2.8",
-    "three": "0.185.1"
+    "three": "0.185.1",
+    "unicode-property-value-aliases": "3.9.0"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=9.6.1 <10",

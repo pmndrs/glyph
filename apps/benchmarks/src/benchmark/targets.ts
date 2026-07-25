@@ -1,7 +1,10 @@
 import {
+  createParagraphEngine,
   createRuntimeShaper,
   FontLoader,
   FontRegistry,
+  type Paragraph,
+  type ParagraphMeasurement,
   type RegisteredFont,
   type RuntimeShaper,
   type ShapeBatchRequest,
@@ -240,6 +243,200 @@ const harfrustShaperTarget: BenchmarkTarget = {
   },
 }
 
+const paragraphGolden = {
+  natural: {
+    width: 847.625,
+    height: 41.599999999999994,
+    contentWidth: 847.625,
+    contentHeight: 41.599999999999994,
+    firstBaseline: 32.440625,
+    lastBaseline: 32.440625,
+    overflowed: false,
+  },
+  wide: {
+    width: 696.734375,
+    height: 83.19999999999999,
+    contentWidth: 696.734375,
+    contentHeight: 83.19999999999999,
+    firstBaseline: 32.440625,
+    lastBaseline: 74.04062499999999,
+    overflowed: false,
+  },
+  narrow: {
+    width: 356.546875,
+    height: 124.79999999999998,
+    contentWidth: 356.546875,
+    contentHeight: 124.79999999999998,
+    firstBaseline: 32.440625,
+    lastBaseline: 115.64062499999999,
+    overflowed: false,
+  },
+} as const
+
+let paragraphShaper: RuntimeShaper | undefined
+let paragraphFont: RegisteredFont | undefined
+let measuredParagraph: Paragraph | undefined
+let paragraphShapeCalls = 0
+let paragraphReshapeCalls = 0
+
+const paragraphTarget: BenchmarkTarget = {
+  id: 'paragraph-engine',
+  label: 'JavaScript paragraph engine',
+  detail: 'validated GLB · exact HarfRust widths · cached reflow',
+  color: 'violet',
+  capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph']),
+  status: (input) => (input.fontBytes === undefined ? 'ready' : 'needs-fixture'),
+  load: async () => {
+    if (
+      paragraphShaper !== undefined &&
+      paragraphFont !== undefined &&
+      measuredParagraph !== undefined
+    )
+      return
+    const [bakerResponse, shaperResponse, fontResponse] = await Promise.all([
+      fetch(wasmUrl),
+      fetch(shaperWasmUrl),
+      fetch(canonicalFontUrl),
+    ])
+    if (!bakerResponse.ok)
+      throw new Error(`Unable to load font baker Wasm (${bakerResponse.status})`)
+    if (!shaperResponse.ok)
+      throw new Error(`Unable to load text shaper Wasm (${shaperResponse.status})`)
+    if (!fontResponse.ok)
+      throw new Error(`Unable to load canonical font fixture (${fontResponse.status})`)
+    const [bakerWasm, shaperWasm, source] = await Promise.all([
+      bakerResponse.arrayBuffer(),
+      shaperResponse.arrayBuffer(),
+      fontResponse.arrayBuffer(),
+    ])
+    const directBaker = await createFontBaker(bakerWasm)
+    const artifact = directBaker.bake({
+      source: new Uint8Array(source),
+      descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+    }).artifacts[0]
+    if (artifact === undefined) throw new Error('Font baker returned no paragraph artifact')
+    const registry = new FontRegistry()
+    const font = await registry.registerAsset(artifact.bytes)
+    const shaper = await createRuntimeShaper({ registry, wasm: shaperWasm })
+    const observedShaper: RuntimeShaper = {
+      registry: shaper.registry,
+      registerFont: (registered) => shaper.registerFont(registered),
+      disposeFont: (registered) => shaper.disposeFont(registered),
+      shapeBatch: (request) => {
+        paragraphShapeCalls += 1
+        return shaper.shapeBatch(request)
+      },
+      reshapeRanges: (request) => {
+        paragraphReshapeCalls += 1
+        return shaper.reshapeRanges(request)
+      },
+      memoryReport: () => shaper.memoryReport(),
+      dispose: () => shaper.dispose(),
+    }
+    const fixture = shapingCases.find(({ id }) => id === 'paragraph')
+    if (fixture === undefined) throw new Error('Canonical paragraph shaping fixture is missing')
+    const expectedNaturalWidth =
+      (fixture.glyphs.reduce((sum, glyph) => sum + glyph.xAdvance, 0) * 32) /
+      font.metrics.unitsPerEm
+    if (expectedNaturalWidth !== paragraphGolden.natural.width) {
+      throw new Error('Paragraph width golden is not derived from the pinned HarfRust advances')
+    }
+    const paragraph = createParagraphEngine({ shaper: observedShaper }).create({
+      text: fixture.text,
+      font: font.handle,
+      style: {
+        fontSize: 32,
+        lineHeight: 1.3,
+        language: 'en',
+        direction: 'ltr',
+        features: [],
+      },
+    })
+    paragraphShaper = shaper
+    paragraphFont = font
+    measuredParagraph = paragraph
+  },
+  run: async () => {
+    if (measuredParagraph === undefined) throw new Error('Paragraph target was not loaded')
+    const shapeCalls = paragraphShapeCalls
+    const reshapeCalls = paragraphReshapeCalls
+    const natural = measuredParagraph.measure()
+    const wideConstraints = { width: { mode: 'at-most' as const, size: 720 } }
+    const wide = measuredParagraph.measure(wideConstraints)
+    const cachedWide = measuredParagraph.measure(wideConstraints)
+    const narrow = measuredParagraph.measure({ width: { mode: 'at-most', size: 360 } })
+    exactMeasurement('natural', natural, paragraphGolden.natural)
+    exactMeasurement('wide', wide, paragraphGolden.wide)
+    exactMeasurement('narrow', narrow, paragraphGolden.narrow)
+    if (cachedWide !== wide) throw new Error('Equivalent paragraph constraints missed the cache')
+    if (paragraphShapeCalls !== shapeCalls || paragraphReshapeCalls !== reshapeCalls) {
+      throw new Error('Width-only paragraph reflow crossed the Wasm boundary')
+    }
+    return {
+      bytes: 3 * 7 * Float64Array.BYTES_PER_ELEMENT,
+      hash: hashMeasurements([natural, wide, narrow]),
+      metrics: {
+        measurementCount: 3,
+        positionedGlyphBytes: 0,
+        reflowBoundaryCrossings: 0,
+        reshapeBoundaryCrossings: paragraphReshapeCalls,
+        shapeBoundaryCrossings: paragraphShapeCalls,
+      },
+    }
+  },
+  dispose: async () => {
+    measuredParagraph?.dispose()
+    paragraphShaper?.dispose()
+    paragraphFont?.dispose()
+    measuredParagraph = undefined
+    paragraphShaper = undefined
+    paragraphFont = undefined
+    paragraphShapeCalls = 0
+    paragraphReshapeCalls = 0
+  },
+}
+
+function exactMeasurement(
+  label: string,
+  actual: ParagraphMeasurement,
+  expected: ParagraphMeasurement,
+): void {
+  for (const key of [
+    'width',
+    'height',
+    'contentWidth',
+    'contentHeight',
+    'firstBaseline',
+    'lastBaseline',
+    'overflowed',
+  ] as const) {
+    if (actual[key] !== expected[key]) {
+      throw new Error(
+        `Paragraph ${label}.${key} differs: ${String(actual[key])} !== ${String(expected[key])}`,
+      )
+    }
+  }
+}
+
+function hashMeasurements(measurements: readonly ParagraphMeasurement[]): string {
+  let hash = 2_166_136_261
+  for (const measurement of measurements) {
+    for (const value of [
+      measurement.width,
+      measurement.height,
+      measurement.contentWidth,
+      measurement.contentHeight,
+      measurement.firstBaseline,
+      measurement.lastBaseline,
+      Number(measurement.overflowed),
+    ]) {
+      for (const codeUnit of String(value))
+        hash = Math.imul(hash ^ codeUnit.charCodeAt(0), 16_777_619)
+    }
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
 function shapingBatch(font: RegisteredFont['handle']): ShapeBatchRequest {
   const codeUnits: number[] = []
   const features: { tag: string; value: number; start: number; end: number }[] = []
@@ -406,6 +603,7 @@ export const targets: readonly BenchmarkTarget[] = [
   bakerTarget,
   loaderWorkerTarget,
   harfrustShaperTarget,
+  paragraphTarget,
   unavailableTarget('bitmap', 'Bitmap atlas', 'capability not landed', 'amber'),
   unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),

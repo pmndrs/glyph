@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T04:17:03Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # Shaping and layout conformance plan
@@ -204,6 +204,12 @@ Fixtures must cover:
 - Run `GraphemeBreakTest.txt` for extended grapheme boundaries.
 - Run the version-matched `BidiTest.txt` and `BidiCharacterTest.txt`; bidi analysis is owned by the package's JavaScript paragraph engine.
 - Record any tailoring as a named profile, never an undocumented deviation.
+
+Item 5.1 runs all 766 Unicode 17 `GraphemeBreakTest.txt` vectors and all 19,338
+Unicode 17 `LineBreakTest.txt` vectors in the ordinary package suite. The
+official sources are stored as deterministic gzip fixtures whose uncompressed
+SHA-256 values are checked before the tests execute. UAX #9 remains an explicit
+5.3 gate and cannot inherit completion from the UAX #14/#29 results.
 
 ### Reflow cases
 

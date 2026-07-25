@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:47:06Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -876,7 +876,11 @@ interface ParagraphEngine {
   create(input: ParagraphInput): Paragraph
 }
 
-declare function createParagraphEngine(): ParagraphEngine
+interface ParagraphEngineOptions {
+  shaper: RuntimeShaper
+}
+
+declare function createParagraphEngine(options: ParagraphEngineOptions): ParagraphEngine
 
 type ParagraphAxisConstraint =
   | { mode: 'unconstrained' }

@@ -111,4 +111,34 @@ describe('canonical Inter fixtures', () => {
       ),
     ).toBe(true)
   })
+
+  it('records exact browser paragraph measurement with zero Wasm reflow calls', async () => {
+    const result = JSON.parse(
+      await readFile(
+        new URL('results/paragraph-measurement-chromium149.json', fixtureRoot),
+        'utf8',
+      ),
+    )
+
+    expect(result).toMatchObject({
+      targetId: 'paragraph-engine',
+      scenarioId: 'paragraph-measurement',
+      status: 'passed',
+      outputBytes: 168,
+    })
+    expect(result.measurements).toHaveLength(3)
+    expect(new Set(result.measurements.map(({ hash }: { hash: string }) => hash))).toEqual(
+      new Set(['79874b9d']),
+    )
+    expect(
+      result.measurements.every(
+        ({ metrics }: { metrics: Record<string, number> }) =>
+          metrics.shapeBoundaryCrossings === 1 &&
+          metrics.reshapeBoundaryCrossings === 0 &&
+          metrics.reflowBoundaryCrossings === 0 &&
+          metrics.measurementCount === 3 &&
+          metrics.positionedGlyphBytes === 0,
+      ),
+    ).toBe(true)
+  })
 })

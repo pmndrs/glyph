@@ -1,3 +1,5 @@
+import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
+
 function elementByText(selector: string, value: string): HTMLElement {
   const element = [...document.querySelectorAll<HTMLElement>(selector)].find(
     (candidate) => candidate.textContent?.trim() === value,
@@ -44,5 +46,41 @@ const metrics = [...scene.querySelectorAll<HTMLElement>('.font-mono')]
   .map((element) => element.textContent?.trim())
   .filter(Boolean)
 console.log('harness-ready', JSON.stringify({ url: location.search, metrics }))
+
+const executionPath = '/src/benchmark/execution.ts'
+const environmentPath = '/src/benchmark/environment.ts'
+const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
+  import(/* @vite-ignore */ executionPath),
+  import(/* @vite-ignore */ environmentPath),
+])
+const paragraph = await runRegisteredBenchmark({
+  targetId: 'paragraph-engine',
+  scenarioId: 'paragraph-measurement',
+  input: {},
+  controls: { samples: 3, warmup: 1 },
+  environment: await environmentResource(),
+})
+if (
+  paragraph.status !== 'passed' ||
+  paragraph.measurements.length !== 3 ||
+  paragraph.measurements.some(
+    (measurement: BenchmarkMeasurement) =>
+      measurement.hash !== '79874b9d' ||
+      measurement.metrics?.shapeBoundaryCrossings !== 1 ||
+      measurement.metrics.reshapeBoundaryCrossings !== 0 ||
+      measurement.metrics.reflowBoundaryCrossings !== 0 ||
+      measurement.metrics.positionedGlyphBytes !== 0,
+  )
+) {
+  throw new Error('Live paragraph probe did not preserve its exact cached-reflow contract')
+}
+console.log(
+  'paragraph-ready',
+  JSON.stringify({
+    hash: paragraph.measurements[0]?.hash,
+    validation: paragraph.validation,
+    webgpu: paragraph.environment.webgpu,
+  }),
+)
 
 export {}

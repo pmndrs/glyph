@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:47:06Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # Benchmark plan
@@ -64,8 +64,8 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
-| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, pinned real-font direct-baker, public loader/module-Worker, and exact eight-case/one-call HarfRust shaping lanes pass. Paragraph and rendering lanes remain open. |
-| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; Worker and shaper JavaScript exclude separately measured Wasm assets; future Unicode tables remain explicitly unavailable. The complete milestone-4 shaper is 27,859 bytes minified JavaScript and 645,666 bytes optimized Wasm. |
+| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, pinned real-font direct-baker, public loader/module-Worker, exact eight-case/one-call HarfRust shaping, and exact prepare-once/zero-reflow-Wasm paragraph measurement lanes pass. Positioned paragraph and rendering lanes remain open. |
+| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; Worker and shaper JavaScript exclude separately measured Wasm assets. Unicode analysis is 139,752 bytes minified and the complete milestone-4 shaper is 27,859 bytes minified JavaScript plus 645,666 bytes optimized Wasm. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
 

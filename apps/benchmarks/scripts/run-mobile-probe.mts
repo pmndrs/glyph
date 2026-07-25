@@ -4,7 +4,8 @@ import { chromium } from 'playwright'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url))
-const server = spawn(vite, ['--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+const mobilePort = 5174
+const server = spawn(vite, ['--host', '127.0.0.1', '--port', String(mobilePort), '--strictPort'], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'pipe'],
 })
@@ -33,7 +34,7 @@ try {
   })
   page.on('pageerror', (error) => errors.push(error.message))
 
-  await page.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle' })
+  await page.goto(`http://127.0.0.1:${mobilePort}/`, { waitUntil: 'networkidle' })
   await page.locator('[data-testid="scene"]:visible').waitFor()
   await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-scene.png', fullPage: true })
   await page.getByRole('button', { name: 'controls', exact: true }).click()

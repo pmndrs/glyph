@@ -14,6 +14,12 @@ sources:
   - id: unicode
     resource: https://www.unicode.org/versions/Unicode17.0.0/
     title: Unicode 17.0.0
+  - id: unicode-linebreak
+    resource: https://www.npmjs.com/package/@cto.af/linebreak/v/4.0.3
+    title: "@cto.af/linebreak 4.0.3"
+  - id: unicode-segmenter
+    resource: https://www.npmjs.com/package/unicode-segmenter/v/0.15.0
+    title: unicode-segmenter 0.15.0
   - id: gltf-schema
     resource: https://github.com/KhronosGroup/glTF/tree/77b44be7bef26e01fb0b140e3d5bb1716421c5e9/specification/2.0/schema
     title: Pinned glTF 2.0 schema revision
@@ -40,7 +46,7 @@ sources:
     title: libfuzzer-sys 0.4.13
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T04:18:36Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # V0 toolchain and format version pins
@@ -55,6 +61,9 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | HarfRust | `0.12.0` | tag commit `60b28ea22b5261710018d69c168a762bcb28794c` |
 | HarfBuzz oracle | `13.0.0` | tag commit `a0fc099681a69ae40665fbea74982a2e9d7a5260` |
 | Unicode | `17.0.0` | versioned UCD and UAX data |
+| Unicode Script/Script_Extensions data | `@unicode/unicode-17.0.0` `1.6.17` | build-only generated range-table source |
+| UAX #29 implementation | `unicode-segmenter` `0.15.0` | Unicode 17 extended-grapheme segmentation |
+| UAX #14 implementation | `@cto.af/linebreak` `4.0.3` | Unicode 17 line breaking; complete official corpus gate |
 | glTF specification | `2.0` | Khronos schema commit `77b44be7bef26e01fb0b140e3d5bb1716421c5e9` |
 | Khronos glTF Validator | `2.0.0-dev.3.10` | npm package |
 | JSON Schema Draft-04 evaluator | Ajv `6.15.0` | npm package; exact extension-schema negative matrix |

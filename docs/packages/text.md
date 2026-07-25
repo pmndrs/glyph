@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
 title: "@pmndrs/text"
-description: Defines public core contracts, static discovery, portable bitmap artifacts, validation, and generic composition.
+description: Implements public font loading, shaping, paragraph measurement, static discovery, and portable bitmap artifact contracts.
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:c4204a04e022e2c6edd2b7da9cf01b2f508bc732ac971f4450633685379d1183"
+source_digest: "sha256:1e337ea8ea9eef68d781f1e1ca4cd492a0c597a43ad76c0ff936f80fe3dd70d6"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -47,14 +47,20 @@ sources:
   - id: shaper-core
     resource: ../../packages/text/rust/shaper
     title: HarfRust Wasm shaper implementation
+  - id: paragraph
+    resource: ../../packages/text/src/paragraph.ts
+    title: Paragraph engine implementation
+  - id: unicode-analysis
+    resource: ../../packages/text/src/internal/unicode.ts
+    title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T06:47:06Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 implementation slice; Milestone 4 complete and roadmap item 5.1 active
+Status: 🟡 implementation slice; roadmap item 5.1 complete and item 5.2 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -80,7 +86,11 @@ Milestone 4 closes the package-owned HarfRust runtime. The Rust 1.97.1 module us
 
 One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, language, and range records through offsets from the generated ABI. It returns aligned borrowed SoA views with absolute UTF-16 clusters, glyph IDs, four positions, and mapped flags. Every pinned Inter case passes bit-for-bit through the complete source → baker GLB → validator → registry extraction → Wasm chain for both calls; multi-run batching, plan reuse/disposal, surrogate boundaries, extents conversion, malformed records, and deterministic raw-ABI mutation fuzzing are executable. The browser product batches all eight cases into one 97-glyph call with exact output hash `dc30c21c`. The complete optimized module is 645,666 bytes raw, 239,303 bytes gzip, and 188,862 bytes Brotli; its JavaScript bridge is 27,859 bytes minified, 8,190 bytes gzip, and 7,320 bytes Brotli.
 
-The package does not yet perform paragraph analysis/layout or render glyphs. Item 5.1 now consumes the copied broad-shape results for measured clusters and greedy breaking. The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+Roadmap item 5.1 adds synchronous paragraph preparation and measurement. Unicode 17 Script/Script_Extensions tables are generated deterministically from the pinned UCD package; `unicode-segmenter` supplies extended grapheme boundaries and `@cto.af/linebreak` supplies line-break opportunities. The ordinary suite executes all 766 official grapheme vectors and all 19,338 official line-break vectors from hash-pinned gzip fixtures. Prepared text is split only at grapheme-safe style/script boundaries, shaped once through the existing GLB-retained HarfRust path, copied immediately out of its borrowed result arena, and measured into legal break clusters with explicit baselines. Equivalent width constraints reuse frozen measurement objects and width-only reflow performs zero Wasm calls.
+
+The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three layouts with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays. `layout()` remains the explicit item-5.2 boundary; alignment, bidi, clipping, max-lines, and ellipsis remain item 5.3 rather than silently behaving as implemented options.
+
+The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
@@ -90,7 +100,7 @@ The package does not yet perform paragraph analysis/layout or render glyphs. Ite
 | `test` | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, both Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts. |
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `test:unit` | Run focused Rust bitmap and HarfRust-shaper unit tests. |
-| `test:integration` | Run both Rust public boundaries plus Wasm/package, registration, golden, and malformed-artifact integration tests. |
+| `test:integration` | Verify pinned Unicode fixture hashes, then run both Rust public boundaries plus Wasm/package, registration, shaping/paragraph goldens, Unicode conformance, and malformed-artifact integration tests. |
 | `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, and raw shaper-request mutations twice and require deterministic, trap-free outcomes. |
 | `build` | Emit ESM/declarations, compile the no-WASI bitmap and shaper Wasm modules, optimize them with pinned Binaryen, and publish both generated ABIs. |
 

@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:47:06Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–4 are closed. Milestone 5 continues in issue order at active item 5.1.
+Milestones 0–4 and item 5.1 are closed. Milestone 5 continues in issue order at active item 5.2.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -97,8 +97,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 3.3 | ✅ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
 | 4.1 | ✅ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
 | 4.2 | ✅ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
-| 5.1 | 🟡 | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
-| 5.2 | ⬜ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
+| 5.1 | ✅ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
+| 5.2 | 🟡 | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
 | 5.3 | ⬜ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
 | 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
@@ -339,7 +339,7 @@ Item 4.1 is closed.
 - [x] The real benchmark product runs all eight cases as one 97-glyph Chromium batch, validates hash `dc30c21c`, records 2,412 output bytes, one boundary crossing, three plans, 171,056 retained font bytes, 1,638,400 linear-memory bytes, and raw cold/warm timings after correctness passes.
 - [x] The complete optimized module and bridge are measured independently at 645,666 raw / 239,303 gzip / 188,862 Brotli Wasm bytes and 27,859 minified / 8,190 gzip / 7,320 Brotli JavaScript bytes.
 
-Item 4.2 and Milestone 4 are closed. Item 5.1 is active.
+Item 4.2 and Milestone 4 are closed. Item 5.1 closure evidence is recorded under Milestone 5.
 
 Deliver:
 
@@ -368,6 +368,18 @@ Deliver:
 HarfRust reads the retained SFNT tables in Wasm. The milestone does not claim compiled-IR or zero table interpretation.
 
 ## Milestone 5 — JavaScript paragraph reflow
+
+### 5.1 closure checklist
+
+- [x] The public engine prepares immutable paragraph/span/style input over an active `RuntimeShaper`, validates span boundaries against extended grapheme clusters, and resolves overlapping style, font, feature, language, and explicit-direction ranges.
+- [x] Generated Unicode 17 Script and Script_Extensions tables come from the pinned official UCD package; `unicode-segmenter` 0.15.0 supplies UAX #29 boundaries and `@cto.af/linebreak` 4.0.3 supplies UAX #14 opportunities.
+- [x] Ordinary package tests verify all 766 official Unicode 17 extended-grapheme vectors and all 19,338 official line-break vectors from hash-pinned deterministic gzip fixtures; malformed UTF-16 and selected Script/Script_Extensions values have focused regressions.
+- [x] One broad HarfRust shape is copied immediately out of the borrowed Wasm arena and converted into font-scaled, letter-spaced measured grapheme clusters with unsafe-break information, explicit hard breaks, line metrics, and baselines.
+- [x] Greedy word/character wrapping handles mandatory breaks, trailing empty lines, over-wide clusters, and shaping-safe emergency boundaries. Equivalent unconstrained/at-most/exactly measurements reuse one frozen result and never materialize positioned glyph arrays.
+- [x] Canonical Inter travels source TTF → portable baker GLB → hostile-input validator → retained shaping views → HarfRust Wasm → paragraph measurement. Exact HarfRust-derived natural, 720 px, and 360 px widths are `847.625`, `696.734375`, and `356.546875`; unrelated shaper calls prove cached ownership.
+- [x] The real Chromium benchmark repeats the three exact layouts with hash `79874b9d`, one preparation shape, zero reshapes/reflow boundary crossings, zero positioned-glyph bytes, and a measured independent Unicode-analysis size lane of 139,752 minified / 41,999 gzip / 31,018 Brotli bytes.
+
+Item 5.1 is closed. Item 5.2 is active; positioned output and boundary-sensitive batched reshaping remain intentionally outside the completed measurement surface.
 
 Deliver:
 

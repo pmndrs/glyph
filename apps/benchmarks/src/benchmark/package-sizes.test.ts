@@ -12,6 +12,7 @@ describe('independent package-size report', () => {
       'text-shaper-wasm',
       'portable-baker-js',
       'portable-baker-wasm',
+      'unicode-analysis-js',
     ]) {
       const entry = report.entries.find((candidate) => candidate.id === id)
       expect(entry?.status).toBe('measured')
@@ -35,13 +36,13 @@ describe('independent package-size report', () => {
     expect(core.minifiedBytes).toBeLessThan(validator.minifiedBytes)
   })
 
-  it('reports the future Unicode table entry as unavailable, never zero bytes', () => {
-    const entry = report.entries.find((candidate) => candidate.id === 'unicode-properties')
-    expect(entry).toEqual({
-      id: 'unicode-properties',
-      label: 'Unicode property tables',
-      status: 'unavailable',
-      reason: 'Version-pinned JavaScript tables land with the paragraph engine in milestone 5.',
-    })
+  it('reports Unicode analysis independently from the initial browser graph', () => {
+    const core = report.entries.find((candidate) => candidate.id === 'browser-core')
+    const unicode = report.entries.find((candidate) => candidate.id === 'unicode-analysis-js')
+    expect(core?.status).toBe('measured')
+    expect(unicode?.status).toBe('measured')
+    if (core?.status !== 'measured' || unicode?.status !== 'measured') return
+    expect(unicode.minifiedBytes).toBeGreaterThan(0)
+    expect(core.minifiedBytes).toBeGreaterThan(unicode.minifiedBytes)
   })
 })

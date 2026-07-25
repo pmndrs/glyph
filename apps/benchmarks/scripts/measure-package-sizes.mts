@@ -190,12 +190,11 @@ const entries: SizeEntry[] = [
     'Portable baker Wasm',
     new URL('../../../packages/font-baker/dist/font_baker.wasm', import.meta.url),
   ),
-  {
-    id: 'unicode-properties',
-    label: 'Unicode property tables',
-    status: 'unavailable',
-    reason: 'Version-pinned JavaScript tables land with the paragraph engine in milestone 5.',
-  },
+  await measureJavaScript(
+    'unicode-analysis-js',
+    'Unicode 17 analysis JS',
+    new URL('../size-entries/unicode-analysis.ts', import.meta.url),
+  ),
 ]
 
 const report = {

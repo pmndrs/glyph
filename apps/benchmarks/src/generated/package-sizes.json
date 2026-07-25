@@ -6,10 +6,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 50347,
-      "minifiedBytes": 35439,
-      "gzipBytes": 10217,
-      "brotliBytes": 9131
+      "rawBytes": 234422,
+      "minifiedBytes": 188389,
+      "gzipBytes": 56994,
+      "brotliBytes": 43025
     },
     {
       "id": "font-validator-js",
@@ -58,8 +58,8 @@
       "format": "wasm",
       "rawBytes": 645666,
       "minifiedBytes": 645666,
-      "gzipBytes": 239303,
-      "brotliBytes": 188862
+      "gzipBytes": 239311,
+      "brotliBytes": 188695
     },
     {
       "id": "portable-baker-js",
@@ -82,10 +82,14 @@
       "brotliBytes": 136118
     },
     {
-      "id": "unicode-properties",
-      "label": "Unicode property tables",
-      "status": "unavailable",
-      "reason": "Version-pinned JavaScript tables land with the paragraph engine in milestone 5."
+      "id": "unicode-analysis-js",
+      "label": "Unicode 17 analysis JS",
+      "status": "measured",
+      "format": "javascript",
+      "rawBytes": 164481,
+      "minifiedBytes": 139752,
+      "gzipBytes": 41999,
+      "brotliBytes": 31018
     }
   ]
 }

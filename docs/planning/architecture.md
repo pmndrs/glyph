@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T08:13:36Z"
 ---
 
 # Proposed architecture
@@ -190,6 +190,13 @@ The generic Node and Worker hosts dynamically load raster packages, pass them th
 - text/styles, region constraints, and break selection;
 - alignment, clipping, max lines, ellipsis, and reflow caches;
 - batching boundary-sensitive reshapes.
+
+The item-5.1 implementation pins Unicode 17 throughout this boundary: generated
+Script/Script_Extensions ranges come from `@unicode/unicode-17.0.0` 1.6.17,
+extended grapheme boundaries come from `unicode-segmenter` 0.15.0, and line
+break opportunities come from `@cto.af/linebreak` 4.0.3. Generated tables and
+official conformance fixtures are build/test inputs; application code does not
+consult ambient `Intl` or a browser-dependent ICU version.
 
 ### Raster modules own
 
