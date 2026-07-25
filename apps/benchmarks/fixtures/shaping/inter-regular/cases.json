@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 0,
+  "fontFixture": "inter-regular-v0",
+  "clusterUnit": "utf16",
+  "defaults": {
+    "direction": "ltr",
+    "script": "Latn",
+    "language": "en",
+    "features": []
+  },
+  "cases": [
+    {
+      "id": "paragraph",
+      "text": "office AVATAR café — ffi, kerning, marks, and wrapping.",
+      "utf16Length": 56,
+      "codePoints": [
+        "U+006F@0",
+        "U+0066@1",
+        "U+0066@2",
+        "U+0069@3",
+        "U+0063@4",
+        "U+0065@5",
+        "U+0020@6",
+        "U+0041@7",
+        "U+0056@8",
+        "U+0041@9",
+        "U+0054@10",
+        "U+0041@11",
+        "U+0052@12",
+        "U+0020@13",
+        "U+0063@14",
+        "U+0061@15",
+        "U+0066@16",
+        "U+0065@17",
+        "U+0301@18",
+        "U+0020@19",
+        "U+2014@20",
+        "U+0020@21",
+        "U+0066@22",
+        "U+0066@23",
+        "U+0069@24",
+        "U+002C@25",
+        "U+0020@26",
+        "U+006B@27",
+        "U+0065@28",
+        "U+0072@29",
+        "U+006E@30",
+        "U+0069@31",
+        "U+006E@32",
+        "U+0067@33",
+        "U+002C@34",
+        "U+0020@35",
+        "U+006D@36",
+        "U+0061@37",
+        "U+0072@38",
+        "U+006B@39",
+        "U+0073@40",
+        "U+002C@41",
+        "U+0020@42",
+        "U+0061@43",
+        "U+006E@44",
+        "U+0064@45",
+        "U+0020@46",
+        "U+0077@47",
+        "U+0072@48",
+        "U+0061@49",
+        "U+0070@50",
+        "U+0070@51",
+        "U+0069@52",
+        "U+006E@53",
+        "U+0067@54",
+        "U+002E@55"
+      ]
+    },
+    {
+      "id": "ligature-default",
+      "text": "office ffi",
+      "utf16Length": 10,
+      "codePoints": [
+        "U+006F@0",
+        "U+0066@1",
+        "U+0066@2",
+        "U+0069@3",
+        "U+0063@4",
+        "U+0065@5",
+        "U+0020@6",
+        "U+0066@7",
+        "U+0066@8",
+        "U+0069@9"
+      ]
+    },
+    {
+      "id": "ligature-disabled",
+      "text": "office ffi",
+      "utf16Length": 10,
+      "features": ["liga=0"],
+      "codePoints": [
+        "U+006F@0",
+        "U+0066@1",
+        "U+0066@2",
+        "U+0069@3",
+        "U+0063@4",
+        "U+0065@5",
+        "U+0020@6",
+        "U+0066@7",
+        "U+0066@8",
+        "U+0069@9"
+      ]
+    },
+    {
+      "id": "kerning-default",
+      "text": "AVATAR",
+      "utf16Length": 6,
+      "codePoints": ["U+0041@0", "U+0056@1", "U+0041@2", "U+0054@3", "U+0041@4", "U+0052@5"]
+    },
+    {
+      "id": "kerning-disabled",
+      "text": "AVATAR",
+      "utf16Length": 6,
+      "features": ["kern=0"],
+      "codePoints": ["U+0041@0", "U+0056@1", "U+0041@2", "U+0054@3", "U+0041@4", "U+0052@5"]
+    },
+    {
+      "id": "combining-mark",
+      "text": "café",
+      "utf16Length": 5,
+      "codePoints": ["U+0063@0", "U+0061@1", "U+0066@2", "U+0065@3", "U+0301@4"]
+    },
+    {
+      "id": "supplementary-notdef",
+      "text": "A😀B",
+      "utf16Length": 4,
+      "codePoints": ["U+0041@0", "U+1F600@1+2", "U+0042@3"]
+    },
+    {
+      "id": "variation-selector",
+      "text": "A️B",
+      "utf16Length": 3,
+      "codePoints": ["U+0041@0", "U+FE0F@1", "U+0042@2"]
+    },
+    {
+      "id": "spaces-and-newline",
+      "text": "one two\nthree",
+      "utf16Length": 13,
+      "oracle": false,
+      "codePoints": [
+        "U+006F@0",
+        "U+006E@1",
+        "U+0065@2",
+        "U+0020@3",
+        "U+0074@4",
+        "U+0077@5",
+        "U+006F@6",
+        "U+000A@7",
+        "U+0074@8",
+        "U+0068@9",
+        "U+0072@10",
+        "U+0065@11",
+        "U+0065@12"
+      ]
+    }
+  ]
+}

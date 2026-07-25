@@ -40,7 +40,7 @@ function Harness() {
   const environment = use(environmentResource())
   const [location, setLocationState] = useState(() => readHarnessLocation(locationSearch()))
   const [fontBytes, setFontBytes] = useState<Uint8Array>()
-  const [fontName, setFontName] = useState('Select a local .ttf or .otf')
+  const [fontName, setFontName] = useState('Inter Regular 4.1 · canonical')
   const [summary, setSummary] = useState<BenchmarkSummary>()
   const [event, setEvent] = useState<RunnerEvent>()
   const [error, setError] = useState<string>()
@@ -211,7 +211,7 @@ function ScenarioRail({
     <aside className="overflow-auto border-r border-border bg-chrome p-3">
       <p className="eyebrow">Fixture</p>
       <div className="mt-2 rounded-md border border-border bg-surface p-2.5">
-        <div className="text-xs font-medium">Local font</div>
+        <div className="text-xs font-medium">Font fixture</div>
         <div className="mt-1 truncate font-mono text-[9px] text-dim">{fontName}</div>
       </div>
       <p className="eyebrow mb-2 mt-4">Scenarios</p>

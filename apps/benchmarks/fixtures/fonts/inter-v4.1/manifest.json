@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 0,
+  "id": "inter-regular-v0",
+  "source": {
+    "family": "Inter",
+    "style": "Regular",
+    "version": "4.1",
+    "releaseCommit": "e3a3d4c57d5ecc01453a575621882a384c1995a3",
+    "url": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+    "archiveSha256": "9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e",
+    "archiveMember": "extras/ttf/Inter-Regular.ttf",
+    "fontFile": "Inter-Regular.ttf",
+    "fontBytes": 411640,
+    "fontSha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "license": "OFL-1.1",
+    "licenseFile": "LICENSE.txt",
+    "licenseSha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a"
+  },
+  "face": { "fontIndex": 0, "variations": {} },
+  "glyphIds": "source",
+  "bake": {
+    "bakerVersion": "0.0.0",
+    "formatVersion": 0,
+    "descriptorHash": "f1c0e6c2ead13ceab41f2e39aa883e139fcecfb59c08bee7818242615170331d"
+  },
+  "versions": {
+    "rust": "1.97.1",
+    "unicode": "17.0.0",
+    "harfbuzz": "13.0.0",
+    "harfbuzzCommit": "a0fc099681a69ae40665fbea74982a2e9d7a5260",
+    "harfrust": "0.12.0",
+    "harfrustCommit": "60b28ea22b5261710018d69c168a762bcb28794c",
+    "gltfSchemaRevision": "77b44be7bef26e01fb0b140e3d5bb1716421c5e9",
+    "gltfValidator": "2.0.0-dev.3.10"
+  },
+  "contracts": {
+    "corpus": "../../shaping/inter-regular/cases.json",
+    "harfbuzzOracle": "../../shaping/inter-regular/harfbuzz.json",
+    "harfrustOracle": "../../shaping/inter-regular/harfrust.json",
+    "browserReference": "../../visual/inter-regular/browser-html.json"
+  }
+}

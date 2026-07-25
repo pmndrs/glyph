@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:a9336c237c0352a9f1d62c2b6a4980cda1c5b6e21a23a7eb4e9fe449829efce7"
+source_digest: "sha256:e63fb78bbb4a78ea88daecf6268edc9027c3c999f155b513e80a38969c679d0d"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T01:43:45Z"
+  at: "2026-07-25T02:10:04Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -30,7 +30,7 @@ This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON A
 
 Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract.
 
-It does not run HarfRust, shape Unicode, generate a bitmap, discover application fonts, or provide the public Node/Worker host. Those remain separate roadmap gates.
+The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, discover application fonts, or provide the public Node/Worker host. Those remain separate roadmap gates. Its host-only `generate-shaping-oracle` binary uses pinned HarfRust 0.12.0 to produce deterministic UTF-16 fixture JSON and is not linked into the `no_std` Wasm artifact. The mandatory package E2E verifies canonical Inter 4.1 identity before exercising the compiled Wasm API; it has no environment-dependent skip.
 
 ## Package scripts
 
@@ -39,8 +39,9 @@ It does not run HarfRust, shape Unicode, generate a bitmap, discover application
 | `build` | Compile the `no_std` Wasm module, generate the ABI JSON, and emit the TypeScript package. |
 | `test:unit` | Run Rust unit tests. |
 | `test:integration` | Run public Rust and compiled Wasm/TypeScript integration tests. |
-| `test:e2e` | Bake the licensed real-font fixture when the fixture gate is available. |
+| `test:e2e` | Verify and bake the canonical licensed Inter fixture through the packaged Wasm API. |
 | `test` | Run all three test layers. |
+| `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths. |
 
 See the [implementation status](../planning/font-baker-implementation.md) for evidence and open gates.[^implementation-status]
 

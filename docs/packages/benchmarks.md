@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:5a784ad7be8dd6ac054339349efa3e3cab52a4013a3018ccc16035f1baafb5ba"
+source_digest: "sha256:4e5af7770d35d8a66caa0b84fb80d339c8d0b7c4d965cf0db3e1f1b02124fd90"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,14 +16,14 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T01:54:22Z"
+  at: "2026-07-25T02:10:04Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: 🟡 usable harness shell; rendering targets not implemented
 
-This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, and real portable-baker target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. Its independent package-size lane measures public core JavaScript, baker JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders.
+This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, and real portable-baker target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override. Its independent package-size lane measures public core JavaScript, baker JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders.
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. The first real rendered font frame must land here after its loader, shaping, paragraph, and bitmap dependencies close.
 
@@ -40,6 +40,8 @@ Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabri
 | `format:check` | Verify Oxfmt output. |
 | `size` | Produce deterministic independent package-size JSON for the report UI. |
 | `test:live` | Run the explicit maintainer-local Vitexec and Playwright product probes. |
+| `capture:browser-reference` | Regenerate the pinned Chromium HTML/CSS reference and metadata. |
+| `generate:harfbuzz-oracle` | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable. |
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 

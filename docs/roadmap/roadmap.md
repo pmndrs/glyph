@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:54:22Z"
+  at: "2026-07-25T02:10:04Z"
 ---
 
 # Canonical implementation roadmap
@@ -87,7 +87,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 0.3 | ✅ | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
 | 1.2 | ✅ | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
-| 1.3 | ⬜ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
+| 1.3 | 🟡 | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
 | 2.1 | ⬜ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
 | 2.2 | 🟡 | Implement the host-independent font bake request/result core. | M | 2.1 |
 | 2.3 | ⬜ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
@@ -170,6 +170,20 @@ The contract-only TypeScript shim may contain identity factories such as `define
 - [x] Vitest, production build, headless browser smoke, Vitexec GPU launch, and 390×844 Playwright navigation pass.
 
 Item 1.2 is closed. Item 1.3 is now the active dependency; it replaces local/conditional font input with licensed immutable fixtures and structured/visual oracles.
+
+### 1.3 progress checklist
+
+- [x] Inter Regular 4.1 source/archive member, release commit, OFL-1.1 text, byte sizes, and SHA-256 hashes are immutable and checked in.
+- [x] The package real-font E2E is mandatory and verifies fixture identity before invoking the compiled Wasm package.
+- [x] The shared interactive/headless baker target defaults to the canonical bytes and produces deterministic GLB output; local upload remains an explicit override.
+- [x] The UTF-16 corpus covers kerning and ligature toggles, decomposed marks, supplementary decode, variation selectors, spaces, and explicit newline.
+- [x] Repository commands generate HarfRust 0.12.0 and HarfBuzz 13.0.0 JSON oracles and refuse incompatible engine inputs.
+- [x] A differential test proves core shaping equality and fixes the exact unsafe-to-concat flag-delta inventory.
+- [x] The deterministic HTML/CSS reference records exact font/text/style/viewport/browser inputs and a hashed PNG.
+- [ ] Pin the remaining bitmap, paragraph, GLB, malformed-input, GPU-readback, maximum-cardinality, and empty identity contract fixtures.
+- [ ] Admit the no-retry Vitexec probe with the required repetition, fresh-lifecycle, and environment evidence.
+
+Item 1.3 remains open until the last two gates close; no milestone-2 expansion resumes before then.
 
 Deliver:
 

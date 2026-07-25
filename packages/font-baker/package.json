@@ -20,6 +20,7 @@
     "build": "node ./scripts/build.mjs",
     "build:rust": "cargo build --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
     "generate:abi": "cargo run --manifest-path rust/Cargo.toml --bin generate-abi --locked --quiet",
+    "generate:shaping-oracle": "cargo run --manifest-path rust/Cargo.toml --bin generate-shaping-oracle --features oracle --locked --quiet --",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
     "test:unit": "cargo test --manifest-path rust/Cargo.toml --lib --locked",

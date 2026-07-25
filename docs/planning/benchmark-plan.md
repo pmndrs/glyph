@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:54:22Z"
+  at: "2026-07-25T02:10:04Z"
 ---
 
 # Benchmark plan
@@ -62,11 +62,11 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Harness gate | Status | Evidence required to advance |
 | --- | :---: | --- |
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
-| Portable baker target | 🟡 | `packages/font-baker` provides the initial Wasm package and tiered tests; its real-font lane remains conditional until the repository fixture is pinned. |
+| Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
-| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module and prove deterministic desktop/mobile flows; the pinned real-font public-package lane remains open. |
+| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic and pinned real-font baker lanes pass, while later loading/rendering lanes remain open. |
 | Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli core and baker JavaScript sizes plus raw/gzip/Brotli Wasm; future Unicode tables remain explicitly unavailable. |
-| Browser visual reference | ⬜ | Same-process HTML/CSS reference and candidate captures retain scores and raw diffs. |
+| Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
 
 The lab is both the benchmark product and the canonical product-level test harness described by the [test ownership ladder](conformance-plan.md#test-layers-and-ownership). A scenario first validates semantic output, artifact hashes or schema, lifecycle cleanup, and visual output where relevant; only a passing sample may contribute performance numbers. Synthetic scenarios protect contracts and stress limits, but every user-facing milestone also needs a real-font scenario through public package surfaces. A separate demo, private test hook, or mocked adapter cannot close that end-to-end gate.

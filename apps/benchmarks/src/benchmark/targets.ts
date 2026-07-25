@@ -1,5 +1,6 @@
 import { createFontBaker, type FontBaker } from '@pmndrs/text-font-baker'
 import wasmUrl from '@pmndrs/text-font-baker/font-baker.wasm?url'
+import canonicalFontUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url'
 import type { BenchmarkTarget } from './contracts'
 
 function stableSyntheticHash(sample: number): string {
@@ -23,24 +24,31 @@ const syntheticTarget: BenchmarkTarget = {
 }
 
 let baker: FontBaker | undefined
+let canonicalFontBytes: Uint8Array | undefined
 const bakerTarget: BenchmarkTarget = {
   id: 'font-baker',
   label: 'Rust font baker',
   detail: 'Wasm · direct memory ABI',
   color: 'green',
   capabilities: new Set(['deterministic', 'font-bytes', 'wasm']),
-  status: (input) => (input.fontBytes === undefined ? 'needs-fixture' : 'ready'),
+  status: () => 'ready',
   load: async () => {
-    if (baker !== undefined) return
-    const response = await fetch(wasmUrl)
-    if (!response.ok) throw new Error(`Unable to load font baker Wasm (${response.status})`)
-    baker = await createFontBaker(await response.arrayBuffer())
+    if (baker !== undefined && canonicalFontBytes !== undefined) return
+    const [wasmResponse, fontResponse] = await Promise.all([
+      fetch(wasmUrl),
+      fetch(canonicalFontUrl),
+    ])
+    if (!wasmResponse.ok) throw new Error(`Unable to load font baker Wasm (${wasmResponse.status})`)
+    if (!fontResponse.ok)
+      throw new Error(`Unable to load canonical font fixture (${fontResponse.status})`)
+    const [wasm, font] = await Promise.all([wasmResponse.arrayBuffer(), fontResponse.arrayBuffer()])
+    baker = await createFontBaker(wasm)
+    canonicalFontBytes = new Uint8Array(font)
   },
   run: async (input) => {
-    if (baker === undefined) throw new Error('Font baker target was not loaded')
-    if (input.fontBytes === undefined)
-      throw new Error('Select a font fixture before running the baker')
-    const result = baker.bakeFont(input.fontBytes)
+    if (baker === undefined || canonicalFontBytes === undefined)
+      throw new Error('Font baker target was not loaded')
+    const result = baker.bakeFont(input.fontBytes ?? canonicalFontBytes)
     const artifact = result.artifacts[0]
     if (artifact === undefined) throw new Error('Font baker returned no artifact')
     return { bytes: artifact.bytes.byteLength, hash: artifact.sha256 }

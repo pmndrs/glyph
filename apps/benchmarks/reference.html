@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inter Regular browser reference</title>
+    <style>
+      @font-face {
+        font-family: 'Fixture Inter';
+        src: url('/fixtures/fonts/inter-v4.1/Inter-Regular.ttf') format('truetype');
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #0a0a0a;
+      }
+      #reference {
+        width: 1024px;
+        height: 512px;
+        padding: 56px 64px;
+        overflow: hidden;
+        color: #f5f5f5;
+        background: #0a0a0a;
+        font-family: 'Fixture Inter', sans-serif;
+        font-size: 32px;
+        font-style: normal;
+        font-weight: 400;
+        font-kerning: normal;
+        font-feature-settings: normal;
+        font-synthesis: none;
+        line-height: 1.3;
+        text-align: left;
+        text-rendering: geometricPrecision;
+        white-space: normal;
+      }
+      .paragraph {
+        width: 720px;
+        margin: 0 0 40px;
+      }
+      .comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+        color: #a3a3a3;
+        font-size: 24px;
+      }
+      .off {
+        font-feature-settings:
+          'liga' 0,
+          'kern' 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="reference" aria-label="Inter Regular browser reference">
+      <p class="paragraph">office AVATAR café — ffi, kerning, marks, and wrapping.</p>
+      <div class="comparison">
+        <span>Default: office ffi · AVATAR</span>
+        <span class="off">Features off: office ffi · AVATAR</span>
+      </div>
+    </main>
+    <script type="module">
+      window.referenceReady = (async () => {
+        await document.fonts.load('32px "Fixture Inter"')
+        await document.fonts.ready
+        document.documentElement.dataset.referenceReady = 'true'
+      })()
+    </script>
+  </body>
+</html>

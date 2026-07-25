@@ -5,7 +5,7 @@
     "declaration": false,
     "declarationMap": false,
     "isolatedDeclarations": false,
-    "lib": ["ES2025"],
+    "lib": ["DOM", "ES2025"],
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "types": ["node"]
