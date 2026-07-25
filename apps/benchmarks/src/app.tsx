@@ -103,10 +103,10 @@ function Harness() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <TopBar
-        environmentLabel={environment.webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
         pending={isPending}
         ready={ready}
         samples={samples}
+        webgpu={environment.webgpu}
         onRun={run}
       />
       <div className="hidden h-[calc(100vh-52px)] min-h-[680px] grid-cols-[240px_minmax(560px,1fr)_300px] lg:grid">
@@ -162,16 +162,16 @@ function locationSearch(): string {
 }
 
 function TopBar({
-  environmentLabel,
   pending,
   ready,
   samples,
+  webgpu,
   onRun,
 }: {
-  readonly environmentLabel: string
   readonly pending: boolean
   readonly ready: boolean
   readonly samples: number
+  readonly webgpu: boolean
   readonly onRun: () => void
 }) {
   return (
@@ -185,8 +185,8 @@ function TopBar({
       </div>
       <div className="flex-1" />
       <div className="hidden items-center gap-2 md:flex">
-        <Chip tone={environmentLabel.includes('available') ? 'success' : 'warning'}>
-          {environmentLabel}
+        <Chip tone={webgpu ? 'success' : 'warning'}>
+          {webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
         </Chip>
         <Chip tone="accent">warm · {samples} samples</Chip>
         <Chip>working tree</Chip>

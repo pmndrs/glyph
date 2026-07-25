@@ -1,52 +1,46 @@
 # Maintainability review rubric
 
-Use this rubric to distinguish safer, clearer code from style churn.
+Use the canonical [engineering house style](../../../../docs/engineering/code-style.md) to judge code. This rubric defines the evidence a review must return; it intentionally does not copy the standard.
 
-## General design
+## Finding contract
 
-- Prefer explicit data flow, domain names, and invariants visible in the current file.
-- Model a closed set of alternatives as an algebraic data type. Make invalid combinations unrepresentable when doing so stays local and inexpensive.
-- Keep functions total over their declared domain. Make expected failure explicit.
-- Deduplicate stable domain knowledge, not coincidentally similar mechanics.
-- Prefer deterministic ordering and transactional publication where callers observe multiple related outputs.
-- Optimize after identifying the actual repeated work. Preserve semantics with independent invariants, not only regenerated snapshots.
+For every finding, provide:
 
-## Rust
+- severity and a concrete failure mode;
+- exact file and symbol;
+- evidence from code, tests, generated output, or an independent contract;
+- the smallest credible correction;
+- a test or check that distinguishes the correction from current behavior;
+- public API, runtime-size, dependency, and generated-artifact impact.
 
-- Do not use `unwrap`, `expect`, `panic!`, unchecked indexing, truncating integer casts, or reconstructed raw ownership on caller-controlled paths.
-- Use checked arithmetic and fallible reservation for attacker-controlled sizes. A fixed, one-time runtime allocation may remain when stable Rust offers no proportionate fallible alternative; document the residual limitation.
-- Own allocations in the module that releases them. Validate exact pointer/length or handle identity before use or release.
-- Use enums with exhaustive matches for exclusive states and failure causes.
-- Use `#[repr(transparent)]` newtypes for distinct units, identifiers, generations, or ownership domains when mixing primitive values would be plausible. Convert at C/Wasm ABI edges. Do not wrap primitives solely for visual uniformity.
-- Keep `unsafe` blocks small and state the invariant they rely on. Tests must attack forged ranges, repeated release, overflow, and stale state when those paths exist.
+Report important clean findings as well as defects. Distinguish reusable production paths from tests, build scripts, oracle tools, and generated source before calling something a panic, allocation, validation, or style violation.
 
-## TypeScript
+## Severity
 
-- Prefer discriminated unions for exclusive protocol, lifecycle, and result states. Use exhaustive checks when adding a variant must require code changes.
-- Use branded primitives for opaque handles and hashes when values from different domains share a representation.
-- Choose the validation tool by purpose:
-  - `boolean` for semantic classifiers when callers gain no useful narrowing;
-  - `value is T` for reusable runtime checks that truly prove `T`;
-  - `asserts value is T` for throwing trust-boundary validation;
-  - a parser/normalizer returning `T` when validation also copies, defaults, or canonicalizes.
-- An object check does not prove its properties. For unknown values, first prove a non-null non-array object, then prove each property value that will be consumed.
-- Use `"key" in value` when presence itself matters. Use `Object.hasOwn(value, "key")` when inherited properties must not satisfy the contract. Neither check proves the property's value type.
-- Name object predicates honestly: `isNonArrayObject` for structural object-like input; `isPlainObject` only when prototypes are explicitly restricted.
-- Validate deeply at untyped boundaries: parsed JSON, Worker messages, Wasm responses, fetched artifacts, persisted data, and plugin inputs.
-- Treat values returned by third-party or plugin callbacks as boundary data even when their TypeScript signature claims a trusted type.
-- For JSON contracts, state whether the boundary accepts only materialized JSON values or intentionally applies `JSON.stringify` coercions such as `toJSON`. Programmatic inputs may be cyclic or excessively nested even though parsed JSON cannot be; reject cycles and enforce proportionate resource limits where necessary.
-- Fuse validation with unavoidable parsing, copying, or canonicalization when possible instead of adding a second full traversal.
-- At public JavaScript APIs, validate only the discriminants and invariants needed to prevent corrupt state or obscure failures. Normalize once.
-- Trust normalized internal values. Never place generic schema walks in shaping, layout, render, or other hot loops.
-- Remove casts only when control flow or validation genuinely proves the target type. Do not replace a cast with a dishonest predicate.
-- Prefer resource-owning classes only for identity, lifecycle, cleanup, or encapsulated mutable state; use data and functions otherwise.
+- **High** — corrupt output or state, memory/ownership unsafety, security boundary failure, data loss, nondeterminism that invalidates artifacts, or a public contract that promises a shape it does not prove.
+- **Medium** — realistic lifecycle leak, overflow/trap, drift-prone duplicated safety knowledge, misleading state model, material hot-path waste, or reasoning cost likely to cause incorrect maintenance.
+- **Low** — bounded clarity, naming, or evidence weakness with a concrete maintenance consequence.
 
-## Tests and evidence
+Do not report taste-only preferences as findings.
 
-- Unit tests cover local state transitions, arithmetic, parsing, and error variants.
-- Integration tests cross real package and ABI boundaries.
-- End-to-end tests exercise shipped products and real assets when the behavior is observable there.
-- Deterministic fuzzing attacks parsers, wire formats, and boundary state machines. Maintain toolchain exceptions canonically.
-- Live GPU/browser probes belong in the documented local lane when CI cannot provide the required environment.
-- Prefer official conformance suites, independent oracles, invariant checks, and exact artifact authentication over implementation-shaped assertions.
-- Never add sleeps, arbitrary retries, or timer cushions as correctness mechanisms.
+## Reconciliation
+
+Classify each finding before editing:
+
+- **accept** when evidence establishes a correctness, safety, determinism, performance, or material local-reasoning problem;
+- **defer** when the issue is valid but outside scope, lacks a safe bounded correction, or needs measurement first;
+- **reject** when it asks for speculative abstraction, blanket newtyping, mechanical cast removal, unrelated deduplication, public-API churn, or conformity without a failure mode.
+
+When multiple corrections work, prefer the smallest one that restores a visible invariant and admits a deterministic regression test.
+
+## Anti-overfitting checks
+
+Before accepting a recommendation, ask:
+
+1. Does the proposed type or abstraction prevent a plausible mix-up, or only add ceremony?
+2. Is duplicated domain knowledge likely to drift, or are only local mechanics similar?
+3. Does validation prove a boundary contract, or merely move a cast into a dishonest predicate?
+4. Is added validation outside hot loops and fused with work already required?
+5. Does cleanup cover partial acquisition, cancellation, stale completion, and repeated release?
+6. Does the test use an independent invariant, or restate the implementation?
+7. Would a generated file be better reviewed through its generator and conformance evidence?

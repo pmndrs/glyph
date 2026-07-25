@@ -5,6 +5,7 @@ import test from 'node:test'
 import {
   bitmapBakerFromCore,
   createBitmapBaker,
+  createBitmapBakerFromInstance,
   readBitmapBakerAbi,
 } from '@pmndrs/text/bakers/bitmap'
 import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap'
@@ -16,6 +17,7 @@ const fontUrl = new URL(
   import.meta.url,
 )
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09'
+const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'))
 
 async function setup() {
   const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(fontUrl)])
@@ -46,8 +48,7 @@ test('ships a zero-import optimized Wasm module with its generated ABI', async (
   const { module, instance } = await setup()
   assert.deepEqual(WebAssembly.Module.imports(module), [])
   const embedded = readBitmapBakerAbi(instance)
-  const published = JSON.parse(await readFile(abiUrl, 'utf8'))
-  assert.deepEqual(embedded, published)
+  assert.deepEqual(embedded, publishedAbi)
   assert.deepEqual(embedded.versions, {
     bitmapFormat: 0,
     generator: '0.0.0',
@@ -159,3 +160,90 @@ test('direct-memory allocations reject forged releases and recover after invalid
   assert.notEqual(recovered, 0)
   deallocate(recovered, 8)
 })
+
+test('the direct-memory shim releases earlier allocations when a later copy fails', () => {
+  const released = []
+  let allocations = 0
+  const core = createBitmapBakerFromInstance(
+    fakeBitmapBakerInstance({
+      allocate: () => (++allocations === 1 ? 4096 : 0),
+      deallocate: (pointer, length) => released.push([pointer, length]),
+    }),
+  )
+
+  assert.throws(
+    () =>
+      core.bake({
+        source: new Uint8Array(8),
+        request: {
+          fontFaceIndex: 0,
+          glyphCount: 1,
+          shapingHash: '0'.repeat(64),
+          rasterKey: '0'.repeat(64),
+          packaging: { artifact: 'embedded', pages: 'embedded' },
+          descriptor: bitmapDescriptor({ strikes: [16] }),
+        },
+      }),
+    /allocation failed/,
+  )
+  assert.deepEqual(released, [[4096, 8]])
+})
+
+test('the direct-memory shim releases an allocation whose memory copy fails', () => {
+  const released = []
+  let allocations = 0
+  const core = createBitmapBakerFromInstance(
+    fakeBitmapBakerInstance({
+      allocate: () => (++allocations === 1 ? 4096 : 65_535),
+      deallocate: (pointer, length) => released.push([pointer, length]),
+    }),
+  )
+
+  assert.throws(() =>
+    core.bake({
+      source: new Uint8Array(8),
+      request: {
+        fontFaceIndex: 0,
+        glyphCount: 1,
+        shapingHash: '0'.repeat(64),
+        rasterKey: '0'.repeat(64),
+        packaging: { artifact: 'embedded', pages: 'embedded' },
+        descriptor: bitmapDescriptor({ strikes: [16] }),
+      },
+    }),
+  )
+  assert.deepEqual(
+    released.map(([pointer]) => pointer),
+    [65_535, 4096],
+  )
+})
+
+test('the bitmap ABI reader rejects malformed nested function contracts', () => {
+  const malformed = structuredClone(publishedAbi)
+  malformed.functions.bake.parameters = ['wrong']
+  assert.throws(
+    () => readBitmapBakerAbi(fakeBitmapBakerInstance({ abi: malformed })),
+    /unsupported bitmap baker ABI/,
+  )
+})
+
+function fakeBitmapBakerInstance({
+  abi = publishedAbi,
+  allocate = () => 0,
+  deallocate = () => undefined,
+} = {}) {
+  const memory = new WebAssembly.Memory({ initial: 1 })
+  const abiBytes = new TextEncoder().encode(JSON.stringify(abi))
+  new Uint8Array(memory.buffer, 0, abiBytes.byteLength).set(abiBytes)
+  return {
+    exports: {
+      memory,
+      pmndrs_bitmap_baker_abi_ptr: () => 0,
+      pmndrs_bitmap_baker_abi_len: () => abiBytes.byteLength,
+      pmndrs_bitmap_baker_alloc: allocate,
+      pmndrs_bitmap_baker_dealloc: deallocate,
+      pmndrs_bitmap_baker_bake: () => 0,
+      pmndrs_bitmap_baker_result_len: () => 0,
+    },
+  }
+}

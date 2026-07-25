@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:15384c2940601f75c8b61f16154de1df5e7860b16dd0e66162cf299959720111"
+source_digest: "sha256:bfbd547155c8bfc227d9a7b7fe49a34f0d5fea6148987e6ba87641a4f1384be9"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -60,8 +60,8 @@ sources:
     resource: ../../packages/text/src/internal/unicode.ts
     title: Unicode analysis implementation
 generated:
-  by: openai-codex/gpt-5
-  at: "2026-07-25T14:19:44Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-25T16:20:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -84,7 +84,7 @@ The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The h
 
 The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
 
-The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers provenance-preserving owned byte ranges; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus its package-owned optimized Wasm. Offline and Worker hosts share dependency-light V0 descriptor, sole-artifact, successful-promise-cache, and owned-transfer rules while keeping filesystem and fetch behavior separate. A failed core initialization is retryable in both hosts. Canonical Inter fixtures execute the offline host and Worker entry, compare their complete artifacts byte-for-byte with the direct portable core, and then send the Worker result through loader provenance and hostile-input validation. The current independent size lanes report a 3,498-byte minified runtime host, 6,334-byte Worker JavaScript, and one 434,285-byte Wasm artifact; reviewed ceilings prevent heavy validation, Node, discovery, composition, or raster dependencies from entering those runtime graphs.
+The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers provenance-preserving owned byte ranges; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus its package-owned optimized Wasm. Offline and Worker hosts share dependency-light V0 descriptor, sole-artifact, successful-promise-cache, and owned-transfer rules while keeping filesystem and fetch behavior separate. The host predicate promises only the message fields it proves and consumes instead of overclaiming the complete baker report. A failed core initialization is retryable in both hosts. Canonical Inter fixtures execute the offline host and Worker entry, compare their complete artifacts byte-for-byte with the direct portable core, and then send the Worker result through loader provenance and hostile-input validation. The current independent size lanes report a 3,498-byte minified runtime host, 8,952-byte Worker JavaScript, and one 434,285-byte Wasm artifact; reviewed ceilings prevent heavy validation, Node, discovery, composition, or raster dependencies from entering those runtime graphs.
 
 Milestone 3 closes with browser-executed parity and cancellation. The benchmark product's public loader target first hashes the real module-Worker artifact against the canonical Node artifact, validates and registers it, then runs the complete missing-sibling fallback in Chromium. Shared loads now reference-count consumers: one abort detaches safely, the final abort reaches fetch/stream/Worker work, and an otherwise-idle Worker terminates immediately after the final success, failure, or cancellation and recreates on demand without timers. Stale events from a terminated Worker cannot settle requests owned by its replacement. Shaping-identity deduplication retains source bytes only when their source hash matches the registered primary provenance; alternate URLs remain hash-qualified candidates.
 
@@ -124,9 +124,8 @@ With item 5.4 closed, the public runtime bitmap upload/module in milestone 6.1 i
 | `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations twice and require deterministic, trap-free outcomes. |
 | `build` | Emit ESM/declarations, compile the no-WASI bitmap and shaper Wasm modules, optimize them with pinned Binaryen, and publish both generated ABIs. |
 
-The [API contract](../planning/api-shapes.md) remains authoritative for proposed public behavior; this concept explains the package that currently embodies its compile-time subset.[^api-contract]
+The [API contract](../planning/api-shapes.md) remains authoritative for public behavior; this concept explains the package that implements its current loading, baking, shaping, and paragraph surfaces. The [canonical roadmap](../roadmap/roadmap.md) alone owns program-wide completion status.
 
-[^api-contract]: The implementation must not be inferred to exist merely because its types compile.
 [^bitmap-identity]: Raster-specific descriptor fields remain owned by this subpath and never enter a closed core union.
 [^bitmap-baker]: Artifact generation, validation, and generic composition are complete; GPU resource creation is deliberately deferred to the renderer milestone.
 [^node-host]: The Node host trusts selected installed baker code but authenticates every returned artifact; hostile baked assets are independently revalidated at the loader boundary.

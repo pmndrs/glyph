@@ -35,8 +35,8 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
   if (target.status(input) !== 'ready') throw new Error('Target is not ready for this input')
 
   onEvent?.({ phase: 'loading', completed: 0, total: 1 })
-  await target.load()
   try {
+    await target.load()
     for (let sample = 0; sample < controls.warmup; sample += 1) {
       onEvent?.({ phase: 'warming', completed: sample, total: controls.warmup })
       await target.run(input, 0)

@@ -8,8 +8,8 @@
       "format": "javascript",
       "rawBytes": 267993,
       "minifiedBytes": 209375,
-      "gzipBytes": 62155,
-      "brotliBytes": 47557
+      "gzipBytes": 62156,
+      "brotliBytes": 47591
     },
     {
       "id": "font-validator-js",
@@ -28,18 +28,18 @@
       "format": "javascript",
       "rawBytes": 4799,
       "minifiedBytes": 3498,
-      "gzipBytes": 1394,
-      "brotliBytes": 1248
+      "gzipBytes": 1395,
+      "brotliBytes": 1247
     },
     {
       "id": "runtime-baker-worker-js",
       "label": "Runtime baker Worker JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 8863,
-      "minifiedBytes": 6334,
-      "gzipBytes": 2309,
-      "brotliBytes": 2022
+      "rawBytes": 13225,
+      "minifiedBytes": 8952,
+      "gzipBytes": 3018,
+      "brotliBytes": 2651
     },
     {
       "id": "text-shaper-js",
@@ -66,10 +66,10 @@
       "label": "Portable baker JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 5554,
-      "minifiedBytes": 3963,
-      "gzipBytes": 1522,
-      "brotliBytes": 1334
+      "rawBytes": 9884,
+      "minifiedBytes": 6581,
+      "gzipBytes": 2302,
+      "brotliBytes": 2053
     },
     {
       "id": "portable-baker-wasm",

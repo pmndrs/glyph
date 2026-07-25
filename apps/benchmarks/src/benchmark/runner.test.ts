@@ -54,4 +54,33 @@ describe('shared benchmark runner', () => {
       }),
     ).toEqual(['raster', 'gpu-timestamps'])
   })
+
+  it('disposes partial target state when loading fails', async () => {
+    let disposed = 0
+    const failingTarget: BenchmarkTarget = {
+      ...target,
+      load: async () => {
+        throw new Error('fixture load failed')
+      },
+      dispose: async () => {
+        disposed += 1
+      },
+    }
+
+    await expect(
+      runBenchmark({
+        target: failingTarget,
+        scenario,
+        input: {},
+        controls: { warmup: 0, samples: 1 },
+        environment: {
+          browser: 'vitest',
+          hardwareConcurrency: 1,
+          webgpu: false,
+          crossOriginIsolated: false,
+        },
+      }),
+    ).rejects.toThrow('fixture load failed')
+    expect(disposed).toBe(1)
+  })
 })

@@ -1,8 +1,4 @@
-import type {
-  FontBakeDescriptorV0,
-  FontBakeResultV0,
-  SerializedBakeError,
-} from "@pmndrs/text-font-baker";
+import type { FontBakeDescriptorV0, SerializedBakeError } from "@pmndrs/text-font-baker";
 
 export interface RuntimeBakeRequestV0 {
   readonly type: "bake-font-v0";
@@ -16,8 +12,8 @@ export interface RuntimeBakeSuccessV0 {
   readonly id: number;
   readonly ok: true;
   readonly artifacts: readonly [RuntimeBakeArtifactV0];
-  readonly report: FontBakeResultV0["report"];
-  readonly warnings: FontBakeResultV0["warnings"];
+  readonly report: unknown;
+  readonly warnings: readonly unknown[];
 }
 
 export interface RuntimeBakeArtifactV0 {

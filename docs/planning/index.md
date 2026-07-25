@@ -18,7 +18,7 @@
 ## Verification and tooling
 
 - [V0 version pins](version-contract.md) — exact toolchain, oracle, schema, validator, ABI, format, and generator versions.
-- [Font baker implementation status](font-baker-implementation.md) — current Rust/Wasm/TypeScript core evidence and remaining gates.
+- [Portable font baker implementation evidence](font-baker-implementation.md) — package-owned Rust/Wasm/TypeScript core evidence; roadmap status remains canonical.
 - [Wasm allocator experiment](font-baker-allocator.md) — allocator candidates, representative workloads, and selection gate.
 - [Benchmark plan](benchmark-plan.md) — benchmark harness and performance evidence.
 - [Conformance plan](conformance-plan.md) — correctness oracles and acceptance gates.

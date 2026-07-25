@@ -2,9 +2,9 @@
 
 `pmndrs/text` is a planned ESM-only, Three.js-first text system for JavaScript, WebGPU, and WebGL. It shapes Unicode text once, reflows it inside constrained regions, and renders the same positioned glyphs through an explicitly selected bitmap, MSDF, or Slug raster module. The MSDF engine uses MTSDF atlas encoding in V1.
 
-This repository is moving from contract design into bounded implementation slices. The public API, implementation order, and binary contracts remain under review, so implementation status is recorded against their explicit exit gates rather than inferred from the presence of code.
+The repository has completed the accepted contracts, benchmark foundation, portable font and bitmap baking, static project discovery, Node and Worker delivery, universal HarfRust shaping, and horizontal paragraph layout through the CJK universality gate. Rendering remains intentionally capability-gated; Milestone 6 adds the first bitmap frame. Use the [canonical roadmap](docs/roadmap/roadmap.md) for checkbox status and the [workspace package catalog](docs/packages/index.md) for usable package boundaries.
 
-The compile-only public contract scaffold lives in `packages/text`. The first portable baker-core implementation lives in `packages/font-baker`, where one package contains the Rust crate, raw Wasm boundary, TypeScript wrapper, build support, and tests. It emits a shaping-only core GLB; it does not yet implement project discovery, bitmap composition, Node/Worker hosts, runtime shaping, layout, or rendering. See the [font baker implementation status](docs/planning/font-baker-implementation.md) for evidence and remaining gates.
+The public runtime and Node tooling live in `packages/text`; the package-owned portable shaping-data baker lives in `packages/font-baker`; and the shared product, browser, Vitexec, and benchmark evidence lives in `apps/benchmarks`. The [font baker package reference](docs/packages/font-baker.md) records its current interface and verification evidence.
 
 ## The API we intend to ship
 
@@ -165,7 +165,7 @@ The [renderer capability matrix](docs/planning/renderer-capabilities.md) records
 
 Supporting evidence is intentionally outside that path: [RESEARCH.md](RESEARCH.md) is the attributed bibliography; the [decision register](docs/planning/decision-register.md) records proposed choices; [open questions](docs/planning/open-questions.md) records unresolved blockers; and the benchmark, conformance, payload, compression, and Slug audit documents explain how claims will be verified.
 
-The planning corpus under [`docs`](docs/index.md) is an [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: reserved indexes provide progressive disclosure, frontmatter provenance and links make concepts portable to agents, and Diátaxis keeps each page focused on a reader task.
+The knowledge corpus under [`docs`](docs/index.md) is an [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: reserved indexes provide progressive disclosure, while frontmatter provenance and links make product documentation, plans, decisions, specifications, and package references portable to agents. Diátaxis informs reader-facing documentation without forcing internal project artifacts into a four-part template.
 
 ## Work locally
 
@@ -175,8 +175,7 @@ pnpm install
 pnpm check
 ```
 
-Use mise to install the pinned toolchains, or supply compatible Node.js and Rust toolchains through the platform tools you already use.
-The product uses the root stable Rust pin. The optional coverage-guided font-baker fuzzer is isolated
+Use mise to install the exact root Node.js, pnpm, and stable Rust pins. Those canonical versions are required; do not substitute merely compatible local toolchains. The optional coverage-guided font-baker fuzzer is isolated
 under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and
 `cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
 

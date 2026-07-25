@@ -1,7 +1,7 @@
 ---
-type: Implementation Status
-title: Font baker implementation status
-description: Tracks the implemented portable Rust bake core, TypeScript Wasm wrapper, validation evidence, and remaining integration boundaries.
+type: Implementation Evidence
+title: Portable font baker implementation evidence
+description: Records package-owned evidence for the portable Rust bake core, generated Wasm ABI, TypeScript wrapper, and validator.
 resource: ../../packages/font-baker
 tags: [baking, rust, wasm, typescript, implementation]
 sources:
@@ -31,13 +31,13 @@ sources:
     title: "Fontations"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T14:19:44Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-25T16:20:00Z"
 ---
 
-# Font baker implementation status
+# Portable font baker implementation evidence
 
-This page records implementation truth for the portable core started from roadmap item 2.2. It does not replace the [canonical roadmap](../roadmap/roadmap.md), the [bake API contract](api-shapes.md#shared-bake-core), or the [shaping data contract](shaping-data-contract.md).
+This page records evidence owned by `packages/font-baker`. It does not repeat program-wide milestone status: the [canonical roadmap](../roadmap/roadmap.md) owns that checklist, while the [bake API contract](api-shapes.md#shared-bake-core) and [shaping data contract](shaping-data-contract.md) own behavior.
 
 Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not started · ⛔ blocked
 
@@ -52,18 +52,8 @@ Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not s
 | Package integration | ✅ | Public Rust tests validate ABI fields, source/container/table policy, TTC face selection, and structured errors. Compiled-Wasm tests validate the pinned optimized module, zero imports, generated/published ABI identity, direct-memory behavior, exact and forged release metadata, and recovery. The reusable validation entry adds strict GLB framing, exact Khronos-report admission, Draft-04 required/union coverage, schema-copy identity, semantic identity, hostile payload mutation tests, and repeatable non-mutating Node `Buffer` validation. | Reuse the same hostile-input discipline at loader, shaping, paragraph, and renderer boundaries. |
 | Fuzz verification | ✅ | CI runs deterministic arbitrary-byte Rust bake smoke and artifact-mutation validation smoke with seed `0x504d4e44`. Longer source/artifact mutation drivers remain stable-toolchain tools. The isolated coverage target uses mise-owned `nightly-2026-06-01`, cargo-fuzz 0.13.2, and libfuzzer-sys 0.4.13 against the same public bake boundary, seeded from pinned Inter without copying fixture bytes. Minimized failures must enter the malformed corpus. | Add package-owned targets whenever bitmap, loader, shaping, layout, or renderer trust boundaries arrive. |
 | Real-font vertical slice | ✅ | Mandatory Inter, Amiri, and Noto Sans CJK E2E tests authenticate each source, bake and validate the GLB, extract the reduced SFNT, and prove complete source/reduced HarfRust equality. The Noto lane also fixes the maximum 65,535-glyph boundary, `cmap` 12/14 mappings, conditional vertical-data retention, payload arithmetic, and exact HarfBuzz 13 equality. | Preserve this evidence while raster and renderer packages consume the artifact. |
-| Product end-to-end | ✅ | Through Milestone 5, the benchmark product exercises the public loader/Worker, exact HarfRust shaping, paragraph measurement/layout, bidi/line policy/current-uikit integration, and focused CJK universality with deterministic Node, Chromium 149, GPU-enabled Vitexec, and mobile Playwright evidence. | Add the first bitmap frame in Milestone 6 without weakening these gates. |
-| TypeScript verification | ✅ | Generated/embedded ABI equality, zero-import, structured-error handling, declaration generation, package build, and workspace type checks pass with the pinned workspace dependencies. | Keep these checks mandatory as public host surfaces are added. |
-| Roadmap item 2.2 | ✅ | The exact host-independent request/result boundary, source validation/face selection, deterministic reduction, Inter identities, reduced-SFNT HarfRust conformance, and pinned Binaryen build are executable. | Preserve this core unchanged behind both hosts; host parity closes in 3.3. |
-| Roadmap item 2.1 | ✅ | `@pmndrs/text` has a TypeScript 7 AST/symbol analyzer with the complete static-source, raw-form, raster-manifest, path-safety, and negative fixture matrix across typed and plain-JavaScript inputs. One version-guarded adapter owns all unstable compiler imports and snapshot/symbol resolution; it remains internal until the complete Node host ships. | Reuse its report in item 2.4 without creating a second manifest or analyzer. |
-| Roadmap item 2.3 | ✅ | Core and bitmap validators are shipped on import-isolated entries with offline pinned schemas, exact Khronos-report admission, semantic/payload checks, malformed-field matrices, KTX2 parsing, deterministic Rust-input/artifact-mutation fuzz smoke, and real-Inter round trips. The no-std bitmap core uses Fontations/Skrifa, Zeno, generated direct-memory ABI, Binaryen, dense records, and R8 KTX2. The generic composer authenticates results, checks reciprocal identity, handles external artifacts/pages, rebases opaque companion views, and pins combined/empty goldens. | Preserve byte identity behind both hosts; runtime bitmap upload remains milestone 6.1. |
-| Roadmap item 2.4 | ✅ | `@pmndrs/text/bake` exposes typed explicit and project APIs over the shared core, selected ESM raster imports, deterministic grouping/composition, safe atomic publication, cancellation, exact output mapping, and complete timing/memory/raw/compressed byte reports. Plugin descriptors are `JsonValue` at the public type boundary, deeply authenticated at runtime, and resolved with their `rasterKey` exactly once before ordering or baking. | Keep hostile plugin returns contained before baker execution or publication. |
-| Roadmap item 3.1 | ✅ | The public loader/registry performs canonical baked probing, full hostile-input validation, shaping-identity registration, exact reduced-SFNT/extents extraction, embedded/external raster attachment, streaming limits, provenance checks, lifecycle invalidation, request deduplication, structured fallback diagnostics, and deterministic loader mutation fuzz smoke. | Supply the default dynamically imported module-Worker fallback in item 3.2. |
-| Roadmap item 3.2 | ✅ | The default fallback is a cached dynamic import of a named module-Worker host. Dedicated exact-range source/result buffers transfer across the versioned protocol; offline and Worker paths share V0 descriptor, sole-artifact, and retryable successful-core initialization policy; and the Worker fetches the sole optimized Wasm from its owning package. Canonical Inter proves complete offline/Worker/direct-core byte equality, while absolute runtime size ceilings protect the lazy graph. | Keep platform I/O separate and shared policy dependency-light. |
-| Roadmap item 3.3 | ✅ | A real Chromium benchmark target proves exact Worker-versus-canonical-Node artifact identity before executing public loader fallback. Shared consumer accounting aborts underlying fetch/stream/Worker work only after the final detach; idle cancelled Workers terminate and recreate without timers. Emitted-package and Rollup-closure tests keep every lazy/host-specific dependency outside the initial graph. | Register the exact retained shaping SFNT in the milestone-4 HarfRust Wasm module. |
-| Runtime shaping (milestone 4) | ✅ | The package-owned `no_std + alloc` shaper registers only exact validator-retained views, caches HarfRust data/plans, and exposes generated direct-memory batch/reshape records plus borrowed SoA results. Every pinned case matches IDs, absolute UTF-16 clusters, positions, and flags through the GLB path; multi-run, lifecycle, malformed-input, fuzz, size, memory, and real Chromium one-call evidence are executable. | Preserve this conformance through paragraph policy and rendering. |
-| Paragraph measurement/layout and universality (items 5.1–5.4) | ✅ | Unicode 17 analysis passes complete UAX #9/#14/#29 corpora; Inter, Amiri, and Noto CJK evidence covers allocation-light measurement, exact positioned SoA layouts, contextual CJK Script_Extensions, language-sensitive shaping, variation sequences, fuzzing, bidi/line policy, and matching Node/Chromium/Vitexec hashes. | Begin Milestone 6 bitmap rendering without adding fallback, paging, or vertical layout. |
+| TypeScript verification | ✅ | Generated/embedded ABI equality, zero-import, structured-error handling, declaration generation, package build, and workspace type checks pass with the pinned workspace dependencies. | Keep these checks mandatory as public host surfaces evolve. |
 
 The portable TypeScript package remains intentionally internal. The public `@pmndrs/text/bake` Node subpath wraps it without exposing the raw allocation protocol; the runtime path remains a dynamically imported Worker host over the same core.
 
-[^fontations]: `read-fonts` provides checked zero-allocation OpenType table access and `skrifa` provides maintained glyph metadata and bounds. HarfRust remains the separate shaping engine scheduled by milestone 4.
+[^fontations]: `read-fonts` provides checked zero-allocation OpenType table access and `skrifa` provides maintained glyph metadata and bounds. HarfRust is the separately owned runtime shaping engine and is not linked into the portable bake core.

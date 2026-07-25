@@ -138,11 +138,13 @@ export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): B
   return {
     bake({ source, request }) {
       const requestBytes = textEncoder.encode(JSON.stringify(request))
-      const sourcePointer = copyIntoWasm(exports, source)
-      const requestPointer = copyIntoWasm(exports, requestBytes)
+      let sourcePointer = 0
+      let requestPointer = 0
       let responsePointer = 0
       let responseLength = 0
       try {
+        sourcePointer = copyIntoWasm(exports, source)
+        requestPointer = copyIntoWasm(exports, requestBytes)
         responsePointer = exports.bake(
           sourcePointer,
           source.byteLength,
@@ -157,8 +159,8 @@ export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): B
         ).slice()
         return decodeResponse(response, abi)
       } finally {
-        exports.deallocate(sourcePointer, source.byteLength)
-        exports.deallocate(requestPointer, requestBytes.byteLength)
+        if (sourcePointer !== 0) exports.deallocate(sourcePointer, source.byteLength)
+        if (requestPointer !== 0) exports.deallocate(requestPointer, requestBytes.byteLength)
         if (responsePointer !== 0 && responseLength !== 0) {
           exports.deallocate(responsePointer, responseLength)
         }
@@ -174,27 +176,49 @@ export function readBitmapBakerAbi(instance: WebAssembly.Instance): BitmapBakerA
   if (!(memory instanceof WebAssembly.Memory)) {
     throw new TypeError('bitmap baker ABI bootstrap is missing linear memory')
   }
-  const value = JSON.parse(
+  const value: unknown = JSON.parse(
     textDecoder.decode(new Uint8Array(memory.buffer, pointer, length)),
-  ) as Partial<BitmapBakerAbiV0>
+  )
+  assertBitmapBakerAbi(value)
+  return value
+}
+
+function assertBitmapBakerAbi(value: unknown): asserts value is BitmapBakerAbiV0 {
+  if (!isNonArrayObject(value)) throw new TypeError('unsupported bitmap baker ABI')
+  const { versions, functions, response } = value
   if (
     value.name !== 'pmndrs-text-bitmap-baker' ||
     value.version !== 0 ||
     value.endianness !== 'little' ||
     value.pointerWidth !== 32 ||
     value.memory !== 'memory' ||
-    value.versions?.generator !== BITMAP_GENERATOR_VERSION ||
-    value.versions.bitmapFormat !== BITMAP_FORMAT_VERSION ||
-    value.versions.skrifa !== '0.45.1' ||
-    value.versions.readFonts !== '0.42.1' ||
-    value.versions.zeno !== '0.3.3' ||
-    value.versions.ktx2 !== '0.5.0' ||
-    value.functions === undefined ||
-    value.response === undefined
+    !isNonArrayObject(versions) ||
+    versions.generator !== BITMAP_GENERATOR_VERSION ||
+    versions.bitmapFormat !== BITMAP_FORMAT_VERSION ||
+    versions.skrifa !== '0.45.1' ||
+    versions.readFonts !== '0.42.1' ||
+    versions.zeno !== '0.3.3' ||
+    versions.ktx2 !== '0.5.0' ||
+    !isNonArrayObject(functions) ||
+    !matchesAbiFunction(functions.allocate, ['byteLength'], 'pointer') ||
+    !matchesAbiFunction(functions.deallocate, ['pointer', 'byteLength']) ||
+    !matchesAbiFunction(
+      functions.bake,
+      ['sourcePointer', 'sourceByteLength', 'requestPointer', 'requestByteLength'],
+      'responsePointer',
+    ) ||
+    !matchesAbiFunction(functions.responseByteLength, [], 'byteLength') ||
+    !isNonArrayObject(response) ||
+    response.headerByteLength !== 16 ||
+    response.magic !== 'PMBM' ||
+    response.statusOffset !== 4 ||
+    response.metadataByteLengthOffset !== 8 ||
+    response.artifactByteLengthOffset !== 12 ||
+    response.payloadOffset !== 16 ||
+    response.successStatus !== 0
   ) {
     throw new TypeError('unsupported bitmap baker ABI')
   }
-  return value as BitmapBakerAbiV0
 }
 
 function readExports(wasmExports: WebAssembly.Exports, abi: BitmapBakerAbiV0): BitmapBakerExports {
@@ -232,8 +256,13 @@ function copyIntoWasm(exports: BitmapBakerExports, bytes: Uint8Array): number {
   if (pointer === 0 && bytes.byteLength !== 0) {
     throw new RangeError('bitmap baker Wasm allocation failed')
   }
-  new Uint8Array(exports.memory.buffer, pointer, bytes.byteLength).set(bytes)
-  return pointer
+  try {
+    new Uint8Array(exports.memory.buffer, pointer, bytes.byteLength).set(bytes)
+    return pointer
+  } catch (error) {
+    if (pointer !== 0) exports.deallocate(pointer, bytes.byteLength)
+    throw error
+  }
 }
 
 function decodeResponse(response: Uint8Array, abi: BitmapBakerAbiV0): RasterBakeArtifact<'bitmap'> {
@@ -254,8 +283,12 @@ function decodeResponse(response: Uint8Array, abi: BitmapBakerAbiV0): RasterBake
   if (artifactEnd !== response.byteLength) {
     throw new TypeError('bitmap baker response carries undeclared trailing bytes')
   }
-  const metadata: unknown = JSON.parse(textDecoder.decode(response.subarray(metadataStart, metadataEnd)))
-  if (status !== contract.successStatus) throw new BitmapBakeError(metadata as SerializedBakeError)
+  const metadata: unknown = JSON.parse(
+    textDecoder.decode(response.subarray(metadataStart, metadataEnd)),
+  )
+  if (status !== contract.successStatus) {
+    throw new BitmapBakeError(parseSerializedBakeError(metadata))
+  }
   assertBitmapResultMetadata(metadata, artifactLength)
   const result = metadata
   const artifacts = result.artifacts.map<BakeArtifactV0>((artifact) => ({
@@ -359,6 +392,37 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isHash(value: unknown): value is Sha256Hex {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
+}
+
+function parseSerializedBakeError(value: unknown): SerializedBakeError {
+  if (
+    !isNonArrayObject(value) ||
+    typeof value.code !== 'string' ||
+    typeof value.message !== 'string' ||
+    (value.path !== undefined && typeof value.path !== 'string')
+  ) {
+    throw new TypeError('bitmap baker returned invalid error metadata')
+  }
+  return {
+    code: value.code,
+    message: value.message,
+    ...(value.path === undefined ? {} : { path: value.path }),
+  }
+}
+
+function matchesAbiFunction(
+  value: unknown,
+  parameters: readonly string[],
+  result?: string,
+): value is AbiFunction {
+  return (
+    isNonArrayObject(value) &&
+    typeof value.export === 'string' &&
+    Array.isArray(value.parameters) &&
+    value.parameters.length === parameters.length &&
+    value.parameters.every((parameter, index) => parameter === parameters[index]) &&
+    value.result === result
+  )
 }
 
 function checkedEnd(start: number, length: number, limit: number): number {

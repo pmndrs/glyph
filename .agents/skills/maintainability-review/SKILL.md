@@ -7,7 +7,7 @@ description: Audit and improve repository code milestone by milestone for correc
 
 Run a two-phase, evidence-led review. Preserve behavior and public boundaries unless correctness, measured performance, or a seriously misleading name provides strong contrary evidence.
 
-Read [references/review-rubric.md](references/review-rubric.md) before auditing or changing code.
+Read the canonical [engineering house style](../../../docs/engineering/code-style.md) and the [review rubric](references/review-rubric.md) before auditing or changing code. The engineering standard owns durable code rules; this skill owns the review procedure. Do not restate the standard in findings, plans, or package documentation.
 
 ## 1. Establish the baseline
 
@@ -45,15 +45,7 @@ Prefer the smallest change that restores a clear invariant. Keep domain vocabula
 
 When the user requests implementation agents, assign accepted findings in non-overlapping slices and match agent capability to difficulty. Require no commits from subagents; the integrating agent owns review and commits.
 
-During implementation:
-
-1. Normalize untrusted data once at the boundary.
-2. Represent exclusive states with enums or discriminated unions.
-3. Keep normalized internals strongly typed and free from repeated defensive validation.
-4. Add newtypes only when they prevent a real unit, identity, ownership, or lifecycle mix-up.
-5. Replace panics and unchecked arithmetic at operational boundaries with explicit errors and checked, fallible work where stable APIs permit it.
-6. Preserve public signatures unless the reconciled evidence justifies a change.
-7. Add deterministic regression tests before accepting altered behavior.
+Apply the engineering standard to every accepted finding. Begin with a deterministic regression that distinguishes the failure from the intended invariant when behavior changes. Preserve public signatures unless the reconciled evidence justifies a change.
 
 ## 5. Review every delegated diff
 
@@ -77,7 +69,7 @@ Use structural assertions and externally derived invariants. Do not use timers, 
 
 ## 7. Keep knowledge and history current
 
-Update canonical plans and package knowledge in place. Prefer checkboxes or explicit status cells over shadow plans. Record accepted changes, rejected tempting alternatives, residual limitations, and verification evidence in the repository's established log format.
+Update canonical plans and package knowledge in place. Prefer checkboxes or explicit status cells over shadow plans. Link to the engineering standard instead of copying it. Record accepted changes, rejected tempting alternatives, residual limitations, and verification evidence in the repository's established log format.
 
 Refresh OKF provenance/digests after the final source changes, then validate the bundle. Keep package explanation durable; leave line-level mechanics in code comments only when they explain a non-obvious invariant.
 

@@ -18,8 +18,8 @@ sources:
     title: "glTF 2.0 specification"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T14:19:44Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-25T16:20:00Z"
 ---
 
 # Shaping data contract V0
@@ -176,7 +176,7 @@ The metric selection policy is fixed: when `OS/2.fsSelection.USE_TYPO_METRICS` i
 
 ### Large-coverage faces
 
-CJK does not require a wider per-face glyph ID: OpenType glyph IDs and `maxp.numGlyphs` remain 16-bit, and V0 supports `glyphCount` through 65,535. Every byte-length and offset calculation uses checked `u32`/`usize` arithmetic before allocation; no implementation may multiply dense record counts in `u16`. A TTC/OTC or other collection still registers one selected face per `PMNDRS_font`, identified by the existing face index and source provenance.
+CJK does not require a wider per-face glyph ID: OpenType glyph IDs and `maxp.numGlyphs` remain 16-bit, and V0 supports `glyphCount` through 65,535. Implementations MUST use checked `u32`/`usize` arithmetic for caller-derived byte lengths, offsets, alignment, and aggregate report sizes before allocation; checked arithmetic and fallible reservation are separate obligations. No implementation may multiply dense record counts in `u16`. A TTC/OTC or other collection still registers one selected face per `PMNDRS_font`, identified by the existing face index and source provenance.
 
 The shaping payload remains complete for the selected face in V0. Raster paging and sparse raster availability do not change cmap, shaping behavior, clusters, or glyph identity. Roadmap item 5.4 has proven this contract with Noto Sans CJK JP Regular 2.004 at 65,535 glyphs through exact source/reduced HarfRust and HarfBuzz agreement plus horizontal paragraph layout. Later source-font subsetting may reduce a large CJK shaping payload only after shaping closure and differential conformance are proven; the Latin-first implementation does not depend on that compiler work.
 

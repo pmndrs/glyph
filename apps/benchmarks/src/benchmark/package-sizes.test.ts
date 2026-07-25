@@ -28,11 +28,11 @@ describe('independent package-size report', () => {
     const budgets = {
       'runtime-baker-host-js': { minifiedBytes: 3_506, gzipBytes: 1_406, brotliBytes: 1_255 },
       'runtime-baker-worker-js': {
-        minifiedBytes: 6_400,
-        gzipBytes: 2_350,
-        brotliBytes: 2_050,
+        minifiedBytes: 9_050,
+        gzipBytes: 3_050,
+        brotliBytes: 2_690,
       },
-      'portable-baker-js': { minifiedBytes: 4_003, gzipBytes: 1_550, brotliBytes: 1_360 },
+      'portable-baker-js': { minifiedBytes: 6_650, gzipBytes: 2_330, brotliBytes: 2_080 },
       'portable-baker-wasm': {
         minifiedBytes: 434_285,
         gzipBytes: 168_326,

@@ -126,6 +126,18 @@ interface AbiFunction {
   readonly result?: string;
 }
 
+interface FontArtifactMetadata {
+  readonly role: "font";
+  readonly id: string;
+  readonly sha256: string;
+}
+
+interface FontResultMetadata {
+  readonly artifacts: readonly FontArtifactMetadata[];
+  readonly report: FontPayloadReportV0;
+  readonly warnings: readonly BakeWarning[];
+}
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -142,11 +154,13 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
   return {
     bake({ source, descriptor }) {
       const descriptorBytes = textEncoder.encode(JSON.stringify(descriptor));
-      const sourcePointer = copyIntoWasm(exports, source);
-      const descriptorPointer = copyIntoWasm(exports, descriptorBytes);
+      let sourcePointer = 0;
+      let descriptorPointer = 0;
       let responsePointer = 0;
       let responseLength = 0;
       try {
+        sourcePointer = copyIntoWasm(exports, source);
+        descriptorPointer = copyIntoWasm(exports, descriptorBytes);
         responsePointer = exports.pmndrs_font_baker_bake(
           sourcePointer,
           source.byteLength,
@@ -161,8 +175,12 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
         ).slice();
         return decodeResponse(response, abi);
       } finally {
-        exports.pmndrs_font_baker_dealloc(sourcePointer, source.byteLength);
-        exports.pmndrs_font_baker_dealloc(descriptorPointer, descriptorBytes.byteLength);
+        if (sourcePointer !== 0) {
+          exports.pmndrs_font_baker_dealloc(sourcePointer, source.byteLength);
+        }
+        if (descriptorPointer !== 0) {
+          exports.pmndrs_font_baker_dealloc(descriptorPointer, descriptorBytes.byteLength);
+        }
         if (responsePointer !== 0 && responseLength !== 0) {
           exports.pmndrs_font_baker_dealloc(responsePointer, responseLength);
         }
@@ -178,32 +196,54 @@ export function readFontBakerAbi(instance: WebAssembly.Instance): FontBakerAbiV0
   if (!(memory instanceof WebAssembly.Memory)) {
     throw new TypeError("font baker ABI bootstrap is missing linear memory");
   }
-  const value = JSON.parse(
+  const value: unknown = JSON.parse(
     textDecoder.decode(new Uint8Array(memory.buffer, pointer, length)),
-  ) as Partial<FontBakerAbiV0>;
+  );
+  assertFontBakerAbi(value);
+  return value;
+}
+
+function assertFontBakerAbi(value: unknown): asserts value is FontBakerAbiV0 {
+  if (!isNonArrayObject(value)) throw new TypeError("unsupported font baker ABI");
+  const { versions, functions, response } = value;
   if (
     value.name !== "pmndrs-text-font-baker" ||
     value.version !== 0 ||
     value.endianness !== "little" ||
     value.pointerWidth !== 32 ||
     typeof value.memory !== "string" ||
-    value.versions?.baker !== "0.0.0" ||
-    value.versions.fontFormat !== 0 ||
-    value.versions.harfrust !== "0.12.0" ||
-    value.versions.harfrustCommit !== "60b28ea22b5261710018d69c168a762bcb28794c" ||
-    value.versions.harfbuzzReference !== "13.0.0" ||
-    value.versions.harfbuzzReferenceCommit !== "a0fc099681a69ae40665fbea74982a2e9d7a5260" ||
-    value.versions.unicode !== "17.0.0" ||
-    value.versions.gltfSpec !== "2.0" ||
-    value.versions.gltfSchemaRevision !== "77b44be7bef26e01fb0b140e3d5bb1716421c5e9" ||
-    value.versions.gltfValidator !== "2.0.0-dev.3.10" ||
-    value.versions.binaryen !== "129.0.0" ||
-    value.functions === undefined ||
-    value.response === undefined
+    !isNonArrayObject(versions) ||
+    versions.baker !== "0.0.0" ||
+    versions.fontFormat !== 0 ||
+    versions.harfrust !== "0.12.0" ||
+    versions.harfrustCommit !== "60b28ea22b5261710018d69c168a762bcb28794c" ||
+    versions.harfbuzzReference !== "13.0.0" ||
+    versions.harfbuzzReferenceCommit !== "a0fc099681a69ae40665fbea74982a2e9d7a5260" ||
+    versions.unicode !== "17.0.0" ||
+    versions.gltfSpec !== "2.0" ||
+    versions.gltfSchemaRevision !== "77b44be7bef26e01fb0b140e3d5bb1716421c5e9" ||
+    versions.gltfValidator !== "2.0.0-dev.3.10" ||
+    versions.binaryen !== "129.0.0" ||
+    !isNonArrayObject(functions) ||
+    !matchesAbiFunction(functions.allocate, ["byteLength"], "pointer") ||
+    !matchesAbiFunction(functions.deallocate, ["pointer", "byteLength"]) ||
+    !matchesAbiFunction(
+      functions.bake,
+      ["sourcePointer", "sourceByteLength", "descriptorPointer", "descriptorByteLength"],
+      "responsePointer",
+    ) ||
+    !matchesAbiFunction(functions.responseByteLength, [], "byteLength") ||
+    !isNonArrayObject(response) ||
+    response.headerByteLength !== 16 ||
+    response.magic !== "PFB0" ||
+    response.statusOffset !== 4 ||
+    response.metadataByteLengthOffset !== 8 ||
+    response.artifactByteLengthOffset !== 12 ||
+    response.payloadOffset !== 16 ||
+    response.successStatus !== 0
   ) {
     throw new TypeError("unsupported font baker ABI");
   }
-  return value as FontBakerAbiV0;
 }
 
 interface FontBakerExports {
@@ -256,8 +296,13 @@ function copyIntoWasm(exports: FontBakerExports, bytes: Uint8Array): number {
   if (pointer === 0 && bytes.byteLength !== 0) {
     throw new RangeError("font baker Wasm allocation failed");
   }
-  new Uint8Array(exports.memory.buffer, pointer, bytes.byteLength).set(bytes);
-  return pointer;
+  try {
+    new Uint8Array(exports.memory.buffer, pointer, bytes.byteLength).set(bytes);
+    return pointer;
+  } catch (error) {
+    if (pointer !== 0) exports.pmndrs_font_baker_dealloc(pointer, bytes.byteLength);
+    throw error;
+  }
 }
 
 function decodeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV0 {
@@ -275,22 +320,145 @@ function decodeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV
   if (response.payloadOffset + metadataLength + artifactLength !== bytes.byteLength) {
     throw new TypeError("invalid font baker response lengths");
   }
-  const metadata = JSON.parse(
+  const metadata: unknown = JSON.parse(
     textDecoder.decode(
       bytes.subarray(response.payloadOffset, response.payloadOffset + metadataLength),
     ),
-  ) as FontBakeResultV0 | SerializedBakeError;
+  );
   if (status !== response.successStatus) {
-    throw new FontBakeError(metadata as SerializedBakeError);
+    throw new FontBakeError(parseSerializedBakeError(metadata));
   }
-  const result = metadata as FontBakeResultV0;
+  assertFontResultMetadata(metadata);
+  const result = metadata;
   const artifact = result.artifacts[0];
   if (result.artifacts.length !== 1 || artifact === undefined) {
     throw new TypeError("V0 font baker must return exactly one core artifact");
   }
   const artifactBytes = bytes.slice(response.payloadOffset + metadataLength);
   return {
-    ...result,
     artifacts: [{ ...artifact, bytes: artifactBytes }],
+    report: result.report,
+    warnings: result.warnings,
   };
+}
+
+function assertFontResultMetadata(value: unknown): asserts value is FontResultMetadata {
+  if (
+    !isNonArrayObject(value) ||
+    !Array.isArray(value.artifacts) ||
+    !value.artifacts.every(isFontArtifactMetadata) ||
+    !isFontPayloadReport(value.report) ||
+    !Array.isArray(value.warnings) ||
+    !value.warnings.every(isBakeWarning)
+  ) {
+    throw new TypeError("font baker returned invalid result metadata");
+  }
+}
+
+function isFontArtifactMetadata(value: unknown): value is FontArtifactMetadata {
+  return (
+    isNonArrayObject(value) &&
+    value.role === "font" &&
+    typeof value.id === "string" &&
+    value.id.length > 0 &&
+    typeof value.sha256 === "string" &&
+    /^[0-9a-f]{64}$/.test(value.sha256)
+  );
+}
+
+function isFontPayloadReport(value: unknown): value is FontPayloadReportV0 {
+  if (!isNonArrayObject(value)) return false;
+  const { source, shared, containers, transport } = value;
+  return (
+    isNonArrayObject(source) &&
+    isNonnegativeSafeInteger(source.bytes) &&
+    isNonArrayObject(shared) &&
+    isShapingPayloadReport(shared.shaping) &&
+    Array.isArray(value.rasters) &&
+    Array.isArray(containers) &&
+    containers.every(isContainerReport) &&
+    Array.isArray(transport) &&
+    transport.every(isTransportReport)
+  );
+}
+
+function isShapingPayloadReport(value: unknown): value is ShapingPayloadReportV0 {
+  return (
+    isNonArrayObject(value) &&
+    value.format === "opentype-sfnt-harfrust-v0" &&
+    isNonnegativeSafeInteger(value.sfntDirectoryBytes) &&
+    Array.isArray(value.tables) &&
+    value.tables.every(isShapingTableReport) &&
+    isNonnegativeSafeInteger(value.extentsBytes) &&
+    isNonnegativeSafeInteger(value.extentsAvailabilityBytes) &&
+    isNonnegativeSafeInteger(value.totalRawBytes) &&
+    (value.gzipBytes === undefined || isNonnegativeSafeInteger(value.gzipBytes)) &&
+    (value.brotliBytes === undefined || isNonnegativeSafeInteger(value.brotliBytes))
+  );
+}
+
+function isShapingTableReport(value: unknown): boolean {
+  return (
+    isNonArrayObject(value) &&
+    typeof value.tag === "string" &&
+    isNonnegativeSafeInteger(value.rawBytes) &&
+    isNonnegativeSafeInteger(value.paddedBytes)
+  );
+}
+
+function isContainerReport(value: unknown): boolean {
+  return (
+    isNonArrayObject(value) &&
+    typeof value.artifactId === "string" &&
+    value.role === "font" &&
+    isNonnegativeSafeInteger(value.jsonBytes) &&
+    isNonnegativeSafeInteger(value.paddingBytes) &&
+    isNonnegativeSafeInteger(value.totalBytes)
+  );
+}
+
+function isTransportReport(value: unknown): boolean {
+  return (
+    isNonArrayObject(value) &&
+    typeof value.artifactId === "string" &&
+    (value.format === "raw" || value.format === "gzip" || value.format === "brotli") &&
+    isNonnegativeSafeInteger(value.bytes)
+  );
+}
+
+function isBakeWarning(value: unknown): value is BakeWarning {
+  return (
+    isNonArrayObject(value) &&
+    typeof value.code === "string" &&
+    typeof value.message === "string" &&
+    (value.path === undefined || typeof value.path === "string")
+  );
+}
+
+function parseSerializedBakeError(value: unknown): SerializedBakeError {
+  if (!isBakeWarning(value)) throw new TypeError("font baker returned invalid error metadata");
+  return value;
+}
+
+function matchesAbiFunction(
+  value: unknown,
+  parameters: readonly string[],
+  result?: string,
+): value is AbiFunction {
+  return (
+    isNonArrayObject(value) &&
+    typeof value.export === "string" &&
+    Array.isArray(value.parameters) &&
+    value.parameters.length === parameters.length &&
+    value.parameters.every((parameter, index) => parameter === parameters[index]) &&
+    value.result === result
+  );
+}
+
+function isNonArrayObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonnegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
