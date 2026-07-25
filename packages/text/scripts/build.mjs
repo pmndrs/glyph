@@ -12,11 +12,28 @@ const rustWasm = fileURLToPath(
   ),
 );
 const distributedWasm = fileURLToPath(new URL("../dist/bitmap_baker.wasm", import.meta.url));
+const shaperWasm = fileURLToPath(
+  new URL(
+    "../rust/shaper/target/wasm32-unknown-unknown/release/pmndrs_text_shaper.wasm",
+    import.meta.url,
+  ),
+);
+const distributedShaperWasm = fileURLToPath(new URL("../dist/text_shaper.wasm", import.meta.url));
 
 await run("cargo", [
   "build",
   "--manifest-path",
   "rust/bitmap-baker/Cargo.toml",
+  "--target",
+  "wasm32-unknown-unknown",
+  "--release",
+  "--locked",
+  "--no-default-features",
+]);
+await run("cargo", [
+  "build",
+  "--manifest-path",
+  "rust/shaper/Cargo.toml",
   "--target",
   "wasm32-unknown-unknown",
   "--release",
@@ -37,6 +54,14 @@ await run(wasmOpt, [
   "-o",
   distributedWasm,
 ]);
+await run(wasmOpt, [
+  "--enable-bulk-memory",
+  "--enable-nontrapping-float-to-int",
+  "-Oz",
+  shaperWasm,
+  "-o",
+  distributedShaperWasm,
+]);
 await writeFile(
   new URL("../dist/bitmap-baker-abi-v0.json", import.meta.url),
   await runCapture("cargo", [
@@ -45,6 +70,18 @@ await writeFile(
     "rust/bitmap-baker/Cargo.toml",
     "--bin",
     "generate-bitmap-abi",
+    "--locked",
+    "--quiet",
+  ]),
+);
+await writeFile(
+  new URL("../dist/text-shaper-abi-v0.json", import.meta.url),
+  await runCapture("cargo", [
+    "run",
+    "--manifest-path",
+    "rust/shaper/Cargo.toml",
+    "--bin",
+    "generate-shaper-abi",
     "--locked",
     "--quiet",
   ]),

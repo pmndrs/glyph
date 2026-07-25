@@ -2,6 +2,7 @@ import {
   defineRaster,
   defineRasterBaker,
   defineFont,
+  createRuntimeShaper,
   FontLoader,
   FontRegistry,
   rasterBake,
@@ -20,6 +21,7 @@ import {
   type RasterModule,
   type RegisteredFont,
   type RegisteredRaster,
+  type RuntimeShaper,
   type StaticNumberTuple,
   type Paragraph,
   type ParagraphConstraints,
@@ -44,7 +46,9 @@ const fontLoader = new FontLoader({
   development: false,
 });
 const registeredPromise: Promise<RegisteredFont> = fontLoader.load("/fonts/Inter.ttf");
+const shaperPromise: Promise<RuntimeShaper> = createRuntimeShaper({ registry: fontRegistry });
 void registeredPromise;
+void shaperPromise;
 
 interface MsdfResource {
   readonly texture: unknown;

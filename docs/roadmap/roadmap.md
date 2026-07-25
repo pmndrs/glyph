@@ -320,6 +320,16 @@ Item 3.2 is closed. Item 3.3 is active and adds browser-executed Node/Worker aut
 
 Item 3.3 and Milestone 3 are closed. Item 4.1 is active and must register the exact retained GLB-extracted SFNT in HarfRust Wasm without introducing a second font extraction path.
 
+### 4.1 closure checklist
+
+- [x] A package-owned Rust crate builds one `no_std + alloc`, no-WASI `wasm32-unknown-unknown` HarfRust module and exposes only a Rust-generated direct-memory ABI.
+- [x] The TypeScript bridge registers only the validator-retained shaping SFNT, dense glyph extents, and availability bits; it never reparses the GLB or reconstructs a source font.
+- [x] Canonical Inter registration retains exactly 171,056 shaping bytes, is idempotent for the same scoped handle, rejects cross-registry ownership, and releases Wasm state when either the font or shaper is disposed.
+- [x] Package build, export, ESM, type, unit, integration, and independent JavaScript/Wasm size lanes cover the new boundary; the optimized registration module is 91,382 bytes raw, 30,130 bytes gzip, and 24,275 bytes Brotli.
+- [ ] Shape-plan cache keys include every plan-affecting run/feature field, reuse equivalent plans, and release every cached plan with its font.
+
+Item 4.1 remains active until the plan-cache invariant is executable. Item 4.2 does not begin merely because registration is available.
+
 Deliver:
 
 - deterministic baked sibling resolution;

@@ -1,0 +1,37 @@
+[package]
+name = "pmndrs-text-shaper"
+description = "HarfRust Wasm runtime shaper for pmndrs/text"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/text"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "generate-shaper-abi"
+path = "src/bin/generate-shaper-abi.rs"
+required-features = ["std"]
+
+[features]
+default = ["std"]
+std = ["serde_json/std"]
+
+[dependencies]
+harfrust = { version = "0.12.0", default-features = false, features = ["libm"] }
+read-fonts = { version = "0.41.0", default-features = false, features = ["libm"] }
+serde_json = { version = "1.0.145", default-features = false, features = ["alloc"] }
+
+[build-dependencies]
+serde_json = "1.0.145"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dlmalloc = { version = "0.2.14", features = ["global"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

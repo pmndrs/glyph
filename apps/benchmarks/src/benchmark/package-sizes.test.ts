@@ -8,6 +8,8 @@ describe("independent package-size report", () => {
       "font-validator-js",
       "runtime-baker-host-js",
       "runtime-baker-worker-js",
+      "text-shaper-js",
+      "text-shaper-wasm",
       "portable-baker-js",
       "portable-baker-wasm",
     ]) {

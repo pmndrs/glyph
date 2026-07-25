@@ -18,7 +18,13 @@ test("the published contract is ESM-only", async () => {
   for (const [subpath, target] of Object.entries(manifest.exports)) {
     if (typeof target === "string") {
       assert.ok(
-        ["./package.json", "./bitmap-baker.wasm", "./bitmap-abi.json"].includes(subpath),
+        [
+          "./package.json",
+          "./bitmap-baker.wasm",
+          "./bitmap-abi.json",
+          "./text-shaper.wasm",
+          "./shaper-abi.json",
+        ].includes(subpath),
         `unexpected non-JavaScript resource export ${subpath}`,
       );
       assert.match(target, /^\.\/dist\/.*\.(?:json|wasm)$|^\.\/package\.json$/);

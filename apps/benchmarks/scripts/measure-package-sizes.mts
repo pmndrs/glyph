@@ -39,15 +39,20 @@ async function bundle(
           {
             name: "externalize-package-wasm-for-size-measurement",
             transform(code, id) {
-              if (!id.endsWith("/runtime-bake-worker.js")) return;
-              const expression = 'new URL("./font_baker.wasm", import.meta.url)';
-              if (!code.includes(expression)) {
-                throw new Error("Runtime Worker no longer contains the measured Wasm URL boundary");
+              const wasmAssets = ["font_baker.wasm", "text_shaper.wasm"];
+              let transformed = code;
+              let changed = false;
+              for (const asset of wasmAssets) {
+                const expression = `new URL("./${asset}", import.meta.url)`;
+                if (!transformed.includes(expression)) continue;
+                transformed = transformed.replaceAll(
+                  expression,
+                  `new URL("${asset}", "https://size.invalid/")`,
+                );
+                changed = true;
               }
-              return code.replace(
-                expression,
-                'new URL("font_baker.wasm", "https://size.invalid/")',
-              );
+              if (!changed || !id.includes("/packages/text/")) return;
+              return transformed;
             },
           },
         ]
@@ -123,13 +128,11 @@ async function measureJavaScript(
   };
 }
 
-async function measureWasm(): Promise<MeasuredEntry> {
-  const bytes = await readFile(
-    new URL("../../../packages/font-baker/dist/font_baker.wasm", import.meta.url),
-  );
+async function measureWasm(id: string, label: string, source: URL): Promise<MeasuredEntry> {
+  const bytes = await readFile(source);
   return {
-    id: "portable-baker-wasm",
-    label: "Portable baker Wasm",
+    id,
+    label,
     status: "measured",
     format: "wasm",
     rawBytes: bytes.byteLength,
@@ -144,6 +147,7 @@ const entries: SizeEntry[] = [
     "Browser core",
     new URL("../size-entries/text-core.ts", import.meta.url),
     false,
+    true,
   ),
   await measureJavaScript(
     "font-validator-js",
@@ -163,11 +167,27 @@ const entries: SizeEntry[] = [
     true,
   ),
   await measureJavaScript(
+    "text-shaper-js",
+    "Text shaper JS",
+    new URL("../size-entries/text-shaper.ts", import.meta.url),
+    false,
+    true,
+  ),
+  await measureWasm(
+    "text-shaper-wasm",
+    "Text shaper Wasm",
+    new URL("../../../packages/text/dist/text_shaper.wasm", import.meta.url),
+  ),
+  await measureJavaScript(
     "portable-baker-js",
     "Portable baker JS",
     new URL("../size-entries/font-baker.ts", import.meta.url),
   ),
-  await measureWasm(),
+  await measureWasm(
+    "portable-baker-wasm",
+    "Portable baker Wasm",
+    new URL("../../../packages/font-baker/dist/font_baker.wasm", import.meta.url),
+  ),
   {
     id: "unicode-properties",
     label: "Unicode property tables",

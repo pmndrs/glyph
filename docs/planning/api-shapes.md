@@ -809,8 +809,18 @@ interface ReshapeBatchRequest extends ShapeBatchRequest {
 }
 
 interface RuntimeShaper {
+  readonly registry: FontRegistry
+  registerFont(font: RegisteredFont): void
+  disposeFont(font: RegisteredFont): void
   shapeBatch(request: ShapeBatchRequest): ShapedBatchViews
   reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews
+  memoryReport(): {
+    readonly fontCount: number
+    readonly retainedFontBytes: number
+    readonly planCount: number
+    readonly wasmMemoryBytes: number
+  }
+  dispose(): void
 }
 
 interface ShapedBatchViews {
@@ -827,6 +837,8 @@ interface ShapedBatchViews {
   readonly glyphFlags: Uint16Array
 }
 ```
+
+`RuntimeShaper` is scoped to one `FontRegistry`. It accepts only a still-active `RegisteredFont` owned by that registry and imports the exact validated shaping views retained at GLB registration; it does not accept raw source bytes or parse the container again. Re-registering the same object is idempotent. Font disposal automatically removes its Wasm state and cached plans; shaper disposal removes all remaining registrations.
 
 `ShapedBatchViews` borrows the shaper's result arena. A view remains valid only until the next call on that `RuntimeShaper` instance; `shapeBatch`, `reshapeRanges`, font registration, or Wasm-memory growth may invalidate every earlier view. The paragraph engine MUST copy ranges it caches or exposes through `ParagraphLayout` into paragraph-owned SoA storage before making another shaper call.
 

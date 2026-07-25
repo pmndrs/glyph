@@ -5,7 +5,7 @@ description: Defines public core contracts, static discovery, portable bitmap ar
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:347bdaa9eb8e43f569cb4797312539d609f51d08a075b8b93c5d1ea60a4634a2"
+source_digest: "sha256:b3c938544b25326a7a4e8907fbf02ebad25c7c3005609960a1835ccb8f6e70f9"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -41,6 +41,12 @@ sources:
   - id: runtime-bake
     resource: ../../packages/text/src/runtime-bake.ts
     title: Lazy module-Worker bake host
+  - id: shaper-bridge
+    resource: ../../packages/text/src/shaper.ts
+    title: Direct-memory runtime shaper bridge
+  - id: shaper-core
+    resource: ../../packages/text/rust/shaper
+    title: HarfRust Wasm shaper implementation
 generated:
   by: openai-codex/gpt-5
   at: "2026-07-25T06:47:06Z"
@@ -70,19 +76,21 @@ The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically impo
 
 Milestone 3 closes with browser-executed parity and cancellation. The benchmark product's public loader target first hashes the real module-Worker artifact against the canonical Node artifact, validates and registers it, then runs the complete missing-sibling fallback in Chromium. Shared loads now reference-count consumers: one abort detaches safely, the final abort reaches fetch/stream/Worker work, and an otherwise-idle Worker terminates immediately and recreates on demand without timers. This browser gate exposed and fixed native `fetch` receiver loss that Node's implementation tolerated. Static emitted-package checks and independent Rollup closures keep the runtime host, Worker, Wasm, validator, Node host, and raster bakers out of a baked-hit graph.
 
-The package does not yet shape text at runtime, perform paragraph layout, or render glyphs. Item 4.1 consumes the exact retained GLB-extracted SFNT in HarfRust Wasm. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+Roadmap item 4.1 now has its package-owned HarfRust registration boundary. The Rust 1.97.1 module uses HarfRust 0.12.0 and matching `read-fonts` 0.41.0 under `no_std + alloc`, exports a Rust-generated JSON-described C ABI, and keeps its allocator private. The TypeScript bridge copies only the exact validator-retained GLB views into linear memory: canonical Inter contributes 147,192 SFNT bytes, 23,496 dense-extents bytes, and 368 availability bytes, or exactly 171,056 retained bytes. Registration is registry-scoped and idempotent, and font/shaper disposal releases the owned Wasm registration. The optimized module is measured independently at 91,382 bytes raw, 30,130 bytes gzip, and 24,275 bytes Brotli; its JavaScript bridge is 18,622 bytes minified, 5,783 bytes gzip, and 5,149 bytes Brotli.
+
+The package does not yet shape a text batch, perform paragraph layout, or render glyphs. Item 4.1 remains active until shape-plan cache reuse and disposal are executable; item 4.2 then adds the coarse shape/reshape calls and exact corpus comparison. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
 | Script | Purpose |
 | --- | --- |
 | `typecheck` | Type-check package source without emission. |
-| `test` | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, Rust/Wasm bitmap generation, layered validators, goldens, deterministic project bakes, and malformed artifacts. |
+| `test` | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, both Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts. |
 | `test:types` | Compile positive and negative public-contract fixtures. |
-| `test:unit` | Run focused Rust bitmap-core unit tests. |
-| `test:integration` | Run Rust public-boundary, Wasm/package, golden, and malformed-artifact integration tests. |
+| `test:unit` | Run focused Rust bitmap and HarfRust-shaper unit tests. |
+| `test:integration` | Run both Rust public boundaries plus Wasm/package, registration, golden, and malformed-artifact integration tests. |
 | `test:fuzz-smoke` | Run fixed-seed bitmap and loader artifact mutations twice and require deterministic, byte-pure validation outcomes. |
-| `build` | Emit ESM/declarations, compile the no-WASI bitmap Wasm, optimize it with pinned Binaryen, and publish its generated ABI. |
+| `build` | Emit ESM/declarations, compile the no-WASI bitmap and shaper Wasm modules, optimize them with pinned Binaryen, and publish both generated ABIs. |
 
 The [API contract](../planning/api-shapes.md) remains authoritative for proposed public behavior; this concept explains the package that currently embodies its compile-time subset.[^api-contract]
 

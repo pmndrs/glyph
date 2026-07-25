@@ -26,6 +26,9 @@ sources:
   - id: abi-source
     resource: ../../packages/font-baker/rust/src/abi_contract.rs
     title: Generated ABI and version-contract source
+  - id: shaper-abi-source
+    resource: ../../packages/text/rust/shaper/src/abi_contract.rs
+    title: Generated shaper ABI and version-contract source
   - id: binaryen
     resource: https://www.npmjs.com/package/binaryen/v/129.0.0
     title: Binaryen 129.0.0
@@ -61,6 +64,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Coverage-guided Rust fuzzer | `nightly-2026-06-01` (`14210df0e`) + cargo-fuzz `0.13.2` + libfuzzer-sys `0.4.13` | nested mise-owned fuzz workspace; fixed default seed `0x504d4e44`; excluded from product builds |
 | `PMNDRS_font` format | `0` | extension schema and shaping contract |
 | Portable baker ABI | `0` | generated `font-baker-abi-v0.json` |
+| Text shaper ABI | `0` | generated `text-shaper-abi-v0.json` |
 | Font baker | `0.0.0` | Cargo/npm package version during the integration slice |
 | Bitmap generator | `0.0.0` | reserved initial package version for roadmap item 2.3 |
 | Bitmap outline rasterizer | Zeno `0.3.3` | unhinted grayscale mask generation from Skrifa outline commands |
@@ -69,7 +73,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 
 ## Generated contract
 
-The Rust ABI source generates the published JSON contract at build time. Its `versions` object carries the baker, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shim consume that same source rather than repeating freehand values.
+The Rust ABI sources generate both published JSON contracts at build time. Their `versions` objects carry the applicable baker, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shims consume those sources rather than relying on a hand-authored contract artifact.
 
 Every raster generator stamps its exact owning package semantic version into its canonical descriptor and artifact provenance. A generator upgrade changes its descriptor hash and therefore its raster key. The bitmap generator begins at `0.0.0`; additional raster generators receive their own exact pins when their packages enter the roadmap.
 

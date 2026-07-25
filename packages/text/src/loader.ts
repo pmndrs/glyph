@@ -100,6 +100,7 @@ export class FontRegistry {
   readonly #fontsByKey = new Map<FontKey, RegisteredFontImpl>();
   readonly #fontsByHash = new Map<Sha256Hex, RegisteredFontImpl>();
   readonly #fontsByHandle = new Map<FontHandle, RegisteredFontImpl>();
+  readonly #disposeListeners = new Set<(font: RegisteredFont) => void>();
 
   constructor(options: FontRegistryOptions = {}) {
     this.#id = nextRegistryId++;
@@ -286,7 +287,14 @@ export class FontRegistry {
     this.#fontsByKey.delete(font.key);
     this.#fontsByHash.delete(font.shapingHash);
     this.#fontsByHandle.delete(font.handle);
+    for (const listener of this.#disposeListeners) listener(font);
     deleteRegisteredFontData(font);
+  }
+
+  /** @internal */
+  _onFontDispose(listener: (font: RegisteredFont) => void): () => void {
+    this.#disposeListeners.add(listener);
+    return () => this.#disposeListeners.delete(listener);
   }
 
   /** @internal */

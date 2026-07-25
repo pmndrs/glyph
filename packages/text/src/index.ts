@@ -95,6 +95,14 @@ export type {
 export { defineRaster } from "./raster.js";
 
 export type {
+  RuntimeShaper,
+  RuntimeShaperMemoryReport,
+  RuntimeShaperOptions,
+  TextShaperWasmSource,
+} from "./shaper.js";
+export { createRuntimeShaper } from "./shaper.js";
+
+export type {
   FontFeature,
   ResolvedFontFeature,
   TextContentProperties,
