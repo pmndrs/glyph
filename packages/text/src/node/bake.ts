@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib'
 
 import { createFontBaker, type FontBakeDescriptorV0 } from '@pmndrs/text-font-baker'
+import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url'
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate'
 
 import type {
@@ -23,9 +24,10 @@ import {
   type ResolvedRasterBaker,
 } from '../discovery.js'
 import { composeFontBake } from '../internal/compose-bake.js'
-import { deriveRasterKey } from '../internal/raster-identity.js'
+import { fontBakeDescriptorV0, soleCoreFontArtifact } from '../internal/core-bake-policy.js'
+import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js'
+import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js'
 import type { Sha256Hex } from '../identity.js'
-import type { JsonValue } from '../raster.js'
 
 export interface NodeBakeOptions<
   Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[] =
@@ -110,12 +112,21 @@ export class NodeBakeError extends Error {
   }
 }
 
-let fontBakerPromise: ReturnType<typeof createFontBaker> | undefined
+const defaultFontBaker = cacheSuccessfulPromise(async () =>
+  createFontBaker(await readFile(new URL(fontBakerWasmUrl))),
+)
 
 export async function bakeFont<
   const Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[],
 >(
   options: NodeBakeOptions<Rasters> & { readonly rasters?: CheckedRasterPlans<Rasters> },
+): Promise<NodeFontBakeReport> {
+  return bakeFontWithResolvedPlans(options)
+}
+
+async function bakeFontWithResolvedPlans(
+  options: NodeBakeOptions,
+  preparedRasters?: readonly ResolvedRasterBakePlan[],
 ): Promise<NodeFontBakeReport> {
   const started = performance.now()
   const rssBeforeBytes = process.memoryUsage.rss()
@@ -148,24 +159,19 @@ export async function bakeFont<
   const fontBaker = await defaultFontBaker()
   const core = fontBaker.bake({
     source,
-    descriptor: { formatVersion: 0, fontFaceIndex: options.font.fontFaceIndex },
+    descriptor: fontBakeDescriptorV0(options.font.fontFaceIndex),
   })
   timings.coreBake = performance.now() - phase
   options.signal?.throwIfAborted()
 
   phase = performance.now()
-  const coreValidation = await validateFontArtifact(core.artifacts[0]!.bytes)
+  const coreValidation = await validateFontArtifact(soleCoreFontArtifact(core).bytes)
   timings.validate += performance.now() - phase
   const rasterInputs = []
-  for (const plan of options.rasters ?? []) {
+  const rasters =
+    preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)))
+  for (const plan of rasters) {
     options.signal?.throwIfAborted()
-    const descriptor = plan.baker.descriptor(plan.options) as JsonValue
-    const rasterKey = await deriveRasterKey({
-      descriptor,
-      extension: plan.baker.extension,
-      kind: plan.baker.kind,
-      version: plan.baker.version,
-    })
     const raster = await plan.baker.bake({
       font: {
         source,
@@ -173,9 +179,9 @@ export async function bakeFont<
         glyphCount: coreValidation.glyphCount,
         shapingHash: coreValidation.shapingHash as Sha256Hex,
       },
-      rasterKey,
+      rasterKey: plan.rasterKey,
       packaging: plan.packaging,
-      descriptor,
+      descriptor: plan.descriptor,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
     rasterInputs.push({ raster, packaging: plan.packaging })
@@ -232,13 +238,15 @@ export async function bakeProject(options: ProjectBakeOptions = {}): Promise<Pro
     options.signal?.throwIfAborted()
     const plans = await loadProjectPlans(group.rasters)
     fonts.push(
-      await bakeFont({
-        input: group.input,
-        output: group.output,
-        font: { fontFaceIndex: 0 },
-        rasters: plans,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      }),
+      await bakeFontWithResolvedPlans(
+        {
+          input: group.input,
+          output: group.output,
+          font: { fontFaceIndex: 0 },
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        },
+        plans,
+      ),
     )
   }
   const outputs = new Map(groups.map((group) => [group.input, group.output]))
@@ -312,26 +320,16 @@ async function loadRasterPlan(
 
 async function loadProjectPlans(
   rasters: readonly ResolvedRasterBaker[],
-): Promise<RasterBakePlan<AnyRasterBakerModule>[]> {
+): Promise<ResolvedRasterBakePlan[]> {
   const loaded = await Promise.all(rasters.map(loadRasterPlan))
-  const keyed = await Promise.all(
-    loaded.map(async (plan) => ({
-      plan,
-      key: await deriveRasterKey({
-        descriptor: plan.baker.descriptor(plan.options) as JsonValue,
-        extension: plan.baker.extension,
-        kind: plan.baker.kind,
-        version: plan.baker.version,
-      }),
-    })),
-  )
-  keyed.sort(
+  const resolved = await Promise.all(loaded.map(resolveRasterBakePlan))
+  resolved.sort(
     (left, right) =>
-      left.plan.baker.extension.localeCompare(right.plan.baker.extension) ||
-      left.key.localeCompare(right.key),
+      left.baker.extension.localeCompare(right.baker.extension) ||
+      left.rasterKey.localeCompare(right.rasterKey),
   )
   const embeddedExtensions = new Set<string>()
-  return keyed.map(({ plan }) => {
+  return resolved.map((plan) => {
     const embedded = !embeddedExtensions.has(plan.baker.extension)
     embeddedExtensions.add(plan.baker.extension)
     return {
@@ -371,15 +369,6 @@ function bakedSiblingPath(path: string): string {
   return /\.(?:ttf|otf|woff2?)$/i.test(extension)
     ? `${path.slice(0, -extension.length)}.font.glb`
     : `${path}.font.glb`
-}
-
-async function defaultFontBaker() {
-  fontBakerPromise ??= Promise.resolve(
-    import.meta.resolve('@pmndrs/text-font-baker/font-baker.wasm'),
-  )
-    .then((url) => readFile(new URL(url)))
-    .then(createFontBaker)
-  return fontBakerPromise
 }
 
 function outputTargets(

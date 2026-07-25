@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmod, copyFile, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -42,10 +42,7 @@ await run("cargo", [
 ]);
 await run("tsc", ["-p", "tsconfig.build.json"]);
 await mkdir(new URL("../dist/", import.meta.url), { recursive: true });
-await copyFile(
-  new URL("../../font-baker/dist/font_baker.wasm", import.meta.url),
-  new URL("../dist/font_baker.wasm", import.meta.url),
-);
+await rm(new URL("../dist/font_baker.wasm", import.meta.url), { force: true });
 await run(wasmOpt, [
   "--enable-bulk-memory",
   "--enable-nontrapping-float-to-int",

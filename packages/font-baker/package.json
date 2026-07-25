@@ -16,6 +16,10 @@
       "types": "./dist/validator.d.ts",
       "import": "./dist/validator.js"
     },
+    "./wasm-url": {
+      "types": "./dist/wasm-url.d.ts",
+      "import": "./dist/wasm-url.js"
+    },
     "./font-baker.wasm": "./dist/font_baker.wasm",
     "./abi.json": "./dist/font-baker-abi-v0.json",
     "./package.json": "./package.json"

@@ -43,15 +43,21 @@ async function bundle(
               let transformed = code
               let changed = false
               for (const asset of wasmAssets) {
-                const expression = `new URL("./${asset}", import.meta.url)`
-                if (!transformed.includes(expression)) continue
-                transformed = transformed.replaceAll(
-                  expression,
-                  `new URL("${asset}", "https://size.invalid/")`,
-                )
-                changed = true
+                for (const quote of ['"', "'"]) {
+                  const expression = `new URL(${quote}./${asset}${quote}, import.meta.url)`
+                  if (!transformed.includes(expression)) continue
+                  transformed = transformed.replaceAll(
+                    expression,
+                    `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`,
+                  )
+                  changed = true
+                }
               }
-              if (!changed || !id.includes('/packages/text/')) return
+              if (
+                !changed ||
+                (!id.includes('/packages/text/') && !id.includes('/packages/font-baker/'))
+              )
+                return
               return transformed
             },
           },

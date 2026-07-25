@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:de1c0378f90dbab354670731732726c11f87e21dc9be37a01977aa9287c85f34"
+source_digest: "sha256:48df8bb0b4027fd55157cc36600b9af10e4c5c93c0f29d96df13615904713cb5"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -41,6 +41,12 @@ sources:
   - id: runtime-bake
     resource: ../../packages/text/src/runtime-bake.ts
     title: Lazy module-Worker bake host
+  - id: core-bake-policy
+    resource: ../../packages/text/src/internal/core-bake-policy.ts
+    title: Shared offline/runtime core bake policy
+  - id: raster-bake-plan
+    resource: ../../packages/text/src/internal/raster-bake-plan.ts
+    title: Single-evaluation raster plan resolution
   - id: shaper-bridge
     resource: ../../packages/text/src/shaper.ts
     title: Direct-memory runtime shaper bridge
@@ -55,14 +61,14 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T12:30:58Z"
+  at: "2026-07-25T13:06:23Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
 Status: 🟡 Milestone 5 items 5.1–5.3 complete; CJK universality item 5.4 active
 
-This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Plugin-produced raster descriptors are revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal.
+This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
 The browser-safe `@pmndrs/text/raster/bitmap` subpath now owns bitmap generator/format constants, exact runtime validation of the non-empty static strike tuple, ascending canonical strike order, the complete generator-versioned descriptor, RFC 8785 serialization, and SHA-256 raster-key derivation. Equivalent strike sets therefore produce one identity regardless of caller order, while duplicate, non-integral, non-finite, non-positive, or out-of-range values fail before baking. The implementation uses Web Crypto and imports no Node built-ins.[^bitmap-identity]
 
@@ -78,7 +84,7 @@ The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The h
 
 The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
 
-The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers a provenance-preserving source copy and the authoritative result buffer; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus optimized Wasm in that Worker. Canonical Inter fixtures execute both the public host and Worker entry, compare the Worker artifact byte-for-byte with the direct portable core, and then send the result through loader provenance and hostile-input validation. Independent package-size lanes keep the 3,371-byte minified host, 5,576-byte minified Worker JavaScript, and 430,662-byte Wasm distinct from the 22,355-byte initial browser graph.
+The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers provenance-preserving owned byte ranges; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus its package-owned optimized Wasm. Offline and Worker hosts share dependency-light V0 descriptor, sole-artifact, successful-promise-cache, and owned-transfer rules while keeping filesystem and fetch behavior separate. A failed core initialization is retryable in both hosts. Canonical Inter fixtures execute the offline host and Worker entry, compare their complete artifacts byte-for-byte with the direct portable core, and then send the Worker result through loader provenance and hostile-input validation. The current independent size lanes report a 3,468-byte minified runtime host, 6,292-byte Worker JavaScript, and one 434,045-byte Wasm artifact; reviewed ceilings prevent heavy validation, Node, discovery, composition, or raster dependencies from entering those runtime graphs.
 
 Milestone 3 closes with browser-executed parity and cancellation. The benchmark product's public loader target first hashes the real module-Worker artifact against the canonical Node artifact, validates and registers it, then runs the complete missing-sibling fallback in Chromium. Shared loads now reference-count consumers: one abort detaches safely, the final abort reaches fetch/stream/Worker work, and an otherwise-idle Worker terminates immediately after the final success, failure, or cancellation and recreates on demand without timers. Stale events from a terminated Worker cannot settle requests owned by its replacement. Shaping-identity deduplication retains source bytes only when their source hash matches the registered primary provenance; alternate URLs remain hash-qualified candidates.
 

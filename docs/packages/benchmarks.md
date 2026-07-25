@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:23c62b688debbca0f31831cd6aabf596b3e2375a0d5a2626f9f48b1990b40366"
+source_digest: "sha256:08307c4b1bd3a08f3da594ec13434c9f8aada9557357b8fd6b75407ea1517262"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T12:30:58Z"
+  at: "2026-07-25T13:06:23Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -25,7 +25,7 @@ Status: 🟡 usable harness shell; rendering targets not implemented
 
 This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, real HarfRust shaping-conformance target, and real paragraph measurement/positioned-layout/policy targets. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. Inter 4.1 remains the default benchmark fixture. Amiri 1.002 is the immutable complex-script fixture: its font, metadata, and OFL bytes are retrieved from one Google Fonts commit by a hash-enforcing synchronizer, and its checked HarfRust oracle matches the exact-version HarfBuzz 13 oracle across every glyph field. A local font is an explicit override only where a fixture oracle exists. Before timing loader fallback, the browser target hashes the actual module-Worker GLB against the canonical Node artifact and validates/registers it. Chromium 149 passes synthetic, direct-baker, loader-Worker, eight-case one-call shaper, paragraph-measurement, positioned-layout, and bidi/policy/uikit scenarios with three deterministic samples after one warmup. The checked shaping result records exact hash `dc30c21c`, 97 glyphs, one boundary crossing, three plans, retained/Wasm memory, and cold/warm timings. Measurement records hash `79874b9d`, exact natural/wide/narrow HarfRust-derived metrics, one preparation shape, zero reflow/reshape calls, and zero positioned-glyph bytes. Positioned layout records normalized hashes `bb15bbcc:4f111a3f:e8c0e9d5`, 165 glyph instances across three layouts, and one batched reshape call for each changed width. The item-5.3 lane fixes two complete Amiri bidi layouts, nine Inter line-policy layouts, and one current-uikit-shaped layout under twelve portable hashes; its aggregate output is 8,098 bytes with four preparation shapes, five batched reshapes, and WebGPU-active Vitexec parity.
 
-The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated. The current browser graph is 209,191 minified bytes; Unicode analysis is independently 139,752 minified / 41,999 gzip / 31,018 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,124, 3,506, 5,664, 434,045, 30,406, and 691,484 minified/raw bytes respectively. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probe no longer maintain parallel digest logic.
+The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The current browser graph is 209,125 minified bytes; Unicode analysis is independently 139,728 minified / 41,992 gzip / 31,019 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,124, 3,468, 6,292, 434,045, 30,388, and 691,484 minified/raw bytes respectively. Checked ceilings cover both runtime JavaScript entries and the portable baker JavaScript/Wasm so regenerating the report cannot silently bless a heavy dependency edge. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probe no longer maintain parallel digest logic.
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. Item 5.4 next adds a shared-registry horizontal CJK shaping and paragraph scenario with Node, Chromium, and GPU-capable Vitexec evidence but no fabricated rendering metrics. The first real rendered font frame must land here after that gate and the bitmap dependencies close.
 

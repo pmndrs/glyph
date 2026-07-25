@@ -118,8 +118,15 @@ test('rolls back every earlier artifact when a later publication fails', async (
 
   await assert.rejects(bakeFont({ ...bakeOptions, output }))
   for (const [file, bytes] of previous) assert.deepEqual(await readFile(file), bytes)
-  assert.equal(await readFile(join(join(dirname(output), basename(failedTarget.file)), 'keep.txt'), 'utf8'), 'previous directory')
-  assert.ok((await readdir(dirname(output))).every((name) => !name.endsWith('.tmp') && !name.endsWith('.bak')))
+  assert.equal(
+    await readFile(join(join(dirname(output), basename(failedTarget.file)), 'keep.txt'), 'utf8'),
+    'previous directory',
+  )
+  assert.ok(
+    (await readdir(dirname(output))).every(
+      (name) => !name.endsWith('.tmp') && !name.endsWith('.bak'),
+    ),
+  )
 })
 
 test('bakeProject groups static definitions, imports only the resolved baker, and mirrors outputs', async (t) => {
@@ -149,6 +156,15 @@ test('bakeProject groups static definitions, imports only the resolved baker, an
   assert.deepEqual(repeated.mappings, report.mappings)
   assert.deepEqual(repeated.diagnostics, report.diagnostics)
   assert.deepEqual(repeated.fonts[0].execution.outputs, report.fonts[0].execution.outputs)
+})
+
+test('bakeProject resolves each plugin descriptor once before ordering and baking', async (t) => {
+  const root = await projectFixture(16, { rejectRepeatedDescriptor: true })
+  t.after(() => rm(root, { recursive: true, force: true }))
+
+  const report = await bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') })
+  assert.equal(report.fonts.length, 1)
+  assert.deepEqual(report.diagnostics, [])
 })
 
 test('the installed CLI is a thin JSON-reporting layer over bakeProject', async (t) => {
@@ -228,6 +244,39 @@ test('rejects unsafe package-owned artifact IDs before writing any output', asyn
   await assert.rejects(readFile(join(root, '..', 'escape.glb')), { code: 'ENOENT' })
 })
 
+test('rejects a lying plugin descriptor before calling its baker or publishing output', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-text-node-invalid-descriptor-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const output = join(root, 'font.glb')
+  let bakeCalled = false
+  const invalidBaker = {
+    ...bitmapBaker,
+    descriptor: () => new Date(0),
+    async bake(request) {
+      bakeCalled = true
+      return bitmapBaker.bake(request)
+    },
+  }
+
+  await assert.rejects(
+    bakeFont({
+      input: fontUrl,
+      output,
+      font: { fontFaceIndex: 0 },
+      rasters: [
+        {
+          baker: invalidBaker,
+          packaging: { artifact: 'embedded', pages: 'embedded' },
+          options: { strikes: [16] },
+        },
+      ],
+    }),
+    /plain JSON objects/,
+  )
+  assert.equal(bakeCalled, false)
+  await assert.rejects(readFile(output), { code: 'ENOENT' })
+})
+
 test('CLI help and malformed arguments are deterministic and side-effect free', async () => {
   const help = captureIo()
   assert.equal(await runCli(['--help'], help.io), 0)
@@ -241,7 +290,7 @@ test('CLI help and malformed arguments are deterministic and side-effect free', 
   assert.match(malformed.stderr(), /Usage: pmndrs-text-bake/)
 })
 
-async function projectFixture(secondStrike = 16) {
+async function projectFixture(secondStrike = 16, options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-text-project-bake-'))
   const packageRoot = join(root, 'node_modules', '@fixture', 'raster')
   await Promise.all([
@@ -284,7 +333,20 @@ async function projectFixture(secondStrike = 16) {
     writeFile(join(packageRoot, 'index.js'), 'export const bitmap = (options) => options\n'),
     writeFile(
       join(packageRoot, 'baker.js'),
-      `export { default } from ${JSON.stringify(pathToFileURL(await realpath(new URL('../../dist/bakers/bitmap.js', import.meta.url))).href)}\n`,
+      options.rejectRepeatedDescriptor
+        ? `
+          import bitmapBaker from ${JSON.stringify(pathToFileURL(await realpath(new URL('../../dist/bakers/bitmap.js', import.meta.url))).href)}
+          let descriptorCalls = 0
+          export default {
+            ...bitmapBaker,
+            descriptor(value) {
+              descriptorCalls += 1
+              if (descriptorCalls > 1) throw new Error('descriptor evaluated more than once')
+              return bitmapBaker.descriptor(value)
+            },
+          }
+        `
+        : `export { default } from ${JSON.stringify(pathToFileURL(await realpath(new URL('../../dist/bakers/bitmap.js', import.meta.url))).href)}\n`,
     ),
     writeFile(
       join(root, 'src', 'main.ts'),

@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:42d1019e5ebc09e9ffdc867083b79cd5c7896bf63ddfb75c625f49974ebe6460"
+source_digest: "sha256:183a9885515d962b773ef48a1b779c11e3fb296ff82f54391e80a9ccb072f308"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -17,12 +17,15 @@ sources:
   - id: validator
     resource: ../../packages/font-baker/src/validator.ts
     title: Core font artifact validator
+  - id: wasm-url
+    resource: ../../packages/font-baker/src/wasm-url.ts
+    title: Canonical optimized Wasm URL
   - id: fontations
     resource: https://github.com/googlefonts/fontations
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T12:12:44Z"
+  at: "2026-07-25T13:06:23Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -33,7 +36,7 @@ This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON A
 
 The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
 
-The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,045 raw bytes, 168,220 gzip bytes, and 136,955 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. Reports keep raw and transport costs distinct.
+The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,045 raw bytes, 168,220 gzip bytes, and 136,955 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. This package is the sole owner of those optimized bytes and exposes one browser-safe canonical URL; the offline Node host reads that URL and the runtime Worker fetches it instead of `@pmndrs/text` shipping a second copy. Reports keep raw and transport costs distinct.
 
 The direct-memory boundary owns every request and response allocation in a module registry. Caller-controlled requests are capped at 64 MiB and use fallible reservation; use and release require the exact active pointer/length pair, forged or repeated releases are harmless, checked response arithmetic prevents truncation, and response metadata cannot outlive its owned bytes. The fixed, tiny `WasmState` allocation still uses stable Rust's infallible `Box::new` once per Wasm instance; replacing that theoretical OOM trap would require unstable allocator APIs or a disproportionate static-state design.
 

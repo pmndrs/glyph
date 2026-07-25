@@ -15,7 +15,7 @@ export interface RuntimeBakeSuccessV0 {
   readonly type: "bake-font-result-v0";
   readonly id: number;
   readonly ok: true;
-  readonly artifacts: readonly RuntimeBakeArtifactV0[];
+  readonly artifacts: readonly [RuntimeBakeArtifactV0];
   readonly report: FontBakeResultV0["report"];
   readonly warnings: FontBakeResultV0["warnings"];
 }
@@ -51,6 +51,7 @@ export function isRuntimeBakeResultV0(value: unknown): value is RuntimeBakeResul
   return (
     value.ok === true &&
     Array.isArray(value.artifacts) &&
+    value.artifacts.length === 1 &&
     value.artifacts.every(isRuntimeBakeArtifactV0) &&
     isNonArrayObject(value.report) &&
     Array.isArray(value.warnings)

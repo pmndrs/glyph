@@ -1,4 +1,7 @@
+import type { JsonValue } from './raster.js'
 import type { RasterKey, Sha256Hex } from './identity.js'
+
+export type { BakeWarning, SerializedBakeError } from '@pmndrs/text-font-baker'
 
 export interface RasterPackagingV0 {
   readonly artifact: 'embedded' | 'external'
@@ -19,7 +22,7 @@ export interface RasterBakeFontContext {
   readonly shapingHash: Sha256Hex
 }
 
-export interface RasterBakeRequest<Descriptor> {
+export interface RasterBakeRequest<Descriptor extends JsonValue> {
   readonly font: RasterBakeFontContext
   readonly rasterKey: RasterKey
   readonly packaging: RasterPackagingV0
@@ -69,18 +72,6 @@ export interface FontPayloadReport {
   }[]
 }
 
-export interface BakeWarning {
-  readonly code: string
-  readonly message: string
-  readonly path?: string
-}
-
-export interface SerializedBakeError {
-  readonly code: string
-  readonly message: string
-  readonly path?: string
-}
-
 export interface RasterBakeArtifact<Kind extends string = string> {
   readonly rasterKey: RasterKey
   readonly kind: Kind
@@ -90,7 +81,7 @@ export interface RasterBakeArtifact<Kind extends string = string> {
   readonly report: RasterPayloadReport
 }
 
-export interface RasterBakerModule<Kind extends string, Options, Descriptor> {
+export interface RasterBakerModule<Kind extends string, Options, Descriptor extends JsonValue> {
   readonly kind: Kind
   readonly extension: string
   readonly version: number
@@ -98,15 +89,17 @@ export interface RasterBakerModule<Kind extends string, Options, Descriptor> {
   bake(request: RasterBakeRequest<Descriptor>): Promise<RasterBakeArtifact<Kind>>
 }
 
-export type AnyRasterBakerModule = RasterBakerModule<string, any, any>
+export type AnyRasterBakerModule = RasterBakerModule<string, any, JsonValue>
 
 export type RasterBakeOptionsOf<Module extends AnyRasterBakerModule> =
-  Module extends RasterBakerModule<any, infer Options, any> ? Options : never
+  Module extends RasterBakerModule<any, infer Options, JsonValue> ? Options : never
 
 export type RasterBakeDescriptorOf<Module extends AnyRasterBakerModule> =
-  Module extends RasterBakerModule<any, any, infer Descriptor> ? Descriptor : never
+  Module extends RasterBakerModule<any, any, infer Descriptor extends JsonValue>
+    ? Descriptor
+    : never
 
-export function defineRasterBaker<const Kind extends string, Options, Descriptor>(
+export function defineRasterBaker<const Kind extends string, Options, Descriptor extends JsonValue>(
   module: RasterBakerModule<Kind, Options, Descriptor>,
 ): RasterBakerModule<Kind, Options, Descriptor> {
   return module

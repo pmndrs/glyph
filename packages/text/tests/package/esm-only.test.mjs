@@ -55,5 +55,24 @@ test("the public loader graph exposes registration without eager baker or Node h
   );
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/);
   assert.match(runtimeHost, /new Worker\(new URL\("\.\/runtime-bake-worker\.js"/);
-  assert.match(runtimeWorker, /new URL\("\.\/font_baker\.wasm"/);
+  assert.match(runtimeWorker, /from "@pmndrs\/text-font-baker\/wasm-url"/);
+  assert.doesNotMatch(
+    `${runtimeHost}\n${runtimeWorker}`,
+    /(?:node:|font-baker\/validate|compose-bake|compiler-adapter|discovery|gltf-validator|ktx-parse|ajv)/,
+  );
+  for (const helper of [
+    "core-bake-policy.js",
+    "owned-array-buffer.js",
+    "successful-promise-cache.js",
+  ]) {
+    const source = await readFile(
+      new URL(`../../dist/internal/${helper}`, import.meta.url),
+      "utf8",
+    );
+    assert.doesNotMatch(source, /(?:^|\n)\s*(?:import|export\s+\{.*\}\s+from)\s/m);
+  }
+  await assert.rejects(
+    readFile(new URL("../../dist/font_baker.wasm", import.meta.url)),
+    (error) => error?.code === "ENOENT",
+  );
 });

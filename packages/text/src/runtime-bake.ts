@@ -4,8 +4,9 @@ import type { RuntimeFontBake, RuntimeFontBakeRequest } from "./loader.js";
 import {
   isRuntimeBakeResultV0,
   type RuntimeBakeRequestV0,
-  type RuntimeBakeResultV0,
 } from "./internal/runtime-bake-protocol.js";
+import { fontBakeDescriptorV0 } from "./internal/core-bake-policy.js";
+import { copyToOwnedArrayBuffer } from "./internal/owned-array-buffer.js";
 
 interface PendingBake {
   readonly resolve: (bytes: Uint8Array) => void;
@@ -29,12 +30,12 @@ class RuntimeBakeWorkerHost {
     if (request.signal?.aborted === true) return Promise.reject(abortReason(request.signal));
     const worker = (this.#worker ??= this.#createWorker());
     const id = this.#nextId++;
-    const source = copyToArrayBuffer(request.source);
+    const source = copyToOwnedArrayBuffer(request.source);
     const message: RuntimeBakeRequestV0 = {
       type: "bake-font-v0",
       id,
       source,
-      font: { formatVersion: 0, fontFaceIndex: 0 },
+      font: fontBakeDescriptorV0(0),
     };
     return new Promise<Uint8Array>((resolve, reject) => {
       const abort = (): void => {
@@ -66,16 +67,10 @@ class RuntimeBakeWorkerHost {
       this.#receive(worker, event.data);
     });
     worker.addEventListener("error", (event: ErrorEvent) => {
-      this.#failAll(
-        worker,
-        event.error ?? new Error(event.message || "font bake Worker failed"),
-      );
+      this.#failAll(worker, event.error ?? new Error(event.message || "font bake Worker failed"));
     });
     worker.addEventListener("messageerror", () => {
-      this.#failAll(
-        worker,
-        new TypeError("font bake Worker returned an unreadable message"),
-      );
+      this.#failAll(worker, new TypeError("font bake Worker returned an unreadable message"));
     });
     return worker;
   }
@@ -83,10 +78,7 @@ class RuntimeBakeWorkerHost {
   #receive(worker: Worker, value: unknown): void {
     if (worker !== this.#worker) return;
     if (!isRuntimeBakeResultV0(value)) {
-      this.#failAll(
-        worker,
-        new TypeError("font bake Worker returned an invalid protocol message"),
-      );
+      this.#failAll(worker, new TypeError("font bake Worker returned an invalid protocol message"));
       return;
     }
     const pending = this.#settle(value.id);
@@ -94,9 +86,7 @@ class RuntimeBakeWorkerHost {
     if (!value.ok) {
       pending.reject(new FontBakeError(value.error));
     } else {
-      const artifact = soleFontArtifact(value);
-      if (artifact instanceof Error) pending.reject(artifact);
-      else pending.resolve(new Uint8Array(artifact));
+      pending.resolve(new Uint8Array(value.artifacts[0].bytes));
     }
     if (this.#pending.size === 0) this.#terminateIdleWorker();
   }
@@ -122,19 +112,6 @@ class RuntimeBakeWorkerHost {
     this.#worker = undefined;
     worker?.terminate();
   }
-}
-
-function soleFontArtifact(
-  result: RuntimeBakeResultV0 & { readonly ok: true },
-): ArrayBuffer | Error {
-  if (result.artifacts.length !== 1 || result.artifacts[0]?.role !== "font") {
-    return new TypeError("font bake Worker returned an invalid artifact set");
-  }
-  return result.artifacts[0].bytes;
-}
-
-function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.slice().buffer;
 }
 
 function abortReason(signal: AbortSignal | undefined): unknown {

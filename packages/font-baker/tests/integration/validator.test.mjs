@@ -4,6 +4,7 @@ import test, { before } from "node:test";
 
 import { createFontBaker } from "../../dist/index.js";
 import { FontArtifactValidationError, validateFontArtifact } from "../../dist/validator.js";
+import { fontBakerWasmUrl } from "../../dist/wasm-url.js";
 
 const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
@@ -96,6 +97,11 @@ test("keeps the packaged extension schema byte-identical to the canonical schema
     types: "./dist/validator.d.ts",
     import: "./dist/validator.js",
   });
+  assert.deepEqual(manifest.exports["./wasm-url"], {
+    types: "./dist/wasm-url.d.ts",
+    import: "./dist/wasm-url.js",
+  });
+  assert.equal(fontBakerWasmUrl, new URL("../../dist/font_baker.wasm", import.meta.url).href);
   assert.doesNotMatch(coreSource, /(?:ajv|gltf-validator|validator\.js)/);
 
   const property = JSON.parse(

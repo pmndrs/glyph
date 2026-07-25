@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 
 import { createFontBaker } from '@pmndrs/text-font-baker'
+import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url'
 
 import { bitmapBakerFromCore, createBitmapBaker } from '../dist/bakers/bitmap.js'
 import { validateBitmapArtifact } from '../dist/bakers/bitmap-validator.js'
@@ -13,7 +14,6 @@ const sourceUrl = new URL(
   import.meta.url,
 )
 const wasmUrl = new URL('../dist/bitmap_baker.wasm', import.meta.url)
-const fontWasmUrl = new URL('../../font-baker/dist/font_baker.wasm', import.meta.url)
 const outputUrl = new URL('../tests/fixtures/inter-bitmap-v0.json', import.meta.url)
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09'
 const glyphCount = 2937
@@ -23,7 +23,7 @@ const rasterKey = await bitmapRasterKey(options)
 const [source, wasm, fontWasm] = await Promise.all([
   readFile(sourceUrl),
   readFile(wasmUrl),
-  readFile(fontWasmUrl),
+  readFile(new URL(fontBakerWasmUrl)),
 ])
 const baker = bitmapBakerFromCore(await createBitmapBaker(wasm))
 const fontBaker = await createFontBaker(fontWasm)

@@ -24,6 +24,32 @@ describe('independent package-size report', () => {
     }
   })
 
+  it('enforces reviewed runtime-baker and portable-core ceilings', () => {
+    const budgets = {
+      'runtime-baker-host-js': { minifiedBytes: 3_506, gzipBytes: 1_406, brotliBytes: 1_255 },
+      'runtime-baker-worker-js': {
+        minifiedBytes: 6_400,
+        gzipBytes: 2_350,
+        brotliBytes: 2_050,
+      },
+      'portable-baker-js': { minifiedBytes: 4_003, gzipBytes: 1_550, brotliBytes: 1_360 },
+      'portable-baker-wasm': {
+        minifiedBytes: 434_045,
+        gzipBytes: 168_220,
+        brotliBytes: 136_955,
+      },
+    } as const
+
+    for (const [id, budget] of Object.entries(budgets)) {
+      const entry = report.entries.find((candidate) => candidate.id === id)
+      expect(entry?.status).toBe('measured')
+      if (entry?.status !== 'measured') throw new Error(`Missing measured size entry: ${id}`)
+      expect(entry.minifiedBytes).toBeLessThanOrEqual(budget.minifiedBytes)
+      expect(entry.gzipBytes).toBeLessThanOrEqual(budget.gzipBytes)
+      expect(entry.brotliBytes).toBeLessThanOrEqual(budget.brotliBytes)
+    }
+  })
+
   it('keeps the lazy validator out of the initial browser-core measurement', () => {
     const core = report.entries.find((candidate) => candidate.id === 'browser-core')
     const validator = report.entries.find((candidate) => candidate.id === 'font-validator-js')

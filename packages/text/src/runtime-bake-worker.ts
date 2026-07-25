@@ -5,15 +5,25 @@ import {
   type FontBakeCore,
   type SerializedBakeError,
 } from "@pmndrs/text-font-baker";
+import { fontBakerWasmUrl } from "@pmndrs/text-font-baker/wasm-url";
 
+import { soleCoreFontArtifact } from "./internal/core-bake-policy.js";
+import { copyToOwnedArrayBuffer } from "./internal/owned-array-buffer.js";
 import {
   isRuntimeBakeRequestV0,
   type RuntimeBakeFailureV0,
   type RuntimeBakeSuccessV0,
 } from "./internal/runtime-bake-protocol.js";
+import { cacheSuccessfulPromise } from "./internal/successful-promise-cache.js";
 
 const scope = globalThis as unknown as DedicatedWorkerGlobalScope;
-let corePromise: Promise<FontBakeCore> | undefined;
+const loadCore = cacheSuccessfulPromise<FontBakeCore>(async () => {
+  const response = await fetch(fontBakerWasmUrl);
+  if (!response.ok) {
+    throw new Error(`font baker Wasm request failed with HTTP ${response.status}`);
+  }
+  return createFontBaker(await response.arrayBuffer());
+});
 
 scope.addEventListener("message", (event: MessageEvent<unknown>) => {
   void handleMessage(event.data);
@@ -27,12 +37,15 @@ async function handleMessage(value: unknown): Promise<void> {
       source: new Uint8Array(value.source),
       descriptor: value.font,
     });
-    const artifacts = result.artifacts.map((artifact) => ({
-      role: artifact.role,
-      id: artifact.id,
-      bytes: copyToArrayBuffer(artifact.bytes),
-      sha256: artifact.sha256,
-    }));
+    const artifact = soleCoreFontArtifact(result);
+    const artifacts: RuntimeBakeSuccessV0["artifacts"] = [
+      {
+        role: artifact.role,
+        id: artifact.id,
+        bytes: copyToOwnedArrayBuffer(artifact.bytes),
+        sha256: artifact.sha256,
+      },
+    ];
     const response: RuntimeBakeSuccessV0 = {
       type: "bake-font-result-v0",
       id: value.id,
@@ -54,25 +67,6 @@ async function handleMessage(value: unknown): Promise<void> {
     };
     scope.postMessage(response);
   }
-}
-
-function loadCore(): Promise<FontBakeCore> {
-  corePromise ??= fetch(new URL("./font_baker.wasm", import.meta.url))
-    .then((response) => {
-      if (!response.ok)
-        throw new Error(`font baker Wasm request failed with HTTP ${response.status}`);
-      return response.arrayBuffer();
-    })
-    .then(createFontBaker)
-    .catch((error: unknown) => {
-      corePromise = undefined;
-      throw error;
-    });
-  return corePromise;
-}
-
-function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.slice().buffer;
 }
 
 function serializeError(error: unknown): SerializedBakeError {

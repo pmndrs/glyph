@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { FontLoader } from "@pmndrs/text";
+import { bakeFont } from "@pmndrs/text/bake";
 import { bakeFontInWorker } from "@pmndrs/text/runtime-bake";
 import { createFontBaker } from "@pmndrs/text-font-baker";
+import { fontBakerWasmUrl } from "@pmndrs/text-font-baker/wasm-url";
 
 const fixtureDirectory = new URL(
   "../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/",
@@ -12,7 +16,7 @@ const fixtureDirectory = new URL(
 );
 const fixturePromise = Promise.all([
   readFile(new URL("Inter-Regular.ttf", fixtureDirectory)),
-  readFile(new URL("../../dist/font_baker.wasm", import.meta.url)),
+  readFile(new URL(fontBakerWasmUrl)),
 ]).then(async ([source, wasm]) => {
   const baker = await createFontBaker(wasm);
   const result = baker.bake({
@@ -27,6 +31,7 @@ test("the runtime host transfers source and accepts one authoritative font artif
   const originalWorker = globalThis.Worker;
   const workers = [];
   let terminations = 0;
+  let malformedArtifacts = false;
 
   class FixtureWorker {
     listeners = new Map();
@@ -60,6 +65,16 @@ test("the runtime host transfers source and accepts one authoritative font artif
                 ),
                 sha256: "0".repeat(64),
               },
+              ...(malformedArtifacts
+                ? [
+                    {
+                      role: "font",
+                      id: "duplicate-font",
+                      bytes: new ArrayBuffer(0),
+                      sha256: "0".repeat(64),
+                    },
+                  ]
+                : []),
             ],
             report: {},
             warnings: [],
@@ -134,6 +149,18 @@ test("the runtime host transfers source and accepts one authoritative font artif
   });
   assert.equal(workers.length, 5);
   assert.equal(terminations, 5);
+
+  malformedArtifacts = true;
+  await assert.rejects(
+    bakeFontInWorker({
+      source: sourceCopy,
+      sourceUrl: "https://assets.test/malformed-result.ttf",
+    }),
+    /invalid protocol message/,
+  );
+  malformedArtifacts = false;
+  assert.equal(workers.length, 6);
+  assert.equal(terminations, 6);
   for (const worker of workers) {
     assert.deepEqual(worker, {
       url: new URL("../../dist/runtime-bake-worker.js", import.meta.url).href,
@@ -144,6 +171,15 @@ test("the runtime host transfers source and accepts one authoritative font artif
 
 test("the Worker entry runs the portable baker and transfers the exact canonical artifact", async (t) => {
   const { source, artifact: expected } = await fixturePromise;
+  const outputRoot = await mkdtemp(join(tmpdir(), "pmndrs-text-host-parity-"));
+  const offlineOutput = join(outputRoot, "Inter-Regular.font.glb");
+  t.after(() => rm(outputRoot, { recursive: true, force: true }));
+  await bakeFont({
+    input: new URL("Inter-Regular.ttf", fixtureDirectory),
+    output: offlineOutput,
+    font: { fontFaceIndex: 0 },
+  });
+  assert.deepEqual(await readFile(offlineOutput), Buffer.from(expected));
   const originals = {
     addEventListener: globalThis.addEventListener,
     fetch: globalThis.fetch,
@@ -155,8 +191,8 @@ test("the Worker entry runs the portable baker and transfers the exact canonical
     if (type === "message") receive = listener;
   };
   globalThis.fetch = async (input) => {
-    assert.equal(String(input), new URL("../../dist/font_baker.wasm", import.meta.url).href);
-    return new Response(await readFile(new URL("../../dist/font_baker.wasm", import.meta.url)));
+    assert.equal(String(input), fontBakerWasmUrl);
+    return new Response(await readFile(new URL(fontBakerWasmUrl)));
   };
   globalThis.postMessage = (value, transfer) => {
     result.resolve({ value, transfer });
@@ -185,6 +221,62 @@ test("the Worker entry runs the portable baker and transfers the exact canonical
   assert.equal(value.artifacts.length, 1);
   assert.deepEqual(Buffer.from(value.artifacts[0].bytes), Buffer.from(expected));
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
+});
+
+test("the Worker retries a failed Wasm fetch and retains the recovered core", async (t) => {
+  const { source } = await fixturePromise;
+  const originals = {
+    addEventListener: globalThis.addEventListener,
+    fetch: globalThis.fetch,
+    postMessage: globalThis.postMessage,
+  };
+  let receive;
+  let fetches = 0;
+  let response = Promise.withResolvers();
+  globalThis.addEventListener = (type, listener) => {
+    if (type === "message") receive = listener;
+  };
+  globalThis.fetch = async (input) => {
+    assert.equal(String(input), fontBakerWasmUrl);
+    fetches += 1;
+    if (fetches === 1) return new Response(null, { status: 503 });
+    return new Response(await readFile(new URL(fontBakerWasmUrl)));
+  };
+  globalThis.postMessage = (value, transfer) => {
+    response.resolve({ value, transfer });
+  };
+  t.after(() => {
+    restoreGlobal("addEventListener", originals.addEventListener);
+    restoreGlobal("fetch", originals.fetch);
+    restoreGlobal("postMessage", originals.postMessage);
+  });
+
+  await import("../../dist/runtime-bake-worker.js?test=fetch-recovery");
+  const message = (id) => ({
+    data: {
+      type: "bake-font-v0",
+      id,
+      source: source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
+      font: { formatVersion: 0, fontFaceIndex: 0 },
+    },
+  });
+
+  receive(message(1));
+  const first = await response.promise;
+  assert.equal(first.value.ok, false);
+  assert.match(first.value.error.message, /HTTP 503/);
+
+  response = Promise.withResolvers();
+  receive(message(2));
+  const second = await response.promise;
+  assert.equal(second.value.ok, true);
+  assert.equal(fetches, 2);
+
+  response = Promise.withResolvers();
+  receive(message(3));
+  const third = await response.promise;
+  assert.equal(third.value.ok, true);
+  assert.equal(fetches, 2, "the recovered core is reused");
 });
 
 function restoreGlobal(key, value) {
