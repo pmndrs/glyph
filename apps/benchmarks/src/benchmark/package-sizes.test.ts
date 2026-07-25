@@ -6,6 +6,8 @@ describe("independent package-size report", () => {
     for (const id of [
       "browser-core",
       "font-validator-js",
+      "runtime-baker-host-js",
+      "runtime-baker-worker-js",
       "portable-baker-js",
       "portable-baker-wasm",
     ]) {
@@ -25,6 +27,9 @@ describe("independent package-size report", () => {
     expect(core?.status).toBe("measured");
     expect(validator?.status).toBe("measured");
     if (core?.status !== "measured" || validator?.status !== "measured") return;
+    if (core.minifiedBytes === undefined || validator.minifiedBytes === undefined) {
+      throw new Error("Measured entries must contain minified byte counts");
+    }
     expect(core.minifiedBytes).toBeLessThan(validator.minifiedBytes);
   });
 

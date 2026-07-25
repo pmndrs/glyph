@@ -31,6 +31,10 @@
       "types": "./dist/node/bake.d.ts",
       "import": "./dist/node/bake.js"
     },
+    "./runtime-bake": {
+      "types": "./dist/runtime-bake.d.ts",
+      "import": "./dist/runtime-bake.js"
+    },
     "./bitmap-baker.wasm": "./dist/bitmap_baker.wasm",
     "./bitmap-abi.json": "./dist/bitmap-baker-abi-v0.json",
     "./package.json": "./package.json"

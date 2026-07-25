@@ -29,10 +29,29 @@ async function bundle(
   entry: string,
   minify: false | "oxc",
   includeDynamic: boolean,
+  externalizeWasmAsset: boolean,
 ): Promise<Uint8Array> {
   const result = await build({
     configFile: false,
     logLevel: "silent",
+    plugins: externalizeWasmAsset
+      ? [
+          {
+            name: "externalize-package-wasm-for-size-measurement",
+            transform(code, id) {
+              if (!id.endsWith("/runtime-bake-worker.js")) return;
+              const expression = 'new URL("./font_baker.wasm", import.meta.url)';
+              if (!code.includes(expression)) {
+                throw new Error("Runtime Worker no longer contains the measured Wasm URL boundary");
+              }
+              return code.replace(
+                expression,
+                'new URL("font_baker.wasm", "https://size.invalid/")',
+              );
+            },
+          },
+        ]
+      : [],
     root,
     build: {
       lib: {
@@ -87,10 +106,11 @@ async function measureJavaScript(
   label: string,
   entry: URL,
   includeDynamic = true,
+  externalizeWasmAsset = false,
 ): Promise<MeasuredEntry> {
   const [raw, minified] = await Promise.all([
-    bundle(fileURLToPath(entry), false, includeDynamic),
-    bundle(fileURLToPath(entry), "oxc", includeDynamic),
+    bundle(fileURLToPath(entry), false, includeDynamic, externalizeWasmAsset),
+    bundle(fileURLToPath(entry), "oxc", includeDynamic, externalizeWasmAsset),
   ]);
   return {
     id,
@@ -129,6 +149,18 @@ const entries: SizeEntry[] = [
     "font-validator-js",
     "Lazy font validator JS",
     new URL("../size-entries/font-validator.ts", import.meta.url),
+  ),
+  await measureJavaScript(
+    "runtime-baker-host-js",
+    "Runtime baker host JS",
+    new URL("../size-entries/runtime-bake.ts", import.meta.url),
+  ),
+  await measureJavaScript(
+    "runtime-baker-worker-js",
+    "Runtime baker Worker JS",
+    new URL("../../../packages/text/dist/runtime-bake-worker.js", import.meta.url),
+    true,
+    true,
   ),
   await measureJavaScript(
     "portable-baker-js",

@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:10:04Z"
+  at: "2026-07-25T06:32:58Z"
 ---
 
 # Benchmark plan
@@ -65,7 +65,7 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
 | Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic and pinned real-font baker lanes pass, while later loading/rendering lanes remain open. |
-| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, lazy-validator, and baker JavaScript sizes plus raw/gzip/Brotli Wasm; Rollup static closures exclude dynamic chunks, and future Unicode tables remain explicitly unavailable. |
+| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, lazy-validator, runtime-host, runtime-Worker, and baker JavaScript sizes plus raw/gzip/Brotli Wasm; Rollup static closures exclude dynamic chunks, Worker JavaScript excludes its separately measured Wasm asset, and future Unicode tables remain explicitly unavailable. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
 

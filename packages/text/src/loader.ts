@@ -28,6 +28,7 @@ let nextRegistryId = 1;
 let nextFontHandle = 1;
 let nextRasterHandle = 1;
 let validatorPromise: Promise<typeof import("@pmndrs/text-font-baker/validate")> | undefined;
+let defaultRuntimeBakePromise: Promise<RuntimeFontBake> | undefined;
 
 export interface FontLoadOptions {
   readonly signal?: AbortSignal;
@@ -375,15 +376,9 @@ export class FontLoader {
     if (request.sourceUrl === undefined) {
       throw new FontLoadError("INVALID_FONT_INPUT", "font request has no source or baked URL");
     }
-    if (this.#runtimeBake === undefined) {
-      throw new FontLoadError(
-        "RUNTIME_BAKER_UNAVAILABLE",
-        "font source requires the dynamically imported runtime baker",
-        { url: request.sourceUrl },
-      );
-    }
+    const runtimeBake = this.#runtimeBake ?? (await loadDefaultRuntimeBake(request.sourceUrl));
     const source = await this.#fetchRequired(request.sourceUrl, "FONT_SOURCE_FETCH");
-    const baked = await this.#runtimeBake({
+    const baked = await runtimeBake({
       source,
       sourceUrl: request.sourceUrl,
       ...(request.bakedUrl === undefined ? {} : { bakedUrl: request.bakedUrl }),
@@ -493,6 +488,20 @@ export class FontLoader {
       ...(error.cause === undefined ? {} : { cause: error.cause }),
     });
   }
+}
+
+async function loadDefaultRuntimeBake(sourceUrl: string): Promise<RuntimeFontBake> {
+  defaultRuntimeBakePromise ??= import("./runtime-bake.js")
+    .then(({ bakeFontInWorker }) => bakeFontInWorker)
+    .catch((cause: unknown) => {
+      defaultRuntimeBakePromise = undefined;
+      throw new FontLoadError(
+        "RUNTIME_BAKER_UNAVAILABLE",
+        "font source requires the dynamically imported runtime baker",
+        { url: sourceUrl, cause },
+      );
+    });
+  return defaultRuntimeBakePromise;
 }
 
 interface ResolvedFontRequest {

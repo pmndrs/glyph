@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:14:20Z"
+  at: "2026-07-25T06:32:58Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–2 are closed. Milestone 3 continues in issue order at active item 3.1.
+Milestones 0–2 are closed. Milestone 3 continues in issue order at active item 3.3.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -93,8 +93,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 2.3 | ✅ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
 | 2.4 | ✅ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
 | 3.1 | ✅ | Implement baked probing, validation, and registration. | M | 2.4 |
-| 3.2 | 🟡 | Add the dynamically imported Worker bake path. | M | 3.1 |
-| 3.3 | ⬜ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
+| 3.2 | ✅ | Add the dynamically imported Worker bake path. | M | 3.1 |
+| 3.3 | 🟡 | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
 | 4.1 | ⬜ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
 | 4.2 | ⬜ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
 | 5.1 | ⬜ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
@@ -263,7 +263,7 @@ Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-extern
 - [x] Node `Buffer` validation is repeatable and non-mutating; a regression protects SFNT `checksumAdjustment` from Buffer's aliasing `slice` semantics.
 - [x] Package and integration tests cover the public subpath/bin/manifest, exact CLI/API behavior, selected-baker loading, path escape rejection before filesystem mutation, cancellation, and deterministic output mirroring.
 
-Item 2.4 and Milestone 2 are closed. Item 3.1 is active and must validate and register baked assets without making the runtime baker graph reachable on a hit.
+Item 2.4 and Milestone 2 are closed. Items 3.1 and 3.2 are closed; item 3.3 is active and must prove host parity, cancellation, and package-graph isolation.
 
 Deliver:
 
@@ -296,6 +296,17 @@ Explicitly exclude subsetting, shaping closure, dense remapping, compiled layout
 - [x] Real Inter integration tests cover hits, injected fallback seam, registration, disposal, embedded/external rasters, hash failure, limits, and input forms; fixed-seed loader mutation fuzzing requires deterministic, non-mutating outcomes.
 
 Item 3.1 is closed. Item 3.2 is active and replaces the injected fallback seam's absent default with the dynamically imported module-Worker host over the exact portable bake core.
+
+### 3.2 closure checklist
+
+- [x] A baked miss dynamically imports `@pmndrs/text/runtime-bake`; the initial browser graph contains only the import boundary and cannot construct a Worker or reach the bake wrapper/Wasm.
+- [x] The standard host creates a named module Worker lazily, reuses it across requests, copies only the source transfer buffer needed to preserve loader provenance, and transfers the returned artifact buffer.
+- [x] The Worker imports the exact portable `@pmndrs/text-font-baker` wrapper, lazily instantiates the same optimized `font_baker.wasm`, accepts only the versioned face descriptor, and serializes structured failures.
+- [x] The loader routes standard fallback output through the same provenance and hostile-input validator used for baked hits before registration.
+- [x] Canonical Inter integration tests exercise the public host, default loader path, transfer lists, Worker entry, and exact portable-core artifact bytes; package tests prove the runtime host/Worker/Wasm remain outside the static entry graph.
+- [x] Independent size lanes report the runtime host, Worker JavaScript, and portable Wasm separately instead of folding lazy code or Wasm into the initial core.
+
+Item 3.2 is closed. Item 3.3 is active and adds browser-executed Node/Worker authoritative-byte parity, shared-operation cancellation, and complete packed/bundled import-isolation evidence.
 
 Deliver:
 
