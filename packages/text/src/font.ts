@@ -1,6 +1,7 @@
 import type {
   AnyRasterModule,
   AnyRasterInput,
+  LoadedRaster,
   RasterLoadOptions,
   RasterReference,
   RasterRequest,
@@ -62,6 +63,15 @@ export interface AnyFontToken {
     readonly module: AnyRasterModule
     readonly options?: unknown
   }
+}
+
+export interface LoadedFont<
+  Module extends AnyRasterModule,
+  Input extends FontInput = FontInput,
+> {
+  readonly input: Input
+  readonly font: RegisteredFont
+  readonly raster: LoadedRaster<Module>
 }
 
 export type FontInputOf<Token extends AnyFontToken> =

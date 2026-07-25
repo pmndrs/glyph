@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Implementation** — Closed roadmap item 0.2 with distributive React props checked against React 19 and React Three Fiber, exact `useFont`/lazy-raster inference, expanded negative composition fixtures, and an executable ESM-only manifest contract test.
 - **Decision** — Accepted milestone 0.1's Three.js-first core, thin nested-text React wrapper, canonical baked-sibling URL rules, ESM-only exports, open typed raster capabilities, non-generic runtime objects, `defineFont` composition, canonical raster identity, and static bitmap strike contracts for V0.
 - **Governance** — Added an in-place milestone-0.1 acceptance checklist and evidence matrix that distinguish mechanically proven TypeScript/ESM contracts from decisions still awaiting explicit maintainer approval.
 - **Governance** — Added one enforced OKF concept per workspace package; validation now fails for missing, duplicate, misdirected, nonexistent, or source-stale package entries, while deterministic digest generation excludes build outputs and installed dependencies.

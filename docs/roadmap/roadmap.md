@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:29:09Z"
+  at: "2026-07-25T01:34:41Z"
 ---
 
 # Canonical implementation roadmap
@@ -83,7 +83,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | ID | Status | Work | Size | Depends on |
 | --- | :---: | --- | :---: | --- |
 | 0.1 | ✅ | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
-| 0.2 | 🟡 | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
+| 0.2 | ✅ | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
 | 0.3 | 🟡 | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
 | 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
 | 1.2 | 🟡 | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
@@ -119,9 +119,19 @@ These rows replace the former separate backlog. Each is intended to become one f
 - [x] Canonical URL forms and invalid source/baked combinations have compile-only evidence.
 - [x] The current root package export is ESM-only and contains no CommonJS condition.
 - [x] Maintainer explicitly accepted D-001, D-004–009, D-067, D-068, and D-070 for V0 in the [decision register](../planning/decision-register.md#product-and-public-api).
-- [ ] Item 0.2 adds the remaining React-prop and package/export contract fixtures after those public choices are accepted.
+- [x] Item 0.2 adds the remaining React-prop and package/export contract fixtures after those public choices are accepted.
 
-Item 0.1 is closed. Item 0.2 now proceeds with the remaining compile-only React-prop and package/export fixtures.
+Item 0.1 is closed; the 0.2 evidence is recorded below.
+
+### 0.2 closure checklist
+
+- [x] Font, raster, resource, draw-batch, option, runtime-baker, and baker-descriptor literals survive composition.
+- [x] Positive and intentional negative fixtures cover raw/composed fonts, raster options, static bitmap tuples, atomic updates, paragraph constraints, and invalid artifact pairings.
+- [x] React props derive distributively from core properties, retain raw-font/raster coupling, and accept React Three Fiber group props.
+- [x] `useFont`, preload, and lazy-raster contract types preserve exact font and raster types.
+- [x] A package test rejects CommonJS fields, `require` conditions, or non-ESM JavaScript export targets.
+
+Item 0.2 is closed. Item 0.3 is now the active dependency.
 
 Deliver:
 

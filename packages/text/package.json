@@ -17,13 +17,27 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm test:types && node --test tests/package/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"
   },
   "peerDependencies": {
+    "@react-three/fiber": ">=9.6.1 <10",
+    "react": ">=19 <19.3",
     "three": ">=0.185.1"
   },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@react-three/fiber": "9.6.1",
+    "@types/react": "19.2.14",
     "@types/three": "0.185.1",
+    "react": "19.2.8",
     "three": "0.185.1"
   }
 }

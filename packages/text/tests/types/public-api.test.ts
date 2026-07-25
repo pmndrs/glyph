@@ -6,6 +6,7 @@ import {
   type AnyRasterModule,
   type FontInputOf,
   type FontRasterModuleOf,
+  type LoadedFont,
   type GlyphPaint,
   type RasterKey,
   type RasterBatchOf,
@@ -24,6 +25,12 @@ import {
   type TextProperties,
   type TextUpdateProperties,
 } from '../../src/index.js'
+import type { ReactElement } from 'react'
+import type {
+  LazyRaster,
+  ReactTextProps,
+  UseFont,
+} from '../../src/react.js'
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends
@@ -181,6 +188,46 @@ type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Reg
 type _TitleRaster = Expect<Equal<FontRasterModuleOf<typeof titleFont>, typeof msdf>>
 const tokenText: TextProperties = { text: 'Hello', font: titleFont }
 void tokenText
+
+declare const useFont: UseFont
+const loadedTitleFont = useFont(titleFont)
+const preloadedTitleFont = useFont.preload(titleFont)
+type _LoadedTitleFont = Expect<
+  Equal<typeof loadedTitleFont, LoadedFont<typeof msdf, '/fonts/Inter-Regular.ttf'>>
+>
+type _PreloadedTitleFont = Expect<
+  Equal<
+    Awaited<typeof preloadedTitleFont>,
+    LoadedFont<typeof msdf, '/fonts/Inter-Regular.ttf'>
+  >
+>
+
+declare const nestedText: ReactElement<ReactTextProps>
+const reactTokenProps: ReactTextProps = {
+  font: titleFont,
+  fontSize: 0.24,
+  position: [0, 1, 0],
+  children: ['Fast ', nestedText],
+}
+const reactRawProps: ReactTextProps = {
+  font: '/fonts/Inter-Regular.ttf',
+  raster: msdf,
+  children: 'One-off label',
+}
+void reactTokenProps
+void reactRawProps
+
+// @ts-expect-error React children own source text; the core text prop is not duplicated.
+const duplicateReactText: ReactTextProps = { text: 'Hidden duplicate' }
+void duplicateReactText
+
+// @ts-expect-error React raw-font props retain the core font/raster composition rule.
+const reactRawWithoutRaster: ReactTextProps = { font: '/fonts/Inter-Regular.ttf' }
+void reactRawWithoutRaster
+
+declare const lazyRaster: LazyRaster
+const deferredMsdf = lazyRaster(async () => ({ default: msdf }))
+type _DeferredMsdf = Expect<Equal<typeof deferredMsdf, typeof msdf>>
 
 const textOnlyUpdate: TextUpdateProperties = { text: 'Updated' }
 const paintOnlyUpdate: TextUpdateProperties = { opacity: 0.5 }

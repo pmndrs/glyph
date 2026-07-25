@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:29:09Z"
+  at: "2026-07-25T01:34:41Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -34,7 +34,7 @@ This table reports contract evidence; it does not turn implementation or prose i
 | Contract surface | Status | Current evidence | Remaining gate |
 | --- | :---: | --- | --- |
 | Framework-neutral core API | ✅ accepted | `packages/text` compiles the non-generic text, font, paragraph, raster, and baker seams. | Runtime behavior remains milestone-gated. |
-| React API | ✅ accepted | The thin wrapper, nested-span model, direct props, Suspense behavior, and forwarded core ref are specified below. | Compile-only React props fixture belongs to 0.2. |
+| React API | ✅ accepted | The thin wrapper, nested-span model, direct props, Suspense behavior, forwarded core ref, and distributive prop derivation are compile-checked against React 19 and React Three Fiber. | Runtime reconciliation belongs to 6.3. |
 | Typed raster capabilities | ✅ accepted | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors. | Concrete first-party packages remain later milestones. |
 | Canonical URL resolution | ✅ accepted | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below. | Runtime behavior belongs to milestone 3. |
 | ESM-only package contract | ✅ accepted | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition. | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
@@ -216,9 +216,13 @@ This deliberately adopts React Native's familiar nested-text and inherited-inlin
 ```ts
 type TextChild = string | number | null | false | ReactElement<ReactTextProps>
 
+type DistributiveOmit<Value, Keys extends PropertyKey> = Value extends unknown
+  ? Omit<Value, Keys & keyof Value>
+  : never
+
 type ReactTextProps =
   & Omit<ThreeElements['group'], keyof TextProperties | 'children'>
-  & Omit<TextProperties, 'text' | 'spans'>
+  & DistributiveOmit<TextProperties, 'text' | 'spans'>
   & { children?: TextChild | readonly TextChild[] }
 
 interface UseFont {

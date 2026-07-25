@@ -22,6 +22,7 @@ export type {
   BakedFontSource,
   FontInput,
   FontInputOf,
+  LoadedFont,
   FontMetrics,
   FontRasterModuleOf,
   FontSourceOverride,
