@@ -5,7 +5,7 @@ description: Defines public core contracts, static discovery, portable bitmap ar
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:5b5390b8d5e135c4052d05143e63ab6592b67ffaa2eacd3c3bebee2e96cc2b0d"
+source_digest: "sha256:a55e78706f1d71500a4c47c8042d2c4cf4c2b8206ad33de56b86a09bfe659c46"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -35,14 +35,17 @@ sources:
   - id: node-host
     resource: ../../packages/text/src/node/bake.ts
     title: Node bake API and filesystem host
+  - id: loader
+    resource: ../../packages/text/src/loader.ts
+    title: Baked-first loader and registry
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T05:47:27Z"
+  at: "2026-07-25T06:19:41Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 implementation slice; Milestone 2 complete and roadmap item 3.1 active
+Status: 🟡 implementation slice; roadmap item 3.1 complete and item 3.2 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -58,7 +61,9 @@ The Node-only `@pmndrs/text/bake` subpath closes roadmap item 2.4 around the ite
 
 The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The host writes exclusive same-directory temporary files and atomically renames them only after every artifact is ready, rejects input/output overlap and unsafe package-owned filenames, and cleans temporary files on cancellation. Its report adds phase/total timing, before/after RSS, explicitly process-lifetime peak RSS, output paths and hashes, and raw/gzip/Brotli transport sizes to the authoritative core/raster/container byte report. Exact Inter goldens plus repeated mixed-raster project runs bind deterministic output. The core validator also has a Node `Buffer` purity regression so validation cannot mutate the SFNT checksum field through aliasing slice semantics.[^node-host]
 
-It does not yet load/register fonts, run the Worker fallback, shape text at runtime, perform paragraph layout, or render glyphs. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
+
+It does not yet provide the default module-Worker fallback, shape text at runtime, perform paragraph layout, or render glyphs. Item 3.2 replaces the loader's injected host/testing fallback seam with the dynamically imported shared Worker implementation. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
@@ -69,7 +74,7 @@ It does not yet load/register fonts, run the Worker fallback, shape text at runt
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `test:unit` | Run focused Rust bitmap-core unit tests. |
 | `test:integration` | Run Rust public-boundary, Wasm/package, golden, and malformed-artifact integration tests. |
-| `test:fuzz-smoke` | Run fixed-seed bitmap artifact mutations twice and require deterministic validation outcomes. |
+| `test:fuzz-smoke` | Run fixed-seed bitmap and loader artifact mutations twice and require deterministic, byte-pure validation outcomes. |
 | `build` | Emit ESM/declarations, compile the no-WASI bitmap Wasm, optimize it with pinned Binaryen, and publish its generated ABI. |
 
 The [API contract](../planning/api-shapes.md) remains authoritative for proposed public behavior; this concept explains the package that currently embodies its compile-time subset.[^api-contract]
@@ -78,3 +83,4 @@ The [API contract](../planning/api-shapes.md) remains authoritative for proposed
 [^bitmap-identity]: Raster-specific descriptor fields remain owned by this subpath and never enter a closed core union.
 [^bitmap-baker]: Artifact generation, validation, and generic composition are complete; GPU resource creation is deliberately deferred to the renderer milestone.
 [^node-host]: The Node host trusts selected installed baker code but authenticates every returned artifact; hostile baked assets are independently revalidated at the loader boundary.
+[^loader]: Raster-package schema and payload semantics remain in each module's `decode`; the generic registry validates only package-neutral container and reciprocal identity invariants.

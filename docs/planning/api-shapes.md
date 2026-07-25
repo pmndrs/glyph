@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T05:47:27Z"
+  at: "2026-07-25T06:14:20Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -350,18 +350,67 @@ interface FontLoadOptions {
   signal?: AbortSignal
 }
 
+interface FontLoadDiagnostic {
+  code: string
+  message: string
+  url?: string
+  cause?: unknown
+}
+
+interface RuntimeFontBakeRequest {
+  source: Uint8Array
+  sourceUrl: string
+  bakedUrl?: string
+  signal?: AbortSignal
+}
+
+type RuntimeFontBake = (
+  request: RuntimeFontBakeRequest,
+) => Promise<ArrayBufferView>
+
+interface FontRegistryOptions {
+  maxArtifactBytes?: number
+  maxBufferViews?: number
+  maxRasters?: number
+}
+
+interface FontLoaderOptions {
+  registry?: FontRegistry
+  baseUrl?: string | URL
+  fetch?: typeof fetch
+  development?: boolean
+  /** Host/test seam used only after the mandatory baked probe misses or fails. */
+  runtimeBake?: RuntimeFontBake
+  onDiagnostic?: (diagnostic: FontLoadDiagnostic) => void
+  onWarning?: (diagnostic: FontLoadDiagnostic) => void
+}
+
 interface RasterLoadOptions {
   resolve?: RasterResolver
   signal?: AbortSignal
 }
 
 declare class FontLoader {
-  constructor(options?: { registry?: FontRegistry })
+  readonly registry: FontRegistry
+  constructor(options?: FontLoaderOptions)
   load(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>
   attachRaster(
     font: RegisteredFont,
     bytes: ArrayBufferView,
   ): Promise<RegisteredRaster>
+}
+
+declare class FontRegistry {
+  constructor(options?: FontRegistryOptions)
+  registerAsset(bytes: ArrayBufferView): Promise<RegisteredFont>
+  get(key: FontKey): RegisteredFont | undefined
+  getByHandle(handle: FontHandle): RegisteredFont | undefined
+  attachRaster(font: RegisteredFont, bytes: ArrayBufferView): Promise<RegisteredRaster>
+}
+
+declare class FontLoadError extends Error {
+  readonly code: string
+  readonly url: string | undefined
 }
 ```
 
@@ -391,6 +440,10 @@ The object form only overrides those rules. `{ source }` still derives a sibling
 Probe, preload, and load share one normalized cache key containing the normalized source URL when present, the resolved or explicit baked URL, and relevant loader/format versions. Concurrent calls reuse the same promise, and a successful preload returns the same registered font generation as a later `load` or `useFont` call. Changing an explicit baked URL intentionally creates a different load key.
 
 Registration has a second identity layer. Request keys deduplicate equivalent probes and fetches; after validation, `shapingHash` deduplicates the registered core resource. Consequently a string, equivalent `URL`, equivalent object input, and another load path that produce the same canonical shaping payload converge on one core resource within a registry. JavaScript object identity is never part of either key. Separate registries remain isolated ownership domains.
+
+The loader and registry default to 64 MiB per fetched/attached artifact, 4,096 buffer views, and 256 raster references. Positive safe-integer overrides may lower or raise those deployment limits. `Content-Length` is rejected early when it exceeds the configured byte limit, but it is never trusted: response bodies are counted while streaming and registration checks `ArrayBufferView.byteLength` before making an owned copy. A limit failure has a distinct structured code and never publishes a partial registration.
+
+The optional `runtimeBake` constructor value is dependency injection for alternate hosts and deterministic tests, not a per-request policy switch: it is unreachable until the baked probe has missed or produced a structured invalid/incompatible diagnostic. Item 3.2 supplies the standard dynamically imported module-Worker implementation when this option is absent. There remains no `forceRuntime` or `skipBaked` load option.
 
 Resolution order for a selected raster is fixed:
 
@@ -453,12 +506,6 @@ interface LoadedFont<
   readonly token: FontToken<Module, Input>
   readonly core: RegisteredFont
   readonly raster: LoadedRaster<Module>
-}
-
-interface FontRegistry {
-  registerAsset(bytes: ArrayBufferView): Promise<RegisteredFont>
-  get(key: FontKey): RegisteredFont | undefined
-  getByHandle(handle: FontHandle): RegisteredFont | undefined
 }
 
 interface RasterRuntime {

@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T05:47:27Z"
+  at: "2026-07-25T06:14:20Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -252,7 +252,11 @@ Probe readiness follows the [live-probe determinism contract](conformance-plan.m
 
 ### Loader-path runner
 
+Status: 🟡 roadmap item 3.1 probing/validation/registration is complete; the item-3.2 default module-Worker fallback and item-3.3 parity graph remain active
+
 Exercises shorthand source URLs, explicit source/baked overrides, baked-only GLBs, preloads, baked hits, missing assets, corrupt/incompatible assets, cancelled fallback, and repeated concurrent loads. URL fixtures cover every recognized source suffix, suffix case, extensionless paths, query preservation, fragment removal, and non-hierarchical URLs. It asserts one development warning per missing source, no warning in production, canonical-path convergence after fallback, no duplicate probe after preload, and no public runtime-forcing switch.
+
+The completed 3.1 fixture uses exact Inter artifacts through the public loader and registry. It covers request/shaping identity deduplication, exact GLB shaping-view extraction, source provenance, embedded/external raster delivery, relative companion resolution, resolver interception, artifact hashes, lifecycle invalidation, configured limits before copies and during streaming, and deterministic fixed-seed loader mutations. An injected host seam proves that fallback is reachable only after a miss or structured invalid/incompatible diagnostic; item 3.2 supplies its standard Worker-backed implementation.
 
 ### Package-graph runner
 

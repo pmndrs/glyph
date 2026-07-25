@@ -4,6 +4,7 @@
     "outDir": "dist",
     "resolveJsonModule": true,
     "rootDir": "src",
+    "stripInternal": true,
     "tsBuildInfoFile": "dist/.tsbuildinfo",
     "types": ["node"]
   },

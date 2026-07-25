@@ -14,8 +14,8 @@ export type {
   BakeWarning,
   FontPayloadReport,
   SerializedBakeError,
-} from './bake.js'
-export { defineRasterBaker, rasterBake } from './bake.js'
+} from "./bake.js";
+export { defineRasterBaker, rasterBake } from "./bake.js";
 
 export type {
   AnyFontToken,
@@ -28,8 +28,8 @@ export type {
   FontSourceOverride,
   FontToken,
   RegisteredFont,
-} from './font.js'
-export { defineFont } from './font.js'
+} from "./font.js";
+export { defineFont } from "./font.js";
 
 export type {
   FontHandle,
@@ -39,13 +39,21 @@ export type {
   RasterHandle,
   RasterKey,
   Sha256Hex,
-} from './identity.js'
+} from "./identity.js";
 
-export type { FontSlotRecord, ParagraphLayout, ParagraphMeasurement } from './layout.js'
+export type { FontSlotRecord, ParagraphLayout, ParagraphMeasurement } from "./layout.js";
 
-export type { FontLoadOptions, FontLoader, FontRegistry } from './loader.js'
+export type {
+  FontLoadDiagnostic,
+  FontLoadOptions,
+  FontLoaderOptions,
+  FontRegistryOptions,
+  RuntimeFontBake,
+  RuntimeFontBakeRequest,
+} from "./loader.js";
+export { FontLoader, FontLoadError, FontRegistry } from "./loader.js";
 
-export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js'
+export type { GlyphPaint, LinearRgba, ResolvedPaint } from "./paint.js";
 
 export type {
   Paragraph,
@@ -55,7 +63,7 @@ export type {
   ParagraphInput,
   ParagraphSpan,
   ParagraphStyle,
-} from './paragraph.js'
+} from "./paragraph.js";
 
 export type {
   AnyRasterModule,
@@ -83,8 +91,8 @@ export type {
   RuntimeRasterBakeRequest,
   RuntimeRasterBakerLoader,
   RuntimeRasterBakerModule,
-} from './raster.js'
-export { defineRaster } from './raster.js'
+} from "./raster.js";
+export { defineRaster } from "./raster.js";
 
 export type {
   FontFeature,
@@ -97,4 +105,4 @@ export type {
   TextShapingProperties,
   TextSpan,
   TextUpdateProperties,
-} from './text.js'
+} from "./text.js";

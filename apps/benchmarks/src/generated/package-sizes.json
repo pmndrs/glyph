@@ -6,30 +6,40 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 540,
-      "minifiedBytes": 461,
-      "gzipBytes": 222,
-      "brotliBytes": 193
+      "rawBytes": 29833,
+      "minifiedBytes": 21257,
+      "gzipBytes": 6364,
+      "brotliBytes": 5650
+    },
+    {
+      "id": "font-validator-js",
+      "label": "Lazy font validator JS",
+      "status": "measured",
+      "format": "javascript",
+      "rawBytes": 739909,
+      "minifiedBytes": 584061,
+      "gzipBytes": 137510,
+      "brotliBytes": 112768
     },
     {
       "id": "portable-baker-js",
       "label": "Portable baker JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 5643,
-      "minifiedBytes": 4001,
-      "gzipBytes": 1539,
-      "brotliBytes": 1352
+      "rawBytes": 5554,
+      "minifiedBytes": 3963,
+      "gzipBytes": 1522,
+      "brotliBytes": 1334
     },
     {
       "id": "portable-baker-wasm",
       "label": "Portable baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 475609,
-      "minifiedBytes": 475609,
-      "gzipBytes": 168932,
-      "brotliBytes": 136005
+      "rawBytes": 430662,
+      "minifiedBytes": 430662,
+      "gzipBytes": 167310,
+      "brotliBytes": 136118
     },
     {
       "id": "unicode-properties",

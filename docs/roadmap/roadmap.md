@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T05:47:27Z"
+  at: "2026-07-25T06:14:20Z"
 ---
 
 # Canonical implementation roadmap
@@ -92,8 +92,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 2.2 | ✅ | Implement the host-independent font bake request/result core. | M | 2.1 |
 | 2.3 | ✅ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
 | 2.4 | ✅ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
-| 3.1 | 🟡 | Implement baked probing, validation, and registration. | M | 2.4 |
-| 3.2 | ⬜ | Add the dynamically imported Worker bake path. | M | 3.1 |
+| 3.1 | ✅ | Implement baked probing, validation, and registration. | M | 2.4 |
+| 3.2 | 🟡 | Add the dynamically imported Worker bake path. | M | 3.1 |
 | 3.3 | ⬜ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
 | 4.1 | ⬜ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
 | 4.2 | ⬜ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
@@ -281,6 +281,21 @@ Deliver:
 Explicitly exclude subsetting, shaping closure, dense remapping, compiled layout IR, MSDF, and Slug.
 
 ## Milestone 3 — baked-first loader and Worker fallback
+
+### 3.1 closure checklist
+
+- [x] String, `URL`, `{ source }`, `{ source, baked }`, and `{ baked }` inputs normalize against one base, remove fragments, preserve queries, detect baked-only GLBs, and derive exact case-insensitive TTF/OTF/WOFF/WOFF2 or extensionless siblings.
+- [x] Concurrent equivalent requests share one versioned promise key; validated shaping identity deduplicates registration within a registry while separate registries and post-disposal generations remain isolated.
+- [x] Baked hits run the shipped GLB/Khronos/schema/semantic/payload validator before registration, distinguish missing, invalid, incompatible-version, fetch, and resource-limit failures, and cannot reach the runtime baker, bitmap baker, Node host, or bake Wasm in the initial graph.
+- [x] Registration owns caller bytes, extracts the exact reduced SFNT, glyph extents, availability bits, metrics, Unicode/source provenance, and raster directory needed by later shaping without reparsing the source font.
+- [x] Loader fixtures compare every extracted shaping byte to the independently validated GLB views; milestone 4 consumes these same retained views for bit-for-bit corpus shaping rather than creating a second extraction path.
+- [x] Embedded/external delivery variants for one raster key merge without changing identity; generic attachment checks GLB framing, Khronos output, buffer ranges, reciprocal font/raster identity, artifact hash, and immutable copied views while package semantics remain module-owned.
+- [x] External companion URLs resolve relative to the exact core-asset context, application resolvers can intercept, runtime-produced assets authenticate their source bytes against provenance, and baked-only failures never fetch or bake a source.
+- [x] Development missing-sibling warnings deduplicate, production suppresses them, invalid/incompatible assets emit structured diagnostics before allowed fallback, and non-hierarchical source URLs skip sibling warnings.
+- [x] Configured artifact/view/raster limits apply before caller-byte copies and while streaming responses even without trustworthy `Content-Length`; cancellation detaches a caller without corrupting a shared completed result.
+- [x] Real Inter integration tests cover hits, injected fallback seam, registration, disposal, embedded/external rasters, hash failure, limits, and input forms; fixed-seed loader mutation fuzzing requires deterministic, non-mutating outcomes.
+
+Item 3.1 is closed. Item 3.2 is active and replaces the injected fallback seam's absent default with the dynamically imported module-Worker host over the exact portable bake core.
 
 Deliver:
 

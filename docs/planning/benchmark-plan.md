@@ -65,7 +65,7 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
 | Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
 | Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic and pinned real-font baker lanes pass, while later loading/rendering lanes remain open. |
-| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli core and baker JavaScript sizes plus raw/gzip/Brotli Wasm; future Unicode tables remain explicitly unavailable. |
+| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, lazy-validator, and baker JavaScript sizes plus raw/gzip/Brotli Wasm; Rollup static closures exclude dynamic chunks, and future Unicode tables remain explicitly unavailable. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
 
@@ -194,13 +194,14 @@ Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where
 Like the reference project, bundle sizes are produced from independent import entries. Required entries include:
 
 - browser core;
+- lazy font-asset validator;
 - HarfRust shaper JavaScript glue and Wasm;
 - runtime baker loader and bake Wasm;
 - each raster runtime;
 - each raster generator;
 - combined V1 application path.
 
-Report raw, minified, gzip, and Brotli JavaScript; raw, gzip, and Brotli Wasm; and any dynamically imported transcoder separately. The interactive lab reads generated result JSON rather than estimating sizes from the development bundle.
+Report raw, minified, gzip, and Brotli JavaScript; raw, gzip, and Brotli Wasm; and every substantial dynamically imported validator, Worker host, generator, or transcoder separately. The initial entry measurement follows only static chunk imports and never adds dynamic chunks merely because they are reachable. The interactive lab reads generated result JSON rather than estimating sizes from the development bundle.
 
 ## Benchmark environments
 
