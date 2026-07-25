@@ -20,6 +20,9 @@ sources:
   - id: gltf-validator
     resource: https://www.npmjs.com/package/gltf-validator/v/2.0.0-dev.3.10
     title: glTF Validator 2.0.0-dev.3.10
+  - id: ajv
+    resource: https://www.npmjs.com/package/ajv/v/6.15.0
+    title: Ajv 6.15.0
   - id: abi-source
     resource: ../../packages/font-baker/rust/src/abi_contract.rs
     title: Generated ABI and version-contract source
@@ -28,7 +31,7 @@ sources:
     title: Binaryen 129.0.0
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:56:50Z"
+  at: "2026-07-25T03:24:49Z"
 ---
 
 # V0 toolchain and format version pins
@@ -45,6 +48,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Unicode | `17.0.0` | versioned UCD and UAX data |
 | glTF specification | `2.0` | Khronos schema commit `77b44be7bef26e01fb0b140e3d5bb1716421c5e9` |
 | Khronos glTF Validator | `2.0.0-dev.3.10` | npm package |
+| JSON Schema Draft-04 evaluator | Ajv `6.15.0` | npm package; exact extension-schema negative matrix |
 | Binaryen / `wasm-opt` | `129.0.0` | npm package; `-Oz`, bulk memory, nontrapping float-to-int |
 | TypeScript discovery compiler | `7.0.2` | npm package; exact runtime assertion and isolated unstable-API adapter |
 | `PMNDRS_font` format | `0` | extension schema and shaping contract |
@@ -64,7 +68,7 @@ Every raster generator stamps its exact owning package semantic version into its
 | --- | --- |
 | Shaper or oracle | Old/new structured shaping diff over the complete pinned corpus. |
 | Unicode | Version-matched UAX data, conformance runs, and package-size report. |
-| glTF schema or validator | Schema/validator report diff with reviewed extension-only allowlist changes. |
+| glTF schema or validator | Schema/validator report diff with reviewed extension-only allowlist changes; vendored schema archive SHA-256 is `0f1e200bb081d1fcc7a976ee40f05f95b406ed80f43836550af96b73e5a64bef`. |
 | Binaryen | Raw/compressed module diff plus zero-import, ABI, deterministic artifact, and real-font equivalence. |
 | TypeScript discovery compiler | Adapter compatibility, unstable-import isolation, typed/plain-JavaScript discovery, and complete discovery fixture suite. |
 | ABI or font format | Explicit version increment, compatibility decision, and old/new fixture coverage. |

@@ -12,6 +12,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./validate": {
+      "types": "./dist/validator.d.ts",
+      "import": "./dist/validator.js"
+    },
     "./font-baker.wasm": "./dist/font_baker.wasm",
     "./abi.json": "./dist/font-baker-abi-v0.json",
     "./package.json": "./package.json"
@@ -30,5 +34,9 @@
   "devDependencies": {
     "binaryen": "129.0.0",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "ajv": "6.15.0",
+    "gltf-validator": "2.0.0-dev.3.10"
   }
 }

@@ -24,15 +24,15 @@ sources:
     resource: "../../packages/font-baker/rust/build.rs"
     title: "compile-time generator"
   - id: "citation-6"
-    resource: "../../packages/font-baker/tests/support/font-glb.mjs"
-    title: "Real-font GLB probe"
+    resource: "../../packages/font-baker/src/validator.ts"
+    title: "Core font artifact validator"
   - id: "fontations"
     resource: "https://github.com/googlefonts/fontations"
     title: "Fontations"
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:56:50Z"
+  at: "2026-07-25T03:24:49Z"
 ---
 
 # Font baker implementation status
@@ -49,13 +49,13 @@ Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not s
 | Wasm allocator | 🟡 | The `no_std + alloc` build uses ABI-private `dlmalloc` as a working baseline. | Run the [`rlsf`/`lol_alloc` experiment](font-baker-allocator.md) in representative one-shot and repeated-bake Worker lifecycles. |
 | TypeScript wrapper | ✅ | Implements the accepted `FontBakeRequestV0 → FontBakeResultV0` boundary, instantiates the raw Wasm module, reads generated ABI JSON, transfers bytes through linear memory, returns typed bytes/reports, and maps structured errors. | Reuse this exact core in the Node and Worker hosts. |
 | Unit verification | ✅ | Rust unit tests isolate checksum padding, outward V0 bounds encoding, and GLB alignment behavior. | Add a focused regression with every internal defect or policy branch. |
-| Package integration | ✅ | Public Rust tests validate ABI fields, source/container/table policy, TTC face selection, and structured errors. Compiled-Wasm tests validate the pinned optimized module, zero imports, generated/published ABI identity, direct-memory behavior, and errors. | Item 2.3 adds reusable GLB/schema validators rather than test-only inspection. |
-| Real-font vertical slice | ✅ | The mandatory package E2E verifies canonical Inter identity, deterministic exact artifact/report values, closed SFNT structure/checksums/metrics, dense extents/hash, and source-versus-reduced HarfRust equality over every checked-in case. | Item 2.3 adds pinned Khronos and JSON Schema reports plus bitmap composition. |
+| Package integration | ✅ | Public Rust tests validate ABI fields, source/container/table policy, TTC face selection, and structured errors. Compiled-Wasm tests validate the pinned optimized module, zero imports, generated/published ABI identity, direct-memory behavior, and errors. The reusable validation entry adds strict GLB framing, exact Khronos-report admission, Draft-04 required/union coverage, schema-copy identity, semantic identity, and hostile payload mutation tests. | Extend the same layered validator contract to the bitmap-owned companion. |
+| Real-font vertical slice | ✅ | The mandatory package E2E verifies canonical Inter identity, deterministic exact artifact/report values, validates the artifact through the shipped layered validator, and proves source-versus-reduced HarfRust equality over every checked-in case. | Item 2.3 adds bitmap generation and composition to this real-font path. |
 | Product end-to-end | ⬜ | The package test stops at the produced GLB and is not presented as real-product coverage. | Exercise discovery/load, Node/Worker parity, shaping, layout, and rendering through public APIs in `apps/benchmarks`. |
 | TypeScript verification | ✅ | Generated/embedded ABI equality, zero-import, structured-error handling, declaration generation, package build, and workspace type checks pass with the pinned workspace dependencies. | Keep these checks mandatory as public host surfaces are added. |
 | Roadmap item 2.2 | ✅ | The exact host-independent request/result boundary, source validation/face selection, deterministic reduction, Inter identities, reduced-SFNT HarfRust conformance, and pinned Binaryen build are executable. | Preserve this core unchanged behind both hosts; host parity closes in 3.3. |
 | Roadmap item 2.1 | ✅ | `@pmndrs/text` has a TypeScript 7 AST/symbol analyzer with the complete static-source, raw-form, raster-manifest, path-safety, and negative fixture matrix across typed and plain-JavaScript inputs. One version-guarded adapter owns all unstable compiler imports and snapshot/symbol resolution; it remains internal until the complete Node host ships. | Reuse its report in item 2.4 without creating a second manifest or analyzer. |
-| Roadmap item 2.3 | 🟡 | Reusable core/raster validators and package-owned bitmap output are the active slice. | Close schema, semantic, bitmap artifact, and golden gates. |
+| Roadmap item 2.3 | 🟡 | The core-owned validator is shipped on an import-isolated entry with offline pinned schemas, exact validator reports, semantic/payload checks, malformed fixtures, and real-Inter round trip. Bitmap-owned descriptor, generator, companion validator, and goldens remain active. | Close bitmap artifact, packaging, and golden gates. |
 | Roadmap item 2.4 | ⬜ | The public Node host, filesystem output, and CLI remain intentionally absent. | Start only after 2.3 closes. |
 | Runtime shaping (milestone 4) | ⬜ | This package bakes shaping input; it does not yet embed or call HarfRust for runtime shaping. | Start only at the milestone 4 gate. |
 

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { createFontBaker } from "../../dist/index.js";
-import { inspectFontGlb } from "../support/font-glb.mjs";
+import { validateFontArtifact } from "../../dist/validator.js";
 
 const fixtureDirectory = new URL(
   "../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/",
@@ -71,7 +71,7 @@ test("the canonical Inter fixture bakes deterministically and retains HarfRust s
     { artifactId: artifact.id, format: "raw", bytes: artifact.bytes.byteLength },
   ]);
 
-  const inspected = inspectFontGlb(artifact.bytes);
+  const inspected = await validateFontArtifact(artifact.bytes);
   const extension = inspected.document.extensions.PMNDRS_font;
   assert.equal(inspected.shapingSfnt.byteLength, expected.shapingSfntBytes);
   assert.equal(extension.shaping.hash, expected.shapingHash);
@@ -82,6 +82,7 @@ test("the canonical Inter fixture bakes deterministically and retains HarfRust s
   assert.equal(extension.metrics.lineGap, expected.lineGap);
   assert.equal(extension.provenance.sourceHash, manifest.source.fontSha256);
   assert.equal(extension.provenance.descriptorHash, manifest.bake.descriptorHash);
+  assert.equal(inspected.khronos.validatorVersion, manifest.versions.gltfValidator);
 
   const reducedFont = join(temporaryDirectory, "Inter-Regular.shaping.ttf");
   const actualOracle = join(temporaryDirectory, "harfrust.json");

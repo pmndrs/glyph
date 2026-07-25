@@ -16,8 +16,13 @@ and nontrapping float-to-int features emitted by the pinned Rust target.
 
 The current slice accepts source-font bytes and a V0 face descriptor, emits one
 shaping-only `PMNDRS_font` GLB, and returns byte-accounting data and structured
-diagnostics. It does not implement project discovery, filesystem output, bitmap
-baking, Worker orchestration, or runtime shaping.
+diagnostics. Its separate `@pmndrs/text-font-baker/validate` entry validates the
+complete artifact through strict GLB parsing, pinned Khronos glTF validation,
+Draft-04 extension schemas, project semantics, and embedded shaping payloads.
+Keeping that entry separate prevents the Ajv and Khronos engines from loading
+with the small direct-memory baker wrapper. The package does not implement
+project discovery, filesystem output, bitmap baking, Worker orchestration, or
+runtime shaping.
 
 ```ts
 import { createFontBaker } from '@pmndrs/text-font-baker'
@@ -30,6 +35,14 @@ const result = baker.bake({
 })
 ```
 
+Validate untrusted baked bytes before registration:
+
+```ts
+import { validateFontArtifact } from '@pmndrs/text-font-baker/validate'
+
+const validated = await validateFontArtifact(result.artifacts[0].bytes)
+```
+
 Build and verify the package from the repository root:
 
 ```sh
@@ -38,7 +51,7 @@ pnpm --filter @pmndrs/text-font-baker test
 ```
 
 The test command keeps three lanes explicit: Rust unit tests, public Rust and
-compiled Wasm/package integration tests, and a real-font vertical-slice test.
+compiled Wasm/package/schema/malformed-input integration tests, and a real-font vertical-slice test.
 The real-font lane never substitutes generated font bytes for product evidence;
 it always verifies and bakes the checked-in, licensed, hash-pinned Inter 4.1
 fixture. The resulting reduced SFNT is validated structurally and shaped through

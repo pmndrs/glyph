@@ -3,8 +3,9 @@
   "compilerOptions": {
     "lib": ["ES2025", "DOM"],
     "outDir": "dist",
+    "resolveJsonModule": true,
     "rootDir": "src",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.json"]
 }

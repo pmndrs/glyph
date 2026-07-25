@@ -3,7 +3,8 @@
   "compilerOptions": {
     "lib": ["ES2025", "DOM"],
     "noEmit": true,
+    "resolveJsonModule": true,
     "rootDir": "."
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.json"]
 }

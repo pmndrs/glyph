@@ -2,6 +2,7 @@
 
 ## 2026-07-24
 
+- **Implementation** — Added the import-isolated core font validator with strict GLB parsing, exact pinned Khronos-report admission, Ajv Draft-04 schema evaluation against the offline Khronos revision, semantic/SFNT/extents/hash checks, exhaustive required-field/union mutations, and canonical Inter round-trip validation; removed the superseded test-only GLB inspector.
 - **Hardening** — Isolated every TypeScript 7 unstable import and project/symbol-handle operation behind an exact-version compiler adapter; added a source-boundary sentinel and a plain-JavaScript discovery fixture so typed and untyped module support is executable rather than assumed.
 - **Implementation** — Closed roadmap item 2.2 on the exact host-independent request/result boundary; added source/container/table/face-selection fixtures, exact Inter 4.1 reduced-SFNT identities and semantic checks, full-corpus HarfRust source/reduced equivalence, and pinned Binaryen 129.0.0 `-Oz` with zero-import and artifact-equivalence gates.
 - **Implementation** — Closed roadmap item 2.1 with TypeScript 7 AST/symbol discovery for composed and raw core/React font declarations, immutable raster extraction, conservative canonical asset-root mapping, and exact-package ESM baker resolution; seven package/integration cases cover the declared positive and negative fixture inventory without exposing the partial Node API.

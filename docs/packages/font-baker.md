@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:d7c6461f677b8d0332fb5d6f282d5a613046d4d8d05f6c4d9f1b0206f4184434"
+source_digest: "sha256:e49f4ab137385822585168d013ebb6a6147a8a0b9e8bd5439b73f4e91ac28956"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -14,19 +14,24 @@ sources:
   - id: implementation-status
     resource: ../planning/font-baker-implementation.md
     title: Font baker implementation status
+  - id: validator
+    resource: ../../packages/font-baker/src/validator.ts
+    title: Core font artifact validator
   - id: fontations
     resource: https://github.com/googlefonts/fontations
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:56:50Z"
+  at: "2026-07-25T03:24:49Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
 
 Status: ✅ roadmap item 2.2 portable bake core; item 2.3 composition is active
 
-This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, validator, and Binaryen pins consumed by provenance and fixtures.
+This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, core artifact validator, vendored schema bundle, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, validator, and Binaryen pins consumed by provenance and fixtures.
+
+The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only the reviewed `PMNDRS_font`/extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. The main baker entry has no static edge to either validation engine.
 
 The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. At item 2.2 closure, that changes 475,673 raw bytes to 430,662 while preserving zero imports, the embedded ABI, and the canonical artifact hash. Transfer compression changes much less—168,958 to 167,310 gzip bytes and 136,342 to 136,118 Brotli bytes—so reports keep raw and transport costs distinct.
 
@@ -40,8 +45,8 @@ The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, 
 | --- | --- |
 | `build` | Compile the `no_std` Wasm module, apply pinned `wasm-opt -Oz`, generate the ABI JSON, and emit the TypeScript package. |
 | `test:unit` | Run Rust unit tests. |
-| `test:integration` | Run public Rust and compiled Wasm/TypeScript integration tests. |
-| `test:e2e` | Verify and bake the canonical licensed Inter fixture through the packaged Wasm API. |
+| `test:integration` | Run public Rust, compiled Wasm/TypeScript, package-isolation, schema, and malformed-artifact tests. |
+| `test:e2e` | Verify, bake, validate, and shape the canonical licensed Inter fixture through packaged APIs. |
 | `test` | Run all three test layers. |
 | `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths. |
 

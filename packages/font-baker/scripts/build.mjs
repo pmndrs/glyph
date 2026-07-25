@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +31,14 @@ await run("cargo", [
 ]);
 await run("tsc", ["-p", "tsconfig.build.json"]);
 await mkdir(new URL("../dist/", import.meta.url), { recursive: true });
+await copyFile(
+  new URL("../src/schemas/KHRONOS-SPEC-LICENSE.txt", import.meta.url),
+  new URL("../dist/schemas/KHRONOS-SPEC-LICENSE.txt", import.meta.url),
+);
+await copyFile(
+  new URL("../src/schemas/README.md", import.meta.url),
+  new URL("../dist/schemas/README.md", import.meta.url),
+);
 await run(wasmOpt, [
   "--enable-bulk-memory",
   "--enable-nontrapping-float-to-int",
