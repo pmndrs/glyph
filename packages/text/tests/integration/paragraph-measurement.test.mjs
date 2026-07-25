@@ -17,16 +17,23 @@ const shapingDirectory = new URL(
   '../../../../apps/benchmarks/fixtures/shaping/inter-regular/',
   import.meta.url,
 )
+const paragraphContract = new URL(
+  '../../../../apps/benchmarks/fixtures/contracts/paragraph-layout-v0.json',
+  import.meta.url,
+)
 
 test('measures the exact GLB-extracted HarfRust paragraph without positioned arrays', async () => {
-  const [{ font, shaper }, oracle] = await Promise.all([
+  const [{ font, shaper }, oracle, contract] = await Promise.all([
     runtime(),
     readJson(new URL('harfrust.json', shapingDirectory)),
+    readJson(paragraphContract),
   ])
   const calls = { shape: 0, reshape: 0 }
-  const observedShaper = observeShaper(shaper, calls)
+  const reshapeRequests = []
+  const observedShaper = observeShaper(shaper, calls, reshapeRequests)
   const engine = createParagraphEngine({ shaper: observedShaper })
   const expected = oracle.cases.find(({ id }) => id === 'paragraph')
+  const layoutGoldens = contract.goldens
   assert.ok(expected)
   const paragraph = engine.create({
     text: expected.text,
@@ -48,40 +55,71 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
     expected.glyphs.reduce((sum, glyph) => sum + glyph.xAdvance, 0) * 32 / font.metrics.unitsPerEm
   const natural = paragraph.measure()
   assert.equal(natural.width, expectedNaturalWidth)
-  assert.deepEqual(natural, {
-    width: 847.625,
-    height: 41.599999999999994,
-    contentWidth: 847.625,
-    contentHeight: 41.599999999999994,
-    firstBaseline: 32.440625,
-    lastBaseline: 32.440625,
-    overflowed: false,
-  })
+  assert.deepEqual(natural, layoutGoldens.natural.measurement)
   assert.equal('glyphIds' in natural, false)
 
   const wideConstraints = { width: { mode: 'at-most', size: 720 } }
   const wide = paragraph.measure(wideConstraints)
-  assert.deepEqual(wide, {
-    width: 696.734375,
-    height: 83.19999999999999,
-    contentWidth: 696.734375,
-    contentHeight: 83.19999999999999,
-    firstBaseline: 32.440625,
-    lastBaseline: 74.04062499999999,
-    overflowed: false,
-  })
+  assert.deepEqual(wide, layoutGoldens.wide.measurement)
   assert.equal(paragraph.measure(wideConstraints), wide, 'equivalent measurements reuse one object')
-  assert.deepEqual(paragraph.measure({ width: { mode: 'at-most', size: 360 } }), {
-    width: 356.546875,
-    height: 124.79999999999998,
-    contentWidth: 356.546875,
-    contentHeight: 124.79999999999998,
-    firstBaseline: 32.440625,
-    lastBaseline: 115.64062499999999,
-    overflowed: false,
-  })
+  assert.deepEqual(
+    paragraph.measure({ width: { mode: 'at-most', size: 360 } }),
+    layoutGoldens.narrow.measurement,
+  )
   assert.deepEqual(calls, { shape: 2, reshape: 0 }, 'width-only reflow must not enter Wasm')
 
+  const naturalLayout = paragraph.layout()
+  assert.deepEqual(calls, { shape: 2, reshape: 0 }, 'unbroken layout reuses the broad shape')
+  assert.deepEqual([...naturalLayout.glyphIds], expected.glyphs.map(({ glyphId }) => glyphId))
+  assert.deepEqual([...naturalLayout.clusters], expected.glyphs.map(({ cluster }) => cluster))
+  assert.deepEqual([...naturalLayout.glyphFlags], expected.glyphs.map(({ flags }) => flags))
+  assert.deepEqual([...naturalLayout.x], expectedNaturalX(expected.glyphs, 32 / font.metrics.unitsPerEm))
+  assert.deepEqual(
+    [...naturalLayout.y],
+    expected.glyphs.map(({ yOffset }) => Math.fround(naturalLayout.firstBaseline - yOffset * 32 / font.metrics.unitsPerEm)),
+  )
+  assertLayoutLines(naturalLayout, layoutGoldens.natural.layout)
+  assert.equal(hashLayout(naturalLayout), layoutGoldens.natural.layout.hash)
+
+  const wideLayout = paragraph.layout(wideConstraints)
+  assert.deepEqual(calls, { shape: 2, reshape: 1 }, 'all wide boundaries reshape in one batch')
+  assert.equal(paragraph.layout(wideConstraints), wideLayout, 'equivalent layout reuses one object')
+  assertLayoutLines(wideLayout, layoutGoldens.wide.layout)
+  assert.deepEqual([...wideLayout.glyphIds], expected.glyphs.map(({ glyphId }) => glyphId))
+  assert.deepEqual([...wideLayout.clusters], expected.glyphs.map(({ cluster }) => cluster))
+  assert.deepEqual([...wideLayout.glyphFlags], expected.glyphs.map(({ flags }) => flags))
+  assert.equal(hashLayout(wideLayout), layoutGoldens.wide.layout.hash)
+
+  const narrowConstraints = { width: { mode: 'at-most', size: 360 } }
+  const narrowLayout = paragraph.layout(narrowConstraints)
+  assert.deepEqual(calls, { shape: 2, reshape: 2 }, 'all narrow boundaries reshape in one batch')
+  assert.deepEqual(reshapeRequests.map(({ ranges }) => ranges.length), [2, 3])
+  assert.deepEqual(reshapeRequests[0].ranges, [
+    { run: 0, itemStart: 0, itemEnd: 47, contextStart: 0, contextEnd: 56, flags: 0x43 },
+    { run: 0, itemStart: 47, itemEnd: 56, contextStart: 0, contextEnd: 56, flags: 0x43 },
+  ])
+  assert.deepEqual(reshapeRequests[1].ranges, [
+    { run: 0, itemStart: 0, itemEnd: 22, contextStart: 0, contextEnd: 56, flags: 0x43 },
+    { run: 0, itemStart: 22, itemEnd: 47, contextStart: 0, contextEnd: 56, flags: 0x43 },
+    { run: 0, itemStart: 47, itemEnd: 56, contextStart: 0, contextEnd: 56, flags: 0x43 },
+  ])
+  assertLayoutLines(narrowLayout, layoutGoldens.narrow.layout)
+  assert.equal(hashLayout(narrowLayout), layoutGoldens.narrow.layout.hash)
+  const exactHeight = paragraph.layout({
+    ...narrowConstraints,
+    height: { mode: 'exactly', size: 200 },
+  })
+  assert.deepEqual(calls, { shape: 2, reshape: 2 }, 'height-only layout reuses positioned lines')
+  assert.equal(exactHeight.height, 200)
+  assert.equal(exactHeight.glyphIds, narrowLayout.glyphIds)
+  const postLayoutInterfering = engine.create({ text: 'ffi', font: font.handle })
+  assert.equal(
+    hashLayout(narrowLayout),
+    layoutGoldens.narrow.layout.hash,
+    'positioned arrays own their Wasm results',
+  )
+
+  postLayoutInterfering.dispose()
   interfering.dispose()
   paragraph.dispose()
   assert.throws(() => paragraph.measure(), /disposed/)
@@ -99,6 +137,7 @@ test('resolves features and updates as one new broad-shape revision', async () =
   })
   assert.equal(paragraph.measure().width, 119.75)
   assert.deepEqual(calls, { shape: 1, reshape: 0 })
+  const defaultLayout = paragraph.layout()
 
   paragraph.update({
     text: 'AVATAR',
@@ -112,6 +151,9 @@ test('resolves features and updates as one new broad-shape revision', async () =
   })
   assert.equal(paragraph.measure().width, 129.5625)
   assert.deepEqual(calls, { shape: 2, reshape: 0 })
+  const unkernedLayout = paragraph.layout()
+  assert.notEqual(unkernedLayout, defaultLayout)
+  assert.notDeepEqual([...unkernedLayout.x], [...defaultLayout.x])
   shaper.dispose()
   font.dispose()
 })
@@ -147,7 +189,30 @@ test('validates spans, constraints, empty text, and lifecycle deterministically'
   )
   assert.throws(() => empty.measure({ width: { mode: 'at-most', size: Number.NaN } }), /finite/)
   assert.throws(() => empty.measure({ maxLines: 0 }), /positive safe integer/)
-  assert.throws(() => empty.layout(), /roadmap item 5.2/)
+  const emptyLayout = empty.layout()
+  assert.deepEqual(emptyLayout, {
+    width: 0,
+    height: 0,
+    contentWidth: 0,
+    contentHeight: 0,
+    firstBaseline: 0,
+    lastBaseline: 0,
+    overflowed: false,
+    fontHandles: new Uint32Array(),
+    glyphFontSlots: new Uint16Array(),
+    glyphIds: new Uint16Array(),
+    clusters: new Uint32Array(),
+    glyphFontSizes: new Float32Array(),
+    x: new Float32Array(),
+    y: new Float32Array(),
+    glyphFlags: new Uint16Array(),
+    lineTextStarts: new Uint32Array(),
+    lineTextEnds: new Uint32Array(),
+    lineGlyphStarts: new Uint32Array(),
+    lineGlyphCounts: new Uint32Array(),
+    lineBaselines: new Float32Array(),
+    lineAdvances: new Float32Array(),
+  })
   const singleLine = engine.create({ text: 'a', font: font.handle }).measure()
   const trailingBreak = engine.create({ text: 'a\n', font: font.handle }).measure()
   assert.equal(trailingBreak.contentHeight, singleLine.contentHeight * 2)
@@ -173,7 +238,7 @@ async function runtime() {
   return { font, shaper }
 }
 
-function observeShaper(shaper, calls) {
+function observeShaper(shaper, calls, reshapeRequests = []) {
   return {
     registry: shaper.registry,
     registerFont: (font) => shaper.registerFont(font),
@@ -184,11 +249,59 @@ function observeShaper(shaper, calls) {
     },
     reshapeRanges: (request) => {
       calls.reshape += 1
+      reshapeRequests.push({ ranges: request.ranges.map((range) => ({ ...range })) })
       return shaper.reshapeRanges(request)
     },
     memoryReport: () => shaper.memoryReport(),
     dispose: () => shaper.dispose(),
   }
+}
+
+function expectedNaturalX(glyphs, scale) {
+  let cursor = 0
+  return glyphs.map(({ xAdvance, xOffset }) => {
+    const positioned = Math.fround(cursor + xOffset * scale)
+    cursor += Math.abs(xAdvance) * scale
+    return positioned
+  })
+}
+
+function assertLayoutLines(layout, golden) {
+  assert.equal(layout.glyphIds.length, golden.glyphCount)
+  for (const key of [
+    'lineTextStarts',
+    'lineTextEnds',
+    'lineGlyphStarts',
+    'lineGlyphCounts',
+    'lineBaselines',
+    'lineAdvances',
+  ]) {
+    assert.deepEqual([...layout[key]], golden[key])
+  }
+}
+
+function hashLayout(layout) {
+  let hash = 2_166_136_261
+  for (const values of [
+    layout.glyphFontSlots,
+    layout.glyphIds,
+    layout.clusters,
+    layout.glyphFontSizes,
+    layout.x,
+    layout.y,
+    layout.glyphFlags,
+    layout.lineTextStarts,
+    layout.lineTextEnds,
+    layout.lineGlyphStarts,
+    layout.lineGlyphCounts,
+    layout.lineBaselines,
+    layout.lineAdvances,
+  ]) {
+    hash = Math.imul(hash ^ values.length, 16_777_619)
+    const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
+    for (const value of bytes) hash = Math.imul(hash ^ value, 16_777_619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 async function readJson(url) {

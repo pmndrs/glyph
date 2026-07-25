@@ -2,7 +2,13 @@ import type { FontHandle } from './identity.js'
 import type { ParagraphLayout, ParagraphMeasurement } from './layout.js'
 import type { FontFeature, ResolvedFontFeature } from './text.js'
 import type { RegisteredFont } from './font.js'
-import type { RuntimeShaper, ShapeRunRequest, ShapedBatchViews } from './shaper.js'
+import type {
+  ReshapeRange,
+  RuntimeShaper,
+  ShapeBatchRequest,
+  ShapeRunRequest,
+  ShapedBatchViews,
+} from './shaper.js'
 import { analyzeUnicodeText, type UnicodeTextAnalysis } from './internal/unicode.js'
 
 /**
@@ -134,6 +140,7 @@ interface PreparedParagraph {
   readonly unicode: UnicodeTextAnalysis
   readonly styles: readonly StyleSegment[]
   readonly runs: readonly PreparedRun[]
+  readonly request: ShapeBatchRequest
   readonly shape: OwnedShape
   readonly clusters: readonly MeasuredCluster[]
 }
@@ -152,9 +159,38 @@ interface MeasuredPlan {
   readonly lines: readonly LinePlan[]
 }
 
+interface LineFragment {
+  readonly line: number
+  readonly run: number
+  readonly start: number
+  readonly end: number
+  readonly flags: number
+  readonly reshape: boolean
+}
+
+interface PositionedGeometry {
+  readonly fontHandles: Uint32Array
+  readonly glyphFontSlots: Uint16Array
+  readonly glyphIds: Uint16Array
+  readonly clusters: Uint32Array
+  readonly glyphFontSizes: Float32Array
+  readonly x: Float32Array
+  readonly y: Float32Array
+  readonly glyphFlags: Uint16Array
+  readonly lineTextStarts: Uint32Array
+  readonly lineTextEnds: Uint32Array
+  readonly lineGlyphStarts: Uint32Array
+  readonly lineGlyphCounts: Uint32Array
+  readonly lineBaselines: Float32Array
+  readonly lineAdvances: Float32Array
+}
+
 const DEFAULT_FONT_SIZE = 16
 const PRODUCE_UNSAFE_TO_CONCAT = 0x40
+const BEGINNING_OF_TEXT = 0x01
+const END_OF_TEXT = 0x02
 const GLYPH_UNSAFE_TO_BREAK = 0x01
+const GLYPH_UNSAFE_TO_CONCAT = 0x02
 
 export function createParagraphEngine(options: ParagraphEngineOptions): ParagraphEngine {
   if (options?.shaper === undefined) throw new TypeError('paragraph engine requires a shaper')
@@ -176,6 +212,9 @@ class ParagraphEngineImpl implements ParagraphEngine {
 class ParagraphImpl implements Paragraph {
   readonly #shaper: RuntimeShaper
   readonly #measurements = new Map<string, MeasuredPlan>()
+  readonly #linePlans = new Map<string, readonly LinePlan[]>()
+  readonly #positionedLines = new Map<string, PositionedGeometry>()
+  readonly #layouts = new Map<string, ParagraphLayout>()
   #prepared: PreparedParagraph
   #disposed = false
 
@@ -192,27 +231,54 @@ class ParagraphImpl implements Paragraph {
 
   layout(constraints?: ParagraphConstraints): ParagraphLayout {
     this.#assertActive()
-    normalizeConstraints(constraints)
-    throw new Error('positioned paragraph layout is not available until roadmap item 5.2')
+    const normalized = normalizeConstraints(constraints)
+    const key = constraintKey(normalized)
+    let layout = this.#layouts.get(key)
+    if (layout !== undefined) return layout
+    const measured = this.#measurePlan(normalized)
+    const lineKey = lineConstraintKey(normalized)
+    let geometry = this.#positionedLines.get(lineKey)
+    if (geometry === undefined) {
+      geometry = positionPrepared(this.#shaper, this.#prepared, measured.lines)
+      this.#positionedLines.set(lineKey, geometry)
+    }
+    layout = Object.freeze({
+      ...measurementForGeometry(normalized, measured.measurement, geometry),
+      ...geometry,
+    })
+    this.#layouts.set(key, layout)
+    return layout
   }
 
   update(input: ParagraphInput): void {
     this.#assertActive()
     this.#prepared = prepareParagraph(this.#shaper, input)
     this.#measurements.clear()
+    this.#linePlans.clear()
+    this.#positionedLines.clear()
+    this.#layouts.clear()
   }
 
   dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
     this.#measurements.clear()
+    this.#linePlans.clear()
+    this.#positionedLines.clear()
+    this.#layouts.clear()
   }
 
   #measurePlan(constraints: NormalizedConstraints): MeasuredPlan {
     const key = constraintKey(constraints)
     let plan = this.#measurements.get(key)
     if (plan === undefined) {
-      plan = measurePrepared(this.#shaper, this.#prepared, constraints)
+      const lineKey = lineConstraintKey(constraints)
+      let lines = this.#linePlans.get(lineKey)
+      if (lines === undefined) {
+        lines = planLines(this.#shaper, this.#prepared, constraints)
+        this.#linePlans.set(lineKey, lines)
+      }
+      plan = measurePrepared(this.#prepared, constraints, lines)
       this.#measurements.set(key, plan)
     }
     return plan
@@ -234,7 +300,7 @@ function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): Prepare
     : shaper.shapeBatch(request)
   const shape = ownShape(borrowed)
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape)
-  return { input: ownedInput, unicode, styles, runs, shape, clusters }
+  return { input: ownedInput, unicode, styles, runs, request, shape, clusters }
 }
 
 function copyInput(input: ParagraphInput): ParagraphInput {
@@ -413,11 +479,7 @@ function prepareRuns(
   return runs
 }
 
-function shapeRequest(text: string, runs: readonly PreparedRun[]): {
-  readonly textUtf16: Uint16Array
-  readonly runs: readonly ShapeRunRequest[]
-  readonly features: readonly ResolvedFontFeature[]
-} {
+function shapeRequest(text: string, runs: readonly PreparedRun[]): ShapeBatchRequest {
   const features: ResolvedFontFeature[] = []
   const shapeRuns = runs.map((run) => {
     const selected = run.style.features.filter(
@@ -500,11 +562,11 @@ function measureClusters(
   return clusters
 }
 
-function measurePrepared(
+function planLines(
   shaper: RuntimeShaper,
   prepared: PreparedParagraph,
   constraints: NormalizedConstraints,
-): MeasuredPlan {
+): readonly LinePlan[] {
   const widthLimit = constraints.width.mode === 'unconstrained'
     ? Number.POSITIVE_INFINITY
     : constraints.width.size
@@ -527,7 +589,14 @@ function measurePrepared(
     }
   }
 
-  const lines = breakLines(shaper, prepared, allowed, widthLimit, constraints.wrap)
+  return breakLines(shaper, prepared, allowed, widthLimit, constraints.wrap)
+}
+
+function measurePrepared(
+  prepared: PreparedParagraph,
+  constraints: NormalizedConstraints,
+  lines: readonly LinePlan[],
+): MeasuredPlan {
   const contentWidth = lines.reduce((maximum, line) => Math.max(maximum, line.advance), 0)
   const contentHeight = lines.reduce((sum, line) => sum + line.height, 0)
   const width = resolveAxis(constraints.width, contentWidth)
@@ -624,7 +693,7 @@ function breakLines(
       clusterStart: lineStart,
       clusterEnd: lineEnd,
       textStart: first.start,
-      textEnd: last.end,
+      textEnd: last.hardBreak ? last.start : last.end,
       advance: lineAdvance,
       ...metrics,
     })
@@ -696,6 +765,270 @@ function normalizeAxis(
 
 function constraintKey(constraints: NormalizedConstraints): string {
   return JSON.stringify(constraints)
+}
+
+function lineConstraintKey(constraints: NormalizedConstraints): string {
+  return JSON.stringify({
+    width: constraints.width,
+    wrap: constraints.wrap,
+    ...(constraints.maxLines === undefined ? {} : { maxLines: constraints.maxLines }),
+    overflow: constraints.overflow,
+  })
+}
+
+function positionPrepared(
+  shaper: RuntimeShaper,
+  prepared: PreparedParagraph,
+  lines: readonly LinePlan[],
+): PositionedGeometry {
+  if (lines.length === 0) return emptyGeometry()
+  const fragments = collectLineFragments(prepared, lines)
+  const ranges: ReshapeRange[] = []
+  const reshapeRunByFragment = new Map<number, number>()
+  for (const [fragmentIndex, fragment] of fragments.entries()) {
+    if (!fragment.reshape) continue
+    reshapeRunByFragment.set(fragmentIndex, ranges.length)
+    const run = prepared.runs[fragment.run]
+    if (run === undefined) throw new Error('line fragment references a missing shaping run')
+    ranges.push({
+      run: fragment.run,
+      itemStart: fragment.start,
+      itemEnd: fragment.end,
+      contextStart: run.start,
+      contextEnd: run.end,
+      flags: fragment.flags,
+    })
+  }
+  const reshaped = ranges.length === 0
+    ? undefined
+    : ownShape(shaper.reshapeRanges({ ...prepared.request, ranges }))
+
+  const fontHandles: number[] = []
+  const fontSlots = new Map<FontHandle, number>()
+  const glyphFontSlots: number[] = []
+  const glyphIds: number[] = []
+  const clusters: number[] = []
+  const glyphFontSizes: number[] = []
+  const x: number[] = []
+  const y: number[] = []
+  const glyphFlags: number[] = []
+  const lineTextStarts: number[] = []
+  const lineTextEnds: number[] = []
+  const lineGlyphStarts: number[] = []
+  const lineGlyphCounts: number[] = []
+  const lineBaselines: number[] = []
+  const lineAdvances: number[] = []
+  let blockOffset = 0
+  let fragmentIndex = 0
+
+  for (const [lineIndex, line] of lines.entries()) {
+    const lineGlyphStart = glyphIds.length
+    let cursor = 0
+    const baseline = blockOffset + line.baseline
+    while (fragments[fragmentIndex]?.line === lineIndex) {
+      const fragment = fragments[fragmentIndex]
+      if (fragment === undefined) break
+      const run = prepared.runs[fragment.run]
+      if (run === undefined) throw new Error('line fragment references a missing shaping run')
+      const reshapeRun = reshapeRunByFragment.get(fragmentIndex)
+      const source = reshapeRun === undefined ? prepared.shape : reshaped
+      const sourceRun = reshapeRun ?? fragment.run
+      if (source === undefined) throw new Error('boundary reshape result is missing')
+      const glyphStart = source.runGlyphStarts[sourceRun]
+      const glyphCount = source.runGlyphCounts[sourceRun]
+      if (glyphStart === undefined || glyphCount === undefined) {
+        throw new Error('shaper returned an incomplete positioned run')
+      }
+      let slot = fontSlots.get(run.style.font)
+      if (slot === undefined) {
+        slot = fontHandles.length
+        fontHandles.push(run.style.font)
+        fontSlots.set(run.style.font, slot)
+      }
+      const font = requireFont(shaper, run.style.font)
+      const scale = run.style.fontSize / font.metrics.unitsPerEm
+      const selected = glyphIndexes(source, glyphStart, glyphCount, fragment.start, fragment.end)
+      for (const [selectedIndex, glyph] of selected.entries()) {
+        const cluster = source.clusters[glyph]
+        const glyphId = source.glyphIds[glyph]
+        const xAdvance = source.xAdvances[glyph]
+        const xOffset = source.xOffsets[glyph]
+        const yOffset = source.yOffsets[glyph]
+        const flags = source.glyphFlags[glyph]
+        if (
+          cluster === undefined ||
+          glyphId === undefined ||
+          xAdvance === undefined ||
+          xOffset === undefined ||
+          yOffset === undefined ||
+          flags === undefined
+        ) {
+          throw new Error('shaper returned an incomplete positioned glyph')
+        }
+        glyphFontSlots.push(slot)
+        glyphIds.push(glyphId)
+        clusters.push(cluster)
+        glyphFontSizes.push(run.style.fontSize)
+        x.push(cursor + xOffset * scale)
+        y.push(baseline - yOffset * scale)
+        glyphFlags.push(flags)
+        cursor += Math.abs(xAdvance) * scale
+        const nextGlyph = selected[selectedIndex + 1]
+        const nextCluster = nextGlyph === undefined ? fragment.end : source.clusters[nextGlyph]
+        if (nextCluster !== cluster) {
+          cursor += spacingBetween(prepared.clusters, cluster, nextCluster ?? fragment.end)
+        }
+      }
+      fragmentIndex += 1
+    }
+    lineTextStarts.push(line.textStart)
+    lineTextEnds.push(line.textEnd)
+    lineGlyphStarts.push(lineGlyphStart)
+    lineGlyphCounts.push(glyphIds.length - lineGlyphStart)
+    lineBaselines.push(baseline)
+    lineAdvances.push(cursor)
+    blockOffset += line.height
+  }
+
+  return {
+    fontHandles: Uint32Array.from(fontHandles),
+    glyphFontSlots: Uint16Array.from(glyphFontSlots),
+    glyphIds: Uint16Array.from(glyphIds),
+    clusters: Uint32Array.from(clusters),
+    glyphFontSizes: Float32Array.from(glyphFontSizes),
+    x: Float32Array.from(x),
+    y: Float32Array.from(y),
+    glyphFlags: Uint16Array.from(glyphFlags),
+    lineTextStarts: Uint32Array.from(lineTextStarts),
+    lineTextEnds: Uint32Array.from(lineTextEnds),
+    lineGlyphStarts: Uint32Array.from(lineGlyphStarts),
+    lineGlyphCounts: Uint32Array.from(lineGlyphCounts),
+    lineBaselines: Float32Array.from(lineBaselines),
+    lineAdvances: Float32Array.from(lineAdvances),
+  }
+}
+
+function collectLineFragments(
+  prepared: PreparedParagraph,
+  lines: readonly LinePlan[],
+): readonly LineFragment[] {
+  const fragments: LineFragment[] = []
+  for (const [lineIndex, line] of lines.entries()) {
+    const lineFragments = prepared.runs
+      .map((run, runIndex) => ({
+        run: runIndex,
+        start: Math.max(line.textStart, run.start),
+        end: Math.min(line.textEnd, run.end),
+      }))
+      .filter(({ start, end }) => start < end)
+    for (const [localIndex, fragment] of lineFragments.entries()) {
+      const first = localIndex === 0
+      const last = localIndex === lineFragments.length - 1
+      const boundaryLine = lines.length > 1 && (first || last)
+      const unsafe = fragmentHasFlag(prepared, fragment.run, fragment.start, fragment.end, GLYPH_UNSAFE_TO_CONCAT)
+      fragments.push({
+        line: lineIndex,
+        ...fragment,
+        flags:
+          PRODUCE_UNSAFE_TO_CONCAT |
+          (first ? BEGINNING_OF_TEXT : 0) |
+          (last ? END_OF_TEXT : 0),
+        reshape: boundaryLine && unsafe,
+      })
+    }
+  }
+  return fragments
+}
+
+function fragmentHasFlag(
+  prepared: PreparedParagraph,
+  runIndex: number,
+  start: number,
+  end: number,
+  flag: number,
+): boolean {
+  const glyphStart = prepared.shape.runGlyphStarts[runIndex]
+  const glyphCount = prepared.shape.runGlyphCounts[runIndex]
+  if (glyphStart === undefined || glyphCount === undefined) return true
+  const selected = glyphIndexes(prepared.shape, glyphStart, glyphCount, start, end)
+  const first = selected[0]
+  const last = selected.at(-1)
+  return first === undefined || last === undefined ||
+    ((prepared.shape.glyphFlags[first] ?? flag) & flag) !== 0 ||
+    ((prepared.shape.glyphFlags[last] ?? flag) & flag) !== 0
+}
+
+function glyphIndexes(
+  shape: OwnedShape,
+  glyphStart: number,
+  glyphCount: number,
+  textStart: number,
+  textEnd: number,
+): number[] {
+  const indexes: number[] = []
+  for (let glyph = glyphStart; glyph < glyphStart + glyphCount; glyph += 1) {
+    const cluster = shape.clusters[glyph]
+    if (cluster !== undefined && cluster >= textStart && cluster < textEnd) indexes.push(glyph)
+  }
+  return indexes
+}
+
+function spacingBetween(
+  clusters: readonly MeasuredCluster[],
+  start: number,
+  end: number,
+): number {
+  let spacing = 0
+  for (const cluster of clusters) {
+    if (cluster.start >= start && cluster.start < end && !cluster.hardBreak) {
+      spacing += cluster.style.letterSpacing
+    }
+  }
+  return spacing
+}
+
+function measurementForGeometry(
+  constraints: NormalizedConstraints,
+  measured: ParagraphMeasurement,
+  geometry: PositionedGeometry,
+): ParagraphMeasurement {
+  const contentWidth = maxArray(geometry.lineAdvances)
+  const width = resolveAxis(constraints.width, contentWidth)
+  const height = resolveAxis(constraints.height, measured.contentHeight)
+  return {
+    width,
+    height,
+    contentWidth,
+    contentHeight: measured.contentHeight,
+    firstBaseline: geometry.lineBaselines[0] ?? 0,
+    lastBaseline: geometry.lineBaselines.at(-1) ?? 0,
+    overflowed: contentWidth > width || measured.contentHeight > height,
+  }
+}
+
+function maxArray(values: Float32Array): number {
+  let maximum = 0
+  for (const value of values) maximum = Math.max(maximum, value)
+  return maximum
+}
+
+function emptyGeometry(): PositionedGeometry {
+  return {
+    fontHandles: new Uint32Array(),
+    glyphFontSlots: new Uint16Array(),
+    glyphIds: new Uint16Array(),
+    clusters: new Uint32Array(),
+    glyphFontSizes: new Float32Array(),
+    x: new Float32Array(),
+    y: new Float32Array(),
+    glyphFlags: new Uint16Array(),
+    lineTextStarts: new Uint32Array(),
+    lineTextEnds: new Uint32Array(),
+    lineGlyphStarts: new Uint32Array(),
+    lineGlyphCounts: new Uint32Array(),
+    lineBaselines: new Float32Array(),
+    lineAdvances: new Float32Array(),
+  }
 }
 
 function resolveAxis(constraint: ParagraphAxisConstraint, content: number): number {

@@ -21,6 +21,12 @@ describe('milestone-one fixture contracts', () => {
 
     expect(bitmap.strike).toMatchObject({ recordStride: 20, gpuFormat: 'r8unorm' })
     expect(paragraph.constraints.map(({ width }: { width: number }) => width)).toEqual([720, 360])
+    expect(paragraph.status).toBe('golden')
+    expect(paragraph.goldens).toMatchObject({
+      natural: { layout: { hash: 'bb15bbcc', glyphCount: 55 } },
+      wide: { layout: { hash: '4f111a3f', glyphCount: 55 } },
+      narrow: { layout: { hash: 'e8c0e9d5', glyphCount: 55 } },
+    })
     expect(glb.container).toMatchObject({ version: 2, alignment: 4, chunkOrder: ['JSON', 'BIN'] })
     expect(new Set(malformed.cases).size).toBe(malformed.cases.length)
     expect(malformed.mustNot).toContain('unbounded-allocation')

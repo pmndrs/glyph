@@ -141,4 +141,31 @@ describe('canonical Inter fixtures', () => {
       ),
     ).toBe(true)
   })
+
+  it('records exact browser positioned layouts and batched boundary reshaping', async () => {
+    const result = JSON.parse(
+      await readFile(new URL('results/paragraph-layout-chromium149.json', fixtureRoot), 'utf8'),
+    )
+
+    expect(result).toMatchObject({
+      targetId: 'paragraph-layout-engine',
+      scenarioId: 'paragraph-layout',
+      status: 'passed',
+      outputBytes: 3786,
+    })
+    expect(result.measurements).toHaveLength(3)
+    expect(new Set(result.measurements.map(({ hash }: { hash: string }) => hash))).toEqual(
+      new Set(['bb15bbcc:4f111a3f:e8c0e9d5']),
+    )
+    expect(
+      result.measurements.every(
+        ({ metrics }: { metrics: Record<string, number> }) =>
+          metrics.shapeBoundaryCrossings === 1 &&
+          metrics.reshapeBoundaryCrossings === 2 &&
+          metrics.batchedBoundaryLayouts === 2 &&
+          metrics.layoutCount === 3 &&
+          metrics.glyphCount === 165,
+      ),
+    ).toBe(true)
+  })
 })

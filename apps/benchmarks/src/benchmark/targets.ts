@@ -4,6 +4,7 @@ import {
   FontLoader,
   FontRegistry,
   type Paragraph,
+  type ParagraphLayout,
   type ParagraphMeasurement,
   type RegisteredFont,
   type RuntimeShaper,
@@ -15,6 +16,7 @@ import wasmUrl from '@pmndrs/text-font-baker/font-baker.wasm?url'
 import shaperWasmUrl from '@pmndrs/text/text-shaper.wasm?url'
 import canonicalFontUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url'
 import canonicalFontManifest from '../../fixtures/fonts/inter-v4.1/manifest.json'
+import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-v0.json'
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
 
@@ -244,40 +246,101 @@ const harfrustShaperTarget: BenchmarkTarget = {
 }
 
 const paragraphGolden = {
-  natural: {
-    width: 847.625,
-    height: 41.599999999999994,
-    contentWidth: 847.625,
-    contentHeight: 41.599999999999994,
-    firstBaseline: 32.440625,
-    lastBaseline: 32.440625,
-    overflowed: false,
-  },
-  wide: {
-    width: 696.734375,
-    height: 83.19999999999999,
-    contentWidth: 696.734375,
-    contentHeight: 83.19999999999999,
-    firstBaseline: 32.440625,
-    lastBaseline: 74.04062499999999,
-    overflowed: false,
-  },
-  narrow: {
-    width: 356.546875,
-    height: 124.79999999999998,
-    contentWidth: 356.546875,
-    contentHeight: 124.79999999999998,
-    firstBaseline: 32.440625,
-    lastBaseline: 115.64062499999999,
-    overflowed: false,
-  },
-} as const
+  natural: canonicalParagraphLayout.goldens.natural.measurement,
+  wide: canonicalParagraphLayout.goldens.wide.measurement,
+  narrow: canonicalParagraphLayout.goldens.narrow.measurement,
+}
+const paragraphLayoutGolden = {
+  natural: canonicalParagraphLayout.goldens.natural.layout,
+  wide: canonicalParagraphLayout.goldens.wide.layout,
+  narrow: canonicalParagraphLayout.goldens.narrow.layout,
+}
 
 let paragraphShaper: RuntimeShaper | undefined
 let paragraphFont: RegisteredFont | undefined
 let measuredParagraph: Paragraph | undefined
 let paragraphShapeCalls = 0
 let paragraphReshapeCalls = 0
+
+async function loadParagraphFixture(): Promise<void> {
+  if (
+    paragraphShaper !== undefined &&
+    paragraphFont !== undefined &&
+    measuredParagraph !== undefined
+  )
+    return
+  const [bakerResponse, shaperResponse, fontResponse] = await Promise.all([
+    fetch(wasmUrl),
+    fetch(shaperWasmUrl),
+    fetch(canonicalFontUrl),
+  ])
+  if (!bakerResponse.ok) throw new Error(`Unable to load font baker Wasm (${bakerResponse.status})`)
+  if (!shaperResponse.ok)
+    throw new Error(`Unable to load text shaper Wasm (${shaperResponse.status})`)
+  if (!fontResponse.ok)
+    throw new Error(`Unable to load canonical font fixture (${fontResponse.status})`)
+  const [bakerWasm, shaperWasm, source] = await Promise.all([
+    bakerResponse.arrayBuffer(),
+    shaperResponse.arrayBuffer(),
+    fontResponse.arrayBuffer(),
+  ])
+  const directBaker = await createFontBaker(bakerWasm)
+  const artifact = directBaker.bake({
+    source: new Uint8Array(source),
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  }).artifacts[0]
+  if (artifact === undefined) throw new Error('Font baker returned no paragraph artifact')
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(artifact.bytes)
+  const shaper = await createRuntimeShaper({ registry, wasm: shaperWasm })
+  const observedShaper: RuntimeShaper = {
+    registry: shaper.registry,
+    registerFont: (registered) => shaper.registerFont(registered),
+    disposeFont: (registered) => shaper.disposeFont(registered),
+    shapeBatch: (request) => {
+      paragraphShapeCalls += 1
+      return shaper.shapeBatch(request)
+    },
+    reshapeRanges: (request) => {
+      paragraphReshapeCalls += 1
+      return shaper.reshapeRanges(request)
+    },
+    memoryReport: () => shaper.memoryReport(),
+    dispose: () => shaper.dispose(),
+  }
+  const fixture = shapingCases.find(({ id }) => id === 'paragraph')
+  if (fixture === undefined) throw new Error('Canonical paragraph shaping fixture is missing')
+  const expectedNaturalWidth =
+    (fixture.glyphs.reduce((sum, glyph) => sum + glyph.xAdvance, 0) * 32) / font.metrics.unitsPerEm
+  if (expectedNaturalWidth !== paragraphGolden.natural.width) {
+    throw new Error('Paragraph width golden is not derived from the pinned HarfRust advances')
+  }
+  const paragraph = createParagraphEngine({ shaper: observedShaper }).create({
+    text: fixture.text,
+    font: font.handle,
+    style: {
+      fontSize: 32,
+      lineHeight: 1.3,
+      language: 'en',
+      direction: 'ltr',
+      features: [],
+    },
+  })
+  paragraphShaper = shaper
+  paragraphFont = font
+  measuredParagraph = paragraph
+}
+
+async function disposeParagraphFixture(): Promise<void> {
+  measuredParagraph?.dispose()
+  paragraphShaper?.dispose()
+  paragraphFont?.dispose()
+  measuredParagraph = undefined
+  paragraphShaper = undefined
+  paragraphFont = undefined
+  paragraphShapeCalls = 0
+  paragraphReshapeCalls = 0
+}
 
 const paragraphTarget: BenchmarkTarget = {
   id: 'paragraph-engine',
@@ -286,76 +349,7 @@ const paragraphTarget: BenchmarkTarget = {
   color: 'violet',
   capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph']),
   status: (input) => (input.fontBytes === undefined ? 'ready' : 'needs-fixture'),
-  load: async () => {
-    if (
-      paragraphShaper !== undefined &&
-      paragraphFont !== undefined &&
-      measuredParagraph !== undefined
-    )
-      return
-    const [bakerResponse, shaperResponse, fontResponse] = await Promise.all([
-      fetch(wasmUrl),
-      fetch(shaperWasmUrl),
-      fetch(canonicalFontUrl),
-    ])
-    if (!bakerResponse.ok)
-      throw new Error(`Unable to load font baker Wasm (${bakerResponse.status})`)
-    if (!shaperResponse.ok)
-      throw new Error(`Unable to load text shaper Wasm (${shaperResponse.status})`)
-    if (!fontResponse.ok)
-      throw new Error(`Unable to load canonical font fixture (${fontResponse.status})`)
-    const [bakerWasm, shaperWasm, source] = await Promise.all([
-      bakerResponse.arrayBuffer(),
-      shaperResponse.arrayBuffer(),
-      fontResponse.arrayBuffer(),
-    ])
-    const directBaker = await createFontBaker(bakerWasm)
-    const artifact = directBaker.bake({
-      source: new Uint8Array(source),
-      descriptor: { formatVersion: 0, fontFaceIndex: 0 },
-    }).artifacts[0]
-    if (artifact === undefined) throw new Error('Font baker returned no paragraph artifact')
-    const registry = new FontRegistry()
-    const font = await registry.registerAsset(artifact.bytes)
-    const shaper = await createRuntimeShaper({ registry, wasm: shaperWasm })
-    const observedShaper: RuntimeShaper = {
-      registry: shaper.registry,
-      registerFont: (registered) => shaper.registerFont(registered),
-      disposeFont: (registered) => shaper.disposeFont(registered),
-      shapeBatch: (request) => {
-        paragraphShapeCalls += 1
-        return shaper.shapeBatch(request)
-      },
-      reshapeRanges: (request) => {
-        paragraphReshapeCalls += 1
-        return shaper.reshapeRanges(request)
-      },
-      memoryReport: () => shaper.memoryReport(),
-      dispose: () => shaper.dispose(),
-    }
-    const fixture = shapingCases.find(({ id }) => id === 'paragraph')
-    if (fixture === undefined) throw new Error('Canonical paragraph shaping fixture is missing')
-    const expectedNaturalWidth =
-      (fixture.glyphs.reduce((sum, glyph) => sum + glyph.xAdvance, 0) * 32) /
-      font.metrics.unitsPerEm
-    if (expectedNaturalWidth !== paragraphGolden.natural.width) {
-      throw new Error('Paragraph width golden is not derived from the pinned HarfRust advances')
-    }
-    const paragraph = createParagraphEngine({ shaper: observedShaper }).create({
-      text: fixture.text,
-      font: font.handle,
-      style: {
-        fontSize: 32,
-        lineHeight: 1.3,
-        language: 'en',
-        direction: 'ltr',
-        features: [],
-      },
-    })
-    paragraphShaper = shaper
-    paragraphFont = font
-    measuredParagraph = paragraph
-  },
+  load: loadParagraphFixture,
   run: async () => {
     if (measuredParagraph === undefined) throw new Error('Paragraph target was not loaded')
     const shapeCalls = paragraphShapeCalls
@@ -384,16 +378,132 @@ const paragraphTarget: BenchmarkTarget = {
       },
     }
   },
-  dispose: async () => {
-    measuredParagraph?.dispose()
-    paragraphShaper?.dispose()
-    paragraphFont?.dispose()
-    measuredParagraph = undefined
-    paragraphShaper = undefined
-    paragraphFont = undefined
-    paragraphShapeCalls = 0
-    paragraphReshapeCalls = 0
+  dispose: disposeParagraphFixture,
+}
+
+const paragraphLayoutTarget: BenchmarkTarget = {
+  id: 'paragraph-layout-engine',
+  label: 'Positioned paragraph engine',
+  detail: 'validated GLB · exact SoA · batched boundary reshape',
+  color: 'cyan',
+  capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph']),
+  status: (input) => (input.fontBytes === undefined ? 'ready' : 'needs-fixture'),
+  load: loadParagraphFixture,
+  run: async () => {
+    if (measuredParagraph === undefined || paragraphFont === undefined) {
+      throw new Error('Paragraph layout target was not loaded')
+    }
+    const natural = measuredParagraph.layout()
+    const wideConstraints = { width: { mode: 'at-most' as const, size: 720 } }
+    const wide = measuredParagraph.layout(wideConstraints)
+    const cachedWide = measuredParagraph.layout(wideConstraints)
+    const narrow = measuredParagraph.layout({ width: { mode: 'at-most', size: 360 } })
+    if (cachedWide !== wide) throw new Error('Equivalent positioned constraints missed the cache')
+    exactParagraphLayout('natural', natural, paragraphLayoutGolden.natural, paragraphFont.handle)
+    exactParagraphLayout('wide', wide, paragraphLayoutGolden.wide, paragraphFont.handle)
+    exactParagraphLayout('narrow', narrow, paragraphLayoutGolden.narrow, paragraphFont.handle)
+    return {
+      bytes: layoutBytes(natural) + layoutBytes(wide) + layoutBytes(narrow),
+      hash: [natural, wide, narrow].map(hashParagraphLayout).join(':'),
+      metrics: {
+        batchedBoundaryLayouts: 2,
+        glyphCount: natural.glyphIds.length + wide.glyphIds.length + narrow.glyphIds.length,
+        layoutCount: 3,
+        reshapeBoundaryCrossings: paragraphReshapeCalls,
+        shapeBoundaryCrossings: paragraphShapeCalls,
+      },
+    }
   },
+  dispose: disposeParagraphFixture,
+}
+
+interface ParagraphLayoutGolden {
+  readonly hash: string
+  readonly glyphCount: number
+  readonly lineTextStarts: readonly number[]
+  readonly lineTextEnds: readonly number[]
+  readonly lineGlyphStarts: readonly number[]
+  readonly lineGlyphCounts: readonly number[]
+  readonly lineBaselines: readonly number[]
+  readonly lineAdvances: readonly number[]
+}
+
+function exactParagraphLayout(
+  label: string,
+  layout: ParagraphLayout,
+  golden: ParagraphLayoutGolden,
+  fontHandle: RegisteredFont['handle'],
+): void {
+  const fixture = shapingCases.find(({ id }) => id === 'paragraph')
+  if (fixture === undefined) throw new Error('Canonical paragraph shaping fixture is missing')
+  exactArray(
+    `${label}.glyphIds`,
+    layout.glyphIds,
+    fixture.glyphs.map(({ glyphId }) => glyphId),
+  )
+  exactArray(
+    `${label}.clusters`,
+    layout.clusters,
+    fixture.glyphs.map(({ cluster }) => cluster),
+  )
+  exactArray(
+    `${label}.glyphFlags`,
+    layout.glyphFlags,
+    fixture.glyphs.map(({ flags }) => flags),
+  )
+  if (
+    layout.fontHandles.length !== 1 ||
+    layout.fontHandles[0] !== fontHandle ||
+    layout.glyphFontSlots.some((slot) => slot !== 0)
+  ) {
+    throw new Error(`${label} paragraph layout did not normalize its font slots`)
+  }
+  if (layout.glyphIds.length !== golden.glyphCount) {
+    throw new Error(`${label} paragraph layout has an unexpected glyph count`)
+  }
+  exactArray(`${label}.lineTextStarts`, layout.lineTextStarts, golden.lineTextStarts)
+  exactArray(`${label}.lineTextEnds`, layout.lineTextEnds, golden.lineTextEnds)
+  exactArray(`${label}.lineGlyphStarts`, layout.lineGlyphStarts, golden.lineGlyphStarts)
+  exactArray(`${label}.lineGlyphCounts`, layout.lineGlyphCounts, golden.lineGlyphCounts)
+  exactArray(`${label}.lineBaselines`, layout.lineBaselines, golden.lineBaselines)
+  exactArray(`${label}.lineAdvances`, layout.lineAdvances, golden.lineAdvances)
+  const hash = hashParagraphLayout(layout)
+  if (hash !== golden.hash)
+    throw new Error(`${label} paragraph layout hash ${hash} != ${golden.hash}`)
+}
+
+function layoutArrays(layout: ParagraphLayout): readonly ArrayBufferView[] {
+  return [
+    layout.fontHandles,
+    layout.glyphFontSlots,
+    layout.glyphIds,
+    layout.clusters,
+    layout.glyphFontSizes,
+    layout.x,
+    layout.y,
+    layout.glyphFlags,
+    layout.lineTextStarts,
+    layout.lineTextEnds,
+    layout.lineGlyphStarts,
+    layout.lineGlyphCounts,
+    layout.lineBaselines,
+    layout.lineAdvances,
+  ]
+}
+
+function hashParagraphLayout(layout: ParagraphLayout): string {
+  let hash = 2_166_136_261
+  for (const values of layoutArrays(layout).slice(1)) {
+    const length = 'length' in values ? Number(values.length) : values.byteLength
+    hash = Math.imul(hash ^ length, 16_777_619)
+    const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
+    for (const value of bytes) hash = Math.imul(hash ^ value, 16_777_619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function layoutBytes(layout: ParagraphLayout): number {
+  return layoutArrays(layout).reduce((sum, values) => sum + values.byteLength, 0)
 }
 
 function exactMeasurement(
@@ -604,6 +714,7 @@ export const targets: readonly BenchmarkTarget[] = [
   loaderWorkerTarget,
   harfrustShaperTarget,
   paragraphTarget,
+  paragraphLayoutTarget,
   unavailableTarget('bitmap', 'Bitmap atlas', 'capability not landed', 'amber'),
   unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),

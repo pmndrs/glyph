@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:1e337ea8ea9eef68d781f1e1ca4cd492a0c597a43ad76c0ff936f80fe3dd70d6"
+source_digest: "sha256:e3bd17df30e91e037e9bfef03d820ecab02542feef6851444ad6457745564ace"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -55,12 +55,12 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T08:13:36Z"
+  at: "2026-07-25T08:38:57Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 implementation slice; roadmap item 5.1 complete and item 5.2 active
+Status: 🟡 implementation slice; roadmap items 5.1–5.2 complete and item 5.3 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -88,7 +88,11 @@ One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, l
 
 Roadmap item 5.1 adds synchronous paragraph preparation and measurement. Unicode 17 Script/Script_Extensions tables are generated deterministically from the pinned UCD package; `unicode-segmenter` supplies extended grapheme boundaries and `@cto.af/linebreak` supplies line-break opportunities. The ordinary suite executes all 766 official grapheme vectors and all 19,338 official line-break vectors from hash-pinned gzip fixtures. Prepared text is split only at grapheme-safe style/script boundaries, shaped once through the existing GLB-retained HarfRust path, copied immediately out of its borrowed result arena, and measured into legal break clusters with explicit baselines. Equivalent width constraints reuse frozen measurement objects and width-only reflow performs zero Wasm calls.
 
-The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three layouts with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays. `layout()` remains the explicit item-5.2 boundary; alignment, bidi, clipping, max-lines, and ellipsis remain item 5.3 rather than silently behaving as implemented options.
+The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
+
+Item 5.2 implements final positioned `ParagraphLayout`. It caches line plans independently from full constraint results, materializes paragraph-owned typed arrays only when requested, scales the exact HarfRust advances/offsets through retained GLB metrics, and emits parallel glyph and line SoA arrays in top-left/positive-down coordinates. Boundary-sensitive line fragments are gathered into one `reshapeRanges` call per changed width with full shaping context and line BOT/EOT flags. The canonical fixture fixes every glyph ID, UTF-16 cluster, flag, line range, baseline, advance, x/y placement, and normalized byte hash for natural, wide, and narrow layouts. The live Chromium aggregate is 3,786 bytes with hashes `bb15bbcc:4f111a3f:e8c0e9d5`, one broad shape, and two reshape calls total. Registry-scoped handles are validated separately and deliberately excluded from the portable hash.
+
+Alignment, bidi, clipping, max-lines, and ellipsis remain item 5.3 rather than silently behaving as implemented options.
 
 The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 

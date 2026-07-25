@@ -32,7 +32,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:47:06Z"
+  at: "2026-07-25T08:38:57Z"
 ---
 
 # Font baker implementation status
@@ -61,7 +61,8 @@ Status key: ✅ complete for the declared slice · 🟡 in progress · ⬜ not s
 | Roadmap item 3.1 | ✅ | The public loader/registry performs canonical baked probing, full hostile-input validation, shaping-identity registration, exact reduced-SFNT/extents extraction, embedded/external raster attachment, streaming limits, provenance checks, lifecycle invalidation, request deduplication, structured fallback diagnostics, and deterministic loader mutation fuzz smoke. | Supply the default dynamically imported module-Worker fallback in item 3.2. |
 | Roadmap item 3.2 | ✅ | The missing default fallback is now a cached dynamic import of a named module-Worker host. Dedicated source/result buffers transfer across the versioned protocol; the Worker imports the exact portable wrapper and optimized Wasm; and canonical Inter fixtures exercise the public host, Worker entry, default loader, and exact direct-core artifact equality. Separate size lanes keep the initial core, validator, host, Worker JavaScript, and Wasm honest. | Prove the real browser-hosted path against Node, cancel abandoned shared work, and complete packed/bundled graph gates in item 3.3. |
 | Roadmap item 3.3 | ✅ | A real Chromium benchmark target proves exact Worker-versus-canonical-Node artifact identity before executing public loader fallback. Shared consumer accounting aborts underlying fetch/stream/Worker work only after the final detach; idle cancelled Workers terminate and recreate without timers. Emitted-package and Rollup-closure tests keep every lazy/host-specific dependency outside the initial graph. | Register the exact retained shaping SFNT in the milestone-4 HarfRust Wasm module. |
-| Runtime shaping (milestone 4) | ✅ | The package-owned `no_std + alloc` shaper registers only exact validator-retained views, caches HarfRust data/plans, and exposes generated direct-memory batch/reshape records plus borrowed SoA results. Every pinned case matches IDs, absolute UTF-16 clusters, positions, and flags through the GLB path; multi-run, lifecycle, malformed-input, fuzz, size, memory, and real Chromium one-call evidence are executable. | Preserve this conformance while item 5.1 consumes broad shaping. |
+| Runtime shaping (milestone 4) | ✅ | The package-owned `no_std + alloc` shaper registers only exact validator-retained views, caches HarfRust data/plans, and exposes generated direct-memory batch/reshape records plus borrowed SoA results. Every pinned case matches IDs, absolute UTF-16 clusters, positions, and flags through the GLB path; multi-run, lifecycle, malformed-input, fuzz, size, memory, and real Chromium one-call evidence are executable. | Preserve this conformance through paragraph policy and rendering. |
+| Paragraph measurement/layout (items 5.1–5.2) | ✅ | Unicode 17 analysis passes complete UAX #14/#29 corpora; canonical Inter broad-shapes once from retained GLB views, measures without glyph arrays, and emits exact paragraph-owned natural/wide/narrow SoA layouts. Changed-width unsafe boundaries reshape in one batch, caches avoid repeated calls, and Node/Chromium/Vitexec hashes agree after excluding registry-scoped handles from portable identity. | Add the complete 5.3 bidi and line-policy layer without weakening these goldens. |
 
 The portable TypeScript package remains intentionally internal. The public `@pmndrs/text/bake` Node subpath wraps it without exposing the raw allocation protocol; the runtime path remains a dynamically imported Worker host over the same core.
 

@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T08:13:36Z"
+  at: "2026-07-25T08:38:57Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–4 and item 5.1 are closed. Milestone 5 continues in issue order at active item 5.2.
+Milestones 0–4 and items 5.1–5.2 are closed. Milestone 5 continues at active item 5.3.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -98,8 +98,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 4.1 | ✅ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
 | 4.2 | ✅ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
 | 5.1 | ✅ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
-| 5.2 | 🟡 | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
-| 5.3 | ⬜ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
+| 5.2 | ✅ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
+| 5.3 | 🟡 | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
 | 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
@@ -379,7 +379,18 @@ HarfRust reads the retained SFNT tables in Wasm. The milestone does not claim co
 - [x] Canonical Inter travels source TTF → portable baker GLB → hostile-input validator → retained shaping views → HarfRust Wasm → paragraph measurement. Exact HarfRust-derived natural, 720 px, and 360 px widths are `847.625`, `696.734375`, and `356.546875`; unrelated shaper calls prove cached ownership.
 - [x] The real Chromium benchmark repeats the three exact layouts with hash `79874b9d`, one preparation shape, zero reshapes/reflow boundary crossings, zero positioned-glyph bytes, and a measured independent Unicode-analysis size lane of 139,752 minified / 41,999 gzip / 31,018 Brotli bytes.
 
-Item 5.1 is closed. Item 5.2 is active; positioned output and boundary-sensitive batched reshaping remain intentionally outside the completed measurement surface.
+Item 5.1 is closed; the positioned output and boundary-sensitive reshape evidence that followed is recorded below.
+
+### 5.2 closure checklist
+
+- [x] `layout()` shares prepared analysis, broad shaping, and cached line plans with `measure()` while materializing paragraph-owned `fontHandles`, font slots, glyph IDs, UTF-16 clusters, font sizes, x/y positions, flags, and parallel line arrays only on demand.
+- [x] Full layouts cache by complete normalized constraints; positioned line geometry caches independently by effective line policy, so identical layouts reuse one object and height-only box changes reuse the exact glyph arrays without another Wasm call.
+- [x] Unsafe-to-concat line fragments become one `reshapeRanges` request per changed-width layout. Canonical 720 px and 360 px layouts batch exactly two and three line ranges respectively with full-run context and line BOT/EOT flags; the natural unbroken layout reuses the broad shape with zero reshapes.
+- [x] The canonical paragraph contract owns exact measurement values, 55-glyph IDs/clusters/flags, line text/glyph ranges, Float32 baselines/advances, and registry-independent byte-level hashes `bb15bbcc`, `4f111a3f`, and `e8c0e9d5` for natural, wide, and narrow layouts.
+- [x] Integration tests derive natural x/y placement from the checked-in HarfRust glyph advances/offsets and GLB-extracted font metrics, compare every shaped identity field after boundary reshape, prove borrowed-arena invalidation cannot mutate cached layout arrays, and prove shaping-policy updates invalidate both measurement and layout caches.
+- [x] Chromium records three deterministic 3,786-byte aggregate outputs with one broad shape and two total reshape crossings; the GPU Vitexec probe runs measurement and positioned scenarios sequentially, which caught and removed registry-scoped font handles from the portable golden hash while still validating the live handle separately.
+
+Item 5.2 is closed. Item 5.3 is active; bidi, alignment, clipping, max-lines, ellipsis, and the current-uikit-shaped external-layout fixture remain required before Milestone 5 can close.
 
 Deliver:
 

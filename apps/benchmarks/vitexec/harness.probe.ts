@@ -83,4 +83,33 @@ console.log(
   }),
 )
 
+const positioned = await runRegisteredBenchmark({
+  targetId: 'paragraph-layout-engine',
+  scenarioId: 'paragraph-layout',
+  input: {},
+  controls: { samples: 3, warmup: 1 },
+  environment: await environmentResource(),
+})
+if (
+  positioned.status !== 'passed' ||
+  positioned.measurements.length !== 3 ||
+  positioned.measurements.some(
+    (measurement: BenchmarkMeasurement) =>
+      measurement.hash !== 'bb15bbcc:4f111a3f:e8c0e9d5' ||
+      measurement.metrics?.shapeBoundaryCrossings !== 1 ||
+      measurement.metrics.reshapeBoundaryCrossings !== 2 ||
+      measurement.metrics.batchedBoundaryLayouts !== 2,
+  )
+) {
+  throw new Error('Live positioned paragraph probe did not preserve its exact reshape contract')
+}
+console.log(
+  'positioned-ready',
+  JSON.stringify({
+    hash: positioned.measurements[0]?.hash,
+    validation: positioned.validation,
+    webgpu: positioned.environment.webgpu,
+  }),
+)
+
 export {}

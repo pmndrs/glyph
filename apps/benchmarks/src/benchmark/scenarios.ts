@@ -39,6 +39,25 @@ function paragraphValidation(
   return `${values.length}/${values.length} exact paragraph outputs · 0 Wasm reflow calls/sample`
 }
 
+function paragraphLayoutValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    if (
+      value.hash !== 'bb15bbcc:4f111a3f:e8c0e9d5' ||
+      value.metrics?.shapeBoundaryCrossings !== 1 ||
+      value.metrics.reshapeBoundaryCrossings !== 2 ||
+      value.metrics.batchedBoundaryLayouts !== 2 ||
+      value.metrics.layoutCount !== 3 ||
+      value.metrics.glyphCount !== 165
+    ) {
+      throw new Error('Paragraph layout sample did not preserve its exact SoA and batch contract')
+    }
+  }
+  return `${values.length}/${values.length} exact positioned outputs · 1 reshape batch/changed width`
+}
+
 export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'overview',
@@ -74,6 +93,13 @@ export const scenarios: readonly BenchmarkScenario[] = [
     description: 'Exact GLB-backed broad shape followed by cached wide and narrow reflow.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
     validate: paragraphValidation,
+  },
+  {
+    id: 'paragraph-layout',
+    label: 'Positioned paragraph layout',
+    description: 'Exact natural, wide, and narrow SoA output with cached batched boundary reshape.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
+    validate: paragraphLayoutValidation,
   },
 ]
 

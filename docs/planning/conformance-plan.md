@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T08:13:36Z"
+  at: "2026-07-25T08:38:57Z"
 ---
 
 # Shaping and layout conformance plan
@@ -148,6 +148,13 @@ Verify that line fitting and boundary reshaping preserve:
 - bidi visual order;
 - inserted hyphen/ellipsis mapping;
 - identical shaped glyphs across raster selection.
+
+Item 5.2 fixes the Latin integration baseline in the canonical paragraph
+contract: natural/wide/narrow layouts compare every HarfRust-derived glyph ID,
+UTF-16 cluster, flag, scaled x/y position, line source/glyph range, baseline,
+advance, and normalized SoA hash after the complete GLB extraction path. The
+720 px and 360 px cases each submit all affected ranges in exactly one reshape
+call; an unrelated subsequent shaper call proves the layout owns its arrays.
 
 ## Required script/behavior matrix
 

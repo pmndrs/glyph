@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T06:47:06Z"
+  at: "2026-07-25T08:38:57Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -222,7 +222,7 @@ A valid nonresident page is distinct from the permanent `0xffff` absence sentine
 
 Loads the font, shapes the paragraph, lays it out at fixed widths, and records line source ranges, run/font slots, glyph identities, clusters, and positions. It verifies that width-only reflow reuses broad shaping where allowed.
 
-The same runner includes an adapter fixture shaped after current pmndrs/uikit's `CustomLayouting`, `FlexNode`, and resolved size/padding/border signal flow without adding uikit or Yoga to core. It covers intrinsic `minWidth`/`minHeight` derivation; `Undefined`/unconstrained, `AtMost`, and `Exactly`; definite dimensions where measurement may be skipped; first-baseline reporting; point-scale rounding at the host boundary; and a final content box different from the candidate measurement. Repeated `measure` calls must not materialize positioned-glyph arrays. Text or shaping-policy changes invalidate measurement, while paint and raster changes do not. The final `layout` positions remain relative to the content-box origin and are translated by the host fixture. See [uikit integration](uikit-integration.md).
+The canonical `paragraph-layout-v0.json` contract is now a golden rather than a source placeholder: it owns exact natural, 720 px, and 360 px measurements plus positioned line arrays and normalized SoA hashes. The same runner still requires an adapter fixture shaped after current pmndrs/uikit's `CustomLayouting`, `FlexNode`, and resolved size/padding/border signal flow without adding uikit or Yoga to core. It covers intrinsic `minWidth`/`minHeight` derivation; `Undefined`/unconstrained, `AtMost`, and `Exactly`; definite dimensions where measurement may be skipped; first-baseline reporting; point-scale rounding at the host boundary; and a final content box different from the candidate measurement. Repeated `measure` calls must not materialize positioned-glyph arrays. Text or shaping-policy changes invalidate measurement, while paint and raster changes do not. The final `layout` positions remain relative to the content-box origin and are translated by the host fixture. See [uikit integration](uikit-integration.md).
 
 ### Visual runner
 
