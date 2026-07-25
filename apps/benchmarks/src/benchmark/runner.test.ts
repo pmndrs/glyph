@@ -10,7 +10,7 @@ const target: BenchmarkTarget = {
   capabilities: new Set(['deterministic']),
   status: () => 'ready',
   load: async () => undefined,
-  run: async () => ({ bytes: 12, hash: 'stable' }),
+  run: async () => ({ bytes: 12, hash: 'stable', metrics: { boundaryCrossings: 1 } }),
   dispose: async () => undefined,
 }
 
@@ -41,6 +41,7 @@ describe('shared benchmark runner', () => {
 
     expect(result.status).toBe('passed')
     expect(result.measurements).toHaveLength(3)
+    expect(result.measurements.every(({ metrics }) => metrics?.boundaryCrossings === 1)).toBe(true)
     expect(result.validation).toBe('3 accepted')
     expect(phases).toContain('complete')
   })

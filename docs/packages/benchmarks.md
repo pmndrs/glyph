@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:0ae69c04b4e09f8c5b594fdc1b9235bd4af214260fd3655b16ff653dab9f94be"
+source_digest: "sha256:fea009fc81a07716b78edd3c2af44409962017c0758f2082024716c00e0a5678"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -23,7 +23,9 @@ generated:
 
 Status: 🟡 usable harness shell; rendering targets not implemented
 
-This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, and real public loader/Worker-fallback target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override. Before timing loader fallback, the browser target hashes the actual module-Worker GLB against the canonical Node artifact and validates/registers it. Chromium 149 passes synthetic, direct-baker, and loader-Worker scenarios with three deterministic samples after one warmup. Its fixture inventory binds the bitmap strike contract to the executable canonical descriptor and raster key. Its independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated. The current initial graph is 26,175 minified bytes; the validator, runtime host, runtime Worker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,061, 3,371, 5,576, 430,662, 18,622, and 91,382 minified/raw bytes respectively. The production app likewise emits separate runtime-host, Worker, validator, and Wasm assets without an ineffective dynamic-import warning.
+This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, and real HarfRust shaping-conformance target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override only where a fixture oracle exists. Before timing loader fallback, the browser target hashes the actual module-Worker GLB against the canonical Node artifact and validates/registers it. Chromium 149 passes synthetic, direct-baker, loader-Worker, and eight-case one-call shaper scenarios with three deterministic samples after one warmup. The checked shaping result records exact hash `dc30c21c`, 97 glyphs, one boundary crossing, three plans, retained/Wasm memory, and cold/warm timings.
+
+The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated. The current initial graph is 35,439 minified bytes; the validator, runtime host, runtime Worker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,061, 3,371, 5,576, 430,662, 27,859, and 645,666 minified/raw bytes respectively. The production app likewise emits separate runtime-host, Worker, validator, and Wasm assets without an ineffective dynamic-import warning.
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. The first real rendered font frame must land here after its loader, shaping, paragraph, and bitmap dependencies close.
 
@@ -37,7 +39,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `typecheck` | Build the baker dependency and type-check browser and Node script projects. |
 | `test` | Run deterministic Vitest suites and the shared-registry browser smoke test. |
 | `test:unit` | Run deterministic Vitest suites without starting a browser. |
-| `test:headless` | Run the synthetic scenario through the browser headless CLI. |
+| `test:headless` | Run synthetic, direct-baker, loader/Worker, and exact shaping scenarios through the browser CLI. |
 | `lint` | Run Oxlint with warnings denied. |
 | `format:check` | Verify Oxfmt output. |
 | `size` | Produce deterministic independent package-size JSON for the report UI. |

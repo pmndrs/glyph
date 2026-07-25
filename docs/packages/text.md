@@ -5,7 +5,7 @@ description: Defines public core contracts, static discovery, portable bitmap ar
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:b3c938544b25326a7a4e8907fbf02ebad25c7c3005609960a1835ccb8f6e70f9"
+source_digest: "sha256:c4204a04e022e2c6edd2b7da9cf01b2f508bc732ac971f4450633685379d1183"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -54,7 +54,7 @@ generated:
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 implementation slice; Milestone 3 complete and roadmap item 4.1 active
+Status: 🟡 implementation slice; Milestone 4 complete and roadmap item 5.1 active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point.
 
@@ -76,9 +76,11 @@ The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically impo
 
 Milestone 3 closes with browser-executed parity and cancellation. The benchmark product's public loader target first hashes the real module-Worker artifact against the canonical Node artifact, validates and registers it, then runs the complete missing-sibling fallback in Chromium. Shared loads now reference-count consumers: one abort detaches safely, the final abort reaches fetch/stream/Worker work, and an otherwise-idle Worker terminates immediately and recreates on demand without timers. This browser gate exposed and fixed native `fetch` receiver loss that Node's implementation tolerated. Static emitted-package checks and independent Rollup closures keep the runtime host, Worker, Wasm, validator, Node host, and raster bakers out of a baked-hit graph.
 
-Roadmap item 4.1 now has its package-owned HarfRust registration boundary. The Rust 1.97.1 module uses HarfRust 0.12.0 and matching `read-fonts` 0.41.0 under `no_std + alloc`, exports a Rust-generated JSON-described C ABI, and keeps its allocator private. The TypeScript bridge copies only the exact validator-retained GLB views into linear memory: canonical Inter contributes 147,192 SFNT bytes, 23,496 dense-extents bytes, and 368 availability bytes, or exactly 171,056 retained bytes. Registration is registry-scoped and idempotent, and font/shaper disposal releases the owned Wasm registration. The optimized module is measured independently at 91,382 bytes raw, 30,130 bytes gzip, and 24,275 bytes Brotli; its JavaScript bridge is 18,622 bytes minified, 5,783 bytes gzip, and 5,149 bytes Brotli.
+Milestone 4 closes the package-owned HarfRust runtime. The Rust 1.97.1 module uses HarfRust 0.12.0 and matching `read-fonts` 0.41.0 under `no_std + alloc`, exports a Rust-generated JSON-described C ABI, and keeps its allocator private. The TypeScript bridge copies only the exact validator-retained GLB views into linear memory: canonical Inter contributes 147,192 SFNT bytes, 23,496 dense-extents bytes, and 368 availability bytes, or exactly 171,056 retained bytes. Registration is registry-scoped and idempotent; font/shaper disposal releases owned data and plans. Cached shape plans distinguish direction, script, normalized language, and HarfRust-equivalent feature properties while reusing equivalent calls.
 
-The package does not yet shape a text batch, perform paragraph layout, or render glyphs. Item 4.1 remains active until shape-plan cache reuse and disposal are executable; item 4.2 then adds the coarse shape/reshape calls and exact corpus comparison. The public runtime bitmap upload/module belongs to milestone 6.1 after loader and layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, language, and range records through offsets from the generated ABI. It returns aligned borrowed SoA views with absolute UTF-16 clusters, glyph IDs, four positions, and mapped flags. Every pinned Inter case passes bit-for-bit through the complete source → baker GLB → validator → registry extraction → Wasm chain for both calls; multi-run batching, plan reuse/disposal, surrogate boundaries, extents conversion, malformed records, and deterministic raw-ABI mutation fuzzing are executable. The browser product batches all eight cases into one 97-glyph call with exact output hash `dc30c21c`. The complete optimized module is 645,666 bytes raw, 239,303 bytes gzip, and 188,862 bytes Brotli; its JavaScript bridge is 27,859 bytes minified, 8,190 bytes gzip, and 7,320 bytes Brotli.
+
+The package does not yet perform paragraph analysis/layout or render glyphs. Item 5.1 now consumes the copied broad-shape results for measured clusters and greedy breaking. The public runtime bitmap upload/module belongs to milestone 6.1 after layout dependencies; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
@@ -89,7 +91,7 @@ The package does not yet shape a text batch, perform paragraph layout, or render
 | `test:types` | Compile positive and negative public-contract fixtures. |
 | `test:unit` | Run focused Rust bitmap and HarfRust-shaper unit tests. |
 | `test:integration` | Run both Rust public boundaries plus Wasm/package, registration, golden, and malformed-artifact integration tests. |
-| `test:fuzz-smoke` | Run fixed-seed bitmap and loader artifact mutations twice and require deterministic, byte-pure validation outcomes. |
+| `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, and raw shaper-request mutations twice and require deterministic, trap-free outcomes. |
 | `build` | Emit ESM/declarations, compile the no-WASI bitmap and shaper Wasm modules, optimize them with pinned Binaryen, and publish both generated ABIs. |
 
 The [API contract](../planning/api-shapes.md) remains authoritative for proposed public behavior; this concept explains the package that currently embodies its compile-time subset.[^api-contract]

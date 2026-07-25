@@ -98,6 +98,11 @@ export type {
   RuntimeShaper,
   RuntimeShaperMemoryReport,
   RuntimeShaperOptions,
+  ReshapeBatchRequest,
+  ReshapeRange,
+  ShapeBatchRequest,
+  ShapeRunRequest,
+  ShapedBatchViews,
   TextShaperWasmSource,
 } from "./shaper.js";
 export { createRuntimeShaper } from "./shaper.js";

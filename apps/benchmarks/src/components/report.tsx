@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import type { BenchmarkSummary } from '../benchmark/contracts'
 import packageSizes from '../generated/package-sizes.json'
 import { Metric } from './ui'
@@ -13,6 +14,7 @@ function bytes(value: number | undefined): string {
 }
 
 export function Report({ summary }: { readonly summary: BenchmarkSummary | undefined }) {
+  const metrics = summary?.measurements[0]?.metrics
   return (
     <section className="grid gap-3" data-testid="report">
       <header className="flex items-end justify-between gap-4">
@@ -38,6 +40,19 @@ export function Report({ summary }: { readonly summary: BenchmarkSummary | undef
           </span>
         </div>
       </div>
+      {metrics !== undefined && (
+        <div className="rounded-md border border-border bg-surface p-3">
+          <p className="eyebrow">Target evidence</p>
+          <dl className="mt-2 grid grid-cols-[1fr_auto] gap-y-2 text-xs">
+            {Object.entries(metrics).map(([label, value]) => (
+              <Fragment key={label}>
+                <dt className="text-dim">{label}</dt>
+                <dd className="font-mono text-[10px] text-muted">{value}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      )}
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Independent package-size lane</p>
         <div className="mt-2 grid gap-2">

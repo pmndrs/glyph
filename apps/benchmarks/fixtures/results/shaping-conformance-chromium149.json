@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 0,
+  "targetId": "harfrust-shaper",
+  "scenarioId": "shaping-conformance",
+  "status": "passed",
+  "validation": "3/3 exact corpus outputs · 1 Wasm call/sample",
+  "controls": {
+    "samples": 3,
+    "warmup": 1
+  },
+  "measurements": [
+    {
+      "sample": 0,
+      "durationMs": 0.20000000298023224,
+      "outputBytes": 2412,
+      "hash": "dc30c21c",
+      "metrics": {
+        "boundaryCrossings": 1,
+        "coldStartMs": 2.5999999940395355,
+        "shapeCallMs": 0.09999999403953552,
+        "goldenCases": 8,
+        "glyphCount": 97,
+        "planCount": 3,
+        "retainedFontBytes": 171056,
+        "wasmMemoryBytes": 1638400
+      }
+    },
+    {
+      "sample": 1,
+      "durationMs": 0.19999998807907104,
+      "outputBytes": 2412,
+      "hash": "dc30c21c",
+      "metrics": {
+        "boundaryCrossings": 1,
+        "coldStartMs": 2.5999999940395355,
+        "shapeCallMs": 0.09999999403953552,
+        "goldenCases": 8,
+        "glyphCount": 97,
+        "planCount": 3,
+        "retainedFontBytes": 171056,
+        "wasmMemoryBytes": 1638400
+      }
+    },
+    {
+      "sample": 2,
+      "durationMs": 0.10000000894069672,
+      "outputBytes": 2412,
+      "hash": "dc30c21c",
+      "metrics": {
+        "boundaryCrossings": 1,
+        "coldStartMs": 2.5999999940395355,
+        "shapeCallMs": 0.10000000894069672,
+        "goldenCases": 8,
+        "glyphCount": 97,
+        "planCount": 3,
+        "retainedFontBytes": 171056,
+        "wasmMemoryBytes": 1638400
+      }
+    }
+  ],
+  "summary": {
+    "medianMs": 0.19999998807907104,
+    "p95Ms": 0.20000000298023224,
+    "minMs": 0.10000000894069672,
+    "maxMs": 0.20000000298023224,
+    "outputBytes": 2412
+  },
+  "capturedAt": "2026-07-25T07:32:50.493Z",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  }
+}

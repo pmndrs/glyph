@@ -83,4 +83,32 @@ describe('canonical Inter fixtures', () => {
     expect(image.byteLength).toBe(metadata.image.bytes)
     expect(createHash('sha256').update(image).digest('hex')).toBe(metadata.image.sha256)
   })
+
+  it('records the browser shaping conformance and one-call memory evidence', async () => {
+    const result = JSON.parse(
+      await readFile(new URL('results/shaping-conformance-chromium149.json', fixtureRoot), 'utf8'),
+    )
+
+    expect(result).toMatchObject({
+      schemaVersion: 0,
+      targetId: 'harfrust-shaper',
+      scenarioId: 'shaping-conformance',
+      status: 'passed',
+      controls: { samples: 3, warmup: 1 },
+    })
+    expect(result.measurements).toHaveLength(3)
+    expect(new Set(result.measurements.map(({ hash }: { hash: string }) => hash))).toEqual(
+      new Set(['dc30c21c']),
+    )
+    expect(
+      result.measurements.every(
+        ({ metrics }: { metrics: Record<string, number> }) =>
+          metrics.boundaryCrossings === 1 &&
+          metrics.goldenCases === 8 &&
+          metrics.glyphCount === 97 &&
+          metrics.planCount === 3 &&
+          metrics.retainedFontBytes === 171056,
+      ),
+    ).toBe(true)
+  })
 })

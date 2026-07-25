@@ -52,6 +52,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
         durationMs: performance.now() - start,
         outputBytes: output.bytes,
         hash: output.hash,
+        ...(output.metrics === undefined ? {} : { metrics: output.metrics }),
       })
     }
 

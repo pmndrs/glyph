@@ -2,6 +2,7 @@ import type { RegisteredFont } from "./font.js";
 import type { FontHandle } from "./identity.js";
 import { getRegisteredFontData } from "./internal/registered-font.js";
 import { FontRegistry } from "./loader.js";
+import type { ResolvedFontFeature } from "./text.js";
 
 export type TextShaperWasmSource = BufferSource | WebAssembly.Module;
 
@@ -17,12 +18,137 @@ export interface RuntimeShaperMemoryReport {
   readonly wasmMemoryBytes: number;
 }
 
+export interface ShapeRunRequest {
+  readonly font: FontHandle;
+  readonly textStart: number;
+  readonly textEnd: number;
+  readonly direction: "ltr" | "rtl";
+  readonly script: string;
+  readonly language?: string;
+  readonly clusterLevel: 0 | 1 | 2 | 3;
+  readonly flags: number;
+  readonly featureStart: number;
+  readonly featureCount: number;
+}
+
+export interface ShapeBatchRequest {
+  readonly textUtf16: Uint16Array;
+  readonly runs: readonly ShapeRunRequest[];
+  readonly features: readonly ResolvedFontFeature[];
+}
+
+export interface ReshapeRange {
+  readonly run: number;
+  readonly itemStart: number;
+  readonly itemEnd: number;
+  readonly contextStart: number;
+  readonly contextEnd: number;
+  readonly flags: number;
+}
+
+export interface ReshapeBatchRequest extends ShapeBatchRequest {
+  readonly ranges: readonly ReshapeRange[];
+}
+
+export interface ShapedBatchViews {
+  readonly fontHandles: Uint32Array;
+  readonly runFontSlots: Uint16Array;
+  readonly runGlyphStarts: Uint32Array;
+  readonly runGlyphCounts: Uint32Array;
+  readonly glyphIds: Uint16Array;
+  readonly clusters: Uint32Array;
+  readonly xAdvances: Int32Array;
+  readonly yAdvances: Int32Array;
+  readonly xOffsets: Int32Array;
+  readonly yOffsets: Int32Array;
+  readonly glyphFlags: Uint16Array;
+}
+
 export interface RuntimeShaper {
   readonly registry: FontRegistry;
   registerFont(font: RegisteredFont): void;
   disposeFont(font: RegisteredFont): void;
+  shapeBatch(request: ShapeBatchRequest): ShapedBatchViews;
+  reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews;
   memoryReport(): RuntimeShaperMemoryReport;
   dispose(): void;
+}
+
+interface LayoutBase {
+  readonly size: number;
+  readonly [field: string]: number;
+}
+
+interface ShapeRequestLayout extends LayoutBase {
+  readonly textOffset: number;
+  readonly textLength: number;
+  readonly runsOffset: number;
+  readonly runCount: number;
+  readonly featuresOffset: number;
+  readonly featureCount: number;
+  readonly languagesOffset: number;
+  readonly languagesLength: number;
+}
+
+interface ReshapeRequestLayout extends LayoutBase {
+  readonly rangesOffset: number;
+  readonly rangeCount: number;
+}
+
+interface FeatureLayout extends LayoutBase {
+  readonly tag: number;
+  readonly value: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface RunLayout extends LayoutBase {
+  readonly fontHandle: number;
+  readonly textStart: number;
+  readonly textEnd: number;
+  readonly script: number;
+  readonly languageOffset: number;
+  readonly featureStart: number;
+  readonly featureCount: number;
+  readonly direction: number;
+  readonly clusterLevel: number;
+  readonly flags: number;
+}
+
+interface ReshapeRangeLayout extends LayoutBase {
+  readonly run: number;
+  readonly itemStart: number;
+  readonly itemEnd: number;
+  readonly contextStart: number;
+  readonly contextEnd: number;
+  readonly flags: number;
+}
+
+interface ResultLayout extends LayoutBase {
+  readonly byteLength: number;
+  readonly fontHandlesOffset: number;
+  readonly fontHandleCount: number;
+  readonly runFontSlotsOffset: number;
+  readonly runGlyphStartsOffset: number;
+  readonly runGlyphCountsOffset: number;
+  readonly runCount: number;
+  readonly glyphIdsOffset: number;
+  readonly clustersOffset: number;
+  readonly xAdvancesOffset: number;
+  readonly yAdvancesOffset: number;
+  readonly xOffsetsOffset: number;
+  readonly yOffsetsOffset: number;
+  readonly glyphFlagsOffset: number;
+  readonly glyphCount: number;
+}
+
+interface ShaperAbiLayouts {
+  readonly shapeRequest: ShapeRequestLayout;
+  readonly reshapeRequest: ReshapeRequestLayout;
+  readonly feature: FeatureLayout;
+  readonly run: RunLayout;
+  readonly reshapeRange: ReshapeRangeLayout;
+  readonly result: ResultLayout;
 }
 
 interface ShaperAbiV0 {
@@ -46,7 +172,12 @@ interface ShaperAbiV0 {
     readonly fontCount: string;
     readonly retainedFontBytes: string;
     readonly planCount: string;
+    readonly shapeBatch: string;
+    readonly reshapeRanges: string;
+    readonly resultPointer: string;
+    readonly resultLength: string;
   };
+  readonly layouts: ShaperAbiLayouts;
   readonly status: { readonly ok: 0 };
 }
 
@@ -67,9 +198,21 @@ interface ShaperExports {
   readonly fontCount: () => number;
   readonly retainedFontBytes: () => number;
   readonly planCount: () => number;
+  readonly shapeBatch: (pointer: number, length: number) => number;
+  readonly reshapeRanges: (pointer: number, length: number) => number;
+  readonly resultPointer: () => number;
+  readonly resultLength: () => number;
+}
+
+interface ShaperModule {
+  readonly exports: ShaperExports;
+  readonly layouts: ShaperAbiLayouts;
 }
 
 const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+const noLanguage = 0xffff_ffff;
+const bufferFlagsMask = 0xff;
 
 export async function createRuntimeShaper(
   options: RuntimeShaperOptions = {},
@@ -77,19 +220,22 @@ export async function createRuntimeShaper(
   const source = options.wasm ?? (await fetchDefaultWasm());
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
   const instance = await WebAssembly.instantiate(module, {});
-  return new RuntimeShaperImpl(options.registry ?? new FontRegistry(), readExports(instance));
+  const resolved = readModule(instance);
+  return new RuntimeShaperImpl(options.registry ?? new FontRegistry(), resolved);
 }
 
 class RuntimeShaperImpl implements RuntimeShaper {
   readonly registry: FontRegistry;
   readonly #exports: ShaperExports;
+  readonly #layouts: ShaperAbiLayouts;
   readonly #registered = new Map<FontHandle, RegisteredFont>();
   readonly #unsubscribe: () => void;
   #disposed = false;
 
-  constructor(registry: FontRegistry, exports: ShaperExports) {
+  constructor(registry: FontRegistry, module: ShaperModule) {
     this.registry = registry;
-    this.#exports = exports;
+    this.#exports = module.exports;
+    this.#layouts = module.layouts;
     this.#unsubscribe = registry._onFontDispose((font) => this.#disposeHandle(font.handle));
   }
 
@@ -127,6 +273,18 @@ class RuntimeShaperImpl implements RuntimeShaper {
     if (this.#registered.get(font.handle) === font) this.#disposeHandle(font.handle);
   }
 
+  shapeBatch(request: ShapeBatchRequest): ShapedBatchViews {
+    this.#assertActive();
+    this.#assertFontsRegistered(request.runs);
+    return this.#call(request, undefined);
+  }
+
+  reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews {
+    this.#assertActive();
+    this.#assertFontsRegistered(request.runs);
+    return this.#call(request, request.ranges);
+  }
+
   memoryReport(): RuntimeShaperMemoryReport {
     this.#assertActive();
     return {
@@ -142,6 +300,31 @@ class RuntimeShaperImpl implements RuntimeShaper {
     this.#unsubscribe();
     for (const handle of [...this.#registered.keys()]) this.#disposeHandle(handle);
     this.#disposed = true;
+  }
+
+  #call(request: ShapeBatchRequest, ranges: readonly ReshapeRange[] | undefined): ShapedBatchViews {
+    const bytes = packRequest(this.#layouts, request, ranges);
+    const allocation = copyIntoWasm(this.#exports, bytes);
+    try {
+      const status =
+        ranges === undefined
+          ? this.#exports.shapeBatch(allocation.pointer, allocation.length)
+          : this.#exports.reshapeRanges(allocation.pointer, allocation.length);
+      if (status !== 0) {
+        throw shaperStatusError(status, ranges === undefined ? "shape batch" : "reshape ranges");
+      }
+      return readResultViews(this.#exports, this.#layouts.result);
+    } finally {
+      this.#exports.deallocate(allocation.pointer, allocation.length);
+    }
+  }
+
+  #assertFontsRegistered(runs: readonly ShapeRunRequest[]): void {
+    for (const run of runs) {
+      if (!this.#registered.has(run.font)) {
+        throw new TypeError(`font handle ${run.font} is not registered with this shaper`);
+      }
+    }
   }
 
   #disposeHandle(handle: FontHandle): void {
@@ -163,13 +346,13 @@ async function fetchDefaultWasm(): Promise<ArrayBuffer> {
   return response.arrayBuffer();
 }
 
-function readExports(instance: WebAssembly.Instance): ShaperExports {
+function readModule(instance: WebAssembly.Instance): ShaperModule {
   const memory = instance.exports.memory;
   if (!(memory instanceof WebAssembly.Memory)) throw new TypeError("text shaper is missing memory");
   const abiPointer = exportedFunction(instance, "pmndrs_text_shaper_abi_ptr")();
   const abiLength = exportedFunction(instance, "pmndrs_text_shaper_abi_len")();
   const abi = JSON.parse(
-    decoder.decode(new Uint8Array(memory.buffer, abiPointer, abiLength)),
+    decoder.decode(checkedMemoryView(memory, abiPointer, abiLength)),
   ) as Partial<ShaperAbiV0>;
   if (
     abi.name !== "pmndrs-text-shaper" ||
@@ -183,21 +366,336 @@ function readExports(instance: WebAssembly.Instance): ShaperExports {
     abi.versions.unicode !== "17.0.0" ||
     abi.versions.fontFormat !== 0 ||
     abi.functions === undefined ||
+    abi.layouts === undefined ||
     abi.status?.ok !== 0
   ) {
     throw new TypeError("unsupported text shaper ABI");
   }
+  validateLayouts(abi.layouts);
   const functions = abi.functions;
   return {
-    memory,
-    allocate: exportedFunction(instance, functions.allocate),
-    deallocate: exportedFunction(instance, functions.deallocate),
-    registerFont: exportedFunction(instance, functions.registerFont),
-    disposeFont: exportedFunction(instance, functions.disposeFont),
-    fontCount: exportedFunction(instance, functions.fontCount),
-    retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
-    planCount: exportedFunction(instance, functions.planCount),
+    exports: {
+      memory,
+      allocate: exportedFunction(instance, functions.allocate),
+      deallocate: exportedFunction(instance, functions.deallocate),
+      registerFont: exportedFunction(instance, functions.registerFont),
+      disposeFont: exportedFunction(instance, functions.disposeFont),
+      fontCount: exportedFunction(instance, functions.fontCount),
+      retainedFontBytes: exportedFunction(instance, functions.retainedFontBytes),
+      planCount: exportedFunction(instance, functions.planCount),
+      shapeBatch: exportedFunction(instance, functions.shapeBatch),
+      reshapeRanges: exportedFunction(instance, functions.reshapeRanges),
+      resultPointer: exportedFunction(instance, functions.resultPointer),
+      resultLength: exportedFunction(instance, functions.resultLength),
+    },
+    layouts: abi.layouts,
   };
+}
+
+function validateLayouts(layouts: ShaperAbiLayouts): void {
+  const expected: Readonly<Record<keyof ShaperAbiLayouts, Readonly<Record<string, number>>>> = {
+    shapeRequest: {
+      size: 32,
+      textOffset: 0,
+      textLength: 4,
+      runsOffset: 8,
+      runCount: 12,
+      featuresOffset: 16,
+      featureCount: 20,
+      languagesOffset: 24,
+      languagesLength: 28,
+    },
+    reshapeRequest: { size: 40, rangesOffset: 32, rangeCount: 36 },
+    feature: { size: 16, tag: 0, value: 4, start: 8, end: 12 },
+    run: {
+      size: 32,
+      fontHandle: 0,
+      textStart: 4,
+      textEnd: 8,
+      script: 12,
+      languageOffset: 16,
+      featureStart: 20,
+      featureCount: 24,
+      direction: 26,
+      clusterLevel: 27,
+      flags: 28,
+    },
+    reshapeRange: {
+      size: 24,
+      run: 0,
+      itemStart: 4,
+      itemEnd: 8,
+      contextStart: 12,
+      contextEnd: 16,
+      flags: 20,
+    },
+    result: {
+      size: 60,
+      byteLength: 0,
+      fontHandlesOffset: 4,
+      fontHandleCount: 8,
+      runFontSlotsOffset: 12,
+      runGlyphStartsOffset: 16,
+      runGlyphCountsOffset: 20,
+      runCount: 24,
+      glyphIdsOffset: 28,
+      clustersOffset: 32,
+      xAdvancesOffset: 36,
+      yAdvancesOffset: 40,
+      xOffsetsOffset: 44,
+      yOffsetsOffset: 48,
+      glyphFlagsOffset: 52,
+      glyphCount: 56,
+    },
+  };
+  for (const name of Object.keys(expected) as (keyof ShaperAbiLayouts)[]) {
+    const layout = layouts[name];
+    for (const [field, value] of Object.entries(expected[name])) {
+      if (layout[field] !== value) throw new TypeError(`unsupported ${name}.${field} layout`);
+    }
+  }
+}
+
+function packRequest(
+  layouts: ShaperAbiLayouts,
+  request: ShapeBatchRequest,
+  ranges: readonly ReshapeRange[] | undefined,
+): Uint8Array {
+  if (!(request.textUtf16 instanceof Uint16Array)) {
+    throw new TypeError("shape textUtf16 must be a Uint16Array");
+  }
+  if (request.runs.length === 0) throw new RangeError("shape batch must contain a run");
+  if (ranges !== undefined && ranges.length === 0) {
+    throw new RangeError("reshape batch must contain a range");
+  }
+  uint32(request.textUtf16.length, "text UTF-16 length");
+  uint32(request.runs.length, "run count");
+  uint32(request.features.length, "feature count");
+  if (ranges !== undefined) uint32(ranges.length, "reshape range count");
+
+  const languages = new Map<string, number>();
+  const languageBytes: number[] = [];
+  for (const run of request.runs) {
+    if (run.language === undefined || languages.has(run.language)) continue;
+    const bytes = encoder.encode(run.language);
+    if (bytes.length === 0 || bytes.length > 0xffff) {
+      throw new RangeError("shape language must encode to 1..65535 UTF-8 bytes");
+    }
+    const offset = languageBytes.length;
+    uint32(offset, "language offset");
+    languages.set(run.language, offset);
+    languageBytes.push(bytes.length & 0xff, bytes.length >>> 8, ...bytes);
+  }
+
+  const header = ranges === undefined ? layouts.shapeRequest : layouts.reshapeRequest;
+  let length = header.size;
+  const textOffset = align(length, 2);
+  length = checkedAdd(textOffset, checkedMultiply(request.textUtf16.length, 2, "text bytes"));
+  const runsOffset = align(length, 4);
+  length = checkedAdd(
+    runsOffset,
+    checkedMultiply(request.runs.length, layouts.run.size, "run bytes"),
+  );
+  const featuresOffset = align(length, 4);
+  length = checkedAdd(
+    featuresOffset,
+    checkedMultiply(request.features.length, layouts.feature.size, "feature bytes"),
+  );
+  const languagesOffset = length;
+  length = checkedAdd(length, languageBytes.length);
+  const rangesOffset = ranges === undefined ? 0 : align(length, 4);
+  if (ranges !== undefined) {
+    length = checkedAdd(
+      rangesOffset,
+      checkedMultiply(ranges.length, layouts.reshapeRange.size, "reshape range bytes"),
+    );
+  }
+  const bytes = new Uint8Array(length);
+  const view = new DataView(bytes.buffer);
+  writeUint32(view, layouts.shapeRequest.textOffset, textOffset);
+  writeUint32(view, layouts.shapeRequest.textLength, request.textUtf16.length);
+  writeUint32(view, layouts.shapeRequest.runsOffset, runsOffset);
+  writeUint32(view, layouts.shapeRequest.runCount, request.runs.length);
+  writeUint32(view, layouts.shapeRequest.featuresOffset, featuresOffset);
+  writeUint32(view, layouts.shapeRequest.featureCount, request.features.length);
+  writeUint32(view, layouts.shapeRequest.languagesOffset, languagesOffset);
+  writeUint32(view, layouts.shapeRequest.languagesLength, languageBytes.length);
+  if (ranges !== undefined) {
+    writeUint32(view, layouts.reshapeRequest.rangesOffset, rangesOffset);
+    writeUint32(view, layouts.reshapeRequest.rangeCount, ranges.length);
+  }
+  for (let index = 0; index < request.textUtf16.length; index++) {
+    view.setUint16(textOffset + index * 2, request.textUtf16[index]!, true);
+  }
+  request.features.forEach((feature, index) => {
+    const offset = featuresOffset + index * layouts.feature.size;
+    writeUint32(view, offset + layouts.feature.tag, tag(feature.tag, "feature"));
+    writeUint32(view, offset + layouts.feature.value, uint32(feature.value, "feature value"));
+    writeUint32(view, offset + layouts.feature.start, uint32(feature.start, "feature start"));
+    writeUint32(view, offset + layouts.feature.end, uint32(feature.end, "feature end"));
+    if (feature.start > feature.end || feature.end > request.textUtf16.length) {
+      throw new RangeError("feature range is outside textUtf16");
+    }
+  });
+  request.runs.forEach((run, index) => {
+    const offset = runsOffset + index * layouts.run.size;
+    const featureStart = uint32(run.featureStart, "run feature start");
+    const featureCount = uint16(run.featureCount, "run feature count");
+    if (featureStart + featureCount > request.features.length) {
+      throw new RangeError("run feature range is outside features");
+    }
+    writeUint32(view, offset + layouts.run.fontHandle, uint32(run.font, "font handle"));
+    writeUint32(view, offset + layouts.run.textStart, uint32(run.textStart, "run text start"));
+    writeUint32(view, offset + layouts.run.textEnd, uint32(run.textEnd, "run text end"));
+    if (run.textStart > run.textEnd || run.textEnd > request.textUtf16.length) {
+      throw new RangeError("run range is outside textUtf16");
+    }
+    if (run.direction !== "ltr" && run.direction !== "rtl") {
+      throw new RangeError("run direction must be ltr or rtl");
+    }
+    if (!Number.isInteger(run.clusterLevel) || run.clusterLevel < 0 || run.clusterLevel > 3) {
+      throw new RangeError("run cluster level must be an integer from 0 through 3");
+    }
+    writeUint32(view, offset + layouts.run.script, tag(run.script, "script"));
+    writeUint32(
+      view,
+      offset + layouts.run.languageOffset,
+      run.language === undefined ? noLanguage : languages.get(run.language)!,
+    );
+    writeUint32(view, offset + layouts.run.featureStart, featureStart);
+    view.setUint16(offset + layouts.run.featureCount, featureCount, true);
+    view.setUint8(offset + layouts.run.direction, run.direction === "ltr" ? 0 : 1);
+    view.setUint8(offset + layouts.run.clusterLevel, run.clusterLevel);
+    writeUint32(view, offset + layouts.run.flags, flags(run.flags, "run flags"));
+  });
+  bytes.set(languageBytes, languagesOffset);
+  ranges?.forEach((range, index) => {
+    const offset = rangesOffset + index * layouts.reshapeRange.size;
+    writeUint32(view, offset + layouts.reshapeRange.run, uint32(range.run, "range run"));
+    writeUint32(
+      view,
+      offset + layouts.reshapeRange.itemStart,
+      uint32(range.itemStart, "range item start"),
+    );
+    writeUint32(
+      view,
+      offset + layouts.reshapeRange.itemEnd,
+      uint32(range.itemEnd, "range item end"),
+    );
+    writeUint32(
+      view,
+      offset + layouts.reshapeRange.contextStart,
+      uint32(range.contextStart, "range context start"),
+    );
+    writeUint32(
+      view,
+      offset + layouts.reshapeRange.contextEnd,
+      uint32(range.contextEnd, "range context end"),
+    );
+    writeUint32(view, offset + layouts.reshapeRange.flags, flags(range.flags, "range flags"));
+    const run = request.runs[range.run];
+    if (
+      run === undefined ||
+      range.contextStart > range.itemStart ||
+      range.itemStart > range.itemEnd ||
+      range.itemEnd > range.contextEnd ||
+      range.contextStart < run.textStart ||
+      range.contextEnd > run.textEnd
+    ) {
+      throw new RangeError("reshape range is outside its run context");
+    }
+  });
+  return bytes;
+}
+
+function readResultViews(exports: ShaperExports, layout: ResultLayout): ShapedBatchViews {
+  const pointer = exports.resultPointer();
+  const length = exports.resultLength();
+  if (length < layout.size) throw new TypeError("text shaper returned a truncated result header");
+  const bytes = checkedMemoryView(exports.memory, pointer, length);
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (readUint32(header, layout.byteLength) !== length) {
+    throw new TypeError("text shaper result length does not match its header");
+  }
+  const fontHandleCount = readUint32(header, layout.fontHandleCount);
+  const runCount = readUint32(header, layout.runCount);
+  const glyphCount = readUint32(header, layout.glyphCount);
+  return {
+    fontHandles: resultArray(
+      Uint32Array,
+      bytes,
+      readUint32(header, layout.fontHandlesOffset),
+      fontHandleCount,
+    ),
+    runFontSlots: resultArray(
+      Uint16Array,
+      bytes,
+      readUint32(header, layout.runFontSlotsOffset),
+      runCount,
+    ),
+    runGlyphStarts: resultArray(
+      Uint32Array,
+      bytes,
+      readUint32(header, layout.runGlyphStartsOffset),
+      runCount,
+    ),
+    runGlyphCounts: resultArray(
+      Uint32Array,
+      bytes,
+      readUint32(header, layout.runGlyphCountsOffset),
+      runCount,
+    ),
+    glyphIds: resultArray(
+      Uint16Array,
+      bytes,
+      readUint32(header, layout.glyphIdsOffset),
+      glyphCount,
+    ),
+    clusters: resultArray(
+      Uint32Array,
+      bytes,
+      readUint32(header, layout.clustersOffset),
+      glyphCount,
+    ),
+    xAdvances: resultArray(
+      Int32Array,
+      bytes,
+      readUint32(header, layout.xAdvancesOffset),
+      glyphCount,
+    ),
+    yAdvances: resultArray(
+      Int32Array,
+      bytes,
+      readUint32(header, layout.yAdvancesOffset),
+      glyphCount,
+    ),
+    xOffsets: resultArray(Int32Array, bytes, readUint32(header, layout.xOffsetsOffset), glyphCount),
+    yOffsets: resultArray(Int32Array, bytes, readUint32(header, layout.yOffsetsOffset), glyphCount),
+    glyphFlags: resultArray(
+      Uint16Array,
+      bytes,
+      readUint32(header, layout.glyphFlagsOffset),
+      glyphCount,
+    ),
+  };
+}
+
+type ResultArrayConstructor<ArrayType extends Uint16Array | Uint32Array | Int32Array> = {
+  readonly BYTES_PER_ELEMENT: number;
+  new (buffer: ArrayBuffer, byteOffset: number, length: number): ArrayType;
+};
+
+function resultArray<ArrayType extends Uint16Array | Uint32Array | Int32Array>(
+  Constructor: ResultArrayConstructor<ArrayType>,
+  result: Uint8Array<ArrayBuffer>,
+  offset: number,
+  count: number,
+): ArrayType {
+  const length = checkedMultiply(count, Constructor.BYTES_PER_ELEMENT, "result array bytes");
+  if (offset % Constructor.BYTES_PER_ELEMENT !== 0 || offset + length > result.byteLength) {
+    throw new TypeError("text shaper returned an invalid result-array range");
+  }
+  return new Constructor(result.buffer, result.byteOffset + offset, count);
 }
 
 function exportedFunction(
@@ -216,8 +714,82 @@ function copyIntoWasm(
   const length = bytes.byteLength;
   const pointer = exports.allocate(length);
   if (pointer === 0 && length !== 0) throw new RangeError("text shaper allocation failed");
-  new Uint8Array(exports.memory.buffer, pointer, length).set(bytes);
+  checkedMemoryView(exports.memory, pointer, length).set(bytes);
   return { pointer, length };
+}
+
+function checkedMemoryView(
+  memory: WebAssembly.Memory,
+  pointer: number,
+  length: number,
+): Uint8Array<ArrayBuffer> {
+  uint32(pointer, "Wasm pointer");
+  uint32(length, "Wasm length");
+  if (pointer + length > memory.buffer.byteLength) {
+    throw new RangeError("text shaper memory range is out of bounds");
+  }
+  return new Uint8Array(memory.buffer as ArrayBuffer, pointer, length);
+}
+
+function tag(value: string, label: string): number {
+  if (value.length !== 4) throw new RangeError(`${label} tag must contain exactly four bytes`);
+  let packed = 0;
+  for (let index = 0; index < 4; index++) {
+    const byte = value.charCodeAt(index);
+    if (byte < 0x20 || byte > 0x7e) {
+      throw new RangeError(`${label} tag must contain printable ASCII bytes`);
+    }
+    packed = (packed << 8) | byte;
+  }
+  return packed >>> 0;
+}
+
+function flags(value: number, label: string): number {
+  const packed = uint32(value, label);
+  if ((packed & ~bufferFlagsMask) !== 0) throw new RangeError(`${label} contains unknown bits`);
+  return packed;
+}
+
+function uint16(value: number, label: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
+    throw new RangeError(`${label} must be an unsigned 16-bit integer`);
+  }
+  return value;
+}
+
+function uint32(value: number, label: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
+    throw new RangeError(`${label} must be an unsigned 32-bit integer`);
+  }
+  return value;
+}
+
+function align(value: number, alignment: number): number {
+  return checkedAdd(value, (alignment - (value % alignment)) % alignment);
+}
+
+function checkedMultiply(left: number, right: number, label: string): number {
+  const value = left * right;
+  if (!Number.isSafeInteger(value) || value > 0xffff_ffff) {
+    throw new RangeError(`${label} exceeds the V0 address space`);
+  }
+  return value;
+}
+
+function checkedAdd(left: number, right: number): number {
+  const value = left + right;
+  if (!Number.isSafeInteger(value) || value > 0xffff_ffff) {
+    throw new RangeError("shape request exceeds the V0 address space");
+  }
+  return value;
+}
+
+function writeUint32(view: DataView, offset: number, value: number): void {
+  view.setUint32(offset, value, true);
+}
+
+function readUint32(view: DataView, offset: number): number {
+  return view.getUint32(offset, true);
 }
 
 function shaperStatusError(status: number, action: string): Error {
@@ -227,6 +799,8 @@ function shaperStatusError(status: number, action: string): Error {
     3: "invalid glyph extents",
     4: "font handle conflict",
     5: "font handle is not registered",
+    6: "invalid batch request",
+    7: "result exceeds the V0 address space",
   };
   return new Error(`text shaper could not ${action}: ${labels[status] ?? `status ${status}`}`);
 }

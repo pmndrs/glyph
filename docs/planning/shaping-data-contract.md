@@ -70,7 +70,7 @@ The font artifact does not duplicate Unicode or script-shaper tables. The dynami
 
 Its Unicode and HarfBuzz-equivalence versions are pinned in the package and repeated in font provenance so an incompatible font/runtime pairing can be diagnosed. Script, language, direction, features, cluster level, and buffer flags are request data, not font data. Bidi resolution, line-break data, and paragraph policy live outside the font artifact.
 
-The package-owned registration slice now uses Rust 1.97.1, HarfRust 0.12.0 with `default-features = false` and `libm`, matching `read-fonts` 0.41.0, `dlmalloc`, `panic = abort`, and `wasm32-unknown-unknown`. Its Rust-generated V0 ABI has no imports or WASI surface. Pinned Binaryen 129.0.0 `-Oz` produces a 91,382-byte module (30,130 gzip; 24,275 Brotli) before the batch-shaping/result code lands. Canonical Inter registration proves that only the exact GLB-extracted 147,192-byte SFNT, 23,496-byte dense-extents view, and 368-byte availability view enter HarfRust-owned state. Shape plans, output arenas, correctness timings, and call counts remain item-4.1/4.2 gates and are not inferred from registration.
+The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-features = false` and `libm`, matching `read-fonts` 0.41.0, `dlmalloc`, `panic = abort`, and `wasm32-unknown-unknown`. Its Rust-generated V0 ABI has no imports or WASI surface and describes every request/result record and offset consumed by TypeScript. Pinned Binaryen 129.0.0 `-Oz` produces a 645,666-byte complete module (239,303 gzip; 188,862 Brotli). Canonical Inter proves that only the exact GLB-extracted 147,192-byte SFNT, 23,496-byte dense-extents view, and 368-byte availability view enter HarfRust-owned state, then matches all eight source-oracle cases bit-for-bit through `shapeBatch` and `reshapeRanges`. The Chromium product record keeps correctness ahead of timing and reports one boundary crossing, 97 glyphs, three cached plans, 1,638,400 linear-memory bytes, a 2.6 ms cold initialization, and approximately 0.1 ms warm shaping calls in that captured environment.
 
 ### Required tables
 
@@ -183,6 +183,21 @@ The shaping payload remains complete for the selected face in V0. Raster paging 
 
 JavaScript and Wasm exchange one batch, never one glyph. All integers are little-endian in Wasm linear memory. Offsets are 32-bit byte offsets from the start of the request or result arena and MUST meet the component alignment of the referenced array.
 
+### Shape request header — 32 bytes
+
+| Offset | Type | Field |
+| ---: | --- | --- |
+| 0 | `u32` | UTF-16 text byte offset |
+| 4 | `u32` | UTF-16 code-unit count |
+| 8 | `u32` | run-record byte offset |
+| 12 | `u32` | run count |
+| 16 | `u32` | feature-record byte offset |
+| 20 | `u32` | feature count |
+| 24 | `u32` | language-table byte offset |
+| 28 | `u32` | language-table byte length |
+
+The reshape request begins with the same 32 bytes and appends `rangesOffset: u32` at byte 32 and `rangeCount: u32` at byte 36, for a 40-byte header.
+
 ### Feature record — 16 bytes
 
 | Offset | Type | Field |
@@ -230,6 +245,39 @@ V0 buffer flags are a bitset; unlisted bits MUST be zero:
 | 5 | `0x20` | `VERIFY` |
 | 6 | `0x40` | `PRODUCE_UNSAFE_TO_CONCAT` |
 | 7 | `0x80` | `PRODUCE_SAFE_TO_INSERT_TATWEEL` |
+
+### Reshape range record — 24 bytes
+
+| Offset | Type | Field |
+| ---: | --- | --- |
+| 0 | `u32` | index of the source run record |
+| 4 | `u32` | item UTF-16 start, inclusive |
+| 8 | `u32` | item UTF-16 end, exclusive |
+| 12 | `u32` | context UTF-16 start, inclusive |
+| 16 | `u32` | context UTF-16 end, exclusive |
+| 20 | `u32` | buffer flags for this reshape |
+
+Every item lies inside its context and every context lies inside its referenced run. The range flags replace the broad run's flags so the paragraph engine can declare beginning/end-of-text semantics for the selected line boundary. Pre-context is passed to HarfRust in reverse code-point order as required by its low-overhead API; post-context remains forward. One output run is emitted per range in request order.
+
+### Result header — 60 bytes
+
+| Offset | Type | Field |
+| ---: | --- | --- |
+| 0 | `u32` | complete result byte length |
+| 4 | `u32` | font-handle table offset |
+| 8 | `u32` | font-handle count |
+| 12 | `u32` | run-font-slot array offset |
+| 16 | `u32` | run-glyph-start array offset |
+| 20 | `u32` | run-glyph-count array offset |
+| 24 | `u32` | output run count |
+| 28 | `u32` | glyph-ID array offset |
+| 32 | `u32` | cluster array offset |
+| 36 | `u32` | x-advance array offset |
+| 40 | `u32` | y-advance array offset |
+| 44 | `u32` | x-offset array offset |
+| 48 | `u32` | y-offset array offset |
+| 52 | `u32` | glyph-flag array offset |
+| 56 | `u32` | glyph count |
 
 ### Result structure-of-arrays
 

@@ -844,6 +844,8 @@ interface ShapedBatchViews {
 
 Author-facing `FontFeature` defaults `value` to `1`, `start` to the containing root/span range start, and `end` to that range's exclusive end. Feature ranges are absolute UTF-16 paragraph offsets. Paragraph analysis intersects them with shaping runs and produces required `ResolvedFontFeature` records before packing. The implementation packs those resolved values into the exact 16-byte feature and 32-byte run records in the [shaping ABI](shaping-data-contract.md). One API call crosses into Wasm per batch.
 
+For `reshapeRanges`, `itemStart..itemEnd` is the text returned for that output run while `contextStart..contextEnd` supplies surrounding shaping context inside the referenced broad run. The range's `flags` replace the broad run flags for that boundary operation, including `BOT`/`EOT`; output runs preserve range order. All text, feature, item, and context boundaries are absolute UTF-16 offsets and may not split a valid surrogate pair.
+
 ## Paragraph API
 
 ```ts

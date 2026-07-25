@@ -47,15 +47,15 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 1 | ✅ | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
 | 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
 | 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
-| 4 | 🟡 | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | ⬜ | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
+| 4 | ✅ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
+| 5 | 🟡 | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
 | 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
 | 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–3 are closed. Milestone 4 continues in issue order at active item 4.1.
+Milestones 0–4 are closed. Milestone 5 continues in issue order at active item 5.1.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -95,9 +95,9 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 3.1 | ✅ | Implement baked probing, validation, and registration. | M | 2.4 |
 | 3.2 | ✅ | Add the dynamically imported Worker bake path. | M | 3.1 |
 | 3.3 | ✅ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
-| 4.1 | 🟡 | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
-| 4.2 | ⬜ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
-| 5.1 | ⬜ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
+| 4.1 | ✅ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
+| 4.2 | ✅ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
+| 5.1 | 🟡 | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
 | 5.2 | ⬜ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
 | 5.3 | ⬜ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
 | 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
@@ -325,10 +325,21 @@ Item 3.3 and Milestone 3 are closed. Item 4.1 is active and must register the ex
 - [x] A package-owned Rust crate builds one `no_std + alloc`, no-WASI `wasm32-unknown-unknown` HarfRust module and exposes only a Rust-generated direct-memory ABI.
 - [x] The TypeScript bridge registers only the validator-retained shaping SFNT, dense glyph extents, and availability bits; it never reparses the GLB or reconstructs a source font.
 - [x] Canonical Inter registration retains exactly 171,056 shaping bytes, is idempotent for the same scoped handle, rejects cross-registry ownership, and releases Wasm state when either the font or shaper is disposed.
-- [x] Package build, export, ESM, type, unit, integration, and independent JavaScript/Wasm size lanes cover the new boundary; the optimized registration module is 91,382 bytes raw, 30,130 bytes gzip, and 24,275 bytes Brotli.
-- [ ] Shape-plan cache keys include every plan-affecting run/feature field, reuse equivalent plans, and release every cached plan with its font.
+- [x] Package build, export, ESM, type, unit, integration, and independent JavaScript/Wasm size lanes cover the new boundary; the optimized registration-only baseline was 91,382 bytes before batch shaping landed.
+- [x] Shape-plan cache keys include direction, script, normalized language, and HarfRust-equivalent feature tag/value/globalness; equivalent calls reuse plans, non-equivalent feature plans remain distinct, and font disposal releases every plan.
 
-Item 4.1 remains active until the plan-cache invariant is executable. Item 4.2 does not begin merely because registration is available.
+Item 4.1 is closed.
+
+### 4.2 closure checklist
+
+- [x] Rust generates the complete JSON ABI, including every 32-bit request/result offset, 16-byte feature record, 32-byte run record, 24-byte reshape-range record, status, and export name; the TypeScript bridge consumes and exact-version-checks that contract.
+- [x] `shapeBatch` and `reshapeRanges` each cross the boundary once per batch and return aligned borrowed SoA views with 16-bit glyph IDs, absolute UTF-16 clusters, four signed positions, and all three mapped HarfRust glyph flags.
+- [x] Every one of the eight pinned Inter HarfRust cases travels source TTF → portable baker GLB → independent hostile-input validator → `FontRegistry` shaping-view extraction → Wasm registration → both public shaping calls, then compares glyph count, IDs, clusters, advances, offsets, and flags bit-for-bit.
+- [x] A two-run fixture proves run/font indexes, absolute clusters, one-call batching, and plan reuse; UTF-16 surrogate boundaries, tags, ranges, flags, ownership, zero-import ABI identity, extents decoding, and fixed-seed raw request mutations have focused failures.
+- [x] The real benchmark product runs all eight cases as one 97-glyph Chromium batch, validates hash `dc30c21c`, records 2,412 output bytes, one boundary crossing, three plans, 171,056 retained font bytes, 1,638,400 linear-memory bytes, and raw cold/warm timings after correctness passes.
+- [x] The complete optimized module and bridge are measured independently at 645,666 raw / 239,303 gzip / 188,862 Brotli Wasm bytes and 27,859 minified / 8,190 gzip / 7,320 Brotli JavaScript bytes.
+
+Item 4.2 and Milestone 4 are closed. Item 5.1 is active.
 
 Deliver:
 

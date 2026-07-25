@@ -22,6 +22,8 @@ import {
   type RegisteredFont,
   type RegisteredRaster,
   type RuntimeShaper,
+  type ShapeBatchRequest,
+  type ShapedBatchViews,
   type StaticNumberTuple,
   type Paragraph,
   type ParagraphConstraints,
@@ -47,8 +49,31 @@ const fontLoader = new FontLoader({
 });
 const registeredPromise: Promise<RegisteredFont> = fontLoader.load("/fonts/Inter.ttf");
 const shaperPromise: Promise<RuntimeShaper> = createRuntimeShaper({ registry: fontRegistry });
+declare const fontHandle: RegisteredFont["handle"];
+const shapeRequest: ShapeBatchRequest = {
+  textUtf16: Uint16Array.of(0x41),
+  features: [],
+  runs: [
+    {
+      font: fontHandle,
+      textStart: 0,
+      textEnd: 1,
+      direction: "ltr",
+      script: "Latn",
+      language: "en",
+      clusterLevel: 0,
+      flags: 0x40,
+      featureStart: 0,
+      featureCount: 0,
+    },
+  ],
+};
+const shapedPromise: Promise<ShapedBatchViews> = shaperPromise.then((shaper) =>
+  shaper.shapeBatch(shapeRequest),
+);
 void registeredPromise;
 void shaperPromise;
+void shapedPromise;
 
 interface MsdfResource {
   readonly texture: unknown;

@@ -1,1 +1,1 @@
-export { createRuntimeShaper } from "@pmndrs/text";
+export { createRuntimeShaper } from '@pmndrs/text'
