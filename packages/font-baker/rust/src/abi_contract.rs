@@ -26,3 +26,4 @@ pub const UNICODE_VERSION: &str = "17.0.0";
 pub const GLTF_SPEC_VERSION: &str = "2.0";
 pub const GLTF_SCHEMA_REVISION: &str = "77b44be7bef26e01fb0b140e3d5bb1716421c5e9";
 pub const GLTF_VALIDATOR_VERSION: &str = "2.0.0-dev.3.10";
+pub const BINARYEN_VERSION: &str = "129.0.0";

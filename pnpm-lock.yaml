@@ -87,6 +87,9 @@ importers:
 
   packages/font-baker:
     devDependencies:
+      binaryen:
+        specifier: 129.0.0
+        version: 129.0.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -1023,6 +1026,10 @@ packages:
   baseline-browser-mapping@2.11.1:
     resolution: {integrity: sha512-HYXq73DDpCtNzOmrFsm9eSwCvWCql0RzqjpDzXN9EadiLJ4DNat0nsZ/Bzmy+Ud12mb4/zKDY0cQ805ZzN+i0A==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  binaryen@129.0.0:
+    resolution: {integrity: sha512-NyF5J0SfRoLDthpPh36FGTycOEv3Eqnkq3+mP5Cqt6iD9BLGGJMEVuPzu81nhLy2MMpPKmRTM9VLZihfyRQv8A==}
     hasBin: true
 
   brace-expansion@5.0.8:
@@ -2432,6 +2439,8 @@ snapshots:
   base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.11.1: {}
+
+  binaryen@129.0.0: {}
 
   brace-expansion@5.0.8:
     dependencies:

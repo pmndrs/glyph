@@ -25,6 +25,7 @@ fn main() {
             "gltfSpec": abi_contract::GLTF_SPEC_VERSION,
             "gltfSchemaRevision": abi_contract::GLTF_SCHEMA_REVISION,
             "gltfValidator": abi_contract::GLTF_VALIDATOR_VERSION,
+            "binaryen": abi_contract::BINARYEN_VERSION,
         },
         "functions": {
             "allocate": {

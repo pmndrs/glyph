@@ -28,6 +28,7 @@
     "test:e2e": "node --test tests/e2e/*.test.mjs"
   },
   "devDependencies": {
+    "binaryen": "129.0.0",
     "typescript": "7.0.2"
   }
 }

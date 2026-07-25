@@ -1,4 +1,4 @@
-import { createFontBaker, type FontBaker } from '@pmndrs/text-font-baker'
+import { createFontBaker, type FontBakeCore } from '@pmndrs/text-font-baker'
 import wasmUrl from '@pmndrs/text-font-baker/font-baker.wasm?url'
 import canonicalFontUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url'
 import type { BenchmarkTarget } from './contracts'
@@ -23,7 +23,7 @@ const syntheticTarget: BenchmarkTarget = {
   dispose: async () => undefined,
 }
 
-let baker: FontBaker | undefined
+let baker: FontBakeCore | undefined
 let canonicalFontBytes: Uint8Array | undefined
 const bakerTarget: BenchmarkTarget = {
   id: 'font-baker',
@@ -48,7 +48,10 @@ const bakerTarget: BenchmarkTarget = {
   run: async (input) => {
     if (baker === undefined || canonicalFontBytes === undefined)
       throw new Error('Font baker target was not loaded')
-    const result = baker.bakeFont(input.fontBytes ?? canonicalFontBytes)
+    const result = baker.bake({
+      source: input.fontBytes ?? canonicalFontBytes,
+      descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+    })
     const artifact = result.artifacts[0]
     if (artifact === undefined) throw new Error('Font baker returned no artifact')
     return { bytes: artifact.bytes.byteLength, hash: artifact.sha256 }

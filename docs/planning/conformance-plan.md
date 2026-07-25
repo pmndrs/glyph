@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:10:04Z"
+  at: "2026-07-25T02:56:50Z"
 ---
 
 # Shaping and layout conformance plan
@@ -297,7 +297,7 @@ Status key: ✅ available · 🟡 partial or conditional · ⬜ not started
 | Unit | 🟡 | Deterministic tests for parsing, arithmetic, bounds, hashing, serialization, error mapping, and other isolated policy. Tests may use generated values and inspect package internals. | The package that owns the implementation. |
 | Package integration | 🟡 | The compiled artifact is exercised through its public package boundary, including generated ABI equality, zero Wasm imports, direct-memory round trips, structured failures, deterministic bytes, and format validation. | The producing package; currently `packages/font-baker`. |
 | Product end-to-end | 🟡 | The pinned source now flows through the real browser/public Wasm baker path; discovery/loading, Worker parity, registration, shaping, layout, and rendering remain open. | The shared interactive/headless app under `apps/benchmarks`. |
-| Differential conformance | 🟡 | Pinned HarfRust/HarfBuzz source-SFNT oracles have field-level comparison and an exact flag-delta inventory; baked-SFNT comparison remains open. | The conformance runner and fixture corpus. |
+| Differential conformance | 🟡 | Pinned HarfRust/HarfBuzz source oracles have field-level comparison and an exact flag-delta inventory; every checked-in case now also matches the reduced shaping SFNT exactly. Runtime registered-font equivalence closes with the milestone-4 shaping ABI. | The conformance runner and fixture corpus. |
 | Performance regression | ⬜ | Only correctness-passing scenarios contribute timings, payload, allocation, and device measurements. Raw samples and environment metadata are retained. | The shared benchmark scenario registry and runners. |
 
 Every implementation change adds the lowest-cost unit regression that identifies the defect. A package-boundary change also adds or updates an integration case. Any user-visible vertical slice must add a scenario to the shared benchmark registry and an end-to-end assertion in the appropriate automated or local live-probe lane before its roadmap item can be marked complete. The interactive lab, automated runner, and local probes consume the same scenario contract; duplicating the workload in an ad hoc demo or benchmark script does not satisfy the gate.

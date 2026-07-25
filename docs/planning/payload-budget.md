@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T02:56:50Z"
 ---
 
 # Font payload budget
@@ -75,17 +75,17 @@ V0 uses the closed [`opentype-sfnt-harfrust-v0`](shaping-data-contract.md) profi
 
 | Fixture | Full source font | Canonical shaping SFNT | Dense extents + availability | V0 raw shaping payload |
 | --- | ---: | ---: | ---: | ---: |
-| Inter, 2,871 glyphs | 324,820 B | 145,344 B | 23,327 B | 168,671 B (164.7 KiB) |
+| Inter 4.1, 2,937 glyphs | 411,640 B | 147,192 B | 23,864 B | 171,056 B (167.0 KiB) |
 | Font Awesome, 1,403 glyphs | 426,112 B | 24,624 B | 11,400 B | 36,024 B (35.2 KiB) |
 
-Transport measurements for the source and earlier shaping-only experiment remain compression proxies; the canonical V0 SFNT plus font-function views must be recompressed by the first baker:
+The Inter row measures the canonical V0 SFNT plus font-function views outside the portable Wasm core. Font Awesome remains the earlier shaping-only proxy until that licensed fixture enters the canonical baker lane:
 
-| Fixture | Full source gzip | Full source Brotli | Earlier shaping-only gzip | Earlier shaping-only Brotli |
+| Fixture | Full source gzip | Full source Brotli | V0/proxy shaping gzip | V0/proxy shaping Brotli |
 | --- | ---: | ---: | ---: | ---: |
-| Inter | 153,302 B | 122,540 B | 58,610 B | 44,006 B |
+| Inter 4.1 | 200,540 B | 157,517 B | 75,789 B | 55,586 B |
 | Font Awesome | 172,729 B | 147,594 B | 11,234 B | 8,017 B |
 
-The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. Sample shaping-only `hb-shape` outputs matched, but the finalized reconstruction and three-way corpus still require fixture proof. Every bake report lists directory, per-table, extents, and availability bytes.
+The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. The mandatory Inter fixture now proves the complete checked-in HarfRust corpus is identical between the source and reduced SFNT; the later runtime shaping ABI supplies the third registration path. Every bake report lists directory, per-table, extents, and availability bytes.
 
 Lucide is not a font and has no shaping payload. Its shared records are icon identity, view box, fill/paint, and shape indexes. The existing artifact spends 237,704 B on GLB JSON, largely for named icon metadata; the pmndrs format should measure a compact binary name/index representation rather than inherit that JSON cost by default.
 

@@ -23,9 +23,12 @@ sources:
   - id: abi-source
     resource: ../../packages/font-baker/rust/src/abi_contract.rs
     title: Generated ABI and version-contract source
+  - id: binaryen
+    resource: https://www.npmjs.com/package/binaryen/v/129.0.0
+    title: Binaryen 129.0.0
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T01:43:45Z"
+  at: "2026-07-25T02:56:50Z"
 ---
 
 # V0 toolchain and format version pins
@@ -42,6 +45,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Unicode | `17.0.0` | versioned UCD and UAX data |
 | glTF specification | `2.0` | Khronos schema commit `77b44be7bef26e01fb0b140e3d5bb1716421c5e9` |
 | Khronos glTF Validator | `2.0.0-dev.3.10` | npm package |
+| Binaryen / `wasm-opt` | `129.0.0` | npm package; `-Oz`, bulk memory, nontrapping float-to-int |
 | `PMNDRS_font` format | `0` | extension schema and shaping contract |
 | Portable baker ABI | `0` | generated `font-baker-abi-v0.json` |
 | Font baker | `0.0.0` | Cargo/npm package version during the integration slice |
@@ -49,7 +53,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 
 ## Generated contract
 
-The Rust ABI source generates the published JSON contract at build time. Its `versions` object carries the baker, format, shaper, oracle, Unicode, glTF schema, and validator pins; Rust provenance and the TypeScript direct-memory shim consume that same source rather than repeating freehand values.
+The Rust ABI source generates the published JSON contract at build time. Its `versions` object carries the baker, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shim consume that same source rather than repeating freehand values.
 
 Every raster generator stamps its exact owning package semantic version into its canonical descriptor and artifact provenance. A generator upgrade changes its descriptor hash and therefore its raster key. The bitmap generator begins at `0.0.0`; additional raster generators receive their own exact pins when their packages enter the roadmap.
 
@@ -60,6 +64,7 @@ Every raster generator stamps its exact owning package semantic version into its
 | Shaper or oracle | Old/new structured shaping diff over the complete pinned corpus. |
 | Unicode | Version-matched UAX data, conformance runs, and package-size report. |
 | glTF schema or validator | Schema/validator report diff with reviewed extension-only allowlist changes. |
+| Binaryen | Raw/compressed module diff plus zero-import, ABI, deterministic artifact, and real-font equivalence. |
 | ABI or font format | Explicit version increment, compatibility decision, and old/new fixture coverage. |
 | Baker or raster generator | Deterministic artifact diff, payload report, and Node/Worker parity run. |
 

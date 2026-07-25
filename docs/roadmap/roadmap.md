@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:42:19Z"
+  at: "2026-07-25T02:56:50Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0 and 1 and item 2.1 are closed. Milestone 2 continues in issue order at active item 2.2.
+Milestones 0 and 1 and items 2.1–2.2 are closed. Milestone 2 continues in issue order at active item 2.3.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -89,8 +89,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 1.2 | ✅ | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
 | 1.3 | ✅ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
 | 2.1 | ✅ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
-| 2.2 | 🟡 | Implement the host-independent font bake request/result core. | M | 2.1 |
-| 2.3 | ⬜ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
+| 2.2 | ✅ | Implement the host-independent font bake request/result core. | M | 2.1 |
+| 2.3 | 🟡 | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
 | 2.4 | ⬜ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
 | 3.1 | ⬜ | Implement baked probing, validation, and registration. | M | 2.4 |
 | 3.2 | ⬜ | Add the dynamically imported Worker bake path. | M | 3.1 |
@@ -221,6 +221,18 @@ Exit only when the Figma-backed lab is usable, synthetic and portable-baker targ
 - [x] Package integration tests cover successful mappings plus dynamic input, dynamic strikes, unsafe paths, malformed manifests, CommonJS targets, and package escape attempts.
 
 Item 2.1 is closed. Its analyzer remains internal until item 2.4 exposes the complete `@pmndrs/text/bake` Node API and CLI; item 2.2 is the active dependency.
+
+### 2.2 closure checklist
+
+- [x] The portable TypeScript boundary accepts exactly one `FontBakeRequestV0` and returns `FontBakeResultV0`; Node's separate filesystem-oriented `bakeFont(options)` name remains reserved for item 2.4.
+- [x] One `no_std + alloc`, zero-import `wasm32-unknown-unknown` core is shared-ready for Node and Worker hosts through the generated direct-memory ABI with no WASI or binding generator.
+- [x] Fontations owns SFNT/TTC parsing and Skrifa owns maintained glyph bounds; fixtures cover invalid bytes, WOFF/WOFF2, required tables, variable/AAT shaping systems, TTC face selection, and out-of-range face indexes.
+- [x] The canonical Inter 4.1 result binds exact source, descriptor, artifact, shaping, table, metric, extent, and byte identities in its immutable fixture manifest.
+- [x] The reduced SFNT has a sorted closed table set, valid offsets, alignment, padding, table checksums, whole-font checksum, duplicated metrics, dense extents, availability bits, and domain-separated shaping hash.
+- [x] Every checked-in shaping case produces identical HarfRust 0.12.0 glyph IDs, UTF-16 clusters, positions, and flags from the source and reduced SFNT.
+- [x] Pinned Binaryen 129.0.0 `-Oz` optimization reduces the distributed module while zero-import, ABI, deterministic artifact, and real-font tests remain unchanged.
+
+Item 2.2 is closed. Item 2.3 is the active dependency and adds the core/raster validators plus the package-owned bitmap descriptor, baker, artifact, and goldens.
 
 Deliver:
 

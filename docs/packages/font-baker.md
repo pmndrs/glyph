@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:e63fb78bbb4a78ea88daecf6268edc9027c3c999f155b513e80a38969c679d0d"
+source_digest: "sha256:d7c6461f677b8d0332fb5d6f282d5a613046d4d8d05f6c4d9f1b0206f4184434"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -19,14 +19,16 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:10:04Z"
+  at: "2026-07-25T02:56:50Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
 
-Status: 🟡 internal bake-core slice; paused behind roadmap dependencies
+Status: ✅ roadmap item 2.2 portable bake core; item 2.3 composition is active
 
-This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, and validator pins consumed by provenance and fixtures.
+This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, validator, and Binaryen pins consumed by provenance and fixtures.
+
+The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. At item 2.2 closure, that changes 475,673 raw bytes to 430,662 while preserving zero imports, the embedded ABI, and the canonical artifact hash. Transfer compression changes much less—168,958 to 167,310 gzip bytes and 136,342 to 136,118 Brotli bytes—so reports keep raw and transport costs distinct.
 
 Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract.
 
@@ -36,7 +38,7 @@ The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, 
 
 | Script | Purpose |
 | --- | --- |
-| `build` | Compile the `no_std` Wasm module, generate the ABI JSON, and emit the TypeScript package. |
+| `build` | Compile the `no_std` Wasm module, apply pinned `wasm-opt -Oz`, generate the ABI JSON, and emit the TypeScript package. |
 | `test:unit` | Run Rust unit tests. |
 | `test:integration` | Run public Rust and compiled Wasm/TypeScript integration tests. |
 | `test:e2e` | Verify and bake the canonical licensed Inter fixture through the packaged Wasm API. |
@@ -46,4 +48,4 @@ The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, 
 See the [implementation status](../planning/font-baker-implementation.md) for evidence and open gates.[^implementation-status]
 
 [^fontations]: The package does not maintain a parallel OpenType parser or outline geometry engine.
-[^implementation-status]: The implementation-status concept records why existing milestone-2 code is paused until milestones 0–1 close.
+[^implementation-status]: The implementation-status concept records the executable evidence and next canonical gate.

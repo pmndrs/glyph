@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-25T02:56:50Z"
 ---
 
 # Shaping data contract V0
@@ -288,27 +288,27 @@ interface ShapingPayloadReportV0 {
 
 The portable `no_std` Wasm core reports every authoritative raw field and omits `gzipBytes`/`brotliBytes`; it does not carry transport compressors into the browser fallback. A Node or reporting host MUST add both compressed measurements before presenting a completed offline bake report. The corresponding container `transport` list follows the same rule: raw is always present, while gzip and Brotli entries are host-enriched measurements.
 
-The pinned source files provide exact initial costs. Inter contains 2,871 source glyphs and Font Awesome contains 1,403; the smaller 907/350 counts in existing Slug GLBs are raster subsets and are not valid V0 cardinalities because V0 does not yet compute shaping closure.
+The pinned source files provide exact initial costs. Inter 4.1 contains 2,937 source glyphs and Font Awesome contains 1,403; the smaller 907/350 counts in existing Slug GLBs are raster subsets and are not valid V0 cardinalities because V0 does not yet compute shaping closure.
 
 | Retained item | Inter raw | Font Awesome raw |
 | --- | ---: | ---: |
 | SFNT directory | 156 B | 108 B |
 | `head` | 54 B | 54 B |
 | `maxp` | 32 B | 32 B |
-| `cmap` | 25,500 B | 18,682 B |
+| `cmap` | 25,900 B | 18,682 B |
 | `hhea` | 36 B | 36 B |
-| `hmtx` | 11,484 B | 5,612 B |
+| `hmtx` | 11,748 B | 5,612 B |
 | `OS/2` | 96 B | 96 B |
-| `GDEF` | 1,006 B | — |
-| `GSUB` | 16,078 B | — |
-| `GPOS` | 90,894 B | — |
-| Four-byte table padding | 8 B | 4 B |
-| **Canonical shaping SFNT** | **145,344 B** | **24,624 B** |
-| Dense glyph extents | 22,968 B | 11,224 B |
-| Extents availability | 359 B | 176 B |
-| **V0 shaping payload** | **168,671 B** | **36,024 B** |
+| `GDEF` | 1,036 B | — |
+| `GSUB` | 24,406 B | — |
+| `GPOS` | 83,724 B | — |
+| Four-byte table padding | 4 B | 4 B |
+| **Canonical shaping SFNT** | **147,192 B** | **24,624 B** |
+| Dense glyph extents | 23,496 B | 11,224 B |
+| Extents availability | 368 B | 176 B |
+| **V0 shaping payload** | **171,056 B** | **36,024 B** |
 
-The source files are 324,820 B and 426,112 B respectively. The reduced SFNT removes 179,476 B from Inter and 401,488 B from Font Awesome before adding extents and their availability bits. The conformance corpus proves the canonical reconstruction.
+The source files are 411,640 B and 426,112 B respectively. The reduced SFNT removes 264,448 B from Inter and 401,488 B from Font Awesome before adding extents and their availability bits. The conformance corpus proves the canonical reconstruction.
 
 For capacity planning, a shaped batch with 1,000 V0 glyphs costs 24,000 bytes for glyph arrays plus 10 bytes per run, arena headers, font slots, and alignment. This transient memory is separate from the serialized SFNT and GPU raster memory.
 

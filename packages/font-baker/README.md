@@ -10,7 +10,9 @@ Embind bindings, or generated binding runtime. Rust generates the versioned ABI
 JSON at compile time from `src/abi_contract.rs`; the Wasm embeds those exact
 bytes, and the `generate-abi` program emits the compiled contract for the package
 build. The TypeScript shim uses it to access exported functions and response
-offsets in linear memory.
+offsets in linear memory. The package build then runs pinned Binaryen 129.0.0
+with `-Oz` over the Rust release module while preserving only the bulk-memory
+and nontrapping float-to-int features emitted by the pinned Rust target.
 
 The current slice accepts source-font bytes and a V0 face descriptor, emits one
 shaping-only `PMNDRS_font` GLB, and returns byte-accounting data and structured
@@ -22,7 +24,10 @@ import { createFontBaker } from '@pmndrs/text-font-baker'
 
 const wasm = await fetch(wasmUrl).then((response) => response.arrayBuffer())
 const baker = await createFontBaker(wasm)
-const result = baker.bakeFont(sourceBytes, { fontFaceIndex: 0 })
+const result = baker.bake({
+  source: sourceBytes,
+  descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+})
 ```
 
 Build and verify the package from the repository root:
@@ -35,16 +40,9 @@ pnpm --filter @pmndrs/text-font-baker test
 The test command keeps three lanes explicit: Rust unit tests, public Rust and
 compiled Wasm/package integration tests, and a real-font vertical-slice test.
 The real-font lane never substitutes generated font bytes for product evidence;
-until the canonical repository font is licensed and pinned, provide one locally:
-
-```sh
-PMNDRS_TEXT_TEST_FONT=/absolute/path/to/font.ttf \
-  pnpm --filter @pmndrs/text-font-baker test:e2e
-```
-
-The test is reported as skipped when the variable is absent. It becomes a
-required CI lane once the canonical fixture manifest owns the exact font bytes,
-license, version, and SHA-256 hash.
+it always verifies and bakes the checked-in, licensed, hash-pinned Inter 4.1
+fixture. The resulting reduced SFNT is validated structurally and shaped through
+the complete checked-in corpus with HarfRust 0.12.0.
 
 Emit the exact ABI JSON generated into the current Rust build:
 
