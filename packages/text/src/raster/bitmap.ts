@@ -38,9 +38,24 @@ export function bitmapDescriptor<const Strikes extends readonly [number, ...numb
   if (typeof options !== 'object' || options === null || !Array.isArray(options.strikes)) {
     throw new TypeError('bitmap options must provide a strikes tuple')
   }
+  return canonicalizeBitmapDescriptor(options.strikes)
+}
+
+/** Canonicalize JSON strike data at analyzer and artifact-validation boundaries. */
+export function canonicalizeBitmapDescriptor(strikes: readonly number[]): BitmapDescriptorV0 {
   return Object.freeze({
     generatorVersion: BITMAP_GENERATOR_VERSION,
-    strikes: canonicalStrikes(options.strikes),
+    strikes: canonicalStrikes(strikes),
+  })
+}
+
+/** Derive a key from a descriptor that has already crossed package-owned validation. */
+export function bitmapDescriptorRasterKey(descriptor: BitmapDescriptorV0): Promise<RasterKey> {
+  return deriveRasterKey({
+    descriptor,
+    extension: BITMAP_EXTENSION,
+    kind: BITMAP_KIND,
+    version: BITMAP_FORMAT_VERSION,
   })
 }
 
@@ -48,10 +63,5 @@ export function bitmapDescriptor<const Strikes extends readonly [number, ...numb
 export async function bitmapRasterKey<const Strikes extends readonly [number, ...number[]]>(
   options: BitmapOptions<Strikes>,
 ): Promise<RasterKey> {
-  return deriveRasterKey({
-    descriptor: bitmapDescriptor(options),
-    extension: BITMAP_EXTENSION,
-    kind: BITMAP_KIND,
-    version: BITMAP_FORMAT_VERSION,
-  })
+  return bitmapDescriptorRasterKey(bitmapDescriptor(options))
 }

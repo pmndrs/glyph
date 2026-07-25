@@ -16,15 +16,34 @@
       "types": "./dist/raster/bitmap.d.ts",
       "import": "./dist/raster/bitmap.js"
     },
+    "./bakers/bitmap": {
+      "types": "./dist/bakers/bitmap.d.ts",
+      "import": "./dist/bakers/bitmap.js"
+    },
+    "./bakers/bitmap/validate": {
+      "types": "./dist/bakers/bitmap-validator.d.ts",
+      "import": "./dist/bakers/bitmap-validator.js"
+    },
+    "./bitmap-baker.wasm": "./dist/bitmap_baker.wasm",
+    "./bitmap-abi.json": "./dist/bitmap-baker-abi-v0.json",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node ./scripts/build.mjs",
+    "build:typescript": "tsc -p tsconfig.build.json",
+    "build:bitmap-rust": "cargo build --manifest-path rust/bitmap-baker/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
+    "generate:bitmap-abi": "cargo run --manifest-path rust/bitmap-baker/Cargo.toml --bin generate-bitmap-abi --locked --quiet",
+    "generate:bitmap-fixture": "pnpm build && node ./scripts/generate-bitmap-fixture.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build && pnpm test:types && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
+    "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
+    "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked",
+    "test:integration": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
+    "test:fuzz-smoke": "node --test tests/fuzz/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"
   },
   "dependencies": {
+    "@pmndrs/text-font-baker": "workspace:*",
+    "ktx-parse": "1.1.0",
     "typescript": "7.0.2"
   },
   "devDependencies": {
@@ -32,6 +51,7 @@
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.1",
+    "binaryen": "129.0.0",
     "react": "19.2.8",
     "three": "0.185.1"
   },

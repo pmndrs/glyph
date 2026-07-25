@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Implementation** — Added the package-owned portable bitmap artifact core: Fontations/Skrifa outline extraction, Zeno grayscale rasterization, deterministic atlas packing, dense 20-byte records, lossless R8 KTX2, embedded/external pages, generated direct-memory ABI, Binaryen optimization, layered schema/Khronos/KTX2/semantic validation of every declared variant, exact canonical Inter source/Wasm/artifact/report/record/page goldens, a validated 65,535-glyph boundary, and deterministic Rust-input plus artifact-mutation fuzz smoke.
 - **Implementation** — Added the browser-safe package-owned bitmap identity boundary: strict static-strike runtime validation, canonical ascending descriptors stamped with generator `0.0.0`, RFC 8785 serialization, SHA-256 raster-key derivation, public ESM subpath/type fixtures, and independent hash-oracle tests; artifact emission remains open under item 2.3.
 
 ## 2026-07-24

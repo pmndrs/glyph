@@ -69,7 +69,7 @@ This extension does not define text strings, paragraph layout, line breaking, ra
         }
       },
       "metrics": {
-        "glyphCount": 2871,
+        "glyphCount": 2937,
         "glyphIdWidth": 16,
         "unitsPerEm": 2048,
         "ascender": 1984,

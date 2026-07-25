@@ -63,6 +63,9 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Portable baker ABI | `0` | generated `font-baker-abi-v0.json` |
 | Font baker | `0.0.0` | Cargo/npm package version during the integration slice |
 | Bitmap generator | `0.0.0` | reserved initial package version for roadmap item 2.3 |
+| Bitmap outline rasterizer | Zeno `0.3.3` | unhinted grayscale mask generation from Skrifa outline commands |
+| KTX2 Rust model/parser | `ktx2` `0.5.0` | compile-time R8 DFD generation plus native artifact validation |
+| KTX2 JavaScript parser | `ktx-parse` `1.1.0` | package-owned artifact and runtime page validation |
 
 ## Generated contract
 

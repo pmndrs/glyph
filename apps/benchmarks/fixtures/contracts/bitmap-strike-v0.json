@@ -3,9 +3,10 @@
   "id": "inter-regular-bitmap-16-v0",
   "fontFixture": "inter-regular-v0",
   "descriptor": {
-    "kind": "bitmap",
+    "generatorVersion": "0.0.0",
     "strikes": [16]
   },
+  "rasterKey": "f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02",
   "strike": {
     "ppemX": 16,
     "ppemY": 16,
@@ -15,5 +16,5 @@
     "colorSpace": "linear",
     "encoding": "ktx2-lossless"
   },
-  "status": "source-contract"
+  "status": "validated-golden"
 }

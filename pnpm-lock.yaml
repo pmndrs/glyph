@@ -103,6 +103,12 @@ importers:
 
   packages/text:
     dependencies:
+      '@pmndrs/text-font-baker':
+        specifier: workspace:*
+        version: link:../font-baker
+      ktx-parse:
+        specifier: 1.1.0
+        version: 1.1.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -119,6 +125,9 @@ importers:
       '@types/three':
         specifier: 0.185.1
         version: 0.185.1
+      binaryen:
+        specifier: 129.0.0
+        version: 129.0.0
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -1287,6 +1296,9 @@ packages:
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
+
+  ktx-parse@1.1.0:
+    resolution: {integrity: sha512-mKp3y+FaYgR7mXWAbyyzpa/r1zDWeaunH+INJO4fou3hb45XuNSwar+7llrRyvpMWafxSIi99RNFJ05MHedaJQ==}
 
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
@@ -2671,6 +2683,8 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
+
+  ktx-parse@1.1.0: {}
 
   levn@0.4.1:
     dependencies:

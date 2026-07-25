@@ -1,0 +1,144 @@
+use std::vec::Vec;
+
+use crate::error::{BitmapBakeError, BitmapBakeErrorCode, overflow};
+
+const MAGIC: [u8; 12] = [
+    0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a,
+];
+const HEADER_LENGTH: usize = 80;
+const LEVEL_INDEX_LENGTH: usize = 24;
+const VK_FORMAT_R8_UNORM: u32 = 9;
+const R8_DFD_BLOCK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/r8-dfd.bin"));
+
+pub(crate) fn encode_r8(
+    width: u16,
+    height: u16,
+    texels: &[u8],
+) -> Result<Vec<u8>, BitmapBakeError> {
+    let expected = usize::from(width)
+        .checked_mul(usize::from(height))
+        .ok_or_else(overflow)?;
+    if width == 0 || height == 0 || texels.len() != expected {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::SerializationFailed,
+            "R8 KTX2 dimensions do not match the texel payload",
+        ));
+    }
+
+    let dfd_length = 4_usize
+        .checked_add(R8_DFD_BLOCK.len())
+        .ok_or_else(overflow)?;
+    let dfd_offset = HEADER_LENGTH
+        .checked_add(LEVEL_INDEX_LENGTH)
+        .ok_or_else(overflow)?;
+    let level_offset = align4(dfd_offset.checked_add(dfd_length).ok_or_else(overflow)?);
+    let total = level_offset
+        .checked_add(texels.len())
+        .ok_or_else(overflow)?;
+    let mut bytes = vec![0_u8; total];
+
+    bytes[..MAGIC.len()].copy_from_slice(&MAGIC);
+    write_u32(&mut bytes, 12, VK_FORMAT_R8_UNORM);
+    write_u32(&mut bytes, 16, 1);
+    write_u32(&mut bytes, 20, u32::from(width));
+    write_u32(&mut bytes, 24, u32::from(height));
+    write_u32(&mut bytes, 36, 1);
+    write_u32(&mut bytes, 40, 1);
+    write_u32(
+        &mut bytes,
+        48,
+        u32::try_from(dfd_offset).map_err(|_| overflow())?,
+    );
+    write_u32(
+        &mut bytes,
+        52,
+        u32::try_from(dfd_length).map_err(|_| overflow())?,
+    );
+    write_u64(
+        &mut bytes,
+        HEADER_LENGTH,
+        u64::try_from(level_offset).map_err(|_| overflow())?,
+    );
+    write_u64(
+        &mut bytes,
+        HEADER_LENGTH + 8,
+        u64::try_from(texels.len()).map_err(|_| overflow())?,
+    );
+    write_u64(
+        &mut bytes,
+        HEADER_LENGTH + 16,
+        u64::try_from(texels.len()).map_err(|_| overflow())?,
+    );
+    write_u32(
+        &mut bytes,
+        dfd_offset,
+        u32::try_from(dfd_length).map_err(|_| overflow())?,
+    );
+    bytes[dfd_offset + 4..dfd_offset + dfd_length].copy_from_slice(R8_DFD_BLOCK);
+    bytes[level_offset..].copy_from_slice(texels);
+
+    #[cfg(feature = "std")]
+    validate_r8(&bytes, width, height)?;
+    Ok(bytes)
+}
+
+#[cfg(feature = "std")]
+pub(crate) fn validate_r8(
+    bytes: &[u8],
+    expected_width: u16,
+    expected_height: u16,
+) -> Result<(), BitmapBakeError> {
+    let reader = ktx2::Reader::new(bytes)
+        .map_err(|error| BitmapBakeError::new(BitmapBakeErrorCode::SerializationFailed, error))?;
+    let header = reader.header();
+    if header.format != Some(ktx2::Format::R8_UNORM)
+        || header.type_size != 1
+        || header.pixel_width != u32::from(expected_width)
+        || header.pixel_height != u32::from(expected_height)
+        || header.pixel_depth != 0
+        || header.layer_count != 0
+        || header.face_count != 1
+        || header.level_count != 1
+        || header.supercompression_scheme.is_some()
+    {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::SerializationFailed,
+            "KTX2 header does not describe the canonical lossless R8 baseline",
+        ));
+    }
+    let mut levels = reader.levels();
+    let level = levels.next().ok_or_else(|| {
+        BitmapBakeError::new(
+            BitmapBakeErrorCode::SerializationFailed,
+            "KTX2 has no base level",
+        )
+    })?;
+    let expected = usize::from(expected_width)
+        .checked_mul(usize::from(expected_height))
+        .ok_or_else(overflow)?;
+    if level.data.len() != expected || level.uncompressed_byte_length != expected as u64 {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::SerializationFailed,
+            "KTX2 base level byte count does not match its R8 dimensions",
+        ));
+    }
+    if levels.next().is_some() {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::SerializationFailed,
+            "bitmap V0 KTX2 contains unexpected mip levels",
+        ));
+    }
+    Ok(())
+}
+
+fn write_u32(output: &mut [u8], offset: usize, value: u32) {
+    output[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+fn write_u64(output: &mut [u8], offset: usize, value: u64) {
+    output[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+}
+
+fn align4(value: usize) -> usize {
+    (value + 3) & !3
+}

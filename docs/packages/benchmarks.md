@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:b98b124d62aedecde0e0290608192891995ba6be99f8295f1aaf0d130fbefbcc"
+source_digest: "sha256:d7c59b89e9007003cc622d2b1d9b2fcb7eac887c1fc59a23ffa8fbf23d570647"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,14 +16,14 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T02:56:50Z"
+  at: "2026-07-25T05:10:26Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: 🟡 usable harness shell; rendering targets not implemented
 
-This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, and real portable-baker target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override. Its independent package-size lane measures public core JavaScript, baker JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders.
+This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, and real portable-baker target. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. The baker defaults to the hash-pinned Inter 4.1 fixture in interactive and automated paths; a local font is an explicit override. Its fixture inventory now binds the bitmap strike contract to the executable canonical descriptor and raster key. Its independent package-size lane measures public core JavaScript, baker JavaScript/Wasm, and explicitly unavailable future entries without zero-byte placeholders.
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. The first real rendered font frame must land here after its loader, shaping, paragraph, and bitmap dependencies close.
 

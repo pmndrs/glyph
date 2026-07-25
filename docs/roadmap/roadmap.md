@@ -244,9 +244,9 @@ Item 2.2 is closed. Item 2.3 is the active dependency and adds the core/raster v
 - [x] Core semantic and payload validation covers buffer containment/non-overlap, versions, reciprocal raster identity, closed SFNT/checksums/metrics, dense extents, zero padding, and shaping identity.
 - [x] The canonical Inter product path uses the shipped validator, while the baker-only entry remains import-isolated from Ajv and `gltf-validator`.
 - [x] Fixed-seed Rust-input and TypeScript artifact-mutation fuzz smoke tests run in the ordinary suite; longer mutation drivers plus pinned cargo-fuzz/libFuzzer coverage promote minimized findings into permanent malformed fixtures.
-- [ ] The bitmap-owned module canonicalizes static strike tuples and derives the RFC 8785 raster key without a parallel core descriptor union.
+- [x] The bitmap-owned module canonicalizes static strike tuples and derives the RFC 8785 raster key without a parallel core descriptor union.
 - [ ] The bitmap baker emits deterministic unhinted grayscale strikes, dense 20-byte records, lossless R8 KTX2 pages, reports, and embedded/external packaging.
-- [ ] The bitmap-owned validator covers schema, reciprocal identity, exact strikes, records, pages/KTX2, limits, and one-invalid-field-at-a-time malformed artifacts.
+- [x] The bitmap-owned validator covers schema, reciprocal identity, exact strikes, records, pages/KTX2, limits, and one-invalid-field-at-a-time malformed artifacts.
 - [ ] Canonical Inter bitmap bytes and synthetic maximum-cardinality/empty identities are pinned and round-trip through the same core used by later hosts.
 
 Deliver:

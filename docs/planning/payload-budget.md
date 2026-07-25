@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T02:56:50Z"
+  at: "2026-07-25T05:03:21Z"
 ---
 
 # Font payload budget
@@ -61,7 +61,7 @@ Measurements read the checked-in TTF/GLB bytes and their accessor ranges directl
 
 | Fixture | Kind | Coverage |
 | --- | --- | ---: |
-| Inter Regular | UI font | 2,871 source; 907 legacy Slug glyphs |
+| Inter Regular 4.1 | UI font | 2,937 source; 907 legacy Slug glyphs |
 | Font Awesome Solid | Icon font | 1,403 source; 350 legacy Slug glyphs |
 | Lucide | SVG icons | 1,594 baked shapes |
 
@@ -144,9 +144,9 @@ Relevant prior art:
 - [Glyph paging design](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md)
 - [uikit Lucide package](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/uikit-lucide)
 
-## Modeled bitmap and MSDF budgets
+## Measured bitmap and modeled MSDF budgets
 
-These are capacity estimates, not measured baker outputs. They make proposed defaults and fixture expectations reviewable before implementation. Exact atlas dimensions, occupancy, edge padding, distance range, and transport compression become benchmark results as soon as the generators exist.
+The Inter 16 ppem bitmap row is now an exact generator result. Remaining rows are capacity estimates and stay labeled as such. Exact MSDF atlas dimensions, occupancy, distance range, and transport compression become benchmark results only when that generator exists.
 
 Assumptions:
 
@@ -167,6 +167,21 @@ The distance-field ranges span a 1024² to 2048×1024 page for the font fixtures
 
 Bitmap strikes scale independently. A `[16, 24, 32]` R8 set is not “one 32 px atlas times three”: smaller strikes pack into smaller pages. The baker must report every strike and page separately. RGBA color emoji must likewise be reported separately from grayscale glyph strikes.
 
+The canonical full-face Inter 4.1 bitmap at 16 ppem measures:
+
+| Component | Exact result |
+| --- | ---: |
+| Dense records | 58,740 B; SHA-256 `8baad38084b89f93756ee70c994e4e0d30d6854b1c001af6618e0be413a5f60d` |
+| Present / absent glyphs | 2,915 / 22 |
+| R8 page | 1024 × 679 = 695,296 GPU B |
+| Lossless KTX2 | 695,444 B |
+| Embedded raster GLB | 755,064 B |
+| External raster index GLB | 59,744 B |
+| External index + page | 755,188 B |
+| Optimized bitmap baker Wasm | 654,666 B raw; 237,352 B gzip; 182,025 B Brotli q11 |
+
+The embedded and external forms have byte-identical records and KTX2 texels. External packaging costs 124 additional serialized bytes for the authenticated URI/length/hash directory.
+
 Useful exact formulas:
 
 ```text
@@ -179,13 +194,13 @@ Mipmaps add approximately one third to the base texture size when a full chain i
 
 ## Planning totals
 
-For the non-subsetted 2,871-glyph Inter V0 face, the shared cost is fixed while raster textures require first-generator measurement:
+For the non-subsetted 2,937-glyph Inter V0 face, the shared cost is fixed and the bitmap generator now supplies its first exact measurement:
 
 | Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
-| Generated bitmap, one strike | 164.7 KiB | generator report required | 20 B × 2,871 = 57,420 B records. |
-| MSDF | 164.7 KiB | generator report required | MTSDF RGBA8; 57,420 B records; legacy subset was modeled at 4–8 MiB. |
-| Slug | 164.7 KiB | generator report required | 40 B × 2,871 = 114,840 B records; legacy subset derived near 2 MiB. |
+| Generated bitmap, 16 ppem | 167.0 KiB | 695,296 B | 58,740 B records; 755,064 B embedded companion GLB. |
+| MSDF | 167.0 KiB | generator report required | MTSDF RGBA8; 58,740 B records; legacy subset was modeled at 4–8 MiB. |
+| Slug | 167.0 KiB | generator report required | 40 B × 2,937 = 117,480 B records; legacy subset derived near 2 MiB. |
 
 For the non-subsetted 1,403-glyph Font Awesome V0 face:
 

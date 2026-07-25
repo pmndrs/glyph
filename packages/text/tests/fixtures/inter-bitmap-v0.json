@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 0,
+  "source": {
+    "fixture": "apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
+    "bytes": 411640,
+    "sha256": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+    "faceIndex": 0,
+    "glyphCount": 2937,
+    "shapingHash": "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09"
+  },
+  "descriptor": {
+    "generatorVersion": "0.0.0",
+    "strikes": [
+      16
+    ]
+  },
+  "rasterKey": "f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02",
+  "generator": {
+    "version": "0.0.0",
+    "optimizedWasmBytes": 654666,
+    "optimizedWasmSha256": "9add17e6006c3dbbff4d28bc0625ace0a4346ce4121772ed26be11a1adb6c56a",
+    "dependencies": {
+      "readFonts": "0.42.1",
+      "skrifa": "0.45.1",
+      "zeno": "0.3.3",
+      "ktx2Rust": "0.5.0",
+      "ktxParse": "1.1.0",
+      "binaryen": "129.0.0"
+    }
+  },
+  "records": {
+    "stride": 20,
+    "bytes": 58740,
+    "sha256": "8baad38084b89f93756ee70c994e4e0d30d6854b1c001af6618e0be413a5f60d",
+    "presentGlyphs": 2915,
+    "absentGlyphs": 22
+  },
+  "embedded": {
+    "artifacts": [
+      {
+        "role": "raster",
+        "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+        "bytes": 755064,
+        "sha256": "fca76634d6560ebff2436bf0d2a4af0b754ea56e3ce3b99b51e0389bcbd9957c"
+      }
+    ],
+    "report": {
+      "metadataBytes": 58740,
+      "serializedBytes": 755064,
+      "gpuBytes": 695296,
+      "pages": [
+        {
+          "width": 1024,
+          "height": 679,
+          "format": "r8unorm",
+          "mipBytes": 695296,
+          "source": "embedded",
+          "encodedBytes": 695444
+        }
+      ]
+    },
+    "pages": [
+      {
+        "ppem": 16,
+        "width": 1024,
+        "height": 679,
+        "source": "embedded",
+        "bytes": 695444,
+        "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
+      }
+    ]
+  },
+  "external": {
+    "artifacts": [
+      {
+        "role": "raster",
+        "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+        "bytes": 59744,
+        "sha256": "d83adf040f7fee140d0304302975774b61f1d029c6ae11c1b0b001c6494a9863"
+      },
+      {
+        "role": "raster-page",
+        "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+        "bytes": 695444,
+        "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
+      }
+    ],
+    "report": {
+      "metadataBytes": 58740,
+      "serializedBytes": 755188,
+      "gpuBytes": 695296,
+      "pages": [
+        {
+          "width": 1024,
+          "height": 679,
+          "format": "r8unorm",
+          "mipBytes": 695296,
+          "source": "external",
+          "encodedBytes": 695444
+        }
+      ]
+    },
+    "pages": [
+      {
+        "ppem": 16,
+        "width": 1024,
+        "height": 679,
+        "source": "external",
+        "uri": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+        "bytes": 695444,
+        "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
+      }
+    ]
+  }
+}

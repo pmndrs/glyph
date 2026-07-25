@@ -210,7 +210,7 @@ RGBA8 base level = Σ(width × height × 4)
 full mip chain ≈ base × 4/3
 ```
 
-For the non-subsetted V0 fixtures, records are 57,420 bytes for 2,871-glyph Inter and 28,060 bytes for 1,403-glyph Font Awesome. A 1024² R8 page is 1,048,576 GPU bytes before mips; actual full-face page counts remain generator outputs.
+For the non-subsetted V0 fixtures, records are 58,740 bytes for the pinned 2,937-glyph Inter 4.1 face and 28,060 bytes for 1,403-glyph Font Awesome. A 1024² R8 page is 1,048,576 GPU bytes before mips; actual full-face page counts remain generator outputs.
 
 ## `PMNDRS_font_distance_field` V0
 
@@ -242,7 +242,7 @@ RGBA8 base level = Σ(width × height × 4)
 full mip chain ≈ base × 4/3
 ```
 
-The older 4–8 MiB capacity estimates covered the 907/350-glyph raster subsets, not the non-subsetted V0 faces. V0 records are exactly 57,420 B for Inter and 28,060 B for Font Awesome; full-face texture bytes are intentionally reported by the generator rather than extrapolated from an invalid coverage count.
+The older 4–8 MiB capacity estimates covered the 907/350-glyph raster subsets, not the non-subsetted V0 faces. V0 records are exactly 58,740 B for pinned Inter 4.1 and 28,060 B for Font Awesome; full-face texture bytes are generator outputs rather than extrapolations from an invalid coverage count.
 
 ## `PMNDRS_font_slug` V0
 

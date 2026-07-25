@@ -75,13 +75,13 @@ export async function validateFontArtifact(bytes: Uint8Array): Promise<Validated
   return validateFontSemantics(parsed, khronos);
 }
 
-interface ParsedGlb {
+export interface ParsedGlb {
   readonly document: Record<string, unknown>;
   readonly bin: Uint8Array;
   readonly declaredBinLength: number;
 }
 
-function parseGlb(bytes: Uint8Array): ParsedGlb {
+export function parseGlb(bytes: Uint8Array): ParsedGlb {
   if (bytes.byteLength < 28)
     fail("GLB_TOO_SHORT", "GLB must contain a header plus JSON and BIN chunks");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -167,7 +167,7 @@ function parseGlb(bytes: Uint8Array): ParsedGlb {
   return { document: root, bin, declaredBinLength };
 }
 
-async function validateWithKhronos(
+export async function validateWithKhronos(
   bytes: Uint8Array,
   document: Readonly<Record<string, unknown>>,
 ): Promise<KhronosValidationReport> {
@@ -257,6 +257,50 @@ function createFontSchemaValidator(): ValidateFunction {
   ajv.addSchema(withoutMetaSchema(extrasSchema), "extras.schema.json");
   ajv.addSchema(withoutMetaSchema(gltfPropertySchema), "glTFProperty.schema.json");
   return ajv.compile(fontExtensionSchema);
+}
+
+function withSchemaId(
+  schema: Readonly<Record<string, unknown>>,
+  id: string,
+): Record<string, unknown> {
+  const result = withoutMetaSchema(schema);
+  result.$id = id;
+  return result;
+}
+
+export interface ExtensionSchemaDependency {
+  readonly id: string;
+  readonly schema: Readonly<Record<string, unknown>>;
+}
+
+export function evaluateExtensionSchema(
+  value: unknown,
+  schema: Readonly<Record<string, unknown>>,
+  path: string,
+  dependencies: readonly ExtensionSchemaDependency[] = [],
+): readonly FontArtifactValidationIssue[] {
+  const ajv = new Ajv({ allErrors: true, jsonPointers: true, schemaId: "auto" });
+  ajv.addMetaSchema(draft04Schema);
+  ajv.addSchema(withoutMetaSchema(extensionSchema), "extension.schema.json");
+  ajv.addSchema(withoutMetaSchema(extrasSchema), "extras.schema.json");
+  ajv.addSchema(withoutMetaSchema(gltfPropertySchema), "glTFProperty.schema.json");
+  const schemaId = schema.$id;
+  if (typeof schemaId === "string" && schemaId.includes("/")) {
+    const base = schemaId.slice(0, schemaId.lastIndexOf("/") + 1);
+    ajv.addSchema(withSchemaId(extensionSchema, `${base}extension.schema.json`));
+    ajv.addSchema(withSchemaId(extrasSchema, `${base}extras.schema.json`));
+    ajv.addSchema(withSchemaId(gltfPropertySchema, `${base}glTFProperty.schema.json`));
+  }
+  for (const dependency of dependencies) {
+    ajv.addSchema({ ...withoutMetaSchema(dependency.schema), $id: dependency.id }, dependency.id);
+  }
+  const validate = ajv.compile(schema);
+  if (validate(value)) return [];
+  return (validate.errors ?? []).map((error) => ({
+    code: `SCHEMA_${error.keyword.toUpperCase()}`,
+    message: error.message ?? "extension schema validation failed",
+    path: error.dataPath === "" ? path : `${path}${error.dataPath}`,
+  }));
 }
 
 function withoutMetaSchema(schema: Readonly<Record<string, unknown>>): Record<string, unknown> {
