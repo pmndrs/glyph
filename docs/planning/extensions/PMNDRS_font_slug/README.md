@@ -3,7 +3,23 @@ type: glTF Extension Specification
 title: PMNDRS_font_slug
 description: Defines Slug glyph, curve, band-header, curve-reference, and GPU page resources bound to a PMNDRS font.
 tags: [gltf, extension, font, slug]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug"
+    title: "Three Flatland Slug"
+  - id: "citation-2"
+    resource: "../../raster-data-contract.md"
+    title: "Raster data contract"
+  - id: "citation-3-1"
+    resource: "../../slug-audit.md"
+    title: "Slug audit"
+  - id: "citation-3-2"
+    resource: "../../gpu-compression.md"
+    title: "GPU compression design"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -48,11 +64,3 @@ The extension adds a `PMNDRS_font_slug` object to the root glTF `extensions` obj
 
 - [Three Flatland Slug](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug) — implementation prior art for curves, band construction, packing, shaders, paging, and GLB delivery; not yet this exact extension.
 - [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation planned against this contract.
-
-# Citations
-
-[1] [Three Flatland Slug](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug) — implementation prior art for curve, band, packing, shader, paging, and GLB behavior.
-
-[2] [Raster data contract](../../raster-data-contract.md) — normative Slug records, pages, exact integer resources, and validation.
-
-[3] [Slug audit](../../slug-audit.md) and [GPU compression design](../../gpu-compression.md) — repository-local implementation evidence and compression constraints.

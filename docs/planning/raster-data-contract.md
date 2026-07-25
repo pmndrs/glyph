@@ -3,7 +3,26 @@ type: Data Contract
 title: Raster data contract V0
 description: Defines packaging-neutral bitmap, MTSDF-backed MSDF, and Slug raster records and GPU resources.
 tags: [data, bitmap, mtsdf, slug, gpu]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://www.rfc-editor.org/rfc/rfc8785.html"
+    title: "RFC 8785: JSON Canonicalization Scheme"
+  - id: "citation-2"
+    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
+    title: "glTF 2.0 specification"
+  - id: "citation-3"
+    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
+    title: "KTX 2.0 specification"
+  - id: "citation-4"
+    resource: "https://gpuweb.github.io/gpuweb/"
+    title: "WebGPU specification"
+  - id: "citation-5"
+    resource: "https://github.com/Chlumsky/msdfgen"
+    title: "msdfgen"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Raster data contract V0
@@ -361,15 +380,3 @@ Every raster format requires golden-byte, range, and GPU-readback fixtures cover
 - misaligned bitmap/distance-field two-byte records and Slug four-byte records;
 - Slug header/reference overflow, page-boundary, row-padding, and exact address reconstruction;
 - Node/Worker bake parity for records and decoded texture pixels.
-
-# Citations
-
-[1] [RFC 8785: JSON Canonicalization Scheme](https://www.rfc-editor.org/rfc/rfc8785.html) — deterministic raster descriptor serialization.
-
-[2] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — extension, GLB, buffer-view, alignment, and URI rules.
-
-[3] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) — texture container, format, and mip-level validation.
-
-[4] [WebGPU specification](https://gpuweb.github.io/gpuweb/) — texture format features, device limits, and upload constraints.
-
-[5] [msdfgen](https://github.com/Chlumsky/msdfgen) — MSDF/MTSDF channel semantics and generator reference.

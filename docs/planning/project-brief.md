@@ -3,7 +3,9 @@ type: Project Brief
 title: Project brief
 description: Defines the product outcome, users, current one-font slice, later product horizon, non-goals, and success criteria.
 tags: [product, scope, roadmap]
-timestamp: 2026-07-24T14:01:29Z
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Project brief

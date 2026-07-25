@@ -3,7 +3,26 @@ type: glTF Extension Specification
 title: PMNDRS_font
 description: Defines the core font, shaping payload, metrics, provenance, and raster directory extension.
 tags: [gltf, extension, font, shaping]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
+    title: "glTF 2.0 specification"
+  - id: "citation-2"
+    resource: "../../shaping-data-contract.md"
+    title: "V0 shaping data contract"
+  - id: "citation-3"
+    resource: "../../raster-data-contract.md"
+    title: "V0 raster data contract"
+  - id: "citation-4-1"
+    resource: "../../api-shapes.md"
+    title: "Runtime and bake API fixture"
+  - id: "citation-4-2"
+    resource: "../../payload-budget.md"
+    title: "payload budget"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -127,13 +146,3 @@ The extension adds a `PMNDRS_font` object to the root glTF `extensions` object. 
 - [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation in development.
 
 Three Flatland Slug is prior art for baked GLB font delivery but does not implement this extension.
-
-# Citations
-
-[1] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — extension placement, buffers, buffer views, URI resolution, and required-extension behavior.
-
-[2] [V0 shaping data contract](../../shaping-data-contract.md) — normative shaping profile, metrics, identity hash, and validation rules.
-
-[3] [V0 raster data contract](../../raster-data-contract.md) — raster directory, keys, reciprocal bindings, and packaging rules.
-
-[4] [Runtime and bake API fixture](../../api-shapes.md) and [payload budget](../../payload-budget.md) — repository-local loading contract and byte accounting.

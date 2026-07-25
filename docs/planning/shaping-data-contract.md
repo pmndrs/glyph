@@ -3,7 +3,23 @@ type: Data Contract
 title: Shaping data contract V0
 description: Defines the complete reduced SFNT shaping payload, font-function data, batch ABI, byte accounting, and validation.
 tags: [data, shaping, harfrust, wasm, sfnt]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://learn.microsoft.com/en-us/typography/opentype/spec/"
+    title: "OpenType specification"
+  - id: "citation-2"
+    resource: "https://github.com/harfbuzz/harfrust"
+    title: "HarfRust"
+  - id: "citation-3"
+    resource: "https://harfbuzz.github.io/shaping-and-shape-plans.html"
+    title: "HarfBuzz shaping documentation"
+  - id: "citation-4"
+    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
+    title: "glTF 2.0 specification"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Shaping data contract V0
@@ -265,10 +281,12 @@ interface ShapingPayloadReportV0 {
     paddedBytes: number
   }[]
   totalRawBytes: number
-  gzipBytes: number
-  brotliBytes: number
+  gzipBytes?: number
+  brotliBytes?: number
 }
 ```
+
+The portable `no_std` Wasm core reports every authoritative raw field and omits `gzipBytes`/`brotliBytes`; it does not carry transport compressors into the browser fallback. A Node or reporting host MUST add both compressed measurements before presenting a completed offline bake report. The corresponding container `transport` list follows the same rule: raw is always present, while gzip and Brotli entries are host-enriched measurements.
 
 The pinned source files provide exact initial costs. Inter contains 2,871 source glyphs and Font Awesome contains 1,403; the smaller 907/350 counts in existing Slug GLBs are raster subsets and are not valid V0 cardinalities because V0 does not yet compute shaping closure.
 
@@ -320,13 +338,3 @@ For the same static face, text, direction, script, language, features, cluster l
 3. canonical `PMNDRS_font` through the Wasm ABI.
 
 The comparison includes glyph count, IDs, clusters, all four positions, and mapped flags. Any optimized font-function or lookup path added later runs against the same canonical input and MUST be bit-for-bit equivalent to path 2 for the supported corpus.
-
-# Citations
-
-[1] [OpenType specification](https://learn.microsoft.com/en-us/typography/opentype/spec/) — normative SFNT, cmap, metrics, GSUB, GPOS, GDEF, variation, and glyph-data definitions.
-
-[2] [HarfRust](https://github.com/harfbuzz/harfrust) — runtime shaper, font-function surface, and OpenType behavior baseline.
-
-[3] [HarfBuzz shaping documentation](https://harfbuzz.github.io/shaping-and-shape-plans.html) — shape-plan, buffer, cluster, and positioning model used for comparison.
-
-[4] [glTF 2.0 specification](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html) — buffer-view containment and GLB serialization rules.

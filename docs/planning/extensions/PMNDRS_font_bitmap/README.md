@@ -3,7 +3,17 @@ type: glTF Extension Specification
 title: PMNDRS_font_bitmap
 description: Defines generated bitmap strikes, dense glyph records, and texture resources bound to a PMNDRS font.
 tags: [gltf, extension, font, bitmap]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
+    title: "KTX 2.0 specification"
+  - id: "citation-2"
+    resource: "../../raster-data-contract.md"
+    title: "Raster data contract"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -45,9 +55,3 @@ The extension adds a `PMNDRS_font_bitmap` object to the root glTF `extensions` o
 ## Known Implementations
 
 - [`pmndrs/text`](https://github.com/pmndrs/text) — reference implementation in development.
-
-# Citations
-
-[1] [KTX 2.0 specification](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html) — atlas texture container and level encoding.
-
-[2] [Raster data contract](../../raster-data-contract.md) — normative bitmap records, strike descriptors, texture variants, and validation.

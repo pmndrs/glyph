@@ -2,9 +2,9 @@
 
 `pmndrs/text` is a planned ESM-only, Three.js-first text system for JavaScript, WebGPU, and WebGL. It shapes Unicode text once, reflows it inside constrained regions, and renders the same positioned glyphs through an explicitly selected bitmap, MSDF, or Slug raster module. The MSDF engine uses MTSDF atlas encoding in V1.
 
-This repository is currently a design fixture. The public API, implementation order, and binary contracts are being reviewed before production code begins.
+This repository is moving from contract design into bounded implementation slices. The public API, implementation order, and binary contracts remain under review, so implementation status is recorded against their explicit exit gates rather than inferred from the presence of code.
 
-The first compile-only package scaffold lives in `packages/text`. It establishes the inferred raster/baker capability types, the synchronous paragraph/constraint boundary, and their positive and negative type fixtures; it does not yet implement font loading, shaping, layout, baking, or rendering.
+The compile-only public contract scaffold lives in `packages/text`. The first portable baker-core implementation lives in `packages/font-baker`, where one package contains the Rust crate, raw Wasm boundary, TypeScript wrapper, build support, and tests. It emits a shaping-only core GLB; it does not yet implement project discovery, bitmap composition, Node/Worker hosts, runtime shaping, layout, or rendering. See the [font baker implementation status](docs/planning/font-baker-implementation.md) for evidence and remaining gates.
 
 ## The API we intend to ship
 
@@ -165,7 +165,7 @@ The [renderer capability matrix](docs/planning/renderer-capabilities.md) records
 
 Supporting evidence is intentionally outside that path: [RESEARCH.md](RESEARCH.md) is the attributed bibliography; the [decision register](docs/planning/decision-register.md) records proposed choices; [open questions](docs/planning/open-questions.md) records unresolved blockers; and the benchmark, conformance, payload, compression, and Slug audit documents explain how claims will be verified.
 
-The planning corpus under [`docs`](docs/index.md) is an [Open Knowledge Format v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: reserved indexes provide progressive disclosure, frontmatter and links make concepts portable to agents, and Diátaxis keeps each page focused on a reader task.
+The planning corpus under [`docs`](docs/index.md) is an [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: reserved indexes provide progressive disclosure, frontmatter provenance and links make concepts portable to agents, and Diátaxis keeps each page focused on a reader task.
 
 ## Work locally
 
@@ -176,3 +176,15 @@ pnpm check
 ```
 
 Use mise to install the pinned toolchains, or supply compatible Node.js and Rust toolchains through the platform tools you already use.
+
+Run the Figma-backed benchmark product from the monorepo app tree:
+
+```sh
+pnpm benchmarks
+```
+
+The ordinary `pnpm check` path runs deterministic CI-safe tests. The maintainer-local browser lane is intentionally explicit because it starts real browsers and will grow hardware-GPU scenarios:
+
+```sh
+pnpm --filter @pmndrs/text-benchmarks test:live
+```

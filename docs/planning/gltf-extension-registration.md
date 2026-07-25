@@ -3,7 +3,41 @@ type: Submission Draft
 title: glTF vendor-prefix request and extension submission set
 description: Contains the proposed PMNDRS vendor-prefix request and extension submission checklist.
 tags: [gltf, extension, governance]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://github.com/KhronosGroup/glTF/blob/main/extensions/Template.md"
+    title: "glTF extension template"
+  - id: "citation-2"
+    resource: "https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md"
+    title: "glTF extension registry guidance"
+  - id: "citation-3"
+    resource: "https://github.com/KhronosGroup/glTF/blob/main/extensions/Prefixes.md"
+    title: "Registered glTF vendor prefixes"
+  - id: "citation-4-1"
+    resource: "https://github.com/KhronosGroup/glTF/issues/2497"
+    title: "BEVY"
+  - id: "citation-4-2"
+    resource: "https://github.com/KhronosGroup/glTF/issues/2344"
+    title: "KITTYCAD"
+  - id: "citation-4-3"
+    resource: "https://github.com/KhronosGroup/glTF/issues/2398"
+    title: "MANYFOLD"
+  - id: "citation-4-4"
+    resource: "https://github.com/KhronosGroup/glTF/issues/2581"
+    title: "PYTHA"
+  - id: "citation-5-1"
+    resource: "https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/GODOT_single_root"
+    title: "GODOT_single_root"
+  - id: "citation-5-2"
+    resource: "https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/CESIUM_primitive_outline"
+    title: "CESIUM_primitive_outline"
+  - id: "citation-5-3"
+    resource: "https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod"
+    title: "MSFT_lod"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # glTF vendor-prefix request and extension submission set
@@ -81,15 +115,3 @@ The extension pull request waits for:
 5. reciprocal shaping-hash rejection tests;
 6. measured section and texture reports;
 7. named specification editors and accepted Poimandres ownership.
-
-# Citations
-
-[1] [glTF extension template](https://github.com/KhronosGroup/glTF/blob/main/extensions/Template.md) — required structure for extension proposals.
-
-[2] [glTF extension registry guidance](https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md) — registry process and extension organization.
-
-[3] [Registered glTF vendor prefixes](https://github.com/KhronosGroup/glTF/blob/main/extensions/Prefixes.md) — prefix availability and registration source.
-
-[4] [BEVY](https://github.com/KhronosGroup/glTF/issues/2497), [KITTYCAD](https://github.com/KhronosGroup/glTF/issues/2344), [MANYFOLD](https://github.com/KhronosGroup/glTF/issues/2398), and [PYTHA](https://github.com/KhronosGroup/glTF/issues/2581) — accepted vendor-prefix request precedents.
-
-[5] [GODOT_single_root](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/GODOT_single_root), [CESIUM_primitive_outline](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/CESIUM_primitive_outline), and [MSFT_lod](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod) — representative vendor extension specifications.

@@ -3,7 +3,35 @@ type: Reference
 title: Renderer capability matrix
 description: Compares planned game-text features and limitations across bitmap, MSDF, and Slug rasters.
 tags: [rendering, bitmap, msdf, mtsdf, slug, games]
-timestamp: 2026-07-24T13:39:55Z
+sources:
+  - id: "citation-1-1"
+    resource: "https://github.com/Chlumsky/msdfgen"
+    title: "msdfgen"
+  - id: "citation-1-2"
+    resource: "https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553"
+    title: "author's preview shader"
+  - id: "citation-2-1"
+    resource: "https://learn.microsoft.com/en-us/typography/opentype/spec/colr"
+    title: "COLR"
+  - id: "citation-2-2"
+    resource: "https://learn.microsoft.com/en-us/typography/opentype/spec/svg"
+    title: "SVG"
+  - id: "citation-2-3"
+    resource: "https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt"
+    title: "CBDT"
+  - id: "citation-2-4"
+    resource: "https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix"
+    title: "`sbix`"
+  - id: "citation-3"
+    resource: "../../RESEARCH.md"
+    title: "Research bibliography"
+  - id: "citation-4"
+    resource: "slug-audit.md"
+    title: "Three Flatland Slug audit"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Renderer capability matrix
@@ -98,13 +126,3 @@ Switching raster must never reshape text or change line breaks. V1 selects one r
 - Use **bitmap strikes** for tiny or intentionally pixel-authored text and embedded color emoji.
 - Use **Slug** for large or deeply zoomed text, high-fidelity vector layers, and SVG icon fonts.
 - Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
-
-# Citations
-
-[1] [msdfgen](https://github.com/Chlumsky/msdfgen) and the [author's preview shader](https://gist.github.com/Chlumsky/263c960ae0a7df59afc2da4051eb0553) — MSDF/MTSDF generation and shader behavior.
-
-[2] OpenType [COLR](https://learn.microsoft.com/en-us/typography/opentype/spec/colr), [SVG](https://learn.microsoft.com/en-us/typography/opentype/spec/svg), [CBDT](https://learn.microsoft.com/en-us/typography/opentype/spec/cbdt), and [`sbix`](https://learn.microsoft.com/en-us/typography/opentype/otspec180/sbix) — normative color-vector, SVG, and bitmap glyph formats.
-
-[3] [Research bibliography](../../RESEARCH.md) — broader rendering-technique evidence and annotated sources.
-
-[4] [Three Flatland Slug audit](slug-audit.md) — repository-local Slug capability and implementation evidence.

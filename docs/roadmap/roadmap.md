@@ -3,7 +3,20 @@ type: Roadmap
 title: Canonical implementation roadmap
 description: Defines the only active implementation sequence, dependencies, effort estimates, deliverables, and exit gates for pmndrs/text.
 tags: [roadmap, implementation, milestones]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "../planning/benchmark-plan.md"
+    title: "Benchmark plan"
+  - id: "citation-2"
+    resource: "../planning/conformance-plan.md"
+    title: "Conformance plan"
+  - id: "citation-3"
+    resource: "../../README.md#benchmark-harness-wireframe"
+    title: "Repository benchmark-harness wireframe"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Canonical implementation roadmap
@@ -26,19 +39,23 @@ This slice is an internal integration proof, not a release candidate. The first 
 
 ## Implementation order
 
-| Order | Milestone | Effort | Depends on | Exit result |
-| ---: | --- | --- | --- | --- |
-| 0 | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
-| 1 | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
-| 2 | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
-| 3 | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
-| 4 | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
-| 6 | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
-| 7 | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
-| 8 | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
-| 9 | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
-| 10 | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
+Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
+
+| Order | Status | Milestone | Effort | Depends on | Exit result |
+| ---: | :---: | --- | --- | --- | --- |
+| 0 | 🟡 | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
+| 1 | 🟡 | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
+| 2 | 🟡 | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
+| 3 | ⬜ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
+| 4 | ⬜ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
+| 5 | ⬜ | Implement paragraph reflow and the external-layout boundary | L | 4 | Allocation-light measurement and final positioned layout work in a current-uikit-shaped fixture. |
+| 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
+| 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
+| 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
+| 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
+| 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
+
+Milestone 2 is 🟡 only because the host-independent 2.2 core has begun as an explicitly requested bounded slice. This does not waive milestone 0–1 gates or make the complete milestone eligible for completion.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -63,35 +80,35 @@ flowchart LR
 
 These rows replace the former separate backlog. Each is intended to become one focused issue or a short, explicitly linked PR sequence.
 
-| ID | Work | Size | Depends on |
-| --- | --- | :---: | --- |
-| 0.1 | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
-| 0.2 | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
-| 0.3 | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
-| 1.1 | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
-| 1.2 | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
-| 1.3 | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
-| 2.1 | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
-| 2.2 | Implement the host-independent font bake request/result core. | M | 2.1 |
-| 2.3 | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
-| 2.4 | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
-| 3.1 | Implement baked probing, validation, and registration. | M | 2.4 |
-| 3.2 | Add the dynamically imported Worker bake path. | M | 3.1 |
-| 3.3 | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
-| 4.1 | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
-| 4.2 | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
-| 5.1 | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
-| 5.2 | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
-| 5.3 | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
-| 6.1 | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
-| 6.2 | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
-| 6.3 | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
-| 7.1 | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
-| 7.2 | Record end-to-end conformance/performance baselines. | M | 7.1 |
-| 8.x | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
-| 9.x | Split Slug conversion, packing, shaders, quality, and perf work. | XL | 7.2 |
-| 10.1 | Prove raster-module switching through core and React without reflow. | M | 8.x, 9.x |
-| 10.2 | Complete release validation, guidance, and migration material. | M | 10.1 |
+| ID | Status | Work | Size | Depends on |
+| --- | :---: | --- | :---: | --- |
+| 0.1 | 🟡 | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
+| 0.2 | 🟡 | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
+| 0.3 | 🟡 | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
+| 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
+| 1.2 | 🟡 | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
+| 1.3 | ⬜ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
+| 2.1 | ⬜ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
+| 2.2 | 🟡 | Implement the host-independent font bake request/result core. | M | 2.1 |
+| 2.3 | ⬜ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
+| 2.4 | ⬜ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
+| 3.1 | ⬜ | Implement baked probing, validation, and registration. | M | 2.4 |
+| 3.2 | ⬜ | Add the dynamically imported Worker bake path. | M | 3.1 |
+| 3.3 | ⬜ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
+| 4.1 | ⬜ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
+| 4.2 | ⬜ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
+| 5.1 | ⬜ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
+| 5.2 | ⬜ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
+| 5.3 | ⬜ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
+| 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.3 |
+| 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
+| 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
+| 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
+| 7.2 | ⬜ | Record end-to-end conformance/performance baselines. | M | 7.1 |
+| 8.x | ⬜ | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
+| 9.x | ⬜ | Split Slug conversion, packing, shaders, quality, and perf work. | XL | 7.2 |
+| 10.1 | ⬜ | Prove raster-module switching through core and React without reflow. | M | 8.x, 9.x |
+| 10.2 | ⬜ | Complete release validation, guidance, and migration material. | M | 10.1 |
 
 ## Milestone 0 — accept contracts and versions
 
@@ -113,10 +130,15 @@ The contract-only TypeScript shim may contain identity factories such as `define
 Deliver:
 
 - the repository's first executable product surface, before any production font implementation;
+- Vite, React 19, React Compiler, modern async React resources/actions, the Figma-backed custom shadcn-derived component set, Oxlint, and Oxfmt configured as the app foundation;
 - shared target, scenario, capability, sample, result, and validation contracts;
+- the canonical [unit, package-integration, product-E2E, conformance, and performance test ownership ladder](../planning/conformance-plan.md#test-layers-and-ownership);
 - one deterministic synthetic smoke target proving interactive/headless parity without pretending to benchmark the future font engine;
+- one real portable-baker target proving Wasm startup, source-to-GLB correctness, deterministic artifacts, diagnostics, payload, and memory without pretending to render text;
 - interactive browser lab with shareable URL state and phase/result panels;
 - headless local/CI runner importing the same scenario registry and policies;
+- Vitest scenario assertions plus a Vitexec local live-probe lane for visible, stateful, and hardware-GPU behavior, reusable through headed or remote Playwright where representative;
+- committed erasable-TypeScript probes satisfying the [no-timer, no-retry determinism and admission contract](../planning/conformance-plan.md#live-probe-determinism-contract);
 - independent package-size lane and raw result export;
 - a dedicated package-size entry for the version-pinned JS Unicode property tables used by bidi, script itemization, line breaking, and grapheme segmentation;
 - authorized Inter Regular fixture with exact URL, license, version, and SHA-256;
@@ -127,7 +149,7 @@ Deliver:
 - synthetic 65,535-glyph, multi-page record/source fixture proving logical page identity without a real CJK bake;
 - empty multi-font/multi-raster contract fixtures that test identity without adding product behavior.
 
-Exit only when the lab is usable, the synthetic smoke target produces the same validated result through interactive and headless paths, and every oracle can be regenerated deterministically. Later milestones extend this harness; none creates a parallel benchmark or demo architecture.
+Exit only when the Figma-backed lab is usable, synthetic and portable-baker targets produce the same validated results through interactive and automated paths, unavailable raster targets remain honestly capability-gated, every oracle can be regenerated deterministically, and the initial live probes pass their zero-retry admission runs. Later milestones extend this harness through public package adapters and real-font scenarios; none creates a parallel benchmark or demo architecture, and no user-visible slice closes without its capability-appropriate automated or admitted local product-E2E case.
 
 ## Milestone 2 — font bake core, bitmap baker package, and Node host
 

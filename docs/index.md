@@ -1,5 +1,5 @@
 ---
-okf_version: "0.1"
+okf_version: "0.2"
 ---
 
 # pmndrs/text knowledge bundle
@@ -21,6 +21,8 @@ okf_version: "0.1"
 
 ## Verification and evidence
 
+- [Font baker implementation status](planning/font-baker-implementation.md) — implemented Rust/Wasm/TypeScript core and remaining verification gates.
+- [Wasm allocator experiment](planning/font-baker-allocator.md) — evidence plan for the ABI-private Wasm allocator choice.
 - [Benchmark plan](planning/benchmark-plan.md) — interactive/headless harness, scenarios, metrics, and reports.
 - [Conformance plan](planning/conformance-plan.md) — shaping, layout, visual, binary, and runtime correctness gates.
 - [Tooling fixtures](planning/tooling-fixtures.md) — pinned sources, goldens, malformed inputs, and package tests.
@@ -33,4 +35,4 @@ okf_version: "0.1"
 - [Decision register](planning/decision-register.md) — proposed and settled architectural choices.
 - [Open questions](planning/open-questions.md) — unresolved blockers and required prototypes.
 - [Planning index](planning/index.md) — complete planning-document inventory.
-
+- [Knowledge bundle log](log.md) — newest-first record of knowledge-bundle changes.

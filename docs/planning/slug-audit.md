@@ -3,7 +3,20 @@ type: Research Audit
 title: Three Flatland Slug audit
 description: Identifies reusable prior art, required rewrites, and the reuse plan for the Three Flatland Slug implementation.
 tags: [slug, audit, prior-art]
-timestamp: 2026-07-24T13:41:02Z
+sources:
+  - id: "citation-1"
+    resource: "https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug"
+    title: "Three Flatland Slug at the audited revision"
+  - id: "citation-2"
+    resource: "https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60"
+    title: "Three Flatland uikit fork at the reviewed revision"
+  - id: "citation-3"
+    resource: "../../RESEARCH.md"
+    title: "Research bibliography"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Three Flatland Slug audit
@@ -298,11 +311,3 @@ These numbers are useful only as a snapshot of the existing complete Slug GLB; t
 - Measure current loader allocations and load time for ASCII, Latin, and full Inter GLBs.
 - Determine whether the current cubic approximation is visually acceptable for the broader font corpus.
 - Inventory Three Flatland's loader architecture separately before designing the final public loader API.
-
-# Citations
-
-[1] [Three Flatland Slug at the audited revision](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug) — source of the shaping, paragraph, GLB, curve, band, shader, loader, and rendering findings.
-
-[2] [Three Flatland uikit fork at the reviewed revision](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60) — optimized packing and SVG icon-baking prior art.
-
-[3] [Research bibliography](../../RESEARCH.md) — related Slug, Windfoil, sparse-strip, and rendering sources.

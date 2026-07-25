@@ -3,7 +3,17 @@ type: Decision Register
 title: Decision register
 description: Tracks proposed architectural choices and the decisions required before implementation begins.
 tags: [decisions, governance]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "benchmark-plan.md"
+    title: "Benchmark plan"
+  - id: "citation-2"
+    resource: "../../README.md#benchmark-harness-wireframe"
+    title: "Repository benchmark-harness wireframe"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Decision register
@@ -81,6 +91,8 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | D-066 | The CLI resolves baker modules through an imported or explicitly named package's flat `pmndrs.text` map and public ESM exports; package semver governs compatibility and the CLI never scans dependency directories. | Settled for V0 |
 | D-071 | The Node baker statically discovers `defineFont` uses and literal raster descriptors without executing application code; dynamic font origins remain valid when an unambiguous local pathname can be resolved, otherwise runtime fallback remains authoritative. | Proposed |
 | D-070 | Bitmap strike tuples are non-empty, duplicate-free static positive integer literals and are part of raster identity; a missing declared strike makes a baked raster incompatible. | Proposed |
+| D-077 | The portable bake core ships one `wasm32-unknown-unknown` module behind a versioned JSON-described C ABI and direct linear-memory TypeScript shim; it ships no platform binaries, WASI dependency, Embind, or binding-generator runtime. | Settled for V0 |
+| D-078 | The bake Wasm uses `no_std + alloc` and aborting panics; its allocator is ABI-private. `dlmalloc` is the baseline, `rlsf` is the primary challenger, and any replacement requires representative benchmark evidence. Host code owns gzip/Brotli measurement. | Experiment |
 
 The [architecture](architecture.md) owns loading behavior and dependency rules. The [API contract](api-shapes.md) owns host and Worker shapes.
 
@@ -114,6 +126,11 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 | D-060 | Optimizations require reproducible A/B evidence and no quality loss. | Proposed |
 | D-063 | The interactive/headless benchmark harness is the first executable artifact; one shared registry defines every proof and measurement, including the first bitmap frame. | Proposed |
 | D-074 | Every rendering scenario uses current browser HTML/CSS output as its visual reference; HarfRust/HarfBuzz remain structured shaping oracles, and legacy Three Flatland Slug is historical comparison data only. | Proposed |
+| D-079 | The benchmark app uses Vite, React 19, the React Compiler, modern Suspense/resource/action patterns, project-owned custom shadcn-derived components from the Figma design, Oxlint, Oxfmt, Vitest, and committed Vitexec probes. | Settled for harness |
+| D-080 | Rendering is not a prerequisite for the harness shell: the synthetic target proves runner behavior and the portable baker provides the first real non-rendering target; raster panels remain explicitly unsupported until real adapters land. | Settled for harness |
+| D-081 | Figma semantic values are CSS variables consumed through Tailwind utilities and local shadcn-derived primitives; desktop and mobile frames share those tokens and components rather than duplicating literal styles. | Settled for harness |
+| D-082 | React Compiler runs in the Vite build and Oxlint runs compiler analysis, Hooks, accessibility, and `react-you-might-not-need-an-effect` rules as errors. Effects remain external-system synchronization; effect-only events use `useEffectEvent`, never render-time ref reads. | Settled for harness |
+| D-083 | Maintainer-local product probes use Vitexec for the live Vite/GPU-capable desktop lane and Playwright for explicit mobile viewports; both reject browser-console errors and use causal DOM/application signals without sleeps or retries. | Settled for harness |
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.
 

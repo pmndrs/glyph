@@ -3,7 +3,9 @@ type: Optimization Protocol
 title: Autoresearch optimization protocol
 description: Governs evidence-based optimization experiments that cannot trade away rendering quality or text correctness.
 tags: [optimization, benchmarks, quality]
-timestamp: 2026-07-24T13:41:02Z
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Autoresearch optimization protocol

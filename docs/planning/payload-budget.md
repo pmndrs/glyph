@@ -3,7 +3,26 @@ type: Budget Model
 title: Font payload budget
 description: Separates shaping bytes, raster records, transport bytes, decoded textures, and GPU residency.
 tags: [payload, memory, fonts]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175"
+    title: "Three Flatland main at the measured revision"
+  - id: "citation-2"
+    resource: "https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60"
+    title: "Three Flatland uikit fork at the measured revision"
+  - id: "citation-3-1"
+    resource: "https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/superpowers/plans/svg-bake-pipeline.md"
+    title: "SVG bake pipeline"
+  - id: "citation-3-2"
+    resource: "https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md"
+    title: "glyph paging design"
+  - id: "citation-4"
+    resource: "gpu-compression.md"
+    title: "GPU compression design"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Font payload budget
@@ -235,13 +254,3 @@ The benchmark corpus must eventually produce this report for:
 No modeled number becomes a product claim until a checked-in generator, descriptor, source hash, visual reference, and raw report reproduce it.
 
 Plain RGB MSDF is not part of the V1 totals. A later compression experiment may compare an RGB-capable native block format against the MTSDF baseline, including transport bytes, GPU residency, visual error, effect loss, and extra batch/module complexity. It becomes a supported encoding only if that complete comparison proves a material win.
-
-# Citations
-
-[1] [Three Flatland main at the measured revision](https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175) — measured source font and legacy Slug artifacts.
-
-[2] [Three Flatland uikit fork at the measured revision](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60) — optimized Slug texture layout and Lucide SVG artifact.
-
-[3] [SVG bake pipeline](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/superpowers/plans/svg-bake-pipeline.md) and [glyph paging design](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md) — prior artifact structure and paging assumptions.
-
-[4] [GPU compression design](gpu-compression.md) — repository-local transport/GPU byte model and quality gates.

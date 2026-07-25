@@ -3,7 +3,23 @@ type: API Reference
 title: Runtime and bake API fixture V0
 description: Defines the canonical proposed package, loader, baker, shaper, paragraph, raster, and cache interfaces.
 tags: [api, loader, baker, shaping, paragraph, raster]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://reactnative.dev/docs/text"
+    title: "React Native Text"
+  - id: "citation-2"
+    resource: "https://github.com/pmndrs/koota"
+    title: "pmndrs/koota"
+  - id: "citation-3"
+    resource: "https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0"
+    title: "pmndrs/uikit at the reviewed revision"
+  - id: "citation-4"
+    resource: "https://threejs.org/docs/pages/Object3D.html"
+    title: "Three.js Object3D"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -1039,13 +1055,3 @@ Public inference is tested as API behavior. Compile-only fixtures must prove tha
 - rasters: font generation + raster key + artifact hash + device capability key.
 
 Persistent storage is not required in the first slice; in-flight and completed in-memory deduplication is required.
-
-# Citations
-
-[1] [React Native Text](https://reactnative.dev/docs/text) — declarative nested text and inherited inline-style precedent.
-
-[2] [pmndrs/koota](https://github.com/pmndrs/koota) — value-oriented TypeScript inference and public API precedent.
-
-[3] [pmndrs/uikit at the reviewed revision](https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0) — Three.js-first React/vanilla integration and retained-layout boundary evidence.
-
-[4] [Three.js Object3D](https://threejs.org/docs/pages/Object3D.html) — framework-neutral scene-object lifecycle and transform surface.

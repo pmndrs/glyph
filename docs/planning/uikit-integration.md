@@ -3,7 +3,32 @@ type: Explanation
 title: uikit integration
 description: Explains how pmndrs/text can replace uikit's current text subsystem incrementally without coupling the core API to Yoga, signals, or uikit rendering internals.
 tags: [uikit, yoga, integration, paragraphs]
-timestamp: 2026-07-24T13:32:48Z
+sources:
+  - id: "citation-1"
+    resource: "https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0"
+    title: "pmndrs/uikit at the reviewed revision"
+  - id: "citation-2-1"
+    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/components/text.ts"
+    title: "uikit Text component"
+  - id: "citation-2-2"
+    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/index.ts"
+    title: "text layout setup"
+  - id: "citation-3-1"
+    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/measure.ts"
+    title: "uikit measurement"
+  - id: "citation-3-2"
+    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts"
+    title: "FlexNode"
+  - id: "citation-4-1"
+    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts"
+    title: "uikit instanced text rendering"
+  - id: "citation-4-2"
+    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/query.ts"
+    title: "text queries"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # uikit integration
@@ -185,13 +210,3 @@ The integration fixture must exercise the actual uikit seam rather than a generi
 - cluster-aware caret, selection, and pointer tests before removing the old query path.
 
 The production adapter remains in uikit. The pmndrs/text repository owns a small uikit-shaped test fixture to prevent accidental API drift, but it does not add Yoga, Preact Signals, or uikit as runtime dependencies.
-
-# Citations
-
-[1] [pmndrs/uikit at the reviewed revision](https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0) — source snapshot for the integration analysis.
-
-[2] [uikit Text component](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/components/text.ts) and [text layout setup](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/index.ts) — current component and reactive layout boundary.
-
-[3] [uikit measurement](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/measure.ts) and [FlexNode](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts) — Yoga measurement, rounding, and resolved-box integration.
-
-[4] [uikit instanced text rendering](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts) and [text queries](https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/query.ts) — rendering, caret, selection, and hit-testing assumptions.

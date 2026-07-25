@@ -3,7 +3,9 @@ type: Question Register
 title: Open questions
 description: Tracks unresolved decisions, blockers, and prototype questions for the contracts and roadmap.
 tags: [questions, governance, blockers]
-timestamp: 2026-07-24T14:01:29Z
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Open questions

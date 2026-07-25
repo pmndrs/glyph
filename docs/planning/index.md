@@ -17,6 +17,8 @@
 
 ## Verification and tooling
 
+- [Font baker implementation status](font-baker-implementation.md) — current Rust/Wasm/TypeScript core evidence and remaining gates.
+- [Wasm allocator experiment](font-baker-allocator.md) — allocator candidates, representative workloads, and selection gate.
 - [Benchmark plan](benchmark-plan.md) — benchmark harness and performance evidence.
 - [Conformance plan](conformance-plan.md) — correctness oracles and acceptance gates.
 - [Tooling fixtures](tooling-fixtures.md) — reproducible sources, goldens, and validators.
@@ -34,4 +36,3 @@
 
 - [Decision register](decision-register.md) — architectural decision status.
 - [Open questions](open-questions.md) — unresolved decisions and required experiments.
-

@@ -3,7 +3,26 @@ type: Test Plan
 title: Benchmark plan
 description: Defines the interactive benchmark lab, headless runner, and reproducible performance, memory, payload, loader, baker, paragraph, and raster measurements.
 tags: [benchmarks, performance, payload]
-timestamp: 2026-07-24T14:01:29Z
+sources:
+  - id: "citation-1"
+    resource: "https://github.com/isaac-mason/js-physics-benchmarks"
+    title: "isaac-mason/js-physics-benchmarks"
+  - id: "citation-2"
+    resource: "https://www.w3.org/TR/css-fonts-4/"
+    title: "CSS Fonts Module Level 4"
+  - id: "citation-3"
+    resource: "https://www.w3.org/TR/css-text-3/"
+    title: "CSS Text Module Level 3"
+  - id: "citation-4"
+    resource: "https://github.com/drawcall-ai/vitexec"
+    title: "Vitexec"
+  - id: "citation-5"
+    resource: "../../README.md#benchmark-harness-wireframe"
+    title: "Repository benchmark-harness wireframe"
+
+generated:
+  by: "openai-codex/gpt-5"
+  at: "2026-07-25T01:24:00Z"
 ---
 
 # Benchmark plan
@@ -37,6 +56,36 @@ The useful precedent is:
 - static deployment suitable for maintainer and contributor review.
 
 The pmndrs/text lab extends that pattern with correctness hashes, image diffs, cold-start automation, raw sample export, GPU/device metadata, and font/raster byte accounting.
+
+Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not started
+
+| Harness gate | Status | Evidence required to advance |
+| --- | :---: | --- |
+| Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
+| Portable baker target | 🟡 | `packages/font-baker` provides the initial Wasm package and tiered tests; its real-font lane remains conditional until the repository fixture is pinned. |
+| Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
+| Headless product E2E | 🟡 | Vitexec proves the deterministic target in a live Vite browser and Playwright proves the 390×844 scene/controls/report/export flow; the pinned real-font public-package lane remains open. |
+| Browser visual reference | ⬜ | Same-process HTML/CSS reference and candidate captures retain scores and raw diffs. |
+| Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
+
+The lab is both the benchmark product and the canonical product-level test harness described by the [test ownership ladder](conformance-plan.md#test-layers-and-ownership). A scenario first validates semantic output, artifact hashes or schema, lifecycle cleanup, and visual output where relevant; only a passing sample may contribute performance numbers. Synthetic scenarios protect contracts and stress limits, but every user-facing milestone also needs a real-font scenario through public package surfaces. A separate demo, private test hook, or mocked adapter cannot close that end-to-end gate.
+
+The harness does not wait for a raster implementation to become useful. Its deterministic synthetic target first proves registry, runner, validation, URL-state, export, and interactive/automated parity. The existing portable font-baker target then contributes real cold/warm Wasm startup, source-to-GLB correctness, payload, memory, diagnostics, and deterministic-artifact scenarios without claiming that it renders text. Bitmap, MSDF, and Slug remain visible but capability-gated and unsupported until their real adapters exist; the UI never fills unavailable panels with fabricated metrics.
+
+## Application stack
+
+| Concern | Settled harness choice |
+| --- | --- |
+| Application | A Vite browser application under `apps/benchmarks`; it remains locally runnable and statically publishable. |
+| UI runtime | React 19 with the React Compiler enabled from the first implementation. |
+| Async React | Suspense-backed resources, `use`, transitions, and action-style mutations where they match the lifecycle. Async target/scenario loading is modeled as explicit resources rather than effect-driven fetch orchestration. |
+| Components | The project-owned custom shadcn-derived component set represented by the Figma design. Existing components and tokens are reused; generic generated replacements are not accepted. |
+| Source design | The node-specific [benchmark harness Figma wireframe routed from the repository README](../../README.md#benchmark-harness-wireframe) and its extracted component/token context. The checked-in image is orientation evidence, not a substitute for design context. |
+| Formatting and linting | Oxfmt and Oxlint are authoritative. Oxlint runs React Compiler analysis, Rules of Hooks, accessibility checks, and the Oxlint-compatible `react-you-might-not-need-an-effect` rules as errors; effect-only event logic uses `useEffectEvent` instead of render-time refs. |
+| Tests | Vitest covers contracts and reusable assertions; a committed erasable-TypeScript Vitexec probe exercises the live Vite runner; Playwright exercises fixed mobile viewports and remains reusable for representative headed/GPU lanes. Browser console errors fail the wrapper even when the Vitexec CLI exits successfully. |
+| TypeScript | Strict project references extending the repository base configuration. App and probe code remains erasable TypeScript unless a build-tool configuration explicitly requires otherwise. |
+
+The visual shell follows the Figma component hierarchy and token system. Semantic CSS variables feed Tailwind utilities and the project-owned shadcn-derived primitives, so Figma values remain centralized instead of becoming scattered literal utility values. Target adapters, scenarios, runner state, validation, and result schemas stay UI-independent. React components subscribe to those contracts; they do not own benchmark execution policy or create a second result model.
 
 ## Harness architecture
 
@@ -130,8 +179,11 @@ Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where
 
 ### Automation and publication
 
-- Pull requests run deterministic smoke scenarios and schema/output validation.
-- Scheduled or manually approved runs capture longer browser/device matrices because noisy GPU results should not block every pull request.
+- Pull requests run deterministic smoke scenarios, schema/output validation, and public-surface assertions for capabilities the CI environment actually provides.
+- The benchmark app exposes its scenario drivers and pure assertion/result helpers to Vitest. Maintainers run committed erasable-TypeScript Vitexec probe files against the visible Vite app for stateful, visual, multi-frame, WebGL2, and WebGPU behavior that is not soundly represented by ordinary headless CI.
+- Vitexec and headed or remote Playwright runs reuse the same target/scenario contracts, not a second E2E corpus. A probe may import real app modules, drive input, await named lifecycle/GPU completion signals, inspect runtime state, and retain screenshots, traces, profiles, or heap evidence without adding a production debug API.
+- Canonical probes follow the [live-probe determinism contract](conformance-plan.md#live-probe-determinism-contract): no timer-based readiness, arbitrary frame counts, retries, mutable network inputs, test-order dependence, or screenshot-only assertions. Runner timeouts are failure watchdogs only.
+- Scheduled or manually approved runs capture longer browser/device matrices because noisy GPU results should not block every pull request. A headless or software-rendered pass never substitutes for a milestone's required hardware-GPU result.
 - The static lab can be published from the default branch after maintainers approve the workflow.
 - Committed summaries point to raw run artifacts and the exact commit/environment; hand-edited headline numbers are not authoritative.
 - The lab must operate locally without publication, and this planning branch does not authorize deployment.
@@ -422,11 +474,3 @@ The first benchmark milestone delivers the lab shell, target/scenario contracts,
 4. What are the size and registration costs of shaping-only reference data?
 5. Does the proposed shaped-buffer ABI cause copying or allocation that dominates short strings?
 6. What baseline will later compiled lookup and SIMD experiments be required to beat?
-
-# Citations
-
-[1] [isaac-mason/js-physics-benchmarks](https://github.com/isaac-mason/js-physics-benchmarks) — adapter/scenario browser-lab precedent, phase timing, capability gating, bundle-size generation, and static deployment.
-
-[2] [CSS Fonts Module Level 4](https://www.w3.org/TR/css-fonts-4/) — browser font selection, feature control, variations, and color-font behavior represented by the HTML reference target.
-
-[3] [CSS Text Module Level 3](https://www.w3.org/TR/css-text-3/) — browser inline-text processing, spacing, white-space, and line-breaking behavior represented by the HTML reference target.

@@ -1,0 +1,20 @@
+# pmndrs/text documentation update log
+
+## 2026-07-24
+
+- **Migration** — Upgraded the complete documentation bundle and its repository-local maintenance skill to OKF v0.2: concepts now carry `generated.by`/`generated.at` and frontmatter `sources`, the root declares v0.2, the log uses its reserved structure, and the reusable migration/validation commands reject legacy metadata.
+- **Implementation** — Added `apps/benchmarks` with the responsive desktop/mobile Figma shell, semantic CSS-variable-backed Tailwind utilities, local shadcn-derived controls, shared target/scenario runner, URL state, raw export, deterministic synthetic target, and fixture-driven Rust Wasm baker target; raster targets remain visibly unavailable.
+- **Verification** — Added six Vitest contract tests, a committed erasable-TypeScript Vitexec live runner probe, a 390×844 Playwright mobile scene/controls/report/export probe, browser-error-to-test-failure enforcement, and captured local desktop/mobile visual evidence without readiness timers or retries.
+- **Tooling** — Enabled the current Vite React Compiler integration plus Oxlint compiler analysis, Rules of Hooks, accessibility checks, and the strict Oxlint-compatible `react-you-might-not-need-an-effect` rules; effect-only events use `useEffectEvent` rather than render-time refs.
+- **Update** — Settled the benchmark application foundation on Vite, React 19, React Compiler, modern async React, the Figma-backed custom shadcn-derived component set, Oxlint, Oxfmt, Vitest, and Vitexec; the existing baker is the first real non-rendering target and unavailable rasters expose capability state rather than fabricated results.
+- **Update** — Required canonical Vitexec probes to be committed erasable TypeScript wired to shared Vitest scenario/assertion helpers; admission forbids timer/frame-count readiness and retries, requires causal completion signals, isolation, negative controls, and recorded zero-retry repetition evidence.
+- **Update** — Split app testing into hermetic CI and a maintainer-local Vitexec/Vitest live-probe lane; visible hardware-GPU evidence may reuse headed or remote Playwright, while unsupported headless capabilities never count as passes.
+- **Update** — Defined layered GLB validation across container parsing, the pinned Khronos validator, draft extension JSON Schemas, project semantic invariants, embedded payload validation, real-loader round trips, and malformed assets.
+- **Update** — Defined the canonical unit, package-integration, product-E2E, conformance, and performance test ladder; the shared `apps/benchmarks` scenario registry owns real-product E2E and accepts timings only after correctness passes.
+- **Update** — Split the font-baker tests into explicit unit, integration, and real-font vertical-slice lanes; the real-font lane remains conditional until the repository pins its licensed canonical fixture.
+- **Update** — Replaced the hand-authored baker ABI JSON with a Rust compile-time generator and built-in `generate-abi` command; the Wasm embed and published package artifact now come from the same compiled contract.
+- **Update** — Kept transport compression out of the `no_std` Wasm core; raw byte accounting is authoritative there, while Node/reporting hosts complete gzip and Brotli measurements.
+- **Update** — Changed the Wasm allocator from a settled `dlmalloc` choice to an ABI-private experiment: `dlmalloc` remains the working baseline, `rlsf` is the primary reusable-memory challenger, and `lol_alloc` is conditional on a one-shot Worker lifecycle.
+- **Update** — Settled the portable baker boundary on one `no_std + alloc` `wasm32-unknown-unknown` module, a JSON-described C ABI, direct TypeScript linear-memory access, and no native-binary, WASI, or generated-binding requirement.
+- **Update** — Added the internal `packages/font-baker` Rust/Wasm/TypeScript package and linked [implementation status](planning/font-baker-implementation.md) from the canonical planning surfaces.
+- **Update** — Added explicit status markers to the canonical roadmap without changing milestone dependencies or exit gates.
