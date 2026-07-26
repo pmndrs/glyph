@@ -3,7 +3,7 @@ require 'json'
 require 'pathname'
 
 module OkfPackageDigest
-  EXCLUDED_DIRECTORIES = %w[coverage dist node_modules target].freeze
+  EXCLUDED_DIRECTORIES = %w[.cache coverage dist node_modules target].freeze
 
   module_function
 

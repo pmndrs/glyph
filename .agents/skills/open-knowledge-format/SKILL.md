@@ -87,7 +87,7 @@ ruby scripts/validate_okf.rb /path/to/bundle --workspace-root /path/to/repositor
 ruby scripts/generate_package_digests.rb /path/to/repository
 ```
 
-The validator discovers `apps/*/package.json` and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
+The validator discovers `apps/*/package.json` and `packages/*/package.json`. Each manifest requires exactly one `type: Workspace Package` concept whose `workspace_package`, `resource`, and deterministic `source_digest` match. Digests include source and configuration while excluding `.cache`, `node_modules`, `dist`, `target`, `coverage`, `.DS_Store`, and TypeScript build-info files. A digest mismatch forces package documentation review in the same change as source edits.
 
 Report:
 
