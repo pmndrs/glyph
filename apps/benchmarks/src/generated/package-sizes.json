@@ -6,10 +6,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 268350,
-      "minifiedBytes": 209715,
-      "gzipBytes": 62251,
-      "brotliBytes": 47647
+      "rawBytes": 268865,
+      "minifiedBytes": 209956,
+      "gzipBytes": 62335,
+      "brotliBytes": 47727
     },
     {
       "id": "font-validator-js",
@@ -56,10 +56,10 @@
       "label": "Text shaper Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 692682,
-      "minifiedBytes": 692682,
-      "gzipBytes": 257931,
-      "brotliBytes": 202462
+      "rawBytes": 693034,
+      "minifiedBytes": 693034,
+      "gzipBytes": 258008,
+      "brotliBytes": 202525
     },
     {
       "id": "portable-baker-js",

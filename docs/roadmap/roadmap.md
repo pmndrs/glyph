@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:20:00Z"
+  at: "2026-07-26T03:11:19Z"
 ---
 
 # Canonical implementation roadmap
@@ -329,7 +329,7 @@ Item 3.3 and Milestone 3 are closed. Item 4.1 is active and must register the ex
 - [x] The TypeScript bridge registers only the validator-retained shaping SFNT, dense glyph extents, and availability bits; it never reparses the GLB or reconstructs a source font.
 - [x] Canonical Inter registration retains exactly 171,056 shaping bytes, is idempotent for the same scoped handle, rejects cross-registry ownership, and releases Wasm state when either the font or shaper is disposed.
 - [x] Package build, export, ESM, type, unit, integration, and independent JavaScript/Wasm size lanes cover the new boundary; the optimized registration-only baseline was 91,382 bytes before batch shaping landed.
-- [x] Shape-plan cache keys include direction, script, normalized language, and HarfRust-equivalent feature tag/value/globalness; equivalent calls reuse plans, non-equivalent feature plans remain distinct, and font disposal releases every plan.
+- [x] Shape-plan cache keys include direction, script, normalized language, and HarfRust-equivalent feature tag/value/globalness; each font retains its 64 most recently used plans, equivalent calls reuse plans, non-equivalent feature plans remain distinct, and font disposal releases every plan.
 
 Item 4.1 is closed.
 
@@ -340,7 +340,7 @@ Item 4.1 is closed.
 - [x] Every one of the eight pinned Inter HarfRust cases travels source TTF → portable baker GLB → independent hostile-input validator → `FontRegistry` shaping-view extraction → Wasm registration → both public shaping calls, then compares glyph count, IDs, clusters, advances, offsets, and flags bit-for-bit.
 - [x] A two-run fixture proves run/font indexes, absolute clusters, one-call batching, and plan reuse; UTF-16 surrogate boundaries, tags, ranges, flags, ownership, zero-import ABI identity, extents decoding, and fixed-seed raw request mutations have focused failures.
 - [x] The real benchmark product runs all eight cases as one 97-glyph Chromium batch, validates hash `dc30c21c`, records 2,412 output bytes, one boundary crossing, three plans, 171,056 retained font bytes, 1,638,400 linear-memory bytes, and raw cold/warm timings after correctness passes.
-- [x] The complete optimized module and bridge are measured independently at 692,682 raw / 257,931 gzip / 202,462 Brotli Wasm bytes and 30,669 minified / 8,805 gzip / 7,833 Brotli JavaScript bytes.
+- [x] The complete optimized module and bridge are measured independently at 693,034 raw / 258,008 gzip / 202,525 Brotli Wasm bytes and 30,669 minified / 8,805 gzip / 7,833 Brotli JavaScript bytes.
 
 Item 4.2 and Milestone 4 are closed. Item 5.1 closure evidence is recorded under Milestone 5.
 
@@ -387,7 +387,7 @@ Item 5.1 is closed; the positioned output and boundary-sensitive reshape evidenc
 ### 5.2 closure checklist
 
 - [x] `layout()` shares prepared analysis, broad shaping, and cached line plans with `measure()` while materializing paragraph-owned `fontHandles`, font slots, glyph IDs, UTF-16 clusters, font sizes, x/y positions, flags, and parallel line arrays only on demand.
-- [x] Full layouts cache by complete normalized constraints; positioned line geometry caches independently by effective line policy, so identical layouts reuse one object and height-only box changes reuse the exact glyph arrays without another Wasm call.
+- [x] Full layouts cache by complete normalized constraints; positioned line geometry caches independently by effective line policy, so identical hot layouts reuse one object and height-only box changes reuse the exact glyph arrays without another Wasm call. Every paragraph cache retains at most its 32 most recently used variants.
 - [x] Unsafe-to-concat line fragments become one `reshapeRanges` request per changed-width layout. Canonical 720 px and 360 px layouts batch exactly two and three line ranges respectively with full-run context and line BOT/EOT flags; the natural unbroken layout reuses the broad shape with zero reshapes.
 - [x] The canonical paragraph contract owns exact measurement values, 55-glyph IDs/clusters/flags, line text/glyph ranges, Float32 baselines/advances, and registry-independent byte-level hashes `bb15bbcc`, `4f111a3f`, and `e8c0e9d5` for natural, wide, and narrow layouts.
 - [x] Integration tests derive natural x/y placement from the checked-in HarfRust glyph advances/offsets and GLB-extracted font metrics, compare every shaped identity field after boundary reshape, prove borrowed-arena invalidation cannot mutate cached layout arrays, and prove shaping-policy updates invalidate both measurement and layout caches.

@@ -43,7 +43,7 @@ sources:
     title: WebGPU Shading Language
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T02:55:00Z"
+  at: "2026-07-26T03:11:19Z"
 ---
 
 # Shaping compilation and execution research
@@ -74,7 +74,7 @@ The current complete runtime shaper is shared by every font. Its generated size 
 
 | Component | Raw/minified | Gzip | Brotli |
 | --- | ---: | ---: | ---: |
-| HarfRust shaper Wasm | 692,682 B | 257,931 B | 202,462 B |
+| HarfRust shaper Wasm | 693,034 B | 258,008 B | 202,525 B |
 | TypeScript direct-memory bridge | 30,669 B minified | 8,805 B | 7,833 B |
 | **Shared runtime total** | — | **266,274 B** | **209,728 B** |
 

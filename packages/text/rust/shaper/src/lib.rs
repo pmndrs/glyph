@@ -28,6 +28,7 @@ pub const STATUS_INVALID_REQUEST: u32 = 6;
 pub const STATUS_RESULT_TOO_LARGE: u32 = 7;
 
 const BUFFER_FLAGS_MASK: u32 = 0xff;
+const MAX_CACHED_PLANS_PER_FONT: usize = 64;
 
 #[derive(Default)]
 pub struct ShaperRegistry {
@@ -454,8 +455,9 @@ fn shape_segment(
             })
             .collect(),
     };
-    let plan_index = if let Some(index) = font.plans.iter().position(|cached| cached.key == key) {
-        index
+    if let Some(index) = font.plans.iter().position(|cached| cached.key == key) {
+        let cached = font.plans.remove(index);
+        font.plans.push(cached);
     } else {
         let font_ref = FontRef::new(&font.sfnt).map_err(|_| STATUS_INVALID_FONT)?;
         let shaper = font.data.shaper(&font_ref).build();
@@ -466,9 +468,11 @@ fn shape_segment(
             language.as_ref(),
             &features,
         );
+        if font.plans.len() == MAX_CACHED_PLANS_PER_FONT {
+            font.plans.remove(0);
+        }
         font.plans.push(CachedPlan { key, plan });
-        font.plans.len() - 1
-    };
+    }
 
     let mut buffer = UnicodeBuffer::new();
     add_utf16_range(&mut buffer, text, range.item_start, range.item_end)?;
@@ -497,7 +501,7 @@ fn shape_segment(
 
     let font_ref = FontRef::new(&font.sfnt).map_err(|_| STATUS_INVALID_FONT)?;
     let shaper = font.data.shaper(&font_ref).build();
-    let plan = &font.plans[plan_index].plan;
+    let plan = &font.plans.last().ok_or(STATUS_INVALID_REQUEST)?.plan;
     let mut extents = FlatExtents {
         records: &font.extents,
         availability: &font.availability,

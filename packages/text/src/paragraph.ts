@@ -245,6 +245,7 @@ interface PreparedPositioning {
 }
 
 const DEFAULT_FONT_SIZE = 16
+const MAX_PARAGRAPH_CACHE_ENTRIES = 32
 const PRODUCE_UNSAFE_TO_CONCAT = 0x40
 const BEGINNING_OF_TEXT = 0x01
 const END_OF_TEXT = 0x02
@@ -306,17 +307,17 @@ class ParagraphImpl implements Paragraph {
     this.#assertActive()
     const normalized = normalizeConstraints(constraints)
     const key = constraintKey(normalized)
-    let layout = this.#layouts.get(key)
+    let layout = getRecent(this.#layouts, key)
     if (layout !== undefined) return layout
     const measured = this.#measurePlan(normalized)
     const positioningKey = positioningLinesKey(measured.lines)
     const lineKey = geometryLinesKey(positioningKey, normalized.align, measured.measurement.width)
-    let geometry = this.#positionedLines.get(lineKey)
+    let geometry = getRecent(this.#positionedLines, lineKey)
     if (geometry === undefined) {
-      let positioning = this.#positioning.get(positioningKey)
+      let positioning = getRecent(this.#positioning, positioningKey)
       if (positioning === undefined) {
         positioning = preparePositioning(this.#shaper, this.#prepared, measured.lines)
-        this.#positioning.set(positioningKey, positioning)
+        retainRecent(this.#positioning, positioningKey, positioning)
       }
       geometry = positionPrepared(
         this.#shaper,
@@ -326,13 +327,13 @@ class ParagraphImpl implements Paragraph {
         normalized,
         measured.measurement.width,
       )
-      this.#positionedLines.set(lineKey, geometry)
+      retainRecent(this.#positionedLines, lineKey, geometry)
     }
     layout = Object.freeze({
       ...measurementForGeometry(normalized, measured.measurement, geometry),
       ...geometry,
     })
-    this.#layouts.set(key, layout)
+    retainRecent(this.#layouts, key, layout)
     return layout
   }
 
@@ -358,16 +359,16 @@ class ParagraphImpl implements Paragraph {
 
   #measurePlan(constraints: NormalizedConstraints): MeasuredPlan {
     const key = constraintKey(constraints)
-    let plan = this.#measurements.get(key)
+    let plan = getRecent(this.#measurements, key)
     if (plan === undefined) {
       const lineKey = linePlanConstraintKey(constraints)
-      let lines = this.#linePlans.get(lineKey)
+      let lines = getRecent(this.#linePlans, lineKey)
       if (lines === undefined) {
         lines = planLines(this.#shaper, this.#prepared, constraints)
-        this.#linePlans.set(lineKey, lines)
+        retainRecent(this.#linePlans, lineKey, lines)
       }
       plan = measurePrepared(this.#prepared, constraints, lines)
-      this.#measurements.set(key, plan)
+      retainRecent(this.#measurements, key, plan)
     }
     return plan
   }
@@ -375,6 +376,22 @@ class ParagraphImpl implements Paragraph {
   #assertActive(): void {
     if (this.#disposed) throw new Error('paragraph has been disposed')
   }
+}
+
+function getRecent<Key, Value>(cache: Map<Key, Value>, key: Key): Value | undefined {
+  const value = cache.get(key)
+  if (value === undefined) return undefined
+  cache.delete(key)
+  cache.set(key, value)
+  return value
+}
+
+function retainRecent<Key, Value>(cache: Map<Key, Value>, key: Key, value: Value): void {
+  cache.delete(key)
+  cache.set(key, value)
+  if (cache.size <= MAX_PARAGRAPH_CACHE_ENTRIES) return
+  const oldest = cache.keys().next()
+  if (!oldest.done) cache.delete(oldest.value)
 }
 
 function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): PreparedParagraph {
@@ -386,9 +403,7 @@ function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): Prepare
   const runs = prepareRuns(ownedInput.text, styles, unicode, bidi)
   const shapedRequest = shapeRequest(ownedInput.text, runs)
   const request = shapedRequest.request
-  const borrowed = request.runs.length === 0
-    ? emptyShape()
-    : shaper.shapeBatch(request)
+  const borrowed = request.runs.length === 0 ? emptyShape() : shaper.shapeBatch(request)
   const shape = ownShape(borrowed)
   const ellipses = measureEllipses(shaper, runs, shape, shapedRequest.ellipses)
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape)
@@ -429,7 +444,12 @@ function copyStyle(style: ParagraphStyle, name: string): ParagraphStyle {
   if (style.features !== undefined && !Array.isArray(style.features)) {
     throw new TypeError(`${name} features must be an array`)
   }
-  if (style.direction !== undefined && style.direction !== 'auto' && style.direction !== 'ltr' && style.direction !== 'rtl') {
+  if (
+    style.direction !== undefined &&
+    style.direction !== 'auto' &&
+    style.direction !== 'ltr' &&
+    style.direction !== 'rtl'
+  ) {
     throw new RangeError(`${name} direction must be auto, ltr, or rtl`)
   }
   return {
@@ -496,9 +516,8 @@ function resolveSpanStyle(
   index: number,
 ): ResolvedSpanStyle {
   if (span.font !== undefined) shaper.registerFont(requireFont(shaper, span.font))
-  const lineHeight = span.lineHeight === undefined
-    ? undefined
-    : finitePositive(span.lineHeight, 'lineHeight')
+  const lineHeight =
+    span.lineHeight === undefined ? undefined : finitePositive(span.lineHeight, 'lineHeight')
   const direction = span.direction
   const language = span.language === undefined ? undefined : normalizeLanguage(span.language)
   return {
@@ -508,10 +527,14 @@ function resolveSpanStyle(
     ...(span.font === undefined ? {} : { font: span.font }),
     ...(span.fontSize === undefined ? {} : { fontSize: finitePositive(span.fontSize, 'fontSize') }),
     ...(lineHeight === undefined ? {} : { lineHeight }),
-    ...(span.letterSpacing === undefined ? {} : { letterSpacing: finite(span.letterSpacing, 'letterSpacing') }),
+    ...(span.letterSpacing === undefined
+      ? {}
+      : { letterSpacing: finite(span.letterSpacing, 'letterSpacing') }),
     ...(language === undefined ? {} : { language }),
     ...(direction === undefined ? {} : { direction }),
-    ...(span.features === undefined ? {} : { features: resolveFeatures(span.features, span.start, span.end) }),
+    ...(span.features === undefined
+      ? {}
+      : { features: resolveFeatures(span.features, span.start, span.end) }),
   }
 }
 
@@ -598,9 +621,8 @@ class LatestActiveValue<Value> {
     while (true) {
       const left = parent * 2 + 1
       const right = left + 1
-      const child = (this.#heap[right]?.index ?? -1) > (this.#heap[left]?.index ?? -1)
-        ? right
-        : left
+      const child =
+        (this.#heap[right]?.index ?? -1) > (this.#heap[left]?.index ?? -1) ? right : left
       if ((this.#heap[child]?.index ?? -1) <= last.index) break
       this.#heap[parent] = this.#heap[child] as ActiveStyleValue<Value>
       parent = child
@@ -619,9 +641,8 @@ function resolveStyle(
   const font = requireFont(shaper, fontHandle)
   shaper.registerFont(font)
   const fontSize = finitePositive(style.fontSize ?? DEFAULT_FONT_SIZE, 'fontSize')
-  const lineHeight = style.lineHeight === undefined
-    ? undefined
-    : finitePositive(style.lineHeight, 'lineHeight')
+  const lineHeight =
+    style.lineHeight === undefined ? undefined : finitePositive(style.lineHeight, 'lineHeight')
   const letterSpacing = finite(style.letterSpacing ?? 0, 'letterSpacing')
   const language = normalizeLanguage(style.language)
   const direction = style.direction ?? 'auto'
@@ -645,7 +666,8 @@ function resolveFeatures(
     const start = feature.start ?? containingStart
     const end = feature.end ?? containingEnd
     assertTextRange(start, end, containingEnd, `feature ${feature.tag}`)
-    if (start < containingStart) throw new RangeError(`feature ${feature.tag} starts before its style range`)
+    if (start < containingStart)
+      throw new RangeError(`feature ${feature.tag} starts before its style range`)
     const value = feature.value ?? 1
     if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
       throw new RangeError(`feature ${feature.tag} value must be a uint32`)
@@ -678,9 +700,10 @@ function prepareRuns(
     const end = Math.min(style.end, script.end, bidiRun.end)
     if (start < end) {
       const direction = style.style.bidiOverride ?? directionForLevel(bidiRun.level)
-      const bidiLevel = style.style.bidiOverride === undefined
-        ? bidiRun.level
-        : forceLevelDirection(bidiRun.level, direction)
+      const bidiLevel =
+        style.style.bidiOverride === undefined
+          ? bidiRun.level
+          : forceLevelDirection(bidiRun.level, direction)
       for (const fragment of drawableFragments(text, start, end)) {
         appendPreparedRun(runs, {
           ...fragment,
@@ -890,9 +913,8 @@ function planLines(
   prepared: PreparedParagraph,
   constraints: NormalizedConstraints,
 ): readonly LinePlan[] {
-  const widthLimit = constraints.width.mode === 'unconstrained'
-    ? Number.POSITIVE_INFINITY
-    : constraints.width.size
+  const widthLimit =
+    constraints.width.mode === 'unconstrained' ? Number.POSITIVE_INFINITY : constraints.width.size
   const allowed = new Set<number>()
   if (constraints.wrap === 'character') {
     for (let index = 0; index < prepared.clusters.length; index += 1) {
@@ -924,7 +946,8 @@ function measurePrepared(
   const naturalContentWidth = allLines.reduce((maximum, line) => Math.max(maximum, line.advance), 0)
   const contentHeight = allLines.reduce((sum, line) => sum + line.height, 0)
   const displayAdvances = lines.map((line, index) =>
-    measuredLineAdvance(prepared, constraints, lines, line, index))
+    measuredLineAdvance(prepared, constraints, lines, line, index),
+  )
   const visibleWidth = displayAdvances.reduce((maximum, advance) => Math.max(maximum, advance), 0)
   const contentWidth = Math.max(naturalContentWidth, visibleWidth)
   const visibleHeight = lines.reduce((sum, line) => sum + line.height, 0)
@@ -972,9 +995,10 @@ function visibleLines(
   constraints: NormalizedConstraints,
   allLines: readonly LinePlan[],
 ): readonly LinePlan[] {
-  let count = constraints.maxLines === undefined
-    ? allLines.length
-    : Math.min(allLines.length, constraints.maxLines)
+  let count =
+    constraints.maxLines === undefined
+      ? allLines.length
+      : Math.min(allLines.length, constraints.maxLines)
   if (constraints.overflow === 'ellipsis' && constraints.height.mode !== 'unconstrained') {
     let height = 0
     let fitting = 0
@@ -989,19 +1013,14 @@ function visibleLines(
   if (constraints.overflow !== 'ellipsis' || lines.length === 0) return lines
   const last = lines.at(-1)
   if (last === undefined) return lines
-  const widthLimit = constraints.width.mode === 'unconstrained'
-    ? Number.POSITIVE_INFINITY
-    : constraints.width.size
+  const widthLimit =
+    constraints.width.mode === 'unconstrained' ? Number.POSITIVE_INFINITY : constraints.width.size
   const truncated = count < allLines.length
   if (!truncated && last.advance <= widthLimit) return lines
   return [...lines.slice(0, -1), ellipsizeLine(prepared, last, widthLimit)]
 }
 
-function ellipsizeLine(
-  prepared: PreparedParagraph,
-  line: LinePlan,
-  widthLimit: number,
-): LinePlan {
+function ellipsizeLine(prepared: PreparedParagraph, line: LinePlan, widthLimit: number): LinePlan {
   let clusterEnd = line.clusterEnd
   let advance = line.advance
   while (clusterEnd > line.clusterStart && prepared.clusters[clusterEnd - 1]?.hardBreak === true) {
@@ -1040,8 +1059,8 @@ function ellipsisAt(prepared: PreparedParagraph, offset: number): PreparedEllips
   const sourceRun = prepared.runs.findIndex((run) => run.start < offset && offset <= run.end)
   const fallbackRun = prepared.runs.findIndex((run) => run.start <= offset && offset < run.end)
   const run = sourceRun >= 0 ? sourceRun : fallbackRun
-  const ellipsis = prepared.ellipses.find((entry) => entry.sourceRun === run)
-    ?? prepared.ellipses[0]
+  const ellipsis =
+    prepared.ellipses.find((entry) => entry.sourceRun === run) ?? prepared.ellipses[0]
   if (ellipsis === undefined) throw new Error('paragraph has no ellipsis shaping run')
   return ellipsis
 }
@@ -1115,7 +1134,11 @@ function breakLines(
     const first = clusters[lineStart]
     const last = clusters[lineEnd - 1]
     if (first === undefined || last === undefined) throw new Error('invalid line cluster range')
-    const metrics = metricsForLine(shaper, clusters.slice(lineStart, lineEnd), prepared.styles[0]?.style)
+    const metrics = metricsForLine(
+      shaper,
+      clusters.slice(lineStart, lineEnd),
+      prepared.styles[0]?.style,
+    )
     lines.push({
       clusterStart: lineStart,
       clusterEnd: lineEnd,
@@ -1232,23 +1255,25 @@ function geometryLinesKey(
 }
 
 function positioningLinesKey(lines: readonly LinePlan[]): string {
-  return JSON.stringify(lines.map((line) => ({
-    clusterStart: line.clusterStart,
-    clusterEnd: line.clusterEnd,
-    textStart: line.textStart,
-    textEnd: line.textEnd,
-    hardBreak: line.hardBreak,
-    ...(line.ellipsis === undefined
-      ? {}
-      : {
-          ellipsis: {
-            sourceRun: line.ellipsis.sourceRun,
-            shapeRun: line.ellipsis.shapeRun,
-            cluster: line.ellipsis.cluster,
-            level: line.ellipsis.level,
-          },
-        }),
-  })))
+  return JSON.stringify(
+    lines.map((line) => ({
+      clusterStart: line.clusterStart,
+      clusterEnd: line.clusterEnd,
+      textStart: line.textStart,
+      textEnd: line.textEnd,
+      hardBreak: line.hardBreak,
+      ...(line.ellipsis === undefined
+        ? {}
+        : {
+            ellipsis: {
+              sourceRun: line.ellipsis.sourceRun,
+              shapeRun: line.ellipsis.shapeRun,
+              cluster: line.ellipsis.cluster,
+              level: line.ellipsis.level,
+            },
+          }),
+    })),
+  )
 }
 
 function positionPrepared(
@@ -1348,12 +1373,11 @@ function positionPrepared(
         const nextGlyph = selected[selectedIndex + 1]
         const nextCluster = nextGlyph === undefined ? selectedEnd : source.clusters[nextGlyph]
         if (nextCluster !== cluster && fragment.ellipsis === undefined) {
-          const rangeStart = run.direction === 'ltr'
-            ? cluster
-            : Math.min(cluster, clusterBoundary)
-          const rangeEnd = run.direction === 'ltr'
-            ? (nextCluster ?? fragment.end)
-            : Math.max(cluster, clusterBoundary)
+          const rangeStart = run.direction === 'ltr' ? cluster : Math.min(cluster, clusterBoundary)
+          const rangeEnd =
+            run.direction === 'ltr'
+              ? (nextCluster ?? fragment.end)
+              : Math.max(cluster, clusterBoundary)
           cursor += spacingBetween(prepared.clusters, rangeStart, rangeEnd)
           passedSpaces += justificationSpaces(prepared, line, rangeStart, rangeEnd)
           clusterBoundary = cluster
@@ -1429,9 +1453,10 @@ function preparePositioning(
       flags: fragment.flags,
     })
   }
-  const reshaped = ranges.length === 0
-    ? undefined
-    : ownShape(shaper.reshapeRanges({ ...prepared.request, ranges }))
+  const reshaped =
+    ranges.length === 0
+      ? undefined
+      : ownShape(shaper.reshapeRanges({ ...prepared.request, ranges }))
   return { fragments, ...(reshaped === undefined ? {} : { reshaped }) }
 }
 
@@ -1486,15 +1511,17 @@ function collectLineFragments(
       while (fragmentStart < end) {
         const localStart = fragmentStart - line.textStart
         const resolvedLevel = levels[localStart] ?? run.bidiLevel
-        const level = run.style.bidiOverride === undefined
-          ? resolvedLevel
-          : forceLevelDirection(resolvedLevel, run.direction)
+        const level =
+          run.style.bidiOverride === undefined
+            ? resolvedLevel
+            : forceLevelDirection(resolvedLevel, run.direction)
         let fragmentEnd = fragmentStart + 1
         while (fragmentEnd < end) {
           const nextResolved = levels[fragmentEnd - line.textStart] ?? run.bidiLevel
-          const nextLevel = run.style.bidiOverride === undefined
-            ? nextResolved
-            : forceLevelDirection(nextResolved, run.direction)
+          const nextLevel =
+            run.style.bidiOverride === undefined
+              ? nextResolved
+              : forceLevelDirection(nextResolved, run.direction)
           if (nextLevel !== level) break
           fragmentEnd += 1
         }
@@ -1508,13 +1535,17 @@ function collectLineFragments(
       const run = prepared.runs[fragment.run]
       if (run === undefined) throw new Error('line fragment references a missing shaping run')
       const boundaryLine = (first && line.textStart > run.start) || (last && line.textEnd < run.end)
-      const unsafe = fragmentHasFlag(prepared, fragment.run, fragment.start, fragment.end, GLYPH_UNSAFE_TO_CONCAT)
+      const unsafe = fragmentHasFlag(
+        prepared,
+        fragment.run,
+        fragment.start,
+        fragment.end,
+        GLYPH_UNSAFE_TO_CONCAT,
+      )
       return {
         ...fragment,
         flags:
-          PRODUCE_UNSAFE_TO_CONCAT |
-          (first ? BEGINNING_OF_TEXT : 0) |
-          (last ? END_OF_TEXT : 0),
+          PRODUCE_UNSAFE_TO_CONCAT | (first ? BEGINNING_OF_TEXT : 0) | (last ? END_OF_TEXT : 0),
         reshape: boundaryLine && unsafe,
       }
     })
@@ -1536,11 +1567,7 @@ function collectLineFragments(
   return fragments
 }
 
-function reorderedLineLevels(
-  bidi: OwnedBidiAnalysis,
-  start: number,
-  end: number,
-): Uint8Array {
+function reorderedLineLevels(bidi: OwnedBidiAnalysis, start: number, end: number): Uint8Array {
   const levels = bidi.levels.slice(start, end)
   const classes = bidi.classes.subarray(start, end)
   const paragraphLevel = paragraphLevelAt(bidi, start)
@@ -1641,9 +1668,12 @@ function fragmentHasFlag(
   const selected = glyphIndexes(prepared.shape, glyphStart, glyphCount, start, end)
   const first = selected[0]
   const last = selected.at(-1)
-  return first === undefined || last === undefined ||
+  return (
+    first === undefined ||
+    last === undefined ||
     ((prepared.shape.glyphFlags[first] ?? flag) & flag) !== 0 ||
     ((prepared.shape.glyphFlags[last] ?? flag) & flag) !== 0
+  )
 }
 
 function glyphIndexes(
@@ -1661,11 +1691,7 @@ function glyphIndexes(
   return indexes
 }
 
-function spacingBetween(
-  clusters: readonly MeasuredCluster[],
-  start: number,
-  end: number,
-): number {
+function spacingBetween(clusters: readonly MeasuredCluster[], start: number, end: number): number {
   let spacing = 0
   for (const cluster of clusters) {
     if (cluster.start >= start && cluster.start < end && !cluster.hardBreak) {
@@ -1691,7 +1717,8 @@ function measurementForGeometry(
     contentHeight: measured.contentHeight,
     firstBaseline: geometry.lineBaselines[0] ?? 0,
     lastBaseline: geometry.lineBaselines.at(-1) ?? 0,
-    overflowed: measured.overflowed || requiredContentWidth > width || measured.contentHeight > height,
+    overflowed:
+      measured.overflowed || requiredContentWidth > width || measured.contentHeight > height,
   }
 }
 
@@ -1728,7 +1755,8 @@ function resolveAxis(constraint: ParagraphAxisConstraint, content: number): numb
 
 function requireFont(shaper: RuntimeShaper, handle: FontHandle): RegisteredFont {
   const font = shaper.registry.getByHandle(handle)
-  if (font === undefined) throw new RangeError(`font handle ${handle} is not active in the registry`)
+  if (font === undefined)
+    throw new RangeError(`font handle ${handle} is not active in the registry`)
   return font
 }
 
@@ -1769,11 +1797,20 @@ function isHardBreak(text: string, offset: number): boolean {
 }
 
 function isHardBreakCodePoint(codePoint: number): boolean {
-  return codePoint === 0x0a || codePoint === 0x0b || codePoint === 0x0c || codePoint === 0x0d || codePoint === 0x85 || codePoint === 0x2028 || codePoint === 0x2029
+  return (
+    codePoint === 0x0a ||
+    codePoint === 0x0b ||
+    codePoint === 0x0c ||
+    codePoint === 0x0d ||
+    codePoint === 0x85 ||
+    codePoint === 0x2028 ||
+    codePoint === 0x2029
+  )
 }
 
 function equalStyles(left: ResolvedStyle, right: ResolvedStyle): boolean {
-  return left.font === right.font &&
+  return (
+    left.font === right.font &&
     left.fontSize === right.fontSize &&
     left.lineHeight === right.lineHeight &&
     left.letterSpacing === right.letterSpacing &&
@@ -1781,16 +1818,26 @@ function equalStyles(left: ResolvedStyle, right: ResolvedStyle): boolean {
     left.direction === right.direction &&
     left.bidiOverride === right.bidiOverride &&
     equalFeatures(left.features, right.features)
+  )
 }
 
 function equalFeatures(
   left: readonly ResolvedFontFeature[],
   right: readonly ResolvedFontFeature[],
 ): boolean {
-  return left.length === right.length && left.every((feature, index) => {
-    const other = right[index]
-    return other !== undefined && feature.tag === other.tag && feature.value === other.value && feature.start === other.start && feature.end === other.end
-  })
+  return (
+    left.length === right.length &&
+    left.every((feature, index) => {
+      const other = right[index]
+      return (
+        other !== undefined &&
+        feature.tag === other.tag &&
+        feature.value === other.value &&
+        feature.start === other.start &&
+        feature.end === other.end
+      )
+    })
+  )
 }
 
 function ownShape(shape: ShapedBatchViews): OwnedShape {
@@ -1842,7 +1889,13 @@ function emptyShape(): OwnedShape {
 }
 
 function assertTextRange(start: number, end: number, textLength: number, name: string): void {
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= end || end > textLength) {
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    start >= end ||
+    end > textLength
+  ) {
     throw new RangeError(`${name} must be a non-empty UTF-16 range inside the paragraph`)
   }
 }
@@ -1857,12 +1910,14 @@ function isNonArrayObject<T>(value: T): value is T & object {
 }
 
 function finitePositive(value: number, name: string): number {
-  if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be finite and positive`)
+  if (!Number.isFinite(value) || value <= 0)
+    throw new RangeError(`${name} must be finite and positive`)
   return value
 }
 
 function finiteNonnegative(value: number, name: string): number {
-  if (!Number.isFinite(value) || value < 0) throw new RangeError(`${name} must be finite and nonnegative`)
+  if (!Number.isFinite(value) || value < 0)
+    throw new RangeError(`${name} must be finite and nonnegative`)
   return value
 }
 

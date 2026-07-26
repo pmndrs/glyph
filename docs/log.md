@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Memory hardening** — Bounded every paragraph-derived cache to its 32 most recently used variants and each font's HarfRust cache to 64 plans. Hot calls retain identity and reuse, adversarial constraint/language variation has fixed retention, and the optimized shaper cost is 352 raw bytes.
 - **Filesystem safety** — Detect output aliases by device/inode before reading or baking, reject directories and other non-regular targets with structured errors, and narrow raster plugins through property-proving `in` checks instead of a cast.
 - **Correctness** — Stopped treating a standalone OpenType `STAT` table as proof of a variable font. Static fonts carrying style attributes now bake normally; actual axis/delta tables remain rejected and named regressions prove both branches.
 - **Benchmark correctness** — Passed real sample indexes to targets, rejected invalid run counts before loading, removed the unreachable failed-summary state, and made every successful result self-describing with `schemaVersion` and `controls`; Chromium verifies the emitted envelope and stable synthetic output.

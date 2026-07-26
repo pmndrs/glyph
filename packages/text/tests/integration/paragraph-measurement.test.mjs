@@ -2,11 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-import {
-  createParagraphEngine,
-  createRuntimeShaper,
-  FontRegistry,
-} from '@pmndrs/text'
+import { createParagraphEngine, createRuntimeShaper, FontRegistry } from '@pmndrs/text'
 import { createFontBaker } from '@pmndrs/text-font-baker'
 import { hashParagraphLayout } from '../../../../apps/benchmarks/src/benchmark/paragraph-layout-digest.ts'
 
@@ -53,7 +49,7 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
   const interfering = engine.create({ text: 'AV', font: font.handle })
   assert.equal(calls.shape, 2, 'each prepared paragraph performs one broad shape')
   const expectedNaturalWidth =
-    expected.glyphs.reduce((sum, glyph) => sum + glyph.xAdvance, 0) * 32 / font.metrics.unitsPerEm
+    (expected.glyphs.reduce((sum, glyph) => sum + glyph.xAdvance, 0) * 32) / font.metrics.unitsPerEm
   const natural = paragraph.measure()
   assert.equal(natural.width, expectedNaturalWidth)
   assert.deepEqual(natural, layoutGoldens.natural.measurement)
@@ -71,13 +67,27 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
 
   const naturalLayout = paragraph.layout()
   assert.deepEqual(calls, { shape: 2, reshape: 0 }, 'unbroken layout reuses the broad shape')
-  assert.deepEqual([...naturalLayout.glyphIds], expected.glyphs.map(({ glyphId }) => glyphId))
-  assert.deepEqual([...naturalLayout.clusters], expected.glyphs.map(({ cluster }) => cluster))
-  assert.deepEqual([...naturalLayout.glyphFlags], expected.glyphs.map(({ flags }) => flags))
-  assert.deepEqual([...naturalLayout.x], expectedNaturalX(expected.glyphs, 32 / font.metrics.unitsPerEm))
+  assert.deepEqual(
+    [...naturalLayout.glyphIds],
+    expected.glyphs.map(({ glyphId }) => glyphId),
+  )
+  assert.deepEqual(
+    [...naturalLayout.clusters],
+    expected.glyphs.map(({ cluster }) => cluster),
+  )
+  assert.deepEqual(
+    [...naturalLayout.glyphFlags],
+    expected.glyphs.map(({ flags }) => flags),
+  )
+  assert.deepEqual(
+    [...naturalLayout.x],
+    expectedNaturalX(expected.glyphs, 32 / font.metrics.unitsPerEm),
+  )
   assert.deepEqual(
     [...naturalLayout.y],
-    expected.glyphs.map(({ yOffset }) => Math.fround(naturalLayout.firstBaseline - yOffset * 32 / font.metrics.unitsPerEm)),
+    expected.glyphs.map(({ yOffset }) =>
+      Math.fround(naturalLayout.firstBaseline - (yOffset * 32) / font.metrics.unitsPerEm),
+    ),
   )
   assertLayoutLines(naturalLayout, layoutGoldens.natural.layout)
   assert.equal(hashParagraphLayout(naturalLayout), layoutGoldens.natural.layout.hash)
@@ -86,15 +96,27 @@ test('measures the exact GLB-extracted HarfRust paragraph without positioned arr
   assert.deepEqual(calls, { shape: 2, reshape: 1 }, 'all wide boundaries reshape in one batch')
   assert.equal(paragraph.layout(wideConstraints), wideLayout, 'equivalent layout reuses one object')
   assertLayoutLines(wideLayout, layoutGoldens.wide.layout)
-  assert.deepEqual([...wideLayout.glyphIds], expected.glyphs.map(({ glyphId }) => glyphId))
-  assert.deepEqual([...wideLayout.clusters], expected.glyphs.map(({ cluster }) => cluster))
-  assert.deepEqual([...wideLayout.glyphFlags], expected.glyphs.map(({ flags }) => flags))
+  assert.deepEqual(
+    [...wideLayout.glyphIds],
+    expected.glyphs.map(({ glyphId }) => glyphId),
+  )
+  assert.deepEqual(
+    [...wideLayout.clusters],
+    expected.glyphs.map(({ cluster }) => cluster),
+  )
+  assert.deepEqual(
+    [...wideLayout.glyphFlags],
+    expected.glyphs.map(({ flags }) => flags),
+  )
   assert.equal(hashParagraphLayout(wideLayout), layoutGoldens.wide.layout.hash)
 
   const narrowConstraints = { width: { mode: 'at-most', size: 360 } }
   const narrowLayout = paragraph.layout(narrowConstraints)
   assert.deepEqual(calls, { shape: 2, reshape: 2 }, 'all narrow boundaries reshape in one batch')
-  assert.deepEqual(reshapeRequests.map(({ ranges }) => ranges.length), [2, 3])
+  assert.deepEqual(
+    reshapeRequests.map(({ ranges }) => ranges.length),
+    [2, 3],
+  )
   assert.deepEqual(reshapeRequests[0].ranges, [
     { run: 0, itemStart: 0, itemEnd: 47, contextStart: 0, contextEnd: 56, flags: 0x43 },
     { run: 0, itemStart: 47, itemEnd: 56, contextStart: 0, contextEnd: 56, flags: 0x43 },
@@ -159,6 +181,27 @@ test('resolves features and updates as one new broad-shape revision', async () =
   font.dispose()
 })
 
+test('bounds retained paragraph layouts while keeping recent constraints hot', async () => {
+  const { font, shaper } = await runtime()
+  const paragraph = createParagraphEngine({ shaper }).create({
+    text: 'A short paragraph whose width changes repeatedly.',
+    font: font.handle,
+  })
+  const constraints = Array.from({ length: 40 }, (_, index) => ({
+    width: { mode: 'at-most', size: 120 + index },
+  }))
+  const first = paragraph.layout(constraints[0])
+  for (const constraint of constraints.slice(1)) paragraph.layout(constraint)
+  const mostRecent = paragraph.layout(constraints.at(-1))
+
+  assert.equal(paragraph.layout(constraints.at(-1)), mostRecent)
+  assert.notEqual(paragraph.layout(constraints[0]), first)
+
+  paragraph.dispose()
+  shaper.dispose()
+  font.dispose()
+})
+
 test('validates spans, constraints, empty text, and lifecycle deterministically', async () => {
   const { font, shaper } = await runtime()
   const engine = createParagraphEngine({ shaper })
@@ -172,18 +215,21 @@ test('validates spans, constraints, empty text, and lifecycle deterministically'
     lastBaseline: 0,
     overflowed: false,
   })
-  assert.deepEqual(empty.measure({
-    width: { mode: 'exactly', size: 20 },
-    height: { mode: 'exactly', size: 10 },
-  }), {
-    width: 20,
-    height: 10,
-    contentWidth: 0,
-    contentHeight: 0,
-    firstBaseline: 0,
-    lastBaseline: 0,
-    overflowed: false,
-  })
+  assert.deepEqual(
+    empty.measure({
+      width: { mode: 'exactly', size: 20 },
+      height: { mode: 'exactly', size: 10 },
+    }),
+    {
+      width: 20,
+      height: 10,
+      contentWidth: 0,
+      contentHeight: 0,
+      firstBaseline: 0,
+      lastBaseline: 0,
+      overflowed: false,
+    },
+  )
   assert.throws(
     () => engine.create({ text: 'e\u0301', font: font.handle, spans: [{ start: 1, end: 2 }] }),
     /extended-grapheme boundaries/,
