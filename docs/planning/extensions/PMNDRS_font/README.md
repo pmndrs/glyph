@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:43:45Z"
+  at: "2026-07-26T02:40:00Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -127,7 +127,7 @@ When `OS/2.fsSelection.USE_TYPO_METRICS` is set, the serialized line metrics com
 
 Raster keys MUST be unique within the font. A key is the lowercase deterministic SHA-256 over the raster kind, companion extension/version, and canonical package-owned descriptor defined by the [raster contract](../../raster-data-contract.md); it is not a caller-authored alias. `kind` is an open identifier owned by the raster module. `extension` names the companion glTF extension that defines its data, and `version` selects that companion contract. Core consumers MUST NOT reject an otherwise valid font merely because the directory contains an unknown optional raster kind. `rasterKey`, `kind`, `extension`, and `version` MUST agree with an attached raster that the consumer elects to load.
 
-An embedded raster is stored at the root `extensions` object in the same GLB. Because glTF permits one root value per extension name, a combined GLB MUST NOT embed more than one raster using the same companion extension; additional entries using that extension MUST be external. The embedded root's reciprocal `rasterKey` MUST equal its elected directory entry. An external source URI resolves relative to the core GLB. When an external source omits `uri`, the application supplies bytes through its resolver. `artifactHash`, when present, is lowercase SHA-256 over the complete external artifact; it is REQUIRED for cross-origin artifacts and RECOMMENDED for all external artifacts.
+An embedded raster is stored at the root `extensions` object in the same GLB. Because glTF permits one root value per extension name, a combined GLB MUST NOT embed more than one raster using the same companion extension; additional entries using that extension MUST be external. The embedded root's reciprocal `rasterKey` MUST equal its elected directory entry. An external source URI resolves relative to the core GLB and MUST carry `artifactHash`, the lowercase SHA-256 over the complete external artifact. When an external source omits `uri`, the application supplies bytes through its resolver and MAY still declare a hash for authentication.
 
 Companion extensions own a logical raster-page directory. Page payloads may remain embedded in the companion asset or use independently addressed URI, byte-length, and SHA-256 sources relative to that companion asset. Core does not interpret those pages or equate their indexes with GPU binding state.
 

@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Security** — Required SHA-256 authentication for every URI-addressed external raster in the public type, Draft-04 schema, validator, and loader; resolver-only delivery remains available without inventing a URL.
 - **Correctness** — Rejected project-wide font output collisions before baking, made execution phases mutually exclusive so validation is not double-counted as raster work, and made the default bitmap Wasm loader retry after failed initialization.
 - **Hardening** — Scoped bitmap companion/page filenames by both shaping and raster identity, rejected ppem values beyond the padded 1024-pixel atlas range, and streamed glyph masks directly into bounded pages. Two fonts can no longer overwrite one another merely because they share bitmap settings, and the optimized Wasm grows only 639 raw bytes while removing the full-face intermediate bitmap set.
 - **Hardening** — Kept malformed non-ASCII SFNT table tags inside the font validator's structured issue contract by comparing the closed four-byte tag vocabulary directly; a named regression covers the previously escaping UTF-8 decoder error.

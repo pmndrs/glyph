@@ -75,6 +75,7 @@
                   "uri": { "type": "string", "minLength": 1 },
                   "artifactHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
                 },
+                "dependencies": { "uri": ["artifactHash"] },
                 "required": ["type"],
                 "additionalProperties": false
               }

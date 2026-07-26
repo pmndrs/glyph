@@ -23,6 +23,7 @@ import {
   type RasterRequest,
   type RasterRuntime,
   type RasterModule,
+  type RasterSource,
   type RegisteredFont,
   type RegisteredRaster,
   type RuntimeShaper,
@@ -44,6 +45,12 @@ type Equal<Left, Right> =
     : false;
 
 type Expect<Value extends true> = Value;
+
+const resolverRasterSource: RasterSource = { type: "external" };
+void resolverRasterSource;
+// @ts-expect-error URI-addressed raster artifacts require an authenticated hash.
+const unauthenticatedRasterSource: RasterSource = { type: "external", uri: "bitmap.glb" };
+void unauthenticatedRasterSource;
 
 const fontRegistry = new FontRegistry({ maxArtifactBytes: 64 * 1024 * 1024 });
 const fontLoader = new FontLoader({

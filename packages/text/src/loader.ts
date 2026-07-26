@@ -640,7 +640,17 @@ class RegisteredFontImpl implements RegisteredFont {
     }
     const failures: unknown[] = [];
     for (const candidate of source.externalCandidates) {
-      if (candidate.source.uri === undefined) continue;
+      if (!("uri" in candidate.source)) continue;
+      if (candidate.source.artifactHash === undefined) {
+        failures.push(
+          new FontLoadError(
+            "RASTER_ARTIFACT_HASH_REQUIRED",
+            "URI-addressed raster artifacts require an authenticated hash",
+            { url: candidate.source.uri },
+          ),
+        );
+        continue;
+      }
       let url: string;
       try {
         url = new URL(candidate.source.uri, candidate.artifactUrl).href;
@@ -821,7 +831,7 @@ function mergeRasterSources(
         externalCandidate !== undefined &&
         !current.externalCandidates.some(
           (candidate) =>
-            canonicalJson(candidate.source) === canonicalJson(externalCandidate.source) &&
+            sameExternalSource(candidate.source, externalCandidate.source) &&
             candidate.artifactUrl === externalCandidate.artifactUrl,
         )
       ) {
@@ -913,23 +923,7 @@ function rasterReferences(value: unknown): readonly RasterReference[] {
   return value.map((entry, index) => {
     const item = requireNonArrayObject(entry, `rasters[${index}]`);
     const sourceValue = requireNonArrayObject(item.source, `rasters[${index}].source`);
-    const source =
-      sourceValue.type === "embedded"
-        ? ({ type: "embedded" } as const)
-        : {
-            type: "external" as const,
-            ...(sourceValue.uri === undefined
-              ? {}
-              : { uri: string(sourceValue.uri, `rasters[${index}].source.uri`) }),
-            ...(sourceValue.artifactHash === undefined
-              ? {}
-              : {
-                  artifactHash: string(
-                    sourceValue.artifactHash,
-                    `rasters[${index}].source.artifactHash`,
-                  ) as Sha256Hex,
-                }),
-          };
+    const source = rasterSource(sourceValue, `rasters[${index}].source`);
     return {
       rasterKey: string(item.rasterKey, `rasters[${index}].rasterKey`) as RasterKey,
       kind: string(item.kind, `rasters[${index}].kind`),
@@ -938,6 +932,25 @@ function rasterReferences(value: unknown): readonly RasterReference[] {
       source,
     };
   });
+}
+
+function rasterSource(value: Record<string, unknown>, path: string): RasterReference["source"] {
+  if (value.type === "embedded") return { type: "embedded" };
+  const artifactHash =
+    value.artifactHash === undefined
+      ? undefined
+      : (string(value.artifactHash, `${path}.artifactHash`) as Sha256Hex);
+  if (value.uri === undefined) {
+    return { type: "external", ...(artifactHash === undefined ? {} : { artifactHash }) };
+  }
+  if (artifactHash === undefined) {
+    throw new TypeError(`${path}.artifactHash is required when uri is present`);
+  }
+  return {
+    type: "external",
+    uri: string(value.uri, `${path}.uri`),
+    artifactHash,
+  };
 }
 
 function bufferViews(
@@ -1233,16 +1246,11 @@ function freezeReference(reference: RasterReference): RasterReference {
   return Object.freeze(copy);
 }
 
-function canonicalJson(value: JsonValue | RasterReference): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.keys(value)
-    .sort()
-    .map(
-      (key) =>
-        `${JSON.stringify(key)}:${canonicalJson((value as Record<string, JsonValue>)[key]!)}`,
-    )
-    .join(",")}}`;
+function sameExternalSource(
+  left: Extract<RasterReference["source"], { readonly type: "external" }>,
+  right: Extract<RasterReference["source"], { readonly type: "external" }>,
+): boolean {
+  return left.uri === right.uri && left.artifactHash === right.artifactHash;
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {

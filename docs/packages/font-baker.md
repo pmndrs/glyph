@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:55026605069ce30693dbe8d52fada955f1f7c4b49907d5efea848341e20a324f"
+source_digest: "sha256:820d66f8b6f1411926d99836a0b053e87f7a5030e8ead262e075165119047492"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T19:05:00Z"
+  at: "2026-07-26T02:40:00Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -34,7 +34,7 @@ Status: ✅ portable shaping-data core complete; shared by offline and runtime h
 
 This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, core artifact validator, vendored schema bundle, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, validator, and Binaryen pins consumed by provenance and fixtures.
 
-The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. Closed-profile SFNT tags are compared as their four raw directory bytes, so non-ASCII hostile tags fail through the same structured issue contract instead of escaping through UTF-8 decoding. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
+The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. URI-addressed external raster entries require a lowercase SHA-256 artifact hash; resolver-only entries may omit both URI and hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. Closed-profile SFNT tags are compared as their four raw directory bytes, so non-ASCII hostile tags fail through the same structured issue contract instead of escaping through UTF-8 decoding. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
 
 The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,285 raw bytes, 168,326 gzip bytes, and 136,887 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. This package is the sole owner of those optimized bytes and exposes one browser-safe canonical URL; the offline Node host reads that URL and the runtime Worker fetches it instead of `@pmndrs/text` shipping a second copy. Reports keep raw and transport costs distinct.
 

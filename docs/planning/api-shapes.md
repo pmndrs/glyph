@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T19:20:00Z"
+  at: "2026-07-26T02:40:00Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -313,7 +313,8 @@ declare function defineFont<
 
 type RasterSource =
   | { type: 'embedded' }
-  | { type: 'external'; uri?: string; artifactHash?: Sha256Hex }
+  | { type: 'external'; uri: string; artifactHash: Sha256Hex }
+  | { type: 'external'; artifactHash?: Sha256Hex }
 
 interface RasterReference<Kind extends string = string> {
   rasterKey: RasterKey

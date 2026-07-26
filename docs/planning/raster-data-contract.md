@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T05:27:09Z"
+  at: "2026-07-26T02:40:00Z"
 ---
 
 # Raster data contract V0
@@ -62,7 +62,8 @@ interface RasterReference {
   version: number
   source:
     | { type: 'embedded' }
-    | { type: 'external'; uri?: string; artifactHash?: string }
+    | { type: 'external'; uri: string; artifactHash: string }
+    | { type: 'external'; artifactHash?: string }
 }
 ```
 
@@ -79,7 +80,7 @@ interface RasterReference {
 
 The package supplies the actual `descriptor`. It MUST include every option that changes required payload content and its generator compatibility version; it MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. Object member order in source code is irrelevant because RFC 8785 defines the hashed serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
 
-An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. If `uri` is absent, the application must provide the raster through its resolver API. `artifactHash`, when present, is lowercase SHA-256 of the complete external artifact. It is REQUIRED when the resolved artifact is cross-origin and RECOMMENDED for every external artifact. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
+An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. Every URI-addressed artifact carries a lowercase SHA-256 `artifactHash` over the complete external artifact and is authenticated before registration. If `uri` is absent, the application must provide the raster through its resolver API; a hash may still be supplied to authenticate those bytes. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
 
 A combined GLB may embed at most one raster for a given companion extension name because a glTF root has only one value for each extension key. Additional raster definitions using that extension MUST be external. Registration verifies that the embedded extension root's `rasterKey` equals the elected directory entry; an unrelated root object never satisfies an embedded reference.
 

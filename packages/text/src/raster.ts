@@ -24,7 +24,12 @@ export type RasterSource =
   | { readonly type: 'embedded' }
   | {
       readonly type: 'external'
-      readonly uri?: string
+      readonly uri: string
+      readonly artifactHash: Sha256Hex
+    }
+  | {
+      readonly type: 'external'
+      readonly uri?: never
       readonly artifactHash?: Sha256Hex
     }
 

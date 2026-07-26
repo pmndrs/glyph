@@ -234,6 +234,7 @@ test("covers every PMNDRS_font required field and raster-source union one field 
     { type: "unknown" },
     { type: "embedded", uri: "forbidden.glb" },
     { type: "external", uri: "" },
+    { type: "external", uri: "raster.glb" },
   ]) {
     const document = structuredClone(rasterBase);
     document.extensions.PMNDRS_font.rasters[0].source = source;

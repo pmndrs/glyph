@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:2949ce964105087fb591af4f0cd21b511e08931f53601cb8ad3715cf1be7a2c9"
+source_digest: "sha256:8d3a1f43e88798a9a9c1aa94f4ec1dc4b8860cb83119c7380e93b53259f6da29"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T19:20:00Z"
+  at: "2026-07-26T02:40:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -70,7 +70,7 @@ Status: ✅ Milestone 5 paragraph reflow and CJK universality complete; Mileston
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
-The Node host rejects distinct source files that collapse onto one output path before any bake begins, reports mutually exclusive phase timings, and retries the lazily loaded default bitmap baker after a failed initialization instead of pinning a rejected promise. These rules keep batch publication deterministic and make measured phase totals honest.
+The Node host rejects distinct source files that collapse onto one output path before any bake begins, reports mutually exclusive phase timings, and retries the lazily loaded default bitmap baker after a failed initialization instead of pinning a rejected promise. These rules keep batch publication deterministic and make measured phase totals honest. The loader also refuses URI-addressed external raster entries without SHA-256 authentication; resolver-only delivery remains explicit and hash-optional.
 
 The browser-safe `@pmndrs/text/raster/bitmap` subpath now owns bitmap generator/format constants, the exact `1..=1022` ppem V0 range, runtime validation of the non-empty static strike tuple, ascending canonical strike order, the complete generator-versioned descriptor, RFC 8785 serialization, and SHA-256 raster-key derivation. Equivalent strike sets therefore produce one identity regardless of caller order, while duplicate, non-integral, non-finite, non-positive, or out-of-range values fail before baking. The implementation uses Web Crypto and imports no Node built-ins.[^bitmap-identity]
 
