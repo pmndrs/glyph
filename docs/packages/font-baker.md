@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:0bc91e7d62187a30748bb4e2b729e08d1dac12822f07a008abe7f3f75a760fc1"
+source_digest: "sha256:529c6a7b600babed7edd6fb28ceb80a25ad46d47554dc853b917142a8f903a14"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T06:08:31Z"
+  at: "2026-07-26T20:08:45Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -35,6 +35,8 @@ Status: ✅ portable shaping-data core complete; shared by offline and runtime h
 This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON ABI contract, direct-linear-memory TypeScript wrapper, core artifact validator, vendored schema bundle, and tiered tests together. It emits a deterministic shaping-only core GLB. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, validator, and Binaryen pins consumed by provenance and fixtures. Its contract-only subpath exposes the baker and format versions shared by the bridge, validator, and public loader without importing Wasm host code.
 
 The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. URI-addressed external raster entries require a lowercase SHA-256 artifact hash; resolver-only entries may omit both URI and hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. Closed-profile SFNT tags are compared as their four raw directory bytes, so non-ASCII hostile tags fail through the same structured issue contract instead of escaping through UTF-8 decoding. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
+
+The integration suite also compiles the canonical MTSDF and Slug Draft-04 schemas directly from the knowledge bundle with their shared resource references. Positive V0 specimens and one-field mutations keep required members, 20/40-byte record strides, MTSDF encoding, linear color space, lossless RGBA8 MTSDF pages, and lossless RGBA16F Slug curve pages executable before either generator lands. These schema tests do not claim an implemented raster; they prevent Milestone 8 and 9 code from beginning against an internally inconsistent draft.
 
 The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. Canonical path remapping removes host workspace and Cargo registry prefixes before compilation. The current hardened zero-import module is 433,755 raw bytes, 168,251 gzip bytes, and 136,793 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. Native Rust/Binaryen hosts may permute equivalent internal Wasm function indices across CPU architectures, so source/product goldens and the optimized length are portable checks while the exact module hash is canonical release-builder provenance. This package is the sole owner of those optimized bytes and exposes one browser-safe canonical URL; the offline Node host reads that URL and the runtime Worker fetches it instead of `@pmndrs/text` shipping a second copy. Reports keep raw and transport costs distinct.
 

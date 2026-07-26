@@ -19,7 +19,24 @@
       "items": {
         "type": "object",
         "properties": {
-          "curve": { "$ref": "../../schema/textureResource.PMNDRS_font.schema.json" },
+          "curve": {
+            "allOf": [
+              { "$ref": "../../schema/textureResource.PMNDRS_font.schema.json" },
+              {
+                "properties": {
+                  "colorSpace": { "enum": ["linear"] },
+                  "variants": {
+                    "items": {
+                      "properties": {
+                        "gpuFormat": { "enum": ["rgba16float"] },
+                        "quality": { "enum": ["lossless"] }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
           "headerCount": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
           "headerWidth": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "headerHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
