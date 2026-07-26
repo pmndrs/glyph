@@ -458,9 +458,12 @@ async function publishArtifactsWithRollback(
       await rollbackPublication(staged)
       rollbackCompleted = true
     } catch (rollbackError) {
-      throw new AggregateError(
-        [error, rollbackError],
-        'artifact publication failed and rollback was incomplete',
+      throw new Error(
+        `artifact publication failed (${error instanceof Error ? error.message : String(error)}) ` +
+          `and rollback was incomplete: ${
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+          }`,
+        { cause: rollbackError },
       )
     }
     throw error

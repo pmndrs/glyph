@@ -62,7 +62,177 @@ test('Text commits layout and draw generations atomically', async () => {
     restoreFetch()
   }
   assert.equal(text.children.length, 0)
+  await assert.rejects(text.ready, { name: 'AbortError' })
   assert.throws(() => text.setProperties({ opacity: 1 }), /disposed/)
+})
+
+test('disposing Text rejects both pending and subsequent ready observations', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const text = new Text({
+    text: 'cancel a paragraph-reusing constraint update',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+  })
+  try {
+    await text.ready
+    text.setProperties({ width: 120 })
+    const pending = text.ready
+    text.dispose()
+    await assert.rejects(pending, { name: 'AbortError' })
+    await assert.rejects(text.ready, { name: 'AbortError' })
+  } finally {
+    text.dispose()
+    font.dispose()
+    restoreFetch()
+  }
+})
+
+test('a cancelled reflow does not claim ownership of its committed paragraph', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const bitmapRequest = bitmap({ strikes: [16] })
+  let disposeFontAfterBuild = false
+  const raster = defineRaster({
+    ...bitmapRequest.module,
+    buildBatches(...arguments_) {
+      const batch = bitmapRequest.module.buildBatches(...arguments_)
+      if (disposeFontAfterBuild) {
+        disposeFontAfterBuild = false
+        queueMicrotask(() => font.dispose())
+      }
+      return batch
+    },
+  })
+  const text = new Text({
+    text: 'reuse one committed paragraph',
+    font,
+    raster: { module: raster, options: bitmapRequest.options },
+    fontSize: 16,
+  })
+  try {
+    await text.ready
+    disposeFontAfterBuild = true
+    text.setProperties({ width: 120 })
+    const cancelled = text.ready
+    await assert.rejects(cancelled, /font used by this text was disposed/i)
+    await assert.rejects(text.ready, /font used by this text was disposed/i)
+    assert.equal(text.children.length, 0)
+    assert.equal(text.layout, undefined)
+  } finally {
+    text.dispose()
+    font.dispose()
+    restoreFetch()
+  }
+})
+
+test('Text releases the superseded font-disposal listener after every committed reflow', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const subscribe = registry._onFontDispose.bind(registry)
+  let activeSubscriptions = 0
+  registry._onFontDispose = (listener) => {
+    activeSubscriptions += 1
+    const release = subscribe(listener)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      activeSubscriptions -= 1
+      release()
+    }
+  }
+  const text = new Text({
+    text: 'continuous reflow keeps one live generation listener',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+  })
+  try {
+    await text.ready
+    const stableSubscriptions = activeSubscriptions
+    assert.ok(stableSubscriptions > 0)
+    for (let width = 120; width < 140; width += 1) {
+      text.setProperties({ width })
+      await text.ready
+      assert.equal(activeSubscriptions, stableSubscriptions)
+    }
+    text.dispose()
+    assert.equal(activeSubscriptions, stableSubscriptions - 1)
+  } finally {
+    text.dispose()
+    font.dispose()
+    restoreFetch()
+  }
+})
+
+test('Text validates feature ranges with text updates and treats global empty features as no-ops', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const text = new Text({
+    text: 'feature bounds',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+    features: [{ tag: 'liga', start: 0, end: 14 }],
+  })
+  const empty = new Text({
+    text: '',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+    features: [{ tag: 'liga' }],
+  })
+  try {
+    await Promise.all([text.ready, empty.ready])
+    const committed = text.layout
+    assert.throws(() => text.setProperties({ text: 'ab' }), /feature 0 ends after/)
+    assert.equal(text.layout, committed)
+    assert.equal(empty.layout?.glyphIds.length, 0)
+  } finally {
+    text.dispose()
+    empty.dispose()
+    font.dispose()
+    restoreFetch()
+  }
+})
+
+test('Text skips semantic no-op paint uploads and bitmap rejects unsupported effects', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const text = new Text({
+    text: 'office',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+    features: [{ tag: 'liga' }],
+  })
+  try {
+    await text.ready
+    const batch = text.children[0]
+    const mesh = batch?.children[0]
+    const colors = mesh?.geometry?.getAttribute('bitmapColor')
+    assert.ok(colors)
+    const initialVersion = colors.version
+    text.setProperties({ features: [{ tag: 'liga' }], onLayout: () => undefined })
+    await text.ready
+    assert.equal(colors.version, initialVersion)
+    assert.throws(
+      () => text.setProperties({ outline: { color: '#fff', width: 1 } }),
+      /bitmap raster does not support outline or shadow/,
+    )
+    assert.equal(colors.version, initialVersion)
+  } finally {
+    text.dispose()
+    font.dispose()
+    restoreFetch()
+  }
 })
 
 test('disposing a registered font invalidates live Text batches before raster release', async () => {
@@ -83,7 +253,7 @@ test('disposing a registered font invalidates live Text batches before raster re
     assert.equal(text.children.length, 0)
     assert.equal(text.layout, undefined)
     assert.equal(text.visible, false, 'font lifecycle does not override caller visibility')
-    await text.ready
+    await assert.rejects(text.ready, /font used by this text was disposed/i)
   } finally {
     text.dispose()
     restoreFetch()

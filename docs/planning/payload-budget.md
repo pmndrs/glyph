@@ -179,11 +179,11 @@ The canonical full-face Inter 4.1 bitmap at 16 ppem measures:
 | R8 page | 1024 × 679 = 695,296 GPU B |
 | Lossless KTX2 | 695,444 B |
 | Embedded raster GLB | 755,064 B |
-| External raster index GLB | 59,744 B |
-| External index + page | 755,188 B |
+| External raster index GLB | 59,808 B |
+| External index + page | 755,252 B |
 | Combined core + embedded raster GLB | 927,148 B |
 | Core with external directory | 172,476 B |
-| Optimized bitmap baker Wasm | 657,942 B raw; 238,727 B gzip; 182,925 B Brotli q11 |
+| Optimized bitmap baker Wasm | 612,472 B raw; 228,219 B gzip; 175,741 B Brotli q11 |
 
 The embedded and external forms have byte-identical records and KTX2 texels. External packaging costs 124 additional serialized bytes for the authenticated URI/length/hash directory.
 

@@ -1,18 +1,31 @@
 import { useState } from 'react'
 import type { BenchmarkSummary } from '../benchmark/contracts'
+import type { LiveBenchmarkCapture } from '../benchmark/product-result'
 import { Button, Toggle } from './ui'
 
-export function ExportPanel({ summary }: { readonly summary: BenchmarkSummary | undefined }) {
+export function ExportPanel({
+  liveCapture,
+  summary,
+}: {
+  readonly liveCapture?: LiveBenchmarkCapture | undefined
+  readonly summary: BenchmarkSummary | undefined
+}) {
   const [environment, setEnvironment] = useState(true)
   const [measurements, setMeasurements] = useState(true)
   const value = JSON.stringify(
-    summary === undefined
-      ? { status: 'no-run' }
-      : {
-          ...summary,
-          environment: environment ? summary.environment : undefined,
-          measurements: measurements ? summary.measurements : undefined,
-        },
+    liveCapture !== undefined
+      ? {
+          ...liveCapture,
+          environment: environment ? liveCapture.environment : undefined,
+          stats: measurements ? liveCapture.stats : undefined,
+        }
+      : summary === undefined
+        ? { status: 'no-run' }
+        : {
+            ...summary,
+            environment: environment ? summary.environment : undefined,
+            measurements: measurements ? summary.measurements : undefined,
+          },
     null,
     2,
   )
@@ -43,12 +56,16 @@ export function ExportPanel({ summary }: { readonly summary: BenchmarkSummary | 
       </pre>
       <div className="grid grid-cols-2 gap-2">
         <Button
-          disabled={summary === undefined}
+          disabled={summary === undefined && liveCapture === undefined}
           onClick={() => navigator.clipboard.writeText(value)}
         >
           Copy JSON
         </Button>
-        <Button disabled={summary === undefined} variant="primary" onClick={download}>
+        <Button
+          disabled={summary === undefined && liveCapture === undefined}
+          variant="primary"
+          onClick={download}
+        >
           Download JSON
         </Button>
       </div>

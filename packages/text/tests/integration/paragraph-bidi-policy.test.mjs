@@ -20,10 +20,7 @@ test('lays out exact mixed-direction Amiri goldens through retained GLB shaping 
   const engine = createParagraphEngine({ shaper: observed })
   let retainedLayout
 
-  assert.equal(
-    contract.generatedBy,
-    'apps/benchmarks/scripts/generate-paragraph-bidi-contract.mts',
-  )
+  assert.equal(contract.generatedBy, 'apps/benchmarks/scripts/generate-paragraph-bidi-contract.mts')
   assert.equal(font.shapingHash, contract.fonts.amiri.shapingHash)
   for (const fixture of Object.values(contract.bidi)) {
     const paragraph = engine.create({
@@ -39,11 +36,15 @@ test('lays out exact mixed-direction Amiri goldens through retained GLB shaping 
 
   assert.deepEqual(calls, { shape: 2, reshape: 0 })
   assert.deepEqual(
-    requests.filter(({ shape }) => shape !== undefined).map(({ shape }) => shape.runs.slice(0, shape.runs.length / 2).map((run) => ({
-      text: String.fromCharCode(...shape.textUtf16.slice(run.textStart, run.textEnd)),
-      direction: run.direction,
-      script: run.script,
-    }))),
+    requests
+      .filter(({ shape }) => shape !== undefined)
+      .map(({ shape }) =>
+        shape.runs.slice(0, shape.runs.length / 2).map((run) => ({
+          text: String.fromCharCode(...shape.textUtf16.slice(run.textStart, run.textEnd)),
+          direction: run.direction,
+          script: run.script,
+        })),
+      ),
     [
       [
         { text: 'ABC ', direction: 'ltr', script: 'Latn' },
@@ -122,10 +123,18 @@ test('applies exact alignment, clipping, max-lines, and ellipsis policies withou
     (layouts.justify.lineAdvances.at(-1) ?? 180) < 180,
     'justification leaves the final line at its natural advance',
   )
-  for (const layout of [layouts.ellipsisOne, layouts.ellipsisHeightOne, layouts.ellipsisHeightTwo]) {
+  for (const layout of [
+    layouts.ellipsisOne,
+    layouts.ellipsisHeightOne,
+    layouts.ellipsisHeightTwo,
+  ]) {
     const end = layout.lineTextEnds.at(-1) ?? contract.policies.text.length
     assert.ok(end < contract.policies.text.length, 'ellipsis truncates a source range')
-    assert.equal(layout.clusters.at(-1), end, 'ellipsis glyph is anchored at the truncation boundary')
+    assert.equal(
+      layout.clusters.at(-1),
+      end,
+      'ellipsis glyph is anchored at the truncation boundary',
+    )
   }
   assert.deepEqual(
     requests.filter(({ ranges }) => ranges !== undefined).map(({ ranges }) => ranges.length),
@@ -138,7 +147,9 @@ test('applies exact alignment, clipping, max-lines, and ellipsis policies withou
 
 async function runtime(relativeFontPath) {
   const [source, bakerWasm, shaperWasm] = await Promise.all([
-    readFile(new URL(`../../../../apps/benchmarks/fixtures/fonts/${relativeFontPath}`, import.meta.url)),
+    readFile(
+      new URL(`../../../../apps/benchmarks/fixtures/fonts/${relativeFontPath}`, import.meta.url),
+    ),
     readFile(new URL('../../../font-baker/dist/font_baker.wasm', import.meta.url)),
     readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   ])
@@ -175,15 +186,18 @@ function observeShaper(shaper, calls, requests) {
 }
 
 function assertGoldenLayout(layout, golden, full) {
-  assert.deepEqual({
-    width: layout.width,
-    height: layout.height,
-    contentWidth: layout.contentWidth,
-    contentHeight: layout.contentHeight,
-    firstBaseline: layout.firstBaseline,
-    lastBaseline: layout.lastBaseline,
-    overflowed: layout.overflowed,
-  }, golden.measurement)
+  assert.deepEqual(
+    {
+      width: layout.width,
+      height: layout.height,
+      contentWidth: layout.contentWidth,
+      contentHeight: layout.contentHeight,
+      firstBaseline: layout.firstBaseline,
+      lastBaseline: layout.lastBaseline,
+      overflowed: layout.overflowed,
+    },
+    golden.measurement,
+  )
   const fields = full
     ? [
         'glyphFontSlots',
@@ -229,16 +243,26 @@ function assertLineTopology(layout, text) {
     const glyphCount = layout.lineGlyphCounts[index]
     const baseline = layout.lineBaselines[index]
     const advance = layout.lineAdvances[index]
-    assert.ok(start >= previousEnd && start <= end && end <= text.length, `line ${index} text range`)
+    assert.ok(
+      start >= previousEnd && start <= end && end <= text.length,
+      `line ${index} text range`,
+    )
     assert.equal(glyphStart, previousGlyphEnd, `line ${index} glyph range is contiguous`)
-    assert.ok(glyphStart + glyphCount <= layout.glyphIds.length, `line ${index} glyph range is bounded`)
+    assert.ok(
+      glyphStart + glyphCount <= layout.glyphIds.length,
+      `line ${index} glyph range is bounded`,
+    )
     assert.ok(baseline > previousBaseline, `line ${index} baseline is strictly increasing`)
     assert.ok(Number.isFinite(advance) && advance >= 0, `line ${index} advance is finite`)
     previousEnd = end
     previousGlyphEnd = glyphStart + glyphCount
     previousBaseline = baseline
   }
-  assert.equal(previousGlyphEnd, layout.glyphIds.length, 'line glyph ranges cover the positioned output')
+  assert.equal(
+    previousGlyphEnd,
+    layout.glyphIds.length,
+    'line glyph ranges cover the positioned output',
+  )
 }
 
 function assertAlignmentOffsets(start, center, end, width) {

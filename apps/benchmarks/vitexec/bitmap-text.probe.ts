@@ -54,6 +54,14 @@ for (const dpr of [1, 2] as const) {
           !Number.isFinite(measurement.metrics.firstDrawMs) ||
           measurement.metrics.firstDrawMs < 0 ||
           measurement.metrics.referenceMismatchBytes !== 0 ||
+          (measurement.metrics.clippedInkPixels ?? 0) <= 0 ||
+          (measurement.metrics.clippedInkPixels ?? 0) >= (measurement.metrics.inkPixels ?? 0) ||
+          measurement.metrics.clippedTouchesBoundary !== 1 ||
+          measurement.metrics.resizedWidth !== 192 ||
+          measurement.metrics.resizedHeight !== 64 ||
+          typeof measurement.metrics.clippedRenderMs !== 'number' ||
+          !Number.isFinite(measurement.metrics.clippedRenderMs) ||
+          measurement.metrics.clippedRenderMs < 0 ||
           !Number.isFinite(measurement.metrics.unsnappedOriginFraction) ||
           (measurement.metrics.unsnappedOriginFraction ?? 0) <= 0 ||
           (measurement.metrics.unsnappedOriginFraction ?? 0) > 0.5 ||

@@ -1,13 +1,5 @@
 import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
 
-function elementByText(selector: string, value: string): HTMLElement {
-  const element = [...document.querySelectorAll<HTMLElement>(selector)].find(
-    (candidate) => candidate.textContent?.trim() === value,
-  )
-  if (element === undefined) throw new Error(`Missing ${selector} with text ${value}`)
-  return element
-}
-
 function waitForText(root: HTMLElement, value: string): Promise<void> {
   if (root.textContent?.includes(value) === true) return Promise.resolve()
   return new Promise((resolve) => {
@@ -35,17 +27,87 @@ function waitForElement(selector: string): Promise<HTMLElement> {
 }
 
 const scene = await waitForElement('[data-testid="scene"]')
-if (!scene.textContent?.includes('Runner contract')) {
-  throw new Error('Default deterministic target is not visible')
+if (!scene.textContent?.includes('Benchmark ipsum')) {
+  throw new Error('Default live benchmark workload is not visible')
 }
 
-elementByText('button', 'Run suite').click()
-await waitForText(scene, 'passed')
+const captureWindow = await waitForEnabledButton('Capture window')
+const viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
+const initialLayoutWidth = numericAttribute(viewport, 'data-layout-width')
+const initialLineCount = numericAttribute(viewport, 'data-line-count')
+const layoutWidthControl = document.querySelector<HTMLInputElement>(
+  'input[type="range"][min="40"][max="100"]',
+)
+if (layoutWidthControl === null) throw new Error('Live layout width control is missing')
+const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+if (setInputValue === undefined) throw new Error('Native input value setter is unavailable')
+setInputValue.call(layoutWidthControl, '50')
+layoutWidthControl.dispatchEvent(new Event('input', { bubbles: true }))
+const reflowedLayoutWidth = await waitForChangedNumericAttribute(
+  viewport,
+  'data-layout-width',
+  initialLayoutWidth,
+)
+const reflowedLineCount = numericAttribute(viewport, 'data-line-count')
+if (reflowedLayoutWidth >= initialLayoutWidth || reflowedLineCount <= initialLineCount) {
+  throw new Error('Live layout width control did not commit a narrower paragraph reflow')
+}
+
+captureWindow.click()
+await waitForText(scene, 'Captured the current rolling window')
 
 const metrics = [...scene.querySelectorAll<HTMLElement>('.font-mono')]
   .map((element) => element.textContent?.trim())
   .filter(Boolean)
 console.log('harness-ready', JSON.stringify({ url: location.search, metrics }))
+
+function waitForEnabledButton(label: string): Promise<HTMLButtonElement> {
+  const current = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (candidate) => candidate.getAttribute('aria-label') === label && !candidate.disabled,
+  )
+  if (current !== undefined) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (candidate) => candidate.getAttribute('aria-label') === label && !candidate.disabled,
+      )
+      if (button === undefined) return
+      observer.disconnect()
+      resolve(button)
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+  })
+}
+
+function numericAttribute(element: HTMLElement, name: string): number {
+  const raw = element.getAttribute(name)
+  if (raw === null) throw new Error(`${name} is missing from the live viewport`)
+  const value = Number(raw)
+  if (!Number.isFinite(value)) throw new Error(`${name} is not a finite live metric`)
+  return value
+}
+
+function waitForChangedNumericAttribute(
+  element: HTMLElement,
+  name: string,
+  previous: number,
+): Promise<number> {
+  const current = numericAttribute(element, name)
+  if (current !== previous) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const next = numericAttribute(element, name)
+      if (next === previous) return
+      observer.disconnect()
+      resolve(next)
+    })
+    observer.observe(element, { attributes: true, attributeFilter: [name] })
+  })
+}
 
 const executionPath = '/src/benchmark/execution.ts'
 const environmentPath = '/src/benchmark/environment.ts'

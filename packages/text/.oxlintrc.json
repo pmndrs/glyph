@@ -21,5 +21,11 @@
     "react-you-might-not-need-an-effect/no-external-store-subscription": "error",
     "react-you-might-not-need-an-effect/no-initialize-state": "error"
   },
-  "ignorePatterns": [".cache/**", "dist/**", "src/generated/**", "target/**", "tests/fixtures/**"]
+  "ignorePatterns": [
+    "**/.cache/**",
+    "dist/**",
+    "src/generated/**",
+    "**/target/**",
+    "tests/fixtures/**"
+  ]
 }

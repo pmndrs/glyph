@@ -135,11 +135,11 @@ function summarizeResult(result, validation) {
     })),
     report: result.report,
     pages: validation.strikes.flatMap((strike) =>
-      strike.pages.map(({ width, height, bytes, source, uri }) => ({
+      strike.pages.map(({ width, height, bytes, source: pageSource, uri }) => ({
         ppem: strike.ppem,
         width,
         height,
-        source,
+        source: pageSource,
         ...(uri === undefined ? {} : { uri }),
         bytes: bytes.byteLength,
         sha256: hash(bytes),

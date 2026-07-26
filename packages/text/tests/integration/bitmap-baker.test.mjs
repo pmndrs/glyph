@@ -132,13 +132,13 @@ test('direct-memory allocations reject forged releases and recover after invalid
     memory,
     pmndrs_bitmap_baker_alloc: allocate,
     pmndrs_bitmap_baker_dealloc: deallocate,
-    pmndrs_bitmap_baker_bake: bake,
+    pmndrs_bitmap_baker_bake: bakeExport,
     pmndrs_bitmap_baker_result_len: resultLength,
   } = instance.exports
   assert.ok(memory instanceof WebAssembly.Memory)
   assert.equal(typeof allocate, 'function')
   assert.equal(typeof deallocate, 'function')
-  assert.equal(typeof bake, 'function')
+  assert.equal(typeof bakeExport, 'function')
   assert.equal(typeof resultLength, 'function')
 
   assert.equal(allocate(64 * 1024 * 1024 + 1), 0)
@@ -147,7 +147,7 @@ test('direct-memory allocations reject forged releases and recover after invalid
   new Uint8Array(memory.buffer, pointer, 8).fill(0x20)
   deallocate(pointer + 1, 7)
   deallocate(pointer, 7)
-  const response = bake(pointer, 8, pointer, 8)
+  const response = bakeExport(pointer, 8, pointer, 8)
   const responseLength = resultLength()
   assert.notEqual(response, 0)
   assert.ok(responseLength > 0)

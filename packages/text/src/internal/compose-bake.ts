@@ -120,7 +120,10 @@ export async function composeFontBake(
       )
     }
     const parsedRaster = parseGlb(main.bytes)
-    const rasterExtensions = requireNonArrayObject(parsedRaster.document.extensions, `${path}/extensions`)
+    const rasterExtensions = requireNonArrayObject(
+      parsedRaster.document.extensions,
+      `${path}/extensions`,
+    )
     const extensionData = requireNonArrayObject(
       rasterExtensions[raster.extension],
       `${path}/extensions/${raster.extension}`,
@@ -192,7 +195,8 @@ export async function composeFontBake(
 
   document.extensionsUsed = used
   document.extensionsRequired = required
-  requireNonArrayObject(asArray(document.buffers, '/buffers')[0], '/buffers/0').byteLength = binaryLength
+  requireNonArrayObject(asArray(document.buffers, '/buffers')[0], '/buffers/0').byteLength =
+    binaryLength
   const combined = encodeGlb(document, concatenate(binaryParts, binaryLength))
   const fontArtifact: BakeArtifactV0 = {
     role: 'font',

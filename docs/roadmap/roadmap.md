@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T11:15:30Z"
+  at: "2026-07-26T16:29:02Z"
 ---
 
 # Canonical implementation roadmap
@@ -49,13 +49,13 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 | 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
 | 4 | ✅ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
 | 5 | ✅ | Implement paragraph reflow and validate universal shaping assumptions | L | 4 | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence. |
-| 6 | ⬜ | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
+| 6 | 🟡 | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
 | 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
 | 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
 | 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
 | 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
 
-Milestones 0–5 are closed. Milestone 6 is the next dependency and begins the first bitmap rendering proof in the benchmark harness.
+Milestones 0–5 are closed. Milestone 6 is active: item 6.4 reorients the benchmark harness around human-facing live cost inspection before the milestone receives its closure review.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -105,6 +105,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 6.1 | ✅ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 6.0 |
 | 6.2 | 🟡 | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | 🟡 | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
+| 6.4 | 🟡 | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode. | M | 6.1–6.3 |
 | 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
 | 7.2 | ⬜ | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines. | M | 7.1 |
 | 8.x | ⬜ | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
@@ -451,15 +452,17 @@ Large-coverage raster paging remains in Milestone 12. Vertical-form source table
 - [x] Malformed language/surrogate/variation/constraint cases and fixed-seed CJK mutations are deterministic and trap-free.
 - [x] Node integration, Chromium 149 headless, GPU-enabled Vitexec, and the mobile Playwright flow pass through the shared benchmark registry without timers, retries, renderer metrics, or paging claims.
 
-Item 5.4 and Milestone 5 are closed. Milestone 6 is next.
+Item 5.4 and Milestone 5 are closed. Milestone 6 is active.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 
 Items 6.0 and 6.1 are closed on the repository's current Three.js 0.185.1, `@types/three` 0.185.1, and TypeScript 7.0.2 pins. Calling the installed public scalar TSL arithmetic functions directly avoids pathological method-chain and vector/scalar overload expansion. A repository-owned one-line `@types/three` patch narrows the runtime `modelViewProjection` contract from generic `Node` to `Node<'vec4'>`; a compile-only fixture owns that upstream gap. Clean declaration plus package checks complete in under one second without casts, a downgrade, or disabled checking. The baseline TSL graph runs through `WebGPURenderer` on an asserted WebGPU backend and forced WebGL2 fallback with exact 4×4 RGBA8 hash `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77`.
 
-The first real font frame travels through composed Inter GLB loading, retained HarfRust shaping, paragraph positioning, strict bitmap record/KTX2 decode, direct R8 texture upload, order-preserving instanced batching, and one shared TSL material. Explicit 1× and 2× runs each execute three measured samples after one warmup on WebGPU and forced WebGL2. Both backends render the five-lane benchmark ipsum as 120 visible glyphs with zero missing glyphs, in one draw from 695,296 atlas bytes. Bitmap density is a hard contract rather than an implicit CSS scale: the selected 16 px strike renders at 16 device pixels, using 16 CSS px at 1× and 8 CSS px at 2×, while metrics expose baked ppem, rendered ppem, CSS size, and the exact `1.00×` ratio. Raster records now retain Zeno's actual integer placement with `planeUnitsPerEm = 16`, and the TSL graph snaps projected quad edges to physical pixels. A benchmark-only CPU compositor places the authenticated atlas texels from those same records and matches every normalized GPU byte. WebGPU and forced WebGL2 now produce identical full-frame hashes: `56a60fb0…02df` at 1× and `5bb0964e…ba5` at 2×. Both DPRs contain the same 3,473 half-coverage pixels; bounds are `[68, 19, 313, 111]` and `[260, 83, 505, 175]`. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. Decode is transactional: a later invalid strike or record disposes every texture already created. Hinted grayscale and four-phase packing remain a documented research follow-up; LCD rendering is out of scope.
+The first real font frame travels through composed Inter GLB loading, the public framework-neutral `Text`, retained HarfRust shaping, paragraph positioning, strict bitmap record/KTX2 decode, direct R8 texture upload, order-preserving instanced batching, and one shared TSL material. Explicit 1× and 2× runs each execute three measured samples after one warmup on WebGPU and forced WebGL2. Both backends render the five-lane benchmark ipsum as 120 visible glyphs with zero missing glyphs, in one draw from 695,296 atlas bytes. Bitmap density is a hard contract rather than an implicit CSS scale: the selected 16 px strike renders at 16 device pixels, using 16 CSS px at 1× and 8 CSS px at 2×, while metrics expose baked ppem, rendered ppem, CSS size, and the exact `1.00×` ratio. Raster records retain Zeno's actual integer placement with `planeUnitsPerEm = 16`, and the TSL graph snaps projected quad edges to physical pixels. A benchmark-only CPU compositor places authenticated atlas texels and matches every normalized GPU byte for the full frame and a resized clipped frame. WebGPU and forced WebGL2 produce identical full-frame hashes: `31fca7ef…988c` at 1× and `82456231…afd` at 2×. Both DPRs contain the same 3,473 half-coverage pixels; bounds are `[68, 19, 313, 111]` and `[260, 83, 505, 175]`. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. The shared registry also owns a deterministic React reconciler scenario that retains one core object across nested-span reflow. Bitmap rejects outline/shadow rather than silently discarding them; hinted grayscale and four-phase packing remain documented research, and LCD/ClearType rendering is out of scope.
 
-Items 6.2 and 6.3 are implemented and awaiting the milestone adversarial review. The framework-neutral `Text` group owns one transactional paragraph/raster generation: first readiness stays hidden, later asynchronous generations retain the last complete frame, stale work cannot publish, paint-only changes avoid reflow, and disposal releases paragraphs and raster batches. `RasterRuntime` derives package-owned identities and shares decoded resources per registered font generation. The React 19 subpath flattens nested text into UTF-16 spans, suspends on shared font/raster/shaper dependencies, reconciles one retained core object, forwards that object through its ref, and defers Strict Mode cleanup by one microtask rather than a timer. Current React Three Fiber 9.6.1 reconciliation is covered with its matching 9.1.0 test renderer; pending browser Suspense is separately proved in the live React 19 app because the test renderer loops on uncached suspended promises.
+Items 6.2 and 6.3 are implemented and their first adversarial-review findings are remediated. Item 6.4 is active before the milestone closure review because the initial shell exposed internal target/scenario mechanics and presented conformance duration too prominently. The corrected human default is a continuously rendered benchmark control plane showing consumer-facing startup, retained-size, CPU-frame, FPS, and supported GPU-time evidence. Conformance is a separate finite deep-inspection surface showing candidate, reference, difference, structured evidence, and end-to-end test duration. Technique, backend, and workload are independent user controls; target and scenario remain internal runner concepts. The Figma wireframe supplies visual direction rather than prescribing product information architecture.
+
+The five-line, 120-glyph text above is now named the diagnostic conformance specimen. The separate paragraph-scale live benchmark renders 1,150 glyphs through the same single-draw bitmap path.
 
 ### 6.2 closure checklist
 
@@ -476,6 +479,19 @@ Items 6.2 and 6.3 are implemented and awaiting the milestone adversarial review.
 - [x] `useFont`, `.preload`, `.clear`, and `lazyRaster` share core dependency caches and expose deterministic Suspense boundaries.
 - [x] Resolved R3F reconciliation and browser-pending Suspense have executable evidence without sleeps, retries, or timer cushions.
 - [ ] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.3.
+
+### 6.4 closure checklist
+
+- [x] The default route opens a live benchmark rather than an internal runner overview or conformance case.
+- [x] Human-facing controls use mode, technique, backend, and workload; target/scenario terminology is absent from the primary UI.
+- [ ] Benchmark mode continuously renders paragraph-scale benchmark ipsum and separates startup/loading costs, retained sizes, CPU-frame time, FPS, and GPU time when supported.
+- [x] Conformance mode is finite and visibly presents candidate, reference, difference, correctness statistics, and end-to-end test duration without calling that duration render performance.
+- [x] Bitmap frame is classified as conformance; text ladder, off-axis/3D, dynamic layout, and paragraph stress are classified as live visual benchmarks.
+- [x] WebGPU/WebGL2 and 1×/2× DPR remain explicit, shareable, and independently testable.
+- [x] The benchmark-ipsum concept documents the diagnostic specimen and paragraph-scale workload separately.
+- [x] Live telemetry uses fixed-capacity preallocated histories, presents CPU/FPS/GPU graphs without inventing unavailable GPU data, and snapshots histories only on explicit capture.
+- [x] Benchmark controls expose rendered device size and proportional paragraph width; viewport changes exercise retained paragraph reflow rather than stretching geometry.
+- [x] Deterministic unit, headless, and maintainer-local live probes cover the corrected product surface without sleeps or retries.
 
 Deliver:
 
@@ -499,6 +515,8 @@ Deliver:
 - a deterministic advanced-shaping showcase using the real paragraph/rendering path: editable and typewriter-driven text, continuous container reflow, smooth glyph-position interpolation, and reviewed Arabic joining, Indic reordering, bidi, ligature/mark, and CJK line-break cases;
 - pause, step, and scrub controls that make every showcase transition reproducible without timer-based test assertions, with the same definitions reused by headless runs;
 - populated interactive lab scenarios for loading, paragraph reflow, and bitmap rendering using the same definitions as headless runs;
+- explicit conformance and benchmark modes in the shared app and shareable URL, with technique, WebGPU/WebGL2 backend, and workload as independent controls: conformance visibly presents browser/reference, candidate, difference, structured results, and all validation statistics, while benchmark mode is a full live scene organized around consumer cost;
+- performance scenarios that separate bake, Wasm startup, font registration, shaping, layout, upload, first draw, warm CPU frame, and warm GPU frame costs from conformance work; WebGPU timestamp queries and WebGL2 disjoint timer queries feed CPU-ms, FPS, and GPU-ms sparklines in the full responsive design, with unsupported GPU timing reported explicitly;
 - tree-shaking and dynamic-import bundle assertions;
 - packed-package assertions for native ESM, every public subpath, module workers, and rejected CommonJS loading;
 - accepted ADRs and updated extension schemas;

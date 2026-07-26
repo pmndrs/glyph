@@ -11,14 +11,8 @@ test('direct-memory bidi ABI returns exact Unicode 17 levels and classes', async
   try {
     const text = 'אב(גד[&ef].)gh'
     const result = shaper.analyzeBidi(utf16(text), 'ltr')
-    assert.deepEqual(
-      [...result.levels],
-      [1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    )
-    assert.deepEqual(
-      [...result.classes],
-      [1, 1, 13, 1, 1, 13, 13, 0, 0, 13, 7, 13, 0, 0],
-    )
+    assert.deepEqual([...result.levels], [1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    assert.deepEqual([...result.classes], [1, 1, 13, 1, 1, 13, 13, 0, 0, 13, 7, 13, 0, 0])
     assert.deepEqual([...result.paragraphStarts], [0])
     assert.deepEqual([...result.paragraphEnds], [14])
     assert.deepEqual([...result.paragraphLevels], [0])

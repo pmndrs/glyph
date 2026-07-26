@@ -910,6 +910,31 @@ function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   }
 }
 
+function reactTextTarget(): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  return {
+    id: 'react-text-reconciliation',
+    label: 'React Text reconciliation',
+    detail: 'React 19 · R3F · WebGPURenderer · pinned oracle',
+    color: 'violet',
+    capabilities: new Set(['deterministic', 'loader', 'shaping', 'paragraph', 'raster']),
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (await import('../renderer/react-text')).createReactTextTarget()
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('React Text target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
 export const targets: readonly BenchmarkTarget[] = [
   syntheticTarget,
   tslBaselineTarget('webgl2'),
@@ -923,6 +948,7 @@ export const targets: readonly BenchmarkTarget[] = [
   cjkUniversalityTarget,
   bitmapTextTarget('webgl2'),
   bitmapTextTarget('webgpu'),
+  reactTextTarget(),
   unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),
 ]

@@ -1,31 +1,25 @@
 import {
-  createParagraphEngine,
-  createRuntimeShaper,
   FontRegistry,
-  type GlyphPaint,
-  type Paragraph,
+  Text,
+  type JsonValue,
   type ParagraphLayout,
-  type RuntimeShaper,
   type RegisteredFont,
 } from '@pmndrs/text'
-import {
-  bitmap,
-  bitmapRasterKey,
-  type BitmapDrawBatch,
-  type BitmapResource,
-} from '@pmndrs/text/raster/bitmap'
-import shaperWasmUrl from '@pmndrs/text/text-shaper.wasm?url'
+import { bitmap, bitmapRasterKey, type BitmapResource } from '@pmndrs/text/raster/bitmap'
 import * as THREE from 'three/webgpu'
 
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
-import { BENCHMARK_IPSUM_TEXT } from '../benchmark/benchmark-ipsum'
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
 
 const WIDTH = 384
 const HEIGHT = 128
+const CLIPPED_WIDTH = 192
+const CLIPPED_HEIGHT = 64
 const BITMAP_FONT_SIZE = 16
+const HISTORY_CAPACITY = 120
 const bitmapRequest = bitmap({ strikes: [16] as const })
 
 interface BitmapTextResources {
@@ -35,27 +29,41 @@ interface BitmapTextResources {
   readonly target: THREE.RenderTarget
   readonly scene: THREE.Scene
   readonly camera: THREE.OrthographicCamera
-  readonly runtime: BitmapFontRuntime
+  readonly font: RegisteredFont
   readonly line: BitmapLine
+  readonly reference: BitmapReferenceResource
   readonly referencePixels: Uint8Array
+  readonly atlasGpuBytes: number
   readonly firstDrawMs: number
 }
 
-interface BitmapFontRuntime {
-  readonly font: RegisteredFont
-  readonly shaper: RuntimeShaper
-  readonly bitmap: BitmapResource
-  readonly atlasGpuBytes: number
+interface BitmapReferencePage {
+  readonly width: number
+  readonly height: number
+  readonly texels: Uint8Array
+}
+
+interface BitmapReferenceStrike {
+  readonly ppem: number
+  readonly planeUnitsPerEm: number
+  readonly records: Uint8Array
+  readonly pages: readonly BitmapReferencePage[]
+}
+
+interface BitmapReferenceResource {
+  readonly strikes: readonly BitmapReferenceStrike[]
 }
 
 interface BitmapLine {
-  readonly paragraph: Paragraph
+  readonly object: Text
   readonly layout: ParagraphLayout
-  readonly batch: BitmapDrawBatch
   readonly height: number
   readonly width: number
   readonly cssFontSize: number
+  readonly glyphCount: number
   readonly missingGlyphCount: number
+  readonly drawCount: number
+  readonly strikePpem: number
 }
 
 export interface BitmapTextLiveStats {
@@ -68,6 +76,9 @@ export interface BitmapTextLiveStats {
   readonly glyphCount: number
   readonly missingGlyphCount: number
   readonly drawCount: number
+  readonly layoutWidth: number
+  readonly layoutHeight: number
+  readonly lineCount: number
   readonly strikePpem: number
   readonly cssFontSize: number
   readonly renderedPpem: number
@@ -75,10 +86,38 @@ export interface BitmapTextLiveStats {
   readonly atlasGpuBytes: number
   readonly framebufferGpuBytes: number
   readonly totalGpuBytes: number
+  readonly artifactBytes: number
+  readonly rendererInitMs: number
+  readonly fontLoadMs: number
+  readonly textReadyMs: number
+  readonly firstDrawMs: number
+  readonly startupMs: number
+  readonly submitHistory: Float32Array
+  readonly submitHistoryLength: number
+  readonly submitHistoryNextIndex: number
+  readonly fpsHistory: Float32Array
+  readonly fpsHistoryLength: number
+  readonly fpsHistoryNextIndex: number
+  readonly gpuHistory: Float32Array
+  readonly gpuHistoryLength: number
+  readonly gpuHistoryNextIndex: number
+}
+
+export interface BitmapTextConformanceCapture {
+  readonly width: number
+  readonly height: number
+  readonly candidate: Uint8Array
+  readonly reference: Uint8Array
+  readonly difference: Uint8Array
+  readonly mismatchBytes: number
+  readonly litPixels: number
+  readonly inkPixels: number
+  readonly renderSubmitMs: number
 }
 
 export interface BitmapTextPreview {
   resize(width: number, height: number): void
+  update(options: { readonly fontSize: number; readonly layoutWidthRatio: number }): void
   dispose(): Promise<void>
 }
 
@@ -88,6 +127,8 @@ export interface BitmapTextPreviewOptions {
   readonly dpr: number
   readonly fontSize: number
   readonly height: number
+  readonly layoutWidth: number
+  readonly expectedGlyphCount?: number
   readonly text: string
   readonly width: number
   readonly signal?: AbortSignal
@@ -128,7 +169,7 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
       const resources = state.resources
       state = { kind: 'empty' }
       disposeBitmapLine(resources.line)
-      disposeBitmapRuntime(resources.runtime)
+      resources.font.dispose()
       resources.target.dispose()
       await resources.renderer.dispose()
     },
@@ -150,19 +191,20 @@ async function createResources(
     dpr,
   })
   let target: THREE.RenderTarget | undefined
-  let runtime: BitmapFontRuntime | undefined
+  let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
   try {
-    runtime = await loadBitmapRuntime()
-    line = await createBitmapLine(runtime, BENCHMARK_IPSUM_TEXT, BITMAP_FONT_SIZE / dpr)
-    line.batch.object.position.set(
-      Math.max(4, (WIDTH - line.width) / 2),
-      -Math.max(4, (HEIGHT - line.height) / 2),
+    const loadedFont = await loadBitmapFont()
+    font = loadedFont.font
+    line = await createBitmapLine(font, BENCHMARK_IPSUM_CONFORMANCE_TEXT, BITMAP_FONT_SIZE / dpr)
+    line.object.position.set(
+      quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
+      quarterDevicePosition(-Math.max(4, (HEIGHT - line.height) / 2), dpr),
       0,
     )
 
     const scene = new THREE.Scene()
-    scene.add(line.batch.object)
+    scene.add(line.object)
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10)
     camera.position.z = 1
     camera.updateProjectionMatrix()
@@ -183,7 +225,8 @@ async function createResources(
     renderer.render(scene, camera)
     const firstDrawMs = performance.now() - firstDrawStarted
     renderer.setRenderTarget(null)
-    const referencePixels = composeBitmapReference(line, runtime.bitmap, dpr, WIDTH, HEIGHT)
+    const { atlasGpuBytes, reference } = await loadBitmapReferenceSnapshot(font)
+    const referencePixels = composeBitmapReference(line, reference, dpr, WIDTH, HEIGHT)
     return {
       backend,
       dpr,
@@ -191,89 +234,69 @@ async function createResources(
       target,
       scene,
       camera,
-      runtime,
+      font,
       line,
+      reference,
       referencePixels,
+      atlasGpuBytes,
       firstDrawMs,
     }
   } catch (error) {
     if (line !== undefined) disposeBitmapLine(line)
-    if (runtime !== undefined) disposeBitmapRuntime(runtime)
+    font?.dispose()
     target?.dispose()
     await renderer.dispose()
     throw error
   }
 }
 
-async function loadBitmapRuntime(signal?: AbortSignal): Promise<BitmapFontRuntime> {
+async function loadBitmapFont(
+  signal?: AbortSignal,
+): Promise<{ readonly artifactBytes: number; readonly font: RegisteredFont }> {
   signal?.throwIfAborted()
   let font: RegisteredFont | undefined
-  let shaper: RuntimeShaper | undefined
-  let resource: BitmapResource | undefined
   try {
-    const [fontResponse, shaperResponse] = await Promise.all([
-      fetch(bitmapFontUrl, signal === undefined ? undefined : { signal }),
-      fetch(shaperWasmUrl, signal === undefined ? undefined : { signal }),
-    ])
+    const fontResponse = await fetch(bitmapFontUrl, signal === undefined ? undefined : { signal })
     if (!fontResponse.ok)
       throw new Error(`Unable to load bitmap font fixture (${fontResponse.status})`)
-    if (!shaperResponse.ok)
-      throw new Error(`Unable to load text shaper Wasm (${shaperResponse.status})`)
-    const [fontBytes, shaperWasm] = await Promise.all([
-      fontResponse.arrayBuffer(),
-      shaperResponse.arrayBuffer(),
-    ])
+    const fontBytes = await fontResponse.arrayBuffer()
     signal?.throwIfAborted()
     const registry = new FontRegistry()
     font = await registry.registerAsset(new Uint8Array(fontBytes))
     signal?.throwIfAborted()
-    shaper = await createRuntimeShaper({ registry, wasm: shaperWasm })
-    const raster = await font.loadRaster({
-      rasterKey: await bitmapRasterKey({ strikes: [16] as const }),
-      kind: 'bitmap',
-    })
-    resource = await bitmapRequest.module.decode(font, raster, signal)
-    signal?.throwIfAborted()
-    return {
-      font,
-      shaper,
-      bitmap: resource,
-      atlasGpuBytes: resource.strikes.reduce(
-        (strikeBytes, strike) =>
-          strikeBytes +
-          strike.pages.reduce((pageBytes, page) => pageBytes + page.width * page.height, 0),
-        0,
-      ),
-    }
+    return { artifactBytes: fontBytes.byteLength, font }
   } catch (error) {
-    if (resource !== undefined) bitmapRequest.module.dispose(resource)
-    shaper?.dispose()
     font?.dispose()
     throw error
   }
 }
 
 async function createBitmapLine(
-  runtime: BitmapFontRuntime,
+  font: RegisteredFont,
   text: string,
   fontSize: number,
   signal?: AbortSignal,
+  layoutWidth?: number,
 ): Promise<BitmapLine> {
   signal?.throwIfAborted()
-  const paragraph = createParagraphEngine({ shaper: runtime.shaper }).create({
+  const object = new Text({
     text,
-    font: runtime.font.handle,
-    style: {
-      fontSize,
-      lineHeight: 1,
-      language: 'en',
-      direction: 'ltr',
-      features: [],
-    },
+    font,
+    raster: bitmapRequest,
+    fontSize,
+    lineHeight: 1,
+    language: 'en',
+    direction: 'ltr',
+    features: [],
+    ...(layoutWidth === undefined
+      ? {}
+      : { width: layoutWidth, wrap: 'word' as const, overflow: 'visible' as const }),
   })
-  let batch: BitmapDrawBatch | undefined
   try {
-    const layout = paragraph.layout()
+    await object.ready
+    signal?.throwIfAborted()
+    const layout = object.layout
+    if (layout === undefined) throw new Error('public Text did not commit a bitmap layout')
     const missingGlyphCount = layout.glyphIds.reduce(
       (count, glyphId) => count + (glyphId === 0 ? 1 : 0),
       0,
@@ -281,46 +304,168 @@ async function createBitmapLine(
     if (missingGlyphCount !== 0) {
       throw new Error(`benchmark ipsum contains ${missingGlyphCount} glyphs missing from Inter`)
     }
-    await bitmapRequest.module.prepare(layout, runtime.bitmap, 0, signal)
-    signal?.throwIfAborted()
-    const paint: GlyphPaint = {
-      paintIndices: new Uint16Array(layout.glyphIds.length),
-      palette: [{ color: [1, 1, 1, 1] }],
-    }
-    batch = bitmapRequest.module.buildBatches(layout, runtime.bitmap, 0, paint)
     return {
-      paragraph,
+      object,
       layout,
-      batch,
       height: layout.height,
       width: layout.width,
       cssFontSize: fontSize,
+      glyphCount: countRenderedGlyphs(object),
       missingGlyphCount,
+      drawCount: countDraws(object),
+      strikePpem: BITMAP_FONT_SIZE,
     }
   } catch (error) {
-    batch?.dispose()
-    paragraph.dispose()
+    object.dispose()
     throw error
   }
 }
 
 function disposeBitmapLine(line: BitmapLine): void {
-  line.batch.dispose()
-  line.paragraph.dispose()
+  line.object.dispose()
 }
 
-function disposeBitmapRuntime(runtime: BitmapFontRuntime): void {
-  bitmapRequest.module.dispose(runtime.bitmap)
-  runtime.shaper.dispose()
-  runtime.font.dispose()
+async function loadBitmapReferenceSnapshot(
+  font: RegisteredFont,
+  signal?: AbortSignal,
+): Promise<{
+  readonly atlasGpuBytes: number
+  readonly reference: BitmapReferenceResource
+}> {
+  // The registry caches this handle for the font and releases it from font.dispose().
+  // The decoded GPU textures are a separate lease and must be released immediately.
+  const raster = await font.loadRaster(
+    {
+      rasterKey: await bitmapRasterKey({ strikes: [16] as const }),
+      kind: 'bitmap',
+    },
+    signal === undefined ? undefined : { signal },
+  )
+  const resource = await bitmapRequest.module.decode(font, raster, signal)
+  try {
+    return {
+      atlasGpuBytes: bitmapAtlasBytes(resource),
+      reference: snapshotBitmapReference(resource),
+    }
+  } finally {
+    bitmapRequest.module.dispose(resource)
+  }
+}
+
+async function registeredBitmapAtlasBytes(font: RegisteredFont): Promise<number> {
+  const rasterKey = await bitmapRasterKey({ strikes: [16] as const })
+  const raster = font.getRaster(rasterKey)
+  if (raster === undefined) throw new Error('bitmap Text did not retain its registered raster')
+  const extension = jsonObject(raster.extensionData, 'bitmap extension')
+  const strikes = jsonArray(extension.strikes, 'bitmap strikes')
+  let bytes = 0
+  for (const [strikeIndex, strikeValue] of strikes.entries()) {
+    const strike = jsonObject(strikeValue, `bitmap strike ${strikeIndex}`)
+    for (const [pageIndex, pageValue] of jsonArray(
+      strike.pages,
+      `bitmap strike ${strikeIndex} pages`,
+    ).entries()) {
+      const page = jsonObject(pageValue, `bitmap strike ${strikeIndex} page ${pageIndex}`)
+      bytes +=
+        jsonPositiveInteger(page.width, 'bitmap page width') *
+        jsonPositiveInteger(page.height, 'bitmap page height')
+    }
+  }
+  return bytes
+}
+
+function jsonObject(
+  value: JsonValue | undefined,
+  name: string,
+): Readonly<Record<string, JsonValue>> {
+  if (!isJsonObject(value)) throw new TypeError(`${name} must be an object`)
+  return value
+}
+
+function isJsonObject(
+  value: JsonValue | undefined,
+): value is { readonly [key: string]: JsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function jsonArray(value: JsonValue | undefined, name: string): readonly JsonValue[] {
+  if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
+  return value
+}
+
+function jsonPositiveInteger(value: JsonValue | undefined, name: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError(`${name} must be a positive integer`)
+  }
+  return value
+}
+
+function bitmapAtlasBytes(resource: BitmapResource): number {
+  return resource.strikes.reduce(
+    (strikeBytes, strike) =>
+      strikeBytes +
+      strike.pages.reduce((pageBytes, page) => pageBytes + page.width * page.height, 0),
+    0,
+  )
+}
+
+function snapshotBitmapReference(resource: BitmapResource): BitmapReferenceResource {
+  return {
+    strikes: resource.strikes.map((strike) => ({
+      ppem: strike.ppem,
+      planeUnitsPerEm: strike.planeUnitsPerEm,
+      records: strike.records.slice(),
+      pages: strike.pages.map((page) => {
+        const texels = page.texture.image.data
+        if (!(texels instanceof Uint8Array)) {
+          throw new TypeError('bitmap reference page is not backed by unsigned-byte coverage')
+        }
+        return { width: page.width, height: page.height, texels: texels.slice() }
+      }),
+    })),
+  }
+}
+
+function countDraws(object: THREE.Object3D): number {
+  let count = 0
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh) count += 1
+  })
+  return count
+}
+
+function countRenderedGlyphs(object: THREE.Object3D): number {
+  let count = 0
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.geometry instanceof THREE.InstancedBufferGeometry) {
+      count += child.geometry.instanceCount
+    }
+  })
+  return count
 }
 
 export async function createBitmapTextPreview(
   options: BitmapTextPreviewOptions,
 ): Promise<BitmapTextPreview> {
-  const { backend, canvas, dpr, fontSize, height, signal, text, onError, onStats } = options
+  const {
+    backend,
+    canvas,
+    dpr,
+    expectedGlyphCount,
+    fontSize,
+    height,
+    layoutWidth,
+    signal,
+    text,
+    onError,
+    onStats,
+  } = options
+  const startupStarted = performance.now()
   let width = positiveViewportSize(options.width, 'bitmap preview width')
   let viewportHeight = positiveViewportSize(height, 'bitmap preview height')
+  let currentFontSize = fontSize
+  let layoutWidthRatio = layoutWidth / width
+  const rendererStarted = performance.now()
   const renderer = await createConfiguredRenderer({
     alpha: true,
     backend,
@@ -329,71 +474,138 @@ export async function createBitmapTextPreview(
     height: viewportHeight,
     width,
   })
-  let runtime: BitmapFontRuntime | undefined
+  const rendererInitMs = performance.now() - rendererStarted
+  let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
   try {
-    runtime = await loadBitmapRuntime(signal)
+    const fontStarted = performance.now()
+    const loadedFont = await loadBitmapFont(signal)
+    font = loadedFont.font
+    const fontLoadMs = performance.now() - fontStarted
     signal?.throwIfAborted()
     const scene = new THREE.Scene()
-    line = await createBitmapLine(runtime, text, fontSize, signal)
-    const activeRuntime = runtime
+    const textStarted = performance.now()
+    line = await createBitmapLine(font, text, fontSize, signal, layoutWidth)
+    if (expectedGlyphCount !== undefined && line.glyphCount !== expectedGlyphCount) {
+      throw new Error(
+        `live workload rendered ${line.glyphCount} glyphs; expected ${expectedGlyphCount}`,
+      )
+    }
+    const textReadyMs = performance.now() - textStarted
+    const startupMs = performance.now() - startupStarted
+    const activeFont = font
     const activeLine = line
-    scene.add(activeLine.batch.object)
+    const atlasGpuBytes = await registeredBitmapAtlasBytes(activeFont)
+    scene.add(activeLine.object)
     const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10)
     camera.position.z = 1
     camera.updateProjectionMatrix()
     renderer.setClearColor(0x000000, 0)
 
+    const submitHistory = new Float32Array(HISTORY_CAPACITY)
+    const submitQuantileScratch = new Float32Array(HISTORY_CAPACITY)
+    const fpsHistory = new Float32Array(HISTORY_CAPACITY)
+    const gpuHistory = new Float32Array(HISTORY_CAPACITY)
+    let submitHistoryLength = 0
+    let submitHistoryNextIndex = 0
+    let fpsHistoryLength = 0
+    let fpsHistoryNextIndex = 0
+    let frameCount = 0
+    let reportedAt = performance.now()
+    let reportedFrame = 0
+    let disposed = false
+    let layoutRevision = 0
+    let firstDrawMs = 0
     const positionLine = (): void => {
-      activeLine.batch.object.position.set(
-        Math.max(12, (width - activeLine.width) / 2),
-        -Math.max(12, (viewportHeight - activeLine.height) / 2),
+      const layout = activeLine.object.layout
+      const currentLayoutWidth = layout?.width ?? activeLine.width
+      const layoutHeight = layout?.height ?? activeLine.height
+      activeLine.object.position.set(
+        Math.max(12, (width - currentLayoutWidth) / 2),
+        -Math.max(12, (viewportHeight - layoutHeight) / 2),
         0,
       )
     }
     positionLine()
-
-    const submitDurations: number[] = []
-    const glyphCount = activeLine.batch.glyphCount
-    const drawCount = activeLine.batch.drawCount
-    let frameCount = 0
-    let reportedAt = 0
-    let reportedFrame = 0
-    let disposed = false
-    const renderFrame = (timestamp: number): void => {
+    const reflowToViewport = (): void => {
+      const revision = ++layoutRevision
+      activeLine.object.setProperties({
+        fontSize: currentFontSize,
+        width: Math.max(120, width * layoutWidthRatio),
+      })
+      void activeLine.object.ready
+        .then(() => {
+          if (!disposed && revision === layoutRevision) positionLine()
+        })
+        .catch((error: unknown) => {
+          if (disposed || revision !== layoutRevision) return
+          onError(error)
+        })
+    }
+    const renderPreviewFrame = (timestamp: number): void => {
       if (disposed) return
       try {
         const started = performance.now()
         renderer.setRenderTarget(null)
         renderer.clear()
         renderer.render(scene, camera)
-        submitDurations.push(performance.now() - started)
-        if (submitDurations.length > 120) submitDurations.shift()
+        const submitMs = performance.now() - started
+        if (frameCount === 0) firstDrawMs = submitMs
+        submitHistory[submitHistoryNextIndex] = submitMs
+        submitHistoryNextIndex = (submitHistoryNextIndex + 1) % HISTORY_CAPACITY
+        submitHistoryLength = Math.min(submitHistoryLength + 1, HISTORY_CAPACITY)
         frameCount += 1
         const elapsed = timestamp - reportedAt
-        if (reportedAt !== 0 && elapsed < 250) return
-        const sorted = [...submitDurations].sort((left, right) => left - right)
+        if (elapsed < 250) return
+        submitQuantileScratch.set(submitHistory)
+        for (let index = submitHistoryLength; index < HISTORY_CAPACITY; index += 1) {
+          submitQuantileScratch[index] = Number.POSITIVE_INFINITY
+        }
+        submitQuantileScratch.sort()
         const physicalWidth = Math.round(width * dpr)
         const physicalHeight = Math.round(viewportHeight * dpr)
         const framebufferGpuBytes = physicalWidth * physicalHeight * 4
+        const framesPerSecond = elapsed <= 0 ? 0 : ((frameCount - reportedFrame) * 1000) / elapsed
+        fpsHistory[fpsHistoryNextIndex] = framesPerSecond
+        fpsHistoryNextIndex = (fpsHistoryNextIndex + 1) % HISTORY_CAPACITY
+        fpsHistoryLength = Math.min(fpsHistoryLength + 1, HISTORY_CAPACITY)
+        const layout = activeLine.object.layout
+        if (layout === undefined) throw new Error('live bitmap Text lost its committed layout')
         onStats({
           backend,
           dpr,
           frameCount,
-          framesPerSecond:
-            reportedAt === 0 || elapsed <= 0 ? 0 : ((frameCount - reportedFrame) * 1000) / elapsed,
-          medianSubmitMs: quantile(sorted, 0.5),
-          p95SubmitMs: quantile(sorted, 0.95),
-          glyphCount,
+          framesPerSecond,
+          medianSubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.5),
+          p95SubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.95),
+          glyphCount: countRenderedGlyphs(activeLine.object),
           missingGlyphCount: activeLine.missingGlyphCount,
-          drawCount,
-          strikePpem: activeLine.batch.strikePpem,
-          cssFontSize: activeLine.cssFontSize,
-          renderedPpem: activeLine.cssFontSize * dpr,
-          scaleRatio: (activeLine.cssFontSize * dpr) / activeLine.batch.strikePpem,
-          atlasGpuBytes: activeRuntime.atlasGpuBytes,
+          drawCount: countDraws(activeLine.object),
+          layoutWidth: layout.width,
+          layoutHeight: layout.height,
+          lineCount: layout.lineGlyphCounts.length,
+          strikePpem: activeLine.strikePpem,
+          cssFontSize: currentFontSize,
+          renderedPpem: currentFontSize * dpr,
+          scaleRatio: (currentFontSize * dpr) / activeLine.strikePpem,
+          atlasGpuBytes,
           framebufferGpuBytes,
-          totalGpuBytes: activeRuntime.atlasGpuBytes + framebufferGpuBytes,
+          totalGpuBytes: atlasGpuBytes + framebufferGpuBytes,
+          artifactBytes: loadedFont.artifactBytes,
+          rendererInitMs,
+          fontLoadMs,
+          textReadyMs,
+          firstDrawMs,
+          startupMs,
+          submitHistory,
+          submitHistoryLength,
+          submitHistoryNextIndex,
+          fpsHistory,
+          fpsHistoryLength,
+          fpsHistoryNextIndex,
+          gpuHistory,
+          gpuHistoryLength: 0,
+          gpuHistoryNextIndex: 0,
         })
         reportedAt = timestamp
         reportedFrame = frameCount
@@ -401,7 +613,7 @@ export async function createBitmapTextPreview(
         onError(error)
       }
     }
-    await renderer.setAnimationLoop(renderFrame)
+    await renderer.setAnimationLoop(renderPreviewFrame)
     return {
       resize(nextWidth, nextHeight) {
         if (disposed) return
@@ -411,23 +623,97 @@ export async function createBitmapTextPreview(
         camera.right = width
         camera.bottom = -viewportHeight
         camera.updateProjectionMatrix()
-        positionLine()
+        reflowToViewport()
+      },
+      update(next) {
+        if (disposed) return
+        currentFontSize = positiveViewportSize(next.fontSize, 'bitmap preview font size')
+        if (
+          !Number.isFinite(next.layoutWidthRatio) ||
+          next.layoutWidthRatio <= 0 ||
+          next.layoutWidthRatio > 1
+        ) {
+          throw new RangeError('bitmap preview layout width ratio must be in (0, 1]')
+        }
+        layoutWidthRatio = next.layoutWidthRatio
+        reflowToViewport()
       },
       async dispose() {
         if (disposed) return
         disposed = true
         await renderer.setAnimationLoop(null)
         disposeBitmapLine(activeLine)
-        disposeBitmapRuntime(activeRuntime)
+        activeFont.dispose()
         await renderer.dispose()
       },
     }
   } catch (error) {
     if (line !== undefined) disposeBitmapLine(line)
-    if (runtime !== undefined) disposeBitmapRuntime(runtime)
+    font?.dispose()
     await renderer.dispose()
     throw error
   }
+}
+
+export async function captureBitmapTextConformance(options: {
+  readonly backend: RendererBackend
+  readonly dpr: number
+  readonly signal?: AbortSignal
+}): Promise<BitmapTextConformanceCapture> {
+  options.signal?.throwIfAborted()
+  const resources = await createResources(options.backend, options.dpr)
+  try {
+    options.signal?.throwIfAborted()
+    const width = Math.round(WIDTH * options.dpr)
+    const height = Math.round(HEIGHT * options.dpr)
+    const rendered = await renderFrame(resources, width, height)
+    options.signal?.throwIfAborted()
+    const quality = assertBitmapTextPixels(rendered.bytes, width, height)
+    const { bytes: difference, mismatchBytes } = differenceImage(
+      rendered.bytes,
+      resources.referencePixels,
+    )
+    return {
+      width,
+      height,
+      candidate: rendered.bytes,
+      reference: resources.referencePixels.slice(),
+      difference,
+      mismatchBytes,
+      litPixels: quality.litPixels,
+      inkPixels: quality.inkPixels,
+      renderSubmitMs: rendered.renderMs,
+    }
+  } finally {
+    disposeBitmapLine(resources.line)
+    resources.font.dispose()
+    resources.target.dispose()
+    await resources.renderer.dispose()
+  }
+}
+
+function differenceImage(
+  candidate: Uint8Array,
+  reference: Uint8Array,
+): { readonly bytes: Uint8Array; readonly mismatchBytes: number } {
+  if (candidate.byteLength !== reference.byteLength) {
+    throw new Error('bitmap conformance images do not have matching dimensions')
+  }
+  const bytes = new Uint8Array(candidate.byteLength)
+  let mismatchBytes = 0
+  for (let offset = 0; offset < candidate.byteLength; offset += 4) {
+    const red = Math.abs((candidate[offset] ?? 0) - (reference[offset] ?? 0))
+    const green = Math.abs((candidate[offset + 1] ?? 0) - (reference[offset + 1] ?? 0))
+    const blue = Math.abs((candidate[offset + 2] ?? 0) - (reference[offset + 2] ?? 0))
+    if (red !== 0) mismatchBytes += 1
+    if (green !== 0) mismatchBytes += 1
+    if (blue !== 0) mismatchBytes += 1
+    bytes[offset] = Math.max(red, green, blue)
+    bytes[offset + 1] = 0
+    bytes[offset + 2] = 0
+    bytes[offset + 3] = 255
+  }
+  return { bytes, mismatchBytes }
 }
 
 function positiveViewportSize(value: number, name: string): number {
@@ -435,16 +721,112 @@ function positiveViewportSize(value: number, name: string): number {
   return value
 }
 
-function quantile(sorted: readonly number[], fraction: number): number {
-  if (sorted.length === 0) return 0
-  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)
+function quantile(sorted: Float32Array, length: number, fraction: number): number {
+  if (length === 0) return 0
+  const index = Math.min(length - 1, Math.ceil(length * fraction) - 1)
   return sorted[index] ?? 0
 }
 
 async function renderBitmapText(resources: BitmapTextResources): Promise<TargetRunOutput> {
-  const { renderer, target, scene, camera } = resources
+  const { renderer, target, camera, line } = resources
   const physicalWidth = Math.round(WIDTH * resources.dpr)
   const physicalHeight = Math.round(HEIGHT * resources.dpr)
+  const originalPosition = line.object.position.clone()
+  const unsnappedOriginFraction = Math.max(
+    devicePixelFraction(originalPosition.x * resources.dpr),
+    devicePixelFraction(originalPosition.y * resources.dpr),
+  )
+  const full = await renderFrame(resources, physicalWidth, physicalHeight)
+  const quality = assertBitmapTextPixels(
+    full.bytes,
+    physicalWidth,
+    physicalHeight,
+    resources.referencePixels,
+  )
+  const clippedPhysicalWidth = Math.round(CLIPPED_WIDTH * resources.dpr)
+  const clippedPhysicalHeight = Math.round(CLIPPED_HEIGHT * resources.dpr)
+  let clipped: Awaited<ReturnType<typeof renderFrame>>
+  let clippedQuality: ReturnType<typeof assertBitmapTextPixels>
+  try {
+    renderer.setSize(CLIPPED_WIDTH, CLIPPED_HEIGHT, false)
+    target.setSize(clippedPhysicalWidth, clippedPhysicalHeight)
+    camera.right = CLIPPED_WIDTH
+    camera.bottom = -CLIPPED_HEIGHT
+    camera.updateProjectionMatrix()
+    line.object.position.set(
+      quarterDevicePosition(-40, resources.dpr),
+      quarterDevicePosition(-4, resources.dpr),
+      0,
+    )
+    const clippedReference = composeBitmapReference(
+      line,
+      resources.reference,
+      resources.dpr,
+      CLIPPED_WIDTH,
+      CLIPPED_HEIGHT,
+      true,
+    )
+    clipped = await renderFrame(resources, clippedPhysicalWidth, clippedPhysicalHeight)
+    clippedQuality = assertBitmapTextPixels(
+      clipped.bytes,
+      clippedPhysicalWidth,
+      clippedPhysicalHeight,
+      clippedReference,
+      true,
+    )
+    if (!clippedQuality.touchesBoundary || clippedQuality.inkPixels >= quality.inkPixels) {
+      throw new Error('bitmap Text resize did not produce a smaller clipped frame')
+    }
+  } finally {
+    line.object.position.copy(originalPosition)
+    renderer.setSize(WIDTH, HEIGHT, false)
+    target.setSize(physicalWidth, physicalHeight)
+    camera.right = WIDTH
+    camera.bottom = -HEIGHT
+    camera.updateProjectionMatrix()
+  }
+  return {
+    bytes: full.bytes.byteLength,
+    hash: await sha256(full.bytes),
+    metrics: {
+      backendWebGpu: resources.backend === 'webgpu' ? 1 : 0,
+      backendWebGl2: resources.backend === 'webgl2' ? 1 : 0,
+      dpr: resources.dpr,
+      glyphCount: line.glyphCount,
+      missingGlyphCount: line.missingGlyphCount,
+      drawCount: line.drawCount,
+      strikePpem: line.strikePpem,
+      cssFontSize: line.cssFontSize,
+      renderedPpem: line.cssFontSize * resources.dpr,
+      scaleRatio: (line.cssFontSize * resources.dpr) / line.strikePpem,
+      atlasGpuBytes: resources.atlasGpuBytes,
+      renderTargetGpuBytes: full.bytes.byteLength,
+      totalGpuBytes: resources.atlasGpuBytes + full.bytes.byteLength,
+      litPixels: quality.litPixels,
+      inkPixels: quality.inkPixels,
+      inkMinX: quality.inkMinX,
+      inkMinY: quality.inkMinY,
+      inkMaxX: quality.inkMaxX,
+      inkMaxY: quality.inkMaxY,
+      renderMs: full.renderMs,
+      clippedRenderMs: clipped.renderMs,
+      clippedInkPixels: clippedQuality.inkPixels,
+      clippedTouchesBoundary: clippedQuality.touchesBoundary ? 1 : 0,
+      resizedWidth: CLIPPED_WIDTH,
+      resizedHeight: CLIPPED_HEIGHT,
+      firstDrawMs: resources.firstDrawMs,
+      referenceMismatchBytes: quality.referenceMismatchBytes,
+      unsnappedOriginFraction,
+    },
+  }
+}
+
+async function renderFrame(
+  resources: BitmapTextResources,
+  physicalWidth: number,
+  physicalHeight: number,
+): Promise<{ readonly bytes: Uint8Array; readonly renderMs: number }> {
+  const { renderer, target, scene, camera } = resources
   renderer.setRenderTarget(target)
   renderer.setClearColor(0x000000, 1)
   renderer.clear()
@@ -459,49 +841,14 @@ async function renderBitmapText(resources: BitmapTextResources): Promise<TargetR
     physicalHeight,
   )
   renderer.setRenderTarget(null)
-  const bytes = compactRgba8Readback(
-    new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
-    physicalWidth,
-    physicalHeight,
-    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-  )
-  const quality = assertBitmapTextPixels(
-    bytes,
-    physicalWidth,
-    physicalHeight,
-    resources.referencePixels,
-  )
   return {
-    bytes: bytes.byteLength,
-    hash: await sha256(bytes),
-    metrics: {
-      backendWebGpu: resources.backend === 'webgpu' ? 1 : 0,
-      backendWebGl2: resources.backend === 'webgl2' ? 1 : 0,
-      dpr: resources.dpr,
-      glyphCount: resources.line.batch.glyphCount,
-      missingGlyphCount: resources.line.missingGlyphCount,
-      drawCount: resources.line.batch.drawCount,
-      strikePpem: resources.line.batch.strikePpem,
-      cssFontSize: resources.line.cssFontSize,
-      renderedPpem: resources.line.cssFontSize * resources.dpr,
-      scaleRatio: (resources.line.cssFontSize * resources.dpr) / resources.line.batch.strikePpem,
-      atlasGpuBytes: resources.runtime.atlasGpuBytes,
-      renderTargetGpuBytes: bytes.byteLength,
-      totalGpuBytes: resources.runtime.atlasGpuBytes + bytes.byteLength,
-      litPixels: quality.litPixels,
-      inkPixels: quality.inkPixels,
-      inkMinX: quality.inkMinX,
-      inkMinY: quality.inkMinY,
-      inkMaxX: quality.inkMaxX,
-      inkMaxY: quality.inkMaxY,
-      renderMs,
-      firstDrawMs: resources.firstDrawMs,
-      referenceMismatchBytes: 0,
-      unsnappedOriginFraction: Math.max(
-        devicePixelFraction(resources.line.batch.object.position.x * resources.dpr),
-        devicePixelFraction(resources.line.batch.object.position.y * resources.dpr),
-      ),
-    },
+    bytes: compactRgba8Readback(
+      new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
+      physicalWidth,
+      physicalHeight,
+      resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+    ),
+    renderMs,
   }
 }
 
@@ -510,6 +857,7 @@ export function assertBitmapTextPixels(
   width: number,
   height: number,
   referenceBytes?: Uint8Array,
+  allowBoundary = false,
 ): {
   readonly litPixels: number
   readonly minX: number
@@ -521,11 +869,14 @@ export function assertBitmapTextPixels(
   readonly inkMinY: number
   readonly inkMaxX: number
   readonly inkMaxY: number
+  readonly touchesBoundary: boolean
+  readonly referenceMismatchBytes: number
 } {
   if (bytes.byteLength !== width * height * 4) {
     throw new Error('bitmap text readback length does not match its target')
   }
-  if (referenceBytes !== undefined) assertExactReference(bytes, referenceBytes)
+  const referenceMismatchBytes =
+    referenceBytes === undefined ? 0 : assertExactReference(bytes, referenceBytes, width)
   let litPixels = 0
   let minX = width
   let minY = height
@@ -536,6 +887,7 @@ export function assertBitmapTextPixels(
   let inkMinY = height
   let inkMaxX = -1
   let inkMaxY = -1
+  let touchesBoundary = false
   for (let pixel = 0; pixel < width * height; pixel += 1) {
     const offset = pixel * 4
     const coverage = Math.max(bytes[offset] ?? 0, bytes[offset + 1] ?? 0, bytes[offset + 2] ?? 0)
@@ -548,7 +900,8 @@ export function assertBitmapTextPixels(
     maxX = Math.max(maxX, x)
     maxY = Math.max(maxY, y)
     if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
-      throw new Error('bitmap text touches the render boundary')
+      touchesBoundary = true
+      if (!allowBoundary) throw new Error('bitmap text touches the render boundary')
     }
     if (coverage >= 128) {
       inkPixels += 1
@@ -571,22 +924,25 @@ export function assertBitmapTextPixels(
     inkMinY,
     inkMaxX,
     inkMaxY,
+    touchesBoundary,
+    referenceMismatchBytes,
   }
 }
 
 function composeBitmapReference(
   line: BitmapLine,
-  resource: BitmapResource,
+  resource: BitmapReferenceResource,
   dpr: number,
   cssWidth: number,
   cssHeight: number,
+  allowClipping = false,
 ): Uint8Array {
   const physicalWidth = Math.round(cssWidth * dpr)
   const physicalHeight = Math.round(cssHeight * dpr)
   const output = new Uint8Array(physicalWidth * physicalHeight * 4)
   for (let alpha = 3; alpha < output.byteLength; alpha += 4) output[alpha] = 255
 
-  const strike = resource.strikes.find(({ ppem }) => ppem === line.batch.strikePpem)
+  const strike = resource.strikes.find(({ ppem }) => ppem === line.strikePpem)
   if (strike === undefined) throw new Error('bitmap reference is missing the selected strike')
   const records = new DataView(
     strike.records.buffer,
@@ -604,10 +960,7 @@ function composeBitmapReference(
     if (pageIndex === 0xffff) continue
     const page = strike.pages[pageIndex]
     if (page === undefined) throw new Error('bitmap reference record points to a missing page')
-    const texels = page.texture.image.data
-    if (!(texels instanceof Uint8Array)) {
-      throw new TypeError('bitmap reference page is not backed by unsigned-byte coverage')
-    }
+    const texels = page.texels
     const scale = fontSize / strike.planeUnitsPerEm
     if (scale * dpr !== 1) {
       throw new Error('exact bitmap reference requires one atlas texel per device pixel')
@@ -619,16 +972,17 @@ function composeBitmapReference(
     const atlasRight = records.getUint16(record + 12, true)
     const atlasBottom = records.getUint16(record + 14, true)
     const left = Math.round(
-      (line.batch.object.position.x + layout.x[glyphIndex]! + planeLeft * scale) * dpr,
+      (line.object.position.x + layout.x[glyphIndex]! + planeLeft * scale) * dpr,
     )
     const top = Math.round(
-      -(line.batch.object.position.y - layout.y[glyphIndex]! + planeTop * scale) * dpr,
+      -(line.object.position.y - layout.y[glyphIndex]! + planeTop * scale) * dpr,
     )
     for (let atlasY = atlasTop; atlasY < atlasBottom; atlasY += 1) {
       for (let atlasX = atlasLeft; atlasX < atlasRight; atlasX += 1) {
         const x = left + atlasX - atlasLeft
         const y = top + atlasY - atlasTop
         if (x < 0 || y < 0 || x >= physicalWidth || y >= physicalHeight) {
+          if (allowClipping) continue
           throw new Error('bitmap reference glyph exceeds the framebuffer')
         }
         const coverage = texels[atlasY * page.width + atlasX]!
@@ -644,21 +998,60 @@ function composeBitmapReference(
   return output
 }
 
-function assertExactReference(actual: Uint8Array, expected: Uint8Array): void {
+function assertExactReference(actual: Uint8Array, expected: Uint8Array, width: number): number {
   if (actual.byteLength !== expected.byteLength) {
     throw new Error('bitmap CPU reference length does not match the GPU readback')
   }
+  const samples: string[] = []
+  let mismatchBytes = 0
+  let maximumDifference = 0
   for (let index = 0; index < actual.byteLength; index += 1) {
-    if (actual[index] !== expected[index]) {
-      throw new Error(
-        `bitmap GPU readback differs from its CPU atlas reference at byte ${String(index)}`,
+    if (actual[index] === expected[index]) continue
+    mismatchBytes += 1
+    maximumDifference = Math.max(maximumDifference, Math.abs(actual[index]! - expected[index]!))
+    if (samples.length < 8) {
+      const pixel = Math.floor(index / 4)
+      samples.push(
+        `(${String(pixel % width)},${String(Math.floor(pixel / width))},${String(index % 4)}):` +
+          `${String(actual[index])}/${String(expected[index])}`,
       )
     }
   }
+  if (mismatchBytes !== 0) {
+    const actualBounds = coverageBounds(actual, width)
+    const expectedBounds = coverageBounds(expected, width)
+    throw new Error(
+      `bitmap GPU readback differs from its CPU atlas reference in ${String(mismatchBytes)} bytes ` +
+        `(max delta ${String(maximumDifference)}; actual bounds ${actualBounds}; ` +
+        `expected bounds ${expectedBounds}; actual/expected ${samples.join(', ')})`,
+    )
+  }
+  return mismatchBytes
+}
+
+function coverageBounds(bytes: Uint8Array, width: number): string {
+  let minX = width
+  let minY = Number.MAX_SAFE_INTEGER
+  let maxX = -1
+  let maxY = -1
+  for (let pixel = 0; pixel < bytes.byteLength / 4; pixel += 1) {
+    if ((bytes[pixel * 4] ?? 0) === 0) continue
+    const x = pixel % width
+    const y = Math.floor(pixel / width)
+    minX = Math.min(minX, x)
+    minY = Math.min(minY, y)
+    maxX = Math.max(maxX, x)
+    maxY = Math.max(maxY, y)
+  }
+  return `[${String(minX)},${String(minY)},${String(maxX)},${String(maxY)}]`
 }
 
 function devicePixelFraction(value: number): number {
   return Math.abs(value - Math.round(value))
+}
+
+function quarterDevicePosition(value: number, dpr: number): number {
+  return (Math.floor(value * dpr) + 0.25) / dpr
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {

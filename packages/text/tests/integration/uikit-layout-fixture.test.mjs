@@ -23,15 +23,18 @@ test('mirrors the current uikit CustomLayouting and resolved content-box flow', 
   const fixture = createUikitLayoutFixture(paragraph, { wrap: 'word', overflow: 'clip' })
   const custom = fixture.customLayouting()
 
-  assert.deepEqual({
-    minWidth: custom.minWidth,
-    minHeight: custom.minHeight,
-    firstBaseline: custom.firstBaseline,
-  }, {
-    minWidth: 96.0576171875,
-    minHeight: 38.13,
-    firstBaseline: 30.34185546875,
-  })
+  assert.deepEqual(
+    {
+      minWidth: custom.minWidth,
+      minHeight: custom.minHeight,
+      firstBaseline: custom.firstBaseline,
+    },
+    {
+      minWidth: 96.0576171875,
+      minHeight: 38.13,
+      firstBaseline: 30.34185546875,
+    },
+  )
   assert.equal(fixture.calls.layout, 0, 'intrinsic sizing must not materialize glyph arrays')
 
   const natural = custom.measure(
@@ -43,7 +46,12 @@ test('mirrors the current uikit CustomLayouting and resolved content-box flow', 
   assert.deepEqual(natural, { width: 821.14, height: 38.14 })
   const atMost = custom.measure(360, YogaMeasureMode.AtMost, 90, YogaMeasureMode.AtMost)
   assert.deepEqual(atMost, { width: 345.41, height: 90 })
-  const exactWidth = custom.measure(420.001, YogaMeasureMode.Exactly, NaN, YogaMeasureMode.Undefined)
+  const exactWidth = custom.measure(
+    420.001,
+    YogaMeasureMode.Exactly,
+    NaN,
+    YogaMeasureMode.Undefined,
+  )
   assert.deepEqual(exactWidth, { width: 420.01, height: 114.4 })
   for (let index = 0; index < 20; index += 1) {
     assert.deepEqual(
@@ -58,18 +66,18 @@ test('mirrors the current uikit CustomLayouting and resolved content-box flow', 
     fixture.resolveYogaLeaf(401.237, YogaMeasureMode.Exactly, 150.111, YogaMeasureMode.Exactly),
     { width: 401.24, height: 150.12, measured: false },
   )
-  assert.equal(fixture.calls.measure, beforeDefinite, 'Yoga skips leaf measurement for two exact axes')
+  assert.equal(
+    fixture.calls.measure,
+    beforeDefinite,
+    'Yoga skips leaf measurement for two exact axes',
+  )
   assert.throws(
     () => custom.measure(Number.NaN, YogaMeasureMode.AtMost, 10, YogaMeasureMode.Exactly),
     /Yoga width must be finite/,
   )
   assert.throws(() => custom.measure(10, 99, 10, YogaMeasureMode.Exactly), /measure mode/)
 
-  const resolved = fixture.layoutResolvedBox(
-    [401.24, 150.12],
-    [7, 11, 13, 17],
-    [1, 2, 3, 4],
-  )
+  const resolved = fixture.layoutResolvedBox([401.24, 150.12], [7, 11, 13, 17], [1, 2, 3, 4])
   assert.deepEqual(resolved.contentBox, { width: 367.24, height: 126.12 })
   assert.equal(fixture.calls.layout, 1)
   assert.equal(resolved.layout.width, 367.24)
@@ -99,7 +107,12 @@ test('mirrors the current uikit CustomLayouting and resolved content-box flow', 
 
 async function runtime() {
   const [source, bakerWasm, shaperWasm] = await Promise.all([
-    readFile(new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+    readFile(
+      new URL(
+        '../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf',
+        import.meta.url,
+      ),
+    ),
     readFile(new URL('../../../font-baker/dist/font_baker.wasm', import.meta.url)),
     readFile(new URL('../../dist/text_shaper.wasm', import.meta.url)),
   ])

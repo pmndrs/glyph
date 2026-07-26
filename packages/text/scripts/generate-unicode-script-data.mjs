@@ -1,77 +1,75 @@
-import { createRequire } from "node:module";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createRequire } from 'node:module'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
-const require = createRequire(import.meta.url);
-const unicode = require("@unicode/unicode-17.0.0");
-const propertyAliases = require("unicode-property-value-aliases");
-const output = new URL("../src/generated/unicode-script-data.ts", import.meta.url);
-const check = process.argv.includes("--check");
+const require = createRequire(import.meta.url)
+const unicode = require('@unicode/unicode-17.0.0')
+const propertyAliases = require('unicode-property-value-aliases')
+const output = new URL('../src/generated/unicode-script-data.ts', import.meta.url)
+const check = process.argv.includes('--check')
 
-const scriptAliases = propertyAliases.get("Script");
-const tagByScript = new Map();
+const scriptAliases = propertyAliases.get('Script')
+const tagByScript = new Map()
 for (const script of unicode.Script) {
   const aliases = [...scriptAliases]
     .filter(([alias, canonical]) => canonical === script && /^[A-Z][a-z]{3}$/.test(alias))
-    .map(([alias]) => alias);
+    .map(([alias]) => alias)
   if (aliases.length === 0) {
-    throw new Error(`expected an ISO 15924 alias for ${script}`);
+    throw new Error(`expected an ISO 15924 alias for ${script}`)
   }
-  tagByScript.set(script, aliases[0]);
+  tagByScript.set(script, aliases[0])
 }
 
-const primary = [];
-const extensionEvents = new Map();
+const primary = []
+const extensionEvents = new Map()
 for (const script of unicode.Script) {
-  const tag = tagToUint32(tagByScript.get(script));
-  const ranges = require(`@unicode/unicode-17.0.0/Script/${script}/ranges.js`);
-  for (const { begin, end } of ranges) primary.push([begin, end, tag]);
+  const tag = tagToUint32(tagByScript.get(script))
+  const ranges = require(`@unicode/unicode-17.0.0/Script/${script}/ranges.js`)
+  for (const { begin, end } of ranges) primary.push([begin, end, tag])
 
-  const extensionRanges = require(
-    `@unicode/unicode-17.0.0/Script_Extensions/${script}/ranges.js`,
-  );
+  const extensionRanges = require(`@unicode/unicode-17.0.0/Script_Extensions/${script}/ranges.js`)
   for (const { begin, end } of extensionRanges) {
-    event(extensionEvents, begin).add.push(tag);
-    event(extensionEvents, end).remove.push(tag);
+    event(extensionEvents, begin).add.push(tag)
+    event(extensionEvents, end).remove.push(tag)
   }
 }
 
-primary.sort(compareRange);
-const primaryRanges = mergeRanges(primary);
-assertCoverage(primaryRanges, "Script");
+primary.sort(compareRange)
+const primaryRanges = mergeRanges(primary)
+assertCoverage(primaryRanges, 'Script')
 
-const extensionSets = [];
-const extensionSetIndexes = new Map();
-const extensionRanges = [];
-const active = new Set();
-const positions = [...extensionEvents].sort(([left], [right]) => left - right);
+const extensionSets = []
+const extensionSetIndexes = new Map()
+const extensionRanges = []
+const active = new Set()
+const positions = [...extensionEvents].sort(([left], [right]) => left - right)
 for (let index = 0; index < positions.length; index += 1) {
-  const [position, changes] = positions[index];
-  for (const tag of changes.remove) active.delete(tag);
-  for (const tag of changes.add) active.add(tag);
-  const next = positions[index + 1]?.[0] ?? 0x11_0000;
-  if (next <= position) continue;
-  const values = [...active].sort((left, right) => left - right);
-  const key = values.join(",");
-  let setIndex = extensionSetIndexes.get(key);
+  const [position, changes] = positions[index]
+  for (const tag of changes.remove) active.delete(tag)
+  for (const tag of changes.add) active.add(tag)
+  const next = positions[index + 1]?.[0] ?? 0x11_0000
+  if (next <= position) continue
+  const values = [...active].sort((left, right) => left - right)
+  const key = values.join(',')
+  let setIndex = extensionSetIndexes.get(key)
   if (setIndex === undefined) {
-    setIndex = extensionSets.length;
-    extensionSetIndexes.set(key, setIndex);
-    extensionSets.push(values);
+    setIndex = extensionSets.length
+    extensionSetIndexes.set(key, setIndex)
+    extensionSets.push(values)
   }
-  const previous = extensionRanges.at(-1);
+  const previous = extensionRanges.at(-1)
   if (previous !== undefined && previous[1] === position && previous[2] === setIndex) {
-    previous[1] = next;
+    previous[1] = next
   } else {
-    extensionRanges.push([position, next, setIndex]);
+    extensionRanges.push([position, next, setIndex])
   }
 }
-assertCoverage(extensionRanges, "Script_Extensions");
+assertCoverage(extensionRanges, 'Script_Extensions')
 
-const extensionOffsets = [0];
-const extensionTags = [];
+const extensionOffsets = [0]
+const extensionTags = []
 for (const values of extensionSets) {
-  extensionTags.push(...values);
-  extensionOffsets.push(extensionTags.length);
+  extensionTags.push(...values)
+  extensionOffsets.push(extensionTags.length)
 }
 
 const source = `// Generated by scripts/generate-unicode-script-data.mjs from
@@ -79,68 +77,68 @@ const source = `// Generated by scripts/generate-unicode-script-data.mjs from
 // Do not edit by hand.
 
 export const unicodeDataVersion = "17.0.0";
-export const commonScript = ${tagToUint32("Zyyy")};
-export const inheritedScript = ${tagToUint32("Zinh")};
-export const unknownScript = ${tagToUint32("Zzzz")};
+export const commonScript = ${tagToUint32('Zyyy')};
+export const inheritedScript = ${tagToUint32('Zinh')};
+export const unknownScript = ${tagToUint32('Zzzz')};
 
 export const scriptRanges: Uint32Array = new Uint32Array(${numbers(primaryRanges.flat())});
 export const scriptExtensionRanges: Uint32Array = new Uint32Array(${numbers(extensionRanges.flat())});
 export const scriptExtensionOffsets: Uint32Array = new Uint32Array(${numbers(extensionOffsets)});
 export const scriptExtensionTags: Uint32Array = new Uint32Array(${numbers(extensionTags)});
-`;
+`
 
 if (check) {
-  let existing;
+  let existing
   try {
-    existing = await readFile(output, "utf8");
+    existing = await readFile(output, 'utf8')
   } catch {
-    existing = undefined;
+    existing = undefined
   }
   if (existing !== source) {
-    console.error("generated Unicode script data is stale; run pnpm generate:unicode-data");
-    process.exitCode = 1;
+    console.error('generated Unicode script data is stale; run pnpm generate:unicode-data')
+    process.exitCode = 1
   }
 } else {
-  await mkdir(new URL("../src/generated/", import.meta.url), { recursive: true });
-  await writeFile(output, source);
+  await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true })
+  await writeFile(output, source)
 }
 
 function event(events, position) {
-  let value = events.get(position);
+  let value = events.get(position)
   if (value === undefined) {
-    value = { add: [], remove: [] };
-    events.set(position, value);
+    value = { add: [], remove: [] }
+    events.set(position, value)
   }
-  return value;
+  return value
 }
 
 function compareRange(left, right) {
-  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2]
 }
 
 function mergeRanges(ranges) {
-  const merged = [];
+  const merged = []
   for (const range of ranges) {
-    const previous = merged.at(-1);
+    const previous = merged.at(-1)
     if (previous !== undefined && previous[1] === range[0] && previous[2] === range[2]) {
-      previous[1] = range[1];
+      previous[1] = range[1]
     } else {
-      merged.push([...range]);
+      merged.push([...range])
     }
   }
-  return merged;
+  return merged
 }
 
 function assertCoverage(ranges, property) {
-  let cursor = 0;
+  let cursor = 0
   for (const [start, end] of ranges) {
     if (start !== cursor || end <= start) {
-      throw new Error(`${property} ranges are not a disjoint scalar-value partition at ${cursor}`);
+      throw new Error(`${property} ranges are not a disjoint scalar-value partition at ${cursor}`)
     }
-    cursor = end;
+    cursor = end
   }
   if (cursor !== 0x11_0000) {
-    throw new Error(`${property} ranges stop at ${cursor}`);
+    throw new Error(`${property} ranges stop at ${cursor}`)
   }
 }
 
@@ -150,13 +148,13 @@ function tagToUint32(tag) {
     tag.charCodeAt(1) * 0x1_0000 +
     tag.charCodeAt(2) * 0x100 +
     tag.charCodeAt(3)
-  );
+  )
 }
 
 function numbers(values) {
-  const rows = [];
+  const rows = []
   for (let index = 0; index < values.length; index += 24) {
-    rows.push(`  ${values.slice(index, index + 24).join(", ")}`);
+    rows.push(`  ${values.slice(index, index + 24).join(', ')}`)
   }
-  return `[\n${rows.join(",\n")}\n]`;
+  return `[\n${rows.join(',\n')}\n]`
 }

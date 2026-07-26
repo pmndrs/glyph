@@ -249,17 +249,14 @@ test('orders fonts and diagnostics by lexical source position despite concurrent
 
   const report = await discoverProjectFonts({ projectRoot: root })
 
-  assert.deepEqual(report.fonts.map(({ publicPathname }) => publicPathname), [
-    '/fonts/Zeta.ttf',
-    '/fonts/Alpha.ttf',
-    '/fonts/Repeat.ttf',
-    '/fonts/Repeat.ttf',
-  ])
-  assert.deepEqual(report.diagnostics.map(({ code }) => code), [
-    'dynamic-font-source',
-    'missing-font-source',
-    'dynamic-font-source',
-  ])
+  assert.deepEqual(
+    report.fonts.map(({ publicPathname }) => publicPathname),
+    ['/fonts/Zeta.ttf', '/fonts/Alpha.ttf', '/fonts/Repeat.ttf', '/fonts/Repeat.ttf'],
+  )
+  assert.deepEqual(
+    report.diagnostics.map(({ code }) => code),
+    ['dynamic-font-source', 'missing-font-source', 'dynamic-font-source'],
+  )
 })
 
 test('reports ambiguity, unsafe paths, missing files, dynamic options, and dynamic sources', async (t) => {

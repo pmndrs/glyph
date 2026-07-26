@@ -278,8 +278,8 @@ test('one coarse call shapes and reshapes multiple runs with absolute UTF-16 clu
     oracle.cases.find(({ id }) => id === 'combining-mark'),
   ]
   assert.ok(expectedRuns.every(Boolean))
-  const text = expectedRuns.map(({ text }) => text).join('')
-  const textUtf16 = utf16(text)
+  const combinedText = expectedRuns.map(({ text }) => text).join('')
+  const textUtf16 = utf16(combinedText)
   let start = 0
   const runs = expectedRuns.map((expected) => {
     const end = start + utf16(expected.text).length

@@ -28,6 +28,7 @@ import {
   type TextSpan,
   type TextUpdateProperties,
 } from './text.js'
+import { sameFeatures, samePaintProperties } from './internal/text-properties.js'
 
 export type ReactTextElement = ReactElement<ReactTextProps>
 
@@ -463,7 +464,7 @@ function textPatch(
     patch.raster = next.raster
   }
   for (const key of UPDATE_PROPERTY_KEYS) {
-    if (previous[key] !== next[key]) patch[key] = next[key]
+    if (!sameUpdateProperty(key, previous, next)) patch[key] = next[key]
   }
   return Object.keys(patch).length === 0 ? undefined : (patch as TextUpdateProperties)
 }
@@ -474,10 +475,32 @@ function sameSpans(left: readonly TextSpan[], right: readonly TextSpan[]): boole
     const other = right[index]
     if (other === undefined) return false
     for (const key of INLINE_PROPERTY_KEYS) {
-      if (span[key] !== other[key]) return false
+      if (key === 'features') {
+        if (!sameFeatures(span.features ?? [], other.features ?? [])) return false
+      } else if (
+        key !== 'color' &&
+        key !== 'opacity' &&
+        key !== 'outline' &&
+        key !== 'shadow' &&
+        span[key] !== other[key]
+      ) {
+        return false
+      }
     }
-    return span.start === other.start && span.end === other.end
+    return span.start === other.start && span.end === other.end && samePaintProperties(span, other)
   })
+}
+
+function sameUpdateProperty(
+  key: (typeof UPDATE_PROPERTY_KEYS)[number],
+  previous: TextProperties,
+  next: TextProperties,
+): boolean {
+  if (key === 'features') return sameFeatures(previous.features ?? [], next.features ?? [])
+  if (key === 'color' || key === 'opacity' || key === 'outline' || key === 'shadow') {
+    return samePaintProperties(previous, next)
+  }
+  return previous[key] === next[key]
 }
 
 function rasterRequest(raster: AnyRasterInput): RasterRequest<AnyRasterModule> {

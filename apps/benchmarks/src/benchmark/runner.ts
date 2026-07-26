@@ -10,6 +10,8 @@ import type {
 } from './contracts'
 import { median, percentile } from './statistics'
 
+let executionSequence = 0
+
 export interface RunBenchmarkOptions {
   readonly target: BenchmarkTarget
   readonly scenario: BenchmarkScenario
@@ -34,6 +36,8 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
   const missing = missingCapabilities(target, scenario)
   if (missing.length > 0) throw new Error(`Target lacks: ${missing.join(', ')}`)
   if (target.status(input) !== 'ready') throw new Error('Target is not ready for this input')
+  executionSequence += 1
+  const executionId = `run:${String(executionSequence)}`
 
   onEvent?.({ phase: 'loading', completed: 0, total: 1 })
   try {
@@ -71,6 +75,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
     const durations = measurements.map((measurement) => measurement.durationMs)
     const summary: BenchmarkSummary = {
       schemaVersion: 0,
+      executionId,
       targetId: target.id,
       scenarioId: scenario.id,
       status: 'passed',

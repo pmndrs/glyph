@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url'
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url))
 const cwd = fileURLToPath(new URL('..', import.meta.url))
 
-async function runProbe(path: string): Promise<void> {
-  const child = spawn(executable, ['--gpu', path], {
+async function runProbe(path: string, humanSurface = false): Promise<void> {
+  const args = humanSurface ? ['--gpu', path] : ['--gpu', '--path', '/?runner=probe', path]
+  const child = spawn(executable, args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -31,12 +32,14 @@ async function runProbe(path: string): Promise<void> {
   }
 }
 
+await runProbe('./vitexec/harness.probe.ts', true)
+
 for (const probe of [
-  './vitexec/harness.probe.ts',
   './vitexec/tsl-renderer.probe.ts',
   './vitexec/bitmap-text.probe.ts',
   './vitexec/core-text-frame.probe.ts',
   './vitexec/react-font-suspense.probe.ts',
+  './vitexec/react-text-reconciliation.probe.ts',
   './vitexec/cjk-universality.probe.ts',
   './vitexec/worker-queue.probe.ts',
 ]) {

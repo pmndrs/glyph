@@ -28,15 +28,7 @@ test('canonicalizes bitmap strikes and owns its compatibility versions', async (
 })
 
 test('rejects every invalid runtime strike form', () => {
-  for (const strikes of [
-    [],
-    [0],
-    [-1],
-    [1.5],
-    [Number.NaN],
-    [Number.POSITIVE_INFINITY],
-    [1023],
-  ]) {
+  for (const strikes of [[], [0], [-1], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY], [1023]]) {
     assert.throws(() => bitmapDescriptor({ strikes }), /bitmap strikes/)
   }
   assert.throws(() => bitmapDescriptor({ strikes: [16, 16] }), /duplicated/)

@@ -188,7 +188,10 @@ async function validateBitmapSemantics(
       '/extensionsRequired',
     )
   }
-  const extension = requireNonArrayObject(extensions[BITMAP_EXTENSION], `/extensions/${BITMAP_EXTENSION}`)
+  const extension = requireNonArrayObject(
+    extensions[BITMAP_EXTENSION],
+    `/extensions/${BITMAP_EXTENSION}`,
+  )
   const schemaIssues = evaluateExtensionSchema(
     extension,
     withId(
@@ -578,7 +581,10 @@ function claimView(
 function claimCoreViews(value: unknown, claimed: Set<number>, viewCount: number): void {
   const font = requireNonArrayObject(value, '/extensions/PMNDRS_font')
   const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping')
-  const functions = requireNonArrayObject(shaping.fontFunctions, '/extensions/PMNDRS_font/shaping/fontFunctions')
+  const functions = requireNonArrayObject(
+    shaping.fontFunctions,
+    '/extensions/PMNDRS_font/shaping/fontFunctions',
+  )
   for (const [candidate, path] of [
     [shaping.bufferView, '/extensions/PMNDRS_font/shaping/bufferView'],
     [

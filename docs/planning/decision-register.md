@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:20:00Z"
+  at: "2026-07-26T16:29:02Z"
 ---
 
 # Decision register
@@ -126,7 +126,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-075 | Latin remains the V1 rendering and raster-coverage priority. Pre-render CJK shaping/layout conformance may harden universal core assumptions, but CJK raster paging and icon coverage remain a post-V1 milestone and do not expand the Latin-first renderer exit gate. | Accepted |
 | D-076 | Raster page indexes are logical IDs; page payloads may be embedded or independently addressed, and raster modules own preparation, residency, eviction, and backend batching. | Accepted |
 | D-091 | Bitmap plane bounds preserve the rasterizer's integer pixel placement with `planeUnitsPerEm = strike ppem`; the shared TSL vertex graph snaps projected quad edges to physical framebuffer pixels so native rendering maps one atlas texel to one device pixel. | Accepted |
-| D-092 | Hinted grayscale strikes and optional four-phase grayscale packing remain measured research. LCD/ClearType subpixel rendering, panel-order assumptions, runtime hint interpreters, and distance-field reconstruction are out of scope. | Research |
+| D-092 | Hinted grayscale strikes and optional four-phase grayscale packing remain measured research. LCD/ClearType subpixel rendering, panel-order assumptions, runtime hint interpreters, and distance-field reconstruction are out of scope. | Experiment |
+| D-093 | Bitmap V0 renders fill and opacity only and rejects outline or shadow through the raster paint-validation seam; MTSDF owns those distance-based effects rather than silently degrading them. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
@@ -137,12 +138,13 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 | D-060 | Optimizations require reproducible A/B evidence and no quality loss. | Accepted |
 | D-063 | The interactive/headless benchmark harness is the first executable artifact; one shared registry defines every proof and measurement, including the first bitmap frame. | Accepted |
 | D-074 | Every rendering scenario uses current browser HTML/CSS output as its visual reference; HarfRust/HarfBuzz remain structured shaping oracles, and legacy Three Flatland Slug is historical comparison data only. | Accepted |
-| D-079 | The benchmark app uses Vite, React 19, the React Compiler, modern Suspense/resource/action patterns, project-owned custom shadcn-derived components from the Figma design, Oxlint, Oxfmt, Vitest, and committed Vitexec probes. | Settled for harness |
-| D-080 | Rendering is not a prerequisite for the harness shell: the synthetic target proves runner behavior and the portable baker provides the first real non-rendering target; raster panels remain explicitly unsupported until real adapters land. | Settled for harness |
-| D-081 | Figma semantic values are CSS variables consumed through Tailwind utilities and local shadcn-derived primitives; desktop and mobile frames share those tokens and components rather than duplicating literal styles. | Settled for harness |
-| D-082 | React Compiler runs in the Vite build and Oxlint runs compiler analysis, Hooks, accessibility, and `react-you-might-not-need-an-effect` rules as errors. Effects remain external-system synchronization; effect-only events use `useEffectEvent`, never render-time ref reads. | Settled for harness |
-| D-083 | Maintainer-local product probes use Vitexec for the live Vite/GPU-capable desktop lane and Playwright for explicit mobile viewports; both reject browser-console errors and use causal DOM/application signals without sleeps or retries. | Settled for harness |
-| D-084 | The React subpath targets the repository's current React 19 and latest compatible released React Three Fiber, presently 9.6.1. Resolved R3F reconciliation is exercised with test renderer 9.1.0; pending Suspense is exercised in the real browser because that test renderer repeatedly retries an uncached suspended promise. This test-only incompatibility does not add an application workaround or block vanilla Three.js work. | Accepted for Milestone 6 |
+| D-079 | The benchmark app uses Vite, React 19, the React Compiler, modern Suspense/resource/action patterns, project-owned custom shadcn-derived components from the Figma design, Oxlint, Oxfmt, Vitest, and committed Vitexec probes. | Accepted |
+| D-080 | Rendering is not a prerequisite for the harness shell: the synthetic target proves runner behavior and the portable baker provides the first real non-rendering target; raster panels remain explicitly unsupported until real adapters land. | Accepted |
+| D-081 | Figma semantic values are CSS variables consumed through Tailwind utilities and local shadcn-derived primitives; desktop and mobile frames share those tokens and components rather than duplicating literal styles. | Accepted |
+| D-082 | React Compiler runs in the Vite build and Oxlint runs compiler analysis, Hooks, accessibility, and `react-you-might-not-need-an-effect` rules as errors. Effects remain external-system synchronization; effect-only events use `useEffectEvent`, never render-time ref reads. | Accepted |
+| D-083 | Maintainer-local product probes use Vitexec for the live Vite/GPU-capable desktop lane and Playwright for explicit mobile viewports; both reject browser-console errors and use causal DOM/application signals without sleeps or retries. | Accepted |
+| D-094 | The React subpath targets the repository's current React 19 and latest compatible released React Three Fiber, presently 9.6.1. Resolved R3F reconciliation uses a real root backed by `WebGPURenderer` and a pinned paragraph oracle; pending Suspense is exercised in the live browser. Test-only reconcilers do not enter the benchmark product registry. | Accepted |
+| D-095 | The benchmark application has distinct conformance and benchmark modes over shared implementation, workload, fixture, and result contracts. The UI exposes mode, raster technique, WebGPU/WebGL2 backend, and workload as independent shareable axes. Conformance visibly compares reference/candidate/diff and may pay readback/oracle costs; benchmark mode measures consumer-facing cold phases and an oracle-free live render loop with CPU-ms, FPS, and GPU-ms sparklines. Conformance duration is never reported as renderer performance. | Accepted |
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.
 

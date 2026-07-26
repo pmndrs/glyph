@@ -27,6 +27,15 @@ describe('registered benchmark execution', () => {
       'd9384dc5',
       'd9384dc5',
     ])
+
+    const next = await runRegisteredBenchmark({
+      targetId: 'synthetic',
+      scenarioId: 'overview',
+      input: {},
+      controls: { dpr: 1, samples: 1, warmup: 0 },
+      environment,
+    })
+    expect(next.executionId).not.toBe(summary.executionId)
   })
 
   it('rejects unknown registry identities instead of silently changing a run', async () => {

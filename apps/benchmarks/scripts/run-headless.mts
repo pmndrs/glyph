@@ -21,6 +21,7 @@ const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'synthetic', scenarioId: 'overview' },
   { targetId: 'tsl-webgl2-baseline', scenarioId: 'tsl-shader-baseline' },
   { targetId: 'bitmap-text-webgl2', scenarioId: 'bitmap-text-frame' },
+  { targetId: 'react-text-reconciliation', scenarioId: 'react-text-reconciliation' },
   { targetId: 'font-baker', scenarioId: 'cold-load-payload' },
   { targetId: 'font-loader-worker', scenarioId: 'worker-fallback' },
   { targetId: 'harfrust-shaper', scenarioId: 'shaping-conformance' },
@@ -127,7 +128,9 @@ try {
       await withinDeadline(
         `${caseLabel} navigation`,
         navigationTimeoutMs,
-        page.goto(`http://127.0.0.1:${options.port}/`, { waitUntil: 'domcontentloaded' }),
+        page.goto(`http://127.0.0.1:${options.port}/?runner=headless`, {
+          waitUntil: 'domcontentloaded',
+        }),
       )
       reportStage(`${caseLabel}: running benchmark`)
       const summary = await withinDeadline(

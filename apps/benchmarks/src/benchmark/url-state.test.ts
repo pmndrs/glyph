@@ -3,14 +3,36 @@ import { readHarnessLocation, writeHarnessLocation } from './url-state'
 
 describe('harness URL state', () => {
   it('round-trips a reproducible selection', () => {
-    const value = { target: 'font-baker', scenario: 'cold-load-payload', view: 'report' } as const
+    const value = {
+      mode: 'conformance',
+      technique: 'bitmap',
+      backend: 'webgl2',
+      workload: 'bitmap-frame',
+      view: 'report',
+    } as const
     expect(readHarnessLocation(writeHarnessLocation(value))).toEqual(value)
   })
 
-  it('rejects unknown views without losing target and scenario', () => {
-    expect(readHarnessLocation('?target=slug&scenario=overview&view=unknown')).toEqual({
-      target: 'slug',
-      scenario: 'overview',
+  it('rejects unknown axes without losing the human-facing workload', () => {
+    expect(
+      readHarnessLocation(
+        '?mode=unknown&technique=unknown&backend=unknown&workload=text-ladder&view=unknown',
+      ),
+    ).toEqual({
+      mode: 'benchmark',
+      technique: 'bitmap',
+      backend: 'webgpu',
+      workload: 'text-ladder',
+      view: 'scene',
+    })
+  })
+
+  it('maps old bitmap target and scenario links into conformance', () => {
+    expect(readHarnessLocation('?target=bitmap-text-webgl2&scenario=bitmap-text-frame')).toEqual({
+      mode: 'conformance',
+      technique: 'bitmap',
+      backend: 'webgl2',
+      workload: 'bitmap-frame',
       view: 'scene',
     })
   })

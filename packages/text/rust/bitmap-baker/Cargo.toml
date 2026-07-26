@@ -17,7 +17,15 @@ required-features = ["std"]
 
 [features]
 default = ["std"]
-std = ["dep:ktx2", "ktx2/std", "read-fonts/std", "serde/std", "serde_json/std", "skrifa/std", "zeno/std"]
+std = [
+  "dep:ktx2",
+  "ktx2/std",
+  "read-fonts/std",
+  "serde/std",
+  "serde_json/std",
+  "skrifa/std",
+  "zeno/std",
+]
 
 [dependencies]
 core_maths = "0.1.1"
