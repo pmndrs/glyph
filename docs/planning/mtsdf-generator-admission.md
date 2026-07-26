@@ -21,7 +21,7 @@ sources:
     title: oxitext-sdf 0.2.0 documentation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:54:09Z"
+  at: "2026-07-26T22:02:41Z"
 ---
 
 # MTSDF generator admission
@@ -40,6 +40,8 @@ Milestone 8 needs deterministic linear RGBA8 MTSDF bytes from maintained font ou
 | Chlumsky `msdfgen` | Canonical MTSDF behavior, error correction, test rendering, and mature outline corpus | C++/native toolchain and platform matrix | Pinned test-only quality oracle |
 
 The audited crates.io archive for `klyff_msdf` 0.1.3 has SHA-256 `ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235`. The audit used the exact published archive, not a moving repository branch.
+
+The non-shipping admission harness pins that archive with default features disabled. Its locked graph contains neither Skrifa, `ttf-parser`, nor WGPU, and optimized `wasm32-unknown-unknown` imports no host or WASI function. A deterministic 40×40 synthetic MTSDF fixture has FNV-1a identity `4b585e49`. At Rust 1.97.1 and Binaryen 129, the candidate core measures 81,308 raw bytes, 72,510 optimized bytes (70.8 KiB), 32,163 gzip bytes (31.4 KiB), and 27,875 Brotli bytes (27.2 KiB). This proves that generator code size is viable; it does not waive the published crate's use of `std`, panic paths, or quality gates.
 
 ## Required upstreamable patch
 
@@ -64,5 +66,7 @@ Correctness precedes timing:
 - malformed outline/font unit tests and a nightly cargo-fuzz target over the package boundary;
 - exact native/Node/Worker artifact equality through the same C ABI and JSON contract strategy as the existing bakers;
 - `wasm32-unknown-unknown` raw/minified/gzip/Brotli size and cold/warm timing with the font parser, MTSDF generator, atlas packer, KTX2 writer, and GLB writer reported separately where possible.
+
+The package-owned `measure:mtsdf-admission` script rebuilds and optimizes the Wasm, executes the synthetic export, rejects WGPU and duplicate-font-parser lock entries, rejects host imports, and compares every byte count/hash with the checked-in evidence. The intentionally green panic-detection test is a blocker sensor: it must be inverted or removed when the upstreamable fallible API lands; it is not evidence that trapping is acceptable.
 
 The admission record is an experiment, not a recommendation. Milestone 8 can recommend MSDF only after the generator, payload, runtime shader, visual corpus, transforms, effects, and performance gates all close.

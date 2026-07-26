@@ -571,10 +571,12 @@ Exit only when MSDF is credible as the general-purpose recommendation across the
 
 - [x] Audit current Rust candidates against the accepted MTSDF, maintained-font-library, Wasm, licensing, panic-resistance, and package-size constraints.
 - [ ] Remove panic/assert paths and unconditional diagnostic allocation from the selected generator through an upstreamable patch rather than a product-side catch or trap policy.
-- [ ] Compile the CPU generator for `wasm32-unknown-unknown` without WGPU/native bindings, duplicate font parsers, or an unreviewed `std`/allocator expansion.
+- [x] Pin the exact candidate with default features disabled and compile its CPU generator for `wasm32-unknown-unknown` without WGPU/native bindings, duplicate font parsers, or host imports.
+- [ ] Remove or explicitly justify the candidate's remaining `std` dependency and allocator behavior before it enters a shipping baker.
 - [ ] Compare deterministic RGBA8 output and reconstructed glyph error against pinned native `msdfgen` over ordinary, acute-corner, overlap, cubic, quadratic, empty, malformed, and complex-outline fixtures.
 - [ ] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence before accepting the dependency.
-- [ ] Record raw/minified/gzip/Brotli generator Wasm size plus cold/warm generation cost before item 8.2 begins.
+- [x] Record raw/optimized/gzip/Brotli candidate-core Wasm size through a reproducible freshness-checked package script.
+- [ ] Record cold/warm full-font generation cost after the hardened generator and Fontations provider are integrated.
 
 The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. `klyff_msdf` 0.1.3 is the leading patch candidate; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages.
 

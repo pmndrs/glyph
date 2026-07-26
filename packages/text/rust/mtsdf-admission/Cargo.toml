@@ -1,0 +1,21 @@
+[package]
+name = "pmndrs-text-mtsdf-admission"
+description = "Non-shipping MTSDF generator admission harness for pmndrs/text"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/text"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+klyff_msdf = { version = "=0.1.3", default-features = false }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
