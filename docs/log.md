@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Fuzzing** — Seeded raw shaper request mutations with real Inter data from the baker and validator, proving both base requests and surviving mutations enter HarfRust instead of every case stopping at a missing-font status.
 - **Correction** — Kept the Cargo-derived bitmap generator label a compile-time concatenation, preserving the exact optimized Wasm hash and canonical bitmap golden without runtime formatting code.
 - **Performance** — Decode both baker responses in-place while their Wasm allocations are live, copying only artifact ranges that survive release. This removes one full-result copy from the portable and bitmap paths while preserving owned public bytes and unconditional cleanup.
 - **Size enforcement** — Added a non-writing package-size freshness gate to the ordinary benchmark test lane and narrowly raised the portable bridge ceiling after central version authority added 74 minified bytes.

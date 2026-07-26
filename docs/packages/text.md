@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:f63b5089201dd3aa1f14ddaedf73cb5665d18d74200b003144a6e7f43d3097a1"
+source_digest: "sha256:6fd8271f2ba7c73e4f0673e39a58af23024169ea6c8122188adb5edc172f4801"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:43:45Z"
+  at: "2026-07-26T03:51:40Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -94,7 +94,7 @@ Milestone 3 closes with browser-executed parity and cancellation. The benchmark 
 
 Milestone 4 closes the package-owned HarfRust runtime. The Rust 1.97.1 module uses HarfRust 0.12.0 and matching `read-fonts` 0.41.0 under `no_std + alloc`, exports a Rust-generated JSON-described C ABI, and keeps its allocator private. Its request registry owns zero-initialized, caller-sized buffers capped at 64 MiB and accepts only exact live pointer/length pairs, eliminating reconstructed raw ownership. The TypeScript bridge releases earlier allocations if a later registration copy fails. Canonical Inter contributes 147,192 SFNT bytes, 23,496 dense-extents bytes, and 368 availability bytes, or exactly 171,056 retained bytes. Registration is registry-scoped and idempotent; font/shaper disposal releases owned data and plans.
 
-One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, language, and range records through offsets from the generated ABI. It returns aligned borrowed SoA views with absolute UTF-16 clusters, glyph IDs, four positions, and mapped flags. Result layout and arena publication reserve fallibly before writing, so allocation exhaustion returns `RESULT_TOO_LARGE` rather than trapping after shaping. Every pinned Inter case passes bit-for-bit through the complete source → baker GLB → validator → registry extraction → Wasm chain for both calls; multi-run batching, plan reuse/disposal, surrogate boundaries, extents conversion, malformed records, forged release metadata, and deterministic raw-ABI mutation fuzzing are executable. The browser product batches all eight cases into one 97-glyph call with exact output hash `dc30c21c`. The hardened optimized module is 693,034 bytes raw, 258,008 bytes gzip, and 202,525 bytes Brotli; its JavaScript bridge is 30,669 bytes minified, 8,805 bytes gzip, and 7,833 bytes Brotli.
+One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, language, and range records through offsets from the generated ABI. It returns aligned borrowed SoA views with absolute UTF-16 clusters, glyph IDs, four positions, and mapped flags. Result layout and arena publication reserve fallibly before writing, so allocation exhaustion returns `RESULT_TOO_LARGE` rather than trapping after shaping. Every pinned Inter case passes bit-for-bit through the complete source → baker GLB → validator → registry extraction → Wasm chain for both calls; multi-run batching, plan reuse/disposal, surrogate boundaries, extents conversion, malformed records, and forged release metadata are executable. The fixed-seed raw-ABI mutation lane registers real validated Inter views first, so seed and surviving mutated requests reach HarfRust while malformed variants remain deterministic. The browser product batches all eight cases into one 97-glyph call with exact output hash `dc30c21c`. The hardened optimized module is 693,034 bytes raw, 258,008 bytes gzip, and 202,525 bytes Brotli; its JavaScript bridge is 30,669 bytes minified, 8,805 bytes gzip, and 7,833 bytes Brotli.
 
 Roadmap item 5.1 adds synchronous paragraph preparation and measurement. Unicode 17 Script/Script_Extensions tables are generated deterministically from the pinned UCD package; `unicode-segmenter` supplies extended grapheme boundaries and `@cto.af/linebreak` supplies line-break opportunities. The ordinary suite executes all 766 official grapheme vectors and all 19,338 official line-break vectors from hash-pinned gzip fixtures. Prepared text is split only at grapheme-safe style/script boundaries, shaped once through the existing GLB-retained HarfRust path, copied immediately out of its borrowed result arena, and measured into legal break clusters with explicit baselines. Equivalent width constraints reuse frozen measurement objects and width-only reflow performs zero Wasm calls.
 

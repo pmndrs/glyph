@@ -2,20 +2,33 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { createFontBaker } from "../../../font-baker/dist/index.js";
+import { validateFontArtifact } from "../../../font-baker/dist/validator.js";
+
 const wasmUrl = new URL("../../dist/text_shaper.wasm", import.meta.url);
 const abiUrl = new URL("../../dist/text-shaper-abi-v0.json", import.meta.url);
 
 test("fixed-seed shaper request mutations fail safely and deterministically", async () => {
-  const [wasm, abi] = await Promise.all([
+  const [wasm, abi, source, bakerWasm] = await Promise.all([
     readFile(wasmUrl),
     readFile(abiUrl, "utf8").then(JSON.parse),
+    readFile(new URL("../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf", import.meta.url)),
+    readFile(new URL("../../../font-baker/dist/font_baker.wasm", import.meta.url)),
   ]);
+  const artifact = (await createFontBaker(bakerWasm)).bake({
+    source,
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  }).artifacts[0].bytes;
+  const font = await validateFontArtifact(artifact);
   const module = await WebAssembly.compile(wasm);
   const corpus = mutationCorpus();
-  const first = await execute(module, abi, corpus);
-  const second = await execute(module, abi, corpus);
+  const first = await execute(module, abi, corpus, font);
+  const second = await execute(module, abi, corpus, font);
   assert.deepEqual(first, second);
-  assert.ok(first.every((status) => status === 5 || status === 6));
+  assert.deepEqual(first.slice(0, 2), [0, 0], "both seed requests must reach shaping");
+  assert.ok(first.every((status) => Number.isSafeInteger(status) && status >= 0 && status <= 7));
+  assert.ok(first.slice(2).some((status) => status === 0), "mutations must reach valid shaping paths");
+  assert.ok(first.slice(2).some((status) => status !== 0), "mutations must retain malformed paths");
 });
 
 test("raw shaper allocations reject forged releases and recover after invalid requests", async () => {
@@ -47,13 +60,32 @@ test("raw shaper allocations reject forged releases and recover after invalid re
   deallocate(recovered, bytes.byteLength);
 });
 
-async function execute(module, abi, corpus) {
+async function execute(module, abi, corpus, font) {
   const instance = await WebAssembly.instantiate(module, {});
   const memory = instance.exports.memory;
   const allocate = instance.exports[abi.functions.allocate];
   const deallocate = instance.exports[abi.functions.deallocate];
+  const registerFont = instance.exports[abi.functions.registerFont];
+  const disposeFont = instance.exports[abi.functions.disposeFont];
   const shapeBatch = instance.exports[abi.functions.shapeBatch];
   const reshapeRanges = instance.exports[abi.functions.reshapeRanges];
+  const fontInputs = [font.shapingSfnt, font.glyphExtents, font.glyphExtentsAvailability];
+  const fontPointers = fontInputs.map((bytes) => copyBytes(memory, allocate, bytes));
+  assert.equal(
+    registerFont(
+      1,
+      fontPointers[0],
+      fontInputs[0].byteLength,
+      fontPointers[1],
+      fontInputs[1].byteLength,
+      fontPointers[2],
+      fontInputs[2].byteLength,
+    ),
+    0,
+  );
+  for (let index = 0; index < fontInputs.length; index += 1) {
+    deallocate(fontPointers[index], fontInputs[index].byteLength);
+  }
   const statuses = [];
   for (const { bytes, reshape } of corpus) {
     const pointer = allocate(bytes.length);
@@ -64,7 +96,15 @@ async function execute(module, abi, corpus) {
   const outOfBounds = memory.buffer.byteLength - 2;
   statuses.push(shapeBatch(outOfBounds, 8));
   statuses.push(reshapeRanges(outOfBounds, 8));
+  assert.equal(disposeFont(1), 0);
   return statuses;
+}
+
+function copyBytes(memory, allocate, bytes) {
+  const pointer = allocate(bytes.byteLength);
+  assert.notEqual(pointer, 0);
+  new Uint8Array(memory.buffer, pointer, bytes.byteLength).set(bytes);
+  return pointer;
 }
 
 function mutationCorpus() {
