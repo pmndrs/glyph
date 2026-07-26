@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T16:29:02Z"
+  at: "2026-07-26T18:38:31Z"
 ---
 
 # Canonical implementation roadmap
@@ -484,7 +484,7 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 
 - [x] The default route opens a live benchmark rather than an internal runner overview or conformance case.
 - [x] Human-facing controls use mode, technique, backend, and workload; target/scenario terminology is absent from the primary UI.
-- [ ] Benchmark mode continuously renders paragraph-scale benchmark ipsum and separates startup/loading costs, retained sizes, CPU-frame time, FPS, and GPU time when supported.
+- [x] Benchmark mode continuously renders paragraph-scale benchmark ipsum and separates startup/loading costs, retained sizes, CPU-frame time, FPS, and GPU time when supported.
 - [x] Conformance mode is finite and visibly presents candidate, reference, difference, correctness statistics, and end-to-end test duration without calling that duration render performance.
 - [x] Bitmap frame is classified as conformance; text ladder, off-axis/3D, dynamic layout, and paragraph stress are classified as live visual benchmarks.
 - [x] WebGPU/WebGL2 and 1×/2× DPR remain explicit, shareable, and independently testable.
@@ -492,6 +492,7 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 - [x] Live telemetry uses fixed-capacity preallocated histories, presents CPU/FPS/GPU graphs without inventing unavailable GPU data, and snapshots histories only on explicit capture.
 - [x] Benchmark controls expose rendered device size and proportional paragraph width; viewport changes exercise retained paragraph reflow rather than stretching geometry.
 - [x] Deterministic unit, headless, and maintainer-local live probes cover the corrected product surface without sleeps or retries.
+- [x] The maintainer-local live probe produces real timestamp-query samples and cleanly replaces the renderer across WebGPU → forced WebGL2 → WebGPU.
 
 Deliver:
 

@@ -92,6 +92,8 @@ export interface BitmapTextLiveStats {
   readonly textReadyMs: number
   readonly firstDrawMs: number
   readonly startupMs: number
+  readonly gpuTimingSupported: boolean
+  readonly gpuFrameMs: number | undefined
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -472,6 +474,7 @@ export async function createBitmapTextPreview(
     canvas,
     dpr,
     height: viewportHeight,
+    trackGpuTimestamps: true,
     width,
   })
   const rendererInitMs = performance.now() - rendererStarted
@@ -510,10 +513,18 @@ export async function createBitmapTextPreview(
     let submitHistoryNextIndex = 0
     let fpsHistoryLength = 0
     let fpsHistoryNextIndex = 0
+    let gpuHistoryLength = 0
+    let gpuHistoryNextIndex = 0
+    let gpuFrameMs: number | undefined
+    let gpuTimestampRequest: number | undefined
+    let gpuTimestampResolution: Promise<void> | undefined
+    const gpuTimingSupported = renderer.hasFeature('timestamp-query')
     let frameCount = 0
     let reportedAt = performance.now()
     let reportedFrame = 0
+    let closing = false
     let disposed = false
+    let disposal: Promise<void> | undefined
     let layoutRevision = 0
     let firstDrawMs = 0
     const positionLine = (): void => {
@@ -535,12 +546,44 @@ export async function createBitmapTextPreview(
       })
       void activeLine.object.ready
         .then(() => {
-          if (!disposed && revision === layoutRevision) positionLine()
+          if (!closing && !disposed && revision === layoutRevision) positionLine()
         })
         .catch((error: unknown) => {
-          if (disposed || revision !== layoutRevision) return
+          if (closing || disposed || revision !== layoutRevision) return
           onError(error)
         })
+    }
+    const scheduleGpuTimestamp = (): void => {
+      if (
+        !gpuTimingSupported ||
+        gpuTimestampRequest !== undefined ||
+        gpuTimestampResolution !== undefined ||
+        closing ||
+        disposed
+      ) {
+        return
+      }
+      gpuTimestampRequest = requestAnimationFrame(() => {
+        gpuTimestampRequest = undefined
+        if (disposed) return
+        gpuTimestampResolution = renderer
+          .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
+          .then((duration) => {
+            if (disposed || duration === undefined || !Number.isFinite(duration) || duration < 0) {
+              return
+            }
+            gpuFrameMs = duration
+            gpuHistory[gpuHistoryNextIndex] = duration
+            gpuHistoryNextIndex = (gpuHistoryNextIndex + 1) % HISTORY_CAPACITY
+            gpuHistoryLength = Math.min(gpuHistoryLength + 1, HISTORY_CAPACITY)
+          })
+          .catch((error: unknown) => {
+            if (!closing && !disposed) onError(error)
+          })
+          .finally(() => {
+            gpuTimestampResolution = undefined
+          })
+      })
     }
     const renderPreviewFrame = (timestamp: number): void => {
       if (disposed) return
@@ -549,6 +592,7 @@ export async function createBitmapTextPreview(
         renderer.setRenderTarget(null)
         renderer.clear()
         renderer.render(scene, camera)
+        if (closing) return
         const submitMs = performance.now() - started
         if (frameCount === 0) firstDrawMs = submitMs
         submitHistory[submitHistoryNextIndex] = submitMs
@@ -569,6 +613,7 @@ export async function createBitmapTextPreview(
         fpsHistory[fpsHistoryNextIndex] = framesPerSecond
         fpsHistoryNextIndex = (fpsHistoryNextIndex + 1) % HISTORY_CAPACITY
         fpsHistoryLength = Math.min(fpsHistoryLength + 1, HISTORY_CAPACITY)
+        scheduleGpuTimestamp()
         const layout = activeLine.object.layout
         if (layout === undefined) throw new Error('live bitmap Text lost its committed layout')
         onStats({
@@ -597,6 +642,8 @@ export async function createBitmapTextPreview(
           textReadyMs,
           firstDrawMs,
           startupMs,
+          gpuTimingSupported,
+          gpuFrameMs,
           submitHistory,
           submitHistoryLength,
           submitHistoryNextIndex,
@@ -604,8 +651,8 @@ export async function createBitmapTextPreview(
           fpsHistoryLength,
           fpsHistoryNextIndex,
           gpuHistory,
-          gpuHistoryLength: 0,
-          gpuHistoryNextIndex: 0,
+          gpuHistoryLength,
+          gpuHistoryNextIndex,
         })
         reportedAt = timestamp
         reportedFrame = frameCount
@@ -616,7 +663,7 @@ export async function createBitmapTextPreview(
     await renderer.setAnimationLoop(renderPreviewFrame)
     return {
       resize(nextWidth, nextHeight) {
-        if (disposed) return
+        if (closing || disposed) return
         width = positiveViewportSize(nextWidth, 'bitmap preview width')
         viewportHeight = positiveViewportSize(nextHeight, 'bitmap preview height')
         renderer.setSize(width, viewportHeight, false)
@@ -626,7 +673,7 @@ export async function createBitmapTextPreview(
         reflowToViewport()
       },
       update(next) {
-        if (disposed) return
+        if (closing || disposed) return
         currentFontSize = positiveViewportSize(next.fontSize, 'bitmap preview font size')
         if (
           !Number.isFinite(next.layoutWidthRatio) ||
@@ -638,13 +685,19 @@ export async function createBitmapTextPreview(
         layoutWidthRatio = next.layoutWidthRatio
         reflowToViewport()
       },
-      async dispose() {
-        if (disposed) return
-        disposed = true
-        await renderer.setAnimationLoop(null)
-        disposeBitmapLine(activeLine)
-        activeFont.dispose()
-        await renderer.dispose()
+      dispose() {
+        if (disposal !== undefined) return disposal
+        closing = true
+        if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
+        disposal = (async () => {
+          await gpuTimestampResolution
+          disposed = true
+          await renderer.setAnimationLoop(null)
+          disposeBitmapLine(activeLine)
+          activeFont.dispose()
+          await renderer.dispose()
+        })()
+        return disposal
       },
     }
   } catch (error) {
