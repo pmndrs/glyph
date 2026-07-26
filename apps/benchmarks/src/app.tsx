@@ -44,6 +44,7 @@ function Harness() {
   const [summary, setSummary] = useState<BenchmarkSummary>()
   const [event, setEvent] = useState<RunnerEvent>()
   const [error, setError] = useState<string>()
+  const [dpr, setDpr] = useState<1 | 2>(defaultDeviceDpr)
   const [samples, setSamples] = useState(defaultControls.samples)
   const [warmup, setWarmup] = useState(defaultControls.warmup)
   const [showGrid, setShowGrid] = useState(true)
@@ -70,7 +71,7 @@ function Harness() {
           targetId: target.id,
           scenarioId: scenario.id,
           input,
-          controls: { samples, warmup },
+          controls: { dpr, samples, warmup },
           environment,
           onEvent: setEvent,
         })
@@ -79,6 +80,11 @@ function Harness() {
         setError(caught instanceof Error ? caught.message : String(caught))
       }
     })
+  }
+
+  function selectDpr(nextDpr: 1 | 2): void {
+    setDpr(nextDpr)
+    setSummary(undefined)
   }
 
   async function loadFont(file: File | undefined): Promise<void> {
@@ -113,11 +119,13 @@ function Harness() {
         <ScenarioRail fontName={fontName} location={location} onLocation={setLocation} />
         <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
           <Scene
+            dpr={dpr}
             error={error}
             event={event}
             grid={showGrid}
             location={location}
             summary={summary}
+            onDpr={selectDpr}
             onLocation={setLocation}
           />
         </main>
@@ -127,11 +135,13 @@ function Harness() {
         <main className="min-h-[calc(100vh-110px)] p-3">
           {location.view === 'scene' && (
             <Scene
+              dpr={dpr}
               error={error}
               event={event}
               grid={showGrid}
               location={location}
               summary={summary}
+              onDpr={selectDpr}
               onLocation={setLocation}
             />
           )}
@@ -159,6 +169,10 @@ function Harness() {
 
 function locationSearch(): string {
   return typeof globalThis.location === 'undefined' ? '' : globalThis.location.search
+}
+
+function defaultDeviceDpr(): 1 | 2 {
+  return (globalThis.devicePixelRatio ?? 1) >= 1.5 ? 2 : 1
 }
 
 function TopBar({
@@ -286,18 +300,22 @@ function RailButton({
 }
 
 function Scene({
+  dpr,
   error,
   event,
   grid,
   location,
   summary,
+  onDpr,
   onLocation,
 }: {
+  readonly dpr: 1 | 2
   readonly error: string | undefined
   readonly event: RunnerEvent | undefined
   readonly grid: boolean
   readonly location: HarnessLocation
   readonly summary: BenchmarkSummary | undefined
+  readonly onDpr: (dpr: 1 | 2) => void
   readonly onLocation: (value: Partial<HarnessLocation>) => void
 }) {
   const target = targetById(location.target)
@@ -315,8 +333,20 @@ function Scene({
           <p className="mt-1 max-w-2xl text-xs text-muted">{scenario.description}</p>
         </div>
         <div className="hidden gap-1 sm:flex">
-          <Button>1×</Button>
-          <Button>2×</Button>
+          <Button
+            aria-pressed={dpr === 1}
+            variant={dpr === 1 ? 'primary' : 'secondary'}
+            onClick={() => onDpr(1)}
+          >
+            1×
+          </Button>
+          <Button
+            aria-pressed={dpr === 2}
+            variant={dpr === 2 ? 'primary' : 'secondary'}
+            onClick={() => onDpr(2)}
+          >
+            2×
+          </Button>
           <Button>{grid ? 'Grid on' : 'Grid off'}</Button>
         </div>
       </header>

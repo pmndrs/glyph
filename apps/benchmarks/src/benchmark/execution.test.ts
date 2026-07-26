@@ -14,7 +14,7 @@ describe('registered benchmark execution', () => {
       targetId: 'synthetic',
       scenarioId: 'overview',
       input: {},
-      controls: { samples: 3, warmup: 1 },
+      controls: { dpr: 1, samples: 3, warmup: 1 },
       environment,
     })
 
@@ -35,7 +35,7 @@ describe('registered benchmark execution', () => {
         targetId: 'missing',
         scenarioId: 'overview',
         input: {},
-        controls: { samples: 1, warmup: 0 },
+        controls: { dpr: 1, samples: 1, warmup: 0 },
         environment,
       }),
     ).rejects.toThrow('Unknown benchmark target: missing')

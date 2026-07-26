@@ -862,13 +862,45 @@ function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'raster']),
     status: () => 'ready',
-    load: async () => {
+    load: async (controls) => {
       loaded ??= (await import('../renderer/tsl-baseline')).createTslBaselineTarget(backend)
-      await loaded.load()
+      await loaded.load(controls)
     },
-    run: async (input, sampleIndex) => {
+    run: async (input, sampleIndex, controls) => {
       if (loaded === undefined) throw new Error('TSL baseline target was not loaded')
-      return loaded.run(input, sampleIndex)
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
+function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  return {
+    id: `bitmap-text-${backend}`,
+    label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL2 fallback',
+    detail: 'Inter GLB · HarfRust layout · R8 KTX2 · instanced TSL',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (await import('../renderer/bitmap-text')).createBitmapTextTarget(backend)
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('bitmap text target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
     },
     dispose: async () => {
       const target = loaded
@@ -889,7 +921,8 @@ export const targets: readonly BenchmarkTarget[] = [
   paragraphLayoutTarget,
   paragraphPolicyTarget,
   cjkUniversalityTarget,
-  unavailableTarget('bitmap', 'Bitmap atlas', 'capability not landed', 'amber'),
+  bitmapTextTarget('webgl2'),
+  bitmapTextTarget('webgpu'),
   unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),
 ]

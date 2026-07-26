@@ -5,6 +5,7 @@
   "status": "passed",
   "validation": "3/3 exact corpus outputs · 1 Wasm call/sample",
   "controls": {
+    "dpr": 1,
     "samples": 3,
     "warmup": 1
   },

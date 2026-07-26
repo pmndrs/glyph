@@ -602,6 +602,16 @@ class RegisteredFontImpl implements RegisteredFont {
     return this.#rasters.get(rasterKey);
   }
 
+  async loadRaster<const Kind extends string>(
+    selection: RasterSelection<Kind> & { readonly kind: Kind },
+    options?: RasterLoadOptions,
+  ): Promise<RegisteredRaster<Kind>>;
+
+  async loadRaster(
+    selection: RasterSelection,
+    options?: RasterLoadOptions,
+  ): Promise<RegisteredRaster>;
+
   async loadRaster(
     selection: RasterSelection,
     options: RasterLoadOptions = {},

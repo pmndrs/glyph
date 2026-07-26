@@ -103,7 +103,7 @@ describe('canonical Inter fixtures', () => {
       targetId: 'harfrust-shaper',
       scenarioId: 'shaping-conformance',
       status: 'passed',
-      controls: { samples: 3, warmup: 1 },
+      controls: { dpr: 1, samples: 3, warmup: 1 },
     })
     expect(result.measurements).toHaveLength(3)
     expect(new Set(result.measurements.map(({ hash }: { hash: string }) => hash))).toEqual(

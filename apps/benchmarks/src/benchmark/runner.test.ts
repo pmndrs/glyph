@@ -36,7 +36,7 @@ describe('shared benchmark runner', () => {
       },
       scenario,
       input: {},
-      controls: { warmup: 1, samples: 3 },
+      controls: { dpr: 2, warmup: 1, samples: 3 },
       environment: {
         browser: 'vitest',
         hardwareConcurrency: 1,
@@ -48,7 +48,7 @@ describe('shared benchmark runner', () => {
 
     expect(result.status).toBe('passed')
     expect(result.schemaVersion).toBe(0)
-    expect(result.controls).toEqual({ warmup: 1, samples: 3 })
+    expect(result.controls).toEqual({ dpr: 2, warmup: 1, samples: 3 })
     expect(result.measurements).toHaveLength(3)
     expect(result.measurements.every(({ metrics }) => metrics?.boundaryCrossings === 1)).toBe(true)
     expect(result.validation).toBe('3 accepted')
@@ -62,7 +62,7 @@ describe('shared benchmark runner', () => {
         target,
         scenario,
         input: {},
-        controls: { warmup: 0, samples: 0 },
+        controls: { dpr: 1, warmup: 0, samples: 0 },
         environment: {
           browser: 'vitest',
           hardwareConcurrency: 1,
@@ -71,6 +71,23 @@ describe('shared benchmark runner', () => {
         },
       }),
     ).rejects.toThrow('samples must be a positive safe integer')
+  })
+
+  it('rejects an invalid DPR before loading a target', async () => {
+    await expect(
+      runBenchmark({
+        target,
+        scenario,
+        input: {},
+        controls: { dpr: 0, warmup: 0, samples: 1 },
+        environment: {
+          browser: 'vitest',
+          hardwareConcurrency: 1,
+          webgpu: false,
+          crossOriginIsolated: false,
+        },
+      }),
+    ).rejects.toThrow('DPR must be finite')
   })
 
   it('lists capabilities instead of coercing unsupported targets', () => {
@@ -99,7 +116,7 @@ describe('shared benchmark runner', () => {
         target: failingTarget,
         scenario,
         input: {},
-        controls: { warmup: 0, samples: 1 },
+        controls: { dpr: 1, warmup: 0, samples: 1 },
         environment: {
           browser: 'vitest',
           hardwareConcurrency: 1,

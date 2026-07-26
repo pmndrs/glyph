@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:b3e56627d4dbd87aba7ee559682ca0dd85c1551e5c6da6175bd40a20f09f77e5"
+source_digest: "sha256:5820130c6f38f9c5392ddb0185b7ff349e219731098a6496479ad6ca747b8a7a"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,12 +61,12 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T09:40:43Z"
+  at: "2026-07-26T11:15:30Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: ✅ Milestone 5 complete and Milestone 6.0 renderer baseline complete; bitmap rendering active
+Status: ✅ Milestone 5 and bitmap runtime item 6.1 complete; framework-neutral Text object active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing types resolve through the repository's current `three/webgpu` subpath rather than the legacy root export, matching the renderer boundary used by first-party raster work. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
@@ -114,7 +114,9 @@ Roadmap item 5.4 completes this same bake → retained-SFNT → HarfRust → par
 
 Four public-pipeline paragraphs produce twelve exact natural/wide/narrow contracts with grapheme- and UTF-16-safe runs, clusters, and lines, one broad shape per paragraph, and zero reshapes for the fixed corpus. Fixed-seed CJK mutations cover malformed surrogates, variation selectors, language tags, and constraints twice. Node, Chromium 149, and GPU-enabled Vitexec report one composite hash, 10,622 output bytes, 1,539,372 retained bytes, and 4,587,520 Wasm-memory bytes. The item adds no raster paging, rendering, fallback, or vertical layout.
 
-With item 6.0 closed on the current Three.js and TypeScript pins, the public runtime bitmap upload/module in milestone 6.1 is the active gate; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+Roadmap item 6.1 completes the optional bitmap runtime module. It validates reciprocal font/raster identity, exact dense 20-byte records, absent-glyph sentinels, square strikes, embedded lossless linear R8 KTX2 dimensions and format, and page references before publishing a resource. Decode is transactional across pages and strikes, so any later failure disposes every `DataTexture` already created. Runtime selection chooses the nearest strike, uploads each page once, preserves glyph order through contiguous page runs, and emits instanced position, size, UV, and linear-color attributes. One typed TSL material compiles through the same `WebGPURenderer` to WGSL and forced-fallback GLSL; direct public `add`/`mul` calls avoid the measured TypeScript declaration-expansion path without casts or a dependency patch. External page residency remains explicitly deferred to Milestone 12.
+
+The canonical composed Inter fixture proves GLB → registry → HarfRust → paragraph layout → bitmap decode → GPU upload → instanced draw in the benchmark product. Ten visible glyphs render in one draw from 695,296 atlas bytes on both backends. Exact half-coverage ink count and bounds agree after the shared readback boundary normalizes WebGPU top-left aligned rows and WebGL bottom-left compact rows at explicit 1× and 2× DPR. Item 6.2 now owns the framework-neutral `Text` lifecycle; the [roadmap](../roadmap/roadmap.md) remains the only completion ledger.
 
 ## Package scripts
 

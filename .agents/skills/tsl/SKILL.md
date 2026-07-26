@@ -59,7 +59,7 @@ Keep these invariants visible in local code:
 
 - Build typed node graphs with `three/tsl`; use `three/webgpu` for WebGPU renderer and classes.
 - Invoke an `Fn` when a node value is required: `Fn(() => expression)()`.
-- Use node operations such as `.add()`, `.mul()`, and `.greaterThan()` rather than JavaScript operators.
+- Use TSL operations rather than JavaScript operators. On the repository's pinned Three.js/TypeScript pair, prefer typed free functions such as `add(left, right)` and `mul(left, right)` for arithmetic; the equivalent method-chain augmentation can expand pathologically under TypeScript 7.
 - Call `.toVar()` before mutation, then use `.assign()` or compound assignment methods.
 - Update runtime uniforms through `.value`; changing graph structure requires rebuilding the graph.
 - Use `If`, `Loop`, and other TSL control nodes for runtime GPU control flow.

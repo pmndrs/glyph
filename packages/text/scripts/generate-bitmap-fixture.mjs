@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
 import { createFontBaker } from '@pmndrs/text-font-baker'
 import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url'
@@ -15,6 +15,10 @@ const sourceUrl = new URL(
 )
 const wasmUrl = new URL('../dist/bitmap_baker.wasm', import.meta.url)
 const outputUrl = new URL('../tests/fixtures/inter-bitmap-v0.json', import.meta.url)
+const renderingFixtureUrl = new URL(
+  '../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb',
+  import.meta.url,
+)
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09'
 const glyphCount = 2937
 const options = { strikes: [16] }
@@ -113,7 +117,13 @@ const fixture = {
   },
 }
 
-await writeFile(outputUrl, `${JSON.stringify(fixture, null, 2)}\n`)
+await mkdir(new URL('../../../apps/benchmarks/fixtures/rendering/', import.meta.url), {
+  recursive: true,
+})
+await Promise.all([
+  writeFile(outputUrl, `${JSON.stringify(fixture, null, 2)}\n`),
+  writeFile(renderingFixtureUrl, combinedEmbedded.artifacts[0].bytes),
+])
 
 function summarizeResult(result, validation) {
   return {

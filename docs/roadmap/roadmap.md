@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T06:45:24Z"
+  at: "2026-07-26T11:15:30Z"
 ---
 
 # Canonical implementation roadmap
@@ -102,11 +102,11 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 5.3 | ✅ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
 | 5.4 | ✅ | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
 | 6.0 | ✅ | Establish the current-repository TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure. | S | 3.3, 5.4 |
-| 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 6.0 |
+| 6.1 | ✅ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 6.0 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
 | 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
-| 7.2 | ⬜ | Record end-to-end conformance/performance baselines. | M | 7.1 |
+| 7.2 | ⬜ | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines. | M | 7.1 |
 | 8.x | ⬜ | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
 | 9.x | ⬜ | Split Slug conversion, packing, shaders, quality, and perf work. | XL | 7.2 |
 | 10.1 | ⬜ | Prove raster-module switching through core and React without reflow. | M | 8.x, 9.x |
@@ -455,7 +455,9 @@ Item 5.4 and Milestone 5 are closed. Milestone 6 is next.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 
-Item 6.0 is closed on the repository's current Three.js 0.185.1, `@types/three` 0.185.1, and TypeScript 7.0.2 pins. Naming an installed overloaded TSL operator with its exact local scalar signature reduces the compiler fixture from more than 60 seconds to 0.9 seconds without a cast, dependency downgrade, or disabled checking. One TSL graph then runs through `WebGPURenderer` on an asserted WebGPU backend and its forced WebGL2 fallback; each returns the same exact 4×4 RGBA8 hash `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77` across three measured runs after one warmup. The readback boundary explicitly compacts WebGPU's 256-byte-aligned rows and preserves WebGL2's already compact rows. Item 6.1 is active.
+Items 6.0 and 6.1 are closed on the repository's current Three.js 0.185.1, `@types/three` 0.185.1, and TypeScript 7.0.2 pins. Calling the installed public TSL arithmetic functions directly avoids the pathological method-chain and custom-signature structural expansion: clean package and benchmark graph checks complete in 0.18 and 0.17 seconds without a cast, dependency patch, downgrade, or disabled checking. The baseline TSL graph runs through `WebGPURenderer` on an asserted WebGPU backend and forced WebGL2 fallback with exact 4×4 RGBA8 hash `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77`.
+
+The first real font frame travels through composed Inter GLB loading, retained HarfRust shaping, paragraph positioning, strict bitmap record/KTX2 decode, direct R8 texture upload, order-preserving instanced batching, and one shared TSL material. Explicit 1× and 2× runs each execute three measured samples after one warmup on WebGPU and forced WebGL2. Both backends render ten visible glyphs in one draw from 695,296 atlas bytes. After normalizing WebGPU's top-left padded rows and WebGL's bottom-left compact rows, the local live cross-backend probe agreed on 2,249 half-coverage pixels at `[16, 25, 281, 64]` for 1× and 9,113 at `[32, 50, 563, 130]` for 2×. A separate headless WebGL2 run retained the 1× bounds with 2,243 thresholded pixels, so these counts remain environment-qualified observations rather than portable goldens. Framebuffer bytes scale from 122,880 to 491,520, and total tracked GPU bytes from 818,176 to 1,186,816. Each environment hard-gates deterministic frames, nonempty unclipped ink, and cross-backend geometry where both backends are available; linear-filter edge values remain backend-specific. Decode is transactional: a later invalid strike or record disposes every texture already created. Item 6.2 is active.
 
 Deliver:
 
@@ -476,7 +478,9 @@ Deliver:
 - React reconciliation, nested-span flattening, Suspense, ref, and disposal tests against the same core object behavior;
 - second registration of the same font proving scoped identity and lifecycle;
 - offline/Worker byte parity and cold/warm end-to-end benchmark reports;
-- populated interactive lab scenarios for shaping, loading, paragraph reflow, and bitmap rendering using the same definitions as headless runs;
+- a deterministic advanced-shaping showcase using the real paragraph/rendering path: editable and typewriter-driven text, continuous container reflow, smooth glyph-position interpolation, and reviewed Arabic joining, Indic reordering, bidi, ligature/mark, and CJK line-break cases;
+- pause, step, and scrub controls that make every showcase transition reproducible without timer-based test assertions, with the same definitions reused by headless runs;
+- populated interactive lab scenarios for loading, paragraph reflow, and bitmap rendering using the same definitions as headless runs;
 - tree-shaking and dynamic-import bundle assertions;
 - packed-package assertions for native ESM, every public subpath, module workers, and rejected CommonJS loading;
 - accepted ADRs and updated extension schemas;

@@ -18,7 +18,7 @@ for (const [targetId, backendMetric] of [
     targetId,
     scenarioId: 'tsl-shader-baseline',
     input: {},
-    controls: { samples: 3, warmup: 1 },
+    controls: { dpr: 1, samples: 3, warmup: 1 },
     environment,
   })
   if (
