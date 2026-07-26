@@ -6,7 +6,15 @@ import {
   type ParagraphLayout,
   type RegisteredFont,
 } from '@pmndrs/text'
-import { bitmap, bitmapRasterKey, type BitmapResource } from '@pmndrs/text/raster/bitmap'
+import {
+  bitmap,
+  bitmapRasterKey,
+  captureBitmapGlyphPositions,
+  createBitmapGlyphPositionTransition,
+  type BitmapGlyphPositionSnapshot,
+  type BitmapGlyphPositionTransition,
+  type BitmapResource,
+} from '@pmndrs/text/raster/bitmap'
 import * as THREE from 'three/webgpu'
 
 import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url'
@@ -131,6 +139,8 @@ export interface BitmapTextConformanceCapture {
 export interface BitmapTextPreview {
   resize(width: number, height: number): void
   update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>
+  setPresentationProgress(revision: number, progress: number): BitmapTextPreviewSnapshot
+  finishPresentation(revision: number): BitmapTextPreviewSnapshot
   dispose(): Promise<void>
 }
 
@@ -145,11 +155,34 @@ export interface BitmapTextPreviewUpdate {
 
 export interface BitmapTextPreviewSnapshot {
   readonly revision: number
+  readonly presentationProgress: number
+  readonly matchedGlyphs: number
+  readonly targetGlyphs: number
   readonly glyphCount: number
   readonly lineCount: number
   readonly layoutWidth: number
   readonly layoutHeight: number
 }
+
+type BitmapTextPresentation =
+  | {
+      readonly kind: 'transitioning'
+      readonly revision: number
+      readonly controllers: readonly BitmapGlyphPositionTransition[]
+      readonly fromX: number
+      readonly fromY: number
+      readonly toX: number
+      readonly toY: number
+      readonly matchedGlyphs: number
+      readonly targetGlyphs: number
+      progress: number
+    }
+  | {
+      readonly kind: 'settled'
+      readonly revision: number
+      readonly matchedGlyphs: number
+      readonly targetGlyphs: number
+    }
 
 export interface BitmapTextPreviewOptions {
   readonly backend: RendererBackend
@@ -580,21 +613,84 @@ export async function createBitmapTextPreview(
     let disposal: Promise<void> | undefined
     let layoutRevision = 0
     let firstDrawMs = 0
-    const positionLine = (): void => {
+    const targetLinePosition = (): readonly [number, number] => {
       const layout = activeLine.object.layout
       const currentLayoutWidth = layout?.width ?? activeLine.width
       const layoutHeight = layout?.height ?? activeLine.height
-      activeLine.object.position.set(
+      return [
         Math.max(12, (width - currentLayoutWidth) / 2),
         -Math.max(12, (viewportHeight - layoutHeight) / 2),
+      ]
+    }
+    const initialPosition = targetLinePosition()
+    activeLine.object.position.set(initialPosition[0], initialPosition[1], 0)
+    let presentation: BitmapTextPresentation = {
+      kind: 'settled',
+      revision: 0,
+      matchedGlyphs: 0,
+      targetGlyphs: countRenderedGlyphs(activeLine.object),
+    }
+    const disposePresentation = (): void => {
+      if (presentation.kind !== 'transitioning') return
+      for (const controller of presentation.controllers) controller.dispose()
+    }
+    const presentationSnapshot = (): BitmapTextPreviewSnapshot => {
+      const layout = activeLine.object.layout
+      if (layout === undefined) throw new Error('bitmap preview lost its committed layout')
+      return {
+        revision: presentation.revision,
+        presentationProgress: presentation.kind === 'settled' ? 1 : presentation.progress,
+        matchedGlyphs: presentation.matchedGlyphs,
+        targetGlyphs: presentation.targetGlyphs,
+        glyphCount: countRenderedGlyphs(activeLine.object),
+        lineCount: layout.lineGlyphCounts.length,
+        layoutWidth: layout.width,
+        layoutHeight: layout.height,
+      }
+    }
+    const setPresentationProgress = (
+      revision: number,
+      progress: number,
+    ): BitmapTextPreviewSnapshot => {
+      if (!Number.isFinite(progress) || progress < 0 || progress > 1) {
+        throw new RangeError('bitmap preview presentation progress must be in [0, 1]')
+      }
+      if (closing || disposed || presentation.revision !== revision) {
+        throw new DOMException('The bitmap preview presentation is stale', 'AbortError')
+      }
+      if (presentation.kind === 'settled') {
+        if (progress !== 1) {
+          throw new DOMException('The bitmap preview presentation is settled', 'InvalidStateError')
+        }
+        return presentationSnapshot()
+      }
+      for (const controller of presentation.controllers) controller.setProgress(progress)
+      activeLine.object.position.set(
+        presentation.fromX + (presentation.toX - presentation.fromX) * progress,
+        presentation.fromY + (presentation.toY - presentation.fromY) * progress,
         0,
       )
+      presentation.progress = progress
+      if (progress === 1) {
+        for (const controller of presentation.controllers) controller.finish()
+        presentation = {
+          kind: 'settled',
+          revision: presentation.revision,
+          matchedGlyphs: presentation.matchedGlyphs,
+          targetGlyphs: presentation.targetGlyphs,
+        }
+      }
+      return presentationSnapshot()
     }
-    positionLine()
     const reflowToViewport = (
       update?: Pick<BitmapTextPreviewUpdate, 'text' | 'language' | 'direction' | 'features'>,
     ): Promise<BitmapTextPreviewSnapshot> => {
       const revision = ++layoutRevision
+      const previousSnapshots: readonly BitmapGlyphPositionSnapshot[] =
+        activeLine.object.children.map((object) => captureBitmapGlyphPositions(object))
+      const fromX = activeLine.object.position.x
+      const fromY = activeLine.object.position.y
+      disposePresentation()
       const dimensions = {
         fontSize: currentFontSize,
         width: Math.max(120, width * layoutWidthRatio),
@@ -605,16 +701,40 @@ export async function createBitmapTextPreview(
         if (closing || disposed || revision !== layoutRevision) {
           throw new DOMException('The bitmap preview update was superseded', 'AbortError')
         }
-        positionLine()
         const layout = activeLine.object.layout
         if (layout === undefined) throw new Error('bitmap preview update did not commit a layout')
-        return {
-          revision,
-          glyphCount: countRenderedGlyphs(activeLine.object),
-          lineCount: layout.lineGlyphCounts.length,
-          layoutWidth: layout.width,
-          layoutHeight: layout.height,
+        const targetPosition = targetLinePosition()
+        const controllers: BitmapGlyphPositionTransition[] = []
+        for (
+          let batchIndex = 0;
+          batchIndex < activeLine.object.children.length && batchIndex < previousSnapshots.length;
+          batchIndex += 1
+        ) {
+          controllers.push(
+            createBitmapGlyphPositionTransition(
+              activeLine.object.children[batchIndex]!,
+              previousSnapshots[batchIndex]!,
+            ),
+          )
         }
+        for (const controller of controllers) controller.setProgress(0)
+        activeLine.object.position.set(fromX, fromY, 0)
+        presentation = {
+          kind: 'transitioning',
+          revision,
+          controllers,
+          fromX,
+          fromY,
+          toX: targetPosition[0],
+          toY: targetPosition[1],
+          matchedGlyphs: controllers.reduce(
+            (count, controller) => count + controller.matchedGlyphs,
+            0,
+          ),
+          targetGlyphs: countRenderedGlyphs(activeLine.object),
+          progress: 0,
+        }
+        return presentationSnapshot()
       })
     }
     const scheduleGpuTimestamp = (): void => {
@@ -734,15 +854,17 @@ export async function createBitmapTextPreview(
         camera.right = width
         camera.bottom = -viewportHeight
         camera.updateProjectionMatrix()
-        void reflowToViewport().catch((error: unknown) => {
-          if (
-            !closing &&
-            !disposed &&
-            !(error instanceof DOMException && error.name === 'AbortError')
-          ) {
-            onError(error)
-          }
-        })
+        void reflowToViewport()
+          .then((snapshot) => setPresentationProgress(snapshot.revision, 1))
+          .catch((error: unknown) => {
+            if (
+              !closing &&
+              !disposed &&
+              !(error instanceof DOMException && error.name === 'AbortError')
+            ) {
+              onError(error)
+            }
+          })
       },
       update(next) {
         if (closing || disposed) {
@@ -764,6 +886,10 @@ export async function createBitmapTextPreview(
           features: next.features,
         })
       },
+      setPresentationProgress,
+      finishPresentation(revision) {
+        return setPresentationProgress(revision, 1)
+      },
       dispose() {
         if (disposal !== undefined) return disposal
         closing = true
@@ -772,6 +898,7 @@ export async function createBitmapTextPreview(
           await gpuTimestampResolution
           disposed = true
           await renderer.setAnimationLoop(null)
+          disposePresentation()
           disposeBitmapLine(activeLine)
           activeFont.dispose()
           await renderer.dispose()

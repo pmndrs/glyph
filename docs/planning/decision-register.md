@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:04:16Z"
+  at: "2026-07-26T21:23:09Z"
 ---
 
 # Decision register
@@ -133,6 +133,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-091 | Bitmap plane bounds preserve the rasterizer's integer pixel placement with `planeUnitsPerEm = strike ppem`; the shared TSL vertex graph snaps projected quad edges to physical framebuffer pixels so native rendering maps one atlas texel to one device pixel. | Accepted |
 | D-092 | Hinted grayscale strikes and optional four-phase grayscale packing remain measured research. LCD/ClearType subpixel rendering, panel-order assumptions, runtime hint interpreters, and distance-field reconstruction are out of scope. | Experiment |
 | D-093 | Bitmap V0 renders fill and opacity only and rejects outline or shadow through the raster paint-validation seam; MTSDF owns those distance-based effects rather than silently degrading them. | Accepted |
+| D-096 | Bitmap presentation transitions are optional `@pmndrs/text/raster/bitmap` helpers over copied glyph identities and instance origins. Shaping and layout commit discretely; only identity-matched glyph positions interpolate before the existing physical-pixel snap, and unused consumers pay no target-origin allocation. | Settled for V0 |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 

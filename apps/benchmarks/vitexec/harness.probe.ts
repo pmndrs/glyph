@@ -101,6 +101,7 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   const authoredText = definition.revealUnits.join('')
   await waitForLiveViewportState({
     'data-backend': 'webgpu',
+    'data-presentation-progress': '1',
     'data-settled-tick': String(definition.revealUnits.length),
     'data-settled-text-length': String(authoredText.length),
     'data-missing-glyph-count': '0',
@@ -116,11 +117,18 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   )
   if (stepBack === undefined) throw new Error('Advanced-shaping step control is missing')
   stepBack.click()
-  await waitForLiveViewportState({
+  const steppedViewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
+    'data-presentation-progress': '1',
     'data-settled-tick': String(definition.revealUnits.length - 1),
     'data-missing-glyph-count': '0',
   })
+  if (
+    numericAttribute(steppedViewport, 'data-presentation-matched-glyphs') <= 0 ||
+    numericAttribute(steppedViewport, 'data-presentation-target-glyphs') <= 0
+  ) {
+    throw new Error(`${definition.id} did not match stable glyphs across its stepped layout`)
+  }
   console.log('advanced-shaping-stepped', definition.id)
   if (definition.id === 'latin-features') {
     const editedText = 'Editable AVATAR office'
@@ -128,6 +136,7 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     editor.dispatchEvent(new Event('input', { bubbles: true }))
     await waitForLiveViewportState({
       'data-backend': 'webgpu',
+      'data-presentation-progress': '1',
       'data-settled-text-length': String(editedText.length),
       'data-missing-glyph-count': '0',
     })
@@ -138,10 +147,31 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     reset.click()
     await waitForLiveViewportState({
       'data-backend': 'webgpu',
+      'data-presentation-progress': '1',
       'data-settled-tick': String(definition.revealUnits.length),
       'data-settled-text-length': String(authoredText.length),
       'data-missing-glyph-count': '0',
     })
+    const play = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Play' && !candidate.disabled,
+    )
+    if (play === undefined) throw new Error('Advanced-shaping play control is missing')
+    play.click()
+    const playbackViewport = await waitForLiveViewportState({
+      'data-backend': 'webgpu',
+      'data-presentation-progress': '1',
+      'data-settled-tick': '2',
+      'data-missing-glyph-count': '0',
+    })
+    if (numericAttribute(playbackViewport, 'data-presentation-matched-glyphs') <= 0) {
+      throw new Error('Advanced-shaping playback did not interpolate its stable glyph')
+    }
+    const pause = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Pause' && !candidate.disabled,
+    )
+    if (pause === undefined) throw new Error('Advanced-shaping pause control is missing')
+    pause.click()
+    console.log('advanced-shaping-playback')
     console.log('advanced-shaping-edited')
   }
 }

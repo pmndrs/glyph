@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T13:07:56Z"
+  at: "2026-07-26T21:23:09Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -1079,11 +1079,38 @@ declare function bitmap<const Strikes extends readonly [number, ...number[]]>(
   options: { strikes: StaticNumberTuple<Strikes> },
 ): RasterRequest<BitmapModule>
 
+declare const opaqueSnapshotBrand: unique symbol
+
+interface BitmapGlyphPositionSnapshot {
+  readonly glyphCount: number
+  readonly [opaqueSnapshotBrand]: true
+}
+
+interface BitmapGlyphPositionTransition {
+  readonly matchedGlyphs: number
+  readonly targetGlyphs: number
+  readonly progress: number
+  setProgress(progress: number): void
+  finish(): void
+  dispose(): void
+}
+
+declare function captureBitmapGlyphPositions(
+  object: THREE.Object3D,
+): BitmapGlyphPositionSnapshot
+
+declare function createBitmapGlyphPositionTransition(
+  object: THREE.Object3D,
+  from: BitmapGlyphPositionSnapshot,
+): BitmapGlyphPositionTransition
+
 export const msdf: MsdfModule
 export const slug: SlugModule
 ```
 
 Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, no greater than the exported `MAX_BITMAP_PPEM` value of 1022, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
+
+The optional bitmap presentation helpers snapshot copied font handles, glyph IDs, UTF-16 clusters, exact font-size bits, occurrence ordinals, and currently displayed instance origins without retaining a `Text`, batch, texture, or geometry. A transition matches only the same complete glyph identity and updates the target batch's existing origin arrays. New or reshaped glyphs remain at their authoritative target positions; sizes, UVs, paint, shaping, line breaks, and `ParagraphLayout` never interpolate. Progress is finite and bounded to `[0, 1]`, stale or disposed batches reject mutation, and `finish`/`dispose` are idempotent. Target-origin storage is allocated only when a consumer creates a transition. The existing TSL graph still performs the final physical-pixel snap.
 
 The resource and draw-batch types are owned by their optional raster packages. `defineRaster` captures the literal `kind` and associated types from the module value; consumers do not supply generic arguments. Core has no closed raster-kind union and does not assume which raster packages are installed or shipped. Each optional package owns its literal kind and companion data contract. Adding a first-party or external raster requires no change to the core type declarations. The shared package depends only on `RasterModule` and never imports concrete engines.
 

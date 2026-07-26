@@ -42,6 +42,7 @@ export type AdvancedShapingCommand =
 
 export interface AdvancedShapingFrame {
   readonly caseDefinition: AdvancedShapingCase
+  readonly playing: boolean
   readonly text: string
   readonly tick: number
   readonly tickCount: number
@@ -207,6 +208,7 @@ export function advancedShapingFrame(state: AdvancedShapingState): AdvancedShapi
   const widthIndex = tick % caseDefinition.widthPermille.length
   return {
     caseDefinition,
+    playing: state.playing,
     text: state.editedText ?? caseDefinition.revealUnits.slice(0, tick).join(''),
     tick,
     tickCount,
