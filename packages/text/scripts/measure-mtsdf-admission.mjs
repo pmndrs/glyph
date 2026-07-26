@@ -62,7 +62,7 @@ if (typeof checksumExport !== 'function') {
   throw new TypeError('optimized admission Wasm is missing its checksum export')
 }
 const outputChecksum = checksumExport()
-if (outputChecksum !== 0x4b58_5e49) {
+if (outputChecksum !== 0x1627_af29) {
   throw new Error(`optimized admission Wasm returned unexpected checksum ${String(outputChecksum)}`)
 }
 

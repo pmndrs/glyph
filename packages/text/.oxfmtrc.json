@@ -7,6 +7,7 @@
     "dist/**",
     "src/bakers/schemas/**",
     "src/generated/**",
+    "rust/mtsdf-admission/evidence/**",
     "**/target/**",
     "tests/fixtures/**"
   ]
