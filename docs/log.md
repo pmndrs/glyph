@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Tooling** — Made the benchmark app's zero-warning oxlint and oxfmt checks mandatory in the root `pnpm check` lane, keeping local and CI enforcement aligned.
 - **Version authority** — Added a contract-only portable-baker subpath so loader, validator, and bridge share baker/format versions without a heavy browser edge; Rust shaper and bitmap-generator versions now derive from Cargo metadata, and the canonical version contract lists the bitmap ABI plus exact Fontations/Skrifa/bidi pins.
 - **Test reliability** — Replaced Playwright network-idle heuristics with causal app readiness, validated admission-process failures and parsed lifecycle records before publication, made exact contract comparisons non-coercive, and deferred export URL release to the next microtask without timers.
 - **Performance** — Removed quadratic paragraph-layout scans with one-time cluster prefix indexes, a monotonic style cursor, and direction-aware binary bounds over HarfRust's monotone clusters. An 80,000-glyph justified-layout stress pass dropped from a 431 ms to 268 ms median in the same five-sample local Node run; the browser core cost is 1,140 minified / 240 Brotli bytes.

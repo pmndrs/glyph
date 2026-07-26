@@ -25,7 +25,7 @@ sources:
     title: Shared benchmark lifecycle
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T15:34:50Z"
+  at: "2026-07-26T03:32:25Z"
 ---
 
 # Engineering house style
@@ -103,6 +103,7 @@ This standard is the canonical code-quality policy for `pmndrs/text`. It support
 - Prefer names and types that make ordinary code self-explanatory. Add comments for non-obvious ownership, safety, protocol, performance, or mathematical invariants; match surrounding comment density instead of applying a blanket comment rule.
 - Keep line-level mechanics in code. Put durable package ownership and constraints in package reference, decisions in the decision register, milestone status in the checkbox roadmap, and chronology in the OKF log.
 - Update affected canonical documentation with source changes. Do not create shadow plans, duplicate package histories, or a second copy of this standard.
+- Keep configured lint and formatting checks in the root `pnpm check` lane so local and CI verification enforce the same React, TypeScript, and presentation rules.
 - Preserve public signatures unless correctness, measured performance, or a seriously misleading name supplies strong evidence for a change.
 
 ## Deliberate non-rules
