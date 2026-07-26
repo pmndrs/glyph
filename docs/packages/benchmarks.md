@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:b1be41db9fc65b088aa187df6b8b37fbfd293bd01da07a074c5263e7de553099"
+source_digest: "sha256:ba1f0e9cc9e0853ff4b74920e32af6628b114cb14c1587238c720864ceef46f4"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T06:56:23Z"
+  at: "2026-07-26T07:24:30Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -25,7 +25,7 @@ Status: 🟡 usable harness shell; rendering targets not implemented
 
 This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, real HarfRust shaping-conformance target, and real paragraph measurement/positioned-layout/policy/CJK targets. The runner disposes partial target state when loading fails, and the UI retains typed WebGPU availability through label and tone rendering. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. Inter 4.1 remains the default fixture; Amiri 1.002 owns complex-script evidence; Noto Sans CJK JP 2.004 owns the maximum-cardinality universality lane. Each is immutable, licensed, hash-authenticated, and paired with checked HarfRust/HarfBuzz evidence. Chromium 149 passes all pre-render targets with three deterministic samples after one warmup. The CJK result fixes thirteen corpus cases, four paragraphs, twelve layouts, eight plans, one direct shape call, four paragraph shape calls, zero reshapes, 10,622 output bytes, and the exact composite hash `a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68`; Vitexec repeats it with WebGPU active.
 
-Every measured call receives its actual zero-based sample index; warmups remain outside the reported sample sequence. Controls reject zero/non-integral sample counts and negative/non-integral warmups before target loading. Successful summaries are honest single-state records and include the V0 schema marker plus the exact controls, so headless JSON is self-describing rather than relying on command-line context.
+Every measured call receives its actual zero-based sample index; warmups remain outside the reported sample sequence. Controls reject zero/non-integral sample counts and negative/non-integral warmups before target loading. Successful summaries are honest single-state records and include the V0 schema marker plus the exact controls, so headless JSON is self-describing rather than relying on command-line context. The deterministic headless lane runs its eight cases sequentially through one Chromium/Vite session while opening an isolated page for each case; explicit readiness, launch, navigation, and execution deadlines identify a stalled lifecycle without using time as a readiness signal.
 
 The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The report records its measurement platform and architecture. Same-host regeneration is exact; every foreign-host raw/minified/gzip/Brotli result must satisfy the shared reviewed budget table because native Rust/Binaryen and Rolldown output has small cross-architecture byte variance. The current Darwin arm64 record reports a 211,127 minified / 62,751 gzip / 47,995 Brotli browser graph and an independently measured 139,912 / 42,042 / 31,048 Unicode analysis graph. The validator, runtime host, runtime Worker JavaScript, portable baker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,255, 3,831, 8,968, 6,641, 433,755, 30,630, and 692,114 minified/raw bytes respectively. The reviewed Worker increase buys explicit FIFO admission, queued/active cancellation recovery, and entry-side serialization; the reviewed shaper increase buys fallible result assembly, arena publication, and a 64-plan per-font LRU bound. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
 
@@ -43,7 +43,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `typecheck` | Build the baker dependency and type-check browser and Node script projects. |
 | `test` | Run deterministic Vitest suites and the shared-registry browser smoke test. |
 | `test:unit` | Run deterministic Vitest suites without starting a browser. |
-| `test:headless` | Run synthetic, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, and bidi/policy/uikit scenarios through the browser CLI. |
+| `test:headless` | Run synthetic, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, bidi/policy/uikit, and CJK scenarios through one bounded browser conformance session. |
 | `lint` | Run Oxlint with warnings denied. |
 | `format:check` | Verify Oxfmt output. |
 | `size` | Produce deterministic independent package-size JSON for the report UI. |
