@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:bfbd547155c8bfc227d9a7b7fe49a34f0d5fea6148987e6ba87641a4f1384be9"
+source_digest: "sha256:efac82e437648b5147b8d4351a6d6a1216aedac5e15f6e4373965c0e2f03c330"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T16:20:00Z"
+  at: "2026-07-25T19:20:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -70,9 +70,9 @@ Status: ✅ Milestone 5 paragraph reflow and CJK universality complete; Mileston
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
-The browser-safe `@pmndrs/text/raster/bitmap` subpath now owns bitmap generator/format constants, exact runtime validation of the non-empty static strike tuple, ascending canonical strike order, the complete generator-versioned descriptor, RFC 8785 serialization, and SHA-256 raster-key derivation. Equivalent strike sets therefore produce one identity regardless of caller order, while duplicate, non-integral, non-finite, non-positive, or out-of-range values fail before baking. The implementation uses Web Crypto and imports no Node built-ins.[^bitmap-identity]
+The browser-safe `@pmndrs/text/raster/bitmap` subpath now owns bitmap generator/format constants, the exact `1..=1022` ppem V0 range, runtime validation of the non-empty static strike tuple, ascending canonical strike order, the complete generator-versioned descriptor, RFC 8785 serialization, and SHA-256 raster-key derivation. Equivalent strike sets therefore produce one identity regardless of caller order, while duplicate, non-integral, non-finite, non-positive, or out-of-range values fail before baking. The implementation uses Web Crypto and imports no Node built-ins.[^bitmap-identity]
 
-The optional `@pmndrs/text/bakers/bitmap` subpath wraps a zero-import `no_std + alloc` Wasm generator through its Rust-generated JSON ABI and direct linear-memory shim. Fontations/Skrifa owns font and outline interpretation; a small pen bridge feeds Zeno's maintained antialiased rasterizer. A deterministic shelf packer emits one dense 20-byte record per source glyph plus lossless linear R8 KTX2 pages, either embedded in the companion GLB or emitted as hashed external artifacts. Binaryen 129.0.0 `-Oz` reduces the hardened distributed module to 657,831 bytes raw, 238,360 bytes gzip, and 182,786 bytes Brotli without changing its authoritative bitmap outputs.
+The optional `@pmndrs/text/bakers/bitmap` subpath wraps a zero-import `no_std + alloc` Wasm generator through its Rust-generated JSON ABI and direct linear-memory shim. Fontations/Skrifa owns font and outline interpretation; a small pen bridge feeds Zeno's maintained antialiased rasterizer. A deterministic shelf packer emits one dense 20-byte record per source glyph plus lossless linear R8 KTX2 pages, either embedded in the companion GLB or emitted as hashed external artifacts. Artifact and page filenames bind both `shapingHash` and `rasterKey`, preventing two fonts with the same raster configuration from overwriting one another. Glyph masks are placed as they are rasterized instead of retaining a second full-face bitmap set, fixed buffers reserve fallibly, and the atlas-compatible ppem bound rejects structurally impossible requests before font work. Binaryen 129.0.0 `-Oz` reduces the hardened distributed module to 658,470 bytes raw, 238,750 bytes gzip, and 182,928 bytes Brotli.
 
 The isolated `@pmndrs/text/bakers/bitmap/validate` entry reuses the core package's strict GLB framing and pinned Khronos validator, evaluates byte-identical Draft-04 bitmap/resource schemas, parses every declared page variant with `ktx-parse` 1.1.0, and enforces reciprocal identity, exact strikes, dense records, page bounds, KTX2 dimensions/format/levels, GPU-format/feature/quality mapping, external length/hash, arithmetic limits, and GPU budgets. Rust independently parses every native-test KTX2 through `ktx2` 0.5.0. Canonical Inter source/Wasm/artifact/report/record/page identities, embedded/external parity, 65,535-glyph boundaries, generated/published ABI identity, deterministic arbitrary-font Rust fuzz smoke, and fixed-seed artifact mutation fuzz smoke are executable fixtures.[^bitmap-baker]
 

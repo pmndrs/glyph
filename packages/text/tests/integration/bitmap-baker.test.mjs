@@ -72,6 +72,7 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   assert.ok(first.report.gpuBytes > 0)
   assert.ok(first.report.pages.length > 0)
   assert.ok(first.artifacts.every(({ role }) => role === 'raster'))
+  assert.match(first.artifacts[0].id, new RegExp(`^bitmap-${shapingHash}-[0-9a-f]{64}\\.glb$`))
   assert.deepEqual([...first.artifacts[0].bytes.subarray(0, 4)], [0x67, 0x6c, 0x54, 0x46])
 })
 
@@ -86,6 +87,7 @@ test('external page packaging preserves authoritative records and emits hashed K
   assert.equal(pages.length, external.report.pages.length)
   assert.ok(pages.length > 0)
   for (const page of pages) {
+    assert.match(page.id, new RegExp(`^bitmap-${shapingHash}-[0-9a-f]{64}-s16-p\\d+\\.ktx2$`))
     assert.deepEqual(
       [...page.bytes.subarray(0, 12)],
       [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a],

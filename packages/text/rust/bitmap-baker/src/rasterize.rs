@@ -19,6 +19,7 @@ use crate::{
 const ATLAS_LIMIT: u16 = 1024;
 const GLYPH_PADDING: u16 = 1;
 const ABSENT_PAGE: u16 = 0xffff;
+pub(crate) const MAX_ATLAS_PAGES: usize = 60;
 
 pub(crate) struct RasterizedStrike {
     pub ppem: u16,
@@ -82,15 +83,15 @@ struct AtlasPage {
 }
 
 impl AtlasPage {
-    fn new() -> Self {
-        Self {
-            texels: vec![0; usize::from(ATLAS_LIMIT) * usize::from(ATLAS_LIMIT)],
+    fn new() -> Result<Self, BitmapBakeError> {
+        Ok(Self {
+            texels: zeroed_bytes(usize::from(ATLAS_LIMIT) * usize::from(ATLAS_LIMIT))?,
             cursor_x: 0,
             cursor_y: 0,
             row_height: 0,
             used_width: 0,
             used_height: 0,
-        }
+        })
     }
 
     fn place(&mut self, glyph: &GlyphBitmap) -> Option<[u16; 4]> {
@@ -125,21 +126,24 @@ impl AtlasPage {
         Some([left, top, right, bottom])
     }
 
-    fn finish(self) -> RasterizedPage {
+    fn finish(self) -> Result<RasterizedPage, BitmapBakeError> {
         let width = cmp::max(self.used_width, 1);
         let height = cmp::max(self.used_height, 1);
-        let mut texels = vec![0; usize::from(width) * usize::from(height)];
+        let byte_length = usize::from(width)
+            .checked_mul(usize::from(height))
+            .ok_or_else(overflow)?;
+        let mut texels = zeroed_bytes(byte_length)?;
         for row in 0..height {
             let source = usize::from(row) * usize::from(ATLAS_LIMIT);
             let destination = usize::from(row) * usize::from(width);
             texels[destination..destination + usize::from(width)]
                 .copy_from_slice(&self.texels[source..source + usize::from(width)]);
         }
-        RasterizedPage {
+        Ok(RasterizedPage {
             width,
             height,
             texels,
-        }
+        })
     }
 }
 
@@ -174,13 +178,20 @@ pub(crate) fn rasterize_strike(
         ));
     }
 
+    let record_len = usize::from(glyph_count)
+        .checked_mul(GLYPH_RECORD_STRIDE)
+        .ok_or_else(overflow)?;
+    let mut records = zeroed_bytes(record_len)?;
+    let mut pages = Vec::with_capacity(MAX_ATLAS_PAGES);
+    pages.push(AtlasPage::new()?);
+
     let outlines = font.outline_glyphs();
     let metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
-    let mut bitmaps = Vec::with_capacity(usize::from(glyph_count));
     for raw_glyph_id in 0..glyph_count {
+        let record = usize::from(raw_glyph_id) * GLYPH_RECORD_STRIDE;
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
         let Some(outline) = outlines.get(glyph_id) else {
-            bitmaps.push(None);
+            write_u16(&mut records, record + 16, ABSENT_PAGE);
             continue;
         };
         let mut pen = ZenoPen::default();
@@ -194,12 +205,12 @@ pub(crate) fn rasterize_strike(
                     .at(format!("/glyphs/{raw_glyph_id}"))
             })?;
         if pen.commands.is_empty() {
-            bitmaps.push(None);
+            write_u16(&mut records, record + 16, ABSENT_PAGE);
             continue;
         }
         let (texels, placement) = Mask::new(&pen.commands).render();
         if placement.width == 0 || placement.height == 0 {
-            bitmaps.push(None);
+            write_u16(&mut records, record + 16, ABSENT_PAGE);
             continue;
         }
         let bounds = metrics.bounds(glyph_id).ok_or_else(|| {
@@ -209,7 +220,7 @@ pub(crate) fn rasterize_strike(
             )
             .at(format!("/glyphs/{raw_glyph_id}"))
         })?;
-        bitmaps.push(Some(GlyphBitmap {
+        let bitmap = GlyphBitmap {
             plane_bounds: encode_plane_bounds([
                 bounds.x_min,
                 bounds.y_min,
@@ -219,29 +230,19 @@ pub(crate) fn rasterize_strike(
             width: u16::try_from(placement.width).map_err(|_| glyph_too_large(raw_glyph_id))?,
             height: u16::try_from(placement.height).map_err(|_| glyph_too_large(raw_glyph_id))?,
             texels,
-        }));
-    }
-
-    let record_len = usize::from(glyph_count)
-        .checked_mul(GLYPH_RECORD_STRIDE)
-        .ok_or_else(overflow)?;
-    let mut records = vec![0_u8; record_len];
-    let mut pages = vec![AtlasPage::new()];
-    for (raw_glyph_id, bitmap) in bitmaps.iter().enumerate() {
-        let record = raw_glyph_id * GLYPH_RECORD_STRIDE;
-        let Some(bitmap) = bitmap else {
-            write_u16(&mut records, record + 16, ABSENT_PAGE);
-            continue;
         };
         let mut page_index = pages.len() - 1;
-        let atlas = if let Some(atlas) = pages[page_index].place(bitmap) {
+        let atlas = if let Some(atlas) = pages[page_index].place(&bitmap) {
             atlas
         } else {
-            pages.push(AtlasPage::new());
+            if pages.len() == MAX_ATLAS_PAGES {
+                return Err(overflow());
+            }
+            pages.push(AtlasPage::new()?);
             page_index += 1;
             pages[page_index]
-                .place(bitmap)
-                .ok_or_else(|| glyph_too_large(raw_glyph_id as u16))?
+                .place(&bitmap)
+                .ok_or_else(|| glyph_too_large(raw_glyph_id))?
         };
         if page_index >= usize::from(ABSENT_PAGE) {
             return Err(overflow());
@@ -259,12 +260,27 @@ pub(crate) fn rasterize_strike(
         );
     }
 
+    let mut finished_pages = Vec::with_capacity(pages.len());
+    for page in pages {
+        finished_pages.push(page.finish()?);
+    }
+
     Ok(RasterizedStrike {
         ppem,
         plane_units_per_em: units_per_em,
         records,
-        pages: pages.into_iter().map(AtlasPage::finish).collect(),
+        pages: finished_pages,
     })
+}
+
+#[inline(never)]
+fn zeroed_bytes(byte_length: usize) -> Result<Vec<u8>, BitmapBakeError> {
+    let mut bytes = Vec::new();
+    if bytes.try_reserve_exact(byte_length).is_err() {
+        return Err(overflow());
+    }
+    bytes.resize(byte_length, 0);
+    Ok(bytes)
 }
 
 fn encode_plane_bounds(bounds: [f32; 4]) -> Result<[i16; 4], BitmapBakeError> {

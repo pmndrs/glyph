@@ -15,8 +15,8 @@ sources:
     title: "Repository benchmark-harness wireframe"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T14:19:44Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-25T19:20:00Z"
 ---
 
 # Canonical implementation roadmap
@@ -247,6 +247,7 @@ Item 2.2 is closed. Item 2.3 adds the core/raster validators plus the package-ow
 - [x] Fixed-seed Rust-input and TypeScript artifact-mutation fuzz smoke tests run in the ordinary suite; longer mutation drivers plus pinned cargo-fuzz/libFuzzer coverage promote minimized findings into permanent malformed fixtures.
 - [x] The bitmap-owned module canonicalizes static strike tuples and derives the RFC 8785 raster key without a parallel core descriptor union.
 - [x] The bitmap baker emits deterministic unhinted grayscale strikes, dense 20-byte records, lossless R8 KTX2 pages, reports, and embedded/external packaging.
+- [x] Font-scoped bitmap/page filenames bind shaping and raster identity; atlas-compatible ppem bounds and streaming glyph placement reject impossible requests without retaining a second full-face bitmap set.
 - [x] The bitmap-owned validator covers schema, reciprocal identity, exact strikes, records, pages/KTX2, limits, and one-invalid-field-at-a-time malformed artifacts.
 - [x] Canonical Inter bitmap bytes and synthetic maximum-cardinality/empty identities are pinned and round-trip through the same core used by later hosts.
 

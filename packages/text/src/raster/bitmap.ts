@@ -6,6 +6,7 @@ export const BITMAP_KIND = 'bitmap' as const
 export const BITMAP_EXTENSION = 'PMNDRS_font_bitmap' as const
 export const BITMAP_FORMAT_VERSION = 0 as const
 export const BITMAP_GENERATOR_VERSION = '0.0.0' as const
+export const MAX_BITMAP_PPEM = 1022 as const
 
 export interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
   readonly strikes: StaticNumberTuple<Strikes>
@@ -22,8 +23,8 @@ function canonicalStrikes(values: readonly number[]): readonly number[] {
 
   const unique = new Set<number>()
   for (const value of values) {
-    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0 || value > 65_535) {
-      throw new TypeError('bitmap strikes must contain positive integers no greater than 65535')
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0 || value > MAX_BITMAP_PPEM) {
+      throw new TypeError(`bitmap strikes must contain positive integers no greater than ${MAX_BITMAP_PPEM}`)
     }
     if (unique.has(value)) throw new TypeError(`bitmap strike ${value} is duplicated`)
     unique.add(value)

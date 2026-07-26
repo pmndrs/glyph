@@ -18,8 +18,8 @@ sources:
     title: "Three.js Object3D"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T08:13:36Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-25T19:20:00Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -674,7 +674,7 @@ import { bakeProject } from '@pmndrs/text/bake'
 const report = await bakeProject()
 ```
 
-With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names are deterministically derived from raster keys. The host writes same-directory temporary files and renames them only after every artifact is ready; it rejects source/output overlap, duplicate targets, and package-owned artifact IDs that are not single filenames. Cancellation is checked between every asynchronous or coarse Wasm phase and before publication. The Node host owns filesystem work only.
+With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names deterministically bind the shaping hash and raster key. The host writes same-directory temporary files and renames them only after every artifact is ready; it rejects source/output overlap, duplicate targets, and package-owned artifact IDs that are not single filenames. Cancellation is checked between every asynchronous or coarse Wasm phase and before publication. The Node host owns filesystem work only.
 
 The portable core reports authoritative raw byte counts. A completed Node report adds gzip and Brotli sizes for GLB transport, raw page bytes, phase and total timings, before/after RSS, Node's process-lifetime peak RSS, and the exact path/role/size/hash of every output. The peak is deliberately labeled as process-wide lifetime evidence rather than an isolated allocation measurement.
 
@@ -1075,7 +1075,7 @@ export const msdf: MsdfModule
 export const slug: SlugModule
 ```
 
-Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
+Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, no greater than the exported `MAX_BITMAP_PPEM` value of 1022, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
 
 The resource and draw-batch types are owned by their optional raster packages. `defineRaster` captures the literal `kind` and associated types from the module value; consumers do not supply generic arguments. Core has no closed raster-kind union and does not assume which raster packages are installed or shipped. Each optional package owns its literal kind and companion data contract. Adding a first-party or external raster requires no change to the core type declarations. The shared package depends only on `RasterModule` and never imports concrete engines.
 

@@ -6,6 +6,7 @@ import {
   BITMAP_FORMAT_VERSION,
   BITMAP_GENERATOR_VERSION,
   BITMAP_KIND,
+  MAX_BITMAP_PPEM,
   bitmapDescriptor,
   bitmapRasterKey,
 } from '@pmndrs/text/raster/bitmap'
@@ -18,6 +19,8 @@ test('canonicalizes bitmap strikes and owns its compatibility versions', async (
   assert.equal(BITMAP_EXTENSION, 'PMNDRS_font_bitmap')
   assert.equal(BITMAP_FORMAT_VERSION, 0)
   assert.equal(BITMAP_GENERATOR_VERSION, '0.0.0')
+  assert.equal(MAX_BITMAP_PPEM, 1022)
+  assert.deepEqual(bitmapDescriptor({ strikes: [MAX_BITMAP_PPEM] }).strikes, [MAX_BITMAP_PPEM])
   assert.equal(
     await bitmapRasterKey({ strikes: [32, 16] }),
     await bitmapRasterKey({ strikes: [16, 32] }),
@@ -32,7 +35,7 @@ test('rejects every invalid runtime strike form', () => {
     [1.5],
     [Number.NaN],
     [Number.POSITIVE_INFINITY],
-    [65_536],
+    [1023],
   ]) {
     assert.throws(() => bitmapDescriptor({ strikes }), /bitmap strikes/)
   }

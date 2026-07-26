@@ -17,8 +17,8 @@
   "rasterKey": "f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02",
   "generator": {
     "version": "0.0.0",
-    "optimizedWasmBytes": 657831,
-    "optimizedWasmSha256": "ace273489fe4d604a11a4f52cc7a0ccdecb537cc94055bdebef6aa4ce9b8be41",
+    "optimizedWasmBytes": 658470,
+    "optimizedWasmSha256": "f7d7a462724dc71ff99fd7d9d642a7e33a0f332c878d0c59249c8dcec8c52ece",
     "dependencies": {
       "readFonts": "0.42.1",
       "skrifa": "0.45.1",
@@ -39,7 +39,7 @@
     "artifacts": [
       {
         "role": "raster",
-        "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+        "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
         "bytes": 755064,
         "sha256": "fca76634d6560ebff2436bf0d2a4af0b754ea56e3ce3b99b51e0389bcbd9957c"
       }
@@ -74,20 +74,20 @@
     "artifacts": [
       {
         "role": "raster",
-        "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
-        "bytes": 59744,
-        "sha256": "d83adf040f7fee140d0304302975774b61f1d029c6ae11c1b0b001c6494a9863"
+        "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+        "bytes": 59808,
+        "sha256": "ebd318c200883fed2a5861940c04f0583ddffb7df42e53108a9f88f4ae617e4e"
       },
       {
         "role": "raster-page",
-        "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+        "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
         "bytes": 695444,
         "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
       }
     ],
     "report": {
       "metadataBytes": 58740,
-      "serializedBytes": 755188,
+      "serializedBytes": 755252,
       "gpuBytes": 695296,
       "pages": [
         {
@@ -106,7 +106,7 @@
         "width": 1024,
         "height": 679,
         "source": "external",
-        "uri": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+        "uri": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
         "bytes": 695444,
         "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
       }
@@ -224,18 +224,18 @@
         {
           "role": "font",
           "id": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
-          "bytes": 172476,
-          "sha256": "4ecd8c73335e06d554c0b0b3e7b67bcdadaba821d0c87290ba282247a4e7cbe2"
+          "bytes": 172540,
+          "sha256": "fbc690b87369768f0ed2540b22d403337c6b4105c05652a1122d55b75159d6ef"
         },
         {
           "role": "raster",
-          "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
-          "bytes": 59744,
-          "sha256": "d83adf040f7fee140d0304302975774b61f1d029c6ae11c1b0b001c6494a9863"
+          "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+          "bytes": 59808,
+          "sha256": "ebd318c200883fed2a5861940c04f0583ddffb7df42e53108a9f88f4ae617e4e"
         },
         {
           "role": "raster-page",
-          "id": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+          "id": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
           "bytes": 695444,
           "sha256": "c07da2241f3a11fdf39ae72e442eaa009f5de2e3b5f568c24a789922724c6790"
         }
@@ -305,7 +305,7 @@
           {
             "kind": "bitmap",
             "metadataBytes": 58740,
-            "serializedBytes": 755188,
+            "serializedBytes": 755252,
             "gpuBytes": 695296,
             "pages": [
               {
@@ -323,31 +323,31 @@
           {
             "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
             "role": "font",
-            "jsonBytes": 1389,
-            "paddingBytes": 3,
-            "totalBytes": 172476
+            "jsonBytes": 1454,
+            "paddingBytes": 2,
+            "totalBytes": 172540
           },
           {
-            "artifactId": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+            "artifactId": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
             "role": "raster",
-            "jsonBytes": 975,
-            "paddingBytes": 1,
-            "totalBytes": 59744
+            "jsonBytes": 1040,
+            "paddingBytes": 0,
+            "totalBytes": 59808
           }
         ],
         "transport": [
           {
             "artifactId": "font-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
             "format": "raw",
-            "bytes": 172476
+            "bytes": 172540
           },
           {
-            "artifactId": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
+            "artifactId": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02.glb",
             "format": "raw",
-            "bytes": 59744
+            "bytes": 59808
           },
           {
-            "artifactId": "bitmap-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
+            "artifactId": "bitmap-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02-s16-p0.ktx2",
             "format": "raw",
             "bytes": 695444
           }

@@ -21,7 +21,7 @@ pub use error::{BitmapBakeError, BitmapBakeErrorCode};
 pub use model::{
     ArtifactPackaging, BitmapBakeArtifactV0, BitmapBakeRequestV0, BitmapBakeResultV0,
     BitmapDescriptorV0, BitmapPackagingV0, BitmapPageReportV0, BitmapPayloadReportV0,
-    PagePackaging,
+    MAX_BITMAP_PPEM, PagePackaging,
 };
 
 /// Return the generated direct-memory ABI contract embedded in this build.
@@ -59,12 +59,13 @@ pub fn bake_bitmap(
 
     let mut strikes = Vec::with_capacity(request.descriptor.strikes.len());
     for ppem in request.descriptor.strikes.iter().copied() {
-        strikes.push(rasterize::rasterize_strike(
+        let strike = rasterize::rasterize_strike(
             source,
             request.font_face_index,
             request.glyph_count,
             ppem,
-        )?);
+        )?;
+        strikes.push(strike);
     }
     let metadata_bytes = strikes
         .iter()
@@ -77,7 +78,7 @@ pub fn bake_bitmap(
         request.packaging.pages,
         &strikes,
     )?;
-    let raster_id = format!("bitmap-{}.glb", request.raster_key);
+    let raster_id = format!("bitmap-{}-{}.glb", request.shaping_hash, request.raster_key);
     let raster_hash = hex_sha256(&built.bytes);
     let mut artifacts = vec![BitmapBakeArtifactV0 {
         role: "raster".into(),
@@ -240,6 +241,39 @@ mod tests {
             record_bytes(&embedded_a.artifacts[0].bytes),
             record_bytes(&external.artifacts[0].bytes),
         );
+    }
+
+    #[test]
+    fn artifact_names_include_font_and_raster_identity() {
+        let first = bake_bitmap(INTER, request(PagePackaging::External)).unwrap();
+        let mut second_request = request(PagePackaging::External);
+        second_request.shaping_hash = "0".repeat(64);
+        let second = bake_bitmap(INTER, second_request).unwrap();
+
+        assert_ne!(first.artifacts[0].id, second.artifacts[0].id);
+        assert!(
+            first
+                .artifacts
+                .iter()
+                .all(|artifact| artifact.id.contains(SHAPING_HASH))
+        );
+        assert!(
+            second
+                .artifacts
+                .iter()
+                .all(|artifact| artifact.id.contains(&"0".repeat(64)))
+        );
+    }
+
+    #[test]
+    fn descriptor_rejects_strikes_larger_than_the_atlas_can_represent() {
+        let mut invalid = request(PagePackaging::Embedded);
+        invalid.descriptor.strikes = vec![MAX_BITMAP_PPEM + 1];
+        invalid.raster_key = descriptor_raster_key(&invalid.descriptor);
+
+        let error = bake_bitmap(&[], invalid).unwrap_err();
+        assert_eq!(error.code, BitmapBakeErrorCode::InvalidDescriptor);
+        assert_eq!(error.path.as_deref(), Some("/descriptor/strikes"));
     }
 
     fn record_bytes(glb: &[u8]) -> Vec<u8> {

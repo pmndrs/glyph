@@ -12,8 +12,8 @@ sources:
     title: "Repository benchmark-harness wireframe"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T14:19:44Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-25T19:20:00Z"
 ---
 
 # Decision register
@@ -80,6 +80,7 @@ The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md),
 | D-023 | Core shaping is one SFNT view; rasters use final GPU records/KTX2. | Accepted |
 | D-024 | V0 local and shaped glyph IDs are `u16`. | Accepted |
 | D-062 | Core and raster schemas are identical whether embedded or split. | Accepted |
+| D-089 | Raster artifact filenames bind both the font's shaping hash and the package-owned raster key; bitmap V0 accepts only atlas-representable `1..=1022` ppem strikes. | Accepted |
 
 Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, and extension version match. See the [`PMNDRS_font` extension family](extensions/) and [registration draft](gltf-extension-registration.md).
 

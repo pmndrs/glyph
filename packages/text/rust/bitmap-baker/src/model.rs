@@ -9,6 +9,7 @@ pub const BITMAP_EXTENSION: &str = "PMNDRS_font_bitmap";
 pub const BITMAP_FORMAT_VERSION: u8 = 0;
 pub const BITMAP_GENERATOR_VERSION: &str = "0.0.0";
 pub const GLYPH_RECORD_STRIDE: usize = 20;
+pub const MAX_BITMAP_PPEM: u16 = 1022;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -35,10 +36,10 @@ impl BitmapDescriptorV0 {
         }
         let mut previous = 0_u16;
         for (index, value) in self.strikes.iter().copied().enumerate() {
-            if value == 0 || (index != 0 && value <= previous) {
+            if value == 0 || value > MAX_BITMAP_PPEM || (index != 0 && value <= previous) {
                 return Err(BitmapBakeError::new(
                     BitmapBakeErrorCode::InvalidDescriptor,
-                    "bitmap strikes must be positive, unique, and strictly ascending",
+                    "bitmap strikes must be positive, no greater than 1022, unique, and strictly ascending",
                 )
                 .at("/descriptor/strikes"));
             }

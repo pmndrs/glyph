@@ -16,8 +16,8 @@
       "items": {
         "type": "object",
         "properties": {
-          "ppemX": { "type": "integer", "minimum": 1, "maximum": 65535 },
-          "ppemY": { "type": "integer", "minimum": 1, "maximum": 65535 },
+          "ppemX": { "type": "integer", "minimum": 1, "maximum": 1022 },
+          "ppemY": { "type": "integer", "minimum": 1, "maximum": 1022 },
           "planeUnitsPerEm": { "type": "integer", "minimum": 1, "maximum": 32767 },
           "recordBufferView": { "type": "integer", "minimum": 0 },
           "recordStride": { "type": "integer", "enum": [20] },

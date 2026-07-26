@@ -41,7 +41,10 @@ pub(crate) fn build_bitmap_glb(
         for (page_index, page) in strike.pages.iter().enumerate() {
             let ktx2 = ktx::encode_r8(page.width, page.height, &page.texels)?;
             let sha256 = hex_sha256(&ktx2);
-            let id = format!("bitmap-{raster_key}-s{}-p{page_index}.ktx2", strike.ppem);
+            let id = format!(
+                "bitmap-{shaping_hash}-{raster_key}-s{}-p{page_index}.ktx2",
+                strike.ppem
+            );
             let source = match page_packaging {
                 PagePackaging::Embedded => {
                     let view = append_buffer_view(&mut binary, &mut buffer_views, &ktx2)?;
