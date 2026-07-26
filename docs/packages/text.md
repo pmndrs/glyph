@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:eeb90addfe393390096dfeb4aec83751b286cb4e675dce9b26f959d9f2009f08"
+source_digest: "sha256:b7649e40ad3118b09a7bdcf55055101f193125739bbb03a9384e6f9fb0d9e671"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T02:55:00Z"
+  at: "2026-07-26T03:05:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -104,7 +104,7 @@ Item 5.3 now has a conformant Unicode 17 bidi foundation. The package-owned shap
 
 Item 5.3 completes paragraph-level bidi and line policy. Preparation resolves overlapping span properties with input-order-preserving active-value sweeps, then intersects style, UAX #24 script, and precomputed UAX #9 runs in one interval pass rather than rescanning every cross-product. It shapes each run in its resolved direction, copies borrowed analysis/shaping data, applies line-specific L1 reset and L2 visual ordering, and batches only unsafe changed boundaries. Boundary validation occurs once while copying/normalizing public input; normalized shaping and layout loops do not repeat generic object checks. A pinned Amiri 1.002 fixture covers joining, combining marks, lam-alef forms, Arabic numbers, and Latin: HarfRust over the source font equals HarfRust over the reduced SFNT extracted from the validated GLB exactly, and pinned HarfBuzz 13 independently agrees on every glyph field.
 
-The generated `paragraph-bidi-layout-v0.json` contract owns complete SoA values for two mixed-direction Amiri layouts plus exact start/center/end/justify, clip, max-lines, and width/height ellipsis policies over Inter. Alignment-only and height-only compatible layouts share cached boundary shaping; every changed boundary is reported as one batched reshape. Fixed-seed fuzzing mutates Unicode text—including expected malformed UTF-16 rejection—axis modes, widths/heights, wrapping, alignment, truncation, letter spacing, line height, and direction twice, requiring finite, internally consistent, deterministic output.
+The generated `paragraph-bidi-layout-v0.json` contract owns complete SoA values for two mixed-direction Amiri layouts plus exact start/center/end/justify, clip, max-lines, and width/height ellipsis policies over Inter. Alignment-only and height-only compatible layouts share cached boundary shaping; every changed boundary is reported as one batched reshape. Ellipsizing a line ending in a mandatory break removes that control cluster before inserting the ellipsis, so the visible range never crosses into the hidden line. Fixed-seed fuzzing mutates Unicode text—including expected malformed UTF-16 rejection—axis modes, widths/heights, wrapping, alignment, truncation, letter spacing, line height, and direction twice, requiring finite, internally consistent, deterministic output.
 
 The current-uikit-shaped fixture lives in the benchmark application rather than core. It derives `CustomLayouting` intrinsics, maps Yoga Undefined/AtMost/Exactly modes, ignores the numeric `NaN` payload of undefined axes, preserves uikit's 1/100-point upward rounding, skips measurement for two definite axes, subtracts padding/border from the authoritative resolved box, and translates content-local positions into centered host coordinates. Twenty repeated measurements materialize no glyph arrays. Text and shaping-policy updates dirty layout; paint and raster updates do not. Chromium 149 fixes the twelve-layout aggregate hash at `8859ef19:8d5b98a3:e492fa7d:19a5a03e:32f8722c:0691e0de:e492fa7d:0132eed7:0ddc10b5:0ddc10b5:00f73fd9:c1a7730c`, with 8,098 output bytes, four broad shapes, and five reshape crossings; the GPU Vitexec lane repeats it with WebGPU active.
 

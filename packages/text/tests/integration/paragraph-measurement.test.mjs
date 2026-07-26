@@ -246,6 +246,13 @@ test('validates spans, constraints, empty text, and lifecycle deterministically'
   const trailingBreak = engine.create({ text: 'a\n', font: font.handle }).measure()
   assert.equal(trailingBreak.contentHeight, singleLine.contentHeight * 2)
   assert.equal(trailingBreak.lastBaseline, singleLine.lastBaseline + singleLine.contentHeight)
+  const hardBreakEllipsis = engine.create({ text: 'a\nb', font: font.handle }).layout({
+    maxLines: 1,
+    overflow: 'ellipsis',
+  })
+  assert.deepEqual([...hardBreakEllipsis.lineTextEnds], [1])
+  assert.equal(hardBreakEllipsis.clusters.at(-1), 1)
+  assert.ok([...hardBreakEllipsis.clusters].every((cluster) => cluster <= 1))
   shaper.dispose()
   font.dispose()
 })

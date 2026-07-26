@@ -1004,6 +1004,9 @@ function ellipsizeLine(
 ): LinePlan {
   let clusterEnd = line.clusterEnd
   let advance = line.advance
+  while (clusterEnd > line.clusterStart && prepared.clusters[clusterEnd - 1]?.hardBreak === true) {
+    clusterEnd -= 1
+  }
   let selected = ellipsisAt(prepared, line.textEnd)
   while (
     clusterEnd > line.clusterStart &&

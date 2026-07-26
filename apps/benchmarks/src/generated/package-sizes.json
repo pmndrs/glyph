@@ -6,10 +6,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 268236,
-      "minifiedBytes": 209637,
-      "gzipBytes": 62242,
-      "brotliBytes": 47597
+      "rawBytes": 268350,
+      "minifiedBytes": 209715,
+      "gzipBytes": 62251,
+      "brotliBytes": 47606
     },
     {
       "id": "font-validator-js",

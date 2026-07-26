@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T02:55:00Z"
+  at: "2026-07-26T03:05:00Z"
 ---
 
 # Canonical implementation roadmap
@@ -399,7 +399,7 @@ Item 5.2 is closed. Item 5.3 closure evidence follows.
 - [x] The package-owned `no_std + alloc` shaper uses `unicode-bidi` 0.3.18's maintained UAX #9 algorithm with its bundled Unicode 16 data disabled and repository-generated Unicode 17 `Bidi_Class`/paired-bracket data supplied through the crate's custom data-source seam.
 - [x] Rust executes all 770,241 direction-expanded `BidiTest.txt` cases and all 91,707 `BidiCharacterTest.txt` cases from hash-pinned Unicode 17 gzip fixtures, comparing paragraph levels, every specified resolved level, and complete visual index order; direct-memory Wasm integration separately proves UTF-16/supplementary-plane indexing and explicit/automatic direction.
 - [x] Paragraph preparation intersects resolved style/script ranges with bidi level runs, shapes each run in its resolved direction, applies line-specific UAX #9 L1/L2 ordering, and fixes exact mixed-direction glyph identity/position goldens through the retained-GLB HarfRust path.
-- [x] Start/center/end/justify alignment, clipping, max-lines, and ellipsis have exact policy fixtures, cache/invalidation evidence, and no unreported shaping boundary crossings.
+- [x] Start/center/end/justify alignment, clipping, max-lines, and ellipsis have exact policy fixtures, cache/invalidation evidence, mandatory-break truncation coverage, and no unreported shaping boundary crossings.
 - [x] A current-uikit-shaped fixture proves repeated allocation-light measurement, Yoga-mode translation, final content-box layout, point-scale rounding ownership, and dirtying without a Yoga dependency in core.
 - [x] The real Chromium benchmark and GPU Vitexec lane execute the bidi/policy fixtures with deterministic recorded output before item 5.3 closes.
 
