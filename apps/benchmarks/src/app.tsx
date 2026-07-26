@@ -312,7 +312,7 @@ function locationSearch(): string {
 
 function subscribeDesktop(listener: () => void): () => void {
   if (typeof globalThis.matchMedia !== 'function') return () => undefined
-  const media = globalThis.matchMedia('(min-width: 1024px)')
+  const media = globalThis.matchMedia('(min-width: 1200px)')
   media.addEventListener('change', listener)
   return () => media.removeEventListener('change', listener)
 }
@@ -320,7 +320,7 @@ function subscribeDesktop(listener: () => void): () => void {
 function desktopSnapshot(): boolean {
   return (
     typeof globalThis.matchMedia !== 'function' ||
-    globalThis.matchMedia('(min-width: 1024px)').matches
+    globalThis.matchMedia('(min-width: 1200px)').matches
   )
 }
 
@@ -360,7 +360,7 @@ function TopBar({
       <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
         {(['benchmark', 'conformance'] as const).map((value) => (
           <button
-            className={`rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-dim'}`}
+            className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-dim'}`}
             key={value}
             type="button"
             onClick={() => onMode(value)}
@@ -488,7 +488,7 @@ function Scene({
       data-execution-id={summary?.executionId}
       data-testid="scene"
     >
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <p className="eyebrow">
             {location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}
@@ -496,7 +496,7 @@ function Scene({
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
           <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
           <Chip tone="accent">Bitmap</Chip>
           <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}</Chip>
           <Chip>{dpr}× DPR</Chip>
@@ -579,7 +579,7 @@ function BenchmarkSurface({
         />
       </div>
       <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
-        <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
+        <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3">
           <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
           <LiveCost label="Text ready" value={formatMs(stats?.textReadyMs)} />
@@ -615,14 +615,14 @@ function BenchmarkSurface({
         </div>
       </div>
       <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface p-3">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="eyebrow">Realtime scene</p>
             <p className="mt-1 text-xs text-muted">
               Paragraph-scale text renders continuously and reflows with its live viewport.
             </p>
           </div>
-          <span className="font-mono text-[9px] text-success">LIVE</span>
+          <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
         </div>
         <BitmapTextViewport
           backend={backend}
@@ -1130,7 +1130,7 @@ function MobileNavigation({
   readonly onLocation: (value: Partial<HarnessLocation>) => void
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[58px] grid-cols-4 border-t border-border bg-chrome p-2 lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[58px] grid-cols-4 border-t border-border bg-chrome p-2 min-[1200px]:hidden">
       {(['scene', 'controls', 'report', 'export'] as const).map((view) => (
         <button
           className={`rounded-md font-mono text-[10px] capitalize ${location.view === view ? 'bg-surface-active text-foreground' : 'text-dim'}`}
