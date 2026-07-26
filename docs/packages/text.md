@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:795fffc93e9ead0f77f281cd2d6ac7528f9db969e6d71262a1f11f0dfa51ffac"
+source_digest: "sha256:f3957db08da772f15d842d7c382c8c617a4b6b84049a15c348a5213658bf7de9"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T05:40:22Z"
+  at: "2026-07-26T06:08:31Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -76,7 +76,7 @@ The browser-safe `@pmndrs/text/raster/bitmap` subpath now owns bitmap generator/
 
 The optional `@pmndrs/text/bakers/bitmap` subpath wraps a zero-import `no_std + alloc` Wasm generator through its Rust-generated JSON ABI and direct linear-memory shim. Fontations/Skrifa owns font and outline interpretation; a small pen bridge feeds Zeno's maintained antialiased rasterizer. A deterministic shelf packer emits one dense 20-byte record per source glyph plus lossless linear R8 KTX2 pages, either embedded in the companion GLB or emitted as hashed external artifacts. Artifact and page filenames bind both `shapingHash` and `rasterKey`, preventing two fonts with the same raster configuration from overwriting one another. Glyph masks are placed as they are rasterized instead of retaining a second full-face bitmap set, fixed buffers reserve fallibly, and the atlas-compatible ppem bound rejects structurally impossible requests before font work. The bridge decodes borrowed response metadata while the allocation is live and copies only returned artifact ranges. Canonical path remapping plus Binaryen 129.0.0 `-Oz` reduces the hardened distributed module to 657,942 bytes raw, 238,727 bytes gzip, and 182,925 bytes Brotli.
 
-The isolated `@pmndrs/text/bakers/bitmap/validate` entry reuses the core package's strict GLB framing and pinned Khronos validator, evaluates byte-identical Draft-04 bitmap/resource schemas, parses every declared page variant with `ktx-parse` 1.1.0, and enforces reciprocal identity, exact strikes, dense records, page bounds, KTX2 dimensions/format/levels, GPU-format/feature/quality mapping, external length/hash, arithmetic limits, and GPU budgets. Rust independently parses every native-test KTX2 through `ktx2` 0.5.0. Canonical Inter source/Wasm/artifact/report/record/page identities, embedded/external parity, 65,535-glyph boundaries, generated/published ABI identity, deterministic arbitrary-font Rust fuzz smoke, and fixed-seed artifact mutation fuzz smoke are executable fixtures.[^bitmap-baker]
+The isolated `@pmndrs/text/bakers/bitmap/validate` entry reuses the core package's strict GLB framing and pinned Khronos validator, evaluates byte-identical Draft-04 bitmap/resource schemas, parses every declared page variant with `ktx-parse` 1.1.0, and enforces reciprocal identity, exact strikes, dense records, page bounds, KTX2 dimensions/format/levels, GPU-format/feature/quality mapping, external length/hash, arithmetic limits, and GPU budgets. Rust independently parses every native-test KTX2 through `ktx2` 0.5.0. Canonical Inter source/artifact/report/record/page identities, the fixed optimized Wasm size, embedded/external parity, 65,535-glyph boundaries, generated/published ABI identity, deterministic arbitrary-font Rust fuzz smoke, and fixed-seed artifact mutation fuzz smoke are executable fixtures. The source-remapped macOS arm64 and Ubuntu x64 modules have identical lengths and exact product output but different internal function-index order, so a release hash identifies the canonical builder output rather than pretending native code generators are cross-architecture byte canonicalizers.[^bitmap-baker]
 
 The internal generic composer authenticates every returned artifact, checks reciprocal shaping/glyph/raster identity, retains external companions and pages, and embeds package-owned companion data without interpreting its semantics. Integer glTF buffer-view references are rebased through the shared naming convention, so multiple distinct extension types compose without a closed registry. Exact Inter goldens cover combined embedded, combined external, and the identity-neutral empty raster set; both the core and bitmap validators round-trip the combined bytes.
 

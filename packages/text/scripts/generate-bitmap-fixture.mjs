@@ -88,7 +88,6 @@ const fixture = {
   generator: {
     version: '0.0.0',
     optimizedWasmBytes: wasm.byteLength,
-    optimizedWasmSha256: hash(wasm),
     dependencies: {
       readFonts: '0.42.1',
       skrifa: '0.45.1',

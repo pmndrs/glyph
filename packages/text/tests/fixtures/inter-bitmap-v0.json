@@ -18,7 +18,6 @@
   "generator": {
     "version": "0.0.0",
     "optimizedWasmBytes": 657942,
-    "optimizedWasmSha256": "590c7364762a4cf2cc89f9bc4afd6ab701f216d6b5e21834575985e27ff69d74",
     "dependencies": {
       "readFonts": "0.42.1",
       "skrifa": "0.45.1",

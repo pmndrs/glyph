@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T14:19:44Z"
+  at: "2026-07-26T06:08:31Z"
 ---
 
 # Shaping and layout conformance plan
@@ -385,6 +385,8 @@ Repeated success is supporting evidence, not a substitute for causal synchroniza
 Status: ✅ implemented by [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
 
 The workflow installs the exact repository Node, pnpm, stable Rust, and Wasm target pins through mise, installs dependencies from the frozen lockfile, and runs `pnpm check` with headless Chromium. Third-party actions use immutable commit SHAs annotated with their verified current release. Vitexec, hardware-GPU claims, timing gates, and coverage-guided nightly fuzzing remain outside this tier.
+
+Wasm runtime portability is verified through the generated ABI and exact source-to-product behavior. Release builds also remap checkout and Cargo paths and enforce exact optimized sizes. An exact Wasm hash identifies output from the canonical release builder: pinned native Rust/Binaryen builds on macOS arm64 and Ubuntu x64 can encode equivalent modules with different internal function-index order, even though the modules have equal length and produce byte-identical artifacts. CI retains failed Wasm outputs for seven days so any future divergence can be compared directly rather than inferred from a hash alone.
 
 - formatting and package-owned unit tests;
 - compiled-artifact package integration tests;
