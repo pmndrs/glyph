@@ -1,4 +1,4 @@
-import { createRoot, flushSync, type RootStore } from '@react-three/fiber'
+import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu'
 import React, { createRef, StrictMode, useLayoutEffect } from 'react'
 import * as THREE from 'three/webgpu'
 
@@ -87,8 +87,8 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
       dpr,
       flat: true,
       frameloop: 'never',
-      gl: renderer,
       orthographic: true,
+      renderer,
       size: { height: FRAME_HEIGHT, left: 0, top: 0, width: FRAME_WIDTH },
     })
     font = await useFont.preload(fontToken)

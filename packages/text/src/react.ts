@@ -1,4 +1,4 @@
-import type { ThreeElements } from '@react-three/fiber'
+import type { ThreeElements } from '@react-three/fiber/webgpu'
 import {
   createElement,
   isValidElement,
@@ -39,6 +39,8 @@ type DistributiveOmit<Value, Keys extends PropertyKey> = Value extends unknown
   : never
 
 type ReactTextCoreProps = DistributiveOmit<TextProperties, 'text' | 'spans'> & {
+  readonly text?: never
+  readonly spans?: never
   readonly children?: TextChild | readonly TextChild[]
 }
 

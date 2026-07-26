@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import test from 'node:test'
+import test, { after } from 'node:test'
 
 import React, { createRef, StrictMode } from 'react'
-import ReactThreeTestRenderer from '@react-three/test-renderer'
 
 import { Text as CoreText, defineFont } from '../../dist/index.js'
 import { Text, lazyRaster, useFont } from '../../dist/react.js'
 import { bitmap } from '../../dist/raster/bitmap.js'
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+const restoreR3fEnvironment = installR3fEnvironment()
+const { default: ReactThreeTestRenderer } = await import('@react-three/test-renderer')
+after(restoreR3fEnvironment)
 
 const fixtureUrl = new URL(
   '../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb',
@@ -162,5 +163,24 @@ function installFileFetch() {
   }
   return () => {
     globalThis.fetch = original
+  }
+}
+
+function installR3fEnvironment() {
+  const originalSelf = globalThis.self
+  const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+  const originalActEnvironment = globalThis.IS_REACT_ACT_ENVIRONMENT
+
+  globalThis.self = globalThis
+  globalThis.requestAnimationFrame = () => 0
+  globalThis.cancelAnimationFrame = () => undefined
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+  return () => {
+    globalThis.self = originalSelf
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+    globalThis.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment
   }
 }

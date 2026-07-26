@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+
+const packageManifest = new URL('../../package.json', import.meta.url)
+const reactSource = new URL('../../src/react.ts', import.meta.url)
+
+test('pins the R3F v10 WebGPU entry without browser-global import side effects', async () => {
+  assert.equal(globalThis.localStorage, undefined)
+
+  const fiber = await import('@react-three/fiber/webgpu')
+  const testRenderer = await import('@react-three/test-renderer')
+  const [manifestText, source] = await Promise.all([
+    readFile(packageManifest, 'utf8'),
+    readFile(reactSource, 'utf8'),
+  ])
+  const manifest = JSON.parse(manifestText)
+
+  assert.equal(manifest.devDependencies['@react-three/fiber'], '10.0.0-alpha.2')
+  assert.equal(manifest.peerDependencies['@react-three/fiber'], '>=10.0.0-alpha.2 <11')
+  assert.equal(typeof fiber.createRoot, 'function')
+  assert.equal(typeof testRenderer.default.create, 'function')
+  assert.match(source, /from '@react-three\/fiber\/webgpu'/)
+  assert.doesNotMatch(source, /from '@react-three\/fiber'/)
+})

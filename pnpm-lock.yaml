@@ -5,6 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@react-three/fiber@10.0.0-alpha.2': 0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8
+  '@react-three/test-renderer@9.1.0': d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d
   '@types/three@0.185.1': 0991e5235cf6b2d8dca53f299828795416c44b1a429e0593572c5817f431062e
 
 importers:
@@ -24,8 +26,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/font-baker
       '@react-three/fiber':
-        specifier: 9.6.1
-        version: 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+        specifier: 10.0.0-alpha.2
+        version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -126,11 +128,11 @@ importers:
         version: 0.15.0
     devDependencies:
       '@react-three/fiber':
-        specifier: 9.6.1
-        version: 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+        specifier: 10.0.0-alpha.2
+        version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@react-three/test-renderer':
         specifier: 9.1.0
-        version: 9.1.0(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
+        version: 9.1.0(patch_hash=d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d)(@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -584,29 +586,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@react-three/fiber@9.6.1':
-    resolution: {integrity: sha512-zF0rsKcVYpcJwbFEnv2HkHX9cvOEgsfQo/X8lwmR2dn13S4qEQJXir9fxf5js2LQFoXqxOY7MDkOkYx2uZ4gSg==}
+  '@react-three/fiber@10.0.0-alpha.2':
+    resolution: {integrity: sha512-X4zbB5shS7QQX8X7lFxx6RXtXMIvshZBid4+7B4+lc+7Eg+qayVXt7ch0/NC/WqqNCfsNV4AOfGGXJ33yogKeQ==}
     peerDependencies:
-      expo: '>=43.0'
-      expo-asset: '>=8.4'
-      expo-file-system: '>=11.0'
-      expo-gl: '>=11.0'
-      react: '>=19 <19.3'
-      react-dom: '>=19 <19.3'
-      react-native: '>=0.78'
-      three: '>=0.156'
+      react: '>=19.0 <19.3'
+      react-dom: '>=19.0 <19.3'
+      three: '>=0.181.2'
     peerDependenciesMeta:
-      expo:
-        optional: true
-      expo-asset:
-        optional: true
-      expo-file-system:
-        optional: true
-      expo-gl:
-        optional: true
       react-dom:
-        optional: true
-      react-native:
         optional: true
 
   '@react-three/test-renderer@9.1.0':
@@ -1084,9 +1071,6 @@ packages:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
 
-  base64-js@1.5.1:
-    resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
-
   baseline-browser-mapping@2.11.1:
     resolution: {integrity: sha512-HYXq73DDpCtNzOmrFsm9eSwCvWCql0RzqjpDzXN9EadiLJ4DNat0nsZ/Bzmy+Ud12mb4/zKDY0cQ805ZzN+i0A==}
     engines: {node: '>=6.0.0'}
@@ -1104,9 +1088,6 @@ packages:
     resolution: {integrity: sha512-JxV13hNrFxqjOc8alRbq9dK1MM79NEXYpma2B2J4wAtpWS5zIEIKqWPGCl7N4o7Uc7B7itylh7SuDujATRyyTw==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
-
-  buffer@6.0.3:
-    resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
 
   caniuse-lite@1.0.30001806:
     resolution: {integrity: sha512-72Cuvd95zbSYPKq6Fhg8eDJRlzgWDf7/mtoZv6Qe/DYNCEBdNxoA3+rZAU2ZhGCpZlns3EssFavaZomckT5Uuw==}
@@ -1140,6 +1121,10 @@ packages:
 
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
+
+  dequal@2.0.3:
+    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
+    engines: {node: '>=6'}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
@@ -1285,9 +1270,6 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
-
-  ieee754@1.2.1:
-    resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
 
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
@@ -2165,12 +2147,10 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.75.0':
     optional: true
 
-  '@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)':
+  '@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)':
     dependencies:
       '@babel/runtime': 7.29.7
-      '@types/webxr': 0.5.24
-      base64-js: 1.5.1
-      buffer: 6.0.3
+      dequal: 2.0.3
       its-fine: 2.0.0(@types/react@19.2.14)(react@19.2.8)
       react: 19.2.8
       react-use-measure: 2.1.7(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2185,9 +2165,9 @@ snapshots:
       - '@types/react'
       - immer
 
-  '@react-three/test-renderer@9.1.0(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)':
+  '@react-three/test-renderer@9.1.0(patch_hash=d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d)(@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)':
     dependencies:
-      '@react-three/fiber': 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      '@react-three/fiber': 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react: 19.2.8
       three: 0.185.1
 
@@ -2529,8 +2509,6 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  base64-js@1.5.1: {}
-
   baseline-browser-mapping@2.11.1: {}
 
   binaryen@129.0.0: {}
@@ -2546,11 +2524,6 @@ snapshots:
       electron-to-chromium: 1.5.395
       node-releases: 2.0.51
       update-browserslist-db: 1.2.3(browserslist@4.28.7)
-
-  buffer@6.0.3:
-    dependencies:
-      base64-js: 1.5.1
-      ieee754: 1.2.1
 
   caniuse-lite@1.0.30001806: {}
 
@@ -2573,6 +2546,8 @@ snapshots:
       ms: 2.1.3
 
   deep-is@0.1.4: {}
+
+  dequal@2.0.3: {}
 
   detect-libc@2.1.2: {}
 
@@ -2713,8 +2688,6 @@ snapshots:
   gltf-validator@2.0.0-dev.3.10: {}
 
   graceful-fs@4.2.11: {}
-
-  ieee754@1.2.1: {}
 
   ignore@5.3.2: {}
 
