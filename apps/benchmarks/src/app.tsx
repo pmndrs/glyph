@@ -1,5 +1,17 @@
-import { Suspense, use, useState, useTransition, type ReactNode } from 'react'
+import {
+  Fragment,
+  Suspense,
+  use,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react'
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts'
+import type { BitmapTextLiveStats } from './renderer/bitmap-text'
+import { BENCHMARK_IPSUM_TEXT } from './benchmark/benchmark-ipsum'
 import { environmentResource } from './benchmark/environment'
 import { defaultControls, runRegisteredBenchmark } from './benchmark/execution'
 import { missingCapabilities } from './benchmark/runner'
@@ -126,6 +138,7 @@ function Harness() {
             location={location}
             summary={summary}
             onDpr={selectDpr}
+            onGrid={setShowGrid}
             onLocation={setLocation}
           />
         </main>
@@ -142,6 +155,7 @@ function Harness() {
               location={location}
               summary={summary}
               onDpr={selectDpr}
+              onGrid={setShowGrid}
               onLocation={setLocation}
             />
           )}
@@ -307,6 +321,7 @@ function Scene({
   location,
   summary,
   onDpr,
+  onGrid,
   onLocation,
 }: {
   readonly dpr: 1 | 2
@@ -316,17 +331,18 @@ function Scene({
   readonly location: HarnessLocation
   readonly summary: BenchmarkSummary | undefined
   readonly onDpr: (dpr: 1 | 2) => void
+  readonly onGrid: (grid: boolean) => void
   readonly onLocation: (value: Partial<HarnessLocation>) => void
 }) {
   const target = targetById(location.target)
   const scenario = scenarioById(location.scenario)
   return (
     <section
-      className="mx-auto grid max-w-[1100px] gap-3"
+      className="grid size-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3"
       data-completed-at={summary?.completedAt}
       data-testid="scene"
     >
-      <header className="flex min-h-[62px] items-start justify-between gap-4">
+      <header className="flex items-start justify-between gap-4">
         <div>
           <p className="eyebrow">Scenario · {scenario.id}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{scenario.label}</h1>
@@ -347,10 +363,10 @@ function Scene({
           >
             2×
           </Button>
-          <Button>{grid ? 'Grid on' : 'Grid off'}</Button>
+          <Button onClick={() => onGrid(!grid)}>{grid ? 'Grid on' : 'Grid off'}</Button>
         </div>
       </header>
-      <div className="overflow-hidden rounded-md border border-border bg-surface">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-surface">
         <div className="flex h-[42px] items-center gap-2 border-b border-border px-3">
           <Chip tone={target.status({}) === 'unavailable' ? 'warning' : 'accent'}>
             {target.label}
@@ -360,7 +376,7 @@ function Scene({
           </Chip>
           <span className="ml-auto font-mono text-[9px] text-dim">SHARED RUNNER · V0</span>
         </div>
-        <div className={`benchmark-grid min-h-[420px] p-4 ${grid ? 'is-visible' : ''}`}>
+        <div className="flex min-h-0 flex-1 flex-col p-4">
           <div className="grid gap-3 md:grid-cols-3">
             {['Load target', 'Run samples', 'Validate output'].map((label, index) => {
               const complete = event?.phase === 'complete' || (event !== undefined && index === 0)
@@ -383,27 +399,30 @@ function Scene({
               )
             })}
           </div>
-          <div className="mt-3 rounded-md border border-border bg-panel/95 p-4">
+          <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-md border border-border bg-panel/95 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <p className="eyebrow">Raster readiness ladder</p>
+                <p className="eyebrow">
+                  {location.target.startsWith('bitmap-text-')
+                    ? 'Live bitmap viewport'
+                    : 'Raster readiness ladder'}
+                </p>
                 <p className="mt-1 text-xs text-muted">
-                  Capability-gated until real render adapters land.
+                  Live renderer output; Run suite captures deterministic evidence.
                 </p>
               </div>
-              <span className="font-mono text-[9px] text-warning">NO FABRICATED METRICS</span>
+              <span className="font-mono text-[9px] text-success">LIVE GPU VIEW</span>
             </div>
-            <div className="grid grid-cols-[48px_repeat(3,1fr)] overflow-hidden rounded border border-border text-xs">
-              <div className="cell cell-head">PX</div>
-              {['Bitmap', 'MSDF', 'Slug'].map((label) => (
-                <div className="cell cell-head" key={label}>
-                  {label}
-                </div>
-              ))}
-              {sampleSizes.map((size) => (
-                <SampleRow key={size} size={size} />
-              ))}
-            </div>
+            {location.target === 'bitmap-text-webgpu' ||
+            location.target === 'bitmap-text-webgl2' ? (
+              <BitmapTextViewport
+                backend={location.target === 'bitmap-text-webgpu' ? 'webgpu' : 'webgl2'}
+                dpr={dpr}
+                grid={grid}
+              />
+            ) : (
+              <UnavailableReadinessLadder />
+            )}
           </div>
           {error && (
             <div className="mt-3 rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">
@@ -413,10 +432,13 @@ function Scene({
         </div>
       </div>
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-4">
-        <Metric label="Median" value={formatMs(summary?.medianMs)} />
-        <Metric label="P95" value={formatMs(summary?.p95Ms)} />
-        <Metric label="Samples" value={String(summary?.measurements.length ?? 0)} />
-        <Metric label="Validation" value={summary?.status ?? 'awaiting'} />
+        <Metric label="Captured median" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
+        <Metric label="Captured P95" value={formatMs(summary?.p95Ms ?? event?.p95Ms)} />
+        <Metric
+          label="Captured samples"
+          value={String(summary?.measurements.length ?? event?.completed ?? 0)}
+        />
+        <Metric label="Suite validation" value={summary?.status ?? 'awaiting capture'} />
       </div>
       <div className="flex gap-2 lg:hidden">
         <Button className="flex-1" onClick={() => onLocation({ view: 'controls' })}>
@@ -430,15 +452,152 @@ function Scene({
   )
 }
 
-function SampleRow({ size }: { readonly size: number }) {
+function UnavailableReadinessLadder() {
   return (
-    <>
-      <div className="cell font-mono text-dim">{size}</div>
-      <div className="cell text-dim">unavailable</div>
-      <div className="cell text-dim">unavailable</div>
-      <div className="cell text-dim">unavailable</div>
-    </>
+    <div className="grid grid-cols-[48px_repeat(3,1fr)] overflow-hidden rounded border border-border text-xs">
+      <div className="cell cell-head">PX</div>
+      {['Bitmap', 'MSDF', 'Slug'].map((label) => (
+        <div className="cell cell-head" key={label}>
+          {label}
+        </div>
+      ))}
+      {sampleSizes.map((size) => (
+        <Fragment key={size}>
+          <div className="cell font-mono text-dim">{size}</div>
+          <div className="cell text-dim">unavailable</div>
+          <div className="cell text-dim">unavailable</div>
+          <div className="cell text-dim">unavailable</div>
+        </Fragment>
+      ))}
+    </div>
   )
+}
+
+function BitmapTextViewport({
+  backend,
+  dpr,
+  grid,
+}: {
+  readonly backend: 'webgpu' | 'webgl2'
+  readonly dpr: 1 | 2
+  readonly grid: boolean
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [stats, setStats] = useState<BitmapTextLiveStats>()
+  const [error, setError] = useState<string>()
+  const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
+    setStats(next)
+    setError(undefined)
+  })
+  const publishError = useEffectEvent((caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === 'AbortError') return
+    setError(caught instanceof Error ? caught.message : String(caught))
+  })
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (canvas === null || container === null) return
+    const controller = new AbortController()
+    let preview: Awaited<
+      ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>
+    >
+    const resize = (): void => {
+      if (preview === undefined) return
+      const bounds = container.getBoundingClientRect()
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
+    }
+    const observer = new ResizeObserver(resize)
+    observer.observe(container)
+    void import('./renderer/bitmap-text')
+      .then(({ createBitmapTextPreview }) => {
+        const bounds = container.getBoundingClientRect()
+        return createBitmapTextPreview({
+          backend,
+          canvas,
+          dpr,
+          fontSize: 16 / dpr,
+          height: Math.max(1, bounds.height),
+          text: BENCHMARK_IPSUM_TEXT,
+          width: Math.max(1, bounds.width),
+          signal: controller.signal,
+          onError: publishError,
+          onStats: publishStats,
+        })
+      })
+      .then((created) => {
+        preview = created
+        resize()
+      })
+      .catch(publishError)
+    return () => {
+      controller.abort()
+      observer.disconnect()
+      if (preview !== undefined) void preview.dispose()
+    }
+  }, [backend, dpr])
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="mb-2 grid grid-cols-2 gap-px overflow-hidden rounded border border-border bg-border sm:grid-cols-4">
+        <LiveMetric
+          label="FPS"
+          value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
+        />
+        <LiveMetric label="CPU submit" value={formatMs(stats?.medianSubmitMs)} />
+        <LiveMetric
+          label="Glyphs / draws"
+          value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
+        />
+        <LiveMetric label="Tracked GPU" value={formatBytes(stats?.totalGpuBytes)} />
+      </div>
+      <div
+        className={`benchmark-grid relative min-h-[320px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+        data-testid="bitmap-live-viewport"
+        ref={containerRef}
+      >
+        <canvas
+          aria-label={`Live bitmap text frame using ${backend}`}
+          className="absolute inset-0 size-full"
+          ref={canvasRef}
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+          <span>
+            BAKED {stats?.strikePpem ?? 16} PX · RENDERED {stats?.renderedPpem ?? 16} DEVICE PX ·{' '}
+            {(stats?.scaleRatio ?? 1).toFixed(2)}× · {stats?.cssFontSize ?? 16 / dpr} CSS PX
+          </span>
+          <span>{dpr}× DPR</span>
+        </div>
+        {stats === undefined && error === undefined && (
+          <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
+            INITIALIZING {backend.toUpperCase()}
+          </div>
+        )}
+        {error !== undefined && (
+          <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LiveMetric({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="bg-surface px-3 py-2">
+      <p className="font-mono text-[8px] uppercase tracking-wider text-dim">{label}</p>
+      <p className="mt-1 font-mono text-[11px] text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function formatBytes(value: number | undefined): string {
+  if (value === undefined) return '—'
+  return value < 1024 * 1024
+    ? `${Math.round(value / 1024)} KB`
+    : `${(value / (1024 * 1024)).toFixed(2)} MB`
 }
 
 function Controls({

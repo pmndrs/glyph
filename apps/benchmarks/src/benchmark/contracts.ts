@@ -86,4 +86,7 @@ export interface RunnerEvent {
   readonly phase: 'loading' | 'warming' | 'sampling' | 'complete'
   readonly completed: number
   readonly total: number
+  readonly latest?: BenchmarkMeasurement
+  readonly medianMs?: number
+  readonly p95Ms?: number
 }

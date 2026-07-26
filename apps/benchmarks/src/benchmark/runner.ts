@@ -48,12 +48,22 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
       onEvent?.({ phase: 'sampling', completed: sample, total: controls.samples })
       const start = performance.now()
       const output = await target.run(input, sample, controls)
-      measurements.push({
+      const measurement: BenchmarkMeasurement = {
         sample,
         durationMs: performance.now() - start,
         outputBytes: output.bytes,
         hash: output.hash,
         ...(output.metrics === undefined ? {} : { metrics: output.metrics }),
+      }
+      measurements.push(measurement)
+      const liveDurations = measurements.map(({ durationMs }) => durationMs)
+      onEvent?.({
+        phase: 'sampling',
+        completed: sample + 1,
+        total: controls.samples,
+        latest: measurement,
+        medianMs: median(liveDurations),
+        p95Ms: percentile(liveDurations, 0.95),
       })
     }
 
@@ -75,7 +85,16 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
       completedAt: new Date().toISOString(),
       environment,
     }
-    onEvent?.({ phase: 'complete', completed: controls.samples, total: controls.samples })
+    const latest = measurements.at(-1)
+    if (latest === undefined) throw new Error('benchmark completed without a measurement')
+    onEvent?.({
+      phase: 'complete',
+      completed: controls.samples,
+      total: controls.samples,
+      latest,
+      medianMs: summary.medianMs,
+      p95Ms: summary.p95Ms,
+    })
     return summary
   } finally {
     await target.dispose()
