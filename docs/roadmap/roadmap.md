@@ -108,7 +108,11 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 6.4  |   🟡   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                   |  M   | 6.1–6.3    |
 | 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
 | 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
-| 8.x  |   ⬜   | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work.                                                                                                            |  XL  | 7.2        |
+| 8.1  |   🟡   | Admit and harden one deterministic pure-Rust MTSDF generator against panic, Wasm, size, fuzz, and native-msdfgen quality gates.                                                          |  L   | 7.2        |
+| 8.2  |   ⬜   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
+| 8.3  |   ⬜   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
+| 8.4  |   ⬜   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
+| 8.5  |   ⬜   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |
 | 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
 | 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.x, 9.x   |
 | 10.2 |   ⬜   | Complete release validation, guidance, and migration material.                                                                                                                           |  M   | 10.1       |
@@ -562,6 +566,17 @@ Deliver:
 - bundle assertions proving bitmap- and Slug-only consumers do not import MSDF code.
 
 Exit only when MSDF is credible as the general-purpose recommendation across the accepted size and transform corpus.
+
+### 8.1 generator-admission checklist
+
+- [x] Audit current Rust candidates against the accepted MTSDF, maintained-font-library, Wasm, licensing, panic-resistance, and package-size constraints.
+- [ ] Remove panic/assert paths and unconditional diagnostic allocation from the selected generator through an upstreamable patch rather than a product-side catch or trap policy.
+- [ ] Compile the CPU generator for `wasm32-unknown-unknown` without WGPU/native bindings, duplicate font parsers, or an unreviewed `std`/allocator expansion.
+- [ ] Compare deterministic RGBA8 output and reconstructed glyph error against pinned native `msdfgen` over ordinary, acute-corner, overlap, cubic, quadratic, empty, malformed, and complex-outline fixtures.
+- [ ] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence before accepting the dependency.
+- [ ] Record raw/minified/gzip/Brotli generator Wasm size plus cold/warm generation cost before item 8.2 begins.
+
+The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. `klyff_msdf` 0.1.3 is the leading patch candidate; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages.
 
 ## Milestone 9 — Slug release renderer
 
