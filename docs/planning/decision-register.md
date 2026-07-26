@@ -134,6 +134,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-092 | Hinted grayscale strikes and optional four-phase grayscale packing remain measured research. LCD/ClearType subpixel rendering, panel-order assumptions, runtime hint interpreters, and distance-field reconstruction are out of scope. | Experiment |
 | D-093 | Bitmap V0 renders fill and opacity only and rejects outline or shadow through the raster paint-validation seam; MTSDF owns those distance-based effects rather than silently degrading them. | Accepted |
 | D-096 | Bitmap presentation transitions are optional `@pmndrs/text/raster/bitmap` helpers over copied glyph identities and instance origins. Shaping and layout commit discretely; only identity-matched glyph positions interpolate before the existing physical-pixel snap, and unused consumers pay no target-origin allocation. | Settled for V0 |
+| D-097 | Milestone 8 admits no published MTSDF generator unchanged. `klyff_msdf` 0.1.3 is the leading pure-Rust patch candidate, while pinned native Chlumsky `msdfgen` is a test-only quality oracle. Admission requires upstreamable panic/allocation hardening, `wasm32-unknown-unknown` and dependency-size evidence, deterministic oracle comparison, malformed-input tests, and coverage-guided fuzzing before any product dependency lands. | Experiment |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
