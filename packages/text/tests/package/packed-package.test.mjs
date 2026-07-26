@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import test from 'node:test'
+
+const packageDirectory = fileURLToPath(new URL('../..', import.meta.url))
+
+test('the packed package exposes every ESM subpath and no CommonJS entry', async (context) => {
+  const temporaryDirectory = await mkdtemp(join(packageDirectory, '.packed-package-'))
+  context.after(() => rm(temporaryDirectory, { recursive: true, force: true }))
+
+  const archiveDirectory = join(temporaryDirectory, 'archive')
+  const installedDirectory = join(temporaryDirectory, 'consumer', 'node_modules', '@pmndrs', 'text')
+  await mkdir(archiveDirectory, { recursive: true })
+  await mkdir(installedDirectory, { recursive: true })
+  execFileSync('pnpm', ['pack', '--pack-destination', archiveDirectory], {
+    cwd: packageDirectory,
+    stdio: 'ignore',
+  })
+  execFileSync(
+    'tar',
+    [
+      '-xzf',
+      join(archiveDirectory, 'pmndrs-text-0.0.0.tgz'),
+      '--strip-components=1',
+      '-C',
+      installedDirectory,
+    ],
+    { stdio: 'ignore' },
+  )
+
+  const manifest = JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'))
+  const packedFiles = await readdir(installedDirectory, { recursive: true })
+  assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false)
+  assert.deepEqual(
+    [...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(),
+    ['dist', 'package.json'],
+  )
+  const consumerEntry = pathToFileURL(join(temporaryDirectory, 'consumer', 'entry.mjs')).href
+  const moduleSubpaths = Object.entries(manifest.exports)
+    .filter(([, target]) => typeof target === 'object' && target !== null)
+    .map(([subpath]) => (subpath === '.' ? '@pmndrs/text' : `@pmndrs/text${subpath.slice(1)}`))
+
+  for (const specifier of moduleSubpaths) {
+    const resolved = import.meta.resolve(specifier, consumerEntry)
+    const imported = await import(resolved)
+    assert.ok(Object.keys(imported).length > 0, `${specifier} must expose at least one ESM export`)
+  }
+
+  for (const subpath of [
+    './text-shaper.wasm',
+    './shaper-abi.json',
+    './bitmap-baker.wasm',
+    './bitmap-abi.json',
+  ]) {
+    const specifier = `@pmndrs/text${subpath.slice(1)}`
+    const resolved = import.meta.resolve(specifier, consumerEntry)
+    assert.ok(
+      (await readFile(fileURLToPath(resolved))).byteLength > 0,
+      `${specifier} must be packed`,
+    )
+  }
+
+  const runtimeHost = await readFile(join(installedDirectory, 'dist/runtime-bake.js'), 'utf8')
+  assert.match(
+    runtimeHost,
+    /new Worker\(new URL\(["']\.\/runtime-bake-worker\.js["'][\s\S]*type:\s*["']module["']/,
+  )
+
+  const commonJs = spawnSync(process.execPath, ['-e', "require('@pmndrs/text')"], {
+    cwd: dirname(installedDirectory),
+    encoding: 'utf8',
+  })
+  assert.notEqual(commonJs.status, 0)
+  assert.match(commonJs.stderr, /ERR_PACKAGE_PATH_NOT_EXPORTED|ERR_REQUIRE_ESM/)
+})

@@ -6,7 +6,8 @@
     "pmndrs-text-bake": "./dist/node/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo"
   ],
   "type": "module",
   "sideEffects": false,

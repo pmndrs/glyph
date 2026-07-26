@@ -394,6 +394,30 @@ test('registries isolate generations, own their bytes, enforce limits, and inval
   )
 })
 
+test('raster handles are generation-scoped and become stale on disposal', async () => {
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(embeddedBytes)
+  const reference = font.rasterReferences[0]
+  const first = await font.loadRaster({ rasterKey: reference.rasterKey, kind: 'bitmap' })
+  const view = first.extensionData.strikes[0].recordBufferView
+
+  assert.ok(first.view(view).byteLength > 0)
+  first.dispose()
+  assert.equal(font.getRaster(reference.rasterKey), undefined)
+  assert.throws(
+    () => first.view(view),
+    (error) => error instanceof FontLoadError && error.code === 'STALE_RASTER_HANDLE',
+  )
+
+  const second = await font.loadRaster({ rasterKey: reference.rasterKey, kind: 'bitmap' })
+  assert.notEqual(second.handle, first.handle)
+  font.dispose()
+  assert.throws(
+    () => second.view(view),
+    (error) => error instanceof FontLoadError && error.code === 'STALE_FONT_HANDLE',
+  )
+})
+
 test('fetch limits reject both declared and streamed excess before registration', async () => {
   const streamed = new FontLoader({
     registry: new FontRegistry({ maxArtifactBytes: 1024 }),

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:784e192c4c1e6e098c70ed710641a8e218217f25cc5766a130b43c616c7b8d90"
+source_digest: "sha256:c63e7d8dbfbb62a1f3df0edd53d19f8d12d16564af4dad062272f809c7158652"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -70,7 +70,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:27:32Z"
+  at: "2026-07-26T19:51:43Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -100,6 +100,8 @@ The Node-only `@pmndrs/text/bake` subpath closes roadmap item 2.4 around the ite
 The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The host writes exclusive same-directory temporary files, backs up existing regular-file targets, publishes only after every artifact is staged, and restores all earlier targets if a later rename fails; process termination during the multi-file swap is not claimed as a filesystem transaction. It rejects lexical and filesystem-identity input/output overlap, non-regular existing targets, and unsafe package-owned filenames, then cleans temporary or backup files after success, cancellation, and ordinary failure. Its plugin type guard proves each required property with `in` checks before reading it rather than asserting a partial module shape. Discovery reports are sorted by source file and lexical AST offset after concurrent analysis. Its report adds phase/total timing, before/after RSS, explicitly process-lifetime peak RSS, output paths and hashes, and raw/gzip/Brotli transport sizes to the authoritative core/raster/container byte report.[^node-host]
 
 The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
+
+Milestone 7.1 strengthens that lifecycle at the asynchronous raster publication boundary. If a decode completes after its runtime or owning font generation has been disposed, the decoded resource is released exactly once and the awaiting caller receives `AbortError`; it can never observe a resource that was already torn down. Named tests also prove stale raster handles, same-artifact re-registration with a fresh font handle, stale-handle shaping rejection, and independent shape-plan ownership. The packed tarball is exercised as the consumer artifact: every declared JavaScript and Wasm/JSON subpath resolves as ESM, the fallback remains a module-Worker edge, and CommonJS loading fails rather than discovering a hidden compatibility build.
 
 Paragraph instances retain only the 32 most recently used entries in each measurement, line-plan, positioning, geometry, and final-layout cache. Each registered font likewise retains at most 64 least-recently-used HarfRust shape plans. Equivalent hot calls still reuse the same results, while adversarial constraint or language/feature variation has a fixed retention ceiling; updating or disposing a paragraph and disposing a font release the respective caches immediately. Paragraph preparation indexes cluster starts plus spacing/space prefix sums once, and positioned fragments use binary bounds over monotone HarfRust clusters instead of rescanning the paragraph or complete shaped run at every glyph boundary.
 

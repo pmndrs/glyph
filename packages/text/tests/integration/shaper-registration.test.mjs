@@ -104,6 +104,56 @@ test('shaper ownership stays scoped to its FontRegistry', async () => {
   foreign.dispose()
 })
 
+test('re-registering the same artifact creates a new lifecycle without reviving stale handles', async () => {
+  const { artifact, shaperWasm } = await fixture()
+  const registry = new FontRegistry()
+  const first = await registry.registerAsset(artifact)
+  const firstHandle = first.handle
+  const shaper = await createRuntimeShaper({ registry, wasm: shaperWasm })
+  const request = {
+    textUtf16: utf16('A'),
+    features: [],
+    runs: [
+      {
+        font: firstHandle,
+        textStart: 0,
+        textEnd: 1,
+        direction: 'ltr',
+        script: 'Latn',
+        language: 'en',
+        clusterLevel: 0,
+        flags: 0x40,
+        featureStart: 0,
+        featureCount: 0,
+      },
+    ],
+  }
+  const ranges = [{ run: 0, itemStart: 0, itemEnd: 1, contextStart: 0, contextEnd: 1, flags: 0x40 }]
+
+  shaper.registerFont(first)
+  assert.equal(shaper.shapeBatch(request).glyphIds.length, 1)
+  first.dispose()
+  assert.throws(() => shaper.shapeBatch(request), /font handle .* is not registered/)
+  assert.throws(
+    () => shaper.reshapeRanges({ ...request, ranges }),
+    /font handle .* is not registered/,
+  )
+
+  const second = await registry.registerAsset(artifact)
+  assert.notEqual(second.handle, firstHandle)
+  assert.equal(second.shapingHash, first.shapingHash)
+  shaper.registerFont(second)
+  const secondRequest = {
+    ...request,
+    runs: [{ ...request.runs[0], font: second.handle }],
+  }
+  assert.equal(shaper.shapeBatch(secondRequest).glyphIds.length, 1)
+  assert.throws(() => shaper.shapeBatch(request), /font handle .* is not registered/)
+
+  second.dispose()
+  shaper.dispose()
+})
+
 test('shapes every pinned HarfRust case exactly from GLB-extracted font data', async () => {
   const [{ artifact, shaperWasm }, corpus, oracle] = await Promise.all([
     fixture(),
