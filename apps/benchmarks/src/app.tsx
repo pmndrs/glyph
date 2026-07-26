@@ -563,7 +563,16 @@ function BenchmarkSurface({
           value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
         />
         <Metric label="CPU frame submit" value={formatMs(stats?.medianSubmitMs)} />
-        <Metric label="GPU frame" value="unavailable" />
+        <Metric
+          label="GPU frame"
+          value={
+            stats?.gpuFrameMs === undefined
+              ? stats?.gpuTimingSupported === true
+                ? 'resolving'
+                : 'unavailable'
+              : formatMs(stats.gpuFrameMs)
+          }
+        />
         <Metric
           label="Glyphs / draws"
           value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
@@ -595,7 +604,9 @@ function BenchmarkSurface({
             values={stats?.fpsHistory}
           />
           <Sparkline
-            emptyLabel="GPU timing unavailable"
+            emptyLabel={
+              stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
+            }
             label="GPU frame ms"
             length={stats?.gpuHistoryLength ?? 0}
             nextIndex={stats?.gpuHistoryNextIndex ?? 0}
@@ -755,6 +766,7 @@ function BitmapTextViewport({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<BitmapTextPreview>(undefined)
+  const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const [stats, setStats] = useState<BitmapTextLiveStats>()
   const [error, setError] = useState<string>()
   const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
@@ -788,40 +800,47 @@ function BitmapTextViewport({
     }
     const observer = new ResizeObserver(resize)
     observer.observe(container)
-    void import('./renderer/bitmap-text')
-      .then(({ createBitmapTextPreview }) => {
-        const bounds = container.getBoundingClientRect()
-        return createBitmapTextPreview({
-          backend,
-          canvas,
-          dpr,
-          expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
-          fontSize: configuration.fontSize,
-          height: Math.max(1, bounds.height),
-          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
-          text: BENCHMARK_IPSUM_TEXT,
-          width: Math.max(1, bounds.width),
-          signal: controller.signal,
-          onError: publishError,
-          onStats: publishStats,
-        })
+    const initialization = previewLifecycleRef.current.then(async () => {
+      const { createBitmapTextPreview } = await import('./renderer/bitmap-text')
+      if (cancelled) return
+      const bounds = container.getBoundingClientRect()
+      const created = await createBitmapTextPreview({
+        backend,
+        canvas,
+        dpr,
+        expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+        fontSize: configuration.fontSize,
+        height: Math.max(1, bounds.height),
+        layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+        text: BENCHMARK_IPSUM_TEXT,
+        width: Math.max(1, bounds.width),
+        signal: controller.signal,
+        onError: publishError,
+        onStats: publishStats,
       })
-      .then(async (created) => {
-        if (cancelled) {
-          await created.dispose()
-          return
-        }
-        preview = created
-        previewRef.current = created
-        resize()
-      })
-      .catch(publishError)
+      if (cancelled) {
+        await created.dispose()
+        return
+      }
+      preview = created
+      previewRef.current = created
+      resize()
+    })
+    void initialization.catch(publishError)
     return () => {
       cancelled = true
       controller.abort()
       observer.disconnect()
-      if (previewRef.current === preview) previewRef.current = undefined
-      if (preview !== undefined) void preview.dispose()
+      previewLifecycleRef.current = initialization.then(
+        async () => {
+          if (preview === undefined) return
+          const current = preview
+          preview = undefined
+          if (previewRef.current === current) previewRef.current = undefined
+          await current.dispose()
+        },
+        () => undefined,
+      )
     }
   }, [backend, dpr])
 
@@ -837,6 +856,9 @@ function BitmapTextViewport({
       className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
       data-layout-width={stats?.layoutWidth}
       data-line-count={stats?.lineCount}
+      data-backend={stats?.backend}
+      data-gpu-history-length={stats?.gpuHistoryLength}
+      data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-testid="bitmap-live-viewport"
       ref={containerRef}
     >

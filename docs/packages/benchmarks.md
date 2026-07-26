@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:4df9095c6473925fdcb2d19dcd088bcc20897a4340e8aaa8e89421c84485b03a"
+source_digest: "sha256:ccaff5b3eefd1f41c495eacce767fb65ef7ef3d072505cef9992d956fa4afd13"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T17:23:23Z"
+  at: "2026-07-26T18:38:31Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -40,7 +40,7 @@ The local Worker-queue Vitexec probe authenticates every output and reports obse
 
 Item 6.1 replaces the bitmap placeholder with the harness's first real rendered font frame. A checked-in 927,148-byte composed Inter GLB loads through the public registry, shapes and positions the five-line diagnostic specimen through HarfRust and the paragraph engine, decodes its embedded R8 KTX2 page, uploads 695,296 atlas bytes, and renders 120 visible glyphs in one instanced draw. The separate paragraph-scale live workload renders 1,150 glyphs in one draw. The selected 16 px strike is public batch metadata. Both surfaces distinguish CSS size from physical render size and hold the image at `renderedPpem / strikePpem = 1`; at 2× DPR this means 8 CSS px produces 16 device pixels. The screen-space ladder owns intentionally scaled samples and must label both sizes and the resulting quality-loss ratio. The canvas stays transparent over the optional design-token grid, while grid-off reveals the solid design-token panel.
 
-The live telemetry loop owns fixed-capacity typed-array rings for CPU submission, FPS, and future backend GPU timestamps. It computes quantiles with one preallocated scratch array and paints sparklines imperatively, so history collection does not grow arrays, shift elements, sort fresh copies, or build SVG point strings while the measured scene runs. The right panel exposes rendered device size and proportional layout width; viewport and width changes commit real paragraph reflows through the retained public `Text` object. Live capture copies the rings only at the user-requested snapshot boundary and records the browser environment.
+The live telemetry loop owns fixed-capacity typed-array rings for CPU submission, FPS, and GPU timestamps. It enables Three.js timestamp tracking only for this live surface: WebGPU uses the adapter's `timestamp-query` feature, while forced WebGL2 uses `EXT_disjoint_timer_query_webgl2` through the same public `WebGPURenderer` resolver. One next-frame resolution may be in flight at the reporting cadence; teardown stops new samples, drains the active query while rendering can still make progress, and then releases the renderer. Unsupported timing remains visibly unavailable and is never replaced with CPU submission time. Quantiles use one preallocated scratch array and sparklines paint imperatively, so history collection does not grow arrays, shift elements, sort fresh copies, or build SVG point strings while the measured scene runs. The right panel exposes rendered device size and proportional layout width; viewport and width changes commit real paragraph reflows through the retained public `Text` object. Live capture copies the rings only at the user-requested snapshot boundary and records the browser environment. The committed causal live probe proves timestamp samples and clean renderer replacement across WebGPU → forced WebGL2 → WebGPU without sleeps or retries.
 
 The bitmap baker now retains Zeno's actual integer mask placement with `planeUnitsPerEm` equal to the strike ppem, rather than stretching the integer mask over analytic outline bounds. The TSL vertex graph snaps projected quad edges to physical framebuffer pixels. The shared target now constructs the public framework-neutral `Text` object rather than maintaining a second paragraph/shaper/batch path. A benchmark-only CPU compositor independently places authenticated atlas texels and must match every byte after WebGPU row-padding and WebGL row-origin normalization for both the full frame and a resized clipped frame. A one-quarter-device-pixel unsnapped object origin proves the snap is exercised without ambiguous half-tie rounding through the nested object transforms. WebGPU and WebGL2 agree on the complete frame: hash `31fca7ef…988c` at 1× and `82456231…afd` at 2×, with 3,473 half-coverage pixels at each density and respective bounds `[68, 19, 313, 111]` and `[260, 83, 505, 175]`. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. Determinism, zero missing glyphs, exact strike/scale, CPU/GPU equality, full-frame boundary rejection, resized clipping, empty-output rejection, draw count, and GPU-memory contracts are hard gates. Hinted grayscale and four-phase coverage packing are documented research; LCD/ClearType rendering is out of scope. Bitmap fill/opacity are supported; outline/shadow reject explicitly until MTSDF. MSDF and Slug remain explicitly unavailable.
 

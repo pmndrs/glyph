@@ -33,6 +33,7 @@ if (!scene.textContent?.includes('Benchmark ipsum')) {
 
 const captureWindow = await waitForEnabledButton('Capture window')
 const viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
+await verifyGpuTiming(viewport, 'webgpu')
 const initialLayoutWidth = numericAttribute(viewport, 'data-layout-width')
 const initialLineCount = numericAttribute(viewport, 'data-line-count')
 const layoutWidthControl = document.querySelector<HTMLInputElement>(
@@ -55,6 +56,25 @@ if (reflowedLayoutWidth >= initialLayoutWidth || reflowedLineCount <= initialLin
 
 captureWindow.click()
 await waitForText(scene, 'Captured the current rolling window')
+
+const webglButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) => candidate.textContent?.trim() === 'WebGL2' && !candidate.disabled,
+)
+if (webglButton === undefined) throw new Error('WebGL2 live backend control is missing')
+webglButton.click()
+const webglViewport = await waitForReplacement(viewport, '[data-testid="bitmap-live-viewport"]')
+await verifyGpuTiming(webglViewport, 'webgl2')
+
+const webgpuButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) => candidate.textContent?.trim() === 'WebGPU' && !candidate.disabled,
+)
+if (webgpuButton === undefined) throw new Error('WebGPU live backend control is missing')
+webgpuButton.click()
+const restoredWebgpuViewport = await waitForReplacement(
+  webglViewport,
+  '[data-testid="bitmap-live-viewport"]',
+)
+await verifyGpuTiming(restoredWebgpuViewport, 'webgpu')
 
 const metrics = [...scene.querySelectorAll<HTMLElement>('.font-mono')]
   .map((element) => element.textContent?.trim())
@@ -107,6 +127,59 @@ function waitForChangedNumericAttribute(
     })
     observer.observe(element, { attributes: true, attributeFilter: [name] })
   })
+}
+
+function waitForAttribute(element: HTMLElement, name: string, expected: string): Promise<void> {
+  if (element.getAttribute(name) === expected) return Promise.resolve()
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (element.getAttribute(name) !== expected) return
+      observer.disconnect()
+      resolve()
+    })
+    observer.observe(element, { attributes: true, attributeFilter: [name] })
+  })
+}
+
+function waitForReplacement(previous: HTMLElement, selector: string): Promise<HTMLElement> {
+  const current = document.querySelector<HTMLElement>(selector)
+  if (current !== null && current !== previous) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const replacement = document.querySelector<HTMLElement>(selector)
+      if (replacement === null || replacement === previous) return
+      observer.disconnect()
+      resolve(replacement)
+    })
+    observer.observe(document.documentElement, { childList: true, subtree: true })
+  })
+}
+
+function waitForPositiveNumericAttribute(element: HTMLElement, name: string): Promise<number> {
+  const current = numericAttribute(element, name)
+  if (current > 0) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const next = numericAttribute(element, name)
+      if (next <= 0) return
+      observer.disconnect()
+      resolve(next)
+    })
+    observer.observe(element, { attributes: true, attributeFilter: [name] })
+  })
+}
+
+async function verifyGpuTiming(element: HTMLElement, backend: string): Promise<void> {
+  await waitForAttribute(element, 'data-backend', backend)
+  const supported = element.getAttribute('data-gpu-timing-supported')
+  if (supported !== 'true' && supported !== 'false') {
+    throw new Error(`${backend} did not publish its GPU timestamp-query capability`)
+  }
+  let sampleCount = 0
+  if (supported === 'true') {
+    sampleCount = await waitForPositiveNumericAttribute(element, 'data-gpu-history-length')
+  }
+  console.log('gpu-timing-ready', JSON.stringify({ backend, supported, sampleCount }))
 }
 
 const executionPath = '/src/benchmark/execution.ts'

@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5.6"
-  at: "2026-07-26T16:29:02Z"
+  at: "2026-07-26T18:38:31Z"
 ---
 
 # Benchmark plan
@@ -74,7 +74,7 @@ Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not
 | --- | :---: | --- |
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
-| Lab shell under `apps/benchmarks` | 🟡 | The responsive token/component shell now defaults to the human-facing live benchmark with mode, technique, backend, and workload URL state; finite visual conformance is separate. Item 6.4 remains active until its real GPU-timestamp and capture/export contracts close. |
+| Lab shell under `apps/benchmarks` | ✅ | The responsive token/component shell defaults to the human-facing live benchmark with mode, technique, backend, and workload URL state; finite visual conformance is separate. Fixed histories report CPU submit, FPS, and real WebGPU/WebGL2 GPU timestamps when supported, while capture/export snapshots the live contract on demand. |
 | Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module. The bounded CI-safe conformance suite includes synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, HarfRust, paragraph, bidi/policy/uikit, and item-5.4 CJK lanes. Hardware-WebGPU and pending-Suspense probes remain maintainer-local, and Milestone 6 awaits its closure review. |
 | Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; the browser-core lane externalizes declared `three`, React, and R3F peers, while Worker and shaper JavaScript exclude separately measured Wasm assets. The record names its measurement host: same-host output stays exact, while every foreign-host entry must satisfy the shared complete reviewed budgets. Unicode analysis is 139,936 bytes minified and the Darwin arm64 shaper record is 30,648 bytes minified JavaScript plus 692,114 bytes optimized Wasm. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |

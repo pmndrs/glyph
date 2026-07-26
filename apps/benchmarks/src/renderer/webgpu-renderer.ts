@@ -9,6 +9,7 @@ export interface RendererOptions {
   readonly dpr: number
   readonly width: number
   readonly height: number
+  readonly trackGpuTimestamps?: boolean
 }
 
 export async function createConfiguredRenderer(
@@ -19,6 +20,7 @@ export async function createConfiguredRenderer(
     antialias: false,
     alpha: options.alpha ?? false,
     forceWebGL: options.backend === 'webgl2',
+    trackTimestamp: options.trackGpuTimestamps ?? false,
   })
   try {
     renderer.setPixelRatio(options.dpr)
