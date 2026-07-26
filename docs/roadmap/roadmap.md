@@ -101,7 +101,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 5.2 | ✅ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
 | 5.3 | ✅ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
 | 5.4 | ✅ | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
-| 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 3.3, 5.4 |
+| 6.0 | 🟨 | Establish the version-matched TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure. | S | 3.3, 5.4 |
+| 6.1 | ⬜ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 6.0 |
 | 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
 | 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
@@ -453,6 +454,8 @@ Large-coverage raster paging remains in Milestone 12. Vertical-form source table
 Item 5.4 and Milestone 5 are closed. Milestone 6 is next.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
+
+Before renderer implementation, close item 6.0 with an exact-version TSL type fixture, a bounded compiler-performance result, one real shader compilation on both renderer paths, and deterministic pixel evidence. The initial TypeScript 7.0.2 plus `@types/three` 0.185.1 fixture compiled imports and typed constant attachment in under one second but did not complete one ordinary TSL operator within 60 seconds. Resolve that declaration-performance boundary deliberately; broad casts and disabled renderer checking do not satisfy the gate.
 
 Deliver:
 

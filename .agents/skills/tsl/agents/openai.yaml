@@ -1,0 +1,4 @@
+interface:
+  display_name: "Three.js TSL"
+  short_description: "Build and verify version-matched TSL graphs"
+  default_prompt: "Use $tsl to implement and verify this Three.js TSL task against the installed version."
