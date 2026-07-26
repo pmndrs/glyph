@@ -853,8 +853,35 @@ function unavailableTarget(
   }
 }
 
+function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  return {
+    id: `tsl-${backend}-baseline`,
+    label: backend === 'webgpu' ? 'TSL WebGPU baseline' : 'TSL WebGL2 fallback baseline',
+    detail: 'WebGPURenderer · TSL · deterministic readback',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set(['deterministic', 'raster']),
+    status: () => 'ready',
+    load: async () => {
+      loaded ??= (await import('../renderer/tsl-baseline')).createTslBaselineTarget(backend)
+      await loaded.load()
+    },
+    run: async (input, sampleIndex) => {
+      if (loaded === undefined) throw new Error('TSL baseline target was not loaded')
+      return loaded.run(input, sampleIndex)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
 export const targets: readonly BenchmarkTarget[] = [
   syntheticTarget,
+  tslBaselineTarget('webgl2'),
+  tslBaselineTarget('webgpu'),
   bakerTarget,
   loaderWorkerTarget,
   harfrustShaperTarget,

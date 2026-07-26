@@ -18,6 +18,7 @@ interface BenchmarkCase {
 
 const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'synthetic', scenarioId: 'overview' },
+  { targetId: 'tsl-webgl2-baseline', scenarioId: 'tsl-shader-baseline' },
   { targetId: 'font-baker', scenarioId: 'cold-load-payload' },
   { targetId: 'font-loader-worker', scenarioId: 'worker-fallback' },
   { targetId: 'harfrust-shaper', scenarioId: 'shaping-conformance' },

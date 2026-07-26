@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:f3957db08da772f15d842d7c382c8c617a4b6b84049a15c348a5213658bf7de9"
+source_digest: "sha256:b3e56627d4dbd87aba7ee559682ca0dd85c1551e5c6da6175bd40a20f09f77e5"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,14 +61,14 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T06:45:24Z"
+  at: "2026-07-26T09:40:43Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: ✅ Milestone 5 paragraph reflow and CJK universality complete; Milestone 6 rendering next
+Status: ✅ Milestone 5 complete and Milestone 6.0 renderer baseline complete; bitmap rendering active
 
-This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
+This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing types resolve through the repository's current `three/webgpu` subpath rather than the legacy root export, matching the renderer boundary used by first-party raster work. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
 The Node host rejects distinct source files that collapse onto one output path before any bake begins, reports mutually exclusive phase timings, and retries the lazily loaded default bitmap baker after a failed initialization instead of pinning a rejected promise. These rules keep batch publication deterministic and make measured phase totals honest. The loader also refuses URI-addressed external raster entries without SHA-256 authentication; resolver-only delivery remains explicit and hash-optional.
 
@@ -114,7 +114,7 @@ Roadmap item 5.4 completes this same bake → retained-SFNT → HarfRust → par
 
 Four public-pipeline paragraphs produce twelve exact natural/wide/narrow contracts with grapheme- and UTF-16-safe runs, clusters, and lines, one broad shape per paragraph, and zero reshapes for the fixed corpus. Fixed-seed CJK mutations cover malformed surrogates, variation selectors, language tags, and constraints twice. Node, Chromium 149, and GPU-enabled Vitexec report one composite hash, 10,622 output bytes, 1,539,372 retained bytes, and 4,587,520 Wasm-memory bytes. The item adds no raster paging, rendering, fallback, or vertical layout.
 
-With item 5.4 closed, the public runtime bitmap upload/module in milestone 6.1 is the next gate; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
+With item 6.0 closed on the current Three.js and TypeScript pins, the public runtime bitmap upload/module in milestone 6.1 is the active gate; it is not an artifact-pipeline shortcut. The [roadmap](../roadmap/roadmap.md) owns the implementation order.
 
 ## Package scripts
 
