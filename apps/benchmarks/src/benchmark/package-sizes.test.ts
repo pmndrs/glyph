@@ -31,6 +31,7 @@ describe('independent package-size report', () => {
       const entry = report.entries.find((candidate) => candidate.id === id)
       expect(entry?.status).toBe('measured')
       if (entry?.status !== 'measured') throw new Error(`Missing measured size entry: ${id}`)
+      expect(entry.rawBytes).toBeLessThanOrEqual(budget.rawBytes)
       expect(entry.minifiedBytes).toBeLessThanOrEqual(budget.minifiedBytes)
       expect(entry.gzipBytes).toBeLessThanOrEqual(budget.gzipBytes)
       expect(entry.brotliBytes).toBeLessThanOrEqual(budget.brotliBytes)
@@ -59,38 +60,39 @@ describe('independent package-size report', () => {
     expect(core.minifiedBytes).toBeGreaterThan(unicode.minifiedBytes)
   })
 
-  it('keeps foreign-host Wasm variance bounded without hiding JavaScript drift', () => {
+  it('keeps foreign-host native-tool variance inside complete reviewed budgets', () => {
     const foreign = structuredClone(report)
     foreign.measurementHost = { platform: 'linux', architecture: 'x64' }
-    const foreignShaper = foreign.entries.find(({ id }) => id === 'text-shaper-wasm')
-    const foreignBaker = foreign.entries.find(({ id }) => id === 'portable-baker-wasm')
-    if (foreignShaper?.status !== 'measured' || foreignBaker?.status !== 'measured') {
-      throw new Error('Missing foreign-host Wasm measurements')
+    const linuxX64Measurements = {
+      'browser-core': [271_169, 211_199, 62_771, 48_040],
+      'font-validator-js': [740_402, 584_255, 137_585, 112_927],
+      'runtime-baker-host-js': [5_264, 3_861, 1_480, 1_322],
+      'runtime-baker-worker-js': [13_315, 9_010, 3_030, 2_665],
+      'text-shaper-js': [43_944, 30_648, 8_798, 7_832],
+      'text-shaper-wasm': [692_111, 692_111, 258_524, 202_634],
+      'portable-baker-js': [10_046, 6_647, 2_338, 2_060],
+      'portable-baker-wasm': [433_755, 433_755, 168_266, 136_961],
+      'unicode-analysis-js': [164_786, 139_936, 42_047, 30_989],
+    } as const
+    for (const [id, [rawBytes, minifiedBytes, gzipBytes, brotliBytes]] of Object.entries(
+      linuxX64Measurements,
+    )) {
+      const entry = foreign.entries.find((candidate) => candidate.id === id)
+      if (entry?.status !== 'measured') throw new Error(`Missing foreign-host measurement: ${id}`)
+      Object.assign(entry, { rawBytes, minifiedBytes, gzipBytes, brotliBytes })
     }
-    Object.assign(foreignShaper, {
-      rawBytes: 692_111,
-      minifiedBytes: 692_111,
-      gzipBytes: 258_524,
-      brotliBytes: 202_634,
-    })
-    Object.assign(foreignBaker, {
-      rawBytes: 433_755,
-      minifiedBytes: 433_755,
-      gzipBytes: 168_266,
-      brotliBytes: 136_961,
-    })
     expect(() => assertPackageSizeReportFresh(report, foreign)).not.toThrow()
 
-    const changedJavaScript = structuredClone(foreign)
-    const browserCore = changedJavaScript.entries.find(({ id }) => id === 'browser-core')
+    const changedSameHost = structuredClone(report)
+    const browserCore = changedSameHost.entries.find(({ id }) => id === 'browser-core')
     if (browserCore?.status !== 'measured') throw new Error('Missing browser-core measurement')
     browserCore.minifiedBytes += 1
-    expect(() => assertPackageSizeReportFresh(report, changedJavaScript)).toThrow(/stale/)
+    expect(() => assertPackageSizeReportFresh(report, changedSameHost)).toThrow(/stale/)
 
-    const oversizedWasm = structuredClone(foreign)
-    const shaper = oversizedWasm.entries.find(({ id }) => id === 'text-shaper-wasm')
+    const oversizedForeign = structuredClone(foreign)
+    const shaper = oversizedForeign.entries.find(({ id }) => id === 'text-shaper-wasm')
     if (shaper?.status !== 'measured') throw new Error('Missing text-shaper-wasm measurement')
     shaper.minifiedBytes = packageSizeBudgets['text-shaper-wasm'].minifiedBytes + 1
-    expect(() => assertPackageSizeReportFresh(report, oversizedWasm)).toThrow(/exceeds/)
+    expect(() => assertPackageSizeReportFresh(report, oversizedForeign)).toThrow(/exceeds/)
   })
 })

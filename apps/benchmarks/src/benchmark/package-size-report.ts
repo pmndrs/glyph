@@ -9,6 +9,7 @@ interface SizeEntry {
   readonly id: string
   readonly status: string
   readonly format?: string
+  readonly rawBytes?: number
   readonly minifiedBytes?: number
   readonly gzipBytes?: number
   readonly brotliBytes?: number
@@ -33,11 +34,7 @@ export function assertPackageSizeReportFresh(
     : {
         ...current,
         measurementHost: committed.measurementHost,
-        entries: current.entries.map((entry) =>
-          entry.status === 'measured' && entry.format === 'wasm'
-            ? (committedById.get(entry.id) ?? entry)
-            : entry,
-        ),
+        entries: current.entries.map((entry) => committedById.get(entry.id) ?? entry),
       }
   if (JSON.stringify(comparable) !== JSON.stringify(committed)) {
     throw new Error(
@@ -52,24 +49,26 @@ export function assertPackageSizeReportFresh(
   if (sameHost) return
 
   for (const entry of current.entries) {
-    if (entry.status !== 'measured' || entry.format !== 'wasm') continue
+    if (entry.status !== 'measured') continue
     const budget = packageSizeBudgets[entry.id as keyof typeof packageSizeBudgets]
     if (budget === undefined) {
-      throw new Error(`foreign-host Wasm measurement has no reviewed ${entry.id} budget`)
+      throw new Error(`foreign-host measurement has no reviewed ${entry.id} budget`)
     }
     if (
+      entry.rawBytes === undefined ||
       entry.minifiedBytes === undefined ||
       entry.gzipBytes === undefined ||
       entry.brotliBytes === undefined
     ) {
-      throw new Error(`foreign-host Wasm measurement is incomplete for ${entry.id}`)
+      throw new Error(`foreign-host measurement is incomplete for ${entry.id}`)
     }
     if (
+      entry.rawBytes > budget.rawBytes ||
       entry.minifiedBytes > budget.minifiedBytes ||
       entry.gzipBytes > budget.gzipBytes ||
       entry.brotliBytes > budget.brotliBytes
     ) {
-      throw new Error(`foreign-host Wasm measurement exceeds the reviewed ${entry.id} budget`)
+      throw new Error(`foreign-host measurement exceeds the reviewed ${entry.id} budget`)
     }
   }
 }
