@@ -3,6 +3,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 
+import {
+  assertPackageSizeReportFresh,
+  type PackageSizeReport,
+} from '../src/benchmark/package-size-report.ts'
+
 interface MeasuredEntry {
   readonly id: string
   readonly label: string
@@ -205,15 +210,17 @@ const entries: SizeEntry[] = [
 
 const report = {
   schemaVersion: 0,
+  measurementHost: {
+    platform: process.platform,
+    architecture: process.arch,
+  },
   entries,
 }
 const output = new URL('../src/generated/package-sizes.json', import.meta.url)
 const serialized = `${JSON.stringify(report, null, 2)}\n`
 if (process.argv.includes('--check')) {
   const committed = await readFile(output, 'utf8')
-  if (committed !== serialized) {
-    throw new Error('generated package-size report is stale; run pnpm size')
-  }
+  assertPackageSizeReportFresh(JSON.parse(committed) as PackageSizeReport, report)
 } else {
   await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true })
   await writeFile(output, serialized)

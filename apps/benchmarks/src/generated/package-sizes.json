@@ -1,5 +1,9 @@
 {
   "schemaVersion": 0,
+  "measurementHost": {
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
   "entries": [
     {
       "id": "browser-core",
