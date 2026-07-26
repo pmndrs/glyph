@@ -41,19 +41,19 @@ This slice is an internal integration proof, not a release candidate. The first 
 
 Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 
-| Order | Status | Milestone | Effort | Depends on | Exit result |
-| ---: | :---: | --- | --- | --- | --- |
-| 0 | ✅ | Accept contracts, type fixtures, and versions | S | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign. |
-| 1 | ✅ | Build benchmark harness and pin fixtures | L | 0 | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
-| 2 | ✅ | Build font bake core, bitmap baker package, and Node host | L | 1 | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work. |
-| 3 | ✅ | Build baked-first loader and Worker fallback | L | 2 | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes. |
-| 4 | ✅ | Integrate HarfRust Wasm shaping | L | 2–3 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags. |
-| 5 | ✅ | Implement paragraph reflow and validate universal shaping assumptions | L | 4 | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence. |
-| 6 | 🟡 | Prove rendering with bitmap inside the benchmark harness | L | 3, 5 | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload. |
-| 7 | ⬜ | Harden the integration proof | L | 1–6 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review. |
-| 8 | ⬜ | Implement and validate MSDF | XL | 7 | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates. |
-| 9 | ⬜ | Port/rewrite and validate Slug | XL | 7 | Outline-accurate text passes correctness, packing, visual, and GPU performance gates. |
-| 10 | ⬜ | Harden the first shippable release | L | 8–9 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result. |
+| Order | Status | Milestone                                                             | Effort | Depends on          | Exit result                                                                                                 |
+| ----: | :----: | --------------------------------------------------------------------- | ------ | ------------------- | ----------------------------------------------------------------------------------------------------------- |
+|     0 |   ✅   | Accept contracts, type fixtures, and versions                         | S      | documentation audit | Public inference and identity, ownership, package, and version decisions cannot force a redesign.           |
+|     1 |   ✅   | Build benchmark harness and pin fixtures                              | L      | 0                   | The first executable product surface runs shared interactive/headless smoke scenarios over pinned fixtures. |
+|     2 |   ✅   | Build font bake core, bitmap baker package, and Node host             | L      | 1                   | Node composes a valid core GLB and one package-owned bitmap artifact without advanced compiler work.        |
+|     3 |   ✅   | Build baked-first loader and Worker fallback                          | L      | 2                   | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes.               |
+|     4 |   ✅   | Integrate HarfRust Wasm shaping                                       | L      | 2–3                 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags.                |
+|     5 |   ✅   | Implement paragraph reflow and validate universal shaping assumptions | L      | 4                   | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence.    |
+|     6 |   🟡   | Prove rendering with bitmap inside the benchmark harness              | L      | 3, 5                | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload.                |
+|     7 |   ⬜   | Harden the integration proof                                          | L      | 1–6                 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review.                |
+|     8 |   ⬜   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
+|     9 |   ⬜   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
+|    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
 Milestones 0–5 are closed. Milestone 6 is active: item 6.4 reorients the benchmark harness around human-facing live cost inspection before the milestone receives its closure review.
 
@@ -80,38 +80,38 @@ flowchart LR
 
 These rows replace the former separate backlog. Each is intended to become one focused issue or a short, explicitly linked PR sequence.
 
-| ID | Status | Work | Size | Depends on |
-| --- | :---: | --- | :---: | --- |
-| 0.1 | ✅ | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports. | S | — |
-| 0.2 | ✅ | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures. | S | 0.1 |
-| 0.3 | ✅ | Accept identity, GLB, Worker, and version contracts. | S | 0.2 |
-| 1.1 | ✅ | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target. | M | 0.3 |
-| 1.2 | ✅ | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry. | M | 1.1 |
-| 1.3 | ✅ | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures. | M | 1.2 |
-| 2.1 | ✅ | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution. | M | 1.3 |
-| 2.2 | ✅ | Implement the host-independent font bake request/result core. | M | 2.1 |
-| 2.3 | ✅ | Emit/validate the core font and declared package-owned bitmap strikes. | M | 2.2 |
-| 2.4 | ✅ | Add the Node API, CLI, deterministic bytes, and report. | M | 2.3 |
-| 3.1 | ✅ | Implement baked probing, validation, and registration. | M | 2.4 |
-| 3.2 | ✅ | Add the dynamically imported Worker bake path. | M | 3.1 |
-| 3.3 | ✅ | Prove Node/Worker parity, cancellation, and import isolation. | M | 3.2 |
-| 4.1 | ✅ | Register fonts and cache HarfRust data/plans in Wasm. | M | 2.2 |
-| 4.2 | ✅ | Implement batched shape/reshape ABI and conformance fixtures. | M | 4.1 |
-| 5.1 | ✅ | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`. | M | 4.2 |
-| 5.2 | ✅ | Add final positioned `layout`, reflow caches, and batched boundary reshaping. | M | 5.1 |
-| 5.3 | ✅ | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures. | M | 5.2 |
-| 5.4 | ✅ | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
-| 6.0 | ✅ | Establish the current-repository TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure. | S | 3.3, 5.4 |
-| 6.1 | ✅ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 6.0 |
-| 6.2 | 🟡 | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
-| 6.3 | 🟡 | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
-| 6.4 | 🟡 | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode. | M | 6.1–6.3 |
-| 7.1 | ✅ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
-| 7.2 | 🟡 | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines. | M | 7.1 |
-| 8.x | ⬜ | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
-| 9.x | ⬜ | Split Slug conversion, packing, shaders, quality, and perf work. | XL | 7.2 |
-| 10.1 | ⬜ | Prove raster-module switching through core and React without reflow. | M | 8.x, 9.x |
-| 10.2 | ⬜ | Complete release validation, guidance, and migration material. | M | 10.1 |
+| ID   | Status | Work                                                                                                                                                                                     | Size | Depends on |
+| ---- | :----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--: | ---------- |
+| 0.1  |   ✅   | Accept public core/React APIs, typed raster capabilities, URL resolution, and ESM-only exports.                                                                                          |  S   | —          |
+| 0.2  |   ✅   | Make the initial `@pmndrs/text` contract shim preserve font/raster literals and pass positive/negative composition fixtures.                                                             |  S   | 0.1        |
+| 0.3  |   ✅   | Accept identity, GLB, Worker, and version contracts.                                                                                                                                     |  S   | 0.2        |
+| 1.1  |   ✅   | Build shared benchmark target/scenario/result contracts and a deterministic synthetic smoke target.                                                                                      |  M   | 0.3        |
+| 1.2  |   ✅   | Add the interactive lab, headless runner, raw result export, and package-size lane over the same registry.                                                                               |  M   | 1.1        |
+| 1.3  |   ✅   | Pin the source font, HarfRust/HarfBuzz shaping oracles, and browser HTML/CSS visual reference as harness fixtures.                                                                       |  M   | 1.2        |
+| 2.1  |   ✅   | Implement static `defineFont` discovery, literal raster extraction, and conservative local source resolution.                                                                            |  M   | 1.3        |
+| 2.2  |   ✅   | Implement the host-independent font bake request/result core.                                                                                                                            |  M   | 2.1        |
+| 2.3  |   ✅   | Emit/validate the core font and declared package-owned bitmap strikes.                                                                                                                   |  M   | 2.2        |
+| 2.4  |   ✅   | Add the Node API, CLI, deterministic bytes, and report.                                                                                                                                  |  M   | 2.3        |
+| 3.1  |   ✅   | Implement baked probing, validation, and registration.                                                                                                                                   |  M   | 2.4        |
+| 3.2  |   ✅   | Add the dynamically imported Worker bake path.                                                                                                                                           |  M   | 3.1        |
+| 3.3  |   ✅   | Prove Node/Worker parity, cancellation, and import isolation.                                                                                                                            |  M   | 3.2        |
+| 4.1  |   ✅   | Register fonts and cache HarfRust data/plans in Wasm.                                                                                                                                    |  M   | 2.2        |
+| 4.2  |   ✅   | Implement batched shape/reshape ABI and conformance fixtures.                                                                                                                            |  M   | 4.1        |
+| 5.1  |   ✅   | Build paragraph analysis, measured clusters, greedy breaks, and allocation-light `measure`.                                                                                              |  M   | 4.2        |
+| 5.2  |   ✅   | Add final positioned `layout`, reflow caches, and batched boundary reshaping.                                                                                                            |  M   | 5.1        |
+| 5.3  |   ✅   | Add alignment, clipping, max-lines, ellipsis, bidi, and current-uikit adapter fixtures.                                                                                                  |  M   | 5.2        |
+| 5.4  |   ✅   | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. |  L   | 5.3        |
+| 6.0  |   ✅   | Establish the current-repository TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure.                                                                       |  S   | 3.3, 5.4   |
+| 6.1  |   ✅   | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2.                                                                                    |  M   | 6.0        |
+| 6.2  |   🟡   | Implement the Three.js `Text` object over the bitmap proof.                                                                                                                              |  M   | 6.1        |
+| 6.3  |   🟡   | Implement `@pmndrs/text/react` as a thin reconciliation layer.                                                                                                                           |  M   | 6.2        |
+| 6.4  |   🟡   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                   |  M   | 6.1–6.3    |
+| 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
+| 7.2  |   🟡   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
+| 8.x  |   ⬜   | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work.                                                                                                            |  XL  | 7.2        |
+| 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
+| 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.x, 9.x   |
+| 10.2 |   ⬜   | Complete release validation, guidance, and migration material.                                                                                                                           |  M   | 10.1       |
 
 ## Milestone 0 — accept contracts and versions
 
@@ -540,6 +540,14 @@ Milestone 7 authorizes implementation of the release rasters; it does not author
 - [x] Compile every canonical extension draft with shared references; validate complete core/bitmap artifacts and positive plus field-level MTSDF/Slug contract specimens.
 - [x] Capture a freshness-checked autoresearch baseline with campaigns explicitly disabled and guarded from accidental execution.
 
+### 7.2 progress checklist
+
+- [x] Define the Latin feature/mark, Arabic joining, Indic reordering, mixed-bidi, and CJK line-break lanes as one immutable discriminated corpus with deterministic integer seek, step, and playback state.
+- [x] Pin licensed static Devanagari and bounded Japanese showcase fonts, retain Amiri and Inter, and regenerate byte-authenticated 16 ppem bitmap artifacts through the public Node host and package-owned bitmap baker.
+- [ ] Bind the shared definitions to editable/typewriter playback, continuous width reflow, pause, step, scrub, and causal settled-state signals in the real public `Text` rendering path.
+- [ ] Add discrete authoritative layout transitions with presentation-only glyph-position interpolation and bitmap pixel snapping.
+- [ ] Reuse the exact showcase definitions through headless conformance and admitted Vitexec product probes, then record reviewed conformance and performance evidence.
+
 ## Milestone 8 — MSDF release raster
 
 Deliver:
@@ -587,14 +595,14 @@ The project cannot ship before this gate passes.
 
 The order below preserves lanes without pretending the work is part of V1:
 
-| Order | Workstream | Effort | Why next |
-| ---: | --- | --- | --- |
-| 11 | Mixed-font spans and explicit font fallback | XL | Extend the multi-font identity smoke proof into paragraph behavior. |
-| 12 | Large-coverage CJK raster paging and icons | XL | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
-| 13 | Color emoji | XL | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout. |
-| 14 | Raster effects and expanded recommendations | L | Extend outlines, colorization, shadows, and projected-size guidance with measurements. |
-| 15 | Measured optimization campaigns | ongoing | Activate autoresearch only with strict correctness and visual gates. |
-| 16 | Advanced font compiler units | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence. |
+| Order | Workstream                                  | Effort  | Why next                                                                                                                                                    |
+| ----: | ------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    11 | Mixed-font spans and explicit font fallback | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                         |
+|    12 | Large-coverage CJK raster paging and icons  | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
+|    13 | Color emoji                                 | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                              |
+|    14 | Raster effects and expanded recommendations | L       | Extend outlines, colorization, shadows, and projected-size guidance with measurements.                                                                      |
+|    15 | Measured optimization campaigns             | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                        |
+|    16 | Advanced font compiler units                | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                          |
 
 ### Milestone 12 — large-coverage CJK raster paging and icons
 

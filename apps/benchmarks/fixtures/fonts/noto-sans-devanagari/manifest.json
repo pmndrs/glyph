@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 0,
+  "id": "noto-sans-devanagari-showcase-v0",
+  "purpose": "Milestone 7 advanced-shaping showcase fixture",
+  "source": {
+    "family": "Noto Sans Devanagari",
+    "style": "Regular",
+    "releaseCommit": "cac60972ca4d7d5e3b5bfae33e90b1e0e5267a66",
+    "url": "https://raw.githubusercontent.com/google/fonts/cac60972ca4d7d5e3b5bfae33e90b1e0e5267a66/ofl/notosansdevanagari/NotoSansDevanagari-Regular.ttf",
+    "fontFile": "NotoSansDevanagari.ttf",
+    "fontBytes": 229336,
+    "fontSha256": "79a470365ccb210fa3c7d8d8ff2e005ef9d983cfd067f735a0caf7e15070ca9f",
+    "metadataFile": "METADATA.pb",
+    "metadataSha256": "3c201abfcd49b2b8f8b8ae6041bad70cdeb2ef03a1c5c0870772e137f1f450c0",
+    "license": "OFL-1.1",
+    "licenseFile": "OFL.txt",
+    "licenseSha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6"
+  },
+  "face": { "fontIndex": 0, "variations": {} }
+}

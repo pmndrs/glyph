@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 0,
+  "strikePpem": 16,
+  "packaging": { "artifact": "embedded", "pages": "embedded" },
+  "artifacts": [
+    {
+      "fontFixture": "amiri-regular-v0",
+      "file": "amiri-bitmap-16.font.glb",
+      "bytes": 1987832,
+      "sha256": "50a1e69888bcffc544f183fc0af797803c8e037ab8e4ad68b7b231f432e966da"
+    },
+    {
+      "fontFixture": "noto-sans-devanagari-showcase-v0",
+      "file": "noto-sans-devanagari-bitmap-16.font.glb",
+      "bytes": 312228,
+      "sha256": "6709802a47a9f8220f49663a84eeccf86a922e4be1459780bb04de0c0069e366"
+    },
+    {
+      "fontFixture": "dot-gothic-16-japanese-showcase-v0",
+      "file": "dot-gothic-16-bitmap-16.font.glb",
+      "bytes": 3294368,
+      "sha256": "c10716c4dbb5f0266c3d57789c567f10242cf6f7d03318ba0ee604be43c7c47c"
+    }
+  ]
+}
