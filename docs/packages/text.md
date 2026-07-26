@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:2cbe21f037f19f44a611ebcda3404146b1f08d6d79330d212d795beb6f5191b8"
+source_digest: "sha256:b328eba8d2c54576e7c8abf84891e0dc1f26d7ceffccfb4042618c3a8b212630"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:11:19Z"
+  at: "2026-07-26T03:18:02Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -86,7 +86,7 @@ The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The h
 
 The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
 
-Paragraph instances retain only the 32 most recently used entries in each measurement, line-plan, positioning, geometry, and final-layout cache. Each registered font likewise retains at most 64 least-recently-used HarfRust shape plans. Equivalent hot calls still reuse the same results, while adversarial constraint or language/feature variation has a fixed retention ceiling; updating or disposing a paragraph and disposing a font release the respective caches immediately.
+Paragraph instances retain only the 32 most recently used entries in each measurement, line-plan, positioning, geometry, and final-layout cache. Each registered font likewise retains at most 64 least-recently-used HarfRust shape plans. Equivalent hot calls still reuse the same results, while adversarial constraint or language/feature variation has a fixed retention ceiling; updating or disposing a paragraph and disposing a font release the respective caches immediately. Paragraph preparation indexes cluster starts plus spacing/space prefix sums once, and positioned fragments use binary bounds over monotone HarfRust clusters instead of rescanning the paragraph or complete shaped run at every glyph boundary.
 
 The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically imported only after a missing, invalid, or incompatible baked probe; creates one named module Worker; transfers provenance-preserving owned byte ranges; and runs the exact portable `@pmndrs/text-font-baker` wrapper plus its package-owned optimized Wasm. Offline and Worker hosts share dependency-light V0 descriptor, sole-artifact, successful-promise-cache, and owned-transfer rules while keeping filesystem and fetch behavior separate. The host owns a strict FIFO with one active bake: queued cancellation removes only that job, active cancellation replaces the Worker before resuming queued work, and the Worker entry independently serializes accepted messages. This bounds active CPU/Wasm memory without relying on async message ordering. The host predicate promises only the message fields it proves and consumes instead of overclaiming the complete baker report. A failed core initialization is retryable in both hosts. Canonical Inter fixtures execute the offline host and Worker entry, compare their complete artifacts byte-for-byte with the direct portable core, and then send the Worker result through loader provenance and hostile-input validation. The current independent size lanes report a 3,861-byte minified runtime host, 9,005-byte Worker JavaScript, and one 434,251-byte Wasm artifact; reviewed ceilings prevent heavy validation, Node, discovery, composition, or raster dependencies from entering those runtime graphs.
 

@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Performance** — Removed quadratic paragraph-layout scans with one-time cluster prefix indexes, a monotonic style cursor, and direction-aware binary bounds over HarfRust's monotone clusters. An 80,000-glyph justified-layout stress pass dropped from a 431 ms to 268 ms median in the same five-sample local Node run; the browser core cost is 1,140 minified / 240 Brotli bytes.
 - **Memory hardening** — Bounded every paragraph-derived cache to its 32 most recently used variants and each font's HarfRust cache to 64 plans. Hot calls retain identity and reuse, adversarial constraint/language variation has fixed retention, and the optimized shaper cost is 352 raw bytes.
 - **Filesystem safety** — Detect output aliases by device/inode before reading or baking, reject directories and other non-regular targets with structured errors, and narrow raster plugins through property-proving `in` checks instead of a cast.
 - **Correctness** — Stopped treating a standalone OpenType `STAT` table as proof of a variable font. Static fonts carrying style attributes now bake normally; actual axis/delta tables remain rejected and named regressions prove both branches.

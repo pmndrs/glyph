@@ -195,6 +195,9 @@ interface PreparedParagraph {
   readonly shape: OwnedShape
   readonly ellipses: readonly PreparedEllipsis[]
   readonly clusters: readonly MeasuredCluster[]
+  readonly clusterStarts: Uint32Array
+  readonly letterSpacingPrefix: Float64Array
+  readonly spacePrefix: Uint32Array
 }
 
 interface NormalizedConstraints {
@@ -407,7 +410,19 @@ function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): Prepare
   const shape = ownShape(borrowed)
   const ellipses = measureEllipses(shaper, runs, shape, shapedRequest.ellipses)
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape)
-  return { input: ownedInput, unicode, bidi, styles, runs, request, shape, ellipses, clusters }
+  const clusterIndexes = indexClusters(ownedInput.text, clusters)
+  return {
+    input: ownedInput,
+    unicode,
+    bidi,
+    styles,
+    runs,
+    request,
+    shape,
+    ellipses,
+    clusters,
+    ...clusterIndexes,
+  }
 }
 
 function copyInput(input: ParagraphInput): ParagraphInput {
@@ -888,11 +903,17 @@ function measureClusters(
 
   const lineBreaks = new Map(unicode.lineBreaks.map((entry) => [entry.position, entry.required]))
   const clusters: MeasuredCluster[] = []
+  let styleIndex = 0
   for (let index = 0; index + 1 < unicode.graphemeBoundaries.length; index += 1) {
     const start = unicode.graphemeBoundaries[index]
     const end = unicode.graphemeBoundaries[index + 1]
     if (start === undefined || end === undefined) continue
-    const style = styleAt(styles, start)
+    while ((styles[styleIndex]?.end ?? Number.POSITIVE_INFINITY) <= start) styleIndex += 1
+    const styleSegment = styles[styleIndex]
+    if (styleSegment === undefined || styleSegment.start > start) {
+      throw new Error(`paragraph offset ${start} has no resolved style`)
+    }
+    const style = styleSegment.style
     const requiredBreak = lineBreaks.get(end) === true
     const hardBreak = isHardBreak(text, start)
     clusters.push({
@@ -906,6 +927,25 @@ function measureClusters(
     })
   }
   return clusters
+}
+
+function indexClusters(
+  text: string,
+  clusters: readonly MeasuredCluster[],
+): Pick<PreparedParagraph, 'clusterStarts' | 'letterSpacingPrefix' | 'spacePrefix'> {
+  const clusterStarts = new Uint32Array(clusters.length)
+  const letterSpacingPrefix = new Float64Array(clusters.length + 1)
+  const spacePrefix = new Uint32Array(clusters.length + 1)
+  for (let index = 0; index < clusters.length; index += 1) {
+    const cluster = clusters[index]
+    if (cluster === undefined) continue
+    clusterStarts[index] = cluster.start
+    letterSpacingPrefix[index + 1] =
+      (letterSpacingPrefix[index] ?? 0) + (cluster.hardBreak ? 0 : cluster.style.letterSpacing)
+    spacePrefix[index + 1] =
+      (spacePrefix[index] ?? 0) + (text.charCodeAt(cluster.start) === 0x20 ? 1 : 0)
+  }
+  return { clusterStarts, letterSpacingPrefix, spacePrefix }
 }
 
 function planLines(
@@ -1378,7 +1418,7 @@ function positionPrepared(
             run.direction === 'ltr'
               ? (nextCluster ?? fragment.end)
               : Math.max(cluster, clusterBoundary)
-          cursor += spacingBetween(prepared.clusters, rangeStart, rangeEnd)
+          cursor += spacingBetween(prepared, rangeStart, rangeEnd)
           passedSpaces += justificationSpaces(prepared, line, rangeStart, rangeEnd)
           clusterBoundary = cluster
         }
@@ -1481,18 +1521,12 @@ function justificationSpaces(
   while (trimmedEnd > line.textStart && prepared.input.text.charCodeAt(trimmedEnd - 1) === 0x20) {
     trimmedEnd -= 1
   }
-  let count = 0
-  for (const cluster of prepared.clusters) {
-    if (
-      cluster.start >= start &&
-      cluster.start < end &&
-      cluster.start < trimmedEnd &&
-      prepared.input.text.charCodeAt(cluster.start) === 0x20
-    ) {
-      count += 1
-    }
-  }
-  return count
+  return clusterRangeSum(
+    prepared.clusterStarts,
+    prepared.spacePrefix,
+    start,
+    Math.min(end, trimmedEnd),
+  )
 }
 
 function collectLineFragments(
@@ -1683,22 +1717,81 @@ function glyphIndexes(
   textStart: number,
   textEnd: number,
 ): number[] {
-  const indexes: number[] = []
-  for (let glyph = glyphStart; glyph < glyphStart + glyphCount; glyph += 1) {
-    const cluster = shape.clusters[glyph]
-    if (cluster !== undefined && cluster >= textStart && cluster < textEnd) indexes.push(glyph)
+  if (glyphCount === 0 || textEnd <= textStart) return []
+  const firstCluster = shape.clusters[glyphStart]
+  const lastCluster = shape.clusters[glyphStart + glyphCount - 1]
+  if (firstCluster === undefined || lastCluster === undefined) {
+    throw new Error('shaper returned an incomplete glyph cluster table')
   }
+  const ascending = firstCluster <= lastCluster
+  const selectedStart = ascending
+    ? glyphLowerBound(shape.clusters, glyphStart, glyphCount, textStart)
+    : glyphBelow(shape.clusters, glyphStart, glyphCount, textEnd)
+  const selectedEnd = ascending
+    ? glyphLowerBound(shape.clusters, glyphStart, glyphCount, textEnd)
+    : glyphBelow(shape.clusters, glyphStart, glyphCount, textStart)
+  const indexes: number[] = []
+  for (let glyph = selectedStart; glyph < selectedEnd; glyph += 1) indexes.push(glyph)
   return indexes
 }
 
-function spacingBetween(clusters: readonly MeasuredCluster[], start: number, end: number): number {
-  let spacing = 0
-  for (const cluster of clusters) {
-    if (cluster.start >= start && cluster.start < end && !cluster.hardBreak) {
-      spacing += cluster.style.letterSpacing
-    }
+function glyphLowerBound(
+  clusters: Uint32Array,
+  glyphStart: number,
+  glyphCount: number,
+  target: number,
+): number {
+  let low = glyphStart
+  let high = glyphStart + glyphCount
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2)
+    if ((clusters[middle] ?? 0) < target) low = middle + 1
+    else high = middle
   }
-  return spacing
+  return low
+}
+
+function glyphBelow(
+  clusters: Uint32Array,
+  glyphStart: number,
+  glyphCount: number,
+  target: number,
+): number {
+  let low = glyphStart
+  let high = glyphStart + glyphCount
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2)
+    if ((clusters[middle] ?? 0) >= target) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
+function spacingBetween(prepared: PreparedParagraph, start: number, end: number): number {
+  return clusterRangeSum(prepared.clusterStarts, prepared.letterSpacingPrefix, start, end)
+}
+
+function clusterRangeSum(
+  starts: Uint32Array,
+  prefix: Uint32Array | Float64Array,
+  start: number,
+  end: number,
+): number {
+  if (end <= start) return 0
+  const first = lowerBound(starts, start)
+  const afterLast = lowerBound(starts, end)
+  return (prefix[afterLast] ?? 0) - (prefix[first] ?? 0)
+}
+
+function lowerBound(values: Uint32Array, target: number): number {
+  let low = 0
+  let high = values.length
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2)
+    if ((values[middle] ?? 0) < target) low = middle + 1
+    else high = middle
+  }
+  return low
 }
 
 function measurementForGeometry(
@@ -1758,12 +1851,6 @@ function requireFont(shaper: RuntimeShaper, handle: FontHandle): RegisteredFont 
   if (font === undefined)
     throw new RangeError(`font handle ${handle} is not active in the registry`)
   return font
-}
-
-function styleAt(styles: readonly StyleSegment[], offset: number): ResolvedStyle {
-  const style = styles.find((entry) => entry.start <= offset && offset < entry.end)
-  if (style === undefined) throw new Error(`paragraph offset ${offset} has no resolved style`)
-  return style.style
 }
 
 function drawableFragments(
