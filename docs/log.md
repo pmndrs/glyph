@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Correctness** — Rejected project-wide font output collisions before baking, made execution phases mutually exclusive so validation is not double-counted as raster work, and made the default bitmap Wasm loader retry after failed initialization.
 - **Hardening** — Scoped bitmap companion/page filenames by both shaping and raster identity, rejected ppem values beyond the padded 1024-pixel atlas range, and streamed glyph masks directly into bounded pages. Two fonts can no longer overwrite one another merely because they share bitmap settings, and the optimized Wasm grows only 639 raw bytes while removing the full-face intermediate bitmap set.
 - **Hardening** — Kept malformed non-ASCII SFNT table tags inside the font validator's structured issue contract by comparing the closed four-byte tag vocabulary directly; a named regression covers the previously escaping UTF-8 decoder error.
 - **Research** — Added a non-binding shaping-compilation concept covering the closed-corpus limit of static baking; total-portfolio break-even for semantic bytecode; an MLIR-based multi-target compiler direction; CPU/Wasm-first validation; WebGPU batching and CPU-readback constraints; and exact conformance, size, latency, memory, robustness, and maintenance gates.

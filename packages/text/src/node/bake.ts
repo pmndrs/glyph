@@ -167,6 +167,7 @@ async function bakeFontWithResolvedPlans(
   phase = performance.now()
   const coreValidation = await validateFontArtifact(soleCoreFontArtifact(core).bytes)
   timings.validate += performance.now() - phase
+  phase = performance.now()
   const rasterInputs = []
   const rasters =
     preparedRasters ?? (await Promise.all((options.rasters ?? []).map(resolveRasterBakePlan)))
@@ -274,8 +275,19 @@ function groupDefinitions(
   outputRoot: string | undefined,
 ): ProjectGroup[] {
   const groups = new Map<string, { output: string; rasters: Map<string, ResolvedRasterBaker> }>()
+  const inputsByOutput = new Map<string, string>()
   for (const font of fonts) {
     const output = outputPath(font, outputRoot)
+    const canonicalOutput = resolve(output)
+    const existingInput = inputsByOutput.get(canonicalOutput)
+    if (existingInput !== undefined && existingInput !== font.resolvedFile) {
+      throw new NodeBakeError(
+        'OUTPUT_CONFLICT',
+        'multiple font sources resolve to one output path',
+        output,
+      )
+    }
+    inputsByOutput.set(canonicalOutput, font.resolvedFile)
     const group = groups.get(font.resolvedFile) ?? { output, rasters: new Map() }
     if (group.output !== output) {
       throw new NodeBakeError(

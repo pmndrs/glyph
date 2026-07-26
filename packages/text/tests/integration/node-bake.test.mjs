@@ -48,6 +48,11 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
   assert.ok(embedded.transport.some(({ format }) => format === 'gzip'))
   assert.ok(embedded.transport.some(({ format }) => format === 'brotli'))
   assert.ok(embedded.execution.timingsMs.total >= 0)
+  assert.ok(
+    Object.entries(embedded.execution.timingsMs)
+      .filter(([phase]) => phase !== 'total')
+      .reduce((total, [, duration]) => total + duration, 0) <= embedded.execution.timingsMs.total,
+  )
   assert.ok(embedded.execution.memory.processMaxRssBytes > 0)
 
   const externalOutput = join(root, 'external', 'Inter-Regular.font.glb')
@@ -165,6 +170,30 @@ test('bakeProject resolves each plugin descriptor once before ordering and bakin
   const report = await bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') })
   assert.equal(report.fonts.length, 1)
   assert.deepEqual(report.diagnostics, [])
+})
+
+test('bakeProject rejects distinct sources that resolve to one output before baking', async (t) => {
+  const root = await projectFixture()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const fonts = join(root, 'public', 'fonts')
+  await writeFile(join(fonts, 'Inter-Regular.otf'), await readFile(fontUrl))
+  await writeFile(
+    join(root, 'src', 'main.ts'),
+    `
+      import { defineFont } from '@pmndrs/text'
+      import { bitmap } from '@fixture/raster'
+      export const ttf = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: [16] }))
+      export const otf = defineFont('/fonts/Inter-Regular.otf', bitmap({ strikes: [16] }))
+    `,
+  )
+
+  await assert.rejects(
+    bakeProject({ projectRoot: root, outputRoot: join(root, 'generated') }),
+    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_CONFLICT',
+  )
+  await assert.rejects(readFile(join(root, 'generated', 'fonts', 'Inter-Regular.font.glb')), {
+    code: 'ENOENT',
+  })
 })
 
 test('the installed CLI is a thin JSON-reporting layer over bakeProject', async (t) => {

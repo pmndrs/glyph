@@ -8,6 +8,7 @@ import type {
   SerializedBakeError,
 } from '../bake.js'
 import type { RasterKey, Sha256Hex } from '../identity.js'
+import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js'
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
@@ -460,8 +461,6 @@ export function bitmapBakerFromCore(
   }
 }
 
-let defaultBaker: Promise<ReturnType<typeof bitmapBakerFromCore>> | undefined
-
 async function loadDefaultBitmapBaker(): Promise<ReturnType<typeof bitmapBakerFromCore>> {
   const wasmUrl = new URL('../bitmap_baker.wasm', import.meta.url)
   let bytes: BufferSource
@@ -476,14 +475,15 @@ async function loadDefaultBitmapBaker(): Promise<ReturnType<typeof bitmapBakerFr
   return bitmapBakerFromCore(await createBitmapBaker(bytes))
 }
 
+const defaultBitmapBaker = cacheSuccessfulPromise(loadDefaultBitmapBaker)
+
 export const bitmapBaker: RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptorV0> = {
   kind: BITMAP_KIND,
   extension: BITMAP_EXTENSION,
   version: BITMAP_FORMAT_VERSION,
   descriptor: bitmapDescriptor,
   async bake(request) {
-    defaultBaker ??= loadDefaultBitmapBaker()
-    return (await defaultBaker).bake(request)
+    return (await defaultBitmapBaker()).bake(request)
   },
 }
 
