@@ -1,0 +1,37 @@
+diff --git a/dist/webgpu/index.cjs b/dist/webgpu/index.cjs
+index 3af2d8a..bd04f03 100644
+--- a/dist/webgpu/index.cjs
++++ b/dist/webgpu/index.cjs
+@@ -1,7 +1,6 @@
+ 'use strict';
+ 
+ const webgpu = require('three/webgpu');
+-const Inspector_js = require('three/addons/inspector/Inspector.js');
+ const jsxRuntime = require('react/jsx-runtime');
+ const React = require('react');
+ const useMeasure = require('react-use-measure');
+@@ -59,7 +58,6 @@ const WebGLRenderTarget = null;
+ 
+ const THREE = /*#__PURE__*/_mergeNamespaces({
+   __proto__: null,
+-  Inspector: Inspector_js.Inspector,
+   R3F_BUILD_LEGACY: R3F_BUILD_LEGACY,
+   R3F_BUILD_WEBGPU: R3F_BUILD_WEBGPU,
+   RenderTargetCompat: webgpu.RenderTarget,
+diff --git a/dist/webgpu/index.mjs b/dist/webgpu/index.mjs
+--- a/dist/webgpu/index.mjs
++++ b/dist/webgpu/index.mjs
+@@ -1,5 +1,4 @@
+ import * as webgpu from 'three/webgpu';
+ import { RenderTarget, Frustum, Matrix4, Group, BoxGeometry, MeshBasicNodeMaterial, Mesh, Node, NodeUpdateType, Layers, RGBAFormat, UnsignedByteType, Vector3, Vector2, TextureLoader, Texture as Texture$1, SRGBColorSpace, Raycaster, OrthographicCamera, PerspectiveCamera, Scene, PCFSoftShadowMap, VSMShadowMap, PCFShadowMap, BasicShadowMap, WebGPURenderer, Color, Vector4, PostProcessing } from 'three/webgpu';
+-import { Inspector } from 'three/addons/inspector/Inspector.js';
+ import { jsx, Fragment } from 'react/jsx-runtime';
+ import * as React from 'react';
+@@ -39,7 +38,6 @@ const WebGLRenderTarget = null;
+ 
+ const THREE = /*#__PURE__*/_mergeNamespaces({
+   __proto__: null,
+-  Inspector: Inspector,
+   R3F_BUILD_LEGACY: R3F_BUILD_LEGACY,
+   R3F_BUILD_WEBGPU: R3F_BUILD_WEBGPU,
+   RenderTargetCompat: RenderTarget,

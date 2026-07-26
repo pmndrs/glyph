@@ -5,4 +5,6 @@ packages:
 onlyBuiltDependencies: []
 
 patchedDependencies:
+  '@react-three/fiber@10.0.0-alpha.2': packages/text/patches/@react-three__fiber@10.0.0-alpha.2.patch
+  '@react-three/test-renderer@9.1.0': packages/text/patches/@react-three__test-renderer@9.1.0.patch
   '@types/three@0.185.1': packages/text/patches/@types__three@0.185.1.patch

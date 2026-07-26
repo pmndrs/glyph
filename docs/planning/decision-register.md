@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T16:29:02Z"
+  at: "2026-07-26T19:27:32Z"
 ---
 
 # Decision register
@@ -143,7 +143,7 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 | D-081 | Figma semantic values are CSS variables consumed through Tailwind utilities and local shadcn-derived primitives; desktop and mobile frames share those tokens and components rather than duplicating literal styles. | Accepted |
 | D-082 | React Compiler runs in the Vite build and Oxlint runs compiler analysis, Hooks, accessibility, and `react-you-might-not-need-an-effect` rules as errors. Effects remain external-system synchronization; effect-only events use `useEffectEvent`, never render-time ref reads. | Accepted |
 | D-083 | Maintainer-local product probes use Vitexec for the live Vite/GPU-capable desktop lane and Playwright for explicit mobile viewports; both reject browser-console errors and use causal DOM/application signals without sleeps or retries. | Accepted |
-| D-094 | The React subpath targets the repository's current React 19 and latest compatible released React Three Fiber, presently 9.6.1. Resolved R3F reconciliation uses a real root backed by `WebGPURenderer` and a pinned paragraph oracle; pending Suspense is exercised in the live browser. Test-only reconcilers do not enter the benchmark product registry. | Accepted |
+| D-094 | The React subpath targets React 19.2 and the agreed React Three Fiber 10 alpha lane, presently 10.0.0-alpha.2, exclusively through `@react-three/fiber/webgpu`. Its Three peer accepts 0.185.1. A narrow R3F patch removes eager browser-only Inspector registration from the WebGPU module graph, while the 9.1.0 test-renderer patch retargets static imports to `three/webgpu` and the R3F WebGPU entry; upstream should make Inspector registration lazy and publish a v10-aware WebGPU test entry. Resolved R3F reconciliation uses a real root backed by `WebGPURenderer` and a pinned paragraph oracle; pending Suspense is exercised in the live browser. Test-only reconcilers do not enter the benchmark product registry. | Accepted |
 | D-095 | The benchmark application has distinct conformance and benchmark modes over shared implementation, workload, fixture, and result contracts. The UI exposes mode, raster technique, WebGPU/WebGL2 backend, and workload as independent shareable axes. Conformance visibly compares reference/candidate/diff and may pay readback/oracle costs; benchmark mode measures consumer-facing cold phases and an oracle-free live render loop with CPU-ms, FPS, and GPU-ms sparklines. Conformance duration is never reported as renderer performance. | Accepted |
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.

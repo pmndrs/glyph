@@ -1,0 +1,44 @@
+diff --git a/dist/react-three-test-renderer.cjs.dev.js b/dist/react-three-test-renderer.cjs.dev.js
+index 649b764..7fb4f36 100644
+--- a/dist/react-three-test-renderer.cjs.dev.js
++++ b/dist/react-three-test-renderer.cjs.dev.js
+@@ -2,8 +2,8 @@
+ 
+ Object.defineProperty(exports, '__esModule', { value: true });
+ 
+-var THREE = require('three');
+-var fiber = require('@react-three/fiber');
++var THREE = require('three/webgpu');
++var fiber = require('@react-three/fiber/webgpu');
+ 
+ function _interopNamespace(e) {
+   if (e && e.__esModule) return e;
+diff --git a/dist/react-three-test-renderer.cjs.prod.js b/dist/react-three-test-renderer.cjs.prod.js
+index 970109a..7755f6e 100644
+--- a/dist/react-three-test-renderer.cjs.prod.js
++++ b/dist/react-three-test-renderer.cjs.prod.js
+@@ -2,8 +2,8 @@
+ 
+ Object.defineProperty(exports, '__esModule', { value: true });
+ 
+-var THREE = require('three');
+-var fiber = require('@react-three/fiber');
++var THREE = require('three/webgpu');
++var fiber = require('@react-three/fiber/webgpu');
+ 
+ function _interopNamespace(e) {
+   if (e && e.__esModule) return e;
+diff --git a/dist/react-three-test-renderer.esm.js b/dist/react-three-test-renderer.esm.js
+index 018150e..9c82984 100644
+--- a/dist/react-three-test-renderer.esm.js
++++ b/dist/react-three-test-renderer.esm.js
+@@ -1,6 +1,6 @@
+-import * as THREE from 'three';
+-import { act, extend, createRoot, _roots, reconciler } from '@react-three/fiber';
+-export { act } from '@react-three/fiber';
++import * as THREE from 'three/webgpu';
++import { act, extend, createRoot, _roots, reconciler } from '@react-three/fiber/webgpu';
++export { act } from '@react-three/fiber/webgpu';
+ 
+ const lowerCaseFirstLetter = str => `${str.charAt(0).toLowerCase()}${str.slice(1)}`;
+ const toEventHandlerName = eventName => `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`;
