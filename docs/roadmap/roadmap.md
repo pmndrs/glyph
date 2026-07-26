@@ -574,6 +574,8 @@ Exit only when MSDF is credible as the general-purpose recommendation across the
 - [x] Pin the exact candidate with default features disabled and compile its CPU generator for `wasm32-unknown-unknown` without WGPU/native bindings, duplicate font parsers, or host imports.
 - [ ] Remove or explicitly justify the candidate's remaining `std` dependency and allocator behavior before it enters a shipping baker.
 - [ ] Compare deterministic RGBA8 output and reconstructed glyph error against pinned native `msdfgen` over ordinary, acute-corner, overlap, cubic, quadratic, empty, malformed, and complex-outline fixtures.
+  - [x] Pin the native core-only oracle and admit ordinary, acute-corner, overlapping-contour, cubic, quadratic, counter, empty, and provider-malformed cases through one explicit framing contract.
+  - [ ] Resolve the self-intersection mismatch currently detected at 768 of 1,600 reconstructed pixels; do not waive or remove the negative case.
 - [ ] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence before accepting the dependency.
 - [x] Record raw/optimized/gzip/Brotli candidate-core Wasm size through a reproducible freshness-checked package script.
 - [ ] Record cold/warm full-font generation cost after the hardened generator and Fontations provider are integrated.
