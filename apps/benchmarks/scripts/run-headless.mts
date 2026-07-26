@@ -79,7 +79,7 @@ try {
     if (message.type() === 'error') errors.push(message.text())
   })
   page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto(`http://127.0.0.1:${options.port}/`, { waitUntil: 'networkidle' })
+  await page.goto(`http://127.0.0.1:${options.port}/`, { waitUntil: 'domcontentloaded' })
   const summary = await page.evaluate(async (request) => {
     const executionPath = '/src/benchmark/execution.ts'
     const environmentPath = '/src/benchmark/environment.ts'

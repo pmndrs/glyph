@@ -19,6 +19,7 @@ import cjkFontUrl from '../../fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-R
 import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json'
 import cjkOracle from '../../fixtures/shaping/noto-sans-cjk/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
+import { exactValue } from './exact-value'
 import { hashParagraphLayouts, paragraphLayoutContract } from './paragraph-layout-digest'
 import {
   assertShapingFixture,
@@ -199,7 +200,7 @@ function assertExactContract(
   actual: Readonly<Record<string, unknown>>,
   expected: Readonly<Record<string, unknown>> | undefined,
 ): void {
-  if (expected === undefined || JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (expected === undefined || !exactValue(actual, expected)) {
     throw new Error(`${label} differs from the exact CJK paragraph contract`)
   }
 }

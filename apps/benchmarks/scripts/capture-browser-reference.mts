@@ -47,7 +47,7 @@ try {
     if (message.type() === 'error') errors.push(message.text())
   })
   page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto('http://127.0.0.1:5173/reference.html', { waitUntil: 'networkidle' })
+  await page.goto('http://127.0.0.1:5173/reference.html', { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => window.referenceReady)
   const family = await page
     .locator('#reference')

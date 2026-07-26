@@ -21,6 +21,55 @@ interface LifecycleResult {
   }
 }
 
+function lifecycleResult(value: unknown, lifecycle: number): LifecycleResult {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`admission lifecycle ${lifecycle} result must be an object`)
+  }
+  if (!('schemaVersion' in value) || value.schemaVersion !== 0) {
+    throw new TypeError(`admission lifecycle ${lifecycle} has an unsupported schema`)
+  }
+  if (!('executions' in value) || value.executions !== 10) {
+    throw new TypeError(`admission lifecycle ${lifecycle} has an invalid execution count`)
+  }
+  if (!('uniqueCompletions' in value) || value.uniqueCompletions !== value.executions) {
+    throw new TypeError(`admission lifecycle ${lifecycle} has non-unique completions`)
+  }
+  if (
+    !('environment' in value) ||
+    typeof value.environment !== 'object' ||
+    value.environment === null ||
+    Array.isArray(value.environment)
+  ) {
+    throw new TypeError(`admission lifecycle ${lifecycle} has no environment record`)
+  }
+  const environment = value.environment
+  if (
+    !('browser' in environment) ||
+    typeof environment.browser !== 'string' ||
+    !('hardwareConcurrency' in environment) ||
+    typeof environment.hardwareConcurrency !== 'number' ||
+    !Number.isSafeInteger(environment.hardwareConcurrency) ||
+    environment.hardwareConcurrency < 1 ||
+    !('webgpu' in environment) ||
+    typeof environment.webgpu !== 'boolean' ||
+    !('crossOriginIsolated' in environment) ||
+    typeof environment.crossOriginIsolated !== 'boolean'
+  ) {
+    throw new TypeError(`admission lifecycle ${lifecycle} has invalid environment fields`)
+  }
+  return {
+    schemaVersion: value.schemaVersion,
+    executions: value.executions,
+    uniqueCompletions: value.uniqueCompletions,
+    environment: {
+      browser: environment.browser,
+      hardwareConcurrency: environment.hardwareConcurrency,
+      webgpu: environment.webgpu,
+      crossOriginIsolated: environment.crossOriginIsolated,
+    },
+  }
+}
+
 const root = fileURLToPath(new URL('..', import.meta.url))
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url))
 const admissionProbe = './vitexec/admission.probe.ts'
@@ -54,13 +103,18 @@ async function runProbe(path: string, timeout: number): Promise<ProcessResult> {
 
 const wrong = await runProbe('./vitexec/negative-wrong.probe.ts', 15)
 if (
+  wrong.code === 0 ||
   !wrong.output.includes('[error]') ||
   !wrong.output.includes('negative-control expected hash mismatch')
 ) {
   throw new Error('wrong-expectation negative control did not fail for the expected reason')
 }
 const withheld = await runProbe('./vitexec/negative-withheld.probe.ts', 2)
-if (!withheld.output.includes('[error]') || !withheld.output.toLowerCase().includes('timeout')) {
+if (
+  withheld.code === 0 ||
+  !withheld.output.includes('[error]') ||
+  !withheld.output.toLowerCase().includes('timeout')
+) {
   throw new Error('withheld-completion negative control did not reach the watchdog')
 }
 
@@ -75,7 +129,12 @@ for (let lifecycle = 0; lifecycle < 10; lifecycle += 1) {
   if (line === undefined || marker === undefined || marker < 0) {
     throw new Error(`admission lifecycle ${lifecycle} emitted no structured result`)
   }
-  lifecycles.push(JSON.parse(line.slice(marker + 'admission-lifecycle '.length)))
+  lifecycles.push(
+    lifecycleResult(
+      JSON.parse(line.slice(marker + 'admission-lifecycle '.length)) as unknown,
+      lifecycle,
+    ),
+  )
 }
 
 const executions = lifecycles.reduce((total, lifecycle) => total + lifecycle.executions, 0)

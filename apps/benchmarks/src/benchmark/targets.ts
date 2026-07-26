@@ -22,6 +22,7 @@ import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layou
 import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-v0.json'
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
+import { exactValue as exactJsonValue } from './exact-value'
 import { hashParagraphLayout, hashParagraphLayouts } from './paragraph-layout-digest'
 import {
   assertShapingFixture,
@@ -733,10 +734,8 @@ function exactObject(
   actual: Readonly<Record<string, unknown>>,
   expected: Readonly<Record<string, unknown>>,
 ): void {
-  const actualSource = JSON.stringify(actual)
-  const expectedSource = JSON.stringify(expected)
-  if (actualSource !== expectedSource) {
-    throw new Error(`${label} differs: ${actualSource} != ${expectedSource}`)
+  if (!exactJsonValue(actual, expected)) {
+    throw new Error(`${label} differs`)
   }
 }
 

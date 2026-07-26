@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:1aadcf1915520cd5854128b507200896d9d648c0a7b94d0d675c30b7a66a4811"
+source_digest: "sha256:1154ec3850d2dbcd5133ceaf37d1734de7b4a312e09ca1dc619188ed2128783f"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:18:02Z"
+  at: "2026-07-26T03:22:44Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -33,7 +33,7 @@ The local Worker-queue Vitexec probe authenticates every output and reports obse
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. Item 5.4 is complete with Node, Chromium, and GPU-enabled Vitexec evidence and no fabricated rendering metrics. The first real rendered font frame must land here in Milestone 6.
 
-The initial deterministic browser probe is admitted with a checked-in record: 100 executions across 10 fresh GPU-friendly Chromium/Vite lifecycles, zero retries/failures, unique causal completion identities, and wrong-expectation plus withheld-completion negative controls. The current live probe also executes exact paragraph measurement, positioned-layout, bidi/policy, and CJK scenarios sequentially; the CJK probe fixes its composite hash and reports WebGPU active before the mobile Playwright surface runs on its own strict port. This proves a GPU-capable environment, not a rendered GPU workload before Milestone 6.
+The initial deterministic browser probe is admitted with a checked-in record: 100 executions across 10 fresh GPU-friendly Chromium/Vite lifecycles, zero retries/failures, unique causal completion identities, and wrong-expectation plus withheld-completion negative controls. Probe exit status and every parsed lifecycle/environment field are validated before publication. Browser scripts navigate only through DOM readiness and then wait on the product's own completion promise or visible state; they do not use network-idle heuristics. Exact contract comparison rejects non-finite numbers, exotic objects, key-order differences, and missing or additional fields without JSON coercion. The current live probe also executes exact paragraph measurement, positioned-layout, bidi/policy, and CJK scenarios sequentially; the CJK probe fixes its composite hash and reports WebGPU active before the mobile Playwright surface runs on its own strict port. This proves a GPU-capable environment, not a rendered GPU workload before Milestone 6.
 
 ## Package scripts
 

@@ -19,10 +19,11 @@ export function ExportPanel({ summary }: { readonly summary: BenchmarkSummary | 
 
   function download(): void {
     const anchor = document.createElement('a')
-    anchor.href = URL.createObjectURL(new Blob([value], { type: 'application/json' }))
+    const objectUrl = URL.createObjectURL(new Blob([value], { type: 'application/json' }))
+    anchor.href = objectUrl
     anchor.download = 'pmndrs-text-benchmark.json'
     anchor.click()
-    URL.revokeObjectURL(anchor.href)
+    queueMicrotask(() => URL.revokeObjectURL(objectUrl))
   }
 
   return (

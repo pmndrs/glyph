@@ -34,7 +34,7 @@ try {
   })
   page.on('pageerror', (error) => errors.push(error.message))
 
-  await page.goto(`http://127.0.0.1:${mobilePort}/`, { waitUntil: 'networkidle' })
+  await page.goto(`http://127.0.0.1:${mobilePort}/`, { waitUntil: 'domcontentloaded' })
   await page.locator('[data-testid="scene"]:visible').waitFor()
   await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-scene.png', fullPage: true })
   await page.getByRole('button', { name: 'controls', exact: true }).click()
