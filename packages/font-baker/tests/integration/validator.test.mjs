@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import test, { before } from "node:test";
 
 import { createFontBaker } from "../../dist/index.js";
+import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from "../../dist/contract.js";
 import { FontArtifactValidationError, validateFontArtifact } from "../../dist/validator.js";
 import { fontBakerWasmUrl } from "../../dist/wasm-url.js";
 
@@ -145,6 +146,12 @@ test("keeps the packaged extension schema byte-identical to the canonical schema
     types: "./dist/validator.d.ts",
     import: "./dist/validator.js",
   });
+  assert.deepEqual(manifest.exports["./contract"], {
+    types: "./dist/contract.d.ts",
+    import: "./dist/contract.js",
+  });
+  assert.equal(FONT_BAKER_VERSION, manifest.version);
+  assert.equal(FONT_FORMAT_VERSION, 0);
   assert.deepEqual(manifest.exports["./wasm-url"], {
     types: "./dist/wasm-url.d.ts",
     import: "./dist/wasm-url.js",

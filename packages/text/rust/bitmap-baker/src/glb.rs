@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::{
     error::{BitmapBakeError, BitmapBakeErrorCode, overflow},
     hex_sha256, ktx,
-    model::{BITMAP_EXTENSION, PagePackaging},
+    model::{BITMAP_EXTENSION, BITMAP_GENERATOR_VERSION, PagePackaging},
     rasterize::RasterizedStrike,
 };
 
@@ -92,7 +92,7 @@ pub(crate) fn build_bitmap_glb(
     let root = json!({
         "asset": {
             "version": "2.0",
-            "generator": "@pmndrs/text bitmap baker 0.0.0",
+            "generator": format!("@pmndrs/text bitmap baker {BITMAP_GENERATOR_VERSION}"),
         },
         "extensionsUsed": [BITMAP_EXTENSION],
         "extensionsRequired": [BITMAP_EXTENSION],

@@ -1,4 +1,8 @@
 import type { ParsedGlb, ValidatedFontArtifactV0 } from "@pmndrs/text-font-baker/validate";
+import {
+  FONT_BAKER_VERSION as CORE_BAKER_VERSION,
+  FONT_FORMAT_VERSION as CORE_FORMAT_VERSION,
+} from "@pmndrs/text-font-baker/contract";
 
 import type { FontInput, FontMetrics, RegisteredFont } from "./font.js";
 import type { FontHandle, FontKey, RasterHandle, RasterKey, Sha256Hex } from "./identity.js";
@@ -18,8 +22,6 @@ import type {
   RegisteredRaster,
 } from "./raster.js";
 
-const CORE_FORMAT_VERSION = 0;
-const CORE_BAKER_VERSION = "0.0.0";
 const DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_BUFFER_VIEWS = 4_096;
 const DEFAULT_MAX_RASTERS = 256;

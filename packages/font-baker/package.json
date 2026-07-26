@@ -16,6 +16,10 @@
       "types": "./dist/validator.d.ts",
       "import": "./dist/validator.js"
     },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    },
     "./wasm-url": {
       "types": "./dist/wasm-url.d.ts",
       "import": "./dist/wasm-url.js"

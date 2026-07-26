@@ -19,9 +19,9 @@ mod wasm;
 
 pub use error::{BitmapBakeError, BitmapBakeErrorCode};
 pub use model::{
-    ArtifactPackaging, BitmapBakeArtifactV0, BitmapBakeRequestV0, BitmapBakeResultV0,
-    BitmapDescriptorV0, BitmapPackagingV0, BitmapPageReportV0, BitmapPayloadReportV0,
-    MAX_BITMAP_PPEM, PagePackaging,
+    ArtifactPackaging, BITMAP_GENERATOR_VERSION, BitmapBakeArtifactV0, BitmapBakeRequestV0,
+    BitmapBakeResultV0, BitmapDescriptorV0, BitmapPackagingV0, BitmapPageReportV0,
+    BitmapPayloadReportV0, MAX_BITMAP_PPEM, PagePackaging,
 };
 
 /// Return the generated direct-memory ABI contract embedded in this build.
@@ -182,7 +182,7 @@ mod tests {
 
     fn request(pages: PagePackaging) -> BitmapBakeRequestV0 {
         let descriptor = BitmapDescriptorV0 {
-            generator_version: "0.0.0".into(),
+            generator_version: BITMAP_GENERATOR_VERSION.into(),
             strikes: vec![16],
         };
         BitmapBakeRequestV0 {
@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn descriptor_key_matches_the_typescript_contract() {
         let descriptor = BitmapDescriptorV0 {
-            generator_version: "0.0.0".into(),
+            generator_version: BITMAP_GENERATOR_VERSION.into(),
             strikes: vec![16, 32],
         };
         assert_eq!(

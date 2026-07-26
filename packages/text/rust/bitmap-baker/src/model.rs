@@ -7,7 +7,7 @@ use crate::error::{BitmapBakeError, BitmapBakeErrorCode};
 pub const BITMAP_KIND: &str = "bitmap";
 pub const BITMAP_EXTENSION: &str = "PMNDRS_font_bitmap";
 pub const BITMAP_FORMAT_VERSION: u8 = 0;
-pub const BITMAP_GENERATOR_VERSION: &str = "0.0.0";
+pub const BITMAP_GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const GLYPH_RECORD_STRIDE: usize = 20;
 pub const MAX_BITMAP_PPEM: u16 = 1022;
 

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:1154ec3850d2dbcd5133ceaf37d1734de7b4a312e09ca1dc619188ed2128783f"
+source_digest: "sha256:a562e8219275ad935835112ffb296858f013a4790273a887f87e81c020753196"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:22:44Z"
+  at: "2026-07-26T03:29:05Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -27,7 +27,7 @@ This application owns the shared target/scenario runner, responsive Figma-backed
 
 Every measured call receives its actual zero-based sample index; warmups remain outside the reported sample sequence. Controls reject zero/non-integral sample counts and negative/non-integral warmups before target loading. Successful summaries are honest single-state records and include the V0 schema marker plus the exact controls, so headless JSON is self-describing rather than relying on command-line context.
 
-The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The current browser graph is 211,096 minified bytes; Unicode analysis is independently 139,936 minified / 42,047 gzip / 30,989 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, portable baker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,255, 3,861, 9,005, 6,581, 434,251, 30,669, and 693,034 minified/raw bytes respectively. The reviewed Worker increase buys explicit FIFO admission, queued/active cancellation recovery, and entry-side serialization; the reviewed shaper increase buys fallible result assembly, arena publication, and a 64-plan per-font LRU bound. Checked ceilings cover both runtime JavaScript entries and the portable baker JavaScript/Wasm so regenerating the report cannot silently bless a heavy dependency edge. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
+The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The current browser graph is 211,220 minified bytes; Unicode analysis is independently 139,936 minified / 42,047 gzip / 30,989 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, portable baker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,255, 3,861, 9,018, 6,655, 434,251, 30,669, and 693,034 minified/raw bytes respectively. The reviewed Worker increase buys explicit FIFO admission, queued/active cancellation recovery, and entry-side serialization; the reviewed shaper increase buys fallible result assembly, arena publication, and a 64-plan per-font LRU bound. Checked ceilings cover both runtime JavaScript entries and the portable baker JavaScript/Wasm so regenerating the report cannot silently bless a heavy dependency edge. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
 
 The local Worker-queue Vitexec probe authenticates every output and reports observations rather than asserting machine-sensitive timing. Two Chromium runs measured a three-font queued burst at 30.8–32.0 ms and three separately initialized sequential Workers at 68.3–88.6 ms. The correctness suite separately proves one active post, FIFO completion, queued cancellation, and active-cancellation recovery without timers.
 

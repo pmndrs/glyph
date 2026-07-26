@@ -1,3 +1,7 @@
+import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from "./contract.js";
+
+export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from "./contract.js";
+
 export interface FontBakeDescriptorV0 {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
@@ -91,8 +95,8 @@ export interface FontBakerAbiV0 {
   readonly pointerWidth: 32;
   readonly memory: string;
   readonly versions: {
-    readonly baker: "0.0.0";
-    readonly fontFormat: 0;
+    readonly baker: typeof FONT_BAKER_VERSION;
+    readonly fontFormat: typeof FONT_FORMAT_VERSION;
     readonly harfrust: "0.12.0";
     readonly harfrustCommit: "60b28ea22b5261710018d69c168a762bcb28794c";
     readonly harfbuzzReference: "13.0.0";
@@ -213,8 +217,8 @@ function assertFontBakerAbi(value: unknown): asserts value is FontBakerAbiV0 {
     value.pointerWidth !== 32 ||
     typeof value.memory !== "string" ||
     !isNonArrayObject(versions) ||
-    versions.baker !== "0.0.0" ||
-    versions.fontFormat !== 0 ||
+    versions.baker !== FONT_BAKER_VERSION ||
+    versions.fontFormat !== FONT_FORMAT_VERSION ||
     versions.harfrust !== "0.12.0" ||
     versions.harfrustCommit !== "60b28ea22b5261710018d69c168a762bcb28794c" ||
     versions.harfbuzzReference !== "13.0.0" ||

@@ -2,7 +2,7 @@ use alloc::string::{String, ToString};
 use serde_json::json;
 
 pub const ABI_VERSION: u32 = 0;
-pub const SHAPER_VERSION: &str = "0.0.0";
+pub const SHAPER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const HARFRUST_VERSION: &str = "0.12.0";
 pub const HARFRUST_COMMIT: &str = "60b28ea22b5261710018d69c168a762bcb28794c";
 pub const UNICODE_VERSION: &str = "17.0.0";

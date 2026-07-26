@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Version authority** — Added a contract-only portable-baker subpath so loader, validator, and bridge share baker/format versions without a heavy browser edge; Rust shaper and bitmap-generator versions now derive from Cargo metadata, and the canonical version contract lists the bitmap ABI plus exact Fontations/Skrifa/bidi pins.
 - **Test reliability** — Replaced Playwright network-idle heuristics with causal app readiness, validated admission-process failures and parsed lifecycle records before publication, made exact contract comparisons non-coercive, and deferred export URL release to the next microtask without timers.
 - **Performance** — Removed quadratic paragraph-layout scans with one-time cluster prefix indexes, a monotonic style cursor, and direction-aware binary bounds over HarfRust's monotone clusters. An 80,000-glyph justified-layout stress pass dropped from a 431 ms to 268 ms median in the same five-sample local Node run; the browser core cost is 1,140 minified / 240 Brotli bytes.
 - **Memory hardening** — Bounded every paragraph-derived cache to its 32 most recently used variants and each font's HarfRust cache to 64 plans. Hot calls retain identity and reuse, adversarial constraint/language variation has fixed retention, and the optimized shaper cost is 352 raw bytes.

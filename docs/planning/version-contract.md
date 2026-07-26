@@ -20,6 +20,18 @@ sources:
   - id: unicode-segmenter
     resource: https://www.npmjs.com/package/unicode-segmenter/v/0.15.0
     title: unicode-segmenter 0.15.0
+  - id: unicode-bidi
+    resource: https://crates.io/crates/unicode-bidi/0.3.18
+    title: unicode-bidi 0.3.18
+  - id: read-fonts-runtime
+    resource: https://crates.io/crates/read-fonts/0.41.0
+    title: read-fonts 0.41.0
+  - id: read-fonts-bakers
+    resource: https://crates.io/crates/read-fonts/0.42.1
+    title: read-fonts 0.42.1
+  - id: skrifa
+    resource: https://crates.io/crates/skrifa/0.45.1
+    title: Skrifa 0.45.1
   - id: gltf-schema
     resource: https://github.com/KhronosGroup/glTF/tree/77b44be7bef26e01fb0b140e3d5bb1716421c5e9/specification/2.0/schema
     title: Pinned glTF 2.0 schema revision
@@ -35,6 +47,9 @@ sources:
   - id: shaper-abi-source
     resource: ../../packages/text/rust/shaper/src/abi_contract.rs
     title: Generated shaper ABI and version-contract source
+  - id: bitmap-abi-source
+    resource: ../../packages/text/rust/bitmap-baker/src/abi_contract.rs
+    title: Generated bitmap baker ABI source
   - id: binaryen
     resource: https://www.npmjs.com/package/binaryen/v/129.0.0
     title: Binaryen 129.0.0
@@ -46,7 +61,7 @@ sources:
     title: libfuzzer-sys 0.4.13
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-25T08:13:36Z"
+  at: "2026-07-26T03:29:05Z"
 ---
 
 # V0 toolchain and format version pins
@@ -64,6 +79,10 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Unicode Script/Script_Extensions data | `@unicode/unicode-17.0.0` `1.6.17` | build-only generated range-table source |
 | UAX #29 implementation | `unicode-segmenter` `0.15.0` | Unicode 17 extended-grapheme segmentation |
 | UAX #14 implementation | `@cto.af/linebreak` `4.0.3` | Unicode 17 line breaking; complete official corpus gate |
+| UAX #9 implementation | `unicode-bidi` `0.3.18` | `default-features = false`; Unicode 17 bidi classes and brackets are generated in-package |
+| Runtime shaper font reader | `read-fonts` `0.41.0` | HarfRust-matched checked SFNT access |
+| Baker font reader | `read-fonts` `0.42.1` | portable core and bitmap parsing |
+| Baker glyph metadata/outlines | Skrifa `0.45.1` | metrics, bounds, and outline interpretation |
 | glTF specification | `2.0` | Khronos schema commit `77b44be7bef26e01fb0b140e3d5bb1716421c5e9` |
 | Khronos glTF Validator | `2.0.0-dev.3.10` | npm package |
 | JSON Schema Draft-04 evaluator | Ajv `6.15.0` | npm package; exact extension-schema negative matrix |
@@ -74,15 +93,16 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | `PMNDRS_font` format | `0` | extension schema and shaping contract |
 | Portable baker ABI | `0` | generated `font-baker-abi-v0.json` |
 | Text shaper ABI | `0` | generated `text-shaper-abi-v0.json` |
+| Bitmap baker ABI | `0` | generated `bitmap-baker-abi-v0.json` |
 | Font baker | `0.0.0` | Cargo/npm package version during the integration slice |
-| Bitmap generator | `0.0.0` | reserved initial package version for roadmap item 2.3 |
+| Bitmap generator | `0.0.0` | Cargo/package version embedded into descriptors and artifacts |
 | Bitmap outline rasterizer | Zeno `0.3.3` | unhinted grayscale mask generation from Skrifa outline commands |
 | KTX2 Rust model/parser | `ktx2` `0.5.0` | compile-time R8 DFD generation plus native artifact validation |
 | KTX2 JavaScript parser | `ktx-parse` `1.1.0` | package-owned artifact and runtime page validation |
 
 ## Generated contract
 
-The Rust ABI sources generate both published JSON contracts at build time. Their `versions` objects carry the applicable baker, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shims consume those sources rather than relying on a hand-authored contract artifact.
+The Rust ABI sources generate all three published JSON contracts at build time. Their `versions` objects carry the applicable baker, bitmap generator, format, shaper, oracle, Unicode, glTF schema, validator, and Binaryen pins; Rust provenance and the TypeScript direct-memory shims consume those sources rather than relying on a hand-authored contract artifact. Rust package/generator versions derive from Cargo metadata. The contract-only `@pmndrs/text-font-baker/contract` subpath gives the TypeScript loader, validator, and direct-memory bridge one version authority without pulling the bridge into the browser graph.
 
 Every raster generator stamps its exact owning package semantic version into its canonical descriptor and artifact provenance. A generator upgrade changes its descriptor hash and therefore its raster key. The bitmap generator begins at `0.0.0`; additional raster generators receive their own exact pins when their packages enter the roadmap.
 

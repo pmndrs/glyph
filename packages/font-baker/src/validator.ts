@@ -2,6 +2,8 @@ import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
 import draft04Schema from "ajv/lib/refs/json-schema-draft-04.json" with { type: "json" };
 import { validateBytes } from "gltf-validator";
 
+import { FONT_BAKER_VERSION } from "./contract.js";
+
 import extensionSchema from "./schemas/gltf-2.0/extension.schema.json" with { type: "json" };
 import extrasSchema from "./schemas/gltf-2.0/extras.schema.json" with { type: "json" };
 import gltfPropertySchema from "./schemas/gltf-2.0/glTFProperty.schema.json" with { type: "json" };
@@ -352,7 +354,7 @@ async function validateFontSemantics(
     65_535,
   );
   if (
-    provenance.bakerVersion !== "0.0.0" ||
+    provenance.bakerVersion !== FONT_BAKER_VERSION ||
     provenance.harfrustVersion !== "0.12.0" ||
     provenance.harfbuzzReferenceVersion !== "13.0.0" ||
     provenance.unicodeVersion !== "17.0.0"
