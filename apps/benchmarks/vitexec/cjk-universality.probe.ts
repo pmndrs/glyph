@@ -13,7 +13,7 @@ const result = await runRegisteredBenchmark({
   targetId: 'cjk-universality',
   scenarioId: 'cjk-universality',
   input: {},
-  controls: { samples: 3, warmup: 1 },
+  controls: { dpr: 1, samples: 3, warmup: 1 },
   environment,
 })
 const expectedHash =

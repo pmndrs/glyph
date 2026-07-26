@@ -18,6 +18,7 @@ export interface BenchmarkEnvironment {
 }
 
 export interface BenchmarkControls {
+  readonly dpr: number
   readonly samples: number
   readonly warmup: number
 }
@@ -64,8 +65,12 @@ export interface BenchmarkTarget {
   readonly color: 'violet' | 'green' | 'cyan' | 'amber'
   readonly capabilities: ReadonlySet<Capability>
   status(input: BenchmarkInput): TargetStatus
-  load(): Promise<void>
-  run(input: BenchmarkInput, sampleIndex: number): Promise<TargetRunOutput>
+  load(controls: BenchmarkControls): Promise<void>
+  run(
+    input: BenchmarkInput,
+    sampleIndex: number,
+    controls: BenchmarkControls,
+  ): Promise<TargetRunOutput>
   dispose(): Promise<void>
 }
 

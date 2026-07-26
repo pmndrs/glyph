@@ -29,10 +29,12 @@ export interface RegisteredFont {
 
   getRaster(rasterKey: RasterKey | string): RegisteredRaster | undefined
 
-  loadRaster(
-    selection: RasterSelection,
+  loadRaster<const Kind extends string>(
+    selection: RasterSelection<Kind> & { readonly kind: Kind },
     options?: RasterLoadOptions,
-  ): Promise<RegisteredRaster>
+  ): Promise<RegisteredRaster<Kind>>
+
+  loadRaster(selection: RasterSelection, options?: RasterLoadOptions): Promise<RegisteredRaster>
 
   dispose(): void
 }

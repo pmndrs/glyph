@@ -23,16 +23,56 @@ function tslBaselineValidation(
   deterministicValidation(values.map((value) => value.hash))
   for (const value of values) {
     const metrics = value.metrics
+    const dpr = metrics?.dpr
+    const physicalSize = typeof dpr === 'number' ? Math.round(4 * dpr) : 0
     if (
-      value.outputBytes !== 64 ||
-      metrics?.pixelCount !== 16 ||
-      metrics.exactRedPixels !== 16 ||
+      dpr === undefined ||
+      value.outputBytes !== physicalSize * physicalSize * 4 ||
+      metrics?.renderTargetGpuBytes !== value.outputBytes ||
+      metrics.pixelCount !== physicalSize * physicalSize ||
+      metrics.exactRedPixels !== physicalSize * physicalSize ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
       throw new Error('TSL baseline did not preserve its exact backend and pixel contract')
     }
   }
   return `${values.length}/${values.length} exact TSL shader readbacks`
+}
+
+function bitmapTextValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    const dpr = metrics?.dpr
+    const physicalWidth = typeof dpr === 'number' ? Math.round(320 * dpr) : 0
+    const physicalHeight = typeof dpr === 'number' ? Math.round(96 * dpr) : 0
+    if (
+      dpr === undefined ||
+      value.outputBytes !== physicalWidth * physicalHeight * 4 ||
+      metrics?.glyphCount !== 10 ||
+      metrics.drawCount !== 1 ||
+      metrics.atlasGpuBytes !== 695_296 ||
+      metrics.renderTargetGpuBytes !== value.outputBytes ||
+      metrics.totalGpuBytes !== metrics.atlasGpuBytes + metrics.renderTargetGpuBytes ||
+      typeof metrics.litPixels !== 'number' ||
+      metrics.litPixels < 100 ||
+      typeof metrics.inkPixels !== 'number' ||
+      metrics.inkPixels < 100 ||
+      typeof metrics.inkMinX !== 'number' ||
+      typeof metrics.inkMinY !== 'number' ||
+      typeof metrics.inkMaxX !== 'number' ||
+      typeof metrics.inkMaxY !== 'number' ||
+      !finiteNonnegative(metrics.renderMs) ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error(
+        'Bitmap text did not preserve its font, batch, GPU-memory, and pixel contract',
+      )
+    }
+  }
+  return `${values.length}/${values.length} deterministic bitmap font frames`
 }
 
 function shapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
@@ -158,6 +198,13 @@ function finiteNonnegative(value: unknown): value is number {
 }
 
 export const scenarios: readonly BenchmarkScenario[] = [
+  {
+    id: 'bitmap-text-frame',
+    label: 'Bitmap text frame',
+    description: 'Baked Inter shaping, layout, R8 upload, instanced TSL draw, and exact readback.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: bitmapTextValidation,
+  },
   {
     id: 'tsl-shader-baseline',
     label: 'TSL shader baseline',

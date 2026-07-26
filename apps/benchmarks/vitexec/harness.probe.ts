@@ -66,7 +66,7 @@ const paragraph = await runRegisteredBenchmark({
   targetId: 'paragraph-engine',
   scenarioId: 'paragraph-measurement',
   input: {},
-  controls: { samples: 3, warmup: 1 },
+  controls: { dpr: 1, samples: 3, warmup: 1 },
   environment: await environmentResource(),
 })
 if (
@@ -96,7 +96,7 @@ const positioned = await runRegisteredBenchmark({
   targetId: 'paragraph-layout-engine',
   scenarioId: 'paragraph-layout',
   input: {},
-  controls: { samples: 3, warmup: 1 },
+  controls: { dpr: 1, samples: 3, warmup: 1 },
   environment: await environmentResource(),
 })
 if (
@@ -126,7 +126,7 @@ const policy = await runRegisteredBenchmark({
   targetId: 'paragraph-bidi-policy',
   scenarioId: 'paragraph-bidi-policy',
   input: {},
-  controls: { samples: 3, warmup: 1 },
+  controls: { dpr: 1, samples: 3, warmup: 1 },
   environment: await environmentResource(),
 })
 if (

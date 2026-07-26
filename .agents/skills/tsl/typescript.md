@@ -10,7 +10,7 @@ Measure three isolated fixtures with the repository compiler before committing t
 2. a typed constant node attached to the intended material or pass;
 3. one representative TSL operation from the production graph.
 
-In this repository's initial TypeScript 7.0.2 and `@types/three` 0.185.1 check, the first two fixtures completed in under one second, while a single `positionLocal.x.mul(4)` expression did not complete within 60 seconds. Treat that as a declaration-performance finding, not evidence that the runtime API is invalid. Reproduce it after dependency changes and choose a narrow declaration adapter, a verified upstream update, or another measured solution before building substantial graphs. Do not hide it with scattered casts or disable checking for the renderer.
+In this repository's TypeScript 7.0.2 and `@types/three` 0.185.1 check, a single `positionLocal.x.mul(4)` method-chain expression did not complete within 60 seconds. Assigning the overloaded `mul` value to a narrower local function type also forces an expensive structural comparison of the augmented `Node` surface. The public free-function form `mul(positionLocal.x, 4)` preserves exact node types and completes a clean package-plus-graph check in 0.18 seconds (about 167 MB); the benchmark application completes in 0.17 seconds (about 196 MB). Prefer that form for this pinned pair and keep `tests/types/tsl-scalar-operations.test.ts` as the upgrade regression. This is a declaration-performance finding, not evidence that the runtime API is invalid or that an upstream patch is currently required.
 
 ## Imports
 
@@ -37,6 +37,16 @@ function asFloat(value: FloatInput): Node<'float'> {
 ```
 
 Avoid bare `Node`, `any`, or double casts: they erase useful operator and swizzle information. When TypeScript reports an overly complex union, first name a smaller expression or add the narrow expected node type.
+
+For arithmetic on the current pinned pair, import the public operator and call it directly:
+
+```ts
+import { add, mul } from 'three/tsl'
+
+const x: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x))
+```
+
+Do not assign `add` or `mul` to a custom function type. That assignment asks TypeScript to compare every inherited overload and the complete augmented `Node` interface even though the eventual call is scalar.
 
 Uniform properties may name both the shader value type and JavaScript value type when inference cannot cross a class boundary:
 

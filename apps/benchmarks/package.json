@@ -22,7 +22,7 @@
     "sync:cjk-fixture": "node ./scripts/sync-cjk-fixture.mts",
     "provision:harfbuzz": "node ./scripts/provision-harfbuzz.mts",
     "test": "pnpm check:size && pnpm check:paragraph-bidi-contract && pnpm check:paragraph-cjk-contract && pnpm test:unit && pnpm test:headless",
-    "test:headless": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --suite conformance --samples 3 --warmup 1 --port 5181",
+    "test:headless": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --suite conformance --dpr 1 --samples 3 --warmup 1 --port 5181",
     "test:live": "node ./scripts/run-live-probe.mts",
     "test:unit": "vitest run",
     "test:watch": "vitest",

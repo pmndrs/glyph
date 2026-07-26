@@ -5,6 +5,7 @@ import { createServer, type ViteDevServer } from 'vite'
 
 interface Arguments {
   readonly cases: readonly BenchmarkCase[]
+  readonly dpr: number
   readonly samples: number
   readonly warmup: number
   readonly port: number
@@ -19,6 +20,7 @@ interface BenchmarkCase {
 const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'synthetic', scenarioId: 'overview' },
   { targetId: 'tsl-webgl2-baseline', scenarioId: 'tsl-shader-baseline' },
+  { targetId: 'bitmap-text-webgl2', scenarioId: 'bitmap-text-frame' },
   { targetId: 'font-baker', scenarioId: 'cold-load-payload' },
   { targetId: 'font-loader-worker', scenarioId: 'worker-fallback' },
   { targetId: 'harfrust-shaper', scenarioId: 'shaping-conformance' },
@@ -45,9 +47,12 @@ function parseArguments(values: readonly string[]): Arguments {
   }
   const samples = Number(result.samples ?? 32)
   const warmup = Number(result.warmup ?? 4)
+  const dpr = Number(result.dpr ?? 1)
   const port = Number(result.port ?? 5173)
   if (!Number.isSafeInteger(samples) || samples < 1) throw new Error('samples must be positive')
   if (!Number.isSafeInteger(warmup) || warmup < 0) throw new Error('warmup must be non-negative')
+  if (!Number.isFinite(dpr) || dpr <= 0 || dpr > 4)
+    throw new Error('dpr must be greater than zero but no greater than four')
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
     throw new Error('port must be a valid TCP port')
   const suite = result.suite
@@ -66,6 +71,7 @@ function parseArguments(values: readonly string[]): Arguments {
           ],
     samples,
     warmup,
+    dpr,
     port,
     ...(result.output === undefined ? {} : { output: result.output }),
   }
@@ -139,11 +145,11 @@ try {
               targetId: request.targetId,
               scenarioId: request.scenarioId,
               input: {},
-              controls: { samples: request.samples, warmup: request.warmup },
+              controls: { dpr: request.dpr, samples: request.samples, warmup: request.warmup },
               environment: await environmentResource(),
             })
           },
-          { ...benchmarkCase, samples: options.samples, warmup: options.warmup },
+          { ...benchmarkCase, dpr: options.dpr, samples: options.samples, warmup: options.warmup },
         ),
       )
       if (errors.length > 0) throw new Error(`Headless browser errors: ${errors.join(' | ')}`)

@@ -38,6 +38,7 @@ import {
 } from "../../src/index.js";
 import type { ReactElement } from "react";
 import type { LazyRaster, ReactTextProps, UseFont } from "../../src/react.js";
+import { bitmap } from "../../src/raster/bitmap.js";
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
@@ -470,29 +471,6 @@ rasterBake(msdfBaker, {
   // @ts-expect-error The package-owned MSDF baker requires its own options.
   options: { ppem: 16 },
 });
-
-interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
-  readonly strikes: StaticNumberTuple<Strikes>;
-}
-
-interface BitmapResource {
-  readonly texture: unknown;
-}
-
-interface BitmapBatch {
-  readonly instances: number;
-}
-
-type BitmapModule<Strikes extends readonly [number, ...number[]]> = RasterModule<
-  "bitmap",
-  BitmapResource,
-  BitmapBatch,
-  BitmapOptions<Strikes>
->;
-
-declare function bitmap<const Strikes extends readonly [number, ...number[]]>(
-  options: BitmapOptions<Strikes>,
-): RasterRequest<BitmapModule<Strikes>>;
 
 const proseFont = defineFont("/fonts/Inter-Regular.ttf", bitmap({ strikes: [16, 32] }));
 void proseFont;

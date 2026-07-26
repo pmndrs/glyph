@@ -8,7 +8,7 @@ const summary = await runRegisteredBenchmark({
   targetId: 'synthetic',
   scenarioId: 'overview',
   input: {},
-  controls: { samples: 1, warmup: 0 },
+  controls: { dpr: 1, samples: 1, warmup: 0 },
   environment: await environmentResource(),
 })
 if (summary.measurements[0]?.hash !== 'intentionally-wrong') {

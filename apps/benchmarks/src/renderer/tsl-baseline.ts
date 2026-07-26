@@ -3,17 +3,14 @@ import { float, mul, vec3 } from 'three/tsl'
 import type Node from 'three/src/nodes/core/Node.js'
 
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
+import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
 
 const TARGET_SIZE = 4
 const EXPECTED_PIXEL = [255, 0, 0, 255] as const
 
-type RendererBackend = 'webgpu' | 'webgl2'
-type MultiplyFloat = (left: Node<'float'>, right: number) => Node<'float'>
-
-const multiplyFloat: MultiplyFloat = mul
-
 interface BaselineResources {
   readonly backend: RendererBackend
+  readonly dpr: number
   readonly renderer: THREE.WebGPURenderer
   readonly scene: THREE.Scene
   readonly camera: THREE.OrthographicCamera
@@ -35,9 +32,9 @@ export function createTslBaselineTarget(backend: RendererBackend): BenchmarkTarg
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'raster']),
     status: () => 'ready',
-    load: async () => {
+    load: async (controls) => {
       if (state.kind === 'ready') return
-      state = { kind: 'ready', resources: await createResources(backend) }
+      state = { kind: 'ready', resources: await createResources(backend, controls.dpr) }
     },
     run: async () => {
       if (state.kind !== 'ready') throw new Error('TSL baseline target was not loaded')
@@ -55,28 +52,23 @@ export function createTslBaselineTarget(backend: RendererBackend): BenchmarkTarg
   }
 }
 
-async function createResources(backend: RendererBackend): Promise<BaselineResources> {
+async function createResources(backend: RendererBackend, dpr: number): Promise<BaselineResources> {
   const canvas = document.createElement('canvas')
   canvas.width = TARGET_SIZE
   canvas.height = TARGET_SIZE
-  const renderer = new THREE.WebGPURenderer({
+  const renderer = await createConfiguredRenderer({
     canvas,
-    antialias: false,
-    alpha: false,
-    forceWebGL: backend === 'webgl2',
+    dpr,
+    width: TARGET_SIZE,
+    height: TARGET_SIZE,
+    backend,
   })
   let target: THREE.RenderTarget | undefined
   let geometry: THREE.PlaneGeometry | undefined
   let material: THREE.MeshBasicNodeMaterial | undefined
   try {
-    renderer.setPixelRatio(1)
-    renderer.setSize(TARGET_SIZE, TARGET_SIZE, false)
-    renderer.toneMapping = THREE.NoToneMapping
-    renderer.outputColorSpace = THREE.LinearSRGBColorSpace
-    await renderer.init()
-    assertBackend(renderer, backend)
-
-    target = new THREE.RenderTarget(TARGET_SIZE, TARGET_SIZE, {
+    const physicalSize = Math.round(TARGET_SIZE * dpr)
+    target = new THREE.RenderTarget(physicalSize, physicalSize, {
       depthBuffer: false,
       stencilBuffer: false,
       minFilter: THREE.NearestFilter,
@@ -90,7 +82,7 @@ async function createResources(backend: RendererBackend): Promise<BaselineResour
     geometry = new THREE.PlaneGeometry(2, 2)
     material = new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false })
     const half: Node<'float'> = float(0.5)
-    const redChannel: Node<'float'> = multiplyFloat(half, 2)
+    const redChannel: Node<'float'> = mul(half, 2)
     const red: Node<'vec3'> = vec3(redChannel, 0, 0)
     material.colorNode = red
 
@@ -98,6 +90,7 @@ async function createResources(backend: RendererBackend): Promise<BaselineResour
     scene.add(new THREE.Mesh(geometry, material))
     return {
       backend,
+      dpr,
       renderer,
       scene,
       camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
@@ -114,44 +107,38 @@ async function createResources(backend: RendererBackend): Promise<BaselineResour
   }
 }
 
-function assertBackend(renderer: THREE.WebGPURenderer, expected: RendererBackend): void {
-  const matches =
-    expected === 'webgpu'
-      ? renderer.backend instanceof THREE.WebGPUBackend
-      : renderer.backend instanceof THREE.WebGLBackend
-  if (!matches) {
-    throw new Error(`WebGPURenderer initialized ${backendName(renderer)} instead of ${expected}`)
-  }
-}
-
-function backendName(renderer: THREE.WebGPURenderer): string {
-  if (renderer.backend instanceof THREE.WebGPUBackend) return 'webgpu'
-  if (renderer.backend instanceof THREE.WebGLBackend) return 'webgl2'
-  return renderer.backend.constructor.name
-}
-
 async function renderBaseline(resources: BaselineResources): Promise<TargetRunOutput> {
   const { renderer, scene, camera, target } = resources
+  const physicalSize = Math.round(TARGET_SIZE * resources.dpr)
   renderer.setRenderTarget(target)
   renderer.setClearColor(0x000000, 1)
   renderer.clear()
   renderer.render(scene, camera)
-  const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, TARGET_SIZE, TARGET_SIZE)
+  const pixels = await renderer.readRenderTargetPixelsAsync(
+    target,
+    0,
+    0,
+    physicalSize,
+    physicalSize,
+  )
   renderer.setRenderTarget(null)
   const bytes = compactRgba8Readback(
     new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
-    TARGET_SIZE,
-    TARGET_SIZE,
+    physicalSize,
+    physicalSize,
+    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
   )
-  assertTslBaselinePixels(bytes)
+  assertTslBaselinePixels(bytes, physicalSize)
   return {
     bytes: bytes.byteLength,
     hash: await sha256(bytes),
     metrics: {
       backendWebGpu: resources.backend === 'webgpu' ? 1 : 0,
       backendWebGl2: resources.backend === 'webgl2' ? 1 : 0,
-      pixelCount: TARGET_SIZE * TARGET_SIZE,
-      exactRedPixels: TARGET_SIZE * TARGET_SIZE,
+      dpr: resources.dpr,
+      pixelCount: physicalSize * physicalSize,
+      exactRedPixels: physicalSize * physicalSize,
+      renderTargetGpuBytes: bytes.byteLength,
     },
   }
 }
@@ -160,27 +147,30 @@ export function compactRgba8Readback(
   source: Uint8Array,
   width: number,
   height: number,
+  rowOrder: 'top-to-bottom' | 'bottom-to-top' = 'top-to-bottom',
 ): Uint8Array {
   const rowBytes = width * 4
   const compactLength = rowBytes * height
-  if (source.byteLength === compactLength) return source.slice()
-  const paddedRowBytes = Math.ceil(rowBytes / 256) * 256
-  const paddedLength = (height - 1) * paddedRowBytes + rowBytes
-  if (source.byteLength !== paddedLength) {
+  const sourceRowBytes =
+    source.byteLength === compactLength ? rowBytes : Math.ceil(rowBytes / 256) * 256
+  const expectedLength = (height - 1) * sourceRowBytes + rowBytes
+  if (source.byteLength !== expectedLength) {
     throw new Error(
-      `RGBA8 readback returned ${source.byteLength} bytes; expected ${compactLength} compact or ${paddedLength} WebGPU-padded bytes`,
+      `RGBA8 readback returned ${source.byteLength} bytes; expected ${compactLength} compact or ${expectedLength} aligned bytes`,
     )
   }
   const compact = new Uint8Array(compactLength)
+  // WebGPU copies rows from the top-left; WebGL readPixels returns bottom-left rows.
   for (let row = 0; row < height; row += 1) {
-    const sourceOffset = row * paddedRowBytes
+    const sourceRow = rowOrder === 'bottom-to-top' ? height - row - 1 : row
+    const sourceOffset = sourceRow * sourceRowBytes
     compact.set(source.subarray(sourceOffset, sourceOffset + rowBytes), row * rowBytes)
   }
   return compact
 }
 
-export function assertTslBaselinePixels(bytes: Uint8Array): void {
-  const expectedLength = TARGET_SIZE * TARGET_SIZE * EXPECTED_PIXEL.length
+export function assertTslBaselinePixels(bytes: Uint8Array, physicalSize = TARGET_SIZE): void {
+  const expectedLength = physicalSize * physicalSize * EXPECTED_PIXEL.length
   if (bytes.byteLength !== expectedLength) {
     throw new Error(`TSL baseline returned ${bytes.byteLength} bytes instead of ${expectedLength}`)
   }
