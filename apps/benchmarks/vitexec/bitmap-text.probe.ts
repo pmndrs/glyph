@@ -13,7 +13,7 @@ for (const dpr of [1, 2] as const) {
   const backendLitPixels: number[] = []
   const backendInkPixels: number[] = []
   const backendInkBounds: number[][] = []
-  const expectedOutputBytes = 320 * dpr * 96 * dpr * 4
+  const expectedOutputBytes = 384 * dpr * 128 * dpr * 4
   for (const [targetId, backendMetric] of [
     ['bitmap-text-webgpu', 'backendWebGpu'],
     ['bitmap-text-webgl2', 'backendWebGl2'],
@@ -34,8 +34,13 @@ for (const dpr of [1, 2] as const) {
           measurement.outputBytes !== expectedOutputBytes ||
           measurement.metrics?.dpr !== dpr ||
           measurement.metrics[backendMetric] !== 1 ||
-          measurement.metrics.glyphCount !== 10 ||
+          measurement.metrics.glyphCount !== 120 ||
+          measurement.metrics.missingGlyphCount !== 0 ||
           measurement.metrics.drawCount !== 1 ||
+          measurement.metrics.strikePpem !== 16 ||
+          measurement.metrics.renderedPpem !== 16 ||
+          measurement.metrics.cssFontSize !== 16 / dpr ||
+          measurement.metrics.scaleRatio !== 1 ||
           measurement.metrics.atlasGpuBytes !== 695_296 ||
           measurement.metrics.renderTargetGpuBytes !== expectedOutputBytes ||
           measurement.metrics.totalGpuBytes !== 695_296 + expectedOutputBytes ||
@@ -65,6 +70,10 @@ for (const dpr of [1, 2] as const) {
         litPixels: firstMetrics.litPixels,
         inkPixels: firstMetrics.inkPixels,
         inkBounds,
+        strikePpem: firstMetrics.strikePpem,
+        renderedPpem: firstMetrics.renderedPpem,
+        cssFontSize: firstMetrics.cssFontSize,
+        scaleRatio: firstMetrics.scaleRatio,
         atlasGpuBytes: firstMetrics.atlasGpuBytes,
         renderTargetGpuBytes: firstMetrics.renderTargetGpuBytes,
         totalGpuBytes: firstMetrics.totalGpuBytes,

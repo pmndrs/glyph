@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BenchmarkScenario, BenchmarkTarget } from './contracts'
+import type { BenchmarkScenario, BenchmarkTarget, RunnerEvent } from './contracts'
 import { missingCapabilities, runBenchmark } from './runner'
 
 const target: BenchmarkTarget = {
@@ -24,7 +24,7 @@ const scenario: BenchmarkScenario = {
 
 describe('shared benchmark runner', () => {
   it('reports accepted samples through one lifecycle', async () => {
-    const phases: string[] = []
+    const events: RunnerEvent[] = []
     const sampleIndexes: number[] = []
     const result = await runBenchmark({
       target: {
@@ -43,7 +43,7 @@ describe('shared benchmark runner', () => {
         webgpu: false,
         crossOriginIsolated: false,
       },
-      onEvent: (event) => phases.push(event.phase),
+      onEvent: (event) => events.push(event),
     })
 
     expect(result.status).toBe('passed')
@@ -52,7 +52,18 @@ describe('shared benchmark runner', () => {
     expect(result.measurements).toHaveLength(3)
     expect(result.measurements.every(({ metrics }) => metrics?.boundaryCrossings === 1)).toBe(true)
     expect(result.validation).toBe('3 accepted')
-    expect(phases).toContain('complete')
+    expect(events.map(({ phase }) => phase)).toContain('complete')
+    expect(
+      events
+        .filter(({ phase, latest }) => phase === 'sampling' && latest !== undefined)
+        .map(({ completed }) => completed),
+    ).toEqual([1, 2, 3])
+    expect(events.at(-1)).toMatchObject({
+      phase: 'complete',
+      completed: 3,
+      medianMs: expect.any(Number),
+      p95Ms: expect.any(Number),
+    })
     expect(sampleIndexes).toEqual([0, 0, 1, 2])
   })
 

@@ -46,13 +46,18 @@ function bitmapTextValidation(
   for (const value of values) {
     const metrics = value.metrics
     const dpr = metrics?.dpr
-    const physicalWidth = typeof dpr === 'number' ? Math.round(320 * dpr) : 0
-    const physicalHeight = typeof dpr === 'number' ? Math.round(96 * dpr) : 0
+    const physicalWidth = typeof dpr === 'number' ? Math.round(384 * dpr) : 0
+    const physicalHeight = typeof dpr === 'number' ? Math.round(128 * dpr) : 0
     if (
       dpr === undefined ||
       value.outputBytes !== physicalWidth * physicalHeight * 4 ||
-      metrics?.glyphCount !== 10 ||
+      metrics?.glyphCount !== 120 ||
+      metrics.missingGlyphCount !== 0 ||
       metrics.drawCount !== 1 ||
+      metrics.strikePpem !== 16 ||
+      metrics.renderedPpem !== 16 ||
+      metrics.cssFontSize !== 16 / dpr ||
+      metrics.scaleRatio !== 1 ||
       metrics.atlasGpuBytes !== 695_296 ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       metrics.totalGpuBytes !== metrics.atlasGpuBytes + metrics.renderTargetGpuBytes ||
@@ -68,7 +73,7 @@ function bitmapTextValidation(
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
       throw new Error(
-        'Bitmap text did not preserve its font, batch, GPU-memory, and pixel contract',
+        'Bitmap text did not preserve its strike, scale, batch, GPU-memory, and pixel contract',
       )
     }
   }
@@ -201,7 +206,8 @@ export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'bitmap-text-frame',
     label: 'Bitmap text frame',
-    description: 'Baked Inter shaping, layout, R8 upload, instanced TSL draw, and exact readback.',
+    description:
+      'Inter at its native 16 px bitmap strike, with shaping, layout, R8 upload, instanced TSL draw, and exact readback.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
     validate: bitmapTextValidation,
   },

@@ -65,6 +65,8 @@ export interface BitmapDrawBatch {
   readonly object: THREE.Group
   readonly glyphCount: number
   readonly drawCount: number
+  /** Selected baked strike in pixels per em. */
+  readonly strikePpem: number
   updatePaint(paint: GlyphPaint): void
   dispose(): void
 }
@@ -391,6 +393,7 @@ function buildBitmapBatches(
     object: group,
     glyphCount,
     drawCount: runs.length,
+    strikePpem: strike.ppem,
     updatePaint(nextPaint) {
       if (disposed) throw new TypeError('bitmap draw batch has been disposed')
       assertParallelPaint(layout, nextPaint)

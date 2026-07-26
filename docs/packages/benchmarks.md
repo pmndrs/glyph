@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:8ec4fa93b676e4ac3a64066e9015d5fca617f226659384d12d0a817c6a052ff4"
+source_digest: "sha256:0b6d6835f06023d70221f4296b8c7833a7510befb46940cb21d603e13891106b"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -14,6 +14,9 @@ sources:
   - id: benchmark-plan
     resource: ../planning/benchmark-plan.md
     title: Benchmark plan
+  - id: benchmark-ipsum
+    resource: ../../apps/benchmarks/src/benchmark/benchmark-ipsum.ts
+    title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
   at: "2026-07-26T11:15:30Z"
@@ -33,7 +36,19 @@ The independent package-size lane measures the initial public browser graph, laz
 
 The local Worker-queue Vitexec probe authenticates every output and reports observations rather than asserting machine-sensitive timing. Two Chromium runs measured a three-font queued burst at 30.8–32.0 ms and three separately initialized sequential Workers at 68.3–88.6 ms. The correctness suite separately proves one active post, FIFO completion, queued cancellation, and active-cancellation recovery without timers.
 
-Item 6.1 replaces the bitmap placeholder with the harness's first real rendered font frame. A checked-in 927,148-byte composed Inter GLB loads through the public registry, shapes and positions `pmndrs text` through HarfRust and the paragraph engine, decodes its embedded R8 KTX2 page, uploads 695,296 atlas bytes, and renders ten visible glyphs in one instanced draw. The shared readback normalizer removes WebGPU row padding and reverses WebGL's bottom-left row order. Three samples after one warmup are deterministic for each backend/DPR pair. The local live cross-backend probe agreed on 2,249 half-coverage pixels at `[16, 25, 281, 64]` for 1× and 9,113 at `[32, 50, 563, 130]` for 2×. A separate headless WebGL2 run retained the 1× bounds with 2,243 thresholded pixels, showing why filtered coverage counts and full grayscale hashes are environment-qualified observations rather than portable goldens. Framebuffers use 122,880 bytes at 1× and 491,520 at 2×; total tracked GPU bytes are 818,176 and 1,186,816. This machine measured roughly 2 ms WebGPU and 8.3 ms forced-WebGL2 medians in the live run. Determinism, cross-backend bounds where both backends are available, clipping rejection, empty-output rejection, draw count, font count, and GPU-memory contracts remain hard gates. Item 6.2 now owns the framework-neutral `Text` object; MSDF and Slug remain explicitly unavailable.
+Item 6.1 replaces the bitmap placeholder with the harness's first real rendered font frame. A checked-in 927,148-byte composed Inter GLB loads through the public registry, shapes and positions the canonical benchmark ipsum through HarfRust and the paragraph engine, decodes its embedded R8 KTX2 page, uploads 695,296 atlas bytes, and renders 120 visible glyphs in one instanced draw. The selected 16 px strike is now public batch metadata. Both the live viewport and captured target distinguish CSS size from physical render size and hold the image at `renderedPpem / strikePpem = 1`; at 2× DPR this means 8 CSS px produces 16 device pixels. The screen-space ladder owns intentionally scaled samples and must label both sizes and the resulting quality-loss ratio. The canvas stays transparent over the optional design-token grid, while grid-off reveals the solid design-token panel. The shared readback normalizer removes WebGPU row padding and reverses WebGL's bottom-left row order. A fresh GPU Vitexec pass produced 2,659 half-coverage ink pixels on both backends at both DPRs; 1× bounds were `[69, 20, 313, 110]` and 2× bounds were `[261, 84, 505, 174]` in their respective physical framebuffers. WebGPU/WebGL2 edge coverage differed by only 16 pixels, within the two-percent environment-qualified tolerance. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. Determinism, zero missing glyphs, exact strike/scale, clipping rejection, empty-output rejection, draw count, and GPU-memory contracts remain hard gates. Item 6.2 now owns the framework-neutral `Text` object; MSDF and Slug remain explicitly unavailable.
+
+### Benchmark ipsum corpus
+
+The corpus is an executable fixture, not display copy. Its five lines isolate ordinary Latin rhythm, numerals, kerning pairs, punctuation, standard ligature candidates, and compact mathematical notation. Inter must shape every scalar without glyph 0; the renderer rejects the corpus before upload if coverage regresses.
+
+| Lane | Canonical text | Primary signal |
+| --- | --- | --- |
+| Latin | `Lorem ipsum dolor sit amet.` | Common word rhythm and spacing |
+| Numerals | `Hamburgefontsiv 0123456789.` | Mixed round/stem forms and tabular sequence |
+| Kerning | `AVATAR To Wa Yo — “quotes”.` | Strong kerning pairs and punctuation |
+| Ligatures | `ff fi fl ffi ffl; (brackets).` | Standard Latin ligature substitutions |
+| Mathematics | `x²+y²≈z²; 0≤α≤1; ±×÷∞√∑π→←.` | Superscripts, Greek, relations, operators, and arrows |
 
 Milestone 7.2 owns a product-facing advanced-shaping showcase over this same rendering path. It will make Arabic joining, Indic reordering, bidi, ligatures and marks, and CJK line breaking visible while text streams in and the container continuously reflows. Glyphs may interpolate between proven layouts, but shaping and line breaking remain discrete authoritative states. Pause, step, and scrub controls provide deterministic transition points for Vitest, Vitexec, and visual evidence without sleeps or timer tolerances.
 

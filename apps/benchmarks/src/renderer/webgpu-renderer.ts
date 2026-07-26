@@ -3,6 +3,7 @@ import * as THREE from 'three/webgpu'
 export type RendererBackend = 'webgpu' | 'webgl2'
 
 export interface RendererOptions {
+  readonly alpha?: boolean
   readonly backend: RendererBackend
   readonly canvas: HTMLCanvasElement
   readonly dpr: number
@@ -16,7 +17,7 @@ export async function createConfiguredRenderer(
   const renderer = new THREE.WebGPURenderer({
     canvas: options.canvas,
     antialias: false,
-    alpha: false,
+    alpha: options.alpha ?? false,
     forceWebGL: options.backend === 'webgl2',
   })
   try {
