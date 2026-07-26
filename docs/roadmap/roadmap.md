@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T05:40:22Z"
+  at: "2026-07-26T06:45:24Z"
 ---
 
 # Canonical implementation roadmap
@@ -340,7 +340,7 @@ Item 4.1 is closed.
 - [x] Every one of the eight pinned Inter HarfRust cases travels source TTF → portable baker GLB → independent hostile-input validator → `FontRegistry` shaping-view extraction → Wasm registration → both public shaping calls, then compares glyph count, IDs, clusters, advances, offsets, and flags bit-for-bit.
 - [x] A two-run fixture proves run/font indexes, absolute clusters, one-call batching, and plan reuse; UTF-16 surrogate boundaries, tags, ranges, flags, ownership, zero-import ABI identity, extents decoding, and fixed-seed raw request mutations have focused failures.
 - [x] The real benchmark product runs all eight cases as one 97-glyph Chromium batch, validates hash `dc30c21c`, records 2,412 output bytes, one boundary crossing, three plans, 171,056 retained font bytes, 1,638,400 linear-memory bytes, and raw cold/warm timings after correctness passes.
-- [x] The complete optimized module and bridge are measured independently at 692,114 raw / 257,986 gzip / 202,523 Brotli Wasm bytes and 30,648 minified / 8,798 gzip / 7,832 Brotli JavaScript bytes.
+- [x] The complete optimized module and bridge are measured independently at 692,114 raw / 257,986 gzip / 202,523 Brotli Wasm bytes and 30,630 minified / 8,794 gzip / 7,826 Brotli JavaScript bytes.
 
 Item 4.2 and Milestone 4 are closed. Item 5.1 closure evidence is recorded under Milestone 5.
 
@@ -380,7 +380,7 @@ HarfRust reads the retained SFNT tables in Wasm. The milestone does not claim co
 - [x] One broad HarfRust shape is copied immediately out of the borrowed Wasm arena and converted into font-scaled, letter-spaced measured grapheme clusters with unsafe-break information, explicit hard breaks, line metrics, and baselines.
 - [x] Greedy word/character wrapping handles mandatory breaks, trailing empty lines, over-wide clusters, and shaping-safe emergency boundaries. Equivalent unconstrained/at-most/exactly measurements reuse one frozen result and never materialize positioned glyph arrays.
 - [x] Canonical Inter travels source TTF → portable baker GLB → hostile-input validator → retained shaping views → HarfRust Wasm → paragraph measurement. Exact HarfRust-derived natural, 720 px, and 360 px widths are `847.625`, `696.734375`, and `356.546875`; unrelated shaper calls prove cached ownership.
-- [x] The real Chromium benchmark repeats the three exact layouts with hash `79874b9d`, one preparation shape, zero reshapes/reflow boundary crossings, zero positioned-glyph bytes, and a measured independent Unicode-analysis size lane of 139,936 minified / 42,047 gzip / 30,989 Brotli bytes.
+- [x] The real Chromium benchmark repeats the three exact layouts with hash `79874b9d`, one preparation shape, zero reshapes/reflow boundary crossings, zero positioned-glyph bytes, and a measured independent Unicode-analysis size lane of 139,912 minified / 42,042 gzip / 31,048 Brotli bytes.
 
 Item 5.1 is closed; the positioned output and boundary-sensitive reshape evidence that followed is recorded below.
 

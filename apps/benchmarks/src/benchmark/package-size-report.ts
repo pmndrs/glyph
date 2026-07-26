@@ -1,4 +1,4 @@
-import { packageSizeBudgets } from './package-size-budgets'
+import { packageSizeBudgets } from './package-size-budgets.ts'
 
 interface MeasurementHost {
   readonly platform: string
@@ -40,7 +40,14 @@ export function assertPackageSizeReportFresh(
         ),
       }
   if (JSON.stringify(comparable) !== JSON.stringify(committed)) {
-    throw new Error('generated package-size report is stale; run pnpm size')
+    throw new Error(
+      `generated package-size report is stale; run pnpm size\n${JSON.stringify({
+        committedHost: committed.measurementHost,
+        currentHost: current.measurementHost,
+        committedEntries: committed.entries,
+        currentEntries: current.entries,
+      })}`,
+    )
   }
   if (sameHost) return
 

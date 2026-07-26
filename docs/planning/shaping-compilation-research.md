@@ -43,7 +43,7 @@ sources:
     title: WebGPU Shading Language
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T05:40:22Z"
+  at: "2026-07-26T06:45:24Z"
 ---
 
 # Shaping compilation and execution research
@@ -75,7 +75,7 @@ The current complete runtime shaper is shared by every font. Its generated size 
 | Component | Raw/minified | Gzip | Brotli |
 | --- | ---: | ---: | ---: |
 | HarfRust shaper Wasm | 692,114 B | 257,986 B | 202,523 B |
-| TypeScript direct-memory bridge | 30,648 B minified | 8,798 B | 7,832 B |
+| TypeScript direct-memory bridge | 30,630 B minified | 8,794 B | 7,826 B |
 | **Shared runtime total** | — | **266,274 B** | **209,728 B** |
 
 The V0 shaped result costs exactly 24 bytes per produced glyph plus 10 bytes per run before arena alignment. The current Chromium conformance fixture broad-shapes 97 Inter glyphs with one Wasm call in approximately 0.1–0.3 ms warm; paragraph measurement then reuses paragraph-owned arrays without repeating broad shaping.[^shaping-contract]

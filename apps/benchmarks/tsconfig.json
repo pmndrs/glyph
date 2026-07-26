@@ -5,6 +5,7 @@
     "declaration": false,
     "declarationMap": false,
     "isolatedDeclarations": false,
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2025"],
     "types": ["vite/client", "vitest/globals"]
