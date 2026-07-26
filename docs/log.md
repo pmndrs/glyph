@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Performance** — Decode both baker responses in-place while their Wasm allocations are live, copying only artifact ranges that survive release. This removes one full-result copy from the portable and bitmap paths while preserving owned public bytes and unconditional cleanup.
 - **Size enforcement** — Added a non-writing package-size freshness gate to the ordinary benchmark test lane and narrowly raised the portable bridge ceiling after central version authority added 74 minified bytes.
 - **Tooling** — Made the benchmark app's zero-warning oxlint and oxfmt checks mandatory in the root `pnpm check` lane, keeping local and CI enforcement aligned.
 - **Version authority** — Added a contract-only portable-baker subpath so loader, validator, and bridge share baker/format versions without a heavy browser edge; Rust shaper and bitmap-generator versions now derive from Cargo metadata, and the canonical version contract lists the bitmap ABI plus exact Fontations/Skrifa/bidi pins.

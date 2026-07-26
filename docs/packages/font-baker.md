@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:148289c72781efeb677463e8a3a619a053882c537f75cc6c476ec49561e8c745"
+source_digest: "sha256:77a52437269bc5728515fcbf8f8c35472319bdf52eca1d295e9197546541ca77"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:31:17Z"
+  at: "2026-07-26T03:38:55Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -38,7 +38,7 @@ The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked ass
 
 The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,251 raw bytes, 168,280 gzip bytes, and 137,042 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. This package is the sole owner of those optimized bytes and exposes one browser-safe canonical URL; the offline Node host reads that URL and the runtime Worker fetches it instead of `@pmndrs/text` shipping a second copy. Reports keep raw and transport costs distinct.
 
-The direct-memory boundary owns every request and response allocation in a module registry. Caller-controlled requests are capped at 64 MiB and use fallible reservation; use and release require the exact active pointer/length pair, forged or repeated releases are harmless, checked response arithmetic prevents truncation, and response metadata cannot outlive its owned bytes. The TypeScript wrapper enters cleanup before its first copy, releases each successful allocation after any later failure, and validates the complete generated ABI plus every promised response/error field before constructing a public result. The fixed, tiny `WasmState` allocation still uses stable Rust's infallible `Box::new` once per Wasm instance; replacing that theoretical OOM trap would require unstable allocator APIs or a disproportionate static-state design.
+The direct-memory boundary owns every request and response allocation in a module registry. Caller-controlled requests are capped at 64 MiB and use fallible reservation; use and release require the exact active pointer/length pair, forged or repeated releases are harmless, checked response arithmetic prevents truncation, and response metadata cannot outlive its owned bytes. The TypeScript wrapper enters cleanup before its first copy, releases each successful allocation after any later failure, and validates the complete generated ABI plus every promised response/error field before constructing a public result. It decodes the response while the Wasm allocation is live and copies only the artifact ranges that must survive release, avoiding a redundant full-response copy. The fixed, tiny `WasmState` allocation still uses stable Rust's infallible `Box::new` once per Wasm instance; replacing that theoretical OOM trap would require unstable allocator APIs or a disproportionate static-state design.
 
 Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract. A source `STAT` table alone is not evidence of variation axes and no longer rejects an otherwise static font; actual axis/delta tables still reject V0 input, and `STAT` remains omitted from the reduced static payload.
 

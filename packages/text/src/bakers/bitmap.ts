@@ -153,11 +153,7 @@ export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): B
           requestBytes.byteLength,
         )
         responseLength = exports.responseLength()
-        const response = new Uint8Array(
-          exports.memory.buffer,
-          responsePointer,
-          responseLength,
-        ).slice()
+        const response = new Uint8Array(exports.memory.buffer, responsePointer, responseLength)
         return decodeResponse(response, abi)
       } finally {
         if (sourcePointer !== 0) exports.deallocate(sourcePointer, source.byteLength)

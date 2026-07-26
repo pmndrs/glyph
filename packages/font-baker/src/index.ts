@@ -172,11 +172,7 @@ export function createFontBakerFromInstance(instance: WebAssembly.Instance): Fon
           descriptorBytes.byteLength,
         );
         responseLength = exports.pmndrs_font_baker_result_len();
-        const response = new Uint8Array(
-          exports.memory.buffer,
-          responsePointer,
-          responseLength,
-        ).slice();
+        const response = new Uint8Array(exports.memory.buffer, responsePointer, responseLength);
         return decodeResponse(response, abi);
       } finally {
         if (sourcePointer !== 0) {
