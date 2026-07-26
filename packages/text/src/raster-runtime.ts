@@ -59,6 +59,7 @@ export class RasterRuntime {
       kind: module.kind,
       version: module.version,
     })
+    this.#assertActive()
     options.signal?.throwIfAborted()
 
     this.#observeRegistry(font)
@@ -78,12 +79,21 @@ export class RasterRuntime {
     }
 
     const loadOptions = options.resolve === undefined ? {} : { resolve: options.resolve }
-    const promise = this.#loadUncached(font, request, rasterKey, loadOptions).catch(
-      (error: unknown) => {
+    const promise = this.#loadUncached(font, request, rasterKey, loadOptions)
+      .then((loaded) => {
+        if (
+          this.#disposed ||
+          this.#fonts.get(font)?.get(module)?.get(rasterKey)?.promise !== promise
+        ) {
+          module.dispose(loaded.resource)
+          throw new DOMException('The raster load was invalidated', 'AbortError')
+        }
+        return loaded
+      })
+      .catch((error: unknown) => {
         if (rasters?.get(rasterKey)?.promise === promise) rasters.delete(rasterKey)
         throw error
-      },
-    )
+      })
     rasters.set(rasterKey, { promise })
     return awaitWithSignal(promise, options.signal)
   }

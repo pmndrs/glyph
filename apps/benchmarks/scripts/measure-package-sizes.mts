@@ -28,6 +28,12 @@ interface UnavailableEntry {
 
 type SizeEntry = MeasuredEntry | UnavailableEntry
 
+interface BundleResult {
+  readonly bytes: Uint8Array
+  readonly includedModules: ReadonlySet<string>
+  readonly excludedDynamicModules: ReadonlySet<string>
+}
+
 const root = fileURLToPath(new URL('..', import.meta.url))
 
 function isTextPeerDependency(id: string): boolean {
@@ -45,7 +51,7 @@ async function bundle(
   includeDynamic: boolean,
   externalizeWasmAsset: boolean,
   externalizePeerDependencies: boolean,
-): Promise<Uint8Array> {
+): Promise<BundleResult> {
   const result = await build({
     configFile: false,
     logLevel: 'silent',
@@ -123,7 +129,49 @@ async function bundle(
     .map(({ code }) => code)
   if (bundledCode.length === 0)
     throw new Error(`Package-size entry emitted no JavaScript: ${entry}`)
-  return new TextEncoder().encode(bundledCode.join('\n'))
+  const includedModules = new Set(
+    chunks.filter(({ fileName }) => included.has(fileName)).flatMap(({ moduleIds }) => moduleIds),
+  )
+  const excludedDynamicModules = new Set(
+    chunks
+      .filter(
+        ({ fileName }) => !included.has(fileName) && chunkIsDynamicallyReachable(fileName, chunks),
+      )
+      .flatMap(({ moduleIds }) => moduleIds),
+  )
+  return {
+    bytes: new TextEncoder().encode(bundledCode.join('\n')),
+    includedModules,
+    excludedDynamicModules,
+  }
+}
+
+function chunkIsDynamicallyReachable(
+  fileName: string,
+  chunks: ReadonlyArray<{ readonly dynamicImports: readonly string[] }>,
+): boolean {
+  return chunks.some(({ dynamicImports }) => dynamicImports.includes(fileName))
+}
+
+function assertGraphBoundary(
+  label: string,
+  graph: BundleResult,
+  expectedDynamic: readonly string[],
+  excludedInitial: readonly string[],
+): void {
+  const normalize = (modules: ReadonlySet<string>): string => [...modules].join('\n')
+  const dynamic = normalize(graph.excludedDynamicModules)
+  for (const fragment of expectedDynamic) {
+    if (!dynamic.includes(fragment))
+      throw new Error(`${label} did not retain ${fragment} behind a dynamic import`)
+  }
+  for (const fragment of excludedInitial) {
+    const matches = [...graph.includedModules].filter((module) => module.includes(fragment))
+    if (matches.length > 0)
+      throw new Error(
+        `${label} pulled ${fragment} into its initial bundle graph:\n${matches.join('\n')}`,
+      )
+  }
 }
 
 function compression(bytes: Uint8Array): Pick<MeasuredEntry, 'gzipBytes' | 'brotliBytes'> {
@@ -144,6 +192,10 @@ async function measureJavaScript(
   includeDynamic = true,
   externalizeWasmAsset = false,
   externalizePeerDependencies = false,
+  graphBoundary?: {
+    readonly expectedDynamic: readonly string[]
+    readonly excludedInitial: readonly string[]
+  },
 ): Promise<MeasuredEntry> {
   const [raw, minified] = await Promise.all([
     bundle(
@@ -161,14 +213,23 @@ async function measureJavaScript(
       externalizePeerDependencies,
     ),
   ])
+  if (graphBoundary !== undefined) {
+    assertGraphBoundary(label, raw, graphBoundary.expectedDynamic, graphBoundary.excludedInitial)
+    assertGraphBoundary(
+      label,
+      minified,
+      graphBoundary.expectedDynamic,
+      graphBoundary.excludedInitial,
+    )
+  }
   return {
     id,
     label,
     status: 'measured',
     format: 'javascript',
-    rawBytes: raw.byteLength,
-    minifiedBytes: minified.byteLength,
-    ...compression(minified),
+    rawBytes: raw.bytes.byteLength,
+    minifiedBytes: minified.bytes.byteLength,
+    ...compression(minified.bytes),
   }
 }
 
@@ -193,6 +254,19 @@ const entries: SizeEntry[] = [
     false,
     true,
     true,
+    {
+      expectedDynamic: ['/packages/text/dist/runtime-bake.js'],
+      excludedInitial: [
+        '/packages/text/dist/runtime-bake.js',
+        '/packages/text/dist/runtime-bake-worker.js',
+        '/packages/text/dist/react.js',
+        '/packages/text/dist/raster/bitmap.js',
+        '/packages/text/dist/node/',
+        '/packages/font-baker/dist/index.js',
+        '/packages/font-baker/dist/wasm.js',
+        '/packages/font-baker/dist/validator.js',
+      ],
+    },
   ),
   await measureJavaScript(
     'font-validator-js',

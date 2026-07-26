@@ -378,6 +378,54 @@ test('RasterRuntime caches one decoded resource per font and disposes it with it
   runtime.dispose()
 })
 
+test('RasterRuntime rejects and disposes a decode completed after runtime disposal', async () => {
+  await assertPendingRasterInvalidation((runtime) => runtime.dispose())
+})
+
+test('RasterRuntime rejects and disposes a decode completed after font disposal', async () => {
+  await assertPendingRasterInvalidation((_runtime, font) => font.dispose())
+})
+
+async function assertPendingRasterInvalidation(invalidate) {
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const runtime = new RasterRuntime()
+  const decodeStarted = Promise.withResolvers()
+  const releaseDecode = Promise.withResolvers()
+  let disposeCount = 0
+  const module = defineRaster({
+    kind: 'bitmap',
+    extension: 'PMNDRS_font_bitmap',
+    version: 0,
+    descriptor() {
+      return { generatorVersion: '0.0.0', strikes: [16] }
+    },
+    async decode() {
+      decodeStarted.resolve()
+      await releaseDecode.promise
+      return { decoded: true }
+    },
+    async prepare() {},
+    buildBatches() {
+      throw new Error('not used by the raster-runtime disposal test')
+    },
+    updatePaint() {},
+    dispose() {
+      disposeCount += 1
+    },
+  })
+
+  const pending = runtime.load(font, { module })
+  await decodeStarted.promise
+  invalidate(runtime, font)
+  releaseDecode.resolve()
+
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.equal(disposeCount, 1)
+  runtime.dispose()
+  font.dispose()
+}
+
 function installFileFetch() {
   const original = globalThis.fetch
   globalThis.fetch = async (input, init) => {

@@ -106,7 +106,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 6.2 | 🟡 | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
 | 6.3 | 🟡 | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
 | 6.4 | 🟡 | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode. | M | 6.1–6.3 |
-| 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
+| 7.1 | 🟡 | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
 | 7.2 | ⬜ | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines. | M | 7.1 |
 | 8.x | ⬜ | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
 | 9.x | ⬜ | Split Slug conversion, packing, shaders, quality, and perf work. | XL | 7.2 |
@@ -525,6 +525,17 @@ Deliver:
 - an autoresearch baseline with optimization campaigns still disabled.
 
 Milestone 7 authorizes implementation of the release rasters; it does not authorize a package release.
+
+### 7.1 closure checklist
+
+- [x] Reject stale font and raster generations, including a disposed decode that finishes asynchronously, without publishing a dead resource.
+- [x] Exercise shared-request cancellation, source/artifact limits, corrupt GLB input, and unsupported bitmap capabilities through deterministic package and browser tests.
+- [x] Prove React reconciliation, nested-span flattening, Suspense, ref forwarding, and disposal against the framework-neutral `Text` object.
+- [x] Re-register the same artifact after disposal with a distinct handle, the same shaping identity, independent plan ownership, and no resurrection of the stale handle.
+- [x] Inspect real consumer-bundler module graphs so runtime baking remains dynamic and React, raster, Node, validator, Worker, and Wasm host implementations stay outside the browser-core entry.
+- [x] Pack the package, import every JavaScript and resource export from the tarball, confirm the emitted module-Worker boundary, and reject CommonJS loading.
+- [ ] Execute the CLI and runtime fallback from packed-package consumers, including a real browser module Worker.
+- [ ] Record accepted architecture decisions, validate every implemented extension schema, and capture the disabled autoresearch baseline.
 
 ## Milestone 8 — MSDF release raster
 

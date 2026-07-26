@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:d95c777c6795f7ed87f6f9553ca4f09d678448b8c5d3ecf01ddcf8284e7967db"
+source_digest: "sha256:81b584d2e7cffdba90bdb0f7502a1d73735d5e283695cd0f6346d7b9daf2c24a"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:27:32Z"
+  at: "2026-07-26T19:51:43Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -88,6 +88,8 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `check:paragraph-bidi-contract` | Recompute the contract without writing and fail if any checked-in exact value is stale. |
 | `generate:paragraph-cjk-contract` | Regenerate the reviewed Noto CJK natural/wide/narrow exact layout contract. |
 | `check:paragraph-cjk-contract` | Recompute CJK semantics without writing and fail if any checked-in value is stale. |
+
+The size lane is also a package-graph gate. Its consumer builds inspect emitted module membership rather than relying only on source text or byte totals: the browser-core entry must retain runtime baking as a dynamic chunk while excluding React, bitmap rendering, Node hosts, the Worker, the validator implementation, and portable-baker hosts from its initial graph. The lightweight shared version contract remains intentionally present. These assertions run for both readable and minified builds before size evidence is accepted.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 
