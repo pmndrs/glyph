@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T18:38:31Z"
+  at: "2026-07-26T18:54:55Z"
 ---
 
 # Canonical implementation roadmap
@@ -493,6 +493,7 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 - [x] Benchmark controls expose rendered device size and proportional paragraph width; viewport changes exercise retained paragraph reflow rather than stretching geometry.
 - [x] Deterministic unit, headless, and maintainer-local live probes cover the corrected product surface without sleeps or retries.
 - [x] The maintainer-local live probe produces real timestamp-query samples and cleanly replaces the renderer across WebGPU → forced WebGL2 → WebGPU.
+- [x] The responsive shell keeps control typography, label fit, whitespace flow, and horizontal overflow within explicit 390 px, 1,024 px, and 1,280 px product gates.
 
 Deliver:
 

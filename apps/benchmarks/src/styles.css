@@ -54,7 +54,7 @@ body {
 button,
 input,
 select {
-  font: inherit;
+  font-family: inherit;
 }
 button {
   cursor: pointer;
