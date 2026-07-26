@@ -39,3 +39,15 @@ jobs:
 
       - name: Run deterministic repository checks
         run: pnpm check
+
+      - name: Retain Wasm failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wasm-failure-evidence
+          path: |
+            packages/font-baker/dist/font_baker.wasm
+            packages/text/dist/bitmap_baker.wasm
+            packages/text/dist/text_shaper.wasm
+          if-no-files-found: error
+          retention-days: 7
