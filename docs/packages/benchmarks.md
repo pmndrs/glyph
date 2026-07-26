@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:2d8acbdb20c45ce1b1616e0ef99b61b1c612f856760fcd3066f8166c30127643"
+source_digest: "sha256:4fd881022077b4e6c366a9be295d8042f35541b81d011b3a96ccce59134cf8bc"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:20:41Z"
+  at: "2026-07-26T20:34:00Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -50,15 +50,17 @@ The bitmap baker now retains Zeno's actual integer mask placement with `planeUni
 
 The corpus is an executable fixture, not display copy. Its five lines isolate ordinary Latin rhythm, numerals, kerning pairs, punctuation, standard ligature candidates, and compact mathematical notation. Inter must shape every scalar without glyph 0; the renderer rejects the corpus before upload if coverage regresses.
 
-| Lane | Canonical text | Primary signal |
-| --- | --- | --- |
-| Latin | `Lorem ipsum dolor sit amet.` | Common word rhythm and spacing |
-| Numerals | `Hamburgefontsiv 0123456789.` | Mixed round/stem forms and tabular sequence |
-| Kerning | `AVATAR To Wa Yo — “quotes”.` | Strong kerning pairs and punctuation |
+| Lane                | Canonical text                  | Primary signal                                                                                                                               |
+| ------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Latin               | `Lorem ipsum dolor sit amet.`   | Common word rhythm and spacing                                                                                                               |
+| Numerals            | `Hamburgefontsiv 0123456789.`   | Mixed round/stem forms and tabular sequence                                                                                                  |
+| Kerning             | `AVATAR To Wa Yo — “quotes”.`   | Strong kerning pairs and punctuation                                                                                                         |
 | Ligature candidates | `ff fi fl ffi ffl; (brackets).` | Repeated join candidates and spacing; this Inter frame does not itself assert substitution, which belongs to structured shaping conformance. |
-| Mathematics | `x²+y²≈z²; 0≤α≤1; ±×÷∞√∑π→←.` | Superscripts, Greek, relations, operators, and arrows |
+| Mathematics         | `x²+y²≈z²; 0≤α≤1; ±×÷∞√∑π→←.`   | Superscripts, Greek, relations, operators, and arrows                                                                                        |
 
 Milestone 7.2 owns a product-facing advanced-shaping showcase over this same rendering path. It will make Arabic joining, Indic reordering, bidi, ligatures and marks, and CJK line breaking visible while text streams in and the container continuously reflows. Glyphs may interpolate between proven layouts, but shaping and line breaking remain discrete authoritative states. Pause, step, and scrub controls provide deterministic transition points for Vitest, Vitexec, and visual evidence without sleeps or timer tolerances.
+
+The showcase corpus is now an immutable TypeScript discriminated union with exact integer timeline state. Authored reveal units keep combining marks and complex-script clusters intact; seek and step do not depend on elapsed time or JavaScript code-unit slicing. Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 12 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
 The browser product also carries the React 19 subpath proofs. A shared registry target mounts public nested `<Text>` through a real React Three Fiber root backed by `WebGPURenderer`, retains one forwarded core object through width reflow and canonical restoration, matches pinned natural/narrow paragraph oracles, verifies two span paints in one draw, and submits a real renderer frame over three deterministic samples. The live pending-resource probe intercepts the exact composed Inter request behind a manually released promise, observes the Suspense fallback before publication, releases the request without a timer, then proves the registered font key and all 2,937 glyphs before deterministic cleanup. The test renderer remains confined to package integration evidence and does not enter the product registry or application dependencies.
 
@@ -66,32 +68,36 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 
 ## Package scripts
 
-| Script | Purpose |
-| --- | --- |
-| `dev` | Build the baker dependency and start the Vite application. |
-| `typecheck` | Build the baker dependency and type-check browser and Node script projects. |
-| `test` | Run deterministic Vitest suites and the shared-registry browser smoke test. |
-| `test:unit` | Run deterministic Vitest suites without starting a browser. |
-| `test:headless` | Run synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, bidi/policy/uikit, and CJK scenarios through one bounded browser conformance session. |
-| `test:packed` | Pack both runtime packages, install only their tarballs in an isolated Vite consumer, and prove the module Worker returns the canonical artifact in Chromium. |
-| `lint` | Run Oxlint with warnings denied. |
-| `format:check` | Verify Oxfmt output. |
-| `size` | Produce deterministic independent package-size JSON for the report UI. |
-| `check:size` | Recompute package sizes without writing; require exact same-host freshness and enforce complete reviewed foreign-host budgets. |
-| `test:live` | Run the explicit maintainer-local Vitexec and Playwright product probes. |
-| `admit:live` | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record. |
-| `capture:browser-reference` | Regenerate the pinned Chromium HTML/CSS reference and metadata. |
-| `capture:bake-host-baseline` | Capture three isolated offline and browser-Worker cold/warm bake samples with complete artifact parity. |
-| `generate:autoresearch-baseline` | Hash the accepted Milestone 7 evidence into the disabled V0 autoresearch baseline. |
-| `check:autoresearch-baseline` | Recompute the baseline without writing and reject evidence or toolchain drift. |
-| `generate:harfbuzz-oracle` | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable. |
-| `provision:harfbuzz` | Authenticate and build exact HarfBuzz 13.0.0 into the app-local ignored cache; `--check` never downloads. |
-| `sync:amiri-fixture` | Fetch the immutable Amiri font/metadata/license or verify checked-in bytes with `--check`. |
-| `sync:cjk-fixture` | Fetch the immutable Noto CJK font/license or verify checked-in bytes with `--check`. |
-| `generate:paragraph-bidi-contract` | Regenerate the reviewed Amiri/Inter bidi, line-policy, and current-uikit-shaped exact layout contract. |
-| `check:paragraph-bidi-contract` | Recompute the contract without writing and fail if any checked-in exact value is stale. |
-| `generate:paragraph-cjk-contract` | Regenerate the reviewed Noto CJK natural/wide/narrow exact layout contract. |
-| `check:paragraph-cjk-contract` | Recompute CJK semantics without writing and fail if any checked-in value is stale. |
+| Script                             | Purpose                                                                                                                                                                                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev`                              | Build the baker dependency and start the Vite application.                                                                                                                                                                                                             |
+| `typecheck`                        | Build the baker dependency and type-check browser and Node script projects.                                                                                                                                                                                            |
+| `test`                             | Run deterministic Vitest suites and the shared-registry browser smoke test.                                                                                                                                                                                            |
+| `test:unit`                        | Run deterministic Vitest suites without starting a browser.                                                                                                                                                                                                            |
+| `test:headless`                    | Run synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, bidi/policy/uikit, and CJK scenarios through one bounded browser conformance session. |
+| `test:packed`                      | Pack both runtime packages, install only their tarballs in an isolated Vite consumer, and prove the module Worker returns the canonical artifact in Chromium.                                                                                                          |
+| `lint`                             | Run Oxlint with warnings denied.                                                                                                                                                                                                                                       |
+| `format:check`                     | Verify Oxfmt output.                                                                                                                                                                                                                                                   |
+| `size`                             | Produce deterministic independent package-size JSON for the report UI.                                                                                                                                                                                                 |
+| `check:size`                       | Recompute package sizes without writing; require exact same-host freshness and enforce complete reviewed foreign-host budgets.                                                                                                                                         |
+| `test:live`                        | Run the explicit maintainer-local Vitexec and Playwright product probes.                                                                                                                                                                                               |
+| `admit:live`                       | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record.                                                                                                                                                |
+| `capture:browser-reference`        | Regenerate the pinned Chromium HTML/CSS reference and metadata.                                                                                                                                                                                                        |
+| `capture:bake-host-baseline`       | Capture three isolated offline and browser-Worker cold/warm bake samples with complete artifact parity.                                                                                                                                                                |
+| `generate:autoresearch-baseline`   | Hash the accepted Milestone 7 evidence into the disabled V0 autoresearch baseline.                                                                                                                                                                                     |
+| `check:autoresearch-baseline`      | Recompute the baseline without writing and reject evidence or toolchain drift.                                                                                                                                                                                         |
+| `generate:harfbuzz-oracle`         | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable.                                                                                                                                                                                                     |
+| `provision:harfbuzz`               | Authenticate and build exact HarfBuzz 13.0.0 into the app-local ignored cache; `--check` never downloads.                                                                                                                                                              |
+| `sync:amiri-fixture`               | Fetch the immutable Amiri font/metadata/license or verify checked-in bytes with `--check`.                                                                                                                                                                             |
+| `sync:cjk-fixture`                 | Fetch the immutable Noto CJK font/license or verify checked-in bytes with `--check`.                                                                                                                                                                                   |
+| `sync:devanagari-fixture`          | Fetch the immutable static Noto Sans Devanagari font/metadata/license or verify checked-in bytes with `--check`.                                                                                                                                                       |
+| `sync:japanese-showcase-fixture`   | Fetch the immutable bounded DotGothic16 font/metadata/license or verify checked-in bytes with `--check`.                                                                                                                                                               |
+| `generate:showcase-rasters`        | Regenerate the three package-owned 16 ppem advanced-showcase bitmap GLBs.                                                                                                                                                                                              |
+| `check:showcase-rasters`           | Fresh-bake all three showcase GLBs into temporary storage and require exact manifest and checked-in byte identity.                                                                                                                                                     |
+| `generate:paragraph-bidi-contract` | Regenerate the reviewed Amiri/Inter bidi, line-policy, and current-uikit-shaped exact layout contract.                                                                                                                                                                 |
+| `check:paragraph-bidi-contract`    | Recompute the contract without writing and fail if any checked-in exact value is stale.                                                                                                                                                                                |
+| `generate:paragraph-cjk-contract`  | Regenerate the reviewed Noto CJK natural/wide/narrow exact layout contract.                                                                                                                                                                                            |
+| `check:paragraph-cjk-contract`     | Recompute CJK semantics without writing and fail if any checked-in value is stale.                                                                                                                                                                                     |
 
 The size lane is also a package-graph gate. Its consumer builds inspect emitted module membership rather than relying only on source text or byte totals: the browser-core entry must retain runtime baking as a dynamic chunk while excluding React, bitmap rendering, Node hosts, the Worker, the validator implementation, and portable-baker hosts from its initial graph. The lightweight shared version contract remains intentionally present. These assertions run for both readable and minified builds before size evidence is accepted.
 
