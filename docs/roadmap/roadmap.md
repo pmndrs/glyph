@@ -534,7 +534,7 @@ Milestone 7 authorizes implementation of the release rasters; it does not author
 - [x] Re-register the same artifact after disposal with a distinct handle, the same shaping identity, independent plan ownership, and no resurrection of the stale handle.
 - [x] Inspect real consumer-bundler module graphs so runtime baking remains dynamic and React, raster, Node, validator, Worker, and Wasm host implementations stay outside the browser-core entry.
 - [x] Pack the package, import every JavaScript and resource export from the tarball, confirm the emitted module-Worker boundary, and reject CommonJS loading.
-- [ ] Execute the CLI and runtime fallback from packed-package consumers, including a real browser module Worker.
+- [x] Execute the CLI and runtime fallback from packed-package consumers, including a real browser module Worker with canonical artifact bytes.
 - [x] Record accepted architecture decisions in linked ADRs without duplicating status ownership from the decision register.
 - [x] Compile every canonical extension draft with shared references; validate complete core/bitmap artifacts and positive plus field-level MTSDF/Slug contract specimens.
 - [x] Capture a freshness-checked autoresearch baseline with campaigns explicitly disabled and guarded from accidental execution.

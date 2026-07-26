@@ -2,6 +2,8 @@
 
 ## 2026-07-26
 
+- **Packed consumer** — Closed the remaining package-execution gap by excluding `.tsbuildinfo` from the tarball, checking the installed CLI's executable mode and help path, and installing both package tarballs into an isolated Vite application. Chromium now runs the installed runtime-bake module Worker and returns canonical Inter's exact 172,140 bytes and SHA-256 `296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8`; source-workspace resolution can no longer mask a broken published Worker graph.
+
 - **Extension schemas** — Compiled all four canonical Draft-04 extension schemas with their shared resource references in the ordinary package suite. Positive and mutation specimens closed two pre-implementation holes: MTSDF pages are now restricted to lossless linear RGBA8, and Slug curve pages to lossless linear RGBA16F, matching the accepted raster contracts. Core and bitmap retain their complete generated-artifact validators; the MTSDF and Slug checks establish executable contracts without claiming those rasters are implemented.
 
 - **Governance baseline** — Added four linked ADRs that preserve the decision register as the sole status ledger while recording accepted package/runtime, shaping/identity, raster/container, and verification/optimization rationale. Activated the autoresearch protocol in a fail-closed state: a versioned schema, exact TypeScript validator, deterministic generator, and baseline rooted at `0e9610aaca9777156fa81fcc3659d4e31603f555` authenticate package-size, admission, shaping, paragraph, bidi, CJK, and toolchain evidence. Campaigns remain explicitly disabled and ordinary tests prove they cannot cross the guard accidentally.

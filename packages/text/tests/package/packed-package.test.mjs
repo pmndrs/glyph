@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
@@ -34,10 +34,10 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   const manifest = JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'))
   const packedFiles = await readdir(installedDirectory, { recursive: true })
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false)
-  assert.deepEqual(
-    [...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(),
-    ['dist', 'package.json'],
-  )
+  assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
+    'dist',
+    'package.json',
+  ])
   const consumerEntry = pathToFileURL(join(temporaryDirectory, 'consumer', 'entry.mjs')).href
   const moduleSubpaths = Object.entries(manifest.exports)
     .filter(([, target]) => typeof target === 'object' && target !== null)
@@ -68,6 +68,15 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     runtimeHost,
     /new Worker\(new URL\(["']\.\/runtime-bake-worker\.js["'][\s\S]*type:\s*["']module["']/,
   )
+
+  const cli = join(installedDirectory, 'dist/node/cli.js')
+  assert.notEqual((await stat(cli)).mode & 0o111, 0, 'the packed CLI must be executable')
+  const cliHelp = spawnSync(process.execPath, [cli, '--help'], {
+    cwd: join(temporaryDirectory, 'consumer'),
+    encoding: 'utf8',
+  })
+  assert.equal(cliHelp.status, 0, cliHelp.stderr)
+  assert.match(cliHelp.stdout, /pmndrs-text-bake/)
 
   const commonJs = spawnSync(process.execPath, ['-e', "require('@pmndrs/text')"], {
     cwd: dirname(installedDirectory),
