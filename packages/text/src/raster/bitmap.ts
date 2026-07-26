@@ -88,6 +88,7 @@ export interface BitmapDrawBatch {
 
 const RECORD_STRIDE = 20
 const ABSENT_PAGE = 0xffff
+const materialByPageTexture = new WeakMap<THREE.DataTexture, THREE.MeshBasicNodeMaterial>()
 
 function canonicalStrikes(values: readonly number[]): readonly number[] {
   if (values.length === 0) throw new TypeError('bitmap strikes must be a non-empty tuple')
@@ -167,6 +168,7 @@ const bitmapModule: RasterModule<
   buildBatches(layout, resource, fontSlot, paint) {
     return buildBitmapBatches(layout, resource, fontSlot, paint)
   },
+  validatePaint: assertBitmapPaint,
   updatePaint(batch, paint) {
     batch.updatePaint(paint)
   },
@@ -255,7 +257,11 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
 
 function disposeBitmapStrikes(strikes: readonly BitmapStrikeResource[]): void {
   for (const strike of strikes) {
-    for (const page of strike.pages) page.texture.dispose()
+    for (const page of strike.pages) {
+      materialByPageTexture.get(page.texture)?.dispose()
+      materialByPageTexture.delete(page.texture)
+      page.texture.dispose()
+    }
   }
 }
 
@@ -369,7 +375,6 @@ function buildBitmapBatches(
   )
   const group = new THREE.Group()
   const runs: BitmapBatchRun[] = []
-  const materials = new Set<THREE.MeshBasicNodeMaterial>()
   let glyphCount = 0
   let pendingPage = -1
   let pendingGlyphs: number[] = []
@@ -380,7 +385,6 @@ function buildBitmapBatches(
     if (page === undefined) throw new TypeError('bitmap batch references a missing page')
     const run = createBitmapRun(layout, strike, page, pendingGlyphs, paint)
     runs.push(run)
-    materials.add(run.mesh.material as THREE.MeshBasicNodeMaterial)
     group.add(run.mesh)
     glyphCount += pendingGlyphs.length
     pendingGlyphs = []
@@ -419,7 +423,6 @@ function buildBitmapBatches(
       disposed = true
       group.clear()
       for (const run of runs) run.geometry.dispose()
-      for (const material of materials) material.dispose()
     },
   }
 }
@@ -516,6 +519,8 @@ function unitQuadGeometry(): THREE.InstancedBufferGeometry {
 }
 
 function bitmapMaterial(page: THREE.DataTexture): THREE.MeshBasicNodeMaterial {
+  const existing = materialByPageTexture.get(page)
+  if (existing !== undefined) return existing
   const material = new THREE.MeshBasicNodeMaterial({
     depthTest: false,
     depthWrite: false,
@@ -537,6 +542,7 @@ function bitmapMaterial(page: THREE.DataTexture): THREE.MeshBasicNodeMaterial {
   material.vertexNode = pixelSnappedClipPosition()
   material.colorNode = color.rgb
   material.opacityNode = mul(color.a, sampled.r)
+  materialByPageTexture.set(page, material)
   return material
 }
 
@@ -577,6 +583,14 @@ function paintColor(paint: GlyphPaint, glyphIndex: number): LinearRgba {
   const resolved = paintIndex === undefined ? undefined : paint.palette[paintIndex]
   if (resolved === undefined) throw new TypeError('glyph paint references a missing palette entry')
   return resolved.color
+}
+
+function assertBitmapPaint(paint: GlyphPaint): void {
+  for (const entry of paint.palette) {
+    if (entry.outline !== undefined || entry.shadow !== undefined) {
+      throw new TypeError('bitmap raster does not support outline or shadow paint')
+    }
+  }
 }
 
 function assertParallelLayout(layout: ParagraphLayout, paint: GlyphPaint): void {

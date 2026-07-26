@@ -69,8 +69,16 @@ function bitmapTextValidation(
       typeof metrics.inkMinY !== 'number' ||
       typeof metrics.inkMaxX !== 'number' ||
       typeof metrics.inkMaxY !== 'number' ||
+      metrics.referenceMismatchBytes !== 0 ||
+      typeof metrics.clippedInkPixels !== 'number' ||
+      metrics.clippedInkPixels <= 0 ||
+      metrics.clippedInkPixels >= metrics.inkPixels ||
+      metrics.clippedTouchesBoundary !== 1 ||
+      metrics.resizedWidth !== 192 ||
+      metrics.resizedHeight !== 64 ||
       !finiteNonnegative(metrics.firstDrawMs) ||
       !finiteNonnegative(metrics.renderMs) ||
+      !finiteNonnegative(metrics.clippedRenderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
       throw new Error(
@@ -78,7 +86,32 @@ function bitmapTextValidation(
       )
     }
   }
-  return `${values.length}/${values.length} deterministic bitmap font frames`
+  return `${values.length}/${values.length} exact public Text frames with resize + clipping`
+}
+
+function reactTextValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    if (
+      value.hash !== 'bb15bbcc' ||
+      value.metrics?.coreObjectRetained !== 1 ||
+      value.metrics.nestedSpanCount !== 1 ||
+      value.metrics.glyphCount !== 55 ||
+      value.metrics.drawCount !== 1 ||
+      value.metrics.paintCount !== 2 ||
+      value.metrics.widthReflowed !== 1 ||
+      value.metrics.layoutRestored !== 1 ||
+      value.metrics.oracleNaturalMatched !== 1 ||
+      value.metrics.oracleNarrowMatched !== 1 ||
+      typeof value.metrics.r3fDrawCalls !== 'number' ||
+      value.metrics.r3fDrawCalls < 1
+    ) {
+      throw new Error('React Text did not preserve its reconciliation and nested-span contract')
+    }
+  }
+  return `${values.length}/${values.length} exact React Text reconciliations + R3F frames`
 }
 
 function shapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
@@ -204,6 +237,14 @@ function finiteNonnegative(value: unknown): value is number {
 }
 
 export const scenarios: readonly BenchmarkScenario[] = [
+  {
+    id: 'react-text-reconciliation',
+    label: 'React Text reconciliation',
+    description:
+      'React 19 and real R3F retain one public Text object across pinned-oracle nested-span reflow.',
+    requiredCapabilities: new Set(['loader', 'shaping', 'paragraph', 'raster']),
+    validate: reactTextValidation,
+  },
   {
     id: 'bitmap-text-frame',
     label: 'Bitmap text frame',

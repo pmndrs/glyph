@@ -1,10 +1,10 @@
 {
   "schemaVersion": 0,
   "id": "harness-v0",
-  "appCommit": "016078cecee3daaf90243c1473aa9c0168fadbc5",
+  "appCommit": "1eeaab3862d4d91b62651dcabe4b29e0aeaf87d2",
   "probe": {
     "file": "./vitexec/admission.probe.ts",
-    "sha256": "77d6620a5eac677a62301b271b28d0c638dab184423ee518681947a07b29c92b"
+    "sha256": "a70287b4688cf009ccc9c73e5f7481493bb908e27a17a963543835e63de608a1"
   },
   "policy": {
     "retries": 0,

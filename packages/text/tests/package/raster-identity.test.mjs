@@ -7,7 +7,7 @@ import { canonicalJson, deriveRasterKey } from '../../dist/internal/raster-ident
 test('canonicalizes JSON according to RFC 8785 member and number rules', () => {
   const value = {
     z: -0,
-    a: [1e30, 4.5, true, null, '\u20ac$\u000f\nA\'B\"\\\"/'],
+    a: [1e30, 4.5, true, null, '\u20ac$\u000f\nA\'B"\\\"/'],
     nested: { b: 2, a: 1 },
   }
 

@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import type { BenchmarkSummary } from '../benchmark/contracts'
+import type { LiveBenchmarkCapture } from '../benchmark/product-result'
 import packageSizes from '../generated/package-sizes.json'
 import { Metric } from './ui'
 
@@ -13,7 +14,14 @@ function bytes(value: number | undefined): string {
   return `${(value / 1024).toFixed(1)} KiB`
 }
 
-export function Report({ summary }: { readonly summary: BenchmarkSummary | undefined }) {
+export function Report({
+  liveCapture,
+  summary,
+}: {
+  readonly liveCapture?: LiveBenchmarkCapture | undefined
+  readonly summary: BenchmarkSummary | undefined
+}) {
+  if (liveCapture !== undefined) return <LiveReport capture={liveCapture} />
   const metrics = summary?.measurements[0]?.metrics
   return (
     <section className="grid gap-3" data-testid="report">
@@ -81,6 +89,60 @@ export function Report({ summary }: { readonly summary: BenchmarkSummary | undef
           <dt className="text-dim">WebGPU</dt>
           <dd className="text-muted">
             {summary?.environment.webgpu === true ? 'available' : 'unavailable'}
+          </dd>
+        </dl>
+      </div>
+    </section>
+  )
+}
+
+function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
+  const { stats } = capture
+  return (
+    <section className="grid gap-3" data-testid="report">
+      <header>
+        <p className="eyebrow">Captured live benchmark</p>
+        <h2 className="mt-1 text-xl font-semibold">Consumer cost snapshot</h2>
+        <p className="mt-1 font-mono text-[9px] text-muted">{capture.capturedAt}</p>
+      </header>
+      <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
+        <Metric label="FPS" value={stats.framesPerSecond.toFixed(1)} />
+        <Metric label="CPU frame" value={ms(stats.medianSubmitMs)} />
+        <Metric label="GPU frame" value="unavailable" />
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Selection</p>
+        <p className="mt-2 text-xs text-muted">
+          {capture.technique} · {capture.backend} · {capture.workload} · {capture.dpr}× DPR
+        </p>
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Startup</p>
+        <dl className="mt-2 grid grid-cols-[1fr_auto] gap-y-2 text-xs">
+          <dt className="text-dim">Renderer init</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.rendererInitMs)}</dd>
+          <dt className="text-dim">Font fetch + register</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.fontLoadMs)}</dd>
+          <dt className="text-dim">Text ready</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.textReadyMs)}</dd>
+          <dt className="text-dim">First draw submit</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.firstDrawMs)}</dd>
+          <dt className="text-dim">Total startup</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.startupMs)}</dd>
+        </dl>
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Retained cost</p>
+        <dl className="mt-2 grid grid-cols-[1fr_auto] gap-y-2 text-xs">
+          <dt className="text-dim">Font artifact</dt>
+          <dd className="font-mono text-[10px] text-muted">{bytes(stats.artifactBytes)}</dd>
+          <dt className="text-dim">Atlas GPU</dt>
+          <dd className="font-mono text-[10px] text-muted">{bytes(stats.atlasGpuBytes)}</dd>
+          <dt className="text-dim">Total tracked GPU</dt>
+          <dd className="font-mono text-[10px] text-muted">{bytes(stats.totalGpuBytes)}</dd>
+          <dt className="text-dim">Glyphs / draws</dt>
+          <dd className="font-mono text-[10px] text-muted">
+            {stats.glyphCount} / {stats.drawCount}
           </dd>
         </dl>
       </div>

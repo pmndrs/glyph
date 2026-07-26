@@ -96,19 +96,20 @@ test('React Text flattens spans, reconciles, forwards its ref, and disposes', as
 test('lazyRaster participates in the real React Text dependency and draw path', async () => {
   const restoreFetch = installFileFetch()
   const raster = lazyRaster(async () => bitmap({ strikes: [16] }).module)
-  let importPromise
-  try {
-    void raster.kind
-  } catch (error) {
-    importPromise = error
-  }
-  assert.ok(importPromise instanceof Promise)
-  await importPromise
-
   const font = defineFont(fixtureUrl.href, {
     module: raster,
     options: { strikes: [16] },
   })
+  let importPromise
+  try {
+    const unexpectedlyReadyText = new CoreText({ text: 'lazy raster', font, fontSize: 16 })
+    unexpectedlyReadyText.dispose()
+  } catch (error) {
+    importPromise = error
+  }
+  assert.ok(importPromise instanceof Promise, 'a valid lazy token preserves its Suspense promise')
+  await importPromise
+
   const loaded = await useFont.preload(font)
   const reference = createRef()
   let renderer
@@ -127,6 +128,22 @@ test('lazyRaster participates in the real React Text dependency and draw path', 
     useFont.clear(font)
     restoreFetch()
   }
+})
+
+test('Text preserves a raster descriptor failure when validating a font token', () => {
+  const failure = new Error('fixture descriptor failure')
+  const raster = bitmap({ strikes: [16] }).module
+  const invalid = defineFont(fixtureUrl.href, {
+    module: {
+      ...raster,
+      descriptor() {
+        throw failure
+      },
+    },
+    options: { strikes: [16] },
+  })
+
+  assert.throws(() => new CoreText({ text: 'invalid raster', font: invalid }), failure)
 })
 
 function installFileFetch() {

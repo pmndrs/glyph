@@ -30,11 +30,21 @@ type SizeEntry = MeasuredEntry | UnavailableEntry
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
+function isTextPeerDependency(id: string): boolean {
+  return (
+    id === 'three' ||
+    id.startsWith('three/') ||
+    id === 'react' ||
+    id.startsWith('@react-three/fiber')
+  )
+}
+
 async function bundle(
   entry: string,
   minify: false | 'oxc',
   includeDynamic: boolean,
   externalizeWasmAsset: boolean,
+  externalizePeerDependencies: boolean,
 ): Promise<Uint8Array> {
   const result = await build({
     configFile: false,
@@ -78,7 +88,14 @@ async function bundle(
       minify,
       target: 'es2022',
       write: false,
-      rollupOptions: { preserveEntrySignatures: 'strict' },
+      rollupOptions: {
+        preserveEntrySignatures: 'strict',
+        ...(externalizePeerDependencies
+          ? {
+              external: isTextPeerDependency,
+            }
+          : {}),
+      },
     },
   })
   const builds = Array.isArray(result) ? result : [result]
@@ -91,6 +108,7 @@ async function bundle(
   const visit = (fileName: string): void => {
     if (included.has(fileName)) return
     const chunk = byFileName.get(fileName)
+    if (chunk === undefined && externalizePeerDependencies && isTextPeerDependency(fileName)) return
     if (chunk === undefined) throw new Error(`Package-size build omitted static chunk ${fileName}`)
     included.add(fileName)
     for (const imported of chunk.imports) visit(imported)
@@ -125,10 +143,23 @@ async function measureJavaScript(
   entry: URL,
   includeDynamic = true,
   externalizeWasmAsset = false,
+  externalizePeerDependencies = false,
 ): Promise<MeasuredEntry> {
   const [raw, minified] = await Promise.all([
-    bundle(fileURLToPath(entry), false, includeDynamic, externalizeWasmAsset),
-    bundle(fileURLToPath(entry), 'oxc', includeDynamic, externalizeWasmAsset),
+    bundle(
+      fileURLToPath(entry),
+      false,
+      includeDynamic,
+      externalizeWasmAsset,
+      externalizePeerDependencies,
+    ),
+    bundle(
+      fileURLToPath(entry),
+      'oxc',
+      includeDynamic,
+      externalizeWasmAsset,
+      externalizePeerDependencies,
+    ),
   ])
   return {
     id,
@@ -160,6 +191,7 @@ const entries: SizeEntry[] = [
     'Browser core',
     new URL('../size-entries/text-core.ts', import.meta.url),
     false,
+    true,
     true,
   ),
   await measureJavaScript(

@@ -7,7 +7,6 @@ import type {
   ReshapeRange,
   RuntimeShaper,
   ShapeBatchRequest,
-  ShapeRunRequest,
   ShapedBatchViews,
 } from './shaper.js'
 import { analyzeUnicodeText, type UnicodeTextAnalysis } from './internal/unicode.js'

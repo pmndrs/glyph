@@ -5,12 +5,15 @@ import * as THREE from 'three/webgpu'
 const benchmarkIpsumPath = '/src/benchmark/benchmark-ipsum.ts'
 const tslBaselinePath = '/src/renderer/tsl-baseline.ts'
 const rendererPath = '/src/renderer/webgpu-renderer.ts'
-const [{ BENCHMARK_IPSUM_TEXT }, { compactRgba8Readback }, { createConfiguredRenderer }] =
-  await Promise.all([
-    import(/* @vite-ignore */ benchmarkIpsumPath),
-    import(/* @vite-ignore */ tslBaselinePath),
-    import(/* @vite-ignore */ rendererPath),
-  ])
+const [
+  { BENCHMARK_IPSUM_CONFORMANCE_TEXT },
+  { compactRgba8Readback },
+  { createConfiguredRenderer },
+] = await Promise.all([
+  import(/* @vite-ignore */ benchmarkIpsumPath),
+  import(/* @vite-ignore */ tslBaselinePath),
+  import(/* @vite-ignore */ rendererPath),
+])
 
 type RendererBackend = 'webgpu' | 'webgl2'
 
@@ -40,7 +43,7 @@ async function verifyCoreTextFrame(backend: RendererBackend): Promise<void> {
   if (!response.ok) throw new Error(`Unable to load core Text fixture (${response.status})`)
   const font = await registry.registerAsset(new Uint8Array(await response.arrayBuffer()))
   const text = new Text({
-    text: BENCHMARK_IPSUM_TEXT,
+    text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
     font,
     raster: bitmap({ strikes: [16] as const }),
     fontSize: 16,

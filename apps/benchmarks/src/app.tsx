@@ -1,35 +1,98 @@
 import {
-  Fragment,
   Suspense,
   use,
   useEffect,
   useEffectEvent,
   useRef,
   useState,
+  useSyncExternalStore,
   useTransition,
   type ReactNode,
 } from 'react'
+
+import {
+  BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+  BENCHMARK_IPSUM_TEXT,
+} from './benchmark/benchmark-ipsum'
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts'
-import type { BitmapTextLiveStats } from './renderer/bitmap-text'
-import { BENCHMARK_IPSUM_TEXT } from './benchmark/benchmark-ipsum'
 import { environmentResource } from './benchmark/environment'
-import { defaultControls, runRegisteredBenchmark } from './benchmark/execution'
-import { missingCapabilities } from './benchmark/runner'
-import { plannedScenarios, scenarioById, scenarios } from './benchmark/scenarios'
-import { targetById, targets } from './benchmark/targets'
+import { runRegisteredBenchmark } from './benchmark/execution'
+import { captureBitmapTextStats, type LiveBenchmarkCapture } from './benchmark/product-result'
 import {
   readHarnessLocation,
   writeHarnessLocation,
+  type GraphicsBackend,
   type HarnessLocation,
+  type HarnessMode,
 } from './benchmark/url-state'
 import { ExportPanel } from './components/export-panel'
 import { Report } from './components/report'
-import { Button, Chip, Field, Metric, SelectField, Toggle } from './components/ui'
+import { Button, Chip, Field, Metric, Toggle } from './components/ui'
+import packageSizes from './generated/package-sizes.json'
+import type {
+  BitmapTextConformanceCapture,
+  BitmapTextLiveStats,
+  BitmapTextPreview,
+} from './renderer/bitmap-text'
 
-const sampleSizes = [8, 10, 12, 16, 24, 32, 48, 72, 96] as const
+interface WorkloadOption {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly available: boolean
+}
+
+const benchmarkWorkloads: readonly WorkloadOption[] = [
+  {
+    id: 'benchmark-ipsum',
+    label: 'Benchmark ipsum',
+    description: 'Paragraph-scale native-strike text with continuous rendering.',
+    available: true,
+  },
+  {
+    id: 'text-ladder',
+    label: 'Text ladder',
+    description: 'Native and scaled strike quality across screen-space sizes.',
+    available: false,
+  },
+  {
+    id: 'off-axis-3d',
+    label: 'Off-axis / 3D',
+    description: 'Perspective transforms and oblique sampling.',
+    available: false,
+  },
+  {
+    id: 'dynamic-layout',
+    label: 'Dynamic layout',
+    description: 'Continuous container reflow and authoritative reshaping.',
+    available: false,
+  },
+  {
+    id: 'paragraph-stress',
+    label: 'Paragraph stress',
+    description: 'High-volume layout, batching, and memory pressure.',
+    available: false,
+  },
+]
+
+const conformanceWorkloads: readonly WorkloadOption[] = [
+  {
+    id: 'bitmap-frame',
+    label: 'Bitmap frame',
+    description: 'Candidate, CPU reference, exact difference, resize, and clipping checks.',
+    available: true,
+  },
+]
 
 function formatMs(value: number | undefined): string {
   return value === undefined ? '—' : `${value.toFixed(2)} ms`
+}
+
+function formatBytes(value: number | undefined): string {
+  if (value === undefined) return '—'
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`
 }
 
 function ShellFallback() {
@@ -41,6 +104,16 @@ function ShellFallback() {
 }
 
 export function App() {
+  if (new URLSearchParams(locationSearch()).has('runner')) {
+    return (
+      <div
+        className="grid min-h-screen place-items-center bg-background font-mono text-[10px] text-dim"
+        data-testid="runner-host"
+      >
+        INTERNAL RUNNER HOST
+      </div>
+    )
+  }
   return (
     <Suspense fallback={<ShellFallback />}>
       <Harness />
@@ -50,39 +123,63 @@ export function App() {
 
 function Harness() {
   const environment = use(environmentResource())
-  const [location, setLocationState] = useState(() => readHarnessLocation(locationSearch()))
-  const [fontBytes, setFontBytes] = useState<Uint8Array>()
-  const [fontName, setFontName] = useState('Inter Regular 4.1 · canonical')
+  const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true)
+  const [location, setLocationState] = useState(() => {
+    const value = readHarnessLocation(locationSearch())
+    if (!environment.webgpu && !new URLSearchParams(locationSearch()).has('backend')) {
+      return { ...value, backend: 'webgl2' as const }
+    }
+    return value
+  })
   const [summary, setSummary] = useState<BenchmarkSummary>()
   const [event, setEvent] = useState<RunnerEvent>()
+  const [liveStats, setLiveStats] = useState<BitmapTextLiveStats>()
+  const [liveCapture, setLiveCapture] = useState<LiveBenchmarkCapture>()
   const [error, setError] = useState<string>()
   const [dpr, setDpr] = useState<1 | 2>(defaultDeviceDpr)
-  const [samples, setSamples] = useState(defaultControls.samples)
-  const [warmup, setWarmup] = useState(defaultControls.warmup)
+  const [samples, setSamples] = useState(3)
+  const [warmup, setWarmup] = useState(1)
   const [showGrid, setShowGrid] = useState(true)
+  const [fontSize, setFontSize] = useState(16)
+  const [layoutWidthPercent, setLayoutWidthPercent] = useState(82)
   const [isPending, startTransition] = useTransition()
 
-  const target = targetById(location.target)
-  const scenario = scenarioById(location.scenario)
-  const input = fontBytes === undefined ? {} : { fontBytes }
-  const targetStatus = target.status(input)
-  const missing = missingCapabilities(target, scenario)
-  const ready = targetStatus === 'ready' && missing.length === 0 && !isPending
+  const workload = workloadById(location.mode, location.workload)
+  const available = location.technique === 'bitmap' && workload.available
+  const backendAvailable = location.backend !== 'webgpu' || environment.webgpu
 
   function setLocation(next: Partial<HarnessLocation>): void {
     const value = { ...location, ...next }
+    if (
+      next.mode !== undefined ||
+      next.technique !== undefined ||
+      next.backend !== undefined ||
+      next.workload !== undefined
+    ) {
+      setLiveStats(undefined)
+      setSummary(undefined)
+      setLiveCapture(undefined)
+    }
     setLocationState(value)
     globalThis.history?.replaceState(null, '', writeHarnessLocation(value))
   }
 
-  function run(): void {
+  function selectMode(mode: HarnessMode): void {
+    setLocation({
+      mode,
+      workload: mode === 'benchmark' ? 'benchmark-ipsum' : 'bitmap-frame',
+      view: 'scene',
+    })
+  }
+
+  function runConformance(): void {
     setError(undefined)
     startTransition(async () => {
       try {
         const value = await runRegisteredBenchmark({
-          targetId: target.id,
-          scenarioId: scenario.id,
-          input,
+          targetId: `bitmap-text-${location.backend}`,
+          scenarioId: 'bitmap-text-frame',
+          input: {},
           controls: { dpr, samples, warmup },
           environment,
           onEvent: setEvent,
@@ -94,89 +191,117 @@ function Harness() {
     })
   }
 
-  function selectDpr(nextDpr: 1 | 2): void {
-    setDpr(nextDpr)
-    setSummary(undefined)
-  }
-
-  async function loadFont(file: File | undefined): Promise<void> {
-    if (file === undefined) return
-    setFontName(file.name)
-    setFontBytes(new Uint8Array(await file.arrayBuffer()))
+  function captureWindow(): void {
+    if (liveStats === undefined) return
+    setLiveCapture({
+      kind: 'live-benchmark',
+      schemaVersion: 0,
+      capturedAt: new Date().toISOString(),
+      technique: location.technique,
+      backend: location.backend,
+      workload: location.workload,
+      dpr,
+      environment,
+      stats: captureBitmapTextStats(liveStats),
+    })
   }
 
   const controls = (
     <Controls
-      fontName={fontName}
+      backend={location.backend}
+      dpr={dpr}
+      mode={location.mode}
+      fontSize={fontSize}
+      layoutWidthPercent={layoutWidthPercent}
       samples={samples}
       showGrid={showGrid}
       warmup={warmup}
-      onFont={loadFont}
+      webgpu={environment.webgpu}
+      onBackend={(backend) => setLocation({ backend })}
+      onDpr={(value) => {
+        setDpr(value)
+        setLiveStats(undefined)
+        setSummary(undefined)
+        setLiveCapture(undefined)
+      }}
+      onFontSize={(value) => {
+        setFontSize(value)
+        setLiveCapture(undefined)
+      }}
+      onLayoutWidthPercent={(value) => {
+        setLayoutWidthPercent(value)
+        setLiveCapture(undefined)
+      }}
       onSamples={setSamples}
       onShowGrid={setShowGrid}
       onWarmup={setWarmup}
     />
   )
 
+  const actionReady =
+    available && backendAvailable && !isPending && (location.mode === 'conformance' || liveStats)
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <TopBar
+        mode={location.mode}
         pending={isPending}
-        ready={ready}
-        samples={samples}
+        ready={Boolean(actionReady)}
         webgpu={environment.webgpu}
-        onRun={run}
+        onAction={location.mode === 'benchmark' ? captureWindow : runConformance}
+        onMode={selectMode}
       />
-      <div className="hidden h-[calc(100vh-52px)] min-h-[680px] grid-cols-[240px_minmax(560px,1fr)_300px] lg:grid">
-        <ScenarioRail fontName={fontName} location={location} onLocation={setLocation} />
-        <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
-          <Scene
-            dpr={dpr}
-            error={error}
-            event={event}
-            grid={showGrid}
-            location={location}
-            summary={summary}
-            onDpr={selectDpr}
-            onGrid={setShowGrid}
-            onLocation={setLocation}
-          />
-        </main>
-        <aside className="overflow-auto bg-chrome p-4">{controls}</aside>
-      </div>
-      <div className="pb-[58px] lg:hidden">
-        <main className="min-h-[calc(100vh-110px)] p-3">
-          {location.view === 'scene' && (
+      {desktop ? (
+        <div className="grid h-[calc(100vh-52px)] min-h-[680px] grid-cols-[224px_minmax(640px,1fr)_288px]">
+          <WorkloadRail location={location} onLocation={setLocation} />
+          <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
             <Scene
               dpr={dpr}
               error={error}
               event={event}
               grid={showGrid}
+              liveCapture={liveCapture}
+              liveStats={liveStats}
               location={location}
+              fontSize={fontSize}
+              layoutWidthPercent={layoutWidthPercent}
               summary={summary}
-              onDpr={selectDpr}
-              onGrid={setShowGrid}
-              onLocation={setLocation}
+              onLiveStats={setLiveStats}
             />
-          )}
-          {location.view === 'controls' && (
-            <MobileSheet title="Controls" onClose={() => setLocation({ view: 'scene' })}>
-              {controls}
-              <Button
-                className="mt-3 h-10 w-full"
-                disabled={!ready}
-                variant="primary"
-                onClick={run}
-              >
-                Run suite
-              </Button>
-            </MobileSheet>
-          )}
-          {location.view === 'report' && <Report summary={summary} />}
-          {location.view === 'export' && <ExportPanel summary={summary} />}
-        </main>
-        <MobileNavigation location={location} onLocation={setLocation} />
-      </div>
+          </main>
+          <aside className="overflow-auto bg-chrome p-4">{controls}</aside>
+        </div>
+      ) : (
+        <div className="pb-[58px]">
+          <main className="min-h-[calc(100vh-110px)] p-3">
+            <div className={location.view === 'scene' ? undefined : 'hidden'}>
+              <Scene
+                dpr={dpr}
+                error={error}
+                event={event}
+                grid={showGrid}
+                liveCapture={liveCapture}
+                liveStats={liveStats}
+                location={location}
+                fontSize={fontSize}
+                layoutWidthPercent={layoutWidthPercent}
+                summary={summary}
+                onLiveStats={setLiveStats}
+              />
+            </div>
+            {location.view === 'controls' && (
+              <MobileSheet title="Controls" onClose={() => setLocation({ view: 'scene' })}>
+                {controls}
+              </MobileSheet>
+            )}
+            {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
+            {location.view === 'export' && (
+              <ExportPanel liveCapture={liveCapture} summary={summary} />
+            )}
+          </main>
+          <MobileNavigation location={location} onLocation={setLocation} />
+        </div>
+      )}
     </div>
   )
 }
@@ -185,131 +310,148 @@ function locationSearch(): string {
   return typeof globalThis.location === 'undefined' ? '' : globalThis.location.search
 }
 
+function subscribeDesktop(listener: () => void): () => void {
+  if (typeof globalThis.matchMedia !== 'function') return () => undefined
+  const media = globalThis.matchMedia('(min-width: 1024px)')
+  media.addEventListener('change', listener)
+  return () => media.removeEventListener('change', listener)
+}
+
+function desktopSnapshot(): boolean {
+  return (
+    typeof globalThis.matchMedia !== 'function' ||
+    globalThis.matchMedia('(min-width: 1024px)').matches
+  )
+}
+
 function defaultDeviceDpr(): 1 | 2 {
   return (globalThis.devicePixelRatio ?? 1) >= 1.5 ? 2 : 1
 }
 
+function workloadById(mode: HarnessMode, id: string): WorkloadOption {
+  const workloads = mode === 'benchmark' ? benchmarkWorkloads : conformanceWorkloads
+  return workloads.find((workload) => workload.id === id) ?? workloads[0]!
+}
+
 function TopBar({
+  mode,
   pending,
   ready,
-  samples,
   webgpu,
-  onRun,
+  onAction,
+  onMode,
 }: {
+  readonly mode: HarnessMode
   readonly pending: boolean
   readonly ready: boolean
-  readonly samples: number
   readonly webgpu: boolean
-  readonly onRun: () => void
+  readonly onAction: () => void
+  readonly onMode: (mode: HarnessMode) => void
 }) {
   return (
-    <header className="flex h-[52px] items-center gap-2 border-b border-border bg-chrome px-3 lg:px-4">
+    <header className="flex h-[52px] items-center gap-2 border-b border-border bg-chrome px-2 sm:gap-3 sm:px-3 lg:px-4">
       <div className="grid size-7 place-items-center rounded-md bg-accent font-serif text-lg">
         a
       </div>
-      <div className="min-w-0">
+      <div className="hidden min-w-0 sm:block">
         <div className="text-sm font-semibold leading-none">pmndrs/text</div>
-        <div className="mt-1 font-mono text-[9px] text-dim">BENCHMARK HARNESS</div>
+        <div className="mt-1 font-mono text-[9px] text-dim">TEXT PERFORMANCE LAB</div>
+      </div>
+      <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
+        {(['benchmark', 'conformance'] as const).map((value) => (
+          <button
+            className={`rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-dim'}`}
+            key={value}
+            type="button"
+            onClick={() => onMode(value)}
+          >
+            {value}
+          </button>
+        ))}
       </div>
       <div className="flex-1" />
-      <div className="hidden items-center gap-2 md:flex">
+      <span className="hidden sm:inline-flex">
         <Chip tone={webgpu ? 'success' : 'warning'}>
           {webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
         </Chip>
-        <Chip tone="accent">warm · {samples} samples</Chip>
-        <Chip>working tree</Chip>
-      </div>
-      <Button disabled={!ready} variant="primary" onClick={onRun}>
-        {pending ? 'Running…' : 'Run suite'}
+      </span>
+      <Button
+        aria-label={mode === 'benchmark' ? 'Capture window' : 'Run conformance'}
+        className="px-2 text-[10px] sm:px-3 sm:text-xs"
+        disabled={!ready}
+        variant="primary"
+        onClick={onAction}
+      >
+        {pending ? (
+          'Running…'
+        ) : mode === 'benchmark' ? (
+          <>
+            <span className="sm:hidden">Capture</span>
+            <span className="hidden sm:inline">Capture window</span>
+          </>
+        ) : (
+          <>
+            <span className="sm:hidden">Run</span>
+            <span className="hidden sm:inline">Run conformance</span>
+          </>
+        )}
       </Button>
     </header>
   )
 }
 
-function ScenarioRail({
-  fontName,
+function WorkloadRail({
   location,
   onLocation,
 }: {
-  readonly fontName: string
   readonly location: HarnessLocation
   readonly onLocation: (value: Partial<HarnessLocation>) => void
 }) {
+  const workloads = location.mode === 'benchmark' ? benchmarkWorkloads : conformanceWorkloads
   return (
     <aside className="overflow-auto border-r border-border bg-chrome p-3">
-      <p className="eyebrow">Fixture</p>
-      <div className="mt-2 rounded-md border border-border bg-surface p-2.5">
-        <div className="text-xs font-medium">Font fixture</div>
-        <div className="mt-1 truncate font-mono text-[9px] text-dim">{fontName}</div>
-      </div>
-      <p className="eyebrow mb-2 mt-4">Scenarios</p>
-      <nav className="grid gap-1">
-        {scenarios.map((scenario) => (
-          <RailButton
-            active={location.scenario === scenario.id}
-            key={scenario.id}
-            label={scenario.label}
-            onClick={() => onLocation({ scenario: scenario.id })}
-          />
-        ))}
-        {plannedScenarios.map((label) => (
-          <RailButton disabled key={label} label={label} />
-        ))}
-      </nav>
-      <p className="eyebrow mb-2 mt-4">Targets</p>
-      <div className="grid gap-2">
-        {targets.map((target) => (
+      <p className="eyebrow">Technique</p>
+      <div className="mt-2 grid grid-cols-3 gap-1">
+        {(['bitmap', 'mtsdf', 'slug'] as const).map((technique) => (
           <button
-            className={`rounded-md border p-2 text-left transition-colors ${
-              location.target === target.id
-                ? 'border-accent bg-surface-active'
-                : 'border-border bg-surface hover:bg-surface-raised'
-            }`}
-            key={target.id}
+            className={`rounded-md border px-2 py-2 text-[10px] capitalize ${location.technique === technique ? 'border-accent bg-surface-active' : 'border-border bg-surface text-dim'}`}
+            disabled={technique !== 'bitmap'}
+            key={technique}
             type="button"
-            onClick={() => onLocation({ target: target.id })}
+            onClick={() => onLocation({ technique })}
           >
-            <div className="flex items-center gap-2 text-xs">
-              <span className={`target-dot target-dot-${target.color}`} />
-              <span>{target.label}</span>
-              <span className="ml-auto text-dim">
-                {target.id === 'synthetic' || target.id === 'font-baker' ? '✓' : '—'}
-              </span>
-            </div>
-            <div className="mt-1 pl-[15px] font-mono text-[9px] text-dim">{target.detail}</div>
+            {technique}
           </button>
         ))}
       </div>
+      <p className="eyebrow mb-2 mt-5">
+        {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
+      </p>
+      <nav className="grid gap-1">
+        {workloads.map((workload) => (
+          <button
+            className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
+            disabled={!workload.available}
+            key={workload.id}
+            type="button"
+            onClick={() => onLocation({ workload: workload.id })}
+          >
+            <span
+              className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-border'}`}
+            />
+            <span className="block text-xs">{workload.label}</span>
+            <span className="mt-1 block font-mono text-[8px] leading-relaxed text-dim">
+              {workload.available ? workload.description : `PLANNED · ${workload.description}`}
+            </span>
+          </button>
+        ))}
+      </nav>
+      <div className="mt-5 rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Pinned fixture</p>
+        <p className="mt-2 text-xs">Inter Regular 4.1</p>
+        <p className="mt-1 font-mono text-[9px] text-dim">16 px grayscale bitmap strike</p>
+      </div>
     </aside>
-  )
-}
-
-function RailButton({
-  active = false,
-  disabled = false,
-  label,
-  onClick,
-}: {
-  readonly active?: boolean
-  readonly disabled?: boolean
-  readonly label: string
-  readonly onClick?: () => void
-}) {
-  return (
-    <button
-      className={`relative h-9 rounded-md px-5 text-left text-xs ${
-        active ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'
-      } disabled:cursor-not-allowed disabled:opacity-40`}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      <span
-        className={`absolute left-2 top-2.5 h-4 w-[3px] rounded-full ${active ? 'bg-accent' : 'bg-border'}`}
-      />
-      {label}
-      {disabled && <span className="float-right font-mono text-[9px]">planned</span>}
-    </button>
   )
 }
 
@@ -317,192 +459,328 @@ function Scene({
   dpr,
   error,
   event,
+  fontSize,
   grid,
+  layoutWidthPercent,
+  liveCapture,
+  liveStats,
   location,
   summary,
-  onDpr,
-  onGrid,
-  onLocation,
+  onLiveStats,
 }: {
   readonly dpr: 1 | 2
   readonly error: string | undefined
   readonly event: RunnerEvent | undefined
+  readonly fontSize: number
   readonly grid: boolean
+  readonly layoutWidthPercent: number
+  readonly liveCapture: LiveBenchmarkCapture | undefined
+  readonly liveStats: BitmapTextLiveStats | undefined
   readonly location: HarnessLocation
   readonly summary: BenchmarkSummary | undefined
-  readonly onDpr: (dpr: 1 | 2) => void
-  readonly onGrid: (grid: boolean) => void
-  readonly onLocation: (value: Partial<HarnessLocation>) => void
+  readonly onLiveStats: (stats: BitmapTextLiveStats) => void
 }) {
-  const target = targetById(location.target)
-  const scenario = scenarioById(location.scenario)
+  const workload = workloadById(location.mode, location.workload)
   return (
     <section
-      className="grid size-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3"
-      data-completed-at={summary?.completedAt}
+      className="grid min-h-full min-w-0 grid-rows-[auto_minmax(520px,1fr)_auto] gap-3"
+      data-captured-at={liveCapture?.capturedAt}
+      data-execution-id={summary?.executionId}
       data-testid="scene"
     >
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">Scenario · {scenario.id}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{scenario.label}</h1>
-          <p className="mt-1 max-w-2xl text-xs text-muted">{scenario.description}</p>
+          <p className="eyebrow">
+            {location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
+          <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
         </div>
-        <div className="hidden gap-1 sm:flex">
-          <Button
-            aria-pressed={dpr === 1}
-            variant={dpr === 1 ? 'primary' : 'secondary'}
-            onClick={() => onDpr(1)}
-          >
-            1×
-          </Button>
-          <Button
-            aria-pressed={dpr === 2}
-            variant={dpr === 2 ? 'primary' : 'secondary'}
-            onClick={() => onDpr(2)}
-          >
-            2×
-          </Button>
-          <Button onClick={() => onGrid(!grid)}>{grid ? 'Grid on' : 'Grid off'}</Button>
+        <div className="flex gap-2">
+          <Chip tone="accent">Bitmap</Chip>
+          <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}</Chip>
+          <Chip>{dpr}× DPR</Chip>
         </div>
       </header>
-      <div className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-surface">
-        <div className="flex h-[42px] items-center gap-2 border-b border-border px-3">
-          <Chip tone={target.status({}) === 'unavailable' ? 'warning' : 'accent'}>
-            {target.label}
-          </Chip>
-          <Chip tone={summary?.status === 'passed' ? 'success' : 'neutral'}>
-            {summary?.status === 'passed' ? 'oracle locked' : 'awaiting validation'}
-          </Chip>
-          <span className="ml-auto font-mono text-[9px] text-dim">SHARED RUNNER · V0</span>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col p-4">
-          <div className="grid gap-3 md:grid-cols-3">
-            {['Load target', 'Run samples', 'Validate output'].map((label, index) => {
-              const complete = event?.phase === 'complete' || (event !== undefined && index === 0)
-              return (
-                <div className="rounded-md border border-border bg-panel/95 p-4" key={label}>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`grid size-6 place-items-center rounded-full font-mono text-[10px] ${complete ? 'bg-success text-black' : 'bg-surface-active text-muted'}`}
-                    >
-                      {complete ? '✓' : index + 1}
-                    </span>
-                    <span className="text-sm font-medium">{label}</span>
-                  </div>
-                  <p className="mt-3 font-mono text-[10px] leading-relaxed text-dim">
-                    {index === 0 && target.detail}
-                    {index === 1 && `${event?.completed ?? 0} / ${event?.total ?? 0} samples`}
-                    {index === 2 && (summary?.validation ?? 'No accepted sample yet')}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-          <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-md border border-border bg-panel/95 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="eyebrow">
-                  {location.target.startsWith('bitmap-text-')
-                    ? 'Live bitmap viewport'
-                    : 'Raster readiness ladder'}
-                </p>
-                <p className="mt-1 text-xs text-muted">
-                  Live renderer output; Run suite captures deterministic evidence.
-                </p>
-              </div>
-              <span className="font-mono text-[9px] text-success">LIVE GPU VIEW</span>
-            </div>
-            {location.target === 'bitmap-text-webgpu' ||
-            location.target === 'bitmap-text-webgl2' ? (
-              <BitmapTextViewport
-                backend={location.target === 'bitmap-text-webgpu' ? 'webgpu' : 'webgl2'}
-                dpr={dpr}
-                grid={grid}
-              />
-            ) : (
-              <UnavailableReadinessLadder />
-            )}
-          </div>
-          {error && (
-            <div className="mt-3 rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">
-              {error}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-4">
-        <Metric label="Captured median" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
-        <Metric label="Captured P95" value={formatMs(summary?.p95Ms ?? event?.p95Ms)} />
-        <Metric
-          label="Captured samples"
-          value={String(summary?.measurements.length ?? event?.completed ?? 0)}
+      {location.mode === 'benchmark' ? (
+        <BenchmarkSurface
+          backend={location.backend}
+          dpr={dpr}
+          fontSize={fontSize}
+          grid={grid}
+          layoutWidthPercent={layoutWidthPercent}
+          key={`${location.backend}-${String(dpr)}`}
+          stats={liveStats}
+          onStats={onLiveStats}
         />
-        <Metric label="Suite validation" value={summary?.status ?? 'awaiting capture'} />
-      </div>
-      <div className="flex gap-2 lg:hidden">
-        <Button className="flex-1" onClick={() => onLocation({ view: 'controls' })}>
-          Controls
-        </Button>
-        <Button className="flex-1" onClick={() => onLocation({ view: 'report' })}>
-          Report
-        </Button>
-      </div>
+      ) : (
+        <ConformanceSurface
+          backend={location.backend}
+          dpr={dpr}
+          event={event}
+          key={`${location.backend}-${String(dpr)}`}
+          summary={summary}
+        />
+      )}
+      {error !== undefined && (
+        <div className="rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">
+          {error}
+        </div>
+      )}
+      {location.mode === 'benchmark' && liveCapture !== undefined && (
+        <div className="rounded-md border border-success/40 bg-success/5 px-3 py-2 text-xs text-muted">
+          Captured the current rolling window at {liveCapture.capturedAt} ·{' '}
+          {liveCapture.stats.framesPerSecond.toFixed(1)} FPS ·{' '}
+          {formatMs(liveCapture.stats.medianSubmitMs)} CPU submit
+        </div>
+      )}
     </section>
   )
 }
 
-function UnavailableReadinessLadder() {
+function BenchmarkSurface({
+  backend,
+  dpr,
+  fontSize,
+  grid,
+  layoutWidthPercent,
+  stats,
+  onStats,
+}: {
+  readonly backend: GraphicsBackend
+  readonly dpr: 1 | 2
+  readonly fontSize: number
+  readonly grid: boolean
+  readonly layoutWidthPercent: number
+  readonly stats: BitmapTextLiveStats | undefined
+  readonly onStats: (stats: BitmapTextLiveStats) => void
+}) {
   return (
-    <div className="grid grid-cols-[48px_repeat(3,1fr)] overflow-hidden rounded border border-border text-xs">
-      <div className="cell cell-head">PX</div>
-      {['Bitmap', 'MSDF', 'Slug'].map((label) => (
-        <div className="cell cell-head" key={label}>
-          {label}
+    <div className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3">
+      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
+        <Metric
+          label="Live FPS"
+          value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
+        />
+        <Metric label="CPU frame submit" value={formatMs(stats?.medianSubmitMs)} />
+        <Metric label="GPU frame" value="unavailable" />
+        <Metric
+          label="Glyphs / draws"
+          value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
+        />
+      </div>
+      <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
+        <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
+          <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
+          <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
+          <LiveCost label="Text ready" value={formatMs(stats?.textReadyMs)} />
+          <LiveCost label="First draw submit" value={formatMs(stats?.firstDrawMs)} />
+          <LiveCost label="Total startup" value={formatMs(stats?.startupMs)} />
+          <LiveCost
+            label="Artifact / GPU"
+            value={`${formatBytes(stats?.artifactBytes)} / ${formatBytes(stats?.totalGpuBytes)}`}
+          />
         </div>
-      ))}
-      {sampleSizes.map((size) => (
-        <Fragment key={size}>
-          <div className="cell font-mono text-dim">{size}</div>
-          <div className="cell text-dim">unavailable</div>
-          <div className="cell text-dim">unavailable</div>
-          <div className="cell text-dim">unavailable</div>
-        </Fragment>
-      ))}
+        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
+          <Sparkline
+            label="CPU frame ms"
+            length={stats?.submitHistoryLength ?? 0}
+            nextIndex={stats?.submitHistoryNextIndex ?? 0}
+            values={stats?.submitHistory}
+          />
+          <Sparkline
+            label="FPS"
+            length={stats?.fpsHistoryLength ?? 0}
+            nextIndex={stats?.fpsHistoryNextIndex ?? 0}
+            values={stats?.fpsHistory}
+          />
+          <Sparkline
+            emptyLabel="GPU timing unavailable"
+            label="GPU frame ms"
+            length={stats?.gpuHistoryLength ?? 0}
+            nextIndex={stats?.gpuHistoryNextIndex ?? 0}
+            values={stats?.gpuHistory}
+          />
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface p-3">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="eyebrow">Realtime scene</p>
+            <p className="mt-1 text-xs text-muted">
+              Paragraph-scale text renders continuously and reflows with its live viewport.
+            </p>
+          </div>
+          <span className="font-mono text-[9px] text-success">LIVE</span>
+        </div>
+        <BitmapTextViewport
+          backend={backend}
+          dpr={dpr}
+          fontSize={fontSize}
+          grid={grid}
+          layoutWidthPercent={layoutWidthPercent}
+          onStats={onStats}
+        />
+      </div>
     </div>
   )
 }
 
-function BitmapTextViewport({
+function ConformanceSurface({
   backend,
   dpr,
-  grid,
+  event,
+  summary,
 }: {
-  readonly backend: 'webgpu' | 'webgl2'
+  readonly backend: GraphicsBackend
   readonly dpr: 1 | 2
-  readonly grid: boolean
+  readonly event: RunnerEvent | undefined
+  readonly summary: BenchmarkSummary | undefined
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [stats, setStats] = useState<BitmapTextLiveStats>()
+  const [capture, setCapture] = useState<BitmapTextConformanceCapture>()
   const [error, setError] = useState<string>()
-  const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
-    setStats(next)
+  const publishCapture = useEffectEvent((value: BitmapTextConformanceCapture) => {
+    setCapture(value)
     setError(undefined)
   })
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return
     setError(caught instanceof Error ? caught.message : String(caught))
   })
+  useEffect(() => {
+    const controller = new AbortController()
+    void import('./renderer/bitmap-text')
+      .then(({ captureBitmapTextConformance }) =>
+        captureBitmapTextConformance({ backend, dpr, signal: controller.signal }),
+      )
+      .then(publishCapture)
+      .catch(publishError)
+    return () => controller.abort()
+  }, [backend, dpr])
+
+  return (
+    <div className="grid min-h-0 grid-rows-[auto_minmax(360px,1fr)_auto] gap-3">
+      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
+        <Metric
+          label="Reference mismatch"
+          value={capture === undefined ? '—' : String(capture.mismatchBytes)}
+        />
+        <Metric
+          label="Half-coverage ink"
+          value={capture === undefined ? '—' : String(capture.inkPixels)}
+        />
+        <Metric label="Render submit (diagnostic)" value={formatMs(capture?.renderSubmitMs)} />
+        <Metric label="Suite duration" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
+      </div>
+      <div className="grid min-h-0 gap-3 xl:grid-cols-3">
+        <PixelPanel capture={capture} kind="candidate" label="Candidate" />
+        <PixelPanel capture={capture} kind="reference" label="CPU reference" />
+        <PixelPanel capture={capture} kind="difference" label="Difference ×1" />
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <div className="flex items-center gap-2 text-xs">
+          <span
+            className={`size-2 rounded-full ${summary?.status === 'passed' ? 'bg-success' : 'bg-dim'}`}
+          />
+          <span className="font-medium">Finite conformance suite</span>
+          <span className="ml-auto font-mono text-[10px] text-muted">
+            {summary?.validation ?? 'Run conformance to test full-frame and clipped output.'}
+          </span>
+        </div>
+        <p className="mt-2 text-[10px] text-dim">
+          End-to-end suite duration includes readback, CPU composition, comparison, clipping, and
+          hashing. It is test cost, not renderer performance.
+        </p>
+      </div>
+      {error !== undefined && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  )
+}
+
+function PixelPanel({
+  capture,
+  kind,
+  label,
+}: {
+  readonly capture: BitmapTextConformanceCapture | undefined
+  readonly kind: 'candidate' | 'reference' | 'difference'
+  readonly label: string
+}) {
+  function drawCapture(canvas: HTMLCanvasElement | null): void {
+    if (canvas === null || capture === undefined) return
+    canvas.width = capture.width
+    canvas.height = capture.height
+    const context = canvas.getContext('2d')
+    if (context === null) throw new Error('Unable to create conformance inspection canvas')
+    context.putImageData(
+      new ImageData(new Uint8ClampedArray(capture[kind]), capture.width, capture.height),
+      0,
+      0,
+    )
+  }
+  return (
+    <figure className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel">
+      <figcaption className="border-b border-border px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-muted">
+        {label}
+      </figcaption>
+      <div className="grid min-h-[240px] flex-1 place-items-center overflow-hidden p-3">
+        {capture === undefined ? (
+          <span className="font-mono text-[9px] text-dim">GENERATING</span>
+        ) : (
+          <canvas
+            className="h-auto max-h-full w-full [image-rendering:pixelated]"
+            ref={drawCapture}
+          />
+        )}
+      </div>
+    </figure>
+  )
+}
+
+function BitmapTextViewport({
+  backend,
+  dpr,
+  fontSize,
+  grid,
+  layoutWidthPercent,
+  onStats,
+}: {
+  readonly backend: GraphicsBackend
+  readonly dpr: 1 | 2
+  readonly fontSize: number
+  readonly grid: boolean
+  readonly layoutWidthPercent: number
+  readonly onStats: (stats: BitmapTextLiveStats) => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<BitmapTextPreview>(undefined)
+  const [stats, setStats] = useState<BitmapTextLiveStats>()
+  const [error, setError] = useState<string>()
+  const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
+    setStats(next)
+    onStats(next)
+    setError(undefined)
+  })
+  const publishError = useEffectEvent((caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === 'AbortError') return
+    setError(caught instanceof Error ? caught.message : String(caught))
+  })
+  const previewConfiguration = useEffectEvent(() => ({
+    fontSize: fontSize / dpr,
+    layoutWidthRatio: layoutWidthPercent / 100,
+  }))
 
   useEffect(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (canvas === null || container === null) return
     const controller = new AbortController()
-    let preview: Awaited<
-      ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>
-    >
+    const configuration = previewConfiguration()
+    let preview:
+      | Awaited<ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>>
+      | undefined
+    let cancelled = false
     const resize = (): void => {
       if (preview === undefined) return
       const bounds = container.getBoundingClientRect()
@@ -517,8 +795,10 @@ function BitmapTextViewport({
           backend,
           canvas,
           dpr,
-          fontSize: 16 / dpr,
+          expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+          fontSize: configuration.fontSize,
           height: Math.max(1, bounds.height),
+          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
           text: BENCHMARK_IPSUM_TEXT,
           width: Math.max(1, bounds.width),
           signal: controller.signal,
@@ -526,95 +806,164 @@ function BitmapTextViewport({
           onStats: publishStats,
         })
       })
-      .then((created) => {
+      .then(async (created) => {
+        if (cancelled) {
+          await created.dispose()
+          return
+        }
         preview = created
+        previewRef.current = created
         resize()
       })
       .catch(publishError)
     return () => {
+      cancelled = true
       controller.abort()
       observer.disconnect()
+      if (previewRef.current === preview) previewRef.current = undefined
       if (preview !== undefined) void preview.dispose()
     }
   }, [backend, dpr])
 
+  useEffect(() => {
+    previewRef.current?.update({
+      fontSize: fontSize / dpr,
+      layoutWidthRatio: layoutWidthPercent / 100,
+    })
+  }, [dpr, fontSize, layoutWidthPercent])
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="mb-2 grid grid-cols-2 gap-px overflow-hidden rounded border border-border bg-border sm:grid-cols-4">
-        <LiveMetric
-          label="FPS"
-          value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
-        />
-        <LiveMetric label="CPU submit" value={formatMs(stats?.medianSubmitMs)} />
-        <LiveMetric
-          label="Glyphs / draws"
-          value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
-        />
-        <LiveMetric label="Tracked GPU" value={formatBytes(stats?.totalGpuBytes)} />
+    <div
+      className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      data-layout-width={stats?.layoutWidth}
+      data-line-count={stats?.lineCount}
+      data-testid="bitmap-live-viewport"
+      ref={containerRef}
+    >
+      <canvas
+        aria-label={`Live bitmap benchmark using ${backend}`}
+        className="absolute inset-0 size-full"
+        ref={canvasRef}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+        <span>
+          BAKED {stats?.strikePpem ?? 16} PX · RENDERED {stats?.renderedPpem ?? 16} DEVICE PX ·{' '}
+          {(stats?.scaleRatio ?? 1).toFixed(2)}×
+        </span>
+        <span>{dpr}× DPR</span>
       </div>
-      <div
-        className={`benchmark-grid relative min-h-[320px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
-        data-testid="bitmap-live-viewport"
-        ref={containerRef}
-      >
-        <canvas
-          aria-label={`Live bitmap text frame using ${backend}`}
-          className="absolute inset-0 size-full"
-          ref={canvasRef}
-        />
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
-          <span>
-            BAKED {stats?.strikePpem ?? 16} PX · RENDERED {stats?.renderedPpem ?? 16} DEVICE PX ·{' '}
-            {(stats?.scaleRatio ?? 1).toFixed(2)}× · {stats?.cssFontSize ?? 16 / dpr} CSS PX
-          </span>
-          <span>{dpr}× DPR</span>
+      {stats === undefined && error === undefined && (
+        <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
+          INITIALIZING {backend.toUpperCase()}
         </div>
-        {stats === undefined && error === undefined && (
-          <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
-            INITIALIZING {backend.toUpperCase()}
-          </div>
-        )}
-        {error !== undefined && (
-          <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
-            {error}
-          </div>
-        )}
-      </div>
+      )}
+      {error !== undefined && (
+        <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+          {error}
+        </div>
+      )}
     </div>
   )
 }
 
-function LiveMetric({ label, value }: { readonly label: string; readonly value: string }) {
+function LiveCost({ label, value }: { readonly label: string; readonly value: string }) {
   return (
-    <div className="bg-surface px-3 py-2">
+    <div className="border-b border-r border-border px-3 py-2 last:border-r-0">
       <p className="font-mono text-[8px] uppercase tracking-wider text-dim">{label}</p>
       <p className="mt-1 font-mono text-[11px] text-foreground">{value}</p>
     </div>
   )
 }
 
-function formatBytes(value: number | undefined): string {
-  if (value === undefined) return '—'
-  return value < 1024 * 1024
-    ? `${Math.round(value / 1024)} KB`
-    : `${(value / (1024 * 1024)).toFixed(2)} MB`
+function Sparkline({
+  emptyLabel,
+  label,
+  length,
+  nextIndex,
+  values,
+}: {
+  readonly emptyLabel?: string
+  readonly label: string
+  readonly length: number
+  readonly nextIndex: number
+  readonly values: Float32Array | undefined
+}) {
+  function draw(canvas: HTMLCanvasElement | null): void {
+    if (canvas === null || values === undefined || length === 0) return
+    const context = canvas.getContext('2d')
+    if (context === null) return
+    const width = canvas.width
+    const height = canvas.height
+    let maximum = 1
+    const start = length === values.length ? nextIndex : 0
+    for (let index = 0; index < length; index += 1) {
+      maximum = Math.max(maximum, values[(start + index) % values.length] ?? 0)
+    }
+    context.clearRect(0, 0, width, height)
+    context.beginPath()
+    for (let index = 0; index < length; index += 1) {
+      const value = values[(start + index) % values.length] ?? 0
+      const x = length < 2 ? 0 : (index / (length - 1)) * width
+      const y = height - (value / maximum) * (height - 4) - 2
+      if (index === 0) context.moveTo(x, y)
+      else context.lineTo(x, y)
+    }
+    context.strokeStyle = getComputedStyle(canvas).getPropertyValue('--cyan')
+    context.lineWidth = 1.5
+    context.stroke()
+  }
+  return (
+    <div className="bg-surface p-3">
+      <p className="font-mono text-[8px] uppercase tracking-wider text-dim">{label}</p>
+      <div className="relative mt-2 h-[42px] w-full">
+        <canvas
+          aria-label={`${label} history`}
+          className="absolute inset-0 size-full"
+          height={42}
+          ref={draw}
+          width={180}
+        />
+        {length === 0 && emptyLabel !== undefined && (
+          <span className="absolute inset-0 grid place-items-center font-mono text-[8px] text-dim">
+            {emptyLabel}
+          </span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function Controls({
-  fontName,
+  backend,
+  dpr,
+  fontSize,
+  layoutWidthPercent,
+  mode,
   samples,
   showGrid,
   warmup,
-  onFont,
+  webgpu,
+  onBackend,
+  onDpr,
+  onFontSize,
+  onLayoutWidthPercent,
   onSamples,
   onShowGrid,
   onWarmup,
 }: {
-  readonly fontName: string
+  readonly backend: GraphicsBackend
+  readonly dpr: 1 | 2
+  readonly fontSize: number
+  readonly layoutWidthPercent: number
+  readonly mode: HarnessMode
   readonly samples: number
   readonly showGrid: boolean
   readonly warmup: number
-  readonly onFont: (file: File | undefined) => Promise<void>
+  readonly webgpu: boolean
+  readonly onBackend: (backend: GraphicsBackend) => void
+  readonly onDpr: (dpr: 1 | 2) => void
+  readonly onFontSize: (value: number) => void
+  readonly onLayoutWidthPercent: (value: number) => void
   readonly onSamples: (value: number) => void
   readonly onShowGrid: (value: boolean) => void
   readonly onWarmup: (value: number) => void
@@ -622,49 +971,107 @@ function Controls({
   return (
     <section className="grid gap-4" data-testid="controls">
       <div>
-        <p className="eyebrow">Run controls</p>
-        <h2 className="mt-1 text-base font-semibold">Benchmark settings</h2>
+        <p className="eyebrow">Inspection controls</p>
+        <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
       </div>
-      <Field
-        accept=".ttf,.otf,.ttc,.woff,.woff2"
-        label="Font fixture"
-        title={fontName}
-        type="file"
-        onChange={(event) => onFont(event.currentTarget.files?.[0])}
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <Field
-          label="Warmup"
-          min={0}
-          type="number"
-          value={warmup}
-          onChange={(event) => onWarmup(event.currentTarget.valueAsNumber)}
-        />
-        <Field
-          label="Samples"
-          min={1}
-          type="number"
-          value={samples}
-          onChange={(event) => onSamples(event.currentTarget.valueAsNumber)}
-        />
-      </div>
-      <SelectField label="Measurement mode" value="wall" onChange={() => undefined}>
-        <option value="wall">Wall clock</option>
-      </SelectField>
-      <div className="border-y border-border py-2">
-        <Toggle checked={showGrid} label="Show baseline grid" onChange={onShowGrid} />
-        <Toggle checked={false} label="Collect GPU timestamps" onChange={() => undefined} />
-      </div>
-      <div className="rounded-md border border-border bg-surface p-3">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="size-2 rounded-full bg-success" />
-          <span>Runner schema valid</span>
-          <span className="ml-auto font-mono text-[9px] text-dim">v0</span>
+      <div>
+        <p className="mb-2 font-mono text-[9px] uppercase text-dim">Backend</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            disabled={!webgpu}
+            variant={backend === 'webgpu' ? 'primary' : 'secondary'}
+            onClick={() => onBackend('webgpu')}
+          >
+            WebGPU
+          </Button>
+          <Button
+            variant={backend === 'webgl2' ? 'primary' : 'secondary'}
+            onClick={() => onBackend('webgl2')}
+          >
+            WebGL2
+          </Button>
         </div>
       </div>
+      <div>
+        <p className="mb-2 font-mono text-[9px] uppercase text-dim">Device pixel ratio</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant={dpr === 1 ? 'primary' : 'secondary'} onClick={() => onDpr(1)}>
+            1× DPR
+          </Button>
+          <Button variant={dpr === 2 ? 'primary' : 'secondary'} onClick={() => onDpr(2)}>
+            2× DPR
+          </Button>
+        </div>
+      </div>
+      {mode === 'benchmark' && (
+        <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
+          <p className="eyebrow">Live workload</p>
+          <Field
+            label={`Rendered size · ${fontSize} device px`}
+            max={24}
+            min={12}
+            step={1}
+            type="range"
+            value={fontSize}
+            onChange={(event) => onFontSize(event.currentTarget.valueAsNumber)}
+          />
+          <Field
+            label={`Layout width · ${layoutWidthPercent}%`}
+            max={100}
+            min={40}
+            step={2}
+            type="range"
+            value={layoutWidthPercent}
+            onChange={(event) => onLayoutWidthPercent(event.currentTarget.valueAsNumber)}
+          />
+          <p className="text-[10px] leading-relaxed text-muted">
+            Resizing the scene or changing its layout width commits a new paragraph reflow.
+          </p>
+        </div>
+      )}
+      {mode === 'conformance' && (
+        <div className="grid grid-cols-2 gap-2">
+          <Field
+            label="Warmup"
+            min={0}
+            type="number"
+            value={warmup}
+            onChange={(event) => onWarmup(event.currentTarget.valueAsNumber)}
+          />
+          <Field
+            label="Samples"
+            min={1}
+            type="number"
+            value={samples}
+            onChange={(event) => onSamples(event.currentTarget.valueAsNumber)}
+          />
+        </div>
+      )}
+      <div className="border-y border-border py-2">
+        <Toggle checked={showGrid} label="Show canvas grid" onChange={onShowGrid} />
+      </div>
       <div className="rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">Fixture</p>
-        <p className="mt-2 truncate font-mono text-[10px] text-muted">{fontName}</p>
+        <p className="eyebrow">Measurement policy</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-muted">
+          {mode === 'benchmark'
+            ? 'Tracks live frame rate, CPU submission cost, retained bytes, and backend GPU time when timestamp queries are available.'
+            : 'The finite suite includes readback, reference composition, comparison, clipping, and hashing.'}
+        </p>
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Selected payloads</p>
+        <div className="mt-2 grid gap-2">
+          {packageSizes.entries
+            .filter((entry) =>
+              ['browser-core', 'text-shaper-wasm', 'font-baker-wasm'].includes(entry.id),
+            )
+            .map((entry) => (
+              <div className="flex items-center gap-2 text-[10px]" key={entry.id}>
+                <span className="truncate text-muted">{entry.label}</span>
+                <span className="ml-auto font-mono text-dim">{formatBytes(entry.rawBytes)}</span>
+              </div>
+            ))}
+        </div>
       </div>
     </section>
   )
@@ -683,10 +1090,7 @@ function MobileSheet({
     <section className="fixed inset-x-0 bottom-[58px] z-20 max-h-[calc(100vh-86px)] overflow-auto rounded-t-xl border border-border bg-chrome p-4 shadow-2xl">
       <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
       <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          <p className="font-mono text-[9px] text-dim">LOCAL RUN CONFIGURATION</p>
-        </div>
+        <h1 className="text-lg font-semibold">{title}</h1>
         <Button aria-label="Close controls" onClick={onClose}>
           ×
         </Button>

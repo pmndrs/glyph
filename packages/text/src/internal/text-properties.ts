@@ -44,6 +44,13 @@ export interface TextState {
   readonly onLayout: ((layout: import('../layout.js').ParagraphLayout) => void) | undefined
 }
 
+type ComparablePaintProperties = {
+  readonly color?: THREE.ColorRepresentation | undefined
+  readonly opacity?: number | undefined
+  readonly outline?: TextPaintProperties['outline'] | undefined
+  readonly shadow?: TextPaintProperties['shadow'] | undefined
+}
+
 export const EMPTY_TEXT_STATE: TextState = Object.freeze({
   text: '',
   spans: Object.freeze([]),
@@ -111,7 +118,7 @@ export function normalizeTextState(
     language: optionalString(merged.language, 'language'),
     direction: optionalEnum(merged.direction, ['auto', 'ltr', 'rtl'], 'direction'),
     features:
-      initial || Object.hasOwn(value, 'features')
+      initial || Object.hasOwn(value, 'text') || Object.hasOwn(value, 'features')
         ? normalizeFeatures(merged.features, 0, text.length)
         : current.features,
     color: optionalColor(merged.color, 'color'),
@@ -209,49 +216,58 @@ function normalizeFeatures(
 ): readonly FontFeature[] {
   if (value === undefined) return Object.freeze([])
   if (!Array.isArray(value)) throw new TypeError('features must be an array')
-  return Object.freeze(
-    value.map((entry, index) => {
-      assertObject(entry, `feature ${index}`)
-      const tag = stringValue(
-        requiredProperty(entry, 'tag', `feature ${index}`),
-        `feature ${index} tag`,
-      )
-      if (/^[\x20-\x7e]{4}$/.test(tag) === false) {
-        throw new TypeError(`feature ${index} tag must contain four printable ASCII bytes`)
-      }
-      const featureValue = readProperty(entry, 'value')
-      const startValue = readProperty(entry, 'start')
-      const endValue = readProperty(entry, 'end')
-      const resolvedStart =
-        startValue === undefined
-          ? undefined
-          : nonnegativeInteger(startValue, `feature ${index} start`)
-      const resolvedEnd =
-        endValue === undefined ? undefined : nonnegativeInteger(endValue, `feature ${index} end`)
-      if ((resolvedStart ?? containingStart) < containingStart) {
-        throw new RangeError(`feature ${index} starts before its style range`)
-      }
-      if ((resolvedEnd ?? containingEnd) > containingEnd) {
-        throw new RangeError(`feature ${index} ends after its style range`)
-      }
-      if ((resolvedStart ?? containingStart) >= (resolvedEnd ?? containingEnd)) {
-        throw new RangeError(`feature ${index} range is invalid`)
-      }
-      const resolvedValue =
-        featureValue === undefined
-          ? undefined
-          : nonnegativeInteger(featureValue, `feature ${index} value`)
-      if (resolvedValue !== undefined && resolvedValue > 0xffff_ffff) {
-        throw new RangeError(`feature ${index} value must fit uint32`)
-      }
-      return Object.freeze({
+  const normalized: FontFeature[] = []
+  for (const [index, entry] of value.entries()) {
+    assertObject(entry, `feature ${index}`)
+    const tag = stringValue(
+      requiredProperty(entry, 'tag', `feature ${index}`),
+      `feature ${index} tag`,
+    )
+    if (/^[\x20-\x7e]{4}$/.test(tag) === false) {
+      throw new TypeError(`feature ${index} tag must contain four printable ASCII bytes`)
+    }
+    const featureValue = readProperty(entry, 'value')
+    const startValue = readProperty(entry, 'start')
+    const endValue = readProperty(entry, 'end')
+    const resolvedStart =
+      startValue === undefined
+        ? undefined
+        : nonnegativeInteger(startValue, `feature ${index} start`)
+    const resolvedEnd =
+      endValue === undefined ? undefined : nonnegativeInteger(endValue, `feature ${index} end`)
+    const resolvedValue =
+      featureValue === undefined
+        ? undefined
+        : nonnegativeInteger(featureValue, `feature ${index} value`)
+    if (resolvedValue !== undefined && resolvedValue > 0xffff_ffff) {
+      throw new RangeError(`feature ${index} value must fit uint32`)
+    }
+    if (
+      containingStart === containingEnd &&
+      resolvedStart === undefined &&
+      resolvedEnd === undefined
+    ) {
+      continue
+    }
+    if ((resolvedStart ?? containingStart) < containingStart) {
+      throw new RangeError(`feature ${index} starts before its style range`)
+    }
+    if ((resolvedEnd ?? containingEnd) > containingEnd) {
+      throw new RangeError(`feature ${index} ends after its style range`)
+    }
+    if ((resolvedStart ?? containingStart) >= (resolvedEnd ?? containingEnd)) {
+      throw new RangeError(`feature ${index} range is invalid`)
+    }
+    normalized.push(
+      Object.freeze({
         tag,
         ...(resolvedValue === undefined ? {} : { value: resolvedValue }),
         ...(resolvedStart === undefined ? {} : { start: resolvedStart }),
         ...(resolvedEnd === undefined ? {} : { end: resolvedEnd }),
-      })
-    }),
-  )
+      }),
+    )
+  }
+  return Object.freeze(normalized)
 }
 
 function normalizeOutline(value: unknown): TextPaintProperties['outline'] {
@@ -329,22 +345,30 @@ export function assertRasterBatch(value: RasterDrawBatch): void {
   }
 }
 
-export function isFontToken(value: unknown): value is AnyFontToken {
-  if (!isObject(value) || !hasProperty(value, 'input') || !hasProperty(value, 'raster'))
-    return false
-  try {
-    fontInputValue(value.input)
-    normalizeRasterInput(value.raster)
-    return true
-  } catch {
-    return false
-  }
+export function isFontToken(
+  value: AnyFontToken | FontInput | RegisteredFont | undefined,
+): value is AnyFontToken {
+  return isObject(value) && hasProperty(value, 'input') && hasProperty(value, 'raster')
 }
 
 function fontValue(value: unknown): TextState['font'] {
-  if (value === undefined || isRegisteredFont(value) || isFontToken(value)) return value
+  if (value === undefined || isRegisteredFont(value)) return value
+  const token = fontTokenValue(value)
+  if (token !== undefined) return token
   if (typeof value === 'string' || value instanceof URL) return value
   return fontInputValue(value)
+}
+
+function fontTokenValue(value: unknown): AnyFontToken | undefined {
+  if (!isObject(value) || !hasProperty(value, 'input') || !hasProperty(value, 'raster')) {
+    return undefined
+  }
+  const input = fontInputValue(readProperty(value, 'input'))
+  const raster = normalizeRasterInput(readProperty(value, 'raster'))
+  return Object.freeze({
+    input,
+    raster: Object.freeze({ module: raster.module, options: raster.options }),
+  })
 }
 
 function fontInputValue(value: unknown): FontInput {
@@ -438,7 +462,30 @@ export function sameLayoutInput(left: TextState, right: TextState): boolean {
   )
 }
 
-function sameFeatures(left: readonly FontFeature[], right: readonly FontFeature[]): boolean {
+export function samePaintInput(left: TextState, right: TextState): boolean {
+  return (
+    samePaintProperties(left, right) &&
+    left.spans.length === right.spans.length &&
+    left.spans.every((span, index) => {
+      const other = right.spans[index]
+      return other !== undefined && samePaintProperties(span, other)
+    })
+  )
+}
+
+export function samePaintProperties(
+  left: ComparablePaintProperties,
+  right: ComparablePaintProperties,
+): boolean {
+  return (
+    sameColor(left.color, right.color) &&
+    left.opacity === right.opacity &&
+    sameOutline(left.outline, right.outline) &&
+    sameShadow(left.shadow, right.shadow)
+  )
+}
+
+export function sameFeatures(left: readonly FontFeature[], right: readonly FontFeature[]): boolean {
   return (
     left.length === right.length &&
     left.every(
@@ -448,6 +495,43 @@ function sameFeatures(left: readonly FontFeature[], right: readonly FontFeature[
         feature.start === right[index]?.start &&
         feature.end === right[index]?.end,
     )
+  )
+}
+
+function sameColor(
+  left: THREE.ColorRepresentation | undefined,
+  right: THREE.ColorRepresentation | undefined,
+): boolean {
+  return (
+    left === right ||
+    (left instanceof THREE.Color && right instanceof THREE.Color && left.equals(right))
+  )
+}
+
+function sameOutline(
+  left: TextPaintProperties['outline'],
+  right: TextPaintProperties['outline'],
+): boolean {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      left.width === right.width &&
+      sameColor(left.color, right.color))
+  )
+}
+
+function sameShadow(
+  left: TextPaintProperties['shadow'],
+  right: TextPaintProperties['shadow'],
+): boolean {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      sameColor(left.color, right.color) &&
+      left.offset[0] === right.offset[0] &&
+      left.offset[1] === right.offset[1])
   )
 }
 

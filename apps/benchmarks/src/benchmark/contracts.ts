@@ -37,6 +37,7 @@ export interface BenchmarkMeasurement {
 
 export interface BenchmarkSummary {
   readonly schemaVersion: 0
+  readonly executionId: string
   readonly targetId: string
   readonly scenarioId: string
   readonly status: 'passed'

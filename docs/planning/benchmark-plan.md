@@ -21,8 +21,8 @@ sources:
     title: "Repository benchmark-harness wireframe"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-26T06:56:23Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-26T16:29:02Z"
 ---
 
 # Benchmark plan
@@ -57,15 +57,26 @@ The useful precedent is:
 
 The pmndrs/text lab extends that pattern with correctness hashes, image diffs, cold-start automation, raw sample export, GPU/device metadata, and font/raster byte accounting.
 
+The application has two explicit modes over the same implementation, workload, fixture, and result contracts:
+
+| Mode | Purpose | Visible product | Measurement boundary |
+| --- | --- | --- | --- |
+| Conformance | Prove that an implementation is correct and explain failures. | Browser/reference output, candidate output, raw difference view, structured shaping/layout comparison, tolerances, hashes, pixel statistics, and validation diagnostics. | May include readback, reference composition, byte/perceptual comparison, clipping probes, and hashing; these costs are labeled as test execution and never presented as renderer performance. |
+| Benchmark | Explain the cost a consumer pays in a real continuously rendered scene. | Live text, workload controls, cold-phase breakdowns, warm CPU-ms/FPS/GPU-ms sparklines, memory/payload data, and raw samples. | Measures named bake/startup/shape/layout/upload/first-draw phases and a steady render loop with no readback, hash, diff, screenshot, or conformance oracle inside the timed frame. |
+
+The product UI exposes four independent axes: **mode** (`Benchmark` or `Conformance`), **technique** (`Bitmap`, `MTSDF`, `Slug`, or another admitted implementation), **backend** (`WebGPU` or `WebGL2 fallback`), and **workload** (benchmark ipsum, text ladder, paragraph reflow, glyph stress, advanced shaping, and so on). Benchmark is the default because this application is primarily a human control plane for real-world cost. Internal target adapters may bind a technique/backend pair, and internal scenarios define workloads, but those implementation terms do not appear in the primary UI. Every axis is encoded in the shareable URL and exported result. “Run conformance” captures the current finite correctness case; “Capture window” records the current live performance window. A passing conformance result admits a combination to benchmarking; it does not make conformance duration a benchmark metric.
+
+`Bitmap text frame` is a conformance case: its exact full/clipped readback, CPU reference composition, hash, and mismatch scan are valuable because a maintainer can inspect what was proved. `Benchmark ipsum`, `Text ladder`, `Off-axis / 3D`, `Dynamic layout`, and `Paragraph stress` are live visual workloads. The first live workload is the paragraph-scale benchmark ipsum at a native bitmap strike; later workloads add controlled scale, transforms, reflow, and volume without changing this classification.
+
 Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not started
 
 | Harness gate | Status | Evidence required to advance |
 | --- | :---: | --- |
 | Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
 | Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
-| Lab shell under `apps/benchmarks` | ✅ | The responsive Figma-backed shell, local component foundations, target/scenario selection, URL state, validation status, phase results, fixture input, and raw export run from the monorepo app tree. |
-| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module; synthetic, direct-baker, loader/Worker, HarfRust, paragraph, bidi/policy/uikit, and item-5.4 CJK universality lanes pass. Milestone 6 rendering remains open. |
-| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; Worker and shaper JavaScript exclude separately measured Wasm assets. The record names its measurement host: same-host output stays exact, while every foreign-host entry must satisfy the shared complete reviewed budgets. Unicode analysis is 139,912 bytes minified and the Darwin arm64 shaper record is 30,630 bytes minified JavaScript plus 692,114 bytes optimized Wasm. |
+| Lab shell under `apps/benchmarks` | 🟡 | The responsive token/component shell now defaults to the human-facing live benchmark with mode, technique, backend, and workload URL state; finite visual conformance is separate. Item 6.4 remains active until its real GPU-timestamp and capture/export contracts close. |
+| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module. The bounded CI-safe conformance suite includes synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, HarfRust, paragraph, bidi/policy/uikit, and item-5.4 CJK lanes. Hardware-WebGPU and pending-Suspense probes remain maintainer-local, and Milestone 6 awaits its closure review. |
+| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; the browser-core lane externalizes declared `three`, React, and R3F peers, while Worker and shaper JavaScript exclude separately measured Wasm assets. The record names its measurement host: same-host output stays exact, while every foreign-host entry must satisfy the shared complete reviewed budgets. Unicode analysis is 139,936 bytes minified and the Darwin arm64 shaper record is 30,648 bytes minified JavaScript plus 692,114 bytes optimized Wasm. |
 | Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
 | Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
 
@@ -83,12 +94,12 @@ The completed paragraph-policy scenario consumes the generated `paragraph-bidi-l
 | UI runtime | React 19 with the React Compiler enabled from the first implementation. |
 | Async React | Suspense-backed resources, `use`, transitions, and action-style mutations where they match the lifecycle. Async target/scenario loading is modeled as explicit resources rather than effect-driven fetch orchestration. |
 | Components | The project-owned custom shadcn-derived component set represented by the Figma design. Existing components and tokens are reused; generic generated replacements are not accepted. |
-| Source design | The node-specific [benchmark harness Figma wireframe routed from the repository README](../../README.md#benchmark-harness-wireframe) and its extracted component/token context. The checked-in image is orientation evidence, not a substitute for design context. |
+| Source design | The node-specific [benchmark harness Figma wireframe routed from the repository README](../../README.md#benchmark-harness-wireframe) and its extracted component/token context. The file is visual and token input, not a product contract; the implemented information architecture may diverge to make consumer cost and correctness legible. |
 | Formatting and linting | Oxfmt and Oxlint are authoritative. Oxlint runs React Compiler analysis, Rules of Hooks, accessibility checks, and the Oxlint-compatible `react-you-might-not-need-an-effect` rules as errors; effect-only event logic uses `useEffectEvent` instead of render-time refs. |
 | Tests | Vitest covers contracts and reusable assertions; a committed erasable-TypeScript Vitexec probe exercises the live Vite runner; Playwright exercises fixed mobile viewports and remains reusable for representative headed/GPU lanes. Browser console errors fail the wrapper even when the Vitexec CLI exits successfully. |
 | TypeScript | Strict project references extending the repository base configuration. App and probe code remains erasable TypeScript unless a build-tool configuration explicitly requires otherwise. |
 
-The visual shell follows the Figma component hierarchy and token system. Semantic CSS variables feed Tailwind utilities and the project-owned shadcn-derived primitives, so Figma values remain centralized instead of becoming scattered literal utility values. Target adapters, scenarios, runner state, validation, and result schemas stay UI-independent. React components subscribe to those contracts; they do not own benchmark execution policy or create a second result model.
+The visual shell reuses the Figma token system and appropriate project-owned shadcn-derived primitives without treating the mockup hierarchy as immutable. Semantic CSS variables feed Tailwind utilities, so visual values remain centralized instead of becoming scattered literals. Target adapters, scenarios, runner state, validation, and result schemas stay UI-independent. React components subscribe to those contracts; they do not own benchmark execution policy or create a second result model.
 
 ## Harness architecture
 
@@ -112,7 +123,7 @@ flowchart TD
 
 The planned repository keeps target adapters, scenarios, harness policy, UI, bundle-size entries, and result schemas as separate modules under `apps/benchmarks`; the exact directory names are implementation details rather than a second architecture contract.
 
-The interactive application and headless runner import the same target registry, scenario registry, controls, validation rules, warmup policy, and result schema. Every measured target call receives its real zero-based sample index; warmups are excluded from that sequence. The V0 result envelope records its schema version and exact controls, and invalid counts fail before target loading. A visually convenient browser path must not become a separate benchmark definition.
+The interactive application and headless runner import the same target registry, scenario registry, fixtures, controls, validation rules, and result schema. Conformance and benchmark modes own distinct runner policies and timing boundaries over those shared definitions. Every measured target call receives its real zero-based sample index; warmups are excluded from that sequence. The V0 result envelope records its schema version and exact controls, and invalid counts fail before target loading. A visually convenient browser path must not become a separate benchmark definition.
 
 ### Target adapters
 
@@ -174,11 +185,12 @@ The browser UI must provide:
 - a shareable URL encoding the selected configuration;
 - live current, median, p95, minimum, maximum, and sample count;
 - separate shaping, layout, upload, render, and total panels where applicable;
+- rolling sparklines for CPU frame milliseconds, frames per second, and GPU milliseconds, integrated into the full desktop and mobile design rather than exposed as a debug overlay;
 - correctness/visual status adjacent to performance;
 - payload cards separating JS, Wasm, core font, raster, decoded texture, and GPU bytes;
 - environment details and downloadable raw JSON.
 
-Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where supported, first-frame latency, memory, and quality remain separate.
+Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where supported, first-frame latency, memory, and quality remain separate. WebGPU targets use timestamp queries only when the adapter exposes the `timestamp-query` feature; WebGL2 targets use `EXT_disjoint_timer_query_webgl2` and discard samples from a disjoint interval. Unsupported GPU timing is displayed as unavailable and is never replaced with CPU submission time. The live render loop records frame cost independently from conformance capture: GPU readback, byte comparison, image scanning, hashing, and test-only resize probes remain correctness costs and do not contribute to the user-facing render-technique median.
 
 ### Automation and publication
 
@@ -394,10 +406,15 @@ Plain RGB MSDF is excluded from the product matrix. A compression campaign may i
 ### Bitmap
 
 - time and bytes per strike;
+- cold bake, Wasm compile/instantiate, font registration, shaping, paragraph layout, raster decode/upload, and first-draw time as separate phases;
+- warm per-frame CPU submission, GPU timestamp duration, and FPS distributions over a stable scene with no readback or conformance oracle inside the measured interval;
+- fixed-capacity, allocation-free telemetry rings allocated before the live loop; snapshot/export may allocate only after the user requests capture;
 - hinted versus unhinted/oversampled experiment;
 - atlas occupancy/page count;
 - quality at native and off-size scaling;
 - technique-switch threshold experiments.
+
+The human bitmap benchmark is an interactive scene. Rendered device size and proportional paragraph width are live controls, and canvas resizing drives the same retained paragraph reflow path a consumer uses. The benchmark copy describes the workload positively; reference, difference, and comparison language belongs to the separate conformance surface.
 
 ## Payload report
 

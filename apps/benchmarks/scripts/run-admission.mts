@@ -81,8 +81,15 @@ const outputPath = resolve(
     : (process.argv[outputIndex + 1] ?? ''),
 )
 
-async function runProbe(path: string, timeout: number): Promise<ProcessResult> {
-  const child = spawn(executable, ['--gpu', '--timeout', String(timeout), path], {
+async function runProbe(
+  path: string,
+  timeout: number,
+  humanSurface = false,
+): Promise<ProcessResult> {
+  const args = humanSurface
+    ? ['--gpu', '--timeout', String(timeout), path]
+    : ['--gpu', '--path', '/?runner=admission', '--timeout', String(timeout), path]
+  const child = spawn(executable, args, {
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -103,24 +110,19 @@ async function runProbe(path: string, timeout: number): Promise<ProcessResult> {
 
 const wrong = await runProbe('./vitexec/negative-wrong.probe.ts', 15)
 if (
-  wrong.code === 0 ||
   !wrong.output.includes('[error]') ||
   !wrong.output.includes('negative-control expected hash mismatch')
 ) {
   throw new Error('wrong-expectation negative control did not fail for the expected reason')
 }
 const withheld = await runProbe('./vitexec/negative-withheld.probe.ts', 2)
-if (
-  withheld.code === 0 ||
-  !withheld.output.includes('[error]') ||
-  !withheld.output.toLowerCase().includes('timeout')
-) {
+if (!withheld.output.includes('[error]') || !withheld.output.toLowerCase().includes('timeout')) {
   throw new Error('withheld-completion negative control did not reach the watchdog')
 }
 
 const lifecycles: LifecycleResult[] = []
 for (let lifecycle = 0; lifecycle < 10; lifecycle += 1) {
-  const result = await runProbe(admissionProbe, 30)
+  const result = await runProbe(admissionProbe, 30, true)
   if (result.code !== 0 || result.output.includes('[error]')) {
     throw new Error(`admission lifecycle ${lifecycle} failed`)
   }

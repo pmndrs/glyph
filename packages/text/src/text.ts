@@ -13,6 +13,7 @@ import {
   normalizeRasterInput,
   normalizeTextState,
   sameLayoutInput,
+  samePaintInput,
   sameParagraphInput,
   type NormalizedRasterRequest,
   type TextState,
@@ -150,6 +151,8 @@ interface OwnedBatch {
 interface TextGeneration {
   readonly state: TextState
   readonly paragraph: Paragraph
+  /** True only when this uncommitted generation acquired the paragraph it carries. */
+  readonly createdParagraph: boolean
   readonly layout: ParagraphLayout
   readonly batches: readonly OwnedBatch[]
   readonly releaseFontDisposal: () => void
@@ -189,6 +192,10 @@ export class Text extends THREE.Group {
   setProperties(properties: TextUpdateProperties): void {
     this.#assertActive()
     const next = normalizeTextState(this.#state, properties, false)
+    if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, next)) {
+      const paint = resolveGlyphPaint(this.#generation.layout, next)
+      for (const owned of this.#generation.batches) owned.module.validatePaint?.(paint)
+    }
     this.#state = next
     this.#schedule()
   }
@@ -197,11 +204,12 @@ export class Text extends THREE.Group {
     if (this.#disposed) return
     this.#disposed = true
     this.#revision += 1
-    this.#pending?.abort()
+    const reason = new DOMException('The text object was disposed', 'AbortError')
+    this.#pending?.abort(reason)
     this.#pending = undefined
     this.#disposeGeneration(this.#generation)
     this.#generation = undefined
-    this.#ready = Promise.resolve()
+    this.#setCancelledReady(reason)
   }
 
   #schedule(): void {
@@ -218,9 +226,11 @@ export class Text extends THREE.Group {
     }
 
     if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, this.#state)) {
-      const paint = resolveGlyphPaint(this.#generation.layout, this.#state)
-      for (const owned of this.#generation.batches) {
-        owned.module.updatePaint(owned.batch, paint, owned.fontSlot)
+      if (!samePaintInput(this.#generation.state, this.#state)) {
+        const paint = resolveGlyphPaint(this.#generation.layout, this.#state)
+        for (const owned of this.#generation.batches) {
+          owned.module.updatePaint(owned.batch, paint, owned.fontSlot)
+        }
       }
       this.#generation = { ...this.#generation, state: this.#state }
       this.#ready = Promise.resolve()
@@ -239,6 +249,7 @@ export class Text extends THREE.Group {
       this.#pending = undefined
       const previous = this.#generation
       this.#generation = generation
+      previous?.releaseFontDisposal()
       for (const owned of previous?.batches ?? []) {
         this.remove(owned.batch.object)
         owned.batch.dispose()
@@ -280,6 +291,7 @@ export class Text extends THREE.Group {
         ownsParagraph = true
       } else {
         resolved = await resolveParagraphInput(state, signal)
+        signal.throwIfAborted()
       }
 
       const layout = paragraph.layout(paragraphConstraints(state))
@@ -291,6 +303,7 @@ export class Text extends THREE.Group {
         if (fontRaster === undefined) {
           throw new Error('paragraph layout references an unresolved font')
         }
+        fontRaster.raster.module.validatePaint?.(paint)
         await fontRaster.raster.module.prepare(layout, fontRaster.raster.resource, slot, signal)
         signal.throwIfAborted()
         const batch = fontRaster.raster.module.buildBatches(
@@ -306,10 +319,18 @@ export class Text extends THREE.Group {
       let generation: TextGeneration
       const releaseFontDisposal = resolved.registry._onFontDispose((font) => {
         if (!fontHandles.has(font.handle)) return
-        controller.abort(new DOMException('A font used by this text was disposed', 'AbortError'))
-        if (this.#generation === generation) this.#invalidateGeneration(generation)
+        const reason = new DOMException('A font used by this text was disposed', 'AbortError')
+        controller.abort(reason)
+        if (this.#generation === generation) this.#invalidateGeneration(generation, reason)
       })
-      generation = { state, paragraph, layout, batches, releaseFontDisposal }
+      generation = {
+        state,
+        paragraph,
+        createdParagraph: ownsParagraph,
+        layout,
+        batches,
+        releaseFontDisposal,
+      }
       return generation
     } catch (error) {
       for (const owned of batches) owned.batch.dispose()
@@ -331,17 +352,23 @@ export class Text extends THREE.Group {
   #disposeUncommitted(generation: TextGeneration): void {
     generation.releaseFontDisposal()
     for (const owned of generation.batches) owned.batch.dispose()
-    if (generation.paragraph !== this.#generation?.paragraph) generation.paragraph.dispose()
+    if (generation.createdParagraph) generation.paragraph.dispose()
   }
 
-  #invalidateGeneration(generation: TextGeneration): void {
+  #invalidateGeneration(generation: TextGeneration, reason: unknown): void {
     if (this.#generation !== generation) return
     this.#revision += 1
-    this.#pending?.abort()
+    this.#pending?.abort(reason)
     this.#pending = undefined
     this.#disposeGeneration(generation)
     this.#generation = undefined
-    this.#ready = Promise.resolve()
+    this.#setCancelledReady(reason)
+  }
+
+  #setCancelledReady(reason: unknown): void {
+    const ready = Promise.reject(reason)
+    void ready.catch(() => undefined)
+    this.#ready = ready
   }
 
   #assertActive(): void {

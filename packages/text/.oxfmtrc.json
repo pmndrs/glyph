@@ -3,11 +3,11 @@
   "singleQuote": true,
   "trailingComma": "all",
   "ignorePatterns": [
-    ".cache/**",
+    "**/.cache/**",
     "dist/**",
     "src/bakers/schemas/**",
     "src/generated/**",
-    "target/**",
+    "**/target/**",
     "tests/fixtures/**"
   ]
 }

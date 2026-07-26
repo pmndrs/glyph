@@ -1,11 +1,5 @@
 import { version as compilerVersion } from 'typescript'
-import {
-  API,
-  SymbolFlags,
-  type Checker,
-  type Project,
-  type Symbol,
-} from 'typescript/unstable/sync'
+import { API, SymbolFlags, type Checker, type Project, type Symbol } from 'typescript/unstable/sync'
 import * as ast from 'typescript/unstable/ast'
 
 export { ast }
@@ -71,7 +65,10 @@ export function importedBinding(
       const declaration = handle.resolve(project)
       if (declaration === undefined || !ast.isImportSpecifier(declaration)) continue
       const importDeclaration = declaration.parent.parent.parent
-      if (!ast.isImportDeclaration(importDeclaration) || !ast.isStringLiteral(importDeclaration.moduleSpecifier)) {
+      if (
+        !ast.isImportDeclaration(importDeclaration) ||
+        !ast.isStringLiteral(importDeclaration.moduleSpecifier)
+      ) {
         continue
       }
       return {
@@ -85,7 +82,10 @@ export function importedBinding(
       const declaration = handle.resolve(project)
       if (declaration === undefined || !ast.isNamespaceImport(declaration)) continue
       const importDeclaration = declaration.parent.parent
-      if (!ast.isImportDeclaration(importDeclaration) || !ast.isStringLiteral(importDeclaration.moduleSpecifier)) {
+      if (
+        !ast.isImportDeclaration(importDeclaration) ||
+        !ast.isStringLiteral(importDeclaration.moduleSpecifier)
+      ) {
         continue
       }
       return { module: importDeclaration.moduleSpecifier.text, exported: value.name.text }
@@ -101,7 +101,11 @@ export function constantInitializer(
   seen: Set<number> = new Set<number>(),
 ): ast.Expression | undefined {
   if (!ast.isIdentifier(expression)) return undefined
-  return staticInitializer(resolveAlias(checker.getSymbolAtLocation(expression), checker), project, seen)
+  return staticInitializer(
+    resolveAlias(checker.getSymbolAtLocation(expression), checker),
+    project,
+    seen,
+  )
 }
 
 export function shorthandInitializer(
@@ -121,7 +125,8 @@ export function unwrapExpression(expression: ast.Expression): ast.Expression {
     ast.isAsExpression(value) ||
     ast.isSatisfiesExpression(value) ||
     ast.isNonNullExpression(value)
-  ) value = value.expression
+  )
+    value = value.expression
   return value
 }
 
@@ -145,6 +150,7 @@ function staticInitializer(
     declaration.initializer === undefined ||
     !ast.isVariableDeclarationList(declaration.parent) ||
     (declaration.parent.flags & ast.NodeFlags.Const) === 0
-  ) return undefined
+  )
+    return undefined
   return declaration.initializer
 }

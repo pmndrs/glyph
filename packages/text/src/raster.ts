@@ -128,6 +128,7 @@ export interface RasterModule<
     fontSlot: FontSlot,
     paint: GlyphPaint,
   ): DrawBatch
+  validatePaint?(paint: GlyphPaint): void
   updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void
   dispose(resource: Resource): void
 }
