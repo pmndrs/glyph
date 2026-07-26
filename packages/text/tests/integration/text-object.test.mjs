@@ -6,7 +6,13 @@ import { createFontBaker } from '@pmndrs/text-font-baker'
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate'
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/text/bakers/bitmap'
 import { FontRegistry, RasterRuntime, Text, defineRaster } from '../../dist/index.js'
-import { bitmap, bitmapDescriptor, bitmapRasterKey } from '../../dist/raster/bitmap.js'
+import {
+  bitmap,
+  bitmapDescriptor,
+  bitmapRasterKey,
+  captureBitmapGlyphPositions,
+  createBitmapGlyphPositionTransition,
+} from '../../dist/raster/bitmap.js'
 import { composeFontBake } from '../../dist/internal/compose-bake.js'
 
 const fixtureUrl = new URL(
@@ -64,6 +70,105 @@ test('Text commits layout and draw generations atomically', async () => {
   assert.equal(text.children.length, 0)
   await assert.rejects(text.ready, { name: 'AbortError' })
   assert.throws(() => text.setProperties({ opacity: 1 }), /disposed/)
+})
+
+test('bitmap glyph-position transitions preserve authoritative layouts and pixel-snap inputs', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const text = new Text({
+    text: 'AVATAR office wraps across lines',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+    width: 280,
+  })
+  try {
+    await text.ready
+    const wideObject = text.children[0]
+    assert.ok(wideObject)
+    const wideOrigins = bitmapOrigins(wideObject)
+    const wideSnapshot = captureBitmapGlyphPositions(wideObject)
+
+    text.setProperties({ width: 104 })
+    await text.ready
+    const narrowObject = text.children[0]
+    const narrowLayout = text.layout
+    assert.ok(narrowObject)
+    assert.ok(narrowLayout)
+    const targetOrigins = bitmapOrigins(narrowObject)
+    const targetX = narrowLayout.x.slice()
+    const targetY = narrowLayout.y.slice()
+    const transition = createBitmapGlyphPositionTransition(narrowObject, wideSnapshot)
+    assert.equal(transition.targetGlyphs, targetOrigins.length / 2)
+    assert.equal(transition.matchedGlyphs, transition.targetGlyphs)
+
+    transition.setProgress(0)
+    assert.deepEqual(bitmapOrigins(narrowObject), wideOrigins)
+    transition.setProgress(0.5)
+    assert.deepEqual(bitmapOrigins(narrowObject), lerpedOrigins(wideOrigins, targetOrigins, 0.5))
+    assert.deepEqual(narrowLayout.x, targetX)
+    assert.deepEqual(narrowLayout.y, targetY)
+    assert.throws(() => transition.setProgress(Number.NaN), /progress must be in \[0, 1\]/)
+
+    const midpointOrigins = bitmapOrigins(narrowObject)
+    const midpointSnapshot = captureBitmapGlyphPositions(narrowObject)
+    transition.dispose()
+    text.setProperties({ width: 156 })
+    await text.ready
+    const finalObject = text.children[0]
+    assert.ok(finalObject)
+    const finalTargetOrigins = bitmapOrigins(finalObject)
+    const continued = createBitmapGlyphPositionTransition(finalObject, midpointSnapshot)
+    continued.setProgress(0)
+    assert.deepEqual(bitmapOrigins(finalObject), midpointOrigins)
+    continued.finish()
+    continued.finish()
+    assert.deepEqual(bitmapOrigins(finalObject), finalTargetOrigins)
+
+    const liveSnapshot = captureBitmapGlyphPositions(finalObject)
+    const stale = createBitmapGlyphPositionTransition(finalObject, liveSnapshot)
+    text.dispose()
+    assert.throws(() => stale.setProgress(0.5), { name: 'AbortError' })
+  } finally {
+    text.dispose()
+    font.dispose()
+    restoreFetch()
+  }
+})
+
+test('bitmap glyph-position transitions leave unmatched target glyphs authoritative', async () => {
+  const restoreFetch = installFileFetch()
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const text = new Text({
+    text: 'A',
+    font,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+  })
+  try {
+    await text.ready
+    const sourceObject = text.children[0]
+    assert.ok(sourceObject)
+    const sourceSnapshot = captureBitmapGlyphPositions(sourceObject)
+    assert.equal(sourceSnapshot.glyphCount, 1)
+
+    text.setProperties({ text: 'office' })
+    await text.ready
+    const targetObject = text.children[0]
+    assert.ok(targetObject)
+    const targetOrigins = bitmapOrigins(targetObject)
+    const transition = createBitmapGlyphPositionTransition(targetObject, sourceSnapshot)
+    assert.equal(transition.matchedGlyphs, 0)
+    assert.ok(transition.targetGlyphs > 0)
+    transition.setProgress(0)
+    assert.deepEqual(bitmapOrigins(targetObject), targetOrigins)
+  } finally {
+    text.dispose()
+    font.dispose()
+    restoreFetch()
+  }
 })
 
 test('disposing Text rejects both pending and subsequent ready observations', async () => {
@@ -424,6 +529,23 @@ async function assertPendingRasterInvalidation(invalidate) {
   assert.equal(disposeCount, 1)
   runtime.dispose()
   font.dispose()
+}
+
+function bitmapOrigins(object) {
+  const values = []
+  for (const mesh of object.children) {
+    const attribute = mesh.geometry?.getAttribute('bitmapOrigin')
+    assert.ok(attribute)
+    values.push(...attribute.array)
+  }
+  return Float32Array.from(values)
+}
+
+function lerpedOrigins(from, to, progress) {
+  assert.equal(from.length, to.length)
+  return Float32Array.from(from, (value, index) =>
+    Math.fround(value + (to[index] - value) * progress),
+  )
 }
 
 function installFileFetch() {

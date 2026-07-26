@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:27:32Z"
+  at: "2026-07-26T21:23:09Z"
 ---
 
 # Canonical implementation roadmap
@@ -545,7 +545,7 @@ Milestone 7 authorizes implementation of the release rasters; it does not author
 - [x] Define the Latin feature/mark, Arabic joining, Indic reordering, mixed-bidi, and CJK line-break lanes as one immutable discriminated corpus with deterministic integer seek, step, and playback state.
 - [x] Pin licensed static Devanagari and bounded Japanese showcase fonts, retain Amiri and Inter, and regenerate byte-authenticated 16 ppem bitmap artifacts through the public Node host and package-owned bitmap baker.
 - [x] Bind the shared definitions to editable/typewriter playback, pause, step, scrub, authored-width reflow, and causal settled-state signals in the real public `Text` rendering path.
-- [ ] Add continuous authored-width playback and discrete authoritative layout transitions with presentation-only glyph-position interpolation and bitmap pixel snapping.
+- [x] Add continuous authored-width playback and discrete authoritative layout transitions with presentation-only glyph-position interpolation and bitmap pixel snapping.
 - [ ] Reuse the exact showcase definitions through headless conformance and admitted Vitexec product probes, then record reviewed conformance and performance evidence.
 
 ## Milestone 8 — MSDF release raster

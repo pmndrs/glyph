@@ -44,6 +44,7 @@ import type {
   BitmapTextConformanceCapture,
   BitmapTextLiveStats,
   BitmapTextPreview,
+  BitmapTextPreviewSnapshot,
   BitmapTextPreviewUpdate,
 } from './renderer/bitmap-text'
 
@@ -55,12 +56,21 @@ interface WorkloadOption {
 }
 
 interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
+  readonly animatePresentation: boolean
   readonly fontFixture: AdvancedShapingFontFixture
   readonly expectedGlyphCount: number | undefined
   readonly timelineTick: number | undefined
 }
 
+interface PresentationEvidence {
+  readonly revision: number
+  readonly progress: 0 | 1
+  readonly matchedGlyphs: number
+  readonly targetGlyphs: number
+}
+
 const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = []
+const GLYPH_POSITION_TRANSITION_MS = 110
 const showcaseFontLabels: Readonly<Record<AdvancedShapingFontFixture, string>> = {
   inter: 'Inter Regular 4.1',
   amiri: 'Amiri Regular 1.002',
@@ -643,6 +653,7 @@ function BenchmarkSurface({
     ? {
         direction: showcaseFrame.caseDefinition.direction,
         expectedGlyphCount: undefined,
+        animatePresentation: showcaseFrame.playing,
         features: showcaseFrame.caseDefinition.features,
         fontFixture: showcaseFrame.caseDefinition.fontFixture,
         language: showcaseFrame.caseDefinition.language,
@@ -653,6 +664,7 @@ function BenchmarkSurface({
     : {
         direction: 'ltr',
         expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+        animatePresentation: false,
         features: EMPTY_FONT_FEATURES,
         fontFixture: 'inter',
         language: 'en',
@@ -878,8 +890,15 @@ function BitmapTextViewport({
   const [settledRevision, setSettledRevision] = useState(0)
   const [settledTextLength, setSettledTextLength] = useState(0)
   const [settledTimelineTick, setSettledTimelineTick] = useState<number>()
+  const [presentationEvidence, setPresentationEvidence] = useState<PresentationEvidence>({
+    revision: 0,
+    progress: 1,
+    matchedGlyphs: 0,
+    targetGlyphs: 0,
+  })
   const [error, setError] = useState<string>()
   const {
+    animatePresentation,
     direction,
     expectedGlyphCount,
     features,
@@ -918,6 +937,16 @@ function BitmapTextViewport({
   const publishSettledTextLength = useEffectEvent((length: number) => {
     setSettledTextLength(length)
   })
+  const publishPresentation = useEffectEvent(
+    (snapshot: BitmapTextPreviewSnapshot, progress: 0 | 1) => {
+      setPresentationEvidence({
+        revision: snapshot.revision,
+        progress,
+        matchedGlyphs: snapshot.matchedGlyphs,
+        targetGlyphs: snapshot.targetGlyphs,
+      })
+    },
+  )
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -991,6 +1020,15 @@ function BitmapTextViewport({
   useEffect(() => {
     const preview = previewRef.current
     if (preview === undefined) return
+    let cancelled = false
+    let animationFrame: number | undefined
+    const publishSettled = (snapshot: BitmapTextPreviewSnapshot): void => {
+      if (cancelled) return
+      publishPresentation(snapshot, 1)
+      publishSettledRevision(snapshot.revision)
+      publishSettledTimelineTick(timelineTick)
+      publishSettledTextLength(text.length)
+    }
     void preview
       .update({
         fontSize: fontSize / dpr,
@@ -1001,12 +1039,45 @@ function BitmapTextViewport({
         features,
       })
       .then((snapshot) => {
-        publishSettledRevision(snapshot.revision)
-        publishSettledTimelineTick(timelineTick)
-        publishSettledTextLength(text.length)
+        if (cancelled) return
+        publishPresentation(snapshot, 0)
+        if (!animatePresentation) {
+          publishSettled(preview.finishPresentation(snapshot.revision))
+          return
+        }
+        const startedAt = performance.now()
+        const animate = (timestamp: number): void => {
+          if (cancelled) return
+          const linearProgress = Math.min(
+            1,
+            Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS),
+          )
+          const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress)
+          const presented = preview.setPresentationProgress(snapshot.revision, easedProgress)
+          if (linearProgress === 1) {
+            publishSettled(presented)
+            return
+          }
+          animationFrame = requestAnimationFrame(animate)
+        }
+        animationFrame = requestAnimationFrame(animate)
       })
       .catch(publishError)
-  }, [direction, dpr, features, fontSize, language, layoutWidthRatio, text, timelineTick])
+    return () => {
+      cancelled = true
+      if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
+    }
+  }, [
+    animatePresentation,
+    direction,
+    dpr,
+    features,
+    fontSize,
+    language,
+    layoutWidthRatio,
+    text,
+    timelineTick,
+  ])
 
   return (
     <div
@@ -1018,6 +1089,10 @@ function BitmapTextViewport({
       data-settled-revision={settledRevision}
       data-settled-text-length={settledTextLength}
       data-settled-tick={settledTimelineTick}
+      data-presentation-matched-glyphs={presentationEvidence.matchedGlyphs}
+      data-presentation-progress={presentationEvidence.progress}
+      data-presentation-revision={presentationEvidence.revision}
+      data-presentation-target-glyphs={presentationEvidence.targetGlyphs}
       data-backend={stats?.backend}
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}

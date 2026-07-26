@@ -71,6 +71,8 @@ export interface BitmapResource {
 
 interface BitmapBatchRun {
   readonly glyphIndices: Uint32Array
+  readonly originAttribute: THREE.InstancedBufferAttribute
+  targetOrigins?: Float32Array
   readonly colorAttribute: THREE.InstancedBufferAttribute
   readonly geometry: THREE.InstancedBufferGeometry
   readonly mesh: THREE.Mesh
@@ -86,9 +88,48 @@ export interface BitmapDrawBatch {
   dispose(): void
 }
 
+declare const bitmapGlyphPositionSnapshotBrand: unique symbol
+
+/** Copied bitmap glyph identities and displayed origins. It retains no renderer resources. */
+export interface BitmapGlyphPositionSnapshot {
+  readonly glyphCount: number
+  readonly [bitmapGlyphPositionSnapshotBrand]: true
+}
+
+/** Presentation-only motion toward one authoritative bitmap layout. */
+export interface BitmapGlyphPositionTransition {
+  readonly matchedGlyphs: number
+  readonly targetGlyphs: number
+  readonly progress: number
+  setProgress(progress: number): void
+  finish(): void
+  dispose(): void
+}
+
+interface PresentableBitmapBatch {
+  readonly layout: ParagraphLayout
+  readonly runs: readonly BitmapBatchRun[]
+  revision: number
+  disposed: boolean
+}
+
+interface BitmapGlyphPositionSnapshotData {
+  readonly fontHandles: Uint32Array
+  readonly glyphIds: Uint16Array
+  readonly clusters: Uint32Array
+  readonly fontSizeBits: Uint32Array
+  readonly occurrences: Uint32Array
+  readonly origins: Float32Array
+}
+
 const RECORD_STRIDE = 20
 const ABSENT_PAGE = 0xffff
 const materialByPageTexture = new WeakMap<THREE.DataTexture, THREE.MeshBasicNodeMaterial>()
+const presentableBatchByObject = new WeakMap<THREE.Object3D, PresentableBitmapBatch>()
+const snapshotDataByToken = new WeakMap<
+  BitmapGlyphPositionSnapshot,
+  BitmapGlyphPositionSnapshotData
+>()
 
 function canonicalStrikes(values: readonly number[]): readonly number[] {
   if (values.length === 0) throw new TypeError('bitmap strikes must be a non-empty tuple')
@@ -185,6 +226,222 @@ export function bitmap<const Strikes extends readonly [number, ...number[]]>(
 ): RasterRequest<BitmapModule> {
   bitmapDescriptor(options)
   return { module: bitmapModule, options }
+}
+
+export function captureBitmapGlyphPositions(object: THREE.Object3D): BitmapGlyphPositionSnapshot {
+  const batch = presentableBitmapBatch(object)
+  const identities = bitmapGlyphIdentities(batch.layout)
+  const glyphCount = batch.runs.reduce((count, run) => count + run.glyphIndices.length, 0)
+  const fontHandles = new Uint32Array(glyphCount)
+  const glyphIds = new Uint16Array(glyphCount)
+  const clusters = new Uint32Array(glyphCount)
+  const fontSizeBits = new Uint32Array(glyphCount)
+  const occurrences = new Uint32Array(glyphCount)
+  const origins = new Float32Array(glyphCount * 2)
+  let outputIndex = 0
+  for (const run of batch.runs) {
+    const displayedOrigins = run.originAttribute.array as Float32Array
+    for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+      const glyphIndex = run.glyphIndices[instance]!
+      fontHandles[outputIndex] = identities.fontHandles[glyphIndex]!
+      glyphIds[outputIndex] = batch.layout.glyphIds[glyphIndex]!
+      clusters[outputIndex] = batch.layout.clusters[glyphIndex]!
+      fontSizeBits[outputIndex] = identities.fontSizeBits[glyphIndex]!
+      occurrences[outputIndex] = identities.occurrences[glyphIndex]!
+      origins[outputIndex * 2] = displayedOrigins[instance * 2]!
+      origins[outputIndex * 2 + 1] = displayedOrigins[instance * 2 + 1]!
+      outputIndex += 1
+    }
+  }
+  const snapshot = Object.freeze({ glyphCount }) as BitmapGlyphPositionSnapshot
+  snapshotDataByToken.set(snapshot, {
+    fontHandles,
+    glyphIds,
+    clusters,
+    fontSizeBits,
+    occurrences,
+    origins,
+  })
+  return snapshot
+}
+
+export function createBitmapGlyphPositionTransition(
+  object: THREE.Object3D,
+  from: BitmapGlyphPositionSnapshot,
+): BitmapGlyphPositionTransition {
+  const batch = presentableBitmapBatch(object)
+  const source = snapshotDataByToken.get(from)
+  if (source === undefined) throw new TypeError('invalid bitmap glyph-position snapshot')
+  const sourceOrigins = bitmapOriginMap(source)
+  const identities = bitmapGlyphIdentities(batch.layout)
+  const fromOriginsByRun: Float32Array[] = []
+  const targetOriginsByRun: Float32Array[] = []
+  let matchedGlyphs = 0
+  let targetGlyphs = 0
+  for (const run of batch.runs) {
+    const displayedOrigins = run.originAttribute.array as Float32Array
+    const targetOrigins = run.targetOrigins ?? displayedOrigins.slice()
+    run.targetOrigins = targetOrigins
+    const fromOrigins = targetOrigins.slice()
+    for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+      const glyphIndex = run.glyphIndices[instance]!
+      const key = bitmapGlyphIdentityKey(
+        identities.fontHandles[glyphIndex]!,
+        batch.layout.glyphIds[glyphIndex]!,
+        batch.layout.clusters[glyphIndex]!,
+        identities.fontSizeBits[glyphIndex]!,
+        identities.occurrences[glyphIndex]!,
+      )
+      const sourceOrigin = sourceOrigins.get(key)
+      if (sourceOrigin !== undefined) {
+        fromOrigins[instance * 2] = sourceOrigin[0]
+        fromOrigins[instance * 2 + 1] = sourceOrigin[1]
+        matchedGlyphs += 1
+      }
+      targetGlyphs += 1
+    }
+    fromOriginsByRun.push(fromOrigins)
+    targetOriginsByRun.push(targetOrigins)
+  }
+
+  batch.revision += 1
+  const revision = batch.revision
+  let progress = 1
+  let disposed = false
+  const setProgress = (nextProgress: number): void => {
+    if (!Number.isFinite(nextProgress) || nextProgress < 0 || nextProgress > 1) {
+      throw new RangeError('bitmap glyph-position transition progress must be in [0, 1]')
+    }
+    if (disposed || batch.disposed || batch.revision !== revision) {
+      throw new DOMException('The bitmap glyph-position transition is stale', 'AbortError')
+    }
+    for (let runIndex = 0; runIndex < batch.runs.length; runIndex += 1) {
+      const run = batch.runs[runIndex]!
+      const fromOrigins = fromOriginsByRun[runIndex]!
+      const targetOrigins = targetOriginsByRun[runIndex]!
+      const displayedOrigins = run.originAttribute.array as Float32Array
+      for (let offset = 0; offset < displayedOrigins.length; offset += 1) {
+        const start = fromOrigins[offset]!
+        displayedOrigins[offset] = start + (targetOrigins[offset]! - start) * nextProgress
+      }
+      run.originAttribute.needsUpdate = true
+    }
+    progress = nextProgress
+  }
+  return {
+    matchedGlyphs,
+    targetGlyphs,
+    get progress() {
+      return progress
+    },
+    setProgress,
+    finish() {
+      if (disposed) return
+      setProgress(1)
+      disposed = true
+    },
+    dispose() {
+      disposed = true
+    },
+  }
+}
+
+function presentableBitmapBatch(object: THREE.Object3D): PresentableBitmapBatch {
+  const batch = presentableBatchByObject.get(object)
+  if (batch === undefined || batch.disposed) {
+    throw new TypeError('object is not a live bitmap draw batch')
+  }
+  return batch
+}
+
+function bitmapGlyphIdentities(layout: ParagraphLayout): {
+  readonly fontHandles: Uint32Array
+  readonly fontSizeBits: Uint32Array
+  readonly occurrences: Uint32Array
+} {
+  assertParallelGlyphIdentity(layout)
+  const glyphCount = layout.glyphIds.length
+  const fontHandles = new Uint32Array(glyphCount)
+  const fontSizeBits = new Uint32Array(glyphCount)
+  const occurrences = new Uint32Array(glyphCount)
+  const floatBitsBuffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT)
+  const floatValue = new Float32Array(floatBitsBuffer)
+  const unsignedValue = new Uint32Array(floatBitsBuffer)
+  const counts = new Map<string, number>()
+  for (let glyphIndex = 0; glyphIndex < glyphCount; glyphIndex += 1) {
+    const fontSlot = layout.glyphFontSlots[glyphIndex]!
+    const fontHandle = layout.fontHandles[fontSlot]
+    if (fontHandle === undefined) {
+      throw new TypeError('paragraph layout references a missing bitmap font slot')
+    }
+    floatValue[0] = layout.glyphFontSizes[glyphIndex]!
+    const sizeBits = unsignedValue[0]!
+    const baseKey = bitmapGlyphIdentityBaseKey(
+      fontHandle,
+      layout.glyphIds[glyphIndex]!,
+      layout.clusters[glyphIndex]!,
+      sizeBits,
+    )
+    const occurrence = counts.get(baseKey) ?? 0
+    counts.set(baseKey, occurrence + 1)
+    fontHandles[glyphIndex] = fontHandle
+    fontSizeBits[glyphIndex] = sizeBits
+    occurrences[glyphIndex] = occurrence
+  }
+  return { fontHandles, fontSizeBits, occurrences }
+}
+
+function bitmapOriginMap(
+  snapshot: BitmapGlyphPositionSnapshotData,
+): ReadonlyMap<string, readonly [number, number]> {
+  const origins = new Map<string, readonly [number, number]>()
+  for (let index = 0; index < snapshot.glyphIds.length; index += 1) {
+    origins.set(
+      bitmapGlyphIdentityKey(
+        snapshot.fontHandles[index]!,
+        snapshot.glyphIds[index]!,
+        snapshot.clusters[index]!,
+        snapshot.fontSizeBits[index]!,
+        snapshot.occurrences[index]!,
+      ),
+      [snapshot.origins[index * 2]!, snapshot.origins[index * 2 + 1]!],
+    )
+  }
+  return origins
+}
+
+function bitmapGlyphIdentityBaseKey(
+  fontHandle: number,
+  glyphId: number,
+  cluster: number,
+  fontSizeBits: number,
+): string {
+  return `${fontHandle}:${glyphId}:${cluster}:${fontSizeBits}`
+}
+
+function bitmapGlyphIdentityKey(
+  fontHandle: number,
+  glyphId: number,
+  cluster: number,
+  fontSizeBits: number,
+  occurrence: number,
+): string {
+  return `${bitmapGlyphIdentityBaseKey(fontHandle, glyphId, cluster, fontSizeBits)}:${occurrence}`
+}
+
+function assertParallelGlyphIdentity(layout: ParagraphLayout): void {
+  const glyphCount = layout.glyphIds.length
+  for (const values of [
+    layout.glyphFontSlots,
+    layout.clusters,
+    layout.glyphFontSizes,
+    layout.x,
+    layout.y,
+  ]) {
+    if (values.length !== glyphCount) {
+      throw new TypeError('paragraph glyph identity arrays are not parallel')
+    }
+  }
 }
 
 function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): BitmapResource {
@@ -407,6 +664,13 @@ function buildBitmapBatches(
   }
   finishRun()
 
+  const presentation: PresentableBitmapBatch = {
+    layout,
+    runs,
+    revision: 0,
+    disposed: false,
+  }
+  presentableBatchByObject.set(group, presentation)
   let disposed = false
   return {
     object: group,
@@ -421,6 +685,9 @@ function buildBitmapBatches(
     dispose() {
       if (disposed) return
       disposed = true
+      presentation.disposed = true
+      presentation.revision += 1
+      presentableBatchByObject.delete(group)
       group.clear()
       for (const run of runs) run.geometry.dispose()
     },
@@ -494,7 +761,8 @@ function createBitmapRun(
 
   const geometry = unitQuadGeometry()
   geometry.instanceCount = count
-  geometry.setAttribute('bitmapOrigin', new THREE.InstancedBufferAttribute(origins, 2))
+  const originAttribute = new THREE.InstancedBufferAttribute(origins, 2)
+  geometry.setAttribute('bitmapOrigin', originAttribute)
   geometry.setAttribute('bitmapSize', new THREE.InstancedBufferAttribute(sizes, 2))
   geometry.setAttribute('bitmapUvOrigin', new THREE.InstancedBufferAttribute(uvOrigins, 2))
   geometry.setAttribute('bitmapUvSize', new THREE.InstancedBufferAttribute(uvSizes, 2))
@@ -504,7 +772,13 @@ function createBitmapRun(
   const mesh = new THREE.Mesh(geometry, material)
   mesh.frustumCulled = false
   mesh.renderOrder = glyphIndices[0] ?? 0
-  return { glyphIndices: Uint32Array.from(glyphIndices), colorAttribute, geometry, mesh }
+  return {
+    glyphIndices: Uint32Array.from(glyphIndices),
+    originAttribute,
+    colorAttribute,
+    geometry,
+    mesh,
+  }
 }
 
 function unitQuadGeometry(): THREE.InstancedBufferGeometry {
