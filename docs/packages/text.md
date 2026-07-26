@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:ba06778432559e47adee28299052123c067cea939e8d898cc3b557f00a17bd02"
+source_digest: "sha256:ccbf7bd447d292c413fa33afcbc8c333b2f2a4a85079e7a13a999741ae906d6f"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:50:00Z"
+  at: "2026-07-26T04:05:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -82,7 +82,7 @@ The internal generic composer authenticates every returned artifact, checks reci
 
 The Node-only `@pmndrs/text/bake` subpath closes roadmap item 2.4 around the item-2.1 TypeScript 7 AST/symbol discovery engine. `bakeFont` handles an explicit filesystem input/output pair and retains each selected raster package's exact option type. `bakeProject` finds composed tokens and statically visible core/React raw forms across TypeScript, TSX, JavaScript, and JSX; reduces immutable font/raster expressions; maps URL pathnames into canonical asset roots; groups identical sources; and dynamically imports only the exact verified raster-package ESM entry. It never executes application modules. One internal compiler adapter owns every unstable TypeScript import, project snapshot, symbol handle, alias, and declaration-resolution operation; an exact-version assertion and source-boundary test make compiler upgrades explicit.
 
-The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The host writes exclusive same-directory temporary files, backs up existing regular-file targets, publishes only after every artifact is staged, and restores all earlier targets if a later rename fails; process termination during the multi-file swap is not claimed as a filesystem transaction. It rejects input/output overlap and unsafe package-owned filenames and cleans temporary or backup files after success, cancellation, and ordinary failure. Discovery reports are sorted by source file and lexical AST offset after concurrent analysis. Its report adds phase/total timing, before/after RSS, explicitly process-lifetime peak RSS, output paths and hashes, and raw/gzip/Brotli transport sizes to the authoritative core/raster/container byte report.[^node-host]
+The native-ESM `pmndrs-text-bake` command is a thin `bakeProject` adapter. The host writes exclusive same-directory temporary files, backs up existing regular-file targets, publishes only after every artifact is staged, and restores all earlier targets if a later rename fails; process termination during the multi-file swap is not claimed as a filesystem transaction. It rejects lexical and filesystem-identity input/output overlap, non-regular existing targets, and unsafe package-owned filenames, then cleans temporary or backup files after success, cancellation, and ordinary failure. Its plugin type guard proves each required property with `in` checks before reading it rather than asserting a partial module shape. Discovery reports are sorted by source file and lexical AST offset after concurrent analysis. Its report adds phase/total timing, before/after RSS, explicitly process-lifetime peak RSS, output paths and hashes, and raw/gzip/Brotli transport sizes to the authoritative core/raster/container byte report.[^node-host]
 
 The public `FontLoader` and `FontRegistry` close item 3.1. They normalize every accepted input form into deterministic source/baked URLs, deduplicate request promises and validated shaping identities, and run the same hostile-input validator before registration. The large pinned Khronos/Ajv validation graph is cached behind a separate dynamic import: package import stays small, while the first actual registration still validates before publishing anything. Registration owns the bytes and retains the extracted reduced SFNT, glyph extents/availability, metrics, Unicode/source provenance, source candidates, and opaque raster directory required by later stages. Exact Inter fixtures compare those retained shaping views byte-for-byte with independent GLB validation. Embedded and external raster delivery variants merge by raster identity; companion attachment authenticates generic framing, ranges, reciprocal identity, and hashes before package-owned decoding. Streaming limits precede allocation, lifecycle handles are registry-scoped and invalidated on disposal, and a deterministic loader mutation corpus is part of the ordinary fuzz smoke.[^loader]
 

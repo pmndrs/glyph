@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { link, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -121,7 +121,10 @@ test('rolls back every earlier artifact when a later publication fails', async (
     }
   }
 
-  await assert.rejects(bakeFont({ ...bakeOptions, output }))
+  await assert.rejects(
+    bakeFont({ ...bakeOptions, output }),
+    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_TARGET_TYPE',
+  )
   for (const [file, bytes] of previous) assert.deepEqual(await readFile(file), bytes)
   assert.equal(
     await readFile(join(join(dirname(output), basename(failedTarget.file)), 'keep.txt'), 'utf8'),
@@ -222,6 +225,12 @@ test('pre-cancellation and source/output overlap fail before filesystem mutation
   await writeFile(input, await readFile(fontUrl))
   await assert.rejects(
     bakeFont({ input, output: input, font: { fontFaceIndex: 0 } }),
+    (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_OVERLAPS_INPUT',
+  )
+  const aliasedOutput = join(root, 'font.font.glb')
+  await link(input, aliasedOutput)
+  await assert.rejects(
+    bakeFont({ input, output: aliasedOutput, font: { fontFaceIndex: 0 } }),
     (error) => error instanceof NodeBakeError && error.code === 'OUTPUT_OVERLAPS_INPUT',
   )
 

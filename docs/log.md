@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Filesystem safety** — Detect output aliases by device/inode before reading or baking, reject directories and other non-regular targets with structured errors, and narrow raster plugins through property-proving `in` checks instead of a cast.
 - **Correctness** — Stopped treating a standalone OpenType `STAT` table as proof of a variable font. Static fonts carrying style attributes now bake normally; actual axis/delta tables remain rejected and named regressions prove both branches.
 - **Benchmark correctness** — Passed real sample indexes to targets, rejected invalid run counts before loading, removed the unreachable failed-summary state, and made every successful result self-describing with `schemaVersion` and `controls`; Chromium verifies the emitted envelope and stable synthetic output.
 - **Worker lifecycle** — Replaced implicit concurrent posts with one explicit FIFO bake, job-local queued cancellation, active-cancellation Worker replacement, and entry-side serialization. Two authenticated live Chromium observations show that sharing one initialized Worker within a three-font burst also beats three sequential Worker initializations, while a multi-Worker pool remains evidence-gated.

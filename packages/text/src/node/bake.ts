@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { lstat, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -142,13 +142,7 @@ async function bakeFontWithResolvedPlans(
   options.signal?.throwIfAborted()
   const input = filePath(options.input, 'input')
   const output = filePath(options.output, 'output')
-  if (resolve(input) === resolve(output)) {
-    throw new NodeBakeError(
-      'OUTPUT_OVERLAPS_INPUT',
-      'font output must not overwrite its source',
-      output,
-    )
-  }
+  await assertDistinctInputOutput(input, output)
 
   let phase = performance.now()
   const source = new Uint8Array(await readFile(input))
@@ -353,13 +347,17 @@ async function loadProjectPlans(
 
 function isRasterBaker(value: unknown): value is AnyRasterBakerModule {
   if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Partial<AnyRasterBakerModule>
   return (
-    typeof candidate.kind === 'string' &&
-    typeof candidate.extension === 'string' &&
-    Number.isSafeInteger(candidate.version) &&
-    typeof candidate.descriptor === 'function' &&
-    typeof candidate.bake === 'function'
+    'kind' in value &&
+    typeof value.kind === 'string' &&
+    'extension' in value &&
+    typeof value.extension === 'string' &&
+    'version' in value &&
+    Number.isSafeInteger(value.version) &&
+    'descriptor' in value &&
+    typeof value.descriptor === 'function' &&
+    'bake' in value &&
+    typeof value.bake === 'function'
   )
 }
 
@@ -481,7 +479,6 @@ async function publishArtifactsWithRollback(
 async function preservePreviousTarget(entry: StagedArtifactOutput): Promise<void> {
   try {
     const previous = await lstat(entry.target)
-    if (previous.isDirectory()) return
     if (!previous.isFile()) {
       throw new NodeBakeError(
         'OUTPUT_TARGET_TYPE',
@@ -498,6 +495,38 @@ async function preservePreviousTarget(entry: StagedArtifactOutput): Promise<void
   } catch (error) {
     if (isMissing(error)) return
     throw error
+  }
+}
+
+async function assertDistinctInputOutput(input: string, output: string): Promise<void> {
+  if (resolve(input) === resolve(output)) {
+    throw new NodeBakeError(
+      'OUTPUT_OVERLAPS_INPUT',
+      'font output must not overwrite its source',
+      output,
+    )
+  }
+  const inputIdentity = await stat(input)
+  let outputIdentity
+  try {
+    outputIdentity = await stat(output)
+  } catch (error) {
+    if (isMissing(error)) return
+    throw error
+  }
+  if (inputIdentity.dev === outputIdentity.dev && inputIdentity.ino === outputIdentity.ino) {
+    throw new NodeBakeError(
+      'OUTPUT_OVERLAPS_INPUT',
+      'font output must not alias its source',
+      output,
+    )
+  }
+  if (!outputIdentity.isFile()) {
+    throw new NodeBakeError(
+      'OUTPUT_TARGET_TYPE',
+      'existing artifact output must be a regular file',
+      output,
+    )
   }
 }
 
