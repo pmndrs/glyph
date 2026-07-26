@@ -15,8 +15,8 @@ sources:
     title: "Raster data contract"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-26T20:08:45Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -45,7 +45,7 @@ The records are two-byte-aligned CPU-side typed-array inputs for bulk instance g
 
 The extension repeats the deterministic `rasterKey` and core shaping identity declared by its `PMNDRS_font` directory entry. Those values MUST match before upload.
 
-Lossless RGBA8 is the V0 baseline. One atlas and one batch support sharp fill edges from RGB and true-distance effects from alpha. UASTC or native BC7, ETC2, and ASTC variants are quality-gated because channel error changes reconstructed edges.
+Lossless linear RGBA8 is the only V0 schema-admitted texture representation. One atlas and one batch support sharp fill edges from RGB and true-distance effects from alpha. UASTC or native BC7, ETC2, and ASTC variants remain future quality-gated research because channel error changes reconstructed edges.
 
 ## glTF Schema Updates
 

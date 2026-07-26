@@ -18,8 +18,8 @@ sources:
     title: "GPU compression design"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-26T20:08:45Z"
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->
@@ -50,7 +50,7 @@ The dense glyph-record buffer view is four-byte aligned because its 40-byte reco
 
 The header encoding is `(curveCount << 16) | referenceOffset`. References are u16 texel offsets relative to the glyph's curve-base texel. Pages never split glyphs, and any u16 capacity overflow rejects the bake rather than truncating.
 
-Curve half-float bits may use lossless KTX2 supercompression. Lossy block-compressed curves are not part of V0. Headers and references are exact integer data and MUST NOT use lossy compression.
+Curve pages are lossless linear RGBA16F KTX2 resources. Lossy block-compressed curves are not part of V0. Headers and references are exact integer data and MUST NOT use lossy compression.
 
 ## glTF Schema Updates
 
