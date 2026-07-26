@@ -9,7 +9,7 @@
     "docs:check": "ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .",
     "format:check": "pnpm --filter './apps/*' --if-present format:check",
     "lint": "pnpm --filter './apps/*' --if-present lint",
-    "typecheck": "pnpm --filter './packages/*' typecheck && pnpm --filter './apps/*' typecheck",
+    "typecheck": "pnpm --filter './packages/*' build && pnpm --filter './packages/*' typecheck && pnpm --filter './apps/*' typecheck",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",
     "benchmarks": "pnpm --filter @pmndrs/text-benchmarks dev",
     "test:types": "pnpm --filter @pmndrs/text test:types"
