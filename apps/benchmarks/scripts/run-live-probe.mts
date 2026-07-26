@@ -33,6 +33,7 @@ async function runProbe(path: string, humanSurface = false): Promise<void> {
 }
 
 await runProbe('./vitexec/harness.probe.ts', true)
+await runProbe('./vitexec/advanced-shaping-performance.probe.ts', true)
 
 for (const probe of [
   './vitexec/tsl-renderer.probe.ts',

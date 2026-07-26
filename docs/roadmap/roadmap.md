@@ -107,7 +107,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 6.3  |   🟡   | Implement `@pmndrs/text/react` as a thin reconciliation layer.                                                                                                                           |  M   | 6.2        |
 | 6.4  |   🟡   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                   |  M   | 6.1–6.3    |
 | 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
-| 7.2  |   🟡   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
+| 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
 | 8.x  |   ⬜   | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work.                                                                                                            |  XL  | 7.2        |
 | 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
 | 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.x, 9.x   |
@@ -540,14 +540,14 @@ Milestone 7 authorizes implementation of the release rasters; it does not author
 - [x] Compile every canonical extension draft with shared references; validate complete core/bitmap artifacts and positive plus field-level MTSDF/Slug contract specimens.
 - [x] Capture a freshness-checked autoresearch baseline with campaigns explicitly disabled and guarded from accidental execution.
 
-### 7.2 progress checklist
+### 7.2 closure checklist
 
 - [x] Define the Latin feature/mark, Arabic joining, Indic reordering, mixed-bidi, and CJK line-break lanes as one immutable discriminated corpus with deterministic integer seek, step, and playback state.
 - [x] Pin licensed static Devanagari and bounded Japanese showcase fonts, retain Amiri and Inter, and regenerate byte-authenticated 16 ppem bitmap artifacts through the public Node host and package-owned bitmap baker.
 - [x] Bind the shared definitions to editable/typewriter playback, pause, step, scrub, authored-width reflow, and causal settled-state signals in the real public `Text` rendering path.
 - [x] Add continuous authored-width playback and discrete authoritative layout transitions with presentation-only glyph-position interpolation and bitmap pixel snapping.
 - [x] Reuse the exact showcase definitions through headless conformance and the admitted Vitexec product probe, then record reviewed exact conformance evidence.
-- [ ] Record a separate environment-labeled live performance observation; conformance execution duration must not be presented as renderer cost.
+- [x] Record a separate environment-labeled live performance observation; conformance execution duration is never presented as renderer cost.
 
 ## Milestone 8 — MSDF release raster
 

@@ -58,6 +58,12 @@
       "path": "apps/benchmarks/fixtures/results/advanced-shaping-conformance-chromium149.json",
       "sha256": "b0735babeddd13365ee7e9cedb93cb518c4288b954a8e17e6ff2f75f0d924f30",
       "bytes": 1899
+    },
+    {
+      "id": "advanced-shaping-performance",
+      "path": "apps/benchmarks/fixtures/results/advanced-shaping-performance-chromium149.json",
+      "sha256": "fa4de867f5dec2b85712636147047f08b4c4c7501d7ed118a44d0217f9f5ef3d",
+      "bytes": 3590
     }
   ]
 }

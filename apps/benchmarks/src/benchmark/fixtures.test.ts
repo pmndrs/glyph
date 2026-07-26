@@ -245,6 +245,43 @@ describe('advanced-shaping result', () => {
   })
 })
 
+describe('advanced-shaping performance observation', () => {
+  it('labels the environment and retains consumer costs for every showcase lane', async () => {
+    const result = JSON.parse(
+      await readFile(
+        new URL('results/advanced-shaping-performance-chromium149.json', fixtureRoot),
+        'utf8',
+      ),
+    )
+    expect(result).toMatchObject({
+      schemaVersion: 0,
+      kind: 'live-performance-observation',
+      backend: 'webgpu',
+      dpr: 1,
+      steadyStateReportCount: 12,
+      environment: { hardwareConcurrency: 10, webgpu: true },
+      gpuAdapter: { architecture: 'metal-3', vendor: 'apple' },
+    })
+    expect(result.cases.map(({ id }: { id: string }) => id)).toEqual([
+      'latin-features',
+      'arabic-joining',
+      'indic-reordering',
+      'mixed-bidi',
+      'cjk-line-breaks',
+    ])
+    expect(
+      result.cases.every((entry: Record<string, unknown>) =>
+        Object.entries(entry).every(
+          ([name, value]) =>
+            name === 'id' ||
+            name === 'fontFixture' ||
+            (typeof value === 'number' && Number.isFinite(value) && value >= 0),
+        ),
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('canonical Amiri fixtures', () => {
   it('binds font, metadata, and license bytes to the immutable import', async () => {
     const directory = new URL('fonts/amiri-1.002/', fixtureRoot)
