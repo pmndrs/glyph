@@ -23,7 +23,11 @@ import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
 import type { BenchmarkTarget } from './contracts'
 import { exactValue as exactJsonValue } from './exact-value'
-import { hashParagraphLayout, hashParagraphLayouts } from './paragraph-layout-digest'
+import {
+  hashParagraphLayout,
+  hashParagraphLayouts,
+  paragraphLayoutBytes,
+} from './paragraph-layout-digest'
 import {
   assertShapingFixture,
   hashShapedFixture,
@@ -396,7 +400,8 @@ const paragraphLayoutTarget: BenchmarkTarget = {
     exactParagraphLayout('wide', wide, paragraphLayoutGolden.wide, paragraphFont.handle)
     exactParagraphLayout('narrow', narrow, paragraphLayoutGolden.narrow, paragraphFont.handle)
     return {
-      bytes: layoutBytes(natural) + layoutBytes(wide) + layoutBytes(narrow),
+      bytes:
+        paragraphLayoutBytes(natural) + paragraphLayoutBytes(wide) + paragraphLayoutBytes(narrow),
       hash: hashParagraphLayouts([natural, wide, narrow]),
       metrics: {
         batchedBoundaryLayouts: 2,
@@ -634,7 +639,7 @@ const paragraphPolicyTarget: BenchmarkTarget = {
 
     return {
       bytes:
-        layouts.reduce((sum, layout) => sum + layoutBytes(layout), 0) +
+        layouts.reduce((sum, layout) => sum + paragraphLayoutBytes(layout), 0) +
         resolved.centeredX.byteLength +
         resolved.centeredY.byteLength,
       hash: hashParagraphLayouts(layouts),
@@ -737,29 +742,6 @@ function exactObject(
   if (!exactJsonValue(actual, expected)) {
     throw new Error(`${label} differs`)
   }
-}
-
-function layoutArrays(layout: ParagraphLayout): readonly ArrayBufferView[] {
-  return [
-    layout.fontHandles,
-    layout.glyphFontSlots,
-    layout.glyphIds,
-    layout.clusters,
-    layout.glyphFontSizes,
-    layout.x,
-    layout.y,
-    layout.glyphFlags,
-    layout.lineTextStarts,
-    layout.lineTextEnds,
-    layout.lineGlyphStarts,
-    layout.lineGlyphCounts,
-    layout.lineBaselines,
-    layout.lineAdvances,
-  ]
-}
-
-function layoutBytes(layout: ParagraphLayout): number {
-  return layoutArrays(layout).reduce((sum, values) => sum + values.byteLength, 0)
 }
 
 function exactMeasurement(
@@ -910,6 +892,40 @@ function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   }
 }
 
+function advancedShapingConformanceTarget(): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  return {
+    id: 'advanced-shaping-conformance',
+    label: 'Advanced shaping conformance',
+    detail: 'five scripts · every authored frame · public Text bitmap batches',
+    color: 'violet',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (
+        await import('../renderer/advanced-shaping-conformance')
+      ).createAdvancedShapingConformanceTarget()
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('advanced-shaping target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
 function reactTextTarget(): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined
   return {
@@ -946,6 +962,7 @@ export const targets: readonly BenchmarkTarget[] = [
   paragraphLayoutTarget,
   paragraphPolicyTarget,
   cjkUniversalityTarget,
+  advancedShapingConformanceTarget(),
   bitmapTextTarget('webgl2'),
   bitmapTextTarget('webgpu'),
   reactTextTarget(),

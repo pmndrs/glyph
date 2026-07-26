@@ -29,6 +29,10 @@ const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'paragraph-layout-engine', scenarioId: 'paragraph-layout' },
   { targetId: 'paragraph-bidi-policy', scenarioId: 'paragraph-bidi-policy' },
   { targetId: 'cjk-universality', scenarioId: 'cjk-universality' },
+  {
+    targetId: 'advanced-shaping-conformance',
+    scenarioId: 'advanced-shaping-conformance',
+  },
 ]
 
 const readinessTimeoutMs = 30_000

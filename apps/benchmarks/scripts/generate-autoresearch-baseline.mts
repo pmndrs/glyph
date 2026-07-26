@@ -20,6 +20,10 @@ const evidenceFiles = [
   ['paragraph-layout', 'apps/benchmarks/fixtures/results/paragraph-layout-chromium149.json'],
   ['paragraph-bidi', 'apps/benchmarks/fixtures/results/paragraph-bidi-policy-chromium149.json'],
   ['cjk-universality', 'apps/benchmarks/fixtures/results/cjk-universality-chromium149.json'],
+  [
+    'advanced-shaping-conformance',
+    'apps/benchmarks/fixtures/results/advanced-shaping-conformance-chromium149.json',
+  ],
 ] as const
 
 const [workspaceManifest, nodeVersion, rustToolchain] = await Promise.all([

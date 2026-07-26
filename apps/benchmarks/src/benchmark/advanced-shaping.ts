@@ -224,6 +224,20 @@ export function advancedShapingCase(id: AdvancedShapingCaseId): AdvancedShapingC
   return definition
 }
 
+/** Derive the complete finite conformance matrix from the authored product corpus. */
+export function advancedShapingFrames(): readonly AdvancedShapingFrame[] {
+  return ADVANCED_SHAPING_CASES.flatMap((definition) =>
+    Array.from({ length: definition.revealUnits.length + 1 }, (_, tick) =>
+      advancedShapingFrame({
+        caseId: definition.id,
+        playing: false,
+        tick,
+        editedText: undefined,
+      }),
+    ),
+  )
+}
+
 function clampTick(value: number, tickCount: number): number {
   if (!Number.isSafeInteger(value)) throw new TypeError('advanced-shaping tick must be an integer')
   return Math.max(0, Math.min(value, tickCount))
