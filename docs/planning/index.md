@@ -41,4 +41,5 @@
 ## Governance
 
 - [Decision register](decision-register.md) — architectural decision status.
+- [Architecture decision records](decisions/0001-package-runtime-boundaries.md) — accepted rationale grouped by package/runtime, shaping/identity, raster/container, and verification/optimization boundaries.
 - [Open questions](open-questions.md) — unresolved decisions and required experiments.

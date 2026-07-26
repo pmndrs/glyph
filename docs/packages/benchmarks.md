@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:81b584d2e7cffdba90bdb0f7502a1d73735d5e283695cd0f6346d7b9daf2c24a"
+source_digest: "sha256:b99586942e828e2fed69ea05c3bbddc9601f0a13e685ec7992f0a71c92667f2a"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:51:43Z"
+  at: "2026-07-26T20:04:16Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -80,6 +80,8 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `test:live` | Run the explicit maintainer-local Vitexec and Playwright product probes. |
 | `admit:live` | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record. |
 | `capture:browser-reference` | Regenerate the pinned Chromium HTML/CSS reference and metadata. |
+| `generate:autoresearch-baseline` | Hash the accepted Milestone 7 evidence into the disabled V0 autoresearch baseline. |
+| `check:autoresearch-baseline` | Recompute the baseline without writing and reject evidence or toolchain drift. |
 | `generate:harfbuzz-oracle` | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable. |
 | `provision:harfbuzz` | Authenticate and build exact HarfBuzz 13.0.0 into the app-local ignored cache; `--check` never downloads. |
 | `sync:amiri-fixture` | Fetch the immutable Amiri font/metadata/license or verify checked-in bytes with `--check`. |
@@ -90,6 +92,8 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `check:paragraph-cjk-contract` | Recompute CJK semantics without writing and fail if any checked-in value is stale. |
 
 The size lane is also a package-graph gate. Its consumer builds inspect emitted module membership rather than relying only on source text or byte totals: the browser-core entry must retain runtime baking as a dynamic chunk while excluding React, bitmap rendering, Node hosts, the Worker, the validator implementation, and portable-baker hosts from its initial graph. The lightweight shared version contract remains intentionally present. These assertions run for both readable and minified builds before size evidence is accepted.
+
+The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, and CJK records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 0,
+  "baseCommit": "0e9610aaca9777156fa81fcc3659d4e31603f555",
+  "campaign": {
+    "state": "disabled",
+    "reason": "Optimization campaigns remain disabled until the release raster baselines are accepted."
+  },
+  "environment": {
+    "node": "24.18.0",
+    "pnpm": "11.15.1",
+    "rust": "1.97.1"
+  },
+  "evidence": [
+    {
+      "id": "package-sizes",
+      "path": "apps/benchmarks/src/generated/package-sizes.json",
+      "sha256": "b5ff7f8c5ec0524592c4a5ceda1c0a2793277ec54d1f169b3ee130ad3bf2f48c",
+      "bytes": 2368
+    },
+    {
+      "id": "harness-admission",
+      "path": "apps/benchmarks/fixtures/admission/harness-v0.json",
+      "sha256": "1ce7f031bd0ae0a40f24aec7415b99ddd70c419b7f946e0463943d912713ca7c",
+      "bytes": 4619
+    },
+    {
+      "id": "shaping-conformance",
+      "path": "apps/benchmarks/fixtures/results/shaping-conformance-chromium149.json",
+      "sha256": "5a054ed5a634140a12ed65b0414ed27d7e5724a85118dc44b8da7426ac054472",
+      "bytes": 2021
+    },
+    {
+      "id": "paragraph-layout",
+      "path": "apps/benchmarks/fixtures/results/paragraph-layout-chromium149.json",
+      "sha256": "6c20dc7c8fa55c960187993c2f65867f904fb66ba875305729909cff88e92e87",
+      "bytes": 1670
+    },
+    {
+      "id": "paragraph-bidi",
+      "path": "apps/benchmarks/fixtures/results/paragraph-bidi-policy-chromium149.json",
+      "sha256": "e22e81976711a1bf799207ebbc97f1227dd653d9ad8e5c6d89bb935c073bf08b",
+      "bytes": 2030
+    },
+    {
+      "id": "cjk-universality",
+      "path": "apps/benchmarks/fixtures/results/cjk-universality-chromium149.json",
+      "sha256": "29def72d28b4b946bac845b1beeebb34c805545d80c83c53100444ac3d594058",
+      "bytes": 3577
+    }
+  ]
+}

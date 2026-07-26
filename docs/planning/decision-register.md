@@ -13,14 +13,19 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:27:32Z"
+  at: "2026-07-26T20:04:16Z"
 ---
 
 # Decision register
 
 Status: mixed; accepted choices and remaining proposals are recorded per row
 
-This register records choices, not their full rationale. The linked API, architecture, data contracts, roadmap, and research are authoritative for detail. Accepted choices receive an ADR with the exact decision, alternatives, consequences, and date.
+This register records choices, not their full rationale. The linked API, architecture, data contracts, roadmap, and research are authoritative for detail. Accepted choices are grouped into four durable records with the exact decision, alternatives, consequences, and date:
+
+- [package and runtime boundaries](decisions/0001-package-runtime-boundaries.md);
+- [universal shaping and font identity](decisions/0002-shaping-and-font-identity.md);
+- [raster and container contracts](decisions/0003-raster-and-container-contracts.md);
+- [verification and optimization policy](decisions/0004-verification-and-optimization.md).
 
 Status vocabulary: **Proposed**, **Experiment**, **Deferred**, **Settled for V0**, **Accepted**.
 
