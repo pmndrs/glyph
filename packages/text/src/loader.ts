@@ -210,7 +210,6 @@ export class FontRegistry {
     });
     const rasterSources = new Map<string, RegisteredRasterSourceData>();
     setRegisteredFontData(font, {
-      artifactBytes: owned,
       sourceHash,
       ...(context.sourceBytes === undefined ? {} : { sourceBytes: context.sourceBytes.slice() }),
       sourceCandidates:

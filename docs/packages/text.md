@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:6fd8271f2ba7c73e4f0673e39a58af23024169ea6c8122188adb5edc172f4801"
+source_digest: "sha256:322c42acc620373ede6a9fd3400e4d5ab57778200804862c084c0ad29fcf4bd7"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -61,7 +61,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:51:40Z"
+  at: "2026-07-26T03:54:29Z"
 ---
 
 # Package reference: `@pmndrs/text`
