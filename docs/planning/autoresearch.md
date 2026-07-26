@@ -4,13 +4,13 @@ title: Autoresearch optimization protocol
 description: Governs evidence-based optimization experiments that cannot trade away rendering quality or text correctness.
 tags: [optimization, benchmarks, quality]
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-26T20:04:16Z"
 ---
 
 # Autoresearch optimization protocol
 
-Status: proposed  
+Status: active; optimization campaigns disabled
 Purpose: allow an optimization agent to search for and preserve proven performance improvements without degrading rendering quality, text correctness, compatibility, or maintainability.
 
 ## Mandate
@@ -88,7 +88,7 @@ metrics:
   - gpu_memory_bytes
 ```
 
-The exact schema will be implemented with the benchmark harness. The important constraint is that the agent cannot redefine the target, workloads, or acceptance rule after observing the result.
+The benchmark package owns a versioned JSON Schema, an exact TypeScript boundary validator, a freshness-checked baseline generator, and a checked-in baseline rooted at commit `0e9610aaca9777156fa81fcc3659d4e31603f555`. Its campaign state is explicitly `disabled`; ordinary tests prove an enabled shape cannot pass the fail-closed campaign guard. The baseline authenticates the canonical package-size, harness-admission, shaping, paragraph, bidi, and CJK evidence together with the exact Node, pnpm, and stable Rust pins. An experiment manifest cannot redefine its target, workloads, or acceptance rule after observing a result.
 
 ## Optimization loop
 

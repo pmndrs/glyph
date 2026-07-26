@@ -535,7 +535,9 @@ Milestone 7 authorizes implementation of the release rasters; it does not author
 - [x] Inspect real consumer-bundler module graphs so runtime baking remains dynamic and React, raster, Node, validator, Worker, and Wasm host implementations stay outside the browser-core entry.
 - [x] Pack the package, import every JavaScript and resource export from the tarball, confirm the emitted module-Worker boundary, and reject CommonJS loading.
 - [ ] Execute the CLI and runtime fallback from packed-package consumers, including a real browser module Worker.
-- [ ] Record accepted architecture decisions, validate every implemented extension schema, and capture the disabled autoresearch baseline.
+- [x] Record accepted architecture decisions in linked ADRs without duplicating status ownership from the decision register.
+- [ ] Validate every implemented extension schema from its canonical draft and update the extension index.
+- [x] Capture a freshness-checked autoresearch baseline with campaigns explicitly disabled and guarded from accidental execution.
 
 ## Milestone 8 — MSDF release raster
 
