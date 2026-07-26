@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:d83350e55f9fe9643811487062025fbf620f9d36456cbbaa96ae49ed29710a29"
+source_digest: "sha256:2d8acbdb20c45ce1b1616e0ef99b61b1c612f856760fcd3066f8166c30127643"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:15:04Z"
+  at: "2026-07-26T20:20:41Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -81,6 +81,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `test:live` | Run the explicit maintainer-local Vitexec and Playwright product probes. |
 | `admit:live` | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record. |
 | `capture:browser-reference` | Regenerate the pinned Chromium HTML/CSS reference and metadata. |
+| `capture:bake-host-baseline` | Capture three isolated offline and browser-Worker cold/warm bake samples with complete artifact parity. |
 | `generate:autoresearch-baseline` | Hash the accepted Milestone 7 evidence into the disabled V0 autoresearch baseline. |
 | `check:autoresearch-baseline` | Recompute the baseline without writing and reject evidence or toolchain drift. |
 | `generate:harfbuzz-oracle` | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable. |
@@ -97,6 +98,8 @@ The size lane is also a package-graph gate. Its consumer builds inspect emitted 
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, and CJK records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
 The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/text/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,140-byte artifact and SHA-256 `296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
+
+The bake-host report separates the consumer phases without timing conformance work. Each offline sample creates a fresh Wasm baker and records initialization plus first bake as cold, then records a second bake on that instance as warm. Each isolated Chromium context queues two requests onto one Worker: first completion contains Worker/Wasm startup plus its bake, while the interval to second completion is the warm reused-instance bake. Three captured arm64/Chromium 149 samples preserve complete artifact parity; medians were 4.16 ms cold / 2.94 ms warm offline and 21.70 ms cold / 3.50 ms warm in the Worker. These are observations, not cross-host thresholds.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 

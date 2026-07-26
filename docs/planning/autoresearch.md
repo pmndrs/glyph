@@ -5,7 +5,7 @@ description: Governs evidence-based optimization experiments that cannot trade a
 tags: [optimization, benchmarks, quality]
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:04:16Z"
+  at: "2026-07-26T20:20:41Z"
 ---
 
 # Autoresearch optimization protocol
@@ -88,7 +88,7 @@ metrics:
   - gpu_memory_bytes
 ```
 
-The benchmark package owns a versioned JSON Schema, an exact TypeScript boundary validator, a freshness-checked baseline generator, and a checked-in baseline rooted at commit `0e9610aaca9777156fa81fcc3659d4e31603f555`. Its campaign state is explicitly `disabled`; ordinary tests prove an enabled shape cannot pass the fail-closed campaign guard. The baseline authenticates the canonical package-size, harness-admission, shaping, paragraph, bidi, and CJK evidence together with the exact Node, pnpm, and stable Rust pins. An experiment manifest cannot redefine its target, workloads, or acceptance rule after observing a result.
+The benchmark package owns a versioned JSON Schema, an exact TypeScript boundary validator, a freshness-checked baseline generator, and a checked-in baseline rooted at commit `0e9610aaca9777156fa81fcc3659d4e31603f555`. Its campaign state is explicitly `disabled`; ordinary tests prove an enabled shape cannot pass the fail-closed campaign guard. The baseline authenticates the canonical package-size, harness-admission, offline/Worker cold-warm bake, shaping, paragraph, bidi, and CJK evidence together with the exact Node, pnpm, and stable Rust pins. An experiment manifest cannot redefine its target, workloads, or acceptance rule after observing a result.
 
 ## Optimization loop
 

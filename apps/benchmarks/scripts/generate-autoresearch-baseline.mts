@@ -15,6 +15,7 @@ const baseCommit = '0e9610aaca9777156fa81fcc3659d4e31603f555'
 const evidenceFiles = [
   ['package-sizes', 'apps/benchmarks/src/generated/package-sizes.json'],
   ['harness-admission', 'apps/benchmarks/fixtures/admission/harness-v0.json'],
+  ['bake-host-cold-warm', 'apps/benchmarks/fixtures/results/bake-host-baseline-v0.json'],
   ['shaping-conformance', 'apps/benchmarks/fixtures/results/shaping-conformance-chromium149.json'],
   ['paragraph-layout', 'apps/benchmarks/fixtures/results/paragraph-layout-chromium149.json'],
   ['paragraph-bidi', 'apps/benchmarks/fixtures/results/paragraph-bidi-policy-chromium149.json'],

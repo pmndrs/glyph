@@ -46,7 +46,7 @@ try {
       `import { bakeFontInWorker } from '@pmndrs/text/runtime-bake'
 try {
   const source = new Uint8Array(await (await fetch('/Inter-Regular.ttf')).arrayBuffer())
-  const artifact = await bakeFontInWorker({ source })
+  const artifact = await bakeFontInWorker({ source, sourceUrl: location.href })
   const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', artifact))]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')
