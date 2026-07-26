@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { createServer, type ViteDevServer } from 'vite'
 
 interface Arguments {
   readonly cases: readonly BenchmarkCase[]
@@ -72,33 +72,6 @@ function parseArguments(values: readonly string[]): Arguments {
 
 const options = parseArguments(process.argv.slice(2))
 const root = fileURLToPath(new URL('..', import.meta.url))
-const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url))
-const server = spawn(
-  vite,
-  ['--host', '127.0.0.1', '--port', String(options.port), '--strictPort'],
-  {
-    cwd: root,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  },
-)
-
-let output = ''
-const ready = new Promise<void>((resolve, reject) => {
-  server.once('error', reject)
-  server.once('exit', (code) =>
-    reject(
-      new Error(
-        `Vite exited before readiness (${String(code)})${output.length === 0 ? '' : `\n${output}`}`,
-      ),
-    ),
-  )
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.on('data', (chunk: Buffer) => {
-      output += chunk.toString()
-      if (output.includes('Local:')) resolve()
-    })
-  }
-})
 
 function reportStage(message: string): void {
   process.stderr.write(`[headless] ${message}\n`)
@@ -117,10 +90,15 @@ async function withinDeadline<T>(label: string, timeoutMs: number, task: Promise
 }
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+let server: ViteDevServer | undefined
 
 try {
   reportStage('waiting for Vite')
-  await withinDeadline('Vite readiness', readinessTimeoutMs, ready)
+  server = await createServer({
+    root,
+    server: { host: '127.0.0.1', port: options.port, strictPort: true },
+  })
+  await withinDeadline('Vite readiness', readinessTimeoutMs, server.listen())
   reportStage('launching Chromium')
   browser = await withinDeadline(
     'Chromium launch',
@@ -181,5 +159,5 @@ try {
   else await writeFile(options.output, serialized)
 } finally {
   if (browser !== undefined) await browser.close()
-  server.kill('SIGTERM')
+  if (server !== undefined) await server.close()
 }
