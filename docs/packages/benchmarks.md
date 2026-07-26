@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:b99586942e828e2fed69ea05c3bbddc9601f0a13e685ec7992f0a71c92667f2a"
+source_digest: "sha256:d83350e55f9fe9643811487062025fbf620f9d36456cbbaa96ae49ed29710a29"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:04:16Z"
+  at: "2026-07-26T20:15:04Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -73,6 +73,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `test` | Run deterministic Vitest suites and the shared-registry browser smoke test. |
 | `test:unit` | Run deterministic Vitest suites without starting a browser. |
 | `test:headless` | Run synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, bidi/policy/uikit, and CJK scenarios through one bounded browser conformance session. |
+| `test:packed` | Pack both runtime packages, install only their tarballs in an isolated Vite consumer, and prove the module Worker returns the canonical artifact in Chromium. |
 | `lint` | Run Oxlint with warnings denied. |
 | `format:check` | Verify Oxfmt output. |
 | `size` | Produce deterministic independent package-size JSON for the report UI. |
@@ -94,6 +95,8 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 The size lane is also a package-graph gate. Its consumer builds inspect emitted module membership rather than relying only on source text or byte totals: the browser-core entry must retain runtime baking as a dynamic chunk while excluding React, bitmap rendering, Node hosts, the Worker, the validator implementation, and portable-baker hosts from its initial graph. The lightweight shared version contract remains intentionally present. These assertions run for both readable and minified builds before size evidence is accepted.
 
 The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, and CJK records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
+
+The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/text/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,140-byte artifact and SHA-256 `296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
 
 The [benchmark plan](../planning/benchmark-plan.md) owns target admission, correctness-before-timing, and product-E2E requirements.[^benchmark-plan]
 
