@@ -546,7 +546,8 @@ Milestone 7 authorizes implementation of the release rasters; it does not author
 - [x] Pin licensed static Devanagari and bounded Japanese showcase fonts, retain Amiri and Inter, and regenerate byte-authenticated 16 ppem bitmap artifacts through the public Node host and package-owned bitmap baker.
 - [x] Bind the shared definitions to editable/typewriter playback, pause, step, scrub, authored-width reflow, and causal settled-state signals in the real public `Text` rendering path.
 - [x] Add continuous authored-width playback and discrete authoritative layout transitions with presentation-only glyph-position interpolation and bitmap pixel snapping.
-- [ ] Reuse the exact showcase definitions through headless conformance and admitted Vitexec product probes, then record reviewed conformance and performance evidence.
+- [x] Reuse the exact showcase definitions through headless conformance and the admitted Vitexec product probe, then record reviewed exact conformance evidence.
+- [ ] Record a separate environment-labeled live performance observation; conformance execution duration must not be presented as renderer cost.
 
 ## Milestone 8 — MSDF release raster
 

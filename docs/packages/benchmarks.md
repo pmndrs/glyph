@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:c86a752f20e86bfa4db22e663618c0d305ea68ab4cae0d82539d10b2e173a0c2"
+source_digest: "sha256:d59dbfe47c7e75fe8669972e6bfae289bbd64edd788cb27ad763f347684dcf93"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:23:09Z"
+  at: "2026-07-26T21:37:03Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -62,6 +62,8 @@ Milestone 7.2 owns a product-facing advanced-shaping showcase over this same ren
 
 The showcase corpus is now an immutable TypeScript discriminated union with exact integer timeline state. Authored reveal units keep combining marks and complex-script clusters intact; seek and step do not depend on elapsed time or JavaScript code-unit slicing. The live benchmark exposes edit, play, pause, single-step, reset, and scrub controls over the retained public `Text` object. Every text/width update publishes its associated settled timeline tick only after `Text.ready` and its presentation transition complete, giving Vitest and Vitexec a causal product signal instead of a frame or timer heuristic. Playback interpolates only identity-matched bitmap instance origins and group centering over the newly committed layout; the existing shader applies final pixel snapping. React records transition start/finish evidence but does not rerender for per-frame progress. The admitted local product probe runs WebGPU, forced WebGL2, and restored WebGPU timing; renders every authored case with zero missing glyphs; proves stable-glyph matches across every step; edits/restores Latin; and exercises live playback interpolation before pausing through the visible controls.
 
+The CI-safe advanced-shaping target derives all 68 finite frames from that same corpus and sends each through the public `Text` object and bitmap batch construction at an explicit 800 CSS-pixel viewport and 16 px font size. Its exact Chromium 149 record covers five cases, 709 laid-out glyphs, 625 rendered instances, 72 draws, zero missing glyphs, 17,362 normalized layout bytes, and composite hash `314418c3`; a wrong hash and a missing-glyph mutation are negative controls. The three recorded 8.5–11.3 ms durations describe this machine's end-to-end conformance execution only. They are neither live renderer costs nor portability thresholds. Hardware GPU pixels remain owned by the exact bitmap readback lane, while the admitted Vitexec product probe proves that each authenticated showcase fixture reaches the live WebGPU canvas.
+
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 12 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
 The browser product also carries the React 19 subpath proofs. A shared registry target mounts public nested `<Text>` through a real React Three Fiber root backed by `WebGPURenderer`, retains one forwarded core object through width reflow and canonical restoration, matches pinned natural/narrow paragraph oracles, verifies two span paints in one draw, and submits a real renderer frame over three deterministic samples. The live pending-resource probe intercepts the exact composed Inter request behind a manually released promise, observes the Suspense fallback before publication, releases the request without a timer, then proves the registered font key and all 2,937 glyphs before deterministic cleanup. The test renderer remains confined to package integration evidence and does not enter the product registry or application dependencies.
@@ -103,7 +105,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 
 The size lane is also a package-graph gate. Its consumer builds inspect emitted module membership rather than relying only on source text or byte totals: the browser-core entry must retain runtime baking as a dynamic chunk while excluding React, bitmap rendering, Node hosts, the Worker, the validator implementation, and portable-baker hosts from its initial graph. The lightweight shared version contract remains intentionally present. These assertions run for both readable and minified builds before size evidence is accepted.
 
-The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, and CJK records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
+The V0 autoresearch baseline is a fail-closed control artifact, not an active optimizer. Its generated evidence list authenticates the current package sizes, admitted harness, shaping, paragraph, bidi, CJK, and advanced-shaping conformance records at the exact root toolchain pins. A discriminated campaign state remains `disabled`; tests reject malformed evidence and prove that an enabled manifest cannot cross the campaign guard without a later explicit maintainer decision.
 
 The packed-consumer lane builds and packs both workspace packages, extracts only their published tarballs into an isolated Vite application, and executes `@pmndrs/text/runtime-bake` through the installed module Worker in Chromium. Canonical Inter returns the exact 172,140-byte artifact and SHA-256 `296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8`. This closes the gap between source-workspace Worker evidence and what an installed consumer actually resolves.
 

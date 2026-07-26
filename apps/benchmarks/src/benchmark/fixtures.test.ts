@@ -212,6 +212,39 @@ describe('canonical Inter fixtures', () => {
   })
 })
 
+describe('advanced-shaping result', () => {
+  it('records every authored public Text frame with exact layout and batch identity', async () => {
+    const result = JSON.parse(
+      await readFile(
+        new URL('results/advanced-shaping-conformance-chromium149.json', fixtureRoot),
+        'utf8',
+      ),
+    )
+    expect(result).toMatchObject({
+      schemaVersion: 0,
+      targetId: 'advanced-shaping-conformance',
+      scenarioId: 'advanced-shaping-conformance',
+      status: 'passed',
+      controls: { dpr: 1, samples: 3, warmup: 1 },
+      outputBytes: 17_362,
+    })
+    expect(result.measurements).toHaveLength(3)
+    expect(
+      result.measurements.every(
+        ({ hash, metrics }: { hash: string; metrics: Record<string, number> }) =>
+          hash === '314418c3' &&
+          metrics.caseCount === 5 &&
+          metrics.frameCount === 68 &&
+          metrics.layoutBytes === 17_362 &&
+          metrics.glyphCount === 709 &&
+          metrics.missingGlyphCount === 0 &&
+          metrics.renderedGlyphCount === 625 &&
+          metrics.drawCount === 72,
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('canonical Amiri fixtures', () => {
   it('binds font, metadata, and license bytes to the immutable import', async () => {
     const directory = new URL('fonts/amiri-1.002/', fixtureRoot)

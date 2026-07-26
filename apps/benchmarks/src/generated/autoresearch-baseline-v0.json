@@ -52,6 +52,12 @@
       "path": "apps/benchmarks/fixtures/results/cjk-universality-chromium149.json",
       "sha256": "29def72d28b4b946bac845b1beeebb34c805545d80c83c53100444ac3d594058",
       "bytes": 3577
+    },
+    {
+      "id": "advanced-shaping-conformance",
+      "path": "apps/benchmarks/fixtures/results/advanced-shaping-conformance-chromium149.json",
+      "sha256": "b0735babeddd13365ee7e9cedb93cb518c4288b954a8e17e6ff2f75f0d924f30",
+      "bytes": 1899
     }
   ]
 }

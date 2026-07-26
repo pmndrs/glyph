@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 0,
+  "executionId": "run:1",
+  "targetId": "advanced-shaping-conformance",
+  "scenarioId": "advanced-shaping-conformance",
+  "status": "passed",
+  "controls": {
+    "dpr": 1,
+    "samples": 3,
+    "warmup": 1
+  },
+  "validation": "3/3 exact advanced-shaping timelines · 68 frames/sample",
+  "measurements": [
+    {
+      "sample": 0,
+      "durationMs": 11.300000004470348,
+      "outputBytes": 17362,
+      "hash": "314418c3",
+      "metrics": {
+        "caseCount": 5,
+        "frameCount": 68,
+        "finalFrameCount": 5,
+        "layoutBytes": 17362,
+        "glyphCount": 709,
+        "missingGlyphCount": 0,
+        "renderedGlyphCount": 625,
+        "drawCount": 72
+      }
+    },
+    {
+      "sample": 1,
+      "durationMs": 8.5,
+      "outputBytes": 17362,
+      "hash": "314418c3",
+      "metrics": {
+        "caseCount": 5,
+        "frameCount": 68,
+        "finalFrameCount": 5,
+        "layoutBytes": 17362,
+        "glyphCount": 709,
+        "missingGlyphCount": 0,
+        "renderedGlyphCount": 625,
+        "drawCount": 72
+      }
+    },
+    {
+      "sample": 2,
+      "durationMs": 8.799999997019768,
+      "outputBytes": 17362,
+      "hash": "314418c3",
+      "metrics": {
+        "caseCount": 5,
+        "frameCount": 68,
+        "finalFrameCount": 5,
+        "layoutBytes": 17362,
+        "glyphCount": 709,
+        "missingGlyphCount": 0,
+        "renderedGlyphCount": 625,
+        "drawCount": 72
+      }
+    }
+  ],
+  "medianMs": 8.799999997019768,
+  "p95Ms": 11.300000004470348,
+  "minMs": 8.5,
+  "maxMs": 11.300000004470348,
+  "outputBytes": 17362,
+  "completedAt": "2026-07-26T21:32:29.368Z",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  }
+}

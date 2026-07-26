@@ -83,6 +83,13 @@ export function hashParagraphLayouts(layouts: readonly PortableParagraphLayout[]
   return layouts.map(hashParagraphLayout).join(':')
 }
 
+export function paragraphLayoutBytes(layout: ParagraphLayout): number {
+  return [layout.fontHandles, ...portableLayoutArrays(layout)].reduce(
+    (sum, values) => sum + values.byteLength,
+    0,
+  )
+}
+
 export function paragraphPolicyContractHash(contract: ParagraphPolicyHashContract): string {
   return [
     ...Object.values(contract.bidi).map(({ layout }) => layout.hash),

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { BenchmarkMeasurement } from './contracts'
+import { scenarioById } from './scenarios'
 
 import {
   ADVANCED_SHAPING_CASES,
   advanceAdvancedShaping,
   advancedShapingFrame,
+  advancedShapingFrames,
   initialAdvancedShapingState,
   updateAdvancedShaping,
 } from './advanced-shaping'
@@ -61,5 +64,54 @@ describe('advanced-shaping timeline', () => {
     expect(() =>
       updateAdvancedShaping(initialAdvancedShapingState(), { kind: 'seek', tick: 1.5 }),
     ).toThrow('advanced-shaping tick must be an integer')
+  })
+
+  it('derives every finite conformance frame from the same authored corpus', () => {
+    const frames = advancedShapingFrames()
+    expect(frames).toHaveLength(
+      ADVANCED_SHAPING_CASES.reduce(
+        (count, definition) => count + definition.revealUnits.length + 1,
+        0,
+      ),
+    )
+    for (const definition of ADVANCED_SHAPING_CASES) {
+      const caseFrames = frames.filter((frame) => frame.caseDefinition.id === definition.id)
+      expect(caseFrames.map(({ tick }) => tick)).toEqual(
+        Array.from({ length: definition.revealUnits.length + 1 }, (_, tick) => tick),
+      )
+      expect(caseFrames.at(-1)?.text).toBe(definition.revealUnits.join(''))
+    }
+  })
+
+  it('rejects a changed advanced-shaping conformance identity', () => {
+    const scenario = scenarioById('advanced-shaping-conformance')
+    const measurement: BenchmarkMeasurement = {
+      sample: 0,
+      durationMs: 0,
+      outputBytes: 17_362,
+      hash: '314418c3',
+      metrics: {
+        caseCount: 5,
+        frameCount: 68,
+        finalFrameCount: 5,
+        layoutBytes: 17_362,
+        glyphCount: 709,
+        missingGlyphCount: 0,
+        renderedGlyphCount: 625,
+        drawCount: 72,
+      },
+    }
+    expect(scenario.validate([measurement])).toContain('68 frames/sample')
+    expect(() => scenario.validate([{ ...measurement, hash: '414418c3' }])).toThrow(
+      'complete authored frame matrix',
+    )
+    expect(() =>
+      scenario.validate([
+        {
+          ...measurement,
+          metrics: { ...measurement.metrics, missingGlyphCount: 1 },
+        },
+      ]),
+    ).toThrow('complete authored frame matrix')
   })
 })

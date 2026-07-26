@@ -1,4 +1,5 @@
 import type { BenchmarkScenario } from './contracts'
+import { ADVANCED_SHAPING_CASES } from './advanced-shaping'
 import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json'
 import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json'
 import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json'
@@ -9,6 +10,7 @@ const paragraphPolicyHash = [
   ...Object.values(paragraphBidiContract.policies.cases).map(({ layout }) => layout.hash),
   paragraphBidiContract.uikit.resolved.layout.hash,
 ].join(':')
+const ADVANCED_SHAPING_HASH = '314418c3'
 
 function deterministicValidation(hashes: readonly string[]): string {
   if (hashes.length === 0) throw new Error('Scenario produced no measurements')
@@ -232,11 +234,47 @@ function cjkUniversalityValidation(
   return `${values.length}/${values.length} exact CJK corpus + horizontal paragraph outputs`
 }
 
+function advancedShapingValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  const frameCount = ADVANCED_SHAPING_CASES.reduce(
+    (count, definition) => count + definition.revealUnits.length + 1,
+    0,
+  )
+  for (const value of values) {
+    const metrics = value.metrics
+    if (
+      value.hash !== ADVANCED_SHAPING_HASH ||
+      value.outputBytes !== 17_362 ||
+      metrics?.caseCount !== ADVANCED_SHAPING_CASES.length ||
+      metrics.frameCount !== frameCount ||
+      metrics.finalFrameCount !== ADVANCED_SHAPING_CASES.length ||
+      metrics.layoutBytes !== value.outputBytes ||
+      metrics.missingGlyphCount !== 0 ||
+      metrics.glyphCount !== 709 ||
+      metrics.renderedGlyphCount !== 625 ||
+      metrics.drawCount !== 72
+    ) {
+      throw new Error('Advanced shaping did not preserve its complete authored frame matrix')
+    }
+  }
+  return `${values.length}/${values.length} exact advanced-shaping timelines · ${frameCount} frames/sample`
+}
+
 function finiteNonnegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
 export const scenarios: readonly BenchmarkScenario[] = [
+  {
+    id: 'advanced-shaping-conformance',
+    label: 'Advanced shaping conformance',
+    description:
+      'Every authored Latin, Arabic, Devanagari, bidi, and CJK frame through public Text.',
+    requiredCapabilities: new Set(['deterministic', 'shaping', 'paragraph', 'raster']),
+    validate: advancedShapingValidation,
+  },
   {
     id: 'react-text-reconciliation',
     label: 'React Text reconciliation',
