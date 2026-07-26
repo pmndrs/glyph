@@ -1,0 +1,13 @@
+{
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    ".cache/**",
+    "dist/**",
+    "src/bakers/schemas/**",
+    "src/generated/**",
+    "target/**",
+    "tests/fixtures/**"
+  ]
+}

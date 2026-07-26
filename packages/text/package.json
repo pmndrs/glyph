@@ -19,6 +19,10 @@
       "types": "./dist/raster/bitmap.d.ts",
       "import": "./dist/raster/bitmap.js"
     },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
     "./bakers/bitmap": {
       "types": "./dist/bakers/bitmap.d.ts",
       "import": "./dist/bakers/bitmap.js"
@@ -51,6 +55,8 @@
     "sync:unicode-tests": "node ./scripts/sync-unicode-test-data.mjs",
     "check:unicode-tests": "node ./scripts/sync-unicode-test-data.mjs --check",
     "generate:bitmap-fixture": "pnpm --filter @pmndrs/text-font-baker build && pnpm build && node ./scripts/generate-bitmap-fixture.mjs",
+    "format:check": "oxfmt --check src/raster.ts src/raster/bitmap.ts src/react.ts src/text.ts src/raster-runtime.ts src/internal/text-properties.ts src/internal/text-runtime.ts tests/integration/react-text.test.mjs tests/integration/text-object.test.mjs tests/package/react-subpath.test.mjs tests/types/tsl-scalar-operations.test.ts",
+    "lint": "oxlint --deny-warnings src/raster.ts src/raster/bitmap.ts src/react.ts src/text.ts src/raster-runtime.ts src/internal/text-properties.ts src/internal/text-runtime.ts tests/integration/react-text.test.mjs tests/integration/text-object.test.mjs tests/package/react-subpath.test.mjs tests/types/tsl-scalar-operations.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
     "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked",
@@ -67,11 +73,15 @@
   },
   "devDependencies": {
     "@react-three/fiber": "9.6.1",
+    "@react-three/test-renderer": "9.1.0",
     "@types/node": "24.13.3",
     "@types/react": "19.2.14",
     "@types/three": "0.185.1",
     "@unicode/unicode-17.0.0": "1.6.17",
     "binaryen": "129.0.0",
+    "eslint-plugin-react-you-might-not-need-an-effect": "1.0.1",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
     "react": "19.2.8",
     "three": "0.185.1",
     "unicode-property-value-aliases": "3.9.0"

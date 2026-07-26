@@ -9,6 +9,7 @@ const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all(
 const environment = await environmentResource()
 if (environment.webgpu !== true)
   throw new Error('TSL renderer probe requires WebGPU-capable Chrome')
+const expectedHash = 'fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77'
 
 for (const [targetId, backendMetric] of [
   ['tsl-webgpu-baseline', 'backendWebGpu'],
@@ -27,6 +28,7 @@ for (const [targetId, backendMetric] of [
     result.measurements.some(
       (measurement: BenchmarkMeasurement) =>
         measurement.outputBytes !== 64 ||
+        measurement.hash !== expectedHash ||
         measurement.metrics?.[backendMetric] !== 1 ||
         measurement.metrics.pixelCount !== 16 ||
         measurement.metrics.exactRedPixels !== 16,

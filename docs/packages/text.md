@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:58bba64daff5478d66cd97da32203a8e089b3f88692d6ca464d7eab19ef7138e"
+source_digest: "sha256:5c142a00dcdfe4cb9569422e179299fd0c5751d70d490edf8fa14589a1dfb87a"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -56,19 +56,32 @@ sources:
   - id: paragraph
     resource: ../../packages/text/src/paragraph.ts
     title: Paragraph engine implementation
+  - id: text-object
+    resource: ../../packages/text/src/text.ts
+    title: Framework-neutral Three.js Text object
+  - id: raster-runtime
+    resource: ../../packages/text/src/raster-runtime.ts
+    title: Shared decoded-raster runtime
+  - id: react-runtime
+    resource: ../../packages/text/src/react.ts
+    title: React 19 reconciliation layer
   - id: unicode-analysis
     resource: ../../packages/text/src/internal/unicode.ts
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T11:15:30Z"
+  at: "2026-07-26T13:07:56Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: ✅ Milestone 5 and bitmap runtime item 6.1 complete; framework-neutral Text object active
+Status: 🟡 Milestone 6 core and React implementations complete; adversarial review pending
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing types resolve through the repository's current `three/webgpu` subpath rather than the legacy root export, matching the renderer boundary used by first-party raster work. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
+
+The framework-neutral `Text` object is now a real Three.js `Group` rather than a contract shim. It validates one complete candidate state before committing a patch, resolves every distinct root/span font through registry-scoped loader and HarfRust caches, shares decoded raster resources through `RasterRuntime`, and owns the resulting paragraph and raster batches as one generation. The first incomplete generation stays hidden; a later load keeps the prior complete generation visible until the replacement can swap atomically. Revision-scoped cancellation prevents stale work from publishing. Paint-only updates reuse the positioned layout, width updates reuse paragraph shaping, shaping changes replace the paragraph, and disposal releases every owned batch and paragraph. A raw span font inherits the root raster definition but resolves its own font-local resource, preventing cross-font atlas reuse.
+
+The `@pmndrs/text/react` export now provides the thin runtime described by the accepted API. It flattens nested text nodes into one UTF-16 string plus ordered inherited spans, rejects nested object/layout props and non-text children, creates one core object only after React 19 dependencies resolve, forwards that object through its ref, and reconciles ordinary R3F transforms separately from core text properties. `useFont`, `.preload`, `.clear`, and `lazyRaster` reuse the same loader, shaper, and raster dependencies as the core. A deterministic microtask-delayed disposal distinguishes React Strict Mode's setup/cleanup/setup cycle without sleeps or timer cushions. Current React Three Fiber 9.6.1 plus test renderer 9.1.0 proves resolved reconciliation, span flattening, identity retention, ref forwarding, update classes, invalid nesting, and disposal. A real-browser Vitexec probe owns pending Suspense evidence because the upstream test renderer repeatedly retries uncached suspended promises; no application workaround is carried for that test-only behavior.
 
 The Node host rejects distinct source files that collapse onto one output path before any bake begins, reports mutually exclusive phase timings, and retries the lazily loaded default bitmap baker after a failed initialization instead of pinning a rejected promise. These rules keep batch publication deterministic and make measured phase totals honest. The loader also refuses URI-addressed external raster entries without SHA-256 authentication; resolver-only delivery remains explicit and hash-optional.
 
@@ -114,9 +127,9 @@ Roadmap item 5.4 completes this same bake → retained-SFNT → HarfRust → par
 
 Four public-pipeline paragraphs produce twelve exact natural/wide/narrow contracts with grapheme- and UTF-16-safe runs, clusters, and lines, one broad shape per paragraph, and zero reshapes for the fixed corpus. Fixed-seed CJK mutations cover malformed surrogates, variation selectors, language tags, and constraints twice. Node, Chromium 149, and GPU-enabled Vitexec report one composite hash, 10,622 output bytes, 1,539,372 retained bytes, and 4,587,520 Wasm-memory bytes. The item adds no raster paging, rendering, fallback, or vertical layout.
 
-Roadmap item 6.1 completes the optional bitmap runtime module. It validates reciprocal font/raster identity, exact dense 20-byte records, absent-glyph sentinels, square strikes, embedded lossless linear R8 KTX2 dimensions and format, and page references before publishing a resource. Decode is transactional across pages and strikes, so any later failure disposes every `DataTexture` already created. Runtime selection chooses the nearest strike, exposes the selected `strikePpem` on each zero-copy draw batch, uploads each page once, preserves glyph order through contiguous page runs, and emits instanced position, size, UV, and linear-color attributes. Callers can therefore compare the physical rendered ppem with the baked strike instead of silently scaling bitmap coverage. One typed TSL material compiles through the same `WebGPURenderer` to WGSL and forced-fallback GLSL; direct public `add`/`mul` calls avoid the measured TypeScript declaration-expansion path without casts or a dependency patch. External page residency remains explicitly deferred to Milestone 12.
+Roadmap item 6.1 completes the optional bitmap runtime module. It validates reciprocal font/raster identity, exact dense 20-byte records, absent-glyph sentinels, square strikes, embedded lossless linear R8 KTX2 dimensions and format, and page references before publishing a resource. Decode is transactional across pages and strikes, so any later failure disposes every `DataTexture` already created. Runtime selection chooses the nearest strike, exposes the selected `strikePpem` on each zero-copy draw batch, uploads each page once, preserves glyph order through contiguous page runs, and emits instanced position, size, UV, and linear-color attributes. The baker records Zeno's integer mask placement in strike-pixel units; at native density every quad dimension therefore equals its atlas rectangle dimension. The shared TSL vertex graph snaps each projected edge to a physical framebuffer pixel before the same graph emits WGSL or fallback GLSL. Scalar public operators prevent TypeScript 7 recursive overload expansion; the package-owned `@types/three` patch corrects `modelViewProjection` to its runtime `Node<'vec4'>` type, and the compile fixture guards that upstream gap. External page residency remains explicitly deferred to Milestone 12.
 
-The canonical composed Inter fixture proves GLB → registry → HarfRust → paragraph layout → bitmap decode → GPU upload → instanced draw in the benchmark product. The five-lane benchmark ipsum produces 120 visible glyphs, zero missing glyphs, and one draw from 695,296 atlas bytes on both backends. Exact-strike rendering holds the physical rendered size at 16 ppem for both density classes: 16 CSS px at 1× and 8 CSS px at 2×. Deterministic readback and cross-backend geometry checks normalize WebGPU top-left aligned rows and WebGL bottom-left compact rows before comparison. Item 6.2 now owns the framework-neutral `Text` lifecycle; the [roadmap](../roadmap/roadmap.md) remains the only completion ledger.
+The canonical composed Inter fixture proves GLB → registry → HarfRust → paragraph layout → bitmap decode → GPU upload → instanced draw in the benchmark product. The five-lane benchmark ipsum produces 120 visible glyphs, zero missing glyphs, and one draw from 695,296 atlas bytes on both backends. Exact-strike rendering holds the physical rendered size at 16 ppem for both density classes: 16 CSS px at 1× and 8 CSS px at 2×. A record-level Rust invariant proves atlas and native plane dimensions are identical. The benchmark independently CPU-composes the decoded atlas at snapped placements and requires every normalized GPU byte to match; WebGPU and WebGL2 produce the same full-frame hash at each DPR. Hinted grayscale and four-phase coverage packing remain measured research, while LCD/ClearType rendering is an explicit non-goal. Item 6.2 now owns the framework-neutral `Text` lifecycle; the [roadmap](../roadmap/roadmap.md) remains the only completion ledger.
 
 ## Package scripts
 

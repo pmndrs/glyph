@@ -4,6 +4,7 @@ import {
   defineFont,
   createParagraphEngine,
   createRuntimeShaper,
+  Text,
   FontLoader,
   FontRegistry,
   rasterBake,
@@ -37,6 +38,7 @@ import {
   type TextUpdateProperties,
 } from "../../src/index.js";
 import type { ReactElement } from "react";
+import type { Object3D } from "three/webgpu";
 import type { LazyRaster, ReactTextProps, UseFont } from "../../src/react.js";
 import { bitmap } from "../../src/raster/bitmap.js";
 
@@ -101,7 +103,11 @@ interface MsdfResource {
 
 interface MsdfBatch {
   readonly instances: number;
+  readonly object: Object3D;
+  dispose(): void;
 }
+
+declare const rasterObject: Object3D;
 
 const msdf = defineRaster({
   kind: "msdf",
@@ -115,7 +121,7 @@ const msdf = defineRaster({
   },
   async prepare() {},
   buildBatches(_layout, _resource): MsdfBatch {
-    return { instances: 0 };
+    return { instances: 0, object: rasterObject, dispose() {} };
   },
   updatePaint(_batch, _paint, _fontSlot) {},
   dispose(_resource) {},
@@ -137,7 +143,7 @@ const external = defineRaster({
   },
   async prepare() {},
   buildBatches() {
-    return { draws: 1 };
+    return { draws: 1, object: rasterObject, dispose() {} };
   },
   updatePaint() {},
   dispose() {},
@@ -155,7 +161,7 @@ const configurable = defineRaster({
   },
   async prepare() {},
   buildBatches() {
-    return { draws: 1 };
+    return { draws: 1, object: rasterObject, dispose() {} };
   },
   updatePaint() {},
   dispose() {},
@@ -200,6 +206,12 @@ const validText: TextProperties = {
   raster: msdf,
 };
 void validText;
+const coreText = new Text(validText);
+const coreReady: Promise<void> = coreText.ready;
+void coreReady;
+void coreText.layout;
+coreText.setProperties({ opacity: 0.75 });
+coreText.dispose();
 
 declare const paragraph: Paragraph;
 

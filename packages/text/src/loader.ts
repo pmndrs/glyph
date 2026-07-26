@@ -744,6 +744,20 @@ class RegisteredFontImpl implements RegisteredFont {
   }
 }
 
+/** @internal Return the active ownership domain for a package-created font. */
+export function registeredFontRegistry(font: RegisteredFont): FontRegistry {
+  if (!(font instanceof RegisteredFontImpl)) {
+    throw new FontLoadError("FOREIGN_FONT", "font is not registered by this package");
+  }
+  font.assertActive();
+  return font.registry;
+}
+
+/** @internal Narrow an unknown value without trusting structural imitation. */
+export function isPackageRegisteredFont(value: unknown): value is RegisteredFont {
+  return value instanceof RegisteredFontImpl;
+}
+
 interface RegisteredRasterInit {
   readonly owner: RegisteredFontImpl;
   readonly reference: RasterReference;

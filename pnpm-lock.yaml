@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@types/three@0.185.1': 38a449f7f7d34cf4476cc07540f99757e41e626f4f6ee0aca6c0215c64f16acb
+
 importers:
 
   .:
@@ -20,6 +23,9 @@ importers:
       '@pmndrs/text-font-baker':
         specifier: workspace:*
         version: link:../../packages/font-baker
+      '@react-three/fiber':
+        specifier: 9.6.1
+        version: 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -53,7 +59,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@types/three':
         specifier: 0.185.1
-        version: 0.185.1
+        version: 0.185.1(patch_hash=38a449f7f7d34cf4476cc07540f99757e41e626f4f6ee0aca6c0215c64f16acb)
       '@vitejs/plugin-react':
         specifier: 6.0.1
         version: 6.0.1(@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)))(babel-plugin-react-compiler@1.0.0)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
@@ -122,6 +128,9 @@ importers:
       '@react-three/fiber':
         specifier: 9.6.1
         version: 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      '@react-three/test-renderer':
+        specifier: 9.1.0
+        version: 9.1.0(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -130,13 +139,22 @@ importers:
         version: 19.2.14
       '@types/three':
         specifier: 0.185.1
-        version: 0.185.1
+        version: 0.185.1(patch_hash=38a449f7f7d34cf4476cc07540f99757e41e626f4f6ee0aca6c0215c64f16acb)
       '@unicode/unicode-17.0.0':
         specifier: 1.6.17
         version: 1.6.17
       binaryen:
         specifier: 129.0.0
         version: 129.0.0
+      eslint-plugin-react-you-might-not-need-an-effect:
+        specifier: 1.0.1
+        version: 1.0.1(eslint@10.7.0(jiti@2.7.0))
+      oxfmt:
+        specifier: 0.35.0
+        version: 0.35.0
+      oxlint:
+        specifier: 1.75.0
+        version: 1.75.0
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -590,6 +608,13 @@ packages:
         optional: true
       react-native:
         optional: true
+
+  '@react-three/test-renderer@9.1.0':
+    resolution: {integrity: sha512-bLjG+cdpVW69wG1W3TuziHrHvA1JQbLesYddY94QMaFF8yzpgwovWK8hGaHWBET1dvsCPIOWVNYHbKAbRj2xSg==}
+    peerDependencies:
+      '@react-three/fiber': '>=9.0.0'
+      react: ^19.0.0
+      three: '>=0.156'
 
   '@rolldown/binding-android-arm64@1.1.5':
     resolution: {integrity: sha512-lZg8fqIv2v7FF237bwMgzGZEJvGL79/s5knJ/i6FmsGF4XXlzccZ4jb+TrFIxtSSxFtIpdsgrPZeMk1I9AFcyQ==}
@@ -2160,6 +2185,12 @@ snapshots:
       - '@types/react'
       - immer
 
+  '@react-three/test-renderer@9.1.0(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)':
+    dependencies:
+      '@react-three/fiber': 9.6.1(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      react: 19.2.8
+      three: 0.185.1
+
   '@rolldown/binding-android-arm64@1.1.5':
     optional: true
 
@@ -2355,7 +2386,7 @@ snapshots:
 
   '@types/stats.js@0.17.4': {}
 
-  '@types/three@0.185.1':
+  '@types/three@0.185.1(patch_hash=38a449f7f7d34cf4476cc07540f99757e41e626f4f6ee0aca6c0215c64f16acb)':
     dependencies:
       '@dimforge/rapier3d-compat': 0.12.0
       '@tweenjs/tween.js': 23.1.3

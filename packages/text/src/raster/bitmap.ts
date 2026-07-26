@@ -1,6 +1,21 @@
 import { KHR_SUPERCOMPRESSION_NONE, VK_FORMAT_R8_UNORM, read as readKtx2 } from 'ktx-parse'
 import * as THREE from 'three/webgpu'
-import { add, attribute, mul, positionLocal, texture, uv, vec2, vec3 } from 'three/tsl'
+import {
+  add,
+  attribute,
+  modelViewProjection,
+  mul,
+  positionLocal,
+  reciprocal,
+  round,
+  screenSize,
+  sub,
+  texture,
+  uv,
+  vec2,
+  vec3,
+  vec4,
+} from 'three/tsl'
 import type Node from 'three/src/nodes/core/Node.js'
 
 import { deriveRasterKey } from '../internal/raster-identity.js'
@@ -519,9 +534,34 @@ function bitmapMaterial(page: THREE.DataTexture): THREE.MeshBasicNodeMaterial {
   const atlasV: Node<'float'> = add(uvOrigin.y, mul(unitUv.y, uvSize.y))
   const sampled = texture(page, vec2(atlasU, atlasV))
   material.positionNode = vec3(positionX, positionY, 0)
+  material.vertexNode = pixelSnappedClipPosition()
   material.colorNode = color.rgb
   material.opacityNode = mul(color.a, sampled.r)
   return material
+}
+
+function pixelSnappedClipPosition(): Node<'vec4'> {
+  const clip: Node<'vec4'> = modelViewProjection
+  const snappedX = snapClipAxis(clip.x, clip.w, screenSize.x)
+  const snappedY = snapClipAxis(clip.y, clip.w, screenSize.y)
+  return vec4(snappedX, snappedY, clip.z, clip.w)
+}
+
+function snapClipAxis(
+  clipAxis: Node<'float'>,
+  clipW: Node<'float'>,
+  physicalSize: Node<'float'>,
+): Node<'float'> {
+  const normalizedDevicePosition: Node<'float'> = mul(clipAxis, reciprocal(clipW))
+  const halfPhysicalSize: Node<'float'> = mul(physicalSize, 0.5)
+  const physicalPosition: Node<'float'> = mul(add(normalizedDevicePosition, 1), halfPhysicalSize)
+  const snappedPhysicalPosition: Node<'float'> = round(physicalPosition)
+  const normalizedPhysicalPosition: Node<'float'> = mul(
+    snappedPhysicalPosition,
+    reciprocal(physicalSize),
+  )
+  const snappedNormalizedDevicePosition: Node<'float'> = sub(mul(normalizedPhysicalPosition, 2), 1)
+  return mul(snappedNormalizedDevicePosition, clipW)
 }
 
 function updateRunPaint(run: BitmapBatchRun, paint: GlyphPaint): void {

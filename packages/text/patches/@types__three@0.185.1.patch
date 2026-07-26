@@ -1,0 +1,9 @@
+diff --git a/src/nodes/accessors/ModelViewProjectionNode.d.ts b/src/nodes/accessors/ModelViewProjectionNode.d.ts
+index 13d6f72..6a72b7d 100644
+--- a/src/nodes/accessors/ModelViewProjectionNode.d.ts
++++ b/src/nodes/accessors/ModelViewProjectionNode.d.ts
+@@ -1,3 +1,3 @@
+ import Node from "../core/Node.js";
+
+-export const modelViewProjection: Node;
++export const modelViewProjection: Node<"vec4">;

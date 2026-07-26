@@ -31,6 +31,7 @@
 
 ## Rendering analysis
 
+- [Grayscale bitmap hinting research](bitmap-hinting-research.md) — native pixel placement, hinted strikes, and four-phase grayscale packing gates.
 - [Renderer capabilities](renderer-capabilities.md) — feature matrix and developer guidance.
 - [Implementation difficulty](implementation-difficulty.md) — relative correctness and performance effort.
 - [Payload budget](payload-budget.md) — serialized, decoded, and resident cost model.

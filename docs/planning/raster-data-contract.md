@@ -201,7 +201,11 @@ interface BitmapStrikeV0 {
 | 16 | `u16` | page index or `0xffff` |
 | 18 | `u16` | flags; zero in V0 |
 
+For bitmap V0, `planeUnitsPerEm` equals the strike ppem and the four plane values are the rasterizer's integer mask placement converted from its upper-left pixel coordinates into the shared baseline-relative Y-up convention. Consequently, a glyph rendered at its native physical ppem has plane width/height exactly equal to its atlas rectangle width/height. Analytic outline bounds are not valid substitutes because they would rescale already rasterized coverage. Projected quad edges are snapped to physical framebuffer pixels before sampling.
+
 Grayscale strikes use a lossless `r8unorm` KTX2 variant. Optional BC4/EAC/native ASTC variants may reduce GPU residency; the lossless R8 variant remains the correctness baseline. Embedded color emoji uses a separate bitmap raster or strike with `rgba8unorm`, `colorSpace: 'srgb'`, and its own dense records; it is not mixed into a grayscale page.
+
+Hinted grayscale strikes and optional four-phase coverage packing are bounded by the [bitmap hinting research note](bitmap-hinting-research.md). LCD/ClearType subpixel rendering is outside the format's scope.
 
 Exact costs:
 
