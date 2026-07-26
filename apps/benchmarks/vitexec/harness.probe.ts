@@ -76,6 +76,76 @@ const restoredWebgpuViewport = await waitForReplacement(
 )
 await verifyGpuTiming(restoredWebgpuViewport, 'webgpu')
 
+const advancedShapingPath = '/src/benchmark/advanced-shaping.ts'
+const { ADVANCED_SHAPING_CASES } = await import(/* @vite-ignore */ advancedShapingPath)
+const advancedShapingButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) =>
+    candidate.textContent?.includes('Advanced shaping') === true && !candidate.disabled,
+)
+if (advancedShapingButton === undefined) throw new Error('Advanced-shaping workload is missing')
+advancedShapingButton.click()
+const caseSelector = await waitForSelect('Case')
+console.log('advanced-shaping-start')
+const setSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+if (setSelectValue === undefined) throw new Error('Native select value setter is unavailable')
+const setTextareaValue = Object.getOwnPropertyDescriptor(
+  HTMLTextAreaElement.prototype,
+  'value',
+)?.set
+if (setTextareaValue === undefined) throw new Error('Native textarea value setter is unavailable')
+
+for (const definition of ADVANCED_SHAPING_CASES) {
+  console.log('advanced-shaping-select', definition.id)
+  setSelectValue.call(caseSelector, definition.id)
+  caseSelector.dispatchEvent(new Event('change', { bubbles: true }))
+  const authoredText = definition.revealUnits.join('')
+  await waitForLiveViewportState({
+    'data-backend': 'webgpu',
+    'data-settled-tick': String(definition.revealUnits.length),
+    'data-settled-text-length': String(authoredText.length),
+    'data-missing-glyph-count': '0',
+  })
+  console.log('advanced-shaping-settled', definition.id)
+  const editors = document.querySelectorAll<HTMLTextAreaElement>('textarea')
+  const editor = editors.length === 1 ? editors[0] : undefined
+  if (editor === undefined || editor.value !== authoredText) {
+    throw new Error(`${definition.id} did not expose its exact authored text`)
+  }
+  const stepBack = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (candidate) => candidate.textContent?.trim() === '−1' && !candidate.disabled,
+  )
+  if (stepBack === undefined) throw new Error('Advanced-shaping step control is missing')
+  stepBack.click()
+  await waitForLiveViewportState({
+    'data-backend': 'webgpu',
+    'data-settled-tick': String(definition.revealUnits.length - 1),
+    'data-missing-glyph-count': '0',
+  })
+  console.log('advanced-shaping-stepped', definition.id)
+  if (definition.id === 'latin-features') {
+    const editedText = 'Editable AVATAR office'
+    setTextareaValue.call(editor, editedText)
+    editor.dispatchEvent(new Event('input', { bubbles: true }))
+    await waitForLiveViewportState({
+      'data-backend': 'webgpu',
+      'data-settled-text-length': String(editedText.length),
+      'data-missing-glyph-count': '0',
+    })
+    const reset = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Reset' && !candidate.disabled,
+    )
+    if (reset === undefined) throw new Error('Advanced-shaping reset control is missing')
+    reset.click()
+    await waitForLiveViewportState({
+      'data-backend': 'webgpu',
+      'data-settled-tick': String(definition.revealUnits.length),
+      'data-settled-text-length': String(authoredText.length),
+      'data-missing-glyph-count': '0',
+    })
+    console.log('advanced-shaping-edited')
+  }
+}
+
 const metrics = [...scene.querySelectorAll<HTMLElement>('.font-mono')]
   .map((element) => element.textContent?.trim())
   .filter(Boolean)
@@ -94,6 +164,58 @@ function waitForEnabledButton(label: string): Promise<HTMLButtonElement> {
       if (button === undefined) return
       observer.disconnect()
       resolve(button)
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+  })
+}
+
+function waitForSelect(label: string): Promise<HTMLSelectElement> {
+  const current = [...document.querySelectorAll<HTMLSelectElement>('select')].find(
+    (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
+  )
+  if (current !== undefined) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const select = [...document.querySelectorAll<HTMLSelectElement>('select')].find(
+        (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
+      )
+      if (select === undefined) return
+      observer.disconnect()
+      resolve(select)
+    })
+    observer.observe(document.documentElement, { childList: true, subtree: true })
+  })
+}
+
+function waitForLiveViewportState(
+  attributes: Readonly<Record<string, string>>,
+): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined => {
+    const candidateViewport = document.querySelector<HTMLElement>(
+      '[data-testid="bitmap-live-viewport"]',
+    )
+    if (
+      candidateViewport === null ||
+      Object.entries(attributes).some(
+        ([name, value]) => candidateViewport.getAttribute(name) !== value,
+      )
+    ) {
+      return undefined
+    }
+    return candidateViewport
+  }
+  const current = find()
+  if (current !== undefined) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const candidateViewport = find()
+      if (candidateViewport === undefined) return
+      observer.disconnect()
+      resolve(candidateViewport)
     })
     observer.observe(document.documentElement, {
       attributes: true,

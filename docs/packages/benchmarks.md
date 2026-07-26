@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:4fd881022077b4e6c366a9be295d8042f35541b81d011b3a96ccce59134cf8bc"
+source_digest: "sha256:4539c4eb4aa02d81dc6e0f3e20750e78218d6fba98b5e24fe0fec50faac408bd"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:34:00Z"
+  at: "2026-07-26T21:01:04Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -60,7 +60,9 @@ The corpus is an executable fixture, not display copy. Its five lines isolate or
 
 Milestone 7.2 owns a product-facing advanced-shaping showcase over this same rendering path. It will make Arabic joining, Indic reordering, bidi, ligatures and marks, and CJK line breaking visible while text streams in and the container continuously reflows. Glyphs may interpolate between proven layouts, but shaping and line breaking remain discrete authoritative states. Pause, step, and scrub controls provide deterministic transition points for Vitest, Vitexec, and visual evidence without sleeps or timer tolerances.
 
-The showcase corpus is now an immutable TypeScript discriminated union with exact integer timeline state. Authored reveal units keep combining marks and complex-script clusters intact; seek and step do not depend on elapsed time or JavaScript code-unit slicing. Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 12 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
+The showcase corpus is now an immutable TypeScript discriminated union with exact integer timeline state. Authored reveal units keep combining marks and complex-script clusters intact; seek and step do not depend on elapsed time or JavaScript code-unit slicing. The live benchmark exposes edit, play, pause, single-step, reset, and scrub controls over the retained public `Text` object. Every text/width update publishes its associated settled timeline tick only after `Text.ready`, giving Vitest and Vitexec a causal product signal instead of a frame or timer heuristic. The admitted local product probe runs WebGPU, forced WebGL2, and restored WebGPU timing; then renders every authored case with zero missing glyphs, steps each case, and edits/restores the Latin case through the visible controls. Continuous presentation interpolation remains open.
+
+Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 12 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
 The browser product also carries the React 19 subpath proofs. A shared registry target mounts public nested `<Text>` through a real React Three Fiber root backed by `WebGPURenderer`, retains one forwarded core object through width reflow and canonical restoration, matches pinned natural/narrow paragraph oracles, verifies two span paints in one draw, and submits a real renderer frame over three deterministic samples. The live pending-resource probe intercepts the exact composed Inter request behind a manually released promise, observes the Suspense fallback before publication, releases the request without a timer, then proves the registered font key and all 2,937 glyphs before deterministic cleanup. The test renderer remains confined to package integration evidence and does not enter the product registry or application dependencies.
 
