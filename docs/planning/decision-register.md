@@ -125,6 +125,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-073 | V1 assigns one selected raster per font slot; per-glyph raster mixing is additive color/SVG work after the first release. | Accepted |
 | D-075 | Latin remains the V1 rendering and raster-coverage priority. Pre-render CJK shaping/layout conformance may harden universal core assumptions, but CJK raster paging and icon coverage remain a post-V1 milestone and do not expand the Latin-first renderer exit gate. | Accepted |
 | D-076 | Raster page indexes are logical IDs; page payloads may be embedded or independently addressed, and raster modules own preparation, residency, eviction, and backend batching. | Accepted |
+| D-091 | Bitmap plane bounds preserve the rasterizer's integer pixel placement with `planeUnitsPerEm = strike ppem`; the shared TSL vertex graph snaps projected quad edges to physical framebuffer pixels so native rendering maps one atlas texel to one device pixel. | Accepted |
+| D-092 | Hinted grayscale strikes and optional four-phase grayscale packing remain measured research. LCD/ClearType subpixel rendering, panel-order assumptions, runtime hint interpreters, and distance-field reconstruction are out of scope. | Research |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 
@@ -140,6 +142,7 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 | D-081 | Figma semantic values are CSS variables consumed through Tailwind utilities and local shadcn-derived primitives; desktop and mobile frames share those tokens and components rather than duplicating literal styles. | Settled for harness |
 | D-082 | React Compiler runs in the Vite build and Oxlint runs compiler analysis, Hooks, accessibility, and `react-you-might-not-need-an-effect` rules as errors. Effects remain external-system synchronization; effect-only events use `useEffectEvent`, never render-time ref reads. | Settled for harness |
 | D-083 | Maintainer-local product probes use Vitexec for the live Vite/GPU-capable desktop lane and Playwright for explicit mobile viewports; both reject browser-console errors and use causal DOM/application signals without sleeps or retries. | Settled for harness |
+| D-084 | The React subpath targets the repository's current React 19 and latest compatible released React Three Fiber, presently 9.6.1. Resolved R3F reconciliation is exercised with test renderer 9.1.0; pending Suspense is exercised in the real browser because that test renderer repeatedly retries an uncached suspended promise. This test-only incompatibility does not add an application workaround or block vanilla Three.js work. | Accepted for Milestone 6 |
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.
 

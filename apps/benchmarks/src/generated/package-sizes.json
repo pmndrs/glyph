@@ -10,17 +10,17 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 271037,
-      "minifiedBytes": 211127,
-      "gzipBytes": 62751,
-      "brotliBytes": 47995
+      "rawBytes": 607586,
+      "minifiedBytes": 346079,
+      "gzipBytes": 96087,
+      "brotliBytes": 74639
     },
     {
       "id": "font-validator-js",
       "label": "Lazy font validator JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 740114,
+      "rawBytes": 740402,
       "minifiedBytes": 584255,
       "gzipBytes": 137585,
       "brotliBytes": 112927
@@ -30,30 +30,30 @@
       "label": "Runtime baker host JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 5234,
-      "minifiedBytes": 3831,
-      "gzipBytes": 1473,
-      "brotliBytes": 1314
+      "rawBytes": 5264,
+      "minifiedBytes": 3861,
+      "gzipBytes": 1479,
+      "brotliBytes": 1321
     },
     {
       "id": "runtime-baker-worker-js",
       "label": "Runtime baker Worker JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 13273,
-      "minifiedBytes": 8968,
-      "gzipBytes": 3025,
-      "brotliBytes": 2661
+      "rawBytes": 13315,
+      "minifiedBytes": 9010,
+      "gzipBytes": 3030,
+      "brotliBytes": 2665
     },
     {
       "id": "text-shaper-js",
       "label": "Text shaper JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 43926,
-      "minifiedBytes": 30630,
-      "gzipBytes": 8794,
-      "brotliBytes": 7826
+      "rawBytes": 43944,
+      "minifiedBytes": 30648,
+      "gzipBytes": 8798,
+      "brotliBytes": 7832
     },
     {
       "id": "text-shaper-wasm",
@@ -70,10 +70,10 @@
       "label": "Portable baker JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 10034,
-      "minifiedBytes": 6641,
-      "gzipBytes": 2333,
-      "brotliBytes": 2058
+      "rawBytes": 10046,
+      "minifiedBytes": 6647,
+      "gzipBytes": 2338,
+      "brotliBytes": 2060
     },
     {
       "id": "portable-baker-wasm",
@@ -90,10 +90,10 @@
       "label": "Unicode 17 analysis JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 164702,
-      "minifiedBytes": 139912,
-      "gzipBytes": 42042,
-      "brotliBytes": 31048
+      "rawBytes": 164786,
+      "minifiedBytes": 139936,
+      "gzipBytes": 42047,
+      "brotliBytes": 30989
     }
   ]
 }

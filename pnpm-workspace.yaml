@@ -3,3 +3,6 @@ packages:
   - packages/*
 
 onlyBuiltDependencies: []
+
+patchedDependencies:
+  '@types/three@0.185.1': packages/text/patches/@types__three@0.185.1.patch

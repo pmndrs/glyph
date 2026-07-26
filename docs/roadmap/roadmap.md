@@ -103,8 +103,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 5.4 | ✅ | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. | L | 5.3 |
 | 6.0 | ✅ | Establish the current-repository TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure. | S | 3.3, 5.4 |
 | 6.1 | ✅ | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2. | M | 6.0 |
-| 6.2 | ⬜ | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
-| 6.3 | ⬜ | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
+| 6.2 | 🟡 | Implement the Three.js `Text` object over the bitmap proof. | M | 6.1 |
+| 6.3 | 🟡 | Implement `@pmndrs/text/react` as a thin reconciliation layer. | M | 6.2 |
 | 7.1 | ⬜ | Harden lifecycle, invalid input, limits, and package graphs. | M | 1–6 |
 | 7.2 | ⬜ | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines. | M | 7.1 |
 | 8.x | ⬜ | Split MSDF module, MTSDF generator, payload, shaders, quality, and perf work. | XL | 7.2 |
@@ -455,9 +455,27 @@ Item 5.4 and Milestone 5 are closed. Milestone 6 is next.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 
-Items 6.0 and 6.1 are closed on the repository's current Three.js 0.185.1, `@types/three` 0.185.1, and TypeScript 7.0.2 pins. Calling the installed public TSL arithmetic functions directly avoids the pathological method-chain and custom-signature structural expansion: clean package and benchmark graph checks complete in 0.18 and 0.17 seconds without a cast, dependency patch, downgrade, or disabled checking. The baseline TSL graph runs through `WebGPURenderer` on an asserted WebGPU backend and forced WebGL2 fallback with exact 4×4 RGBA8 hash `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77`.
+Items 6.0 and 6.1 are closed on the repository's current Three.js 0.185.1, `@types/three` 0.185.1, and TypeScript 7.0.2 pins. Calling the installed public scalar TSL arithmetic functions directly avoids pathological method-chain and vector/scalar overload expansion. A repository-owned one-line `@types/three` patch narrows the runtime `modelViewProjection` contract from generic `Node` to `Node<'vec4'>`; a compile-only fixture owns that upstream gap. Clean declaration plus package checks complete in under one second without casts, a downgrade, or disabled checking. The baseline TSL graph runs through `WebGPURenderer` on an asserted WebGPU backend and forced WebGL2 fallback with exact 4×4 RGBA8 hash `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77`.
 
-The first real font frame travels through composed Inter GLB loading, retained HarfRust shaping, paragraph positioning, strict bitmap record/KTX2 decode, direct R8 texture upload, order-preserving instanced batching, and one shared TSL material. Explicit 1× and 2× runs each execute three measured samples after one warmup on WebGPU and forced WebGL2. Both backends render the five-lane benchmark ipsum as 120 visible glyphs with zero missing glyphs, in one draw from 695,296 atlas bytes. Bitmap density is a hard contract rather than an implicit CSS scale: the selected 16 px strike renders at 16 device pixels, using 16 CSS px at 1× and 8 CSS px at 2×, while metrics expose baked ppem, rendered ppem, CSS size, and the exact `1.00×` ratio. The 384×128 capture surface is large enough to keep the full corpus away from every boundary. The GPU-local cross-backend probe reports the same 2,659 half-coverage pixels at both DPRs, with identical backend bounds per density and only 16 environment-qualified edge pixels of difference. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. Each environment hard-gates deterministic frames, nonempty unclipped ink, exact density, and cross-backend geometry where both backends are available. Decode is transactional: a later invalid strike or record disposes every texture already created. Item 6.2 is active.
+The first real font frame travels through composed Inter GLB loading, retained HarfRust shaping, paragraph positioning, strict bitmap record/KTX2 decode, direct R8 texture upload, order-preserving instanced batching, and one shared TSL material. Explicit 1× and 2× runs each execute three measured samples after one warmup on WebGPU and forced WebGL2. Both backends render the five-lane benchmark ipsum as 120 visible glyphs with zero missing glyphs, in one draw from 695,296 atlas bytes. Bitmap density is a hard contract rather than an implicit CSS scale: the selected 16 px strike renders at 16 device pixels, using 16 CSS px at 1× and 8 CSS px at 2×, while metrics expose baked ppem, rendered ppem, CSS size, and the exact `1.00×` ratio. Raster records now retain Zeno's actual integer placement with `planeUnitsPerEm = 16`, and the TSL graph snaps projected quad edges to physical pixels. A benchmark-only CPU compositor places the authenticated atlas texels from those same records and matches every normalized GPU byte. WebGPU and forced WebGL2 now produce identical full-frame hashes: `56a60fb0…02df` at 1× and `5bb0964e…ba5` at 2×. Both DPRs contain the same 3,473 half-coverage pixels; bounds are `[68, 19, 313, 111]` and `[260, 83, 505, 175]`. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. Decode is transactional: a later invalid strike or record disposes every texture already created. Hinted grayscale and four-phase packing remain a documented research follow-up; LCD rendering is out of scope.
+
+Items 6.2 and 6.3 are implemented and awaiting the milestone adversarial review. The framework-neutral `Text` group owns one transactional paragraph/raster generation: first readiness stays hidden, later asynchronous generations retain the last complete frame, stale work cannot publish, paint-only changes avoid reflow, and disposal releases paragraphs and raster batches. `RasterRuntime` derives package-owned identities and shares decoded resources per registered font generation. The React 19 subpath flattens nested text into UTF-16 spans, suspends on shared font/raster/shaper dependencies, reconciles one retained core object, forwards that object through its ref, and defers Strict Mode cleanup by one microtask rather than a timer. Current React Three Fiber 9.6.1 reconciliation is covered with its matching 9.1.0 test renderer; pending browser Suspense is separately proved in the live React 19 app because the test renderer loops on uncached suspended promises.
+
+### 6.2 closure checklist
+
+- [x] The public framework-neutral `Text` is a real Three.js `Group` with atomic property validation and one explicit ownership lifecycle.
+- [x] Initial readiness, generation replacement, stale cancellation, paint-only updates, width reflow, shaping invalidation, and disposal have deterministic integration tests over the canonical Inter GLB.
+- [x] Distinct span fonts resolve independent raster resources while sharing registry-scoped loader, shaper, and raster caches.
+- [x] Every raster draw batch exposes its Three.js object and deterministic disposal contract.
+- [ ] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.2.
+
+### 6.3 closure checklist
+
+- [x] The React 19 wrapper retains one core object, forwards its ref, and maps ordinary R3F object props without duplicating core behavior.
+- [x] Nested `<Text>` nodes flatten into one string plus ordered inherited spans; non-text children and nested object/layout properties fail explicitly.
+- [x] `useFont`, `.preload`, `.clear`, and `lazyRaster` share core dependency caches and expose deterministic Suspense boundaries.
+- [x] Resolved R3F reconciliation and browser-pending Suspense have executable evidence without sleeps, retries, or timer cushions.
+- [ ] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.3.
 
 Deliver:
 

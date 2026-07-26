@@ -69,6 +69,7 @@ function bitmapTextValidation(
       typeof metrics.inkMinY !== 'number' ||
       typeof metrics.inkMaxX !== 'number' ||
       typeof metrics.inkMaxY !== 'number' ||
+      !finiteNonnegative(metrics.firstDrawMs) ||
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {

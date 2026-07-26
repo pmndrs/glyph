@@ -35,6 +35,8 @@ for (const probe of [
   './vitexec/harness.probe.ts',
   './vitexec/tsl-renderer.probe.ts',
   './vitexec/bitmap-text.probe.ts',
+  './vitexec/core-text-frame.probe.ts',
+  './vitexec/react-font-suspense.probe.ts',
   './vitexec/cjk-universality.probe.ts',
   './vitexec/worker-queue.probe.ts',
 ]) {

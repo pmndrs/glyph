@@ -34,6 +34,7 @@ okf_version: "0.2"
 
 - [Engineering house style](engineering/code-style.md) — canonical Rust, TypeScript, React, boundary, testing, and maintenance conventions.
 - [Shaping compilation research](planning/shaping-compilation-research.md) — static shaping, semantic bytecode, per-font specialization, MLIR, and WebGPU hypotheses and gates.
+- [Bitmap hinting research](planning/bitmap-hinting-research.md) — hinted grayscale strikes and four-phase coverage packing without distance fields or LCD rendering.
 - [Research bibliography](../RESEARCH.md) — attributed external sources and extracted findings.
 - [Decision register](planning/decision-register.md) — proposed and settled architectural choices.
 - [Open questions](planning/open-questions.md) — unresolved blockers and required prototypes.

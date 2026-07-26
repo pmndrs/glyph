@@ -85,7 +85,6 @@ export type {
   RasterResourceOf,
   RasterOptionsOf,
   RasterOptionsArgument,
-  RasterRuntime,
   RasterSelection,
   RasterSource,
   StaticNumberTuple,
@@ -95,6 +94,8 @@ export type {
   RuntimeRasterBakerModule,
 } from "./raster.js";
 export { defineRaster } from "./raster.js";
+export { RasterRuntime } from "./raster-runtime.js";
+export type { RasterDrawBatch } from "./raster.js";
 
 export type {
   BidiAnalysisViews,
@@ -123,3 +124,4 @@ export type {
   TextSpan,
   TextUpdateProperties,
 } from "./text.js";
+export { Text } from "./text.js";

@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T02:40:00Z"
+  at: "2026-07-26T13:07:56Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -504,21 +504,27 @@ interface LoadedFont<
   Module extends AnyRasterModule,
   Input extends FontInput = FontInput,
 > {
-  readonly token: FontToken<Module, Input>
-  readonly core: RegisteredFont
+  readonly input: Input
+  readonly font: RegisteredFont
   readonly raster: LoadedRaster<Module>
 }
 
-interface RasterRuntime {
+interface RasterDrawBatch {
+  readonly object: Object3D
+  dispose(): void
+}
+
+declare class RasterRuntime {
   load<const Module extends AnyRasterModule>(
     font: RegisteredFont,
     request: RasterRequest<Module>,
     options?: RasterLoadOptions,
   ): Promise<LoadedRaster<Module>>
+  dispose(): void
 }
 ```
 
-Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
+Every raster module's draw-batch type extends `RasterDrawBatch`, giving the core one zero-guesswork scene attachment and disposal seam without interpreting module-owned resources. `RasterRuntime` derives the request identity, reuses one decoded resource per font/module/key, evicts failed promises, detaches an aborted consumer without cancelling other consumers, and releases decoded resources when the registered font generation or runtime is disposed. Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
 
 ## Shared bake core
 

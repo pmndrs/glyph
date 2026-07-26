@@ -1,6 +1,4 @@
 use core::cmp;
-#[cfg(not(feature = "std"))]
-use core_maths::CoreFloat;
 use std::vec::Vec;
 
 use read_fonts::{FontRef, TableProvider, types::GlyphId};
@@ -9,7 +7,7 @@ use skrifa::{
     instance::{LocationRef, Size},
     outline::{DrawSettings, OutlinePen},
 };
-use zeno::{Command, Mask};
+use zeno::{Command, Mask, Placement};
 
 use crate::{
     error::{BitmapBakeError, BitmapBakeErrorCode, overflow},
@@ -186,7 +184,6 @@ pub(crate) fn rasterize_strike(
     pages.push(AtlasPage::new()?);
 
     let outlines = font.outline_glyphs();
-    let metrics = font.glyph_metrics(Size::unscaled(), LocationRef::default());
     for raw_glyph_id in 0..glyph_count {
         let record = usize::from(raw_glyph_id) * GLYPH_RECORD_STRIDE;
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
@@ -213,20 +210,8 @@ pub(crate) fn rasterize_strike(
             write_u16(&mut records, record + 16, ABSENT_PAGE);
             continue;
         }
-        let bounds = metrics.bounds(glyph_id).ok_or_else(|| {
-            BitmapBakeError::new(
-                BitmapBakeErrorCode::InvalidGlyphOutline,
-                "outlined glyph is missing maintained Fontations bounds",
-            )
-            .at(format!("/glyphs/{raw_glyph_id}"))
-        })?;
         let bitmap = GlyphBitmap {
-            plane_bounds: encode_plane_bounds([
-                bounds.x_min,
-                bounds.y_min,
-                bounds.x_max,
-                bounds.y_max,
-            ])?,
+            plane_bounds: encode_pixel_plane_bounds(placement)?,
             width: u16::try_from(placement.width).map_err(|_| glyph_too_large(raw_glyph_id))?,
             height: u16::try_from(placement.height).map_err(|_| glyph_too_large(raw_glyph_id))?,
             texels,
@@ -267,7 +252,7 @@ pub(crate) fn rasterize_strike(
 
     Ok(RasterizedStrike {
         ppem,
-        plane_units_per_em: units_per_em,
+        plane_units_per_em: ppem,
         records,
         pages: finished_pages,
     })
@@ -283,27 +268,22 @@ fn zeroed_bytes(byte_length: usize) -> Result<Vec<u8>, BitmapBakeError> {
     Ok(bytes)
 }
 
-fn encode_plane_bounds(bounds: [f32; 4]) -> Result<[i16; 4], BitmapBakeError> {
-    let rounded = [
-        bounds[0].floor(),
-        bounds[1].floor(),
-        bounds[2].ceil(),
-        bounds[3].ceil(),
-    ];
-    if rounded.iter().any(|value| {
-        !value.is_finite() || *value < f32::from(i16::MIN) || *value > f32::from(i16::MAX)
-    }) {
+fn encode_pixel_plane_bounds(placement: Placement) -> Result<[i16; 4], BitmapBakeError> {
+    let left = i64::from(placement.left);
+    let top = -i64::from(placement.top);
+    let right = left + i64::from(placement.width);
+    let bottom = top - i64::from(placement.height);
+    let bounds = [left, bottom, right, top];
+    if bounds
+        .iter()
+        .any(|value| *value < i64::from(i16::MIN) || *value > i64::from(i16::MAX))
+    {
         return Err(BitmapBakeError::new(
             BitmapBakeErrorCode::InvalidGlyphOutline,
             "glyph plane bounds exceed the bitmap V0 i16 range",
         ));
     }
-    Ok([
-        rounded[0] as i16,
-        rounded[1] as i16,
-        rounded[2] as i16,
-        rounded[3] as i16,
-    ])
+    Ok(bounds.map(|value| value as i16))
 }
 
 fn glyph_too_large(glyph_id: u16) -> BitmapBakeError {

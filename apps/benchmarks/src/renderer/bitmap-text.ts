@@ -4,6 +4,7 @@ import {
   FontRegistry,
   type GlyphPaint,
   type Paragraph,
+  type ParagraphLayout,
   type RuntimeShaper,
   type RegisteredFont,
 } from '@pmndrs/text'
@@ -36,6 +37,8 @@ interface BitmapTextResources {
   readonly camera: THREE.OrthographicCamera
   readonly runtime: BitmapFontRuntime
   readonly line: BitmapLine
+  readonly referencePixels: Uint8Array
+  readonly firstDrawMs: number
 }
 
 interface BitmapFontRuntime {
@@ -47,6 +50,7 @@ interface BitmapFontRuntime {
 
 interface BitmapLine {
   readonly paragraph: Paragraph
+  readonly layout: ParagraphLayout
   readonly batch: BitmapDrawBatch
   readonly height: number
   readonly width: number
@@ -172,6 +176,14 @@ async function createResources(
     })
     target.texture.colorSpace = THREE.NoColorSpace
     target.texture.generateMipmaps = false
+    renderer.setRenderTarget(target)
+    renderer.setClearColor(0x000000, 1)
+    renderer.clear()
+    const firstDrawStarted = performance.now()
+    renderer.render(scene, camera)
+    const firstDrawMs = performance.now() - firstDrawStarted
+    renderer.setRenderTarget(null)
+    const referencePixels = composeBitmapReference(line, runtime.bitmap, dpr, WIDTH, HEIGHT)
     return {
       backend,
       dpr,
@@ -181,6 +193,8 @@ async function createResources(
       camera,
       runtime,
       line,
+      referencePixels,
+      firstDrawMs,
     }
   } catch (error) {
     if (line !== undefined) disposeBitmapLine(line)
@@ -276,6 +290,7 @@ async function createBitmapLine(
     batch = bitmapRequest.module.buildBatches(layout, runtime.bitmap, 0, paint)
     return {
       paragraph,
+      layout,
       batch,
       height: layout.height,
       width: layout.width,
@@ -450,7 +465,12 @@ async function renderBitmapText(resources: BitmapTextResources): Promise<TargetR
     physicalHeight,
     resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
   )
-  const quality = assertBitmapTextPixels(bytes, physicalWidth, physicalHeight)
+  const quality = assertBitmapTextPixels(
+    bytes,
+    physicalWidth,
+    physicalHeight,
+    resources.referencePixels,
+  )
   return {
     bytes: bytes.byteLength,
     hash: await sha256(bytes),
@@ -475,6 +495,12 @@ async function renderBitmapText(resources: BitmapTextResources): Promise<TargetR
       inkMaxX: quality.inkMaxX,
       inkMaxY: quality.inkMaxY,
       renderMs,
+      firstDrawMs: resources.firstDrawMs,
+      referenceMismatchBytes: 0,
+      unsnappedOriginFraction: Math.max(
+        devicePixelFraction(resources.line.batch.object.position.x * resources.dpr),
+        devicePixelFraction(resources.line.batch.object.position.y * resources.dpr),
+      ),
     },
   }
 }
@@ -483,6 +509,7 @@ export function assertBitmapTextPixels(
   bytes: Uint8Array,
   width: number,
   height: number,
+  referenceBytes?: Uint8Array,
 ): {
   readonly litPixels: number
   readonly minX: number
@@ -498,6 +525,7 @@ export function assertBitmapTextPixels(
   if (bytes.byteLength !== width * height * 4) {
     throw new Error('bitmap text readback length does not match its target')
   }
+  if (referenceBytes !== undefined) assertExactReference(bytes, referenceBytes)
   let litPixels = 0
   let minX = width
   let minY = height
@@ -544,6 +572,93 @@ export function assertBitmapTextPixels(
     inkMaxX,
     inkMaxY,
   }
+}
+
+function composeBitmapReference(
+  line: BitmapLine,
+  resource: BitmapResource,
+  dpr: number,
+  cssWidth: number,
+  cssHeight: number,
+): Uint8Array {
+  const physicalWidth = Math.round(cssWidth * dpr)
+  const physicalHeight = Math.round(cssHeight * dpr)
+  const output = new Uint8Array(physicalWidth * physicalHeight * 4)
+  for (let alpha = 3; alpha < output.byteLength; alpha += 4) output[alpha] = 255
+
+  const strike = resource.strikes.find(({ ppem }) => ppem === line.batch.strikePpem)
+  if (strike === undefined) throw new Error('bitmap reference is missing the selected strike')
+  const records = new DataView(
+    strike.records.buffer,
+    strike.records.byteOffset,
+    strike.records.byteLength,
+  )
+  const { layout } = line
+  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+    if (layout.glyphFontSlots[glyphIndex] !== 0) continue
+    const glyphId = layout.glyphIds[glyphIndex]
+    const fontSize = layout.glyphFontSizes[glyphIndex]
+    if (glyphId === undefined || fontSize === undefined) continue
+    const record = glyphId * 20
+    const pageIndex = records.getUint16(record + 16, true)
+    if (pageIndex === 0xffff) continue
+    const page = strike.pages[pageIndex]
+    if (page === undefined) throw new Error('bitmap reference record points to a missing page')
+    const texels = page.texture.image.data
+    if (!(texels instanceof Uint8Array)) {
+      throw new TypeError('bitmap reference page is not backed by unsigned-byte coverage')
+    }
+    const scale = fontSize / strike.planeUnitsPerEm
+    if (scale * dpr !== 1) {
+      throw new Error('exact bitmap reference requires one atlas texel per device pixel')
+    }
+    const planeLeft = records.getInt16(record, true)
+    const planeTop = records.getInt16(record + 6, true)
+    const atlasLeft = records.getUint16(record + 8, true)
+    const atlasTop = records.getUint16(record + 10, true)
+    const atlasRight = records.getUint16(record + 12, true)
+    const atlasBottom = records.getUint16(record + 14, true)
+    const left = Math.round(
+      (line.batch.object.position.x + layout.x[glyphIndex]! + planeLeft * scale) * dpr,
+    )
+    const top = Math.round(
+      -(line.batch.object.position.y - layout.y[glyphIndex]! + planeTop * scale) * dpr,
+    )
+    for (let atlasY = atlasTop; atlasY < atlasBottom; atlasY += 1) {
+      for (let atlasX = atlasLeft; atlasX < atlasRight; atlasX += 1) {
+        const x = left + atlasX - atlasLeft
+        const y = top + atlasY - atlasTop
+        if (x < 0 || y < 0 || x >= physicalWidth || y >= physicalHeight) {
+          throw new Error('bitmap reference glyph exceeds the framebuffer')
+        }
+        const coverage = texels[atlasY * page.width + atlasX]!
+        const destination = (y * physicalWidth + x) * 4
+        const previous = output[destination]!
+        const composed = coverage + Math.round((previous * (255 - coverage)) / 255)
+        output[destination] = composed
+        output[destination + 1] = composed
+        output[destination + 2] = composed
+      }
+    }
+  }
+  return output
+}
+
+function assertExactReference(actual: Uint8Array, expected: Uint8Array): void {
+  if (actual.byteLength !== expected.byteLength) {
+    throw new Error('bitmap CPU reference length does not match the GPU readback')
+  }
+  for (let index = 0; index < actual.byteLength; index += 1) {
+    if (actual[index] !== expected[index]) {
+      throw new Error(
+        `bitmap GPU readback differs from its CPU atlas reference at byte ${String(index)}`,
+      )
+    }
+  }
+}
+
+function devicePixelFraction(value: number): number {
+  return Math.abs(value - Math.round(value))
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {
