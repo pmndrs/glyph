@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:820d66f8b6f1411926d99836a0b053e87f7a5030e8ead262e075165119047492"
+source_digest: "sha256:c458c47aa4958e4016aba51f711ce06530f35ffd89e50150547ee48b14d2ce6c"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T02:40:00Z"
+  at: "2026-07-26T03:50:00Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -36,11 +36,11 @@ This package keeps the Rust crate, `no_std + alloc` Wasm build, generated JSON A
 
 The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. URI-addressed external raster entries require a lowercase SHA-256 artifact hash; resolver-only entries may omit both URI and hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. Closed-profile SFNT tags are compared as their four raw directory bytes, so non-ASCII hostile tags fail through the same structured issue contract instead of escaping through UTF-8 decoding. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
 
-The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,285 raw bytes, 168,326 gzip bytes, and 136,887 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. This package is the sole owner of those optimized bytes and exposes one browser-safe canonical URL; the offline Node host reads that URL and the runtime Worker fetches it instead of `@pmndrs/text` shipping a second copy. Reports keep raw and transport costs distinct.
+The build applies pinned Binaryen 129.0.0 `-Oz` after Rust release linking. The current hardened zero-import module is 434,251 raw bytes, 168,280 gzip bytes, and 137,042 Brotli bytes while preserving the embedded ABI and canonical font artifact hash. This package is the sole owner of those optimized bytes and exposes one browser-safe canonical URL; the offline Node host reads that URL and the runtime Worker fetches it instead of `@pmndrs/text` shipping a second copy. Reports keep raw and transport costs distinct.
 
 The direct-memory boundary owns every request and response allocation in a module registry. Caller-controlled requests are capped at 64 MiB and use fallible reservation; use and release require the exact active pointer/length pair, forged or repeated releases are harmless, checked response arithmetic prevents truncation, and response metadata cannot outlive its owned bytes. The TypeScript wrapper enters cleanup before its first copy, releases each successful allocation after any later failure, and validates the complete generated ABI plus every promised response/error field before constructing a public result. The fixed, tiny `WasmState` allocation still uses stable Rust's infallible `Box::new` once per Wasm instance; replacing that theoretical OOM trap would require unstable allocator APIs or a disproportionate static-state design.
 
-Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract.
+Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC tables and `skrifa` supplies metrics and glyph bounds.[^fontations] Project code owns the accepted table policy, reduced-SFNT serialization, V0 extent encoding, hashes, reports, ABI, and GLB contract. A source `STAT` table alone is not evidence of variation axes and no longer rejects an otherwise static font; actual axis/delta tables still reject V0 input, and `STAT` remains omitted from the reduced static payload.
 
 The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, discover application fonts, or provide a filesystem/Worker host. The public Node host now wraps it from `@pmndrs/text/bake`; the Worker and runtime shaper remain separate packages. Its host-only `generate-shaping-oracle` binary uses pinned HarfRust 0.12.0 to produce deterministic UTF-16 fixture JSON and is not linked into the `no_std` Wasm artifact. The oracle-only `inspect-font-fixture` binary uses Fontations rather than a project parser to emit deterministic glyph/table/cmap facts. Mandatory package E2E lanes authenticate Inter 4.1, Amiri 1.002, and Noto Sans CJK JP 2.004 before exercising the compiled Wasm API; none can skip based on the environment. Noto proves the 65,535-glyph boundary, `cmap` formats 12/14, supplementary/variation mappings, exact source/reduced HarfRust and HarfBuzz equality, and exact retention of source `BASE`, `VORG`, `vhea`, and `vmtx` without fabricating absent tables or implementing vertical layout.
 

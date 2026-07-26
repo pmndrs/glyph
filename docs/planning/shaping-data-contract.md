@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5.6"
-  at: "2026-07-26T02:55:00Z"
+  at: "2026-07-26T03:50:00Z"
 ---
 
 # Shaping data contract V0
@@ -100,7 +100,7 @@ OpenType extension lookup types are retained inside `GSUB` or `GPOS`; they are n
 
 One asset represents one fixed variation instance. The initial fixture is a non-variable static font. Variable input is rejected until the baker can deterministically instantiate outlines, metrics, cmap/layout feature variations, and raster data to the same coordinates.
 
-Consequently, V0 shaping payloads MUST NOT contain `fvar`, `avar`, `gvar`, `cvar`, `HVAR`, `VVAR`, `MVAR`, or `STAT`. Adding runtime variation axes is a format revision, not an undocumented optional path.
+Consequently, V0 shaping payloads MUST NOT contain `fvar`, `avar`, `gvar`, `cvar`, `HVAR`, `VVAR`, `MVAR`, or `STAT`. Adding runtime variation axes is a format revision, not an undocumented optional path. On input, `STAT` alone is accepted because it can describe a static family member without defining an axis; any actual axis or delta table still rejects the source, and `STAT` is dropped from the reduced payload.
 
 ### Excluded tables
 

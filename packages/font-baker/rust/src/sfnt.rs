@@ -40,7 +40,7 @@ const OPTIONAL_TABLES: [Tag; 8] = [
     Tag::new(b"vhea"),
     Tag::new(b"vmtx"),
 ];
-const VARIABLE_TABLES: [Tag; 8] = [
+const VARIABLE_TABLES: [Tag; 7] = [
     Tag::new(b"fvar"),
     Tag::new(b"avar"),
     Tag::new(b"gvar"),
@@ -48,7 +48,6 @@ const VARIABLE_TABLES: [Tag; 8] = [
     Tag::new(b"HVAR"),
     Tag::new(b"VVAR"),
     Tag::new(b"MVAR"),
-    Tag::new(b"STAT"),
 ];
 const UNSUPPORTED_SHAPING_TABLES: [Tag; 9] = [
     Tag::new(b"morx"),
@@ -426,6 +425,25 @@ mod tests {
                 "maxp", "vhea", "vmtx"
             ]
         );
+    }
+
+    #[test]
+    fn stat_alone_does_not_make_a_static_font_variable() {
+        let mut source = INTER.to_vec();
+        let record = table_record(&source, *b"name");
+        source[record..record + 4].copy_from_slice(b"STAT");
+
+        build_shaping_payload(&source, 0).unwrap();
+    }
+
+    #[test]
+    fn variation_axis_tables_still_reject_variable_input() {
+        let mut source = INTER.to_vec();
+        let record = table_record(&source, *b"name");
+        source[record..record + 4].copy_from_slice(b"fvar");
+
+        let error = build_shaping_payload(&source, 0).err().unwrap();
+        assert_eq!(error.code, BakeErrorCode::UnsupportedVariableFont);
     }
 
     fn table_record(font: &[u8], wanted: [u8; 4]) -> usize {

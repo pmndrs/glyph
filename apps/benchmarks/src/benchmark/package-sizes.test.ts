@@ -36,7 +36,7 @@ describe('independent package-size report', () => {
       'portable-baker-wasm': {
         minifiedBytes: 434_285,
         gzipBytes: 168_326,
-        brotliBytes: 136_887,
+        brotliBytes: 137_100,
       },
     } as const
 

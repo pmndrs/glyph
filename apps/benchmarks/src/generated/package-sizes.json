@@ -9,7 +9,7 @@
       "rawBytes": 268350,
       "minifiedBytes": 209715,
       "gzipBytes": 62251,
-      "brotliBytes": 47641
+      "brotliBytes": 47647
     },
     {
       "id": "font-validator-js",
@@ -28,8 +28,8 @@
       "format": "javascript",
       "rawBytes": 5264,
       "minifiedBytes": 3861,
-      "gzipBytes": 1478,
-      "brotliBytes": 1324
+      "gzipBytes": 1480,
+      "brotliBytes": 1319
     },
     {
       "id": "runtime-baker-worker-js",
@@ -76,10 +76,10 @@
       "label": "Portable baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 434285,
-      "minifiedBytes": 434285,
-      "gzipBytes": 168326,
-      "brotliBytes": 136887
+      "rawBytes": 434251,
+      "minifiedBytes": 434251,
+      "gzipBytes": 168280,
+      "brotliBytes": 137042
     },
     {
       "id": "unicode-analysis-js",
