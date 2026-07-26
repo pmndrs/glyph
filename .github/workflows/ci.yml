@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install headless Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter @pmndrs/text-benchmarks exec playwright install --with-deps chromium
 
       - name: Run deterministic repository checks
         run: pnpm check

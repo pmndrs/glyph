@@ -2,7 +2,7 @@
 
 ## 2026-07-26
 
-- **CI** — Added the required pull-request and `main` workflow over the canonical `pnpm check` gate using immutable current-release action SHAs, mise-owned toolchain pins, the frozen dependency graph, and headless Chromium. Vitexec, hardware-GPU evidence, performance thresholds, and coverage-guided nightly fuzzing remain explicit non-CI lanes.
+- **CI** — Added the required pull-request and `main` workflow over the canonical `pnpm check` gate using immutable current-release action SHAs, mise-owned toolchain pins, the frozen dependency graph, and package-owned headless Chromium provisioning. Vitexec, hardware-GPU evidence, performance thresholds, and coverage-guided nightly fuzzing remain explicit non-CI lanes.
 
 ## 2026-07-25
 
