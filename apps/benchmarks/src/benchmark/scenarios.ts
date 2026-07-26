@@ -17,6 +17,24 @@ function deterministicValidation(hashes: readonly string[]): string {
   return `${hashes.length}/${hashes.length} deterministic outputs`
 }
 
+function tslBaselineValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    if (
+      value.outputBytes !== 64 ||
+      metrics?.pixelCount !== 16 ||
+      metrics.exactRedPixels !== 16 ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error('TSL baseline did not preserve its exact backend and pixel contract')
+    }
+  }
+  return `${values.length}/${values.length} exact TSL shader readbacks`
+}
+
 function shapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
   deterministicValidation(values.map((value) => value.hash))
   for (const value of values) {
@@ -140,6 +158,13 @@ function finiteNonnegative(value: unknown): value is number {
 }
 
 export const scenarios: readonly BenchmarkScenario[] = [
+  {
+    id: 'tsl-shader-baseline',
+    label: 'TSL shader baseline',
+    description: 'Exact TSL compilation and readback through WebGPURenderer.',
+    requiredCapabilities: new Set(['deterministic', 'raster']),
+    validate: tslBaselineValidation,
+  },
   {
     id: 'overview',
     label: 'Overview',

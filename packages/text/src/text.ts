@@ -1,4 +1,4 @@
-import type { ColorRepresentation } from 'three'
+import type { ColorRepresentation } from 'three/webgpu'
 import type { AnyFontToken, FontInput, RegisteredFont } from './font.js'
 import type { ParagraphLayout } from './layout.js'
 import type { AnyRasterInput } from './raster.js'
