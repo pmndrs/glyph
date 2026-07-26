@@ -1,4 +1,9 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  TextareaHTMLAttributes,
+} from 'react'
 
 function classes(...values: readonly (string | false | undefined)[]): string {
   return values.filter(Boolean).join(' ')
@@ -85,6 +90,22 @@ export function SelectField({
       >
         {children}
       </select>
+    </label>
+  )
+}
+
+export function TextareaField({
+  label,
+  className,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { readonly label: string }) {
+  return (
+    <label className={classes('grid gap-1.5', className)}>
+      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
+      <textarea
+        className="min-h-20 min-w-0 resize-y rounded-md border border-border bg-background px-2.5 py-2 text-xs leading-relaxed text-foreground outline-none focus:border-accent"
+        {...props}
+      />
     </label>
   )
 }

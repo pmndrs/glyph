@@ -1,6 +1,7 @@
 import {
   FontRegistry,
   Text,
+  type FontFeature,
   type JsonValue,
   type ParagraphLayout,
   type RegisteredFont,
@@ -8,7 +9,11 @@ import {
 import { bitmap, bitmapRasterKey, type BitmapResource } from '@pmndrs/text/raster/bitmap'
 import * as THREE from 'three/webgpu'
 
+import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url'
+import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16.font.glb?url'
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
+import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
+import type { AdvancedShapingFontFixture } from '../benchmark/advanced-shaping'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
@@ -21,6 +26,12 @@ const CLIPPED_HEIGHT = 64
 const BITMAP_FONT_SIZE = 16
 const HISTORY_CAPACITY = 120
 const bitmapRequest = bitmap({ strikes: [16] as const })
+const bitmapFontUrls: Readonly<Record<AdvancedShapingFontFixture, string>> = {
+  inter: bitmapFontUrl,
+  amiri: amiriBitmapFontUrl,
+  'noto-sans-devanagari': devanagariBitmapFontUrl,
+  'dot-gothic-16': dotGothicBitmapFontUrl,
+}
 
 interface BitmapTextResources {
   readonly backend: RendererBackend
@@ -119,8 +130,25 @@ export interface BitmapTextConformanceCapture {
 
 export interface BitmapTextPreview {
   resize(width: number, height: number): void
-  update(options: { readonly fontSize: number; readonly layoutWidthRatio: number }): void
+  update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>
   dispose(): Promise<void>
+}
+
+export interface BitmapTextPreviewUpdate {
+  readonly fontSize: number
+  readonly layoutWidthRatio: number
+  readonly text: string
+  readonly language: string
+  readonly direction: 'ltr' | 'rtl'
+  readonly features: readonly FontFeature[]
+}
+
+export interface BitmapTextPreviewSnapshot {
+  readonly revision: number
+  readonly glyphCount: number
+  readonly lineCount: number
+  readonly layoutWidth: number
+  readonly layoutHeight: number
 }
 
 export interface BitmapTextPreviewOptions {
@@ -131,6 +159,10 @@ export interface BitmapTextPreviewOptions {
   readonly height: number
   readonly layoutWidth: number
   readonly expectedGlyphCount?: number
+  readonly fontFixture?: AdvancedShapingFontFixture
+  readonly language?: string
+  readonly direction?: 'ltr' | 'rtl'
+  readonly features?: readonly FontFeature[]
   readonly text: string
   readonly width: number
   readonly signal?: AbortSignal
@@ -254,11 +286,15 @@ async function createResources(
 
 async function loadBitmapFont(
   signal?: AbortSignal,
+  fixture: AdvancedShapingFontFixture = 'inter',
 ): Promise<{ readonly artifactBytes: number; readonly font: RegisteredFont }> {
   signal?.throwIfAborted()
   let font: RegisteredFont | undefined
   try {
-    const fontResponse = await fetch(bitmapFontUrl, signal === undefined ? undefined : { signal })
+    const fontResponse = await fetch(
+      bitmapFontUrls[fixture],
+      signal === undefined ? undefined : { signal },
+    )
     if (!fontResponse.ok)
       throw new Error(`Unable to load bitmap font fixture (${fontResponse.status})`)
     const fontBytes = await fontResponse.arrayBuffer()
@@ -279,6 +315,11 @@ async function createBitmapLine(
   fontSize: number,
   signal?: AbortSignal,
   layoutWidth?: number,
+  shaping: {
+    readonly language: string
+    readonly direction: 'ltr' | 'rtl'
+    readonly features: readonly FontFeature[]
+  } = { language: 'en', direction: 'ltr', features: [] },
 ): Promise<BitmapLine> {
   signal?.throwIfAborted()
   const object = new Text({
@@ -287,9 +328,9 @@ async function createBitmapLine(
     raster: bitmapRequest,
     fontSize,
     lineHeight: 1,
-    language: 'en',
-    direction: 'ltr',
-    features: [],
+    language: shaping.language,
+    direction: shaping.direction,
+    features: shaping.features,
     ...(layoutWidth === undefined
       ? {}
       : { width: layoutWidth, wrap: 'word' as const, overflow: 'visible' as const }),
@@ -446,6 +487,10 @@ function countRenderedGlyphs(object: THREE.Object3D): number {
   return count
 }
 
+function countMissingGlyphs(layout: ParagraphLayout): number {
+  return layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0)
+}
+
 export async function createBitmapTextPreview(
   options: BitmapTextPreviewOptions,
 ): Promise<BitmapTextPreview> {
@@ -454,11 +499,15 @@ export async function createBitmapTextPreview(
     canvas,
     dpr,
     expectedGlyphCount,
+    fontFixture = 'inter',
     fontSize,
     height,
     layoutWidth,
     signal,
     text,
+    language = 'en',
+    direction = 'ltr',
+    features = [],
     onError,
     onStats,
   } = options
@@ -482,13 +531,17 @@ export async function createBitmapTextPreview(
   let line: BitmapLine | undefined
   try {
     const fontStarted = performance.now()
-    const loadedFont = await loadBitmapFont(signal)
+    const loadedFont = await loadBitmapFont(signal, fontFixture)
     font = loadedFont.font
     const fontLoadMs = performance.now() - fontStarted
     signal?.throwIfAborted()
     const scene = new THREE.Scene()
     const textStarted = performance.now()
-    line = await createBitmapLine(font, text, fontSize, signal, layoutWidth)
+    line = await createBitmapLine(font, text, fontSize, signal, layoutWidth, {
+      language,
+      direction,
+      features,
+    })
     if (expectedGlyphCount !== undefined && line.glyphCount !== expectedGlyphCount) {
       throw new Error(
         `live workload rendered ${line.glyphCount} glyphs; expected ${expectedGlyphCount}`,
@@ -538,20 +591,31 @@ export async function createBitmapTextPreview(
       )
     }
     positionLine()
-    const reflowToViewport = (): void => {
+    const reflowToViewport = (
+      update?: Pick<BitmapTextPreviewUpdate, 'text' | 'language' | 'direction' | 'features'>,
+    ): Promise<BitmapTextPreviewSnapshot> => {
       const revision = ++layoutRevision
-      activeLine.object.setProperties({
+      const dimensions = {
         fontSize: currentFontSize,
         width: Math.max(120, width * layoutWidthRatio),
+      }
+      if (update === undefined) activeLine.object.setProperties(dimensions)
+      else activeLine.object.setProperties({ ...dimensions, ...update })
+      return activeLine.object.ready.then(() => {
+        if (closing || disposed || revision !== layoutRevision) {
+          throw new DOMException('The bitmap preview update was superseded', 'AbortError')
+        }
+        positionLine()
+        const layout = activeLine.object.layout
+        if (layout === undefined) throw new Error('bitmap preview update did not commit a layout')
+        return {
+          revision,
+          glyphCount: countRenderedGlyphs(activeLine.object),
+          lineCount: layout.lineGlyphCounts.length,
+          layoutWidth: layout.width,
+          layoutHeight: layout.height,
+        }
       })
-      void activeLine.object.ready
-        .then(() => {
-          if (!closing && !disposed && revision === layoutRevision) positionLine()
-        })
-        .catch((error: unknown) => {
-          if (closing || disposed || revision !== layoutRevision) return
-          onError(error)
-        })
     }
     const scheduleGpuTimestamp = (): void => {
       if (
@@ -624,7 +688,7 @@ export async function createBitmapTextPreview(
           medianSubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.5),
           p95SubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.95),
           glyphCount: countRenderedGlyphs(activeLine.object),
-          missingGlyphCount: activeLine.missingGlyphCount,
+          missingGlyphCount: countMissingGlyphs(layout),
           drawCount: countDraws(activeLine.object),
           layoutWidth: layout.width,
           layoutHeight: layout.height,
@@ -670,10 +734,20 @@ export async function createBitmapTextPreview(
         camera.right = width
         camera.bottom = -viewportHeight
         camera.updateProjectionMatrix()
-        reflowToViewport()
+        void reflowToViewport().catch((error: unknown) => {
+          if (
+            !closing &&
+            !disposed &&
+            !(error instanceof DOMException && error.name === 'AbortError')
+          ) {
+            onError(error)
+          }
+        })
       },
       update(next) {
-        if (closing || disposed) return
+        if (closing || disposed) {
+          return Promise.reject(new DOMException('The bitmap preview is disposed', 'AbortError'))
+        }
         currentFontSize = positiveViewportSize(next.fontSize, 'bitmap preview font size')
         if (
           !Number.isFinite(next.layoutWidthRatio) ||
@@ -683,7 +757,12 @@ export async function createBitmapTextPreview(
           throw new RangeError('bitmap preview layout width ratio must be in (0, 1]')
         }
         layoutWidthRatio = next.layoutWidthRatio
-        reflowToViewport()
+        return reflowToViewport({
+          text: next.text,
+          language: next.language,
+          direction: next.direction,
+          features: next.features,
+        })
       },
       dispose() {
         if (disposal !== undefined) return disposal

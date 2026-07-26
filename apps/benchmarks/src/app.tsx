@@ -14,6 +14,17 @@ import {
   BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
   BENCHMARK_IPSUM_TEXT,
 } from './benchmark/benchmark-ipsum'
+import {
+  ADVANCED_SHAPING_CASES,
+  advanceAdvancedShaping,
+  advancedShapingFrame,
+  initialAdvancedShapingState,
+  updateAdvancedShaping,
+  type AdvancedShapingCommand,
+  type AdvancedShapingFrame,
+  type AdvancedShapingFontFixture,
+  type AdvancedShapingState,
+} from './benchmark/advanced-shaping'
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts'
 import { environmentResource } from './benchmark/environment'
 import { runRegisteredBenchmark } from './benchmark/execution'
@@ -27,12 +38,13 @@ import {
 } from './benchmark/url-state'
 import { ExportPanel } from './components/export-panel'
 import { Report } from './components/report'
-import { Button, Chip, Field, Metric, Toggle } from './components/ui'
+import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
 import packageSizes from './generated/package-sizes.json'
 import type {
   BitmapTextConformanceCapture,
   BitmapTextLiveStats,
   BitmapTextPreview,
+  BitmapTextPreviewUpdate,
 } from './renderer/bitmap-text'
 
 interface WorkloadOption {
@@ -42,11 +54,31 @@ interface WorkloadOption {
   readonly available: boolean
 }
 
+interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
+  readonly fontFixture: AdvancedShapingFontFixture
+  readonly expectedGlyphCount: number | undefined
+  readonly timelineTick: number | undefined
+}
+
+const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = []
+const showcaseFontLabels: Readonly<Record<AdvancedShapingFontFixture, string>> = {
+  inter: 'Inter Regular 4.1',
+  amiri: 'Amiri Regular 1.002',
+  'noto-sans-devanagari': 'Noto Sans Devanagari',
+  'dot-gothic-16': 'DotGothic16 Japanese',
+}
+
 const benchmarkWorkloads: readonly WorkloadOption[] = [
   {
     id: 'benchmark-ipsum',
     label: 'Benchmark ipsum',
     description: 'Paragraph-scale native-strike text with continuous rendering.',
+    available: true,
+  },
+  {
+    id: 'advanced-shaping',
+    label: 'Advanced shaping',
+    description: 'Editable deterministic playback across complex shaping and line breaking.',
     available: true,
   },
   {
@@ -142,9 +174,11 @@ function Harness() {
   const [showGrid, setShowGrid] = useState(true)
   const [fontSize, setFontSize] = useState(16)
   const [layoutWidthPercent, setLayoutWidthPercent] = useState(82)
+  const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
   const [isPending, startTransition] = useTransition()
 
   const workload = workloadById(location.mode, location.workload)
+  const showcaseFrame = advancedShapingFrame(showcaseState)
   const available = location.technique === 'bitmap' && workload.available
   const backendAvailable = location.backend !== 'webgpu' || environment.webgpu
 
@@ -206,11 +240,37 @@ function Harness() {
     })
   }
 
+  function dispatchShowcase(command: AdvancedShapingCommand): void {
+    setShowcaseState((state) => updateAdvancedShaping(state, command))
+    setLiveCapture(undefined)
+  }
+
+  const advanceShowcase = useEffectEvent(() => {
+    setShowcaseState((state) => advanceAdvancedShaping(state))
+  })
+  useEffect(() => {
+    if (!showcaseState.playing || showcaseState.editedText !== undefined) return
+    let animationFrame = 0
+    let lastTickAt = performance.now()
+    const animate = (timestamp: number): void => {
+      if (timestamp - lastTickAt >= 140) {
+        advanceShowcase()
+        lastTickAt = timestamp
+      }
+      animationFrame = requestAnimationFrame(animate)
+    }
+    animationFrame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(animationFrame)
+  }, [showcaseState.editedText, showcaseState.playing])
+
   const controls = (
     <Controls
       backend={location.backend}
       dpr={dpr}
       mode={location.mode}
+      workload={location.workload}
+      showcaseFrame={showcaseFrame}
+      showcaseState={showcaseState}
       fontSize={fontSize}
       layoutWidthPercent={layoutWidthPercent}
       samples={samples}
@@ -233,6 +293,7 @@ function Harness() {
         setLiveCapture(undefined)
       }}
       onSamples={setSamples}
+      onShowcase={dispatchShowcase}
       onShowGrid={setShowGrid}
       onWarmup={setWarmup}
     />
@@ -253,7 +314,11 @@ function Harness() {
       />
       {desktop ? (
         <div className="grid h-[calc(100vh-52px)] min-h-[680px] grid-cols-[224px_minmax(640px,1fr)_288px]">
-          <WorkloadRail location={location} onLocation={setLocation} />
+          <WorkloadRail
+            location={location}
+            showcaseFrame={showcaseFrame}
+            onLocation={setLocation}
+          />
           <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
             <Scene
               dpr={dpr}
@@ -266,6 +331,7 @@ function Harness() {
               fontSize={fontSize}
               layoutWidthPercent={layoutWidthPercent}
               summary={summary}
+              showcaseFrame={showcaseFrame}
               onLiveStats={setLiveStats}
             />
           </main>
@@ -286,6 +352,7 @@ function Harness() {
                 fontSize={fontSize}
                 layoutWidthPercent={layoutWidthPercent}
                 summary={summary}
+                showcaseFrame={showcaseFrame}
                 onLiveStats={setLiveStats}
               />
             </div>
@@ -402,9 +469,11 @@ function TopBar({
 
 function WorkloadRail({
   location,
+  showcaseFrame,
   onLocation,
 }: {
   readonly location: HarnessLocation
+  readonly showcaseFrame: AdvancedShapingFrame
   readonly onLocation: (value: Partial<HarnessLocation>) => void
 }) {
   const workloads = location.mode === 'benchmark' ? benchmarkWorkloads : conformanceWorkloads
@@ -448,7 +517,11 @@ function WorkloadRail({
       </nav>
       <div className="mt-5 rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Pinned fixture</p>
-        <p className="mt-2 text-xs">Inter Regular 4.1</p>
+        <p className="mt-2 text-xs">
+          {location.workload === 'advanced-shaping'
+            ? showcaseFontLabels[showcaseFrame.caseDefinition.fontFixture]
+            : 'Inter Regular 4.1'}
+        </p>
         <p className="mt-1 font-mono text-[9px] text-dim">16 px grayscale bitmap strike</p>
       </div>
     </aside>
@@ -465,6 +538,7 @@ function Scene({
   liveCapture,
   liveStats,
   location,
+  showcaseFrame,
   summary,
   onLiveStats,
 }: {
@@ -477,10 +551,13 @@ function Scene({
   readonly liveCapture: LiveBenchmarkCapture | undefined
   readonly liveStats: BitmapTextLiveStats | undefined
   readonly location: HarnessLocation
+  readonly showcaseFrame: AdvancedShapingFrame
   readonly summary: BenchmarkSummary | undefined
   readonly onLiveStats: (stats: BitmapTextLiveStats) => void
 }) {
   const workload = workloadById(location.mode, location.workload)
+  const liveFontFixture =
+    location.workload === 'advanced-shaping' ? showcaseFrame.caseDefinition.fontFixture : 'inter'
   return (
     <section
       className="grid min-h-full min-w-0 grid-rows-[auto_minmax(520px,1fr)_auto] gap-3"
@@ -509,8 +586,10 @@ function Scene({
           fontSize={fontSize}
           grid={grid}
           layoutWidthPercent={layoutWidthPercent}
-          key={`${location.backend}-${String(dpr)}`}
+          key={`${location.backend}-${String(dpr)}-${liveFontFixture}`}
+          showcaseFrame={showcaseFrame}
           stats={liveStats}
+          workload={location.workload}
           onStats={onLiveStats}
         />
       ) : (
@@ -544,7 +623,9 @@ function BenchmarkSurface({
   fontSize,
   grid,
   layoutWidthPercent,
+  showcaseFrame,
   stats,
+  workload,
   onStats,
 }: {
   readonly backend: GraphicsBackend
@@ -552,9 +633,33 @@ function BenchmarkSurface({
   readonly fontSize: number
   readonly grid: boolean
   readonly layoutWidthPercent: number
+  readonly showcaseFrame: AdvancedShapingFrame
   readonly stats: BitmapTextLiveStats | undefined
+  readonly workload: string
   readonly onStats: (stats: BitmapTextLiveStats) => void
 }) {
+  const advanced = workload === 'advanced-shaping'
+  const textConfiguration: LiveTextConfiguration = advanced
+    ? {
+        direction: showcaseFrame.caseDefinition.direction,
+        expectedGlyphCount: undefined,
+        features: showcaseFrame.caseDefinition.features,
+        fontFixture: showcaseFrame.caseDefinition.fontFixture,
+        language: showcaseFrame.caseDefinition.language,
+        layoutWidthRatio: showcaseFrame.widthPermille / 1000,
+        text: showcaseFrame.text,
+        timelineTick: showcaseFrame.tick,
+      }
+    : {
+        direction: 'ltr',
+        expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+        features: EMPTY_FONT_FEATURES,
+        fontFixture: 'inter',
+        language: 'en',
+        layoutWidthRatio: layoutWidthPercent / 100,
+        text: BENCHMARK_IPSUM_TEXT,
+        timelineTick: undefined,
+      }
   return (
     <div className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3">
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
@@ -619,7 +724,9 @@ function BenchmarkSurface({
           <div>
             <p className="eyebrow">Realtime scene</p>
             <p className="mt-1 text-xs text-muted">
-              Paragraph-scale text renders continuously and reflows with its live viewport.
+              {advanced
+                ? `${showcaseFrame.caseDefinition.label} reshapes at exact timeline states while the live viewport reflows.`
+                : 'Paragraph-scale text renders continuously and reflows with its live viewport.'}
             </p>
           </div>
           <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
@@ -629,7 +736,7 @@ function BenchmarkSurface({
           dpr={dpr}
           fontSize={fontSize}
           grid={grid}
-          layoutWidthPercent={layoutWidthPercent}
+          textConfiguration={textConfiguration}
           onStats={onStats}
         />
       </div>
@@ -753,14 +860,14 @@ function BitmapTextViewport({
   dpr,
   fontSize,
   grid,
-  layoutWidthPercent,
+  textConfiguration,
   onStats,
 }: {
   readonly backend: GraphicsBackend
   readonly dpr: 1 | 2
   readonly fontSize: number
   readonly grid: boolean
-  readonly layoutWidthPercent: number
+  readonly textConfiguration: LiveTextConfiguration
   readonly onStats: (stats: BitmapTextLiveStats) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -768,7 +875,20 @@ function BitmapTextViewport({
   const previewRef = useRef<BitmapTextPreview>(undefined)
   const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const [stats, setStats] = useState<BitmapTextLiveStats>()
+  const [settledRevision, setSettledRevision] = useState(0)
+  const [settledTextLength, setSettledTextLength] = useState(0)
+  const [settledTimelineTick, setSettledTimelineTick] = useState<number>()
   const [error, setError] = useState<string>()
+  const {
+    direction,
+    expectedGlyphCount,
+    features,
+    fontFixture,
+    language,
+    layoutWidthRatio,
+    text,
+    timelineTick,
+  } = textConfiguration
   const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
     setStats(next)
     onStats(next)
@@ -779,9 +899,25 @@ function BitmapTextViewport({
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   const previewConfiguration = useEffectEvent(() => ({
+    direction,
+    expectedGlyphCount,
+    features,
+    fontFixture,
     fontSize: fontSize / dpr,
-    layoutWidthRatio: layoutWidthPercent / 100,
+    language,
+    layoutWidthRatio,
+    text,
+    timelineTick,
   }))
+  const publishSettledRevision = useEffectEvent((revision: number) => {
+    setSettledRevision(revision)
+  })
+  const publishSettledTimelineTick = useEffectEvent((tick: number | undefined) => {
+    setSettledTimelineTick(tick)
+  })
+  const publishSettledTextLength = useEffectEvent((length: number) => {
+    setSettledTextLength(length)
+  })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -808,11 +944,17 @@ function BitmapTextViewport({
         backend,
         canvas,
         dpr,
-        expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+        ...(configuration.expectedGlyphCount === undefined
+          ? {}
+          : { expectedGlyphCount: configuration.expectedGlyphCount }),
+        fontFixture: configuration.fontFixture,
         fontSize: configuration.fontSize,
         height: Math.max(1, bounds.height),
         layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
-        text: BENCHMARK_IPSUM_TEXT,
+        text: configuration.text,
+        language: configuration.language,
+        direction: configuration.direction,
+        features: configuration.features,
         width: Math.max(1, bounds.width),
         signal: controller.signal,
         onError: publishError,
@@ -824,6 +966,8 @@ function BitmapTextViewport({
       }
       preview = created
       previewRef.current = created
+      publishSettledTimelineTick(configuration.timelineTick)
+      publishSettledTextLength(configuration.text.length)
       resize()
     })
     void initialization.catch(publishError)
@@ -845,17 +989,35 @@ function BitmapTextViewport({
   }, [backend, dpr])
 
   useEffect(() => {
-    previewRef.current?.update({
-      fontSize: fontSize / dpr,
-      layoutWidthRatio: layoutWidthPercent / 100,
-    })
-  }, [dpr, fontSize, layoutWidthPercent])
+    const preview = previewRef.current
+    if (preview === undefined) return
+    void preview
+      .update({
+        fontSize: fontSize / dpr,
+        layoutWidthRatio,
+        text,
+        language,
+        direction,
+        features,
+      })
+      .then((snapshot) => {
+        publishSettledRevision(snapshot.revision)
+        publishSettledTimelineTick(timelineTick)
+        publishSettledTextLength(text.length)
+      })
+      .catch(publishError)
+  }, [direction, dpr, features, fontSize, language, layoutWidthRatio, text, timelineTick])
 
   return (
     <div
       className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
       data-layout-width={stats?.layoutWidth}
       data-line-count={stats?.lineCount}
+      data-glyph-count={stats?.glyphCount}
+      data-missing-glyph-count={stats?.missingGlyphCount}
+      data-settled-revision={settledRevision}
+      data-settled-text-length={settledTextLength}
+      data-settled-tick={settledTimelineTick}
       data-backend={stats?.backend}
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
@@ -961,7 +1123,10 @@ function Controls({
   fontSize,
   layoutWidthPercent,
   mode,
+  workload,
   samples,
+  showcaseFrame,
+  showcaseState,
   showGrid,
   warmup,
   webgpu,
@@ -970,6 +1135,7 @@ function Controls({
   onFontSize,
   onLayoutWidthPercent,
   onSamples,
+  onShowcase,
   onShowGrid,
   onWarmup,
 }: {
@@ -978,7 +1144,10 @@ function Controls({
   readonly fontSize: number
   readonly layoutWidthPercent: number
   readonly mode: HarnessMode
+  readonly workload: string
   readonly samples: number
+  readonly showcaseFrame: AdvancedShapingFrame
+  readonly showcaseState: AdvancedShapingState
   readonly showGrid: boolean
   readonly warmup: number
   readonly webgpu: boolean
@@ -987,6 +1156,7 @@ function Controls({
   readonly onFontSize: (value: number) => void
   readonly onLayoutWidthPercent: (value: number) => void
   readonly onSamples: (value: number) => void
+  readonly onShowcase: (command: AdvancedShapingCommand) => void
   readonly onShowGrid: (value: boolean) => void
   readonly onWarmup: (value: number) => void
 }) {
@@ -1037,17 +1207,74 @@ function Controls({
             value={fontSize}
             onChange={(event) => onFontSize(event.currentTarget.valueAsNumber)}
           />
-          <Field
-            label={`Layout width · ${layoutWidthPercent}%`}
-            max={100}
-            min={40}
-            step={2}
-            type="range"
-            value={layoutWidthPercent}
-            onChange={(event) => onLayoutWidthPercent(event.currentTarget.valueAsNumber)}
-          />
+          {workload !== 'advanced-shaping' && (
+            <Field
+              label={`Layout width · ${layoutWidthPercent}%`}
+              max={100}
+              min={40}
+              step={2}
+              type="range"
+              value={layoutWidthPercent}
+              onChange={(event) => onLayoutWidthPercent(event.currentTarget.valueAsNumber)}
+            />
+          )}
           <p className="text-[10px] leading-relaxed text-muted">
-            Resizing the scene or changing its layout width commits a new paragraph reflow.
+            {workload === 'advanced-shaping'
+              ? 'The authored timeline changes layout width and commits exact paragraph states.'
+              : 'Resizing the scene or changing its layout width commits a new paragraph reflow.'}
+          </p>
+        </div>
+      )}
+      {mode === 'benchmark' && workload === 'advanced-shaping' && (
+        <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
+          <p className="eyebrow">Shaping timeline</p>
+          <SelectField
+            label="Case"
+            value={showcaseState.caseId}
+            onChange={(caseId) => {
+              const definition = ADVANCED_SHAPING_CASES.find((entry) => entry.id === caseId)
+              if (definition !== undefined) {
+                onShowcase({ kind: 'select-case', caseId: definition.id })
+              }
+            }}
+          >
+            {ADVANCED_SHAPING_CASES.map((definition) => (
+              <option key={definition.id} value={definition.id}>
+                {definition.label}
+              </option>
+            ))}
+          </SelectField>
+          <TextareaField
+            label="Live text"
+            value={showcaseFrame.text}
+            onChange={(event) => onShowcase({ kind: 'edit', text: event.currentTarget.value })}
+          />
+          <div className="grid grid-cols-4 gap-1.5">
+            <Button onClick={() => onShowcase({ kind: 'step', ticks: -1 })}>−1</Button>
+            <Button
+              variant={showcaseState.playing ? 'primary' : 'secondary'}
+              onClick={() => onShowcase({ kind: showcaseState.playing ? 'pause' : 'play' })}
+            >
+              {showcaseState.playing ? 'Pause' : 'Play'}
+            </Button>
+            <Button onClick={() => onShowcase({ kind: 'step', ticks: 1 })}>+1</Button>
+            <Button onClick={() => onShowcase({ kind: 'restore-authored-text' })}>Reset</Button>
+          </div>
+          <Field
+            label={`Timeline · ${showcaseFrame.tick} / ${showcaseFrame.tickCount}`}
+            max={showcaseFrame.tickCount}
+            min={0}
+            step={1}
+            type="range"
+            value={showcaseFrame.tick}
+            onChange={(event) =>
+              onShowcase({ kind: 'seek', tick: event.currentTarget.valueAsNumber })
+            }
+          />
+          <p className="font-mono text-[9px] leading-relaxed text-muted">
+            {showcaseFrame.caseDefinition.language.toUpperCase()} ·{' '}
+            {showcaseFrame.caseDefinition.direction.toUpperCase()} · WIDTH{' '}
+            {(showcaseFrame.widthPermille / 10).toFixed(0)}%
           </p>
         </div>
       )}
