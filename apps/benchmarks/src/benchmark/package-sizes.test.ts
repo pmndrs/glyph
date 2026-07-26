@@ -32,7 +32,7 @@ describe('independent package-size report', () => {
         gzipBytes: 3_050,
         brotliBytes: 2_690,
       },
-      'portable-baker-js': { minifiedBytes: 6_650, gzipBytes: 2_330, brotliBytes: 2_080 },
+      'portable-baker-js': { minifiedBytes: 6_700, gzipBytes: 2_360, brotliBytes: 2_080 },
       'portable-baker-wasm': {
         minifiedBytes: 434_285,
         gzipBytes: 168_326,

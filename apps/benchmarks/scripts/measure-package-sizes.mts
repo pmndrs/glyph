@@ -208,6 +208,14 @@ const report = {
   entries,
 }
 const output = new URL('../src/generated/package-sizes.json', import.meta.url)
-await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true })
-await writeFile(output, `${JSON.stringify(report, null, 2)}\n`)
-process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
+const serialized = `${JSON.stringify(report, null, 2)}\n`
+if (process.argv.includes('--check')) {
+  const committed = await readFile(output, 'utf8')
+  if (committed !== serialized) {
+    throw new Error('generated package-size report is stale; run pnpm size')
+  }
+} else {
+  await mkdir(new URL('../src/generated/', import.meta.url), { recursive: true })
+  await writeFile(output, serialized)
+}
+process.stdout.write(serialized)
