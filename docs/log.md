@@ -2,6 +2,8 @@
 
 ## 2026-07-26
 
+- **Bake-host baseline** — Closed roadmap item 7.1 after recording three isolated offline and browser-Worker cold/warm Inter bakes with complete byte parity. Offline cold initialization plus first bake measured a 4.16 ms median and warm same-instance bake 2.94 ms; a fresh Chromium 149 context plus Worker/Wasm first bake measured 21.70 ms and the second job queued on that reused Worker 3.50 ms. Every path returned the exact 172,140-byte canonical artifact. The autoresearch baseline now authenticates this report, but the observations are not portability thresholds; item 7.2 is active.
+
 - **Packed consumer** — Closed the remaining package-execution gap by excluding `.tsbuildinfo` from the tarball, checking the installed CLI's executable mode and help path, and installing both package tarballs into an isolated Vite application. Chromium now runs the installed runtime-bake module Worker and returns canonical Inter's exact 172,140 bytes and SHA-256 `296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8`; source-workspace resolution can no longer mask a broken published Worker graph.
 
 - **Extension schemas** — Compiled all four canonical Draft-04 extension schemas with their shared resource references in the ordinary package suite. Positive and mutation specimens closed two pre-implementation holes: MTSDF pages are now restricted to lossless linear RGBA8, and Slug curve pages to lossless linear RGBA16F, matching the accepted raster contracts. Core and bitmap retain their complete generated-artifact validators; the MTSDF and Slug checks establish executable contracts without claiming those rasters are implemented.

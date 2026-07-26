@@ -24,6 +24,12 @@
       "bytes": 4619
     },
     {
+      "id": "bake-host-cold-warm",
+      "path": "apps/benchmarks/fixtures/results/bake-host-baseline-v0.json",
+      "sha256": "c9e680c47956810b440ba304809d8cc01a8adb8be5f827b2f7dae046bc506b9f",
+      "bytes": 1061
+    },
+    {
       "id": "shaping-conformance",
       "path": "apps/benchmarks/fixtures/results/shaping-conformance-chromium149.json",
       "sha256": "5a054ed5a634140a12ed65b0414ed27d7e5724a85118dc44b8da7426ac054472",
