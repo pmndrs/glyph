@@ -33,10 +33,10 @@ import {
 import { createUikitLayoutFixture, YogaMeasureMode } from './uikit-layout-fixture'
 import { cjkUniversalityTarget } from './cjk-universality'
 
-function stableSyntheticHash(sample: number): string {
+function stableSyntheticHash(): string {
   let value = 2166136261
   for (let index = 0; index < 4096; index += 1) {
-    value = Math.imul(value ^ ((index + sample) & 0xff), 16777619)
+    value = Math.imul(value ^ (index & 0xff), 16777619)
   }
   return (value >>> 0).toString(16).padStart(8, '0')
 }
@@ -49,7 +49,7 @@ const syntheticTarget: BenchmarkTarget = {
   capabilities: new Set(['deterministic']),
   status: () => 'ready',
   load: async () => undefined,
-  run: async (_input, sample) => ({ bytes: 4096, hash: stableSyntheticHash(sample) }),
+  run: async () => ({ bytes: 4096, hash: stableSyntheticHash() }),
   dispose: async () => undefined,
 }
 

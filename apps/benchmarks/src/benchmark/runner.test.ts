@@ -25,8 +25,15 @@ const scenario: BenchmarkScenario = {
 describe('shared benchmark runner', () => {
   it('reports accepted samples through one lifecycle', async () => {
     const phases: string[] = []
+    const sampleIndexes: number[] = []
     const result = await runBenchmark({
-      target,
+      target: {
+        ...target,
+        run: async (_input, sampleIndex) => {
+          sampleIndexes.push(sampleIndex)
+          return { bytes: 12, hash: 'stable', metrics: { boundaryCrossings: 1 } }
+        },
+      },
       scenario,
       input: {},
       controls: { warmup: 1, samples: 3 },
@@ -40,10 +47,30 @@ describe('shared benchmark runner', () => {
     })
 
     expect(result.status).toBe('passed')
+    expect(result.schemaVersion).toBe(0)
+    expect(result.controls).toEqual({ warmup: 1, samples: 3 })
     expect(result.measurements).toHaveLength(3)
     expect(result.measurements.every(({ metrics }) => metrics?.boundaryCrossings === 1)).toBe(true)
     expect(result.validation).toBe('3 accepted')
     expect(phases).toContain('complete')
+    expect(sampleIndexes).toEqual([0, 0, 1, 2])
+  })
+
+  it('rejects invalid controls before loading a target', async () => {
+    await expect(
+      runBenchmark({
+        target,
+        scenario,
+        input: {},
+        controls: { warmup: 0, samples: 0 },
+        environment: {
+          browser: 'vitest',
+          hardwareConcurrency: 1,
+          webgpu: false,
+          crossOriginIsolated: false,
+        },
+      }),
+    ).rejects.toThrow('samples must be a positive safe integer')
   })
 
   it('lists capabilities instead of coercing unsupported targets', () => {

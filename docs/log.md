@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Benchmark correctness** — Passed real sample indexes to targets, rejected invalid run counts before loading, removed the unreachable failed-summary state, and made every successful result self-describing with `schemaVersion` and `controls`; Chromium verifies the emitted envelope and stable synthetic output.
 - **Worker lifecycle** — Replaced implicit concurrent posts with one explicit FIFO bake, job-local queued cancellation, active-cancellation Worker replacement, and entry-side serialization. Two authenticated live Chromium observations show that sharing one initialized Worker within a three-font burst also beats three sequential Worker initializations, while a multi-Worker pool remains evidence-gated.
 - **Correctness** — Removed trailing mandatory-break clusters before ellipsis insertion, preventing a truncated line from extending its visible range across the newline into hidden text.
 - **Hardening** — Made shaper result layout and arena publication fallible and pre-sized; allocation exhaustion now returns the existing `RESULT_TOO_LARGE` status instead of trapping after successful shaping, for 664 additional raw Wasm bytes.

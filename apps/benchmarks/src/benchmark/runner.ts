@@ -30,6 +30,7 @@ export function missingCapabilities(
 
 export async function runBenchmark(options: RunBenchmarkOptions): Promise<BenchmarkSummary> {
   const { target, scenario, input, controls, environment, onEvent } = options
+  assertControls(controls)
   const missing = missingCapabilities(target, scenario)
   if (missing.length > 0) throw new Error(`Target lacks: ${missing.join(', ')}`)
   if (target.status(input) !== 'ready') throw new Error('Target is not ready for this input')
@@ -46,7 +47,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
     for (let sample = 0; sample < controls.samples; sample += 1) {
       onEvent?.({ phase: 'sampling', completed: sample, total: controls.samples })
       const start = performance.now()
-      const output = await target.run(input, 0)
+      const output = await target.run(input, sample)
       measurements.push({
         sample,
         durationMs: performance.now() - start,
@@ -59,9 +60,11 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
     const validation = scenario.validate(measurements)
     const durations = measurements.map((measurement) => measurement.durationMs)
     const summary: BenchmarkSummary = {
+      schemaVersion: 0,
       targetId: target.id,
       scenarioId: scenario.id,
       status: 'passed',
+      controls,
       validation,
       measurements,
       medianMs: median(durations),
@@ -76,5 +79,14 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
     return summary
   } finally {
     await target.dispose()
+  }
+}
+
+function assertControls(controls: BenchmarkControls): void {
+  if (!Number.isSafeInteger(controls.samples) || controls.samples <= 0) {
+    throw new RangeError('benchmark samples must be a positive safe integer')
+  }
+  if (!Number.isSafeInteger(controls.warmup) || controls.warmup < 0) {
+    throw new RangeError('benchmark warmup must be a nonnegative safe integer')
   }
 }

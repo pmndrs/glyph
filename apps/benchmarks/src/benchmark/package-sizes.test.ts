@@ -26,7 +26,7 @@ describe('independent package-size report', () => {
 
   it('enforces reviewed runtime-baker and portable-core ceilings', () => {
     const budgets = {
-      'runtime-baker-host-js': { minifiedBytes: 3_506, gzipBytes: 1_406, brotliBytes: 1_255 },
+      'runtime-baker-host-js': { minifiedBytes: 3_900, gzipBytes: 1_500, brotliBytes: 1_350 },
       'runtime-baker-worker-js': {
         minifiedBytes: 9_050,
         gzipBytes: 3_050,

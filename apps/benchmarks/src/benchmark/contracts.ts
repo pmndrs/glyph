@@ -35,9 +35,11 @@ export interface BenchmarkMeasurement {
 }
 
 export interface BenchmarkSummary {
+  readonly schemaVersion: 0
   readonly targetId: string
   readonly scenarioId: string
-  readonly status: 'passed' | 'failed'
+  readonly status: 'passed'
+  readonly controls: BenchmarkControls
   readonly validation: string
   readonly measurements: readonly BenchmarkMeasurement[]
   readonly medianMs: number
@@ -63,7 +65,7 @@ export interface BenchmarkTarget {
   readonly capabilities: ReadonlySet<Capability>
   status(input: BenchmarkInput): TargetStatus
   load(): Promise<void>
-  run(input: BenchmarkInput, sample: number): Promise<TargetRunOutput>
+  run(input: BenchmarkInput, sampleIndex: number): Promise<TargetRunOutput>
   dispose(): Promise<void>
 }
 

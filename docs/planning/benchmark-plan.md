@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-26T02:55:00Z"
+  at: "2026-07-26T03:35:00Z"
 ---
 
 # Benchmark plan
@@ -112,7 +112,7 @@ flowchart TD
 
 The planned repository keeps target adapters, scenarios, harness policy, UI, bundle-size entries, and result schemas as separate modules under `apps/benchmarks`; the exact directory names are implementation details rather than a second architecture contract.
 
-The interactive application and headless runner import the same target registry, scenario registry, controls, validation rules, warmup policy, and result schema. A visually convenient browser path must not become a separate benchmark definition.
+The interactive application and headless runner import the same target registry, scenario registry, controls, validation rules, warmup policy, and result schema. Every measured target call receives its real zero-based sample index; warmups are excluded from that sequence. The V0 result envelope records its schema version and exact controls, and invalid counts fail before target loading. A visually convenient browser path must not become a separate benchmark definition.
 
 ### Target adapters
 
