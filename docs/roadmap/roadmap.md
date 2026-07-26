@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T19:20:00Z"
+  at: "2026-07-26T02:55:00Z"
 ---
 
 # Canonical implementation roadmap
@@ -339,7 +339,7 @@ Item 4.1 is closed.
 - [x] Every one of the eight pinned Inter HarfRust cases travels source TTF → portable baker GLB → independent hostile-input validator → `FontRegistry` shaping-view extraction → Wasm registration → both public shaping calls, then compares glyph count, IDs, clusters, advances, offsets, and flags bit-for-bit.
 - [x] A two-run fixture proves run/font indexes, absolute clusters, one-call batching, and plan reuse; UTF-16 surrogate boundaries, tags, ranges, flags, ownership, zero-import ABI identity, extents decoding, and fixed-seed raw request mutations have focused failures.
 - [x] The real benchmark product runs all eight cases as one 97-glyph Chromium batch, validates hash `dc30c21c`, records 2,412 output bytes, one boundary crossing, three plans, 171,056 retained font bytes, 1,638,400 linear-memory bytes, and raw cold/warm timings after correctness passes.
-- [x] The complete optimized module and bridge are measured independently at 692,018 raw / 257,537 gzip / 201,934 Brotli Wasm bytes and 30,406 minified / 8,737 gzip / 7,794 Brotli JavaScript bytes.
+- [x] The complete optimized module and bridge are measured independently at 692,682 raw / 257,931 gzip / 202,462 Brotli Wasm bytes and 30,669 minified / 8,805 gzip / 7,833 Brotli JavaScript bytes.
 
 Item 4.2 and Milestone 4 are closed. Item 5.1 closure evidence is recorded under Milestone 5.
 

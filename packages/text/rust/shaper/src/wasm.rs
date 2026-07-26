@@ -96,7 +96,7 @@ pub extern "C" fn pmndrs_text_shaper_plan_count() -> u32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_text_shaper_shape_batch(pointer: u32, length: u32) -> u32 {
     with_state(|state| {
-        state.registry.set_result(Vec::new());
+        state.registry.clear_result();
         let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
             return STATUS_INVALID_REQUEST;
         };
@@ -109,10 +109,7 @@ pub unsafe extern "C" fn pmndrs_text_shaper_shape_batch(pointer: u32, length: u3
             Err(status) => return status,
         };
         match pack_result(&output) {
-            Ok(result) => {
-                state.registry.set_result(result);
-                0
-            }
+            Ok(result) => store_result(&mut state.registry, result),
             Err(status) => status,
         }
     })
@@ -121,7 +118,7 @@ pub unsafe extern "C" fn pmndrs_text_shaper_shape_batch(pointer: u32, length: u3
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_text_shaper_reshape_ranges(pointer: u32, length: u32) -> u32 {
     with_state(|state| {
-        state.registry.set_result(Vec::new());
+        state.registry.clear_result();
         let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
             return STATUS_INVALID_REQUEST;
         };
@@ -134,10 +131,7 @@ pub unsafe extern "C" fn pmndrs_text_shaper_reshape_ranges(pointer: u32, length:
             Err(status) => return status,
         };
         match pack_result(&output) {
-            Ok(result) => {
-                state.registry.set_result(result);
-                0
-            }
+            Ok(result) => store_result(&mut state.registry, result),
             Err(status) => status,
         }
     })
@@ -146,7 +140,7 @@ pub unsafe extern "C" fn pmndrs_text_shaper_reshape_ranges(pointer: u32, length:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn pmndrs_text_shaper_analyze_bidi(pointer: u32, length: u32) -> u32 {
     with_state(|state| {
-        state.registry.set_result(Vec::new());
+        state.registry.clear_result();
         let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
             return STATUS_INVALID_REQUEST;
         };
@@ -160,10 +154,7 @@ pub unsafe extern "C" fn pmndrs_text_shaper_analyze_bidi(pointer: u32, length: u
             Err(bidi::BidiError::ResultTooLarge) => return STATUS_RESULT_TOO_LARGE,
         };
         match pack_bidi_result(&output) {
-            Ok(result) => {
-                state.registry.set_result(result);
-                0
-            }
+            Ok(result) => store_result(&mut state.registry, result),
             Err(status) => status,
         }
     })
@@ -245,6 +236,13 @@ fn owned_bytes(allocations: &[Allocation], pointer: u32, length: u32) -> Option<
         .iter()
         .find(|entry| entry.pointer == pointer && entry.requested_length == length)
         .map(|entry| entry.bytes.as_slice())
+}
+
+fn store_result(registry: &mut ShaperRegistry, result: Vec<u8>) -> u32 {
+    match registry.set_result(result) {
+        Ok(()) => 0,
+        Err(status) => status,
+    }
 }
 
 fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {

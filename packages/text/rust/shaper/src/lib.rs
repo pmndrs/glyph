@@ -270,8 +270,12 @@ impl ShaperRegistry {
         Ok(output)
     }
 
-    pub fn set_result(&mut self, result: Vec<u8>) {
-        self.result.set(result);
+    pub fn clear_result(&mut self) {
+        self.result.clear();
+    }
+
+    pub fn set_result(&mut self, result: Vec<u8>) -> Result<(), u32> {
+        self.result.set(result)
     }
 
     pub fn result_pointer(&self) -> *const u32 {
@@ -310,15 +314,18 @@ impl ResultArena {
         self.byte_length = 0;
     }
 
-    fn set(&mut self, bytes: Vec<u8>) {
+    fn set(&mut self, bytes: Vec<u8>) -> Result<(), u32> {
         self.words.clear();
-        self.words.reserve(bytes.len().div_ceil(4));
+        self.words
+            .try_reserve_exact(bytes.len().div_ceil(4))
+            .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
         for chunk in bytes.chunks(4) {
             let mut word = [0; 4];
             word[..chunk.len()].copy_from_slice(chunk);
             self.words.push(u32::from_le_bytes(word));
         }
-        self.byte_length = u32::try_from(bytes.len()).unwrap_or(u32::MAX);
+        self.byte_length = u32::try_from(bytes.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+        Ok(())
     }
 }
 

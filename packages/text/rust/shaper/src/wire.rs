@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
 use crate::{
     FeatureRecord, ReshapeRange, RunRequest, STATUS_INVALID_REQUEST, STATUS_RESULT_TOO_LARGE,
@@ -173,7 +173,22 @@ pub fn pack_result(output: &ShapeBatchOutput) -> Result<Vec<u8>, u32> {
     {
         return Err(STATUS_RESULT_TOO_LARGE);
     }
-    let mut bytes = vec![0; RESULT_HEADER_SIZE as usize];
+    let mut bytes = result_bytes(
+        RESULT_HEADER_SIZE as usize,
+        &[
+            (output.font_handles.len(), 4),
+            (output.run_font_slots.len(), 2),
+            (output.run_glyph_starts.len(), 4),
+            (output.run_glyph_counts.len(), 4),
+            (output.glyph_ids.len(), 2),
+            (output.clusters.len(), 4),
+            (output.x_advances.len(), 4),
+            (output.y_advances.len(), 4),
+            (output.x_offsets.len(), 4),
+            (output.y_offsets.len(), 4),
+            (output.glyph_flags.len(), 2),
+        ],
+    )?;
     let font_handles_offset = append_u32(&mut bytes, &output.font_handles)?;
     let run_font_slots_offset = append_u16(&mut bytes, &output.run_font_slots)?;
     let run_glyph_starts_offset = append_u32(&mut bytes, &output.run_glyph_starts)?;
@@ -227,7 +242,16 @@ pub fn pack_bidi_result(output: &BidiAnalysis) -> Result<Vec<u8>, u32> {
     {
         return Err(STATUS_RESULT_TOO_LARGE);
     }
-    let mut bytes = vec![0; BIDI_RESULT_HEADER_SIZE as usize];
+    let mut bytes = result_bytes(
+        BIDI_RESULT_HEADER_SIZE as usize,
+        &[
+            (output.levels.len(), 1),
+            (output.classes.len(), 1),
+            (output.paragraph_starts.len(), 4),
+            (output.paragraph_ends.len(), 4),
+            (output.paragraph_levels.len(), 1),
+        ],
+    )?;
     let levels_offset = append_u8(&mut bytes, &output.levels)?;
     let classes_offset = append_u8(&mut bytes, &output.classes)?;
     let paragraph_starts_offset = append_u32(&mut bytes, &output.paragraph_starts)?;
@@ -280,6 +304,25 @@ fn read_u32(bytes: &[u8], offset: usize) -> Result<u32, u32> {
 
 fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
     bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+#[inline(never)]
+fn result_bytes(header_length: usize, fields: &[(usize, usize)]) -> Result<Vec<u8>, u32> {
+    let mut byte_length = header_length;
+    for &(element_count, element_size) in fields {
+        let padding = (element_size - byte_length % element_size) % element_size;
+        byte_length = byte_length
+            .checked_add(padding)
+            .and_then(|length| element_count.checked_mul(element_size)?.checked_add(length))
+            .ok_or(STATUS_RESULT_TOO_LARGE)?;
+    }
+    u32::try_from(byte_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(byte_length)
+        .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+    bytes.resize(header_length, 0);
+    Ok(bytes)
 }
 
 fn align(bytes: &mut Vec<u8>, alignment: usize) -> Result<u32, u32> {
@@ -350,6 +393,14 @@ mod tests {
             parse_shape_request(&bytes),
             Err(STATUS_INVALID_REQUEST)
         ));
+    }
+
+    #[test]
+    fn result_layout_overflow_returns_a_status_before_allocation() {
+        assert_eq!(
+            result_bytes(RESULT_HEADER_SIZE as usize, &[(usize::MAX, 4)]),
+            Err(STATUS_RESULT_TOO_LARGE),
+        );
     }
 
     #[test]

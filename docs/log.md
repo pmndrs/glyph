@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Hardening** — Made shaper result layout and arena publication fallible and pre-sized; allocation exhaustion now returns the existing `RESULT_TOO_LARGE` status instead of trapping after successful shaping, for 664 additional raw Wasm bytes.
 - **Security** — Required SHA-256 authentication for every URI-addressed external raster in the public type, Draft-04 schema, validator, and loader; resolver-only delivery remains available without inventing a URL.
 - **Correctness** — Rejected project-wide font output collisions before baking, made execution phases mutually exclusive so validation is not double-counted as raster work, and made the default bitmap Wasm loader retry after failed initialization.
 - **Hardening** — Scoped bitmap companion/page filenames by both shaping and raster identity, rejected ppem values beyond the padded 1024-pixel atlas range, and streamed glyph masks directly into bounded pages. Two fonts can no longer overwrite one another merely because they share bitmap settings, and the optimized Wasm grows only 639 raw bytes while removing the full-face intermediate bitmap set.

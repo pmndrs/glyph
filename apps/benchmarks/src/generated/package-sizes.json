@@ -6,20 +6,20 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 267993,
-      "minifiedBytes": 209375,
-      "gzipBytes": 62156,
-      "brotliBytes": 47534
+      "rawBytes": 268236,
+      "minifiedBytes": 209637,
+      "gzipBytes": 62242,
+      "brotliBytes": 47597
     },
     {
       "id": "font-validator-js",
       "label": "Lazy font validator JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 740351,
-      "minifiedBytes": 584208,
-      "gzipBytes": 137567,
-      "brotliBytes": 112753
+      "rawBytes": 740402,
+      "minifiedBytes": 584255,
+      "gzipBytes": 137585,
+      "brotliBytes": 112927
     },
     {
       "id": "runtime-baker-host-js",
@@ -46,20 +46,20 @@
       "label": "Text shaper JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 43726,
-      "minifiedBytes": 30406,
-      "gzipBytes": 8736,
-      "brotliBytes": 7801
+      "rawBytes": 43969,
+      "minifiedBytes": 30669,
+      "gzipBytes": 8805,
+      "brotliBytes": 7833
     },
     {
       "id": "text-shaper-wasm",
       "label": "Text shaper Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 692018,
-      "minifiedBytes": 692018,
-      "gzipBytes": 257537,
-      "brotliBytes": 201934
+      "rawBytes": 692682,
+      "minifiedBytes": 692682,
+      "gzipBytes": 257931,
+      "brotliBytes": 202462
     },
     {
       "id": "portable-baker-js",
