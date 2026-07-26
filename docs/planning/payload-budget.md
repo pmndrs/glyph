@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T19:20:00Z"
+  at: "2026-07-26T05:40:22Z"
 ---
 
 # Font payload budget
@@ -183,7 +183,7 @@ The canonical full-face Inter 4.1 bitmap at 16 ppem measures:
 | External index + page | 755,188 B |
 | Combined core + embedded raster GLB | 927,148 B |
 | Core with external directory | 172,476 B |
-| Optimized bitmap baker Wasm | 658,470 B raw; 238,750 B gzip; 182,928 B Brotli q11 |
+| Optimized bitmap baker Wasm | 657,942 B raw; 238,727 B gzip; 182,925 B Brotli q11 |
 
 The embedded and external forms have byte-identical records and KTX2 texels. External packaging costs 124 additional serialized bytes for the authenticated URI/length/hash directory.
 

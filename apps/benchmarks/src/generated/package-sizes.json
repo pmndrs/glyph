@@ -9,7 +9,7 @@
       "rawBytes": 271169,
       "minifiedBytes": 211199,
       "gzipBytes": 62771,
-      "brotliBytes": 47974
+      "brotliBytes": 48060
     },
     {
       "id": "font-validator-js",
@@ -28,8 +28,8 @@
       "format": "javascript",
       "rawBytes": 5264,
       "minifiedBytes": 3861,
-      "gzipBytes": 1480,
-      "brotliBytes": 1323
+      "gzipBytes": 1479,
+      "brotliBytes": 1321
     },
     {
       "id": "runtime-baker-worker-js",
@@ -56,10 +56,10 @@
       "label": "Text shaper Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 693034,
-      "minifiedBytes": 693034,
-      "gzipBytes": 258008,
-      "brotliBytes": 202525
+      "rawBytes": 692114,
+      "minifiedBytes": 692114,
+      "gzipBytes": 257986,
+      "brotliBytes": 202523
     },
     {
       "id": "portable-baker-js",
@@ -76,10 +76,10 @@
       "label": "Portable baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 434251,
-      "minifiedBytes": 434251,
-      "gzipBytes": 168280,
-      "brotliBytes": 137042
+      "rawBytes": 433755,
+      "minifiedBytes": 433755,
+      "gzipBytes": 168251,
+      "brotliBytes": 136793
     },
     {
       "id": "unicode-analysis-js",

@@ -2,7 +2,7 @@
 
 ## 2026-07-26
 
-- **CI** — Added the required pull-request and `main` workflow over the canonical `pnpm check` gate using immutable current-release action SHAs, mise-owned toolchain pins, the frozen dependency graph, and package-owned headless Chromium provisioning. The root typecheck now builds workspace exports first so the same gate is valid in a fresh checkout rather than inheriting local `dist` state. Vitexec, hardware-GPU evidence, performance thresholds, and coverage-guided nightly fuzzing remain explicit non-CI lanes.
+- **CI** — Added the required pull-request and `main` workflow over the canonical `pnpm check` gate using immutable current-release action SHAs, mise-owned toolchain pins, the frozen dependency graph, and package-owned headless Chromium provisioning. The root typecheck builds workspace exports first so the same gate is valid in a fresh checkout rather than inheriting local `dist` state. Canonical Rust release builds remap workspace and Cargo registry paths before optimization, keeping exact Wasm bytes independent of host checkout paths. Vitexec, hardware-GPU evidence, performance thresholds, and coverage-guided nightly fuzzing remain explicit non-CI lanes.
 
 ## 2026-07-25
 

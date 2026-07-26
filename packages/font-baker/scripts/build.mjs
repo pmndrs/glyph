@@ -2,7 +2,11 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { reproducibleRustEnvironment } from "./reproducible-rust-env.mjs";
+
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
+const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
 const wasmOpt = fileURLToPath(
   new URL(
     process.platform === "win32"
@@ -28,7 +32,7 @@ await run("cargo", [
   "--release",
   "--locked",
   "--no-default-features",
-]);
+], rustEnvironment);
 await run("tsc", ["-p", "tsconfig.build.json"]);
 await mkdir(new URL("../dist/", import.meta.url), { recursive: true });
 await copyFile(
@@ -60,9 +64,9 @@ await writeFile(
   ]),
 );
 
-function run(command, args) {
+function run(command, args, environment = process.env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: packageRoot, stdio: "inherit" });
+    const child = spawn(command, args, { cwd: packageRoot, env: environment, stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code, signal) => {
       if (code === 0) resolve();

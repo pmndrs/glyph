@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5.6"
-  at: "2026-07-26T03:11:19Z"
+  at: "2026-07-26T05:40:22Z"
 ---
 
 # Shaping data contract V0
@@ -70,7 +70,7 @@ The font artifact does not duplicate Unicode or script-shaper tables. The dynami
 
 Its Unicode and HarfBuzz-equivalence versions are pinned in the package and repeated in font provenance so an incompatible font/runtime pairing can be diagnosed. Script, language, direction, features, cluster level, and buffer flags are request data, not font data. Bidi resolution, line-break data, and paragraph policy live outside the font artifact.
 
-The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-features = false` and `libm`, matching `read-fonts` 0.41.0, `dlmalloc`, `panic = abort`, and `wasm32-unknown-unknown`. Its Rust-generated V0 ABI has no imports or WASI surface and describes every request/result record and offset consumed by TypeScript. Result serialization computes its full aligned layout and reserves both wire bytes and arena words fallibly before writing. Each font retains at most its 64 most recently used plans. Pinned Binaryen 129.0.0 `-Oz` produces a 693,034-byte complete module (258,008 gzip; 202,525 Brotli). Canonical Inter proves that only the exact GLB-extracted 147,192-byte SFNT, 23,496-byte dense-extents view, and 368-byte availability view enter HarfRust-owned state, then matches all eight source-oracle cases bit-for-bit through `shapeBatch` and `reshapeRanges`. The Chromium product record keeps correctness ahead of timing and reports one boundary crossing, 97 glyphs, three cached plans, 1,703,936 linear-memory bytes, a 2.6 ms cold initialization, and approximately 0.1 ms warm shaping calls in that captured environment.
+The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-features = false` and `libm`, matching `read-fonts` 0.41.0, `dlmalloc`, `panic = abort`, and `wasm32-unknown-unknown`. Its Rust-generated V0 ABI has no imports or WASI surface and describes every request/result record and offset consumed by TypeScript. Result serialization computes its full aligned layout and reserves both wire bytes and arena words fallibly before writing. Each font retains at most its 64 most recently used plans. Canonical path remapping and pinned Binaryen 129.0.0 `-Oz` produce a 692,114-byte complete module (257,986 gzip; 202,523 Brotli). Canonical Inter proves that only the exact GLB-extracted 147,192-byte SFNT, 23,496-byte dense-extents view, and 368-byte availability view enter HarfRust-owned state, then matches all eight source-oracle cases bit-for-bit through `shapeBatch` and `reshapeRanges`. The Chromium product record keeps correctness ahead of timing and reports one boundary crossing, 97 glyphs, three cached plans, 1,703,936 linear-memory bytes, a 2.6 ms cold initialization, and approximately 0.1 ms warm shaping calls in that captured environment.
 
 ### Required tables
 

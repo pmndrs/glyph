@@ -2,7 +2,11 @@ import { spawn } from "node:child_process";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+import { reproducibleRustEnvironment } from "../../font-baker/scripts/reproducible-rust-env.mjs";
+
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
+const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
 const executable = process.platform === "win32" ? "wasm-opt.CMD" : "wasm-opt";
 const wasmOpt = fileURLToPath(new URL(`../node_modules/.bin/${executable}`, import.meta.url));
 const rustWasm = fileURLToPath(
@@ -29,7 +33,7 @@ await run("cargo", [
   "--release",
   "--locked",
   "--no-default-features",
-]);
+], rustEnvironment);
 await run("cargo", [
   "build",
   "--manifest-path",
@@ -39,7 +43,7 @@ await run("cargo", [
   "--release",
   "--locked",
   "--no-default-features",
-]);
+], rustEnvironment);
 await run("tsc", ["-p", "tsconfig.build.json"]);
 await mkdir(new URL("../dist/", import.meta.url), { recursive: true });
 await rm(new URL("../dist/font_baker.wasm", import.meta.url), { force: true });
@@ -87,9 +91,9 @@ if (process.platform !== "win32") {
   await chmod(new URL("../dist/node/cli.js", import.meta.url), 0o755);
 }
 
-function run(command, args) {
+function run(command, args, environment = process.env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: packageRoot, stdio: "inherit" });
+    const child = spawn(command, args, { cwd: packageRoot, env: environment, stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code, signal) => {
       if (code === 0) resolve();
