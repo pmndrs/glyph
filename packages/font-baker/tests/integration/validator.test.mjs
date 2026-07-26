@@ -107,6 +107,10 @@ test("accepts only the expanded closed CJK shaping-table profile", async () => {
     decoded.binStart + shapingView.byteOffset + 12,
   );
   await rejectsWithCode(outsideProfile, "SFNT_TABLE_PROFILE");
+
+  const nonAsciiTag = artifact.slice();
+  nonAsciiTag[decoded.binStart + shapingView.byteOffset + 12] |= 0x80;
+  await rejectsWithCode(nonAsciiTag, "SFNT_TABLE_PROFILE");
 });
 
 test("keeps the packaged extension schema byte-identical to the canonical schema", async () => {

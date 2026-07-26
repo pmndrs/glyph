@@ -594,7 +594,12 @@ function validateShapingSfnt(bytes: Uint8Array, metrics: Readonly<Record<string,
   let previousTag = "";
   for (let index = 0; index < count; index += 1) {
     const record = 12 + index * 16;
-    const tag = textDecoder.decode(bytes.subarray(record, record + 4));
+    const tag = String.fromCharCode(
+      bytes[record] ?? 0,
+      bytes[record + 1] ?? 0,
+      bytes[record + 2] ?? 0,
+      bytes[record + 3] ?? 0,
+    );
     const expectedChecksum = view.getUint32(record + 4, false);
     const offset = view.getUint32(record + 8, false);
     const byteLength = view.getUint32(record + 12, false);

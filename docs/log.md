@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Hardening** — Kept malformed non-ASCII SFNT table tags inside the font validator's structured issue contract by comparing the closed four-byte tag vocabulary directly; a named regression covers the previously escaping UTF-8 decoder error.
 - **Research** — Added a non-binding shaping-compilation concept covering the closed-corpus limit of static baking; total-portfolio break-even for semantic bytecode; an MLIR-based multi-target compiler direction; CPU/Wasm-first validation; WebGPU batching and CPU-readback constraints; and exact conformance, size, latency, memory, robustness, and maintenance gates.
 - **Governance** — Established one canonical engineering house style for Rust, TypeScript, React, Wasm boundaries, lifecycle ownership, deterministic testing, comments, and documentation. A lean root agent guide routes to that OKF concept; the maintainability skill now owns only the review procedure, avoiding repeated context while keeping deliberate review available on demand.
 - **Hardening** — Closed partial-acquisition cleanup gaps in both direct-memory baker bridges and the benchmark lifecycle, replaced cast-shaped Wasm/ABI trust with exact validation, narrowed the runtime Worker predicate to the shape it proves, and retained typed WebGPU availability through presentation.
