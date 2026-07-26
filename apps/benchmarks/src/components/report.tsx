@@ -108,7 +108,16 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
         <Metric label="FPS" value={stats.framesPerSecond.toFixed(1)} />
         <Metric label="CPU frame" value={ms(stats.medianSubmitMs)} />
-        <Metric label="GPU frame" value="unavailable" />
+        <Metric
+          label="GPU frame"
+          value={
+            stats.medianGpuMs === undefined
+              ? stats.gpuTimingSupported
+                ? 'resolving'
+                : 'unavailable'
+              : ms(stats.medianGpuMs)
+          }
+        />
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Selection</p>

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:d59dbfe47c7e75fe8669972e6bfae289bbd64edd788cb27ad763f347684dcf93"
+source_digest: "sha256:214d745d3c80cdd69b5029e58c5458d0c2c972307b6333d6a6cdd62864c46d05"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,12 +19,12 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:37:03Z"
+  at: "2026-07-26T21:48:46Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
-Status: 🟡 Milestone 6.4 benchmark-product correction active; closure review pending
+Status: ✅ Milestone 7 implementation complete; Milestone 6 adversarial review gates remain explicitly open
 
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane; conformance mode is the finite visual correctness inspector. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 
@@ -64,6 +64,8 @@ The showcase corpus is now an immutable TypeScript discriminated union with exac
 
 The CI-safe advanced-shaping target derives all 68 finite frames from that same corpus and sends each through the public `Text` object and bitmap batch construction at an explicit 800 CSS-pixel viewport and 16 px font size. Its exact Chromium 149 record covers five cases, 709 laid-out glyphs, 625 rendered instances, 72 draws, zero missing glyphs, 17,362 normalized layout bytes, and composite hash `314418c3`; a wrong hash and a missing-glyph mutation are negative controls. The three recorded 8.5–11.3 ms durations describe this machine's end-to-end conformance execution only. They are neither live renderer costs nor portability thresholds. Hardware GPU pixels remain owned by the exact bitmap readback lane, while the admitted Vitexec product probe proves that each authenticated showcase fixture reaches the live WebGPU canvas.
 
+The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. This run observed 119.7–120.9 FPS, 0.1–0.2 ms median CPU submission, 0.3–0.7 ms CPU P95, 0.050–0.149 ms median GPU time, and 0.752–2.147 ms GPU P95 across one to three draws. Initial public `Text` readiness was 8.6–18.5 ms and total startup 23.4–119.0 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
+
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 12 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
 The browser product also carries the React 19 subpath proofs. A shared registry target mounts public nested `<Text>` through a real React Three Fiber root backed by `WebGPURenderer`, retains one forwarded core object through width reflow and canonical restoration, matches pinned natural/narrow paragraph oracles, verifies two span paints in one draw, and submits a real renderer frame over three deterministic samples. The live pending-resource probe intercepts the exact composed Inter request behind a manually released promise, observes the Suspense fallback before publication, releases the request without a timer, then proves the registered font key and all 2,937 glyphs before deterministic cleanup. The test renderer remains confined to package integration evidence and does not enter the product registry or application dependencies.
@@ -88,6 +90,7 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `admit:live`                       | Run negative controls plus 100 zero-retry executions across 10 fresh Vitexec lifecycles and write the admission record.                                                                                                                                                |
 | `capture:browser-reference`        | Regenerate the pinned Chromium HTML/CSS reference and metadata.                                                                                                                                                                                                        |
 | `capture:bake-host-baseline`       | Capture three isolated offline and browser-Worker cold/warm bake samples with complete artifact parity.                                                                                                                                                                |
+| `capture:advanced-shaping-performance` | Capture a 1× WebGPU live observation after twelve causal GPU/FPS reports for every advanced-shaping lane.                                                                                                                                                           |
 | `generate:autoresearch-baseline`   | Hash the accepted Milestone 7 evidence into the disabled V0 autoresearch baseline.                                                                                                                                                                                     |
 | `check:autoresearch-baseline`      | Recompute the baseline without writing and reject evidence or toolchain drift.                                                                                                                                                                                         |
 | `generate:harfbuzz-oracle`         | Generate JSON with an exact HarfBuzz 13.0.0 `hb-shape` executable.                                                                                                                                                                                                     |

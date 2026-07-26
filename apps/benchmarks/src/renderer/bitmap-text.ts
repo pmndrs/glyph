@@ -113,6 +113,8 @@ export interface BitmapTextLiveStats {
   readonly startupMs: number
   readonly gpuTimingSupported: boolean
   readonly gpuFrameMs: number | undefined
+  readonly medianGpuMs: number | undefined
+  readonly p95GpuMs: number | undefined
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -595,6 +597,7 @@ export async function createBitmapTextPreview(
     const submitQuantileScratch = new Float32Array(HISTORY_CAPACITY)
     const fpsHistory = new Float32Array(HISTORY_CAPACITY)
     const gpuHistory = new Float32Array(HISTORY_CAPACITY)
+    const gpuQuantileScratch = new Float32Array(HISTORY_CAPACITY)
     let submitHistoryLength = 0
     let submitHistoryNextIndex = 0
     let fpsHistoryLength = 0
@@ -790,6 +793,11 @@ export async function createBitmapTextPreview(
           submitQuantileScratch[index] = Number.POSITIVE_INFINITY
         }
         submitQuantileScratch.sort()
+        gpuQuantileScratch.set(gpuHistory)
+        for (let index = gpuHistoryLength; index < HISTORY_CAPACITY; index += 1) {
+          gpuQuantileScratch[index] = Number.POSITIVE_INFINITY
+        }
+        gpuQuantileScratch.sort()
         const physicalWidth = Math.round(width * dpr)
         const physicalHeight = Math.round(viewportHeight * dpr)
         const framebufferGpuBytes = physicalWidth * physicalHeight * 4
@@ -828,6 +836,14 @@ export async function createBitmapTextPreview(
           startupMs,
           gpuTimingSupported,
           gpuFrameMs,
+          medianGpuMs:
+            gpuHistoryLength === 0
+              ? undefined
+              : quantile(gpuQuantileScratch, gpuHistoryLength, 0.5),
+          p95GpuMs:
+            gpuHistoryLength === 0
+              ? undefined
+              : quantile(gpuQuantileScratch, gpuHistoryLength, 0.95),
           submitHistory,
           submitHistoryLength,
           submitHistoryNextIndex,

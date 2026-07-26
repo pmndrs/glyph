@@ -24,6 +24,10 @@ const evidenceFiles = [
     'advanced-shaping-conformance',
     'apps/benchmarks/fixtures/results/advanced-shaping-conformance-chromium149.json',
   ],
+  [
+    'advanced-shaping-performance',
+    'apps/benchmarks/fixtures/results/advanced-shaping-performance-chromium149.json',
+  ],
 ] as const
 
 const [workspaceManifest, nodeVersion, rustToolchain] = await Promise.all([

@@ -683,11 +683,11 @@ function BenchmarkSurface({
         <Metric
           label="GPU frame"
           value={
-            stats?.gpuFrameMs === undefined
+            stats?.medianGpuMs === undefined
               ? stats?.gpuTimingSupported === true
                 ? 'resolving'
                 : 'unavailable'
-              : formatMs(stats.gpuFrameMs)
+              : formatMs(stats.medianGpuMs)
           }
         />
         <Metric
@@ -1084,8 +1084,26 @@ function BitmapTextViewport({
       className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
       data-layout-width={stats?.layoutWidth}
       data-line-count={stats?.lineCount}
+      data-frame-count={stats?.frameCount}
+      data-frames-per-second={stats?.framesPerSecond}
+      data-median-submit-ms={stats?.medianSubmitMs}
+      data-p95-submit-ms={stats?.p95SubmitMs}
+      data-gpu-frame-ms={stats?.gpuFrameMs}
+      data-median-gpu-ms={stats?.medianGpuMs}
+      data-p95-gpu-ms={stats?.p95GpuMs}
+      data-submit-history-length={stats?.submitHistoryLength}
+      data-fps-history-length={stats?.fpsHistoryLength}
       data-glyph-count={stats?.glyphCount}
       data-missing-glyph-count={stats?.missingGlyphCount}
+      data-draw-count={stats?.drawCount}
+      data-renderer-init-ms={stats?.rendererInitMs}
+      data-font-load-ms={stats?.fontLoadMs}
+      data-text-ready-ms={stats?.textReadyMs}
+      data-first-draw-ms={stats?.firstDrawMs}
+      data-startup-ms={stats?.startupMs}
+      data-artifact-bytes={stats?.artifactBytes}
+      data-atlas-gpu-bytes={stats?.atlasGpuBytes}
+      data-total-gpu-bytes={stats?.totalGpuBytes}
       data-settled-revision={settledRevision}
       data-settled-text-length={settledTextLength}
       data-settled-tick={settledTimelineTick}
@@ -1094,6 +1112,7 @@ function BitmapTextViewport({
       data-presentation-revision={presentationEvidence.revision}
       data-presentation-target-glyphs={presentationEvidence.targetGlyphs}
       data-backend={stats?.backend}
+      data-dpr={stats?.dpr}
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-testid="bitmap-live-viewport"
