@@ -9,7 +9,7 @@
       "rawBytes": 268350,
       "minifiedBytes": 209715,
       "gzipBytes": 62251,
-      "brotliBytes": 47606
+      "brotliBytes": 47641
     },
     {
       "id": "font-validator-js",
@@ -26,20 +26,20 @@
       "label": "Runtime baker host JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 4799,
-      "minifiedBytes": 3498,
-      "gzipBytes": 1395,
-      "brotliBytes": 1247
+      "rawBytes": 5264,
+      "minifiedBytes": 3861,
+      "gzipBytes": 1478,
+      "brotliBytes": 1324
     },
     {
       "id": "runtime-baker-worker-js",
       "label": "Runtime baker Worker JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 13225,
-      "minifiedBytes": 8952,
-      "gzipBytes": 3018,
-      "brotliBytes": 2651
+      "rawBytes": 13310,
+      "minifiedBytes": 9005,
+      "gzipBytes": 3036,
+      "brotliBytes": 2672
     },
     {
       "id": "text-shaper-js",

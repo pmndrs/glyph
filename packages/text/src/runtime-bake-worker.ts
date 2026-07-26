@@ -11,6 +11,7 @@ import { soleCoreFontArtifact } from "./internal/core-bake-policy.js";
 import { copyToOwnedArrayBuffer } from "./internal/owned-array-buffer.js";
 import {
   isRuntimeBakeRequestV0,
+  type RuntimeBakeRequestV0,
   type RuntimeBakeFailureV0,
   type RuntimeBakeSuccessV0,
 } from "./internal/runtime-bake-protocol.js";
@@ -24,13 +25,15 @@ const loadCore = cacheSuccessfulPromise<FontBakeCore>(async () => {
   }
   return createFontBaker(await response.arrayBuffer());
 });
+let pending = Promise.resolve();
 
 scope.addEventListener("message", (event: MessageEvent<unknown>) => {
-  void handleMessage(event.data);
+  const value = event.data;
+  if (!isRuntimeBakeRequestV0(value)) return;
+  pending = pending.then(() => handleMessage(value));
 });
 
-async function handleMessage(value: unknown): Promise<void> {
-  if (!isRuntimeBakeRequestV0(value)) return;
+async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
   try {
     const core = await loadCore();
     const result = core.bake({

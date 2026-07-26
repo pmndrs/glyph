@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:b799c91b36e065cf4ccc3d62483990c006689ef2ed0fec608b680785338725c8"
+source_digest: "sha256:db6954d0390daffd86b9a6f6078baf5bfb59189e4716e64a45c64ea90435072f"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -16,7 +16,7 @@ sources:
     title: Benchmark plan
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:05:00Z"
+  at: "2026-07-26T03:20:00Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -25,7 +25,9 @@ Status: 🟡 usable harness shell; rendering targets not implemented
 
 This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, real HarfRust shaping-conformance target, and real paragraph measurement/positioned-layout/policy/CJK targets. The runner disposes partial target state when loading fails, and the UI retains typed WebGPU availability through label and tone rendering. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. Inter 4.1 remains the default fixture; Amiri 1.002 owns complex-script evidence; Noto Sans CJK JP 2.004 owns the maximum-cardinality universality lane. Each is immutable, licensed, hash-authenticated, and paired with checked HarfRust/HarfBuzz evidence. Chromium 149 passes all pre-render targets with three deterministic samples after one warmup. The CJK result fixes thirteen corpus cases, four paragraphs, twelve layouts, eight plans, one direct shape call, four paragraph shape calls, zero reshapes, 10,622 output bytes, and the exact composite hash `a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68`; Vitexec repeats it with WebGPU active.
 
-The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The current browser graph is 209,715 minified bytes; Unicode analysis is independently 139,936 minified / 42,047 gzip / 30,989 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, portable baker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,255, 3,498, 8,952, 6,581, 434,285, 30,669, and 692,682 minified/raw bytes respectively. The reviewed shaper increase buys fallible result assembly and arena publication rather than an ABI or dependency expansion. Checked ceilings cover both runtime JavaScript entries and the portable baker JavaScript/Wasm so regenerating the report cannot silently bless a heavy dependency edge. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probe no longer maintain parallel digest logic.
+The independent package-size lane measures the initial public browser graph, lazy font validator, runtime Worker boundary, baker and shaper JavaScript/Wasm, and Unicode 17 analysis without zero-byte placeholders. Static entry closures and dynamic chunks are separated from Rollup metadata rather than conflated, and package-owned Wasm URLs are externalized from JavaScript measurements regardless of their owning package. The current browser graph is 209,715 minified bytes; Unicode analysis is independently 139,936 minified / 42,047 gzip / 30,989 Brotli bytes. The validator, runtime host, runtime Worker JavaScript, portable baker JavaScript, baker Wasm, shaper JavaScript, and shaper Wasm report 584,255, 3,861, 9,005, 6,581, 434,285, 30,669, and 692,682 minified/raw bytes respectively. The reviewed Worker increase buys explicit FIFO admission, queued/active cancellation recovery, and entry-side serialization; the reviewed shaper increase buys fallible result assembly and arena publication. Checked ceilings cover both runtime JavaScript entries and the portable baker JavaScript/Wasm so regenerating the report cannot silently bless a heavy dependency edge. Paragraph layout hashes and the policy composite hash share one implementation over the actual normalized layouts; the generator, benchmark target, unit tests, and Vitexec probes no longer maintain parallel digest logic.
+
+The local Worker-queue Vitexec probe authenticates every output and reports observations rather than asserting machine-sensitive timing. Two Chromium runs measured a three-font queued burst at 30.8–32.0 ms and three separately initialized sequential Workers at 68.3–88.6 ms. The correctness suite separately proves one active post, FIFO completion, queued cancellation, and active-cancellation recovery without timers.
 
 Bitmap, MSDF, and Slug remain explicitly unavailable rather than returning fabricated measurements. Item 5.4 is complete with Node, Chromium, and GPU-enabled Vitexec evidence and no fabricated rendering metrics. The first real rendered font frame must land here in Milestone 6.
 

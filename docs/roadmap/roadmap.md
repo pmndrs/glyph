@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T03:05:00Z"
+  at: "2026-07-26T03:20:00Z"
 ---
 
 # Canonical implementation roadmap
@@ -302,7 +302,7 @@ Item 3.1 is closed. Item 3.2 is active and replaces the injected fallback seam's
 ### 3.2 closure checklist
 
 - [x] A baked miss dynamically imports `@pmndrs/text/runtime-bake`; the initial browser graph contains only the import boundary and cannot construct a Worker or reach the bake wrapper/Wasm.
-- [x] The standard host creates a named module Worker lazily, reuses it across requests, copies only the source transfer buffer needed to preserve loader provenance, and transfers the returned artifact buffer.
+- [x] The standard host creates a named module Worker lazily, queues concurrent requests behind one active bake, reuses that instance within the burst, copies only the source transfer buffer needed to preserve loader provenance, and transfers the returned artifact buffer.
 - [x] The Worker imports the exact portable `@pmndrs/text-font-baker` wrapper, lazily instantiates the same optimized `font_baker.wasm`, accepts only the versioned face descriptor, and serializes structured failures.
 - [x] The loader routes standard fallback output through the same provenance and hostile-input validator used for baked hits before registration.
 - [x] Canonical Inter integration tests exercise the public host, default loader path, transfer lists, Worker entry, and exact portable-core artifact bytes; package tests prove the runtime host/Worker/Wasm remain outside the static entry graph.
@@ -316,6 +316,7 @@ Item 3.2 is closed. Item 3.3 is active and adds browser-executed Node/Worker aut
 - [x] The Chromium 149 gate passes the synthetic, direct portable-baker, and public loader-Worker scenarios with three deterministic samples after one warmup; the loader scenario returns the canonical 172,140-byte payload and shaping identity on every sample.
 - [x] Concurrent callers retain one shared request; detaching one does not abort it, while detaching the final consumer aborts the underlying fetch/stream or Worker request and the next load starts fresh.
 - [x] An idle Worker with only cancelled work is terminated immediately and recreated successfully on the next request; no delay, polling, retry, or timer controls lifecycle.
+- [x] Queued cancellation removes only that job; active cancellation terminates the uncancellable bake, recreates the Worker, and resumes FIFO work. Integration tests prove one active post, while a local Vitexec probe records authenticated burst/sequential timing without a flaky threshold.
 - [x] Browser execution covers the native `fetch` receiver contract, module Worker, package-relative Wasm asset, transferred buffers, hostile-input validator, provenance check, registration, and disposal. The product test caught and permanently fixed an illegal native-fetch invocation that Node could not expose.
 - [x] Emitted-package tests prove the root loader has only dynamic runtime/validator boundaries and no static Worker, Wasm, Node-host, or raster-baker edge; independent Rollup closures report initial core, validator, runtime host, Worker JavaScript, and Wasm separately.
 - [x] Canonical source/request deduplication, missing/invalid/incompatible behavior, development warning deduplication, baked-only isolation, limits, fuzz smoke, and exact GLB shaping-view extraction remain green under the final shared-cancellation implementation.

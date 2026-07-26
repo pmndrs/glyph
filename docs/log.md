@@ -2,6 +2,7 @@
 
 ## 2026-07-25
 
+- **Worker lifecycle** — Replaced implicit concurrent posts with one explicit FIFO bake, job-local queued cancellation, active-cancellation Worker replacement, and entry-side serialization. Two authenticated live Chromium observations show that sharing one initialized Worker within a three-font burst also beats three sequential Worker initializations, while a multi-Worker pool remains evidence-gated.
 - **Correctness** — Removed trailing mandatory-break clusters before ellipsis insertion, preventing a truncated line from extending its visible range across the newline into hidden text.
 - **Hardening** — Made shaper result layout and arena publication fallible and pre-sized; allocation exhaustion now returns the existing `RESULT_TOO_LARGE` status instead of trapping after successful shaping, for 664 additional raw Wasm bytes.
 - **Security** — Required SHA-256 authentication for every URI-addressed external raster in the public type, Draft-04 schema, validator, and loader; resolver-only delivery remains available without inventing a URL.

@@ -32,6 +32,8 @@ test("the runtime host transfers source and accepts one authoritative font artif
   const workers = [];
   let terminations = 0;
   let malformedArtifacts = false;
+  let activePosts = 0;
+  let maximumActivePosts = 0;
 
   class FixtureWorker {
     listeners = new Map();
@@ -45,11 +47,14 @@ test("the runtime host transfers source and accepts one authoritative font artif
     }
 
     postMessage(value, transfer) {
+      activePosts += 1;
+      maximumActivePosts = Math.max(maximumActivePosts, activePosts);
       assert.deepEqual(transfer, [value.source]);
       const received = structuredClone(value, { transfer });
       assert.equal(value.source.byteLength, 0);
       assert.deepEqual(Buffer.from(received.source), Buffer.from(source));
       queueMicrotask(() => {
+        activePosts -= 1;
         this.listeners.get("message")?.({
           data: {
             type: "bake-font-result-v0",
@@ -116,6 +121,20 @@ test("the runtime host transfers source and accepts one authoritative font artif
   assert.deepEqual(concurrent, [Uint8Array.from(artifact), Uint8Array.from(artifact)]);
   assert.equal(workers.length, 2, "concurrent requests share one active Worker");
   assert.equal(terminations, 2, "the shared Worker terminates after its final result");
+  assert.equal(maximumActivePosts, 1, "the host dispatches at most one bake at a time");
+
+  const queuedController = new AbortController();
+  const before = bakeFontInWorker({ source: sourceCopy });
+  const cancelledQueued = bakeFontInWorker({ source: sourceCopy, signal: queuedController.signal });
+  const after = bakeFontInWorker({ source: sourceCopy });
+  queuedController.abort(new Error("cancel queued bake"));
+  await assert.rejects(cancelledQueued, /cancel queued bake/);
+  assert.deepEqual(await Promise.all([before, after]), [
+    Uint8Array.from(artifact),
+    Uint8Array.from(artifact),
+  ]);
+  assert.equal(workers.length, 3, "queued cancellation does not replace the active Worker");
+  assert.equal(terminations, 3);
 
   const requests = [];
   const font = await new FontLoader({
@@ -128,7 +147,7 @@ test("the runtime host transfers source and accepts one authoritative font artif
     },
   }).load("Inter-Regular.ttf");
   assert.equal(font.glyphCount, 2937);
-  assert.equal(terminations, 3);
+  assert.equal(terminations, 4);
   assert.deepEqual(requests, [
     "https://assets.test/Inter-Regular.font.glb",
     "https://assets.test/Inter-Regular.ttf",
@@ -141,14 +160,23 @@ test("the runtime host transfers source and accepts one authoritative font artif
   });
   controller.abort(new Error("cancel idle Worker"));
   await assert.rejects(cancelled, /cancel idle Worker/);
-  assert.equal(terminations, 4);
+  assert.equal(terminations, 5);
 
   await bakeFontInWorker({
     source: sourceCopy,
     sourceUrl: "https://assets.test/recovered.ttf",
   });
-  assert.equal(workers.length, 5);
-  assert.equal(terminations, 5);
+  assert.equal(workers.length, 6);
+  assert.equal(terminations, 6);
+
+  const activeController = new AbortController();
+  const cancelledActive = bakeFontInWorker({ source: sourceCopy, signal: activeController.signal });
+  const resumed = bakeFontInWorker({ source: sourceCopy });
+  activeController.abort(new Error("cancel active bake"));
+  await assert.rejects(cancelledActive, /cancel active bake/);
+  assert.deepEqual(await resumed, Uint8Array.from(artifact));
+  assert.equal(workers.length, 8, "active cancellation resumes queued work in a fresh Worker");
+  assert.equal(terminations, 8);
 
   malformedArtifacts = true;
   await assert.rejects(
@@ -159,8 +187,8 @@ test("the runtime host transfers source and accepts one authoritative font artif
     /invalid protocol message/,
   );
   malformedArtifacts = false;
-  assert.equal(workers.length, 6);
-  assert.equal(terminations, 6);
+  assert.equal(workers.length, 9);
+  assert.equal(terminations, 9);
   for (const worker of workers) {
     assert.deepEqual(worker, {
       url: new URL("../../dist/runtime-bake-worker.js", import.meta.url).href,

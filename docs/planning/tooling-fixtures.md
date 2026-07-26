@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T14:19:44Z"
+  at: "2026-07-26T03:20:00Z"
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -279,7 +279,7 @@ Status: ✅ roadmap items 3.1–3.3 and Milestone 3 are complete
 
 Exercises shorthand source URLs, explicit source/baked overrides, baked-only GLBs, preloads, baked hits, missing assets, corrupt/incompatible assets, cancelled fallback, and repeated concurrent loads. URL fixtures cover every recognized source suffix, suffix case, extensionless paths, query preservation, fragment removal, and non-hierarchical URLs. It asserts one development warning per missing source, no warning in production, canonical-path convergence after fallback, no duplicate probe after preload, and no public runtime-forcing switch.
 
-The completed 3.1 fixture uses exact Inter artifacts through the public loader and registry. It covers request/shaping identity deduplication, exact GLB shaping-view extraction, source provenance, embedded/external raster delivery, relative companion resolution, resolver interception, artifact hashes, lifecycle invalidation, configured limits before copies and during streaming, and deterministic fixed-seed loader mutations. Item 3.2 replaces the formerly injected-only seam with the standard dynamic module-Worker host: tests exercise source/result transfer lists, the public runtime subpath, the Worker entry over the exact portable Wasm core, byte-for-byte Inter equality, loader provenance revalidation, and the static package boundary. Item 3.3 runs that proof in Chromium through the benchmark product, checks the real Worker GLB hash against the canonical Node artifact before timing public fallback, and proves reference-counted underlying cancellation plus immediate idle-Worker termination/recovery without timers.
+The completed 3.1 fixture uses exact Inter artifacts through the public loader and registry. It covers request/shaping identity deduplication, exact GLB shaping-view extraction, source provenance, embedded/external raster delivery, relative companion resolution, resolver interception, artifact hashes, lifecycle invalidation, configured limits before copies and during streaming, and deterministic fixed-seed loader mutations. Item 3.2 replaces the formerly injected-only seam with the standard dynamic module-Worker host: tests exercise source/result transfer lists, the public runtime subpath, the Worker entry over the exact portable Wasm core, byte-for-byte Inter equality, loader provenance revalidation, and the static package boundary. Item 3.3 runs that proof in Chromium through the benchmark product, checks the real Worker GLB hash against the canonical Node artifact before timing public fallback, and proves reference-counted underlying cancellation plus immediate idle-Worker termination/recovery without timers. The hardened host admits one FIFO job at a time, removes queued cancellations without disturbing active work, and replaces an actively cancelled Worker before resuming the queue; a local Vitexec probe authenticates every burst output and logs performance observations without threshold-based pass/fail behavior.
 
 ### Package-graph runner
 
