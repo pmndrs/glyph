@@ -6,10 +6,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 271194,
-      "minifiedBytes": 211220,
-      "gzipBytes": 62776,
-      "brotliBytes": 47970
+      "rawBytes": 271169,
+      "minifiedBytes": 211199,
+      "gzipBytes": 62771,
+      "brotliBytes": 47974
     },
     {
       "id": "font-validator-js",
@@ -46,10 +46,10 @@
       "label": "Text shaper JS",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 43969,
-      "minifiedBytes": 30669,
-      "gzipBytes": 8805,
-      "brotliBytes": 7833
+      "rawBytes": 43944,
+      "minifiedBytes": 30648,
+      "gzipBytes": 8798,
+      "brotliBytes": 7832
     },
     {
       "id": "text-shaper-wasm",

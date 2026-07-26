@@ -185,7 +185,7 @@ Run the Figma-backed benchmark product from the monorepo app tree:
 pnpm benchmarks
 ```
 
-The ordinary `pnpm check` path runs deterministic CI-safe tests. The maintainer-local browser lane is intentionally explicit because it starts real browsers and will grow hardware-GPU scenarios:
+The pinned [GitHub Actions workflow](.github/workflows/ci.yml) runs the ordinary `pnpm check` path on pull requests and `main`. This deterministic CI-safe lane includes headless Chromium product scenarios but makes no hardware-GPU claim. The maintainer-local browser lane is intentionally explicit because it starts real GPU-enabled browsers:
 
 ```sh
 pnpm --filter @pmndrs/text-benchmarks test:live

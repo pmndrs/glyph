@@ -382,6 +382,10 @@ Repeated success is supporting evidence, not a substitute for causal synchroniza
 
 ### Pull request tier
 
+Status: ✅ implemented by [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+
+The workflow installs the exact repository Node, pnpm, stable Rust, and Wasm target pins through mise, installs dependencies from the frozen lockfile, and runs `pnpm check` with headless Chromium. Third-party actions use immutable commit SHAs annotated with their verified current release. Vitexec, hardware-GPU claims, timing gates, and coverage-guided nightly fuzzing remain outside this tier.
+
 - formatting and package-owned unit tests;
 - compiled-artifact package integration tests;
 - small licensed corpus;

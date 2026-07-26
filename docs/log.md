@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-07-26
+
+- **CI** — Added the required pull-request and `main` workflow over the canonical `pnpm check` gate using immutable current-release action SHAs, mise-owned toolchain pins, the frozen dependency graph, and headless Chromium. Vitexec, hardware-GPU evidence, performance thresholds, and coverage-guided nightly fuzzing remain explicit non-CI lanes.
+
 ## 2026-07-25
 
 - **Cleanup** — Removed the unread registered-font artifact wrapper; validated shaping and raster subviews already retain the owned backing buffer required by their lifetimes.
