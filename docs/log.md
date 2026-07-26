@@ -2,6 +2,8 @@
 
 ## 2026-07-26
 
+- **MTSDF quality oracle** — Pinned Chlumsky `msdfgen` 1.13.0 by tag commit and source-archive SHA-256. A package-owned provisioner builds only the dependency-free native core and shape-description executable inside an ignored package cache; the oracle remains outside package files, browser dependencies, ordinary builds, and platform releases.
+
 - **MTSDF candidate size** — Added a non-shipping package-owned admission harness for exact `klyff_msdf` 0.1.3 with default features disabled. The locked graph contains no WGPU or duplicate font parser; `wasm32-unknown-unknown` imports nothing; and a fixed 40×40 synthetic MTSDF returns FNV-1a `4b585e49`. Reproducible Rust 1.97.1 plus Binaryen 129 records 81,308 raw, 72,510 optimized, 32,163 gzip, and 27,875 Brotli bytes. A blocker-sensor test still proves the published invalid-threshold API panics, so viable size does not admit the dependency.
 
 - **MTSDF generator admission** — Began roadmap item 8.1 by auditing current generator candidates before adding a dependency. Pure-Rust `klyff_msdf` 0.1.3 is the leading patch candidate, but its published core is not `no_std`, defaults to a second older Skrifa, exposes panic/assert paths, builds an unconditional per-outline diagnostic string, and documents quadratic flattening during intersecting-shape cleanup. Native Chlumsky `msdfgen` remains the test-only quality oracle. Milestone 8 now requires upstreamable hardening, Wasm/size evidence, deterministic oracle comparison, malformed-input coverage, and cargo-fuzz admission before item 8.2.

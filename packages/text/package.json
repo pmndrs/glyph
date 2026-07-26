@@ -54,6 +54,7 @@
     "generate:bitmap-abi": "cargo run --manifest-path rust/bitmap-baker/Cargo.toml --bin generate-bitmap-abi --locked --quiet",
     "measure:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs",
     "check:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs --check",
+    "provision:mtsdf-oracle": "node ./scripts/provision-msdfgen-oracle.mjs",
     "generate:unicode-data": "node ./scripts/generate-unicode-script-data.mjs && node ./scripts/generate-unicode-bidi-data.mjs",
     "check:unicode-data": "node ./scripts/generate-unicode-script-data.mjs --check && node ./scripts/generate-unicode-bidi-data.mjs --check",
     "sync:unicode-tests": "node ./scripts/sync-unicode-test-data.mjs",

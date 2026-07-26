@@ -75,6 +75,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Rust toolchain | `1.97.1` | `rust-toolchain.toml` |
 | HarfRust | `0.12.0` | tag commit `60b28ea22b5261710018d69c168a762bcb28794c` |
 | HarfBuzz oracle | `13.0.0` | tag commit `a0fc099681a69ae40665fbea74982a2e9d7a5260` |
+| MTSDF quality oracle | Chlumsky `msdfgen` `1.13.0` | tag `v1.13`, commit `1874bcf7d9624ccc85b4bc9a85d78116f690f35b`; source archive SHA-256 `93cd1ad8918c1a78c5c96e82d4f4c77f0eb86c2e7e8579a0967e54196c4b7167` |
 | Unicode | `17.0.0` | versioned UCD and UAX data |
 | Unicode Script/Script_Extensions data | `@unicode/unicode-17.0.0` `1.6.17` | build-only generated range-table source |
 | UAX #29 implementation | `unicode-segmenter` `0.15.0` | Unicode 17 extended-grapheme segmentation |

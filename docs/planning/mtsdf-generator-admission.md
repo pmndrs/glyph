@@ -41,6 +41,8 @@ Milestone 8 needs deterministic linear RGBA8 MTSDF bytes from maintained font ou
 
 The audited crates.io archive for `klyff_msdf` 0.1.3 has SHA-256 `ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235`. The audit used the exact published archive, not a moving repository branch.
 
+The independent oracle is Chlumsky `msdfgen` 1.13.0 at tag `v1.13`, commit `1874bcf7d9624ccc85b4bc9a85d78116f690f35b`; its source archive has SHA-256 `93cd1ad8918c1a78c5c96e82d4f4c77f0eb86c2e7e8579a0967e54196c4b7167`. `@pmndrs/text` provisions only the dependency-free core and standalone shape-description tool under its ignored package cache. Font, FreeType, PNG, SVG, Skia, OpenMP, vcpkg, installation, and shared-library features stay disabled. This native executable is test infrastructure, never a package file, runtime dependency, browser artifact, or platform release.
+
 The non-shipping admission harness pins that archive with default features disabled. Its locked graph contains neither Skrifa, `ttf-parser`, nor WGPU, and optimized `wasm32-unknown-unknown` imports no host or WASI function. A deterministic 40×40 synthetic MTSDF fixture has FNV-1a identity `4b585e49`. At Rust 1.97.1 and Binaryen 129, the candidate core measures 81,308 raw bytes, 72,510 optimized bytes (70.8 KiB), 32,163 gzip bytes (31.4 KiB), and 27,875 Brotli bytes (27.2 KiB). This proves that generator code size is viable; it does not waive the published crate's use of `std`, panic paths, or quality gates.
 
 ## Required upstreamable patch
