@@ -12,22 +12,25 @@ import {
 } from './advanced-shaping'
 
 describe('advanced-shaping timeline', () => {
-  it('seeks and steps through exact authored reveal units', () => {
-    const initial = initialAdvancedShapingState()
-    const first = updateAdvancedShaping(initial, { kind: 'seek', tick: 15 })
-    expect(advancedShapingFrame(first).text).toBe('AVATAR office e\u0301')
-
-    const previous = updateAdvancedShaping(first, { kind: 'step', ticks: -1 })
-    expect(advancedShapingFrame(previous).text).toBe('AVATAR office ')
-    expect(previous.playing).toBe(false)
+  it('starts the live showcase as a playing loop from its empty authored boundary', () => {
+    expect(initialAdvancedShapingState()).toMatchObject({ playing: true, tick: 0 })
   })
 
-  it('advances only explicit playing state and stops at the authored boundary', () => {
+  it('seeks exact authored reveal units and pauses while scrubbing', () => {
+    const initial = initialAdvancedShapingState()
+    const playing = updateAdvancedShaping(initial, { kind: 'play' })
+    const scrubbed = updateAdvancedShaping(playing, { kind: 'seek', tick: 15 })
+    expect(advancedShapingFrame(scrubbed).text).toBe('AVATAR office e\u0301')
+    expect(scrubbed.playing).toBe(false)
+  })
+
+  it('advances only explicit playing state and loops at the authored boundary', () => {
     let state = updateAdvancedShaping(initialAdvancedShapingState(), { kind: 'play' })
     expect(state.tick).toBe(0)
     const tickCount = advancedShapingFrame(state).tickCount
-    for (let index = 0; index <= tickCount; index += 1) state = advanceAdvancedShaping(state)
-    expect(state).toMatchObject({ tick: tickCount, playing: false })
+    for (let index = 0; index < tickCount; index += 1) state = advanceAdvancedShaping(state)
+    expect(state).toMatchObject({ tick: tickCount, playing: true })
+    expect(advanceAdvancedShaping(state)).toMatchObject({ tick: 0, playing: true })
   })
 
   it('keeps edits whole and restores the authored deterministic timeline', () => {
@@ -39,10 +42,8 @@ describe('advanced-shaping timeline', () => {
       text: 'A custom e\u0301 paragraph',
       isEdited: true,
     })
-    const restored = updateAdvancedShaping(edited, { kind: 'restore-authored-text' })
-    expect(advancedShapingFrame(restored).text).toBe(
-      ADVANCED_SHAPING_CASES[0]!.showcaseRevealUnits.join(''),
-    )
+    const reset = updateAdvancedShaping(edited, { kind: 'reset' })
+    expect(advancedShapingFrame(reset)).toMatchObject({ text: '', tick: 0, isEdited: false })
   })
 
   it('defines every required universality lane with bounded integer widths', () => {

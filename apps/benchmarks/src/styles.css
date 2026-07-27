@@ -144,23 +144,12 @@ button {
   color: var(--dim);
 }
 
-.benchmark-grid {
-  background-color: var(--background);
-  background-position: -1px -1px;
-}
-.benchmark-grid.is-visible {
-  background-image:
-    linear-gradient(
-      to right,
-      color-mix(in srgb, var(--border) 42%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--border) 42%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 16px 16px;
+@media (min-width: 1400px) {
+  .metric-summary-grid {
+    grid-template-columns:
+      calc(19.6078% - 2.353px) calc(19.6078% - 2.353px) calc(19.6078% + 9.647px)
+      calc(20.5882% - 2.471px) calc(20.5882% - 2.471px);
+  }
 }
 
 .cell {
@@ -200,9 +189,5 @@ button {
 @media (max-width: 1023px) {
   :root {
     font-size: 16px;
-  }
-  .benchmark-grid {
-    min-height: 0;
-    padding: 12px;
   }
 }

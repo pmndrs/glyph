@@ -1,6 +1,11 @@
 const DEFAULT_CAPACITY = 120
 const DEFAULT_REPORT_INTERVAL_MS = 250
 
+export interface LiveFrameHistoryCursor {
+  length: number
+  nextIndex: number
+}
+
 export interface LiveFrameTelemetrySnapshot {
   readonly frameCount: number
   readonly framesPerSecond: number
@@ -18,12 +23,15 @@ export interface LiveFrameTelemetrySnapshot {
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
+  readonly submitHistoryCursor: LiveFrameHistoryCursor
   readonly fpsHistory: Float32Array
   readonly fpsHistoryLength: number
   readonly fpsHistoryNextIndex: number
+  readonly fpsHistoryCursor: LiveFrameHistoryCursor
   readonly gpuHistory: Float32Array
   readonly gpuHistoryLength: number
   readonly gpuHistoryNextIndex: number
+  readonly gpuHistoryCursor: LiveFrameHistoryCursor
 }
 
 export interface LiveFrameTelemetry {
@@ -55,6 +63,9 @@ export function createLiveFrameTelemetry(options?: {
   let fpsHistoryNextIndex = 0
   let gpuHistoryLength = 0
   let gpuHistoryNextIndex = 0
+  const submitHistoryCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 }
+  const fpsHistoryCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 }
+  const gpuHistoryCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 }
   let gpuFrameMs: number | undefined
   let frameCount = 0
   let reportedAt = performance.now()
@@ -69,6 +80,8 @@ export function createLiveFrameTelemetry(options?: {
       gpuHistory[gpuHistoryNextIndex] = durationMs
       gpuHistoryNextIndex = (gpuHistoryNextIndex + 1) % capacity
       gpuHistoryLength = Math.min(gpuHistoryLength + 1, capacity)
+      gpuHistoryCursor.length = gpuHistoryLength
+      gpuHistoryCursor.nextIndex = gpuHistoryNextIndex
     },
     recordSubmit(timestampMs, durationMs) {
       if (!Number.isFinite(timestampMs)) throw new RangeError('frame timestamp must be finite')
@@ -78,6 +91,8 @@ export function createLiveFrameTelemetry(options?: {
       submitHistory[submitHistoryNextIndex] = durationMs
       submitHistoryNextIndex = (submitHistoryNextIndex + 1) % capacity
       submitHistoryLength = Math.min(submitHistoryLength + 1, capacity)
+      submitHistoryCursor.length = submitHistoryLength
+      submitHistoryCursor.nextIndex = submitHistoryNextIndex
       frameCount += 1
       const elapsedMs = timestampMs - reportedAt
       if (elapsedMs < reportIntervalMs) return undefined
@@ -86,6 +101,8 @@ export function createLiveFrameTelemetry(options?: {
       fpsHistory[fpsHistoryNextIndex] = framesPerSecond
       fpsHistoryNextIndex = (fpsHistoryNextIndex + 1) % capacity
       fpsHistoryLength = Math.min(fpsHistoryLength + 1, capacity)
+      fpsHistoryCursor.length = fpsHistoryLength
+      fpsHistoryCursor.nextIndex = fpsHistoryNextIndex
       copyAndSort(submitHistory, submitQuantileScratch, submitHistoryLength)
       copyAndSort(gpuHistory, gpuQuantileScratch, gpuHistoryLength)
       reportedAt = timestampMs
@@ -112,12 +129,15 @@ export function createLiveFrameTelemetry(options?: {
         submitHistory,
         submitHistoryLength,
         submitHistoryNextIndex,
+        submitHistoryCursor,
         fpsHistory,
         fpsHistoryLength,
         fpsHistoryNextIndex,
+        fpsHistoryCursor,
         gpuHistory,
         gpuHistoryLength,
         gpuHistoryNextIndex,
+        gpuHistoryCursor,
       }
     },
   }

@@ -30,7 +30,8 @@ import {
 } from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
-import { createLiveFrameTelemetry } from './live-frame-telemetry'
+import { createCanvasSurface } from './canvas-surface'
+import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
 import {
   LIVE_TEXT_COLOR,
   LIVE_TEXT_LINE_HEIGHT,
@@ -146,12 +147,15 @@ export interface BitmapTextLiveStats {
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
+  readonly submitHistoryCursor: LiveFrameHistoryCursor
   readonly fpsHistory: Float32Array
   readonly fpsHistoryLength: number
   readonly fpsHistoryNextIndex: number
+  readonly fpsHistoryCursor: LiveFrameHistoryCursor
   readonly gpuHistory: Float32Array
   readonly gpuHistoryLength: number
   readonly gpuHistoryNextIndex: number
+  readonly gpuHistoryCursor: LiveFrameHistoryCursor
 }
 
 export interface BitmapAtlasPageStats {
@@ -176,6 +180,7 @@ export interface BitmapTextConformanceCapture {
 
 export interface BitmapTextPreview {
   resize(width: number, height: number): void
+  setGridVisible(visible: boolean): void
   update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>
   setPresentationProgress(revision: number, progress: number): BitmapTextPreviewSnapshot
   finishPresentation(revision: number): BitmapTextPreviewSnapshot
@@ -190,6 +195,7 @@ export interface BitmapTextPreviewUpdate {
   readonly language: string
   readonly direction: 'ltr' | 'rtl'
   readonly features: readonly FontFeature[]
+  readonly textAlign: 'start' | 'center'
 }
 
 export interface BitmapTextPreviewSnapshot {
@@ -230,6 +236,7 @@ export interface BitmapTextPreviewOptions {
   readonly dpr: number
   readonly fontSize: number
   readonly height: number
+  readonly showGrid: boolean
   readonly layoutWidth: number
   readonly expectedGlyphCount?: number
   readonly fontFixture?: BenchmarkFontFixture
@@ -237,6 +244,7 @@ export interface BitmapTextPreviewOptions {
   readonly direction?: 'ltr' | 'rtl'
   readonly features?: readonly FontFeature[]
   readonly text: string
+  readonly textAlign?: 'start' | 'center'
   readonly width: number
   readonly signal?: AbortSignal
   readonly onError: (error: unknown) => void
@@ -401,8 +409,9 @@ async function createBitmapLine(
     readonly language: string
     readonly direction: 'ltr' | 'rtl'
     readonly features: readonly FontFeature[]
+    readonly textAlign: 'start' | 'center'
     readonly rejectMissingGlyphs?: boolean
-  } = { language: 'en', direction: 'ltr', features: [] },
+  } = { language: 'en', direction: 'ltr', features: [], textAlign: 'start' },
 ): Promise<BitmapLine> {
   signal?.throwIfAborted()
   const object = new Text({
@@ -415,6 +424,7 @@ async function createBitmapLine(
     language: shaping.language,
     direction: shaping.direction,
     features: shaping.features,
+    textAlign: shaping.textAlign,
     ...(layoutWidth === undefined
       ? {}
       : { width: layoutWidth, wrap: 'word' as const, overflow: 'visible' as const }),
@@ -606,6 +616,7 @@ export async function createBitmapTextPreview(
     language = 'en',
     direction = 'ltr',
     features = [],
+    textAlign = 'start',
     onError,
     onStats,
   } = options
@@ -616,7 +627,6 @@ export async function createBitmapTextPreview(
   let layoutWidthRatio = layoutWidth / width
   const rendererStarted = performance.now()
   const renderer = await createConfiguredRenderer({
-    alpha: true,
     backend,
     canvas,
     dpr,
@@ -624,6 +634,7 @@ export async function createBitmapTextPreview(
     trackGpuTimestamps: true,
     width,
   })
+  const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, options.showGrid)
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
@@ -639,6 +650,7 @@ export async function createBitmapTextPreview(
       language,
       direction,
       features,
+      textAlign,
       rejectMissingGlyphs: expectedGlyphCount !== undefined,
     })
     if (expectedGlyphCount !== undefined && line.glyphCount !== expectedGlyphCount) {
@@ -655,8 +667,6 @@ export async function createBitmapTextPreview(
     const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10)
     camera.position.z = 1
     camera.updateProjectionMatrix()
-    renderer.setClearColor(0x000000, 0)
-
     const telemetry = createLiveFrameTelemetry()
     let gpuTimestampRequest: number | undefined
     let gpuTimestampResolution: Promise<void> | undefined
@@ -670,9 +680,9 @@ export async function createBitmapTextPreview(
     const targetLinePosition = (): readonly [number, number] => {
       const layout = activeLine.object.layout
       const currentLayoutWidth =
-        anchor === 'top-start'
-          ? Math.max(120, width * layoutWidthRatio)
-          : (layout?.width ?? activeLine.width)
+        anchor === 'center'
+          ? (layout?.width ?? activeLine.width)
+          : Math.max(120, width * layoutWidthRatio)
       const layoutHeight = layout?.height ?? activeLine.height
       return liveTextPosition(anchor, width, viewportHeight, currentLayoutWidth, layoutHeight)
     }
@@ -737,7 +747,10 @@ export async function createBitmapTextPreview(
       return presentationSnapshot()
     }
     const reflowToViewport = (
-      update?: Pick<BitmapTextPreviewUpdate, 'text' | 'language' | 'direction' | 'features'>,
+      update?: Pick<
+        BitmapTextPreviewUpdate,
+        'text' | 'language' | 'direction' | 'features' | 'textAlign'
+      >,
     ): Promise<BitmapTextPreviewSnapshot> => {
       const revision = ++layoutRevision
       const previousSnapshots: readonly BitmapGlyphPositionSnapshot[] =
@@ -824,9 +837,7 @@ export async function createBitmapTextPreview(
       if (disposed) return
       try {
         const started = performance.now()
-        renderer.setRenderTarget(null)
-        renderer.clear()
-        renderer.render(scene, camera)
+        canvasSurface.render(scene, camera)
         if (closing) return
         const submitMs = performance.now() - started
         if (firstDrawMs === 0) firstDrawMs = submitMs
@@ -876,6 +887,7 @@ export async function createBitmapTextPreview(
         width = positiveViewportSize(nextWidth, 'bitmap preview width')
         viewportHeight = positiveViewportSize(nextHeight, 'bitmap preview height')
         renderer.setSize(width, viewportHeight, false)
+        canvasSurface.resize(width, viewportHeight)
         camera.right = width
         camera.bottom = -viewportHeight
         camera.updateProjectionMatrix()
@@ -890,6 +902,9 @@ export async function createBitmapTextPreview(
               onError(error)
             }
           })
+      },
+      setGridVisible(visible) {
+        canvasSurface.setGridVisible(visible)
       },
       update(next) {
         if (closing || disposed) {
@@ -910,6 +925,7 @@ export async function createBitmapTextPreview(
           language: next.language,
           direction: next.direction,
           features: next.features,
+          textAlign: next.textAlign,
         })
       },
       setPresentationProgress,
@@ -927,6 +943,7 @@ export async function createBitmapTextPreview(
           disposePresentation()
           disposeBitmapLine(activeLine)
           activeFont.dispose()
+          canvasSurface.dispose()
           await renderer.dispose()
         })()
         return disposal
@@ -935,6 +952,7 @@ export async function createBitmapTextPreview(
   } catch (error) {
     if (line !== undefined) disposeBitmapLine(line)
     font?.dispose()
+    canvasSurface.dispose()
     await renderer.dispose()
     throw error
   }

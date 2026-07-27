@@ -47,6 +47,9 @@ describe('live frame telemetry', () => {
     expect(wrapped?.submitHistory).toBe(first?.submitHistory)
     expect(wrapped?.fpsHistory).toBe(first?.fpsHistory)
     expect(wrapped?.gpuHistory).toBe(first?.gpuHistory)
+    expect(wrapped?.submitHistoryCursor).toBe(first?.submitHistoryCursor)
+    expect(wrapped?.submitHistoryCursor).toEqual({ length: 3, nextIndex: 1 })
+    expect(wrapped?.gpuHistoryCursor).toBe(first?.gpuHistoryCursor)
     expect(wrapped?.minimumFramesPerSecond).toBeLessThanOrEqual(
       wrapped?.maximumFramesPerSecond ?? 0,
     )
@@ -59,5 +62,15 @@ describe('live frame telemetry', () => {
     expect(() => telemetry.recordGpu(-1)).toThrow(RangeError)
     expect(() => telemetry.recordSubmit(Number.NaN, 1)).toThrow(RangeError)
     expect(() => telemetry.recordSubmit(performance.now(), -1)).toThrow(RangeError)
+  })
+
+  it('advances the shared RAF cursor between React-facing reports', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 4, reportIntervalMs: 1_000 })
+    const startedAt = performance.now()
+    const reported = telemetry.recordSubmit(startedAt + 1_000, 0.25)
+    expect(reported?.submitHistoryCursor).toEqual({ length: 1, nextIndex: 1 })
+    expect(telemetry.recordSubmit(startedAt + 1_001, 0.5)).toBeUndefined()
+    expect(reported?.submitHistoryCursor).toEqual({ length: 2, nextIndex: 2 })
+    expect(reported?.submitHistory[1]).toBe(0.5)
   })
 })

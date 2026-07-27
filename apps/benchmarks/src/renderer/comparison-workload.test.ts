@@ -17,6 +17,7 @@ const baseConfiguration: ComparisonWorkloadConfiguration = {
   paintOpacity: 1,
   paintShadowEnabled: true,
   paintStrokeWidth: 0.5,
+  showGrid: true,
   showLayoutBounds: true,
   workload: 'paint-effects',
 }
@@ -30,6 +31,7 @@ describe('comparison workload updates', () => {
       { paintOpacity: 0.5 },
       { paintShadowEnabled: false },
       { paintStrokeWidth: 0.75 },
+      { showGrid: false },
       { showLayoutBounds: false },
     ] satisfies readonly Partial<ComparisonWorkloadConfiguration>[]) {
       expect(

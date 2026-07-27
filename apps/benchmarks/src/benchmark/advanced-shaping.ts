@@ -40,11 +40,10 @@ export interface AdvancedShapingState {
 export type AdvancedShapingCommand =
   | { readonly kind: 'play' }
   | { readonly kind: 'pause' }
-  | { readonly kind: 'step'; readonly ticks: -1 | 1 }
+  | { readonly kind: 'reset' }
   | { readonly kind: 'seek'; readonly tick: number }
   | { readonly kind: 'select-case'; readonly caseId: AdvancedShapingCaseId }
   | { readonly kind: 'edit'; readonly text: string }
-  | { readonly kind: 'restore-authored-text' }
 
 export interface AdvancedShapingFrame {
   readonly caseDefinition: AdvancedShapingCase
@@ -174,8 +173,8 @@ export function initialAdvancedShapingState(): AdvancedShapingState {
   const definition = advancedShapingCase('latin-features')
   return {
     caseId: definition.id,
-    playing: false,
-    tick: definition.showcaseRevealUnits.length,
+    playing: true,
+    tick: 0,
     editedText: undefined,
   }
 }
@@ -194,11 +193,12 @@ export function updateAdvancedShaping(
       }
     case 'pause':
       return { ...state, playing: false }
-    case 'step':
+    case 'reset':
       return {
         ...state,
         playing: false,
-        tick: clampTick(state.tick + command.ticks, definition.showcaseRevealUnits.length),
+        tick: 0,
+        editedText: undefined,
       }
     case 'seek':
       return {
@@ -207,23 +207,22 @@ export function updateAdvancedShaping(
         tick: clampTick(command.tick, definition.showcaseRevealUnits.length),
       }
     case 'select-case':
+      const nextDefinition = advancedShapingCase(command.caseId)
       return {
         caseId: command.caseId,
         playing: state.playing,
-        tick: advancedShapingCase(command.caseId).showcaseRevealUnits.length,
+        tick: state.playing ? 0 : nextDefinition.showcaseRevealUnits.length,
         editedText: undefined,
       }
     case 'edit':
       return { ...state, playing: false, editedText: command.text }
-    case 'restore-authored-text':
-      return { ...state, tick: definition.showcaseRevealUnits.length, editedText: undefined }
   }
 }
 
 export function advanceAdvancedShaping(state: AdvancedShapingState): AdvancedShapingState {
   if (!state.playing || state.editedText !== undefined) return state
   const tickCount = advancedShapingCase(state.caseId).showcaseRevealUnits.length
-  if (state.tick >= tickCount) return { ...state, playing: false }
+  if (state.tick >= tickCount) return { ...state, tick: 0 }
   return { ...state, tick: state.tick + 1 }
 }
 
