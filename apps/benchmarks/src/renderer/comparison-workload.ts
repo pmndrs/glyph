@@ -67,6 +67,7 @@ interface WorkloadEntry {
   readonly alignment?: 'start' | 'center' | 'end'
   readonly animationPhase?: number
   lastPaintFrame?: number
+  paintPhase?: number
   paintRevision?: number
   lastPaintUpdateMs?: number
   paintOutlineWidth?: number
@@ -333,8 +334,15 @@ export async function createComparisonWorkloadPreview(options: {
       },
       async update(next) {
         if (closing || disposed) return
-        configuration = validateConfiguration(next)
-        await commit(configuration)
+        const validated = validateConfiguration(next)
+        if (comparisonWorkloadUpdateKind(configuration, validated) === 'rebuild') {
+          configuration = validated
+          await commit(configuration)
+          return
+        }
+        configuration = validated
+        revision += 1
+        applyRetainedConfiguration(entries, technique, configuration)
       },
       dispose() {
         if (disposal !== undefined) return disposal
@@ -564,10 +572,12 @@ function animatePaint(
   entry.lastPaintFrame = paintFrame
   const started = performance.now()
   // Identical text and shaping-span ranges keep Text on its synchronous paint-only batch path.
+  const phase = timestamp * 0.0002 * animationRate(configuration)
+  entry.paintPhase = phase
   entry.text.setProperties({
     text: PAINT_EFFECTS_TEXT,
     spans: paintSpans(
-      timestamp * 0.0002 * animationRate(configuration),
+      phase,
       configuration.amount,
       entry.paintOutlineWidth,
       entry.paintShadowOffset,
@@ -575,6 +585,52 @@ function animatePaint(
   })
   entry.paintRevision = (entry.paintRevision ?? 0) + 1
   entry.lastPaintUpdateMs = performance.now() - started
+}
+
+function applyRetainedConfiguration(
+  entries: readonly WorkloadEntry[],
+  technique: 'bitmap' | 'mtsdf',
+  configuration: ComparisonWorkloadConfiguration,
+): void {
+  for (const entry of entries) {
+    if (entry.bounds !== undefined) entry.bounds.visible = configuration.showLayoutBounds
+  }
+  if (configuration.workload !== 'paint-effects') return
+  const maximumOutlineWidth = configuration.fontSize / 16
+  const paintOutlineWidth =
+    technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined
+  const paintShadowOffset =
+    technique === 'mtsdf' && configuration.paintShadowEnabled
+      ? ([
+          Math.max(1, configuration.fontSize / 12),
+          Math.max(1, configuration.fontSize / 12),
+        ] as const)
+      : undefined
+  for (const entry of entries) {
+    if (paintOutlineWidth === undefined) delete entry.paintOutlineWidth
+    else entry.paintOutlineWidth = paintOutlineWidth
+    if (paintShadowOffset === undefined) delete entry.paintShadowOffset
+    else entry.paintShadowOffset = paintShadowOffset
+    entry.text.setProperties({
+      opacity: configuration.paintOpacity,
+      text: PAINT_EFFECTS_TEXT,
+      spans: paintSpans(
+        entry.paintPhase ?? 0,
+        configuration.amount,
+        paintOutlineWidth,
+        paintShadowOffset,
+      ),
+    })
+  }
+}
+
+export function comparisonWorkloadUpdateKind(
+  previous: ComparisonWorkloadConfiguration,
+  next: ComparisonWorkloadConfiguration,
+): 'rebuild' | 'retained' {
+  return previous.fontSize !== next.fontSize || previous.layoutWidthRatio !== next.layoutWidthRatio
+    ? 'rebuild'
+    : 'retained'
 }
 
 function animateDynamicLayout(

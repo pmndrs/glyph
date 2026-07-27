@@ -1,6 +1,55 @@
 import { describe, expect, it } from 'vitest'
 
-import { ladderDeviceSizes, paintWordHue } from './comparison-workload'
+import {
+  comparisonWorkloadUpdateKind,
+  ladderDeviceSizes,
+  paintWordHue,
+  type ComparisonWorkloadConfiguration,
+} from './comparison-workload'
+
+const baseConfiguration: ComparisonWorkloadConfiguration = {
+  amount: 50,
+  animationEnabled: true,
+  animationSpeed: 50,
+  fontFixture: 'inter',
+  fontSize: 20,
+  layoutWidthRatio: 0.8,
+  paintOpacity: 1,
+  paintShadowEnabled: true,
+  paintStrokeWidth: 0.5,
+  showLayoutBounds: true,
+  workload: 'paint-effects',
+}
+
+describe('comparison workload updates', () => {
+  it('retains the scene for animation and paint controls', () => {
+    for (const update of [
+      { animationEnabled: false },
+      { animationSpeed: 75 },
+      { amount: 80 },
+      { paintOpacity: 0.5 },
+      { paintShadowEnabled: false },
+      { paintStrokeWidth: 0.75 },
+      { showLayoutBounds: false },
+    ] satisfies readonly Partial<ComparisonWorkloadConfiguration>[]) {
+      expect(
+        comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, ...update }),
+      ).toBe('retained')
+    }
+  })
+
+  it('rebuilds only for dimensions that change text layout', () => {
+    expect(
+      comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, fontSize: 32 }),
+    ).toBe('rebuild')
+    expect(
+      comparisonWorkloadUpdateKind(baseConfiguration, {
+        ...baseConfiguration,
+        layoutWidthRatio: 0.6,
+      }),
+    ).toBe('rebuild')
+  })
+})
 
 describe('text ladder scale selection', () => {
   it('fills a tall viewport with the complete ordered scale', () => {
