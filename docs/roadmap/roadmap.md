@@ -664,6 +664,7 @@ The order below preserves lanes without pretending the work is part of V1:
 |    15 | Raster effects and expanded recommendations         | L       | Extend outlines, colorization, shadows, and projected-size guidance with measurements.                                                                      |
 |    16 | Measured optimization campaigns                     | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                        |
 |    17 | Advanced font compiler units                        | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                          |
+|    18 | Vertical writing                                    | XL      | Add Japanese top-to-bottom shaping, orientation, column layout, interaction geometry, and three-renderer evidence after complete CJK paging.                |
 
 ### Milestone 11 — editorial flow regions and mixed-raster composition
 
@@ -697,7 +698,20 @@ Deliver:
 
 Vertical writing remains deferred. The milestone retains vertical-form source data and tests that it survives baking, but does not add vertical paragraph layout.
 
-Windfoil, browser-time JIT, MLIR, GPU shaping, vertical writing, runtime variation axes, and automatic raster-module switching are not scheduled.
+### Milestone 18 — vertical writing
+
+This post-V1 milestone adds Japanese top-to-bottom text with right-to-left
+column progression after large-coverage CJK paging makes the result usable with
+a complete font. It interprets the vertical tables already preserved by the
+baker, proves HarfRust against HarfBuzz with vertical direction and font
+features, applies Unicode Vertical_Orientation by grapheme cluster, and extends
+paragraph geometry, hit testing, selection, and all three renderers without
+taxing the horizontal fast path. Tate-chū-yoko, ruby, warichū, Mongolian, and
+vertical exclusion flow remain later evidence-gated slices. The [vertical
+writing research concept](../planning/vertical-writing.md) owns the detailed
+work breakdown and acceptance gates.
+
+Windfoil, browser-time JIT, MLIR, GPU shaping, runtime variation axes, and automatic raster-module switching are not scheduled.
 
 ## Roadmap change rule
 

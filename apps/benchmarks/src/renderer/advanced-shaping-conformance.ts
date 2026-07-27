@@ -3,7 +3,7 @@ import { bitmap } from '@pmndrs/text/raster/bitmap'
 import * as THREE from 'three/webgpu'
 
 import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url'
-import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16.font.glb?url'
+import notoCjkShowcaseBitmapFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb?url'
 import interBitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
 import {
@@ -22,7 +22,7 @@ const fontUrlByFixture: Readonly<Record<AdvancedShapingFontFixture, string>> = {
   inter: interBitmapFontUrl,
   amiri: amiriBitmapFontUrl,
   'noto-sans-devanagari': devanagariBitmapFontUrl,
-  'dot-gothic-16': dotGothicBitmapFontUrl,
+  'noto-sans-cjk-showcase': notoCjkShowcaseBitmapFontUrl,
 }
 
 type AdvancedShapingConformanceState =

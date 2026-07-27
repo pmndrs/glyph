@@ -7,13 +7,19 @@ const version = '13.0.0'
 const archiveSha256 = '1626ebc763d28f4bcca1531fef42e92ca995d45f8ad90ad2ae0b5d1a567fe67a'
 const cacheDirectory = resolve('.cache/harfbuzz', version)
 const executable = resolve(cacheDirectory, 'build/util/hb-shape')
+const subsetExecutable = resolve(cacheDirectory, 'build/util/hb-subset')
 
-if (await isPinnedExecutable(executable)) {
+if (
+  (await isPinnedExecutable(executable, 'hb-shape')) &&
+  (await isPinnedExecutable(subsetExecutable, 'hb-subset'))
+) {
   process.stdout.write(`${executable}\n`)
   process.exit(0)
 }
 if (process.argv.includes('--check')) {
-  throw new Error(`pinned HarfBuzz ${version} is not provisioned at ${executable}`)
+  throw new Error(
+    `pinned HarfBuzz ${version} utilities are not provisioned under ${cacheDirectory}`,
+  )
 }
 
 await mkdir(dirname(cacheDirectory), { recursive: true })
@@ -47,9 +53,11 @@ try {
     '-Dutilities=enabled',
     '-Dintrospection=disabled',
   ])
-  await run('meson', ['compile', '-C', buildDirectory, 'hb-shape'])
-  if (!(await isPinnedExecutable(resolve(buildDirectory, 'util/hb-shape')))) {
-    throw new Error(`built hb-shape did not identify itself as HarfBuzz ${version}`)
+  await run('meson', ['compile', '-C', buildDirectory, 'hb-shape', 'hb-subset'])
+  for (const utility of ['hb-shape', 'hb-subset'] as const) {
+    if (!(await isPinnedExecutable(resolve(buildDirectory, `util/${utility}`), utility))) {
+      throw new Error(`built ${utility} did not identify itself as HarfBuzz ${version}`)
+    }
   }
   await rename(stagingDirectory, cacheDirectory)
 } finally {
@@ -57,9 +65,12 @@ try {
 }
 process.stdout.write(`${executable}\n`)
 
-async function isPinnedExecutable(path: string): Promise<boolean> {
+async function isPinnedExecutable(
+  path: string,
+  utility: 'hb-shape' | 'hb-subset',
+): Promise<boolean> {
   try {
-    return (await capture(path, ['--version'])).trim() === `hb-shape (HarfBuzz) ${version}`
+    return (await capture(path, ['--version'])).trim() === `${utility} (HarfBuzz) ${version}`
   } catch {
     return false
   }

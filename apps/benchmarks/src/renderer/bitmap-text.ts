@@ -22,6 +22,7 @@ import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitma
 import dancingScriptBitmapFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16.font.glb?url'
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
+import notoCjkShowcaseBitmapFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb?url'
 import sourceSerifBitmapFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url'
 import {
   conformanceText,
@@ -54,6 +55,7 @@ const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: bitmapFontUrl,
   amiri: amiriBitmapFontUrl,
   'noto-sans-devanagari': devanagariBitmapFontUrl,
+  'noto-sans-cjk-showcase': notoCjkShowcaseBitmapFontUrl,
   'dot-gothic-16': dotGothicBitmapFontUrl,
   'source-serif-4': sourceSerifBitmapFontUrl,
   'dancing-script': dancingScriptBitmapFontUrl,

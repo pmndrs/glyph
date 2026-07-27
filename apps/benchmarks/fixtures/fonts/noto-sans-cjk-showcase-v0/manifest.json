@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 0,
+  "id": "noto-sans-cjk-jp-showcase-v0",
+  "purpose": "Authored Japanese shaping showcase; not a complete CJK distribution font",
+  "source": {
+    "family": "Noto Sans CJK JP",
+    "style": "Regular",
+    "version": "2.004",
+    "fontFile": "NotoSansCJKjp-Showcase.otf",
+    "fontBytes": 38092,
+    "fontSha256": "1fe4cf952bf410cf4dc22d17be08b5b5bffa137549a25e1122af6a3f96c2ab3f",
+    "license": "OFL-1.1",
+    "licenseFile": "LICENSE.txt",
+    "licenseSha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+    "derivedFrom": {
+      "fontFile": "../noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf",
+      "fontBytes": 16467736,
+      "fontSha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5"
+    }
+  },
+  "subset": {
+    "tool": "hb-subset",
+    "toolVersion": "13.0.0",
+    "corpusSha256": "4097e27ccd61516868fc20bc140d891cfc29c13225dafa8a41cae6a33ec8c5dd",
+    "fontFile": "NotoSansCJKjp-Showcase.otf",
+    "fontBytes": 38092,
+    "fontSha256": "1fe4cf952bf410cf4dc22d17be08b5b5bffa137549a25e1122af6a3f96c2ab3f"
+  },
+  "face": {
+    "fontIndex": 0,
+    "variations": {}
+  }
+}

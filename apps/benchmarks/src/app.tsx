@@ -17,6 +17,7 @@ import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum'
 import {
   ADVANCED_SHAPING_CASES,
   advanceAdvancedShaping,
+  advancedShapingCase,
   advancedShapingFrame,
   initialAdvancedShapingState,
   updateAdvancedShaping,
@@ -29,7 +30,7 @@ import { environmentResource } from './benchmark/environment'
 import { runRegisteredBenchmark } from './benchmark/execution'
 import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result'
 import {
-  BENCHMARK_FONT_LABELS,
+  ADVANCED_FONT_FIXTURES,
   SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
   selectableFontFixture,
@@ -369,6 +370,7 @@ function Harness() {
   const [paintStrokePercent, setPaintStrokePercent] = useState(50)
   const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW)
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
+  const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('inter')
   const [isPending, startTransition] = useTransition()
 
   const workload = workloadById(location.mode, location.workload)
@@ -376,9 +378,7 @@ function Harness() {
   const workloadTechnique = workload.techniques[location.technique]
   const showcaseFrame = advancedShapingFrame(showcaseState)
   const activeFontFixture: BenchmarkFontFixture =
-    location.workload === 'advanced-shaping'
-      ? showcaseFrame.caseDefinition.fontFixture
-      : fontFixture
+    location.workload === 'advanced-shaping' ? advancedFontFixture : fontFixture
   const available = location.technique !== 'slug' && workloadTechnique.kind === 'ready'
   const backendAvailable = location.backend !== 'webgpu' || environment.webgpu
 
@@ -476,6 +476,9 @@ function Harness() {
   }
 
   function dispatchShowcase(command: AdvancedShapingCommand): void {
+    if (command.kind === 'select-case') {
+      setAdvancedFontFixture(advancedShapingCase(command.caseId).fontFixture)
+    }
     setShowcaseState((state) => updateAdvancedShaping(state, command))
     invalidateLiveCapture()
   }
@@ -600,17 +603,23 @@ function Harness() {
       {desktop ? (
         <div className="grid h-[calc(100vh-52px)] min-h-[680px] grid-cols-[224px_minmax(640px,1fr)_288px]">
           <WorkloadRail
+            activeFontFixture={activeFontFixture}
             fontFixture={fontFixture}
             location={location}
             showcaseFrame={showcaseFrame}
             onFontFixture={(value) => {
               setLocation({ fontFixture: value })
             }}
+            onAdvancedFontFixture={(value) => {
+              setAdvancedFontFixture(value)
+              invalidateLiveCapture()
+            }}
             onLocation={setLocation}
             onTechnique={selectTechnique}
           />
           <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
             <Scene
+              activeFontFixture={activeFontFixture}
               fontFixture={fontFixture}
               dpr={dpr}
               conformanceView={conformanceView}
@@ -650,6 +659,7 @@ function Harness() {
           <main className="min-h-[calc(100vh-110px)] p-3">
             <div className={location.view === 'scene' ? undefined : 'hidden'}>
               <Scene
+                activeFontFixture={activeFontFixture}
                 fontFixture={fontFixture}
                 dpr={dpr}
                 conformanceView={conformanceView}
@@ -806,25 +816,25 @@ function TopBar({
 }
 
 function WorkloadRail({
+  activeFontFixture,
   fontFixture,
   location,
   showcaseFrame,
+  onAdvancedFontFixture,
   onFontFixture,
   onLocation,
   onTechnique,
 }: {
+  readonly activeFontFixture: BenchmarkFontFixture
   readonly fontFixture: SelectableFontFixture
   readonly location: HarnessLocation
   readonly showcaseFrame: AdvancedShapingFrame
+  readonly onAdvancedFontFixture: (fontFixture: BenchmarkFontFixture) => void
   readonly onFontFixture: (fontFixture: SelectableFontFixture) => void
   readonly onLocation: (value: Partial<HarnessLocation>) => void
   readonly onTechnique: (technique: RasterTechnique) => void
 }) {
   const workloads = workloadsFor(location.mode)
-  const activeFontFixture: BenchmarkFontFixture =
-    location.workload === 'advanced-shaping'
-      ? showcaseFrame.caseDefinition.fontFixture
-      : fontFixture
   const selectedMtsdfFixture =
     location.technique === 'mtsdf' ? mtsdfFixtureFor(activeFontFixture) : undefined
   const rasterDescription =
@@ -872,9 +882,21 @@ function WorkloadRail({
       <div className="mt-5">
         <p className="eyebrow mb-2">Font fixture</p>
         {location.workload === 'advanced-shaping' ? (
-          <div className="rounded-md border border-border bg-surface p-3">
-            <p className="text-xs">{BENCHMARK_FONT_LABELS[activeFontFixture]}</p>
-            <p className="mt-1 font-mono text-[9px] text-dim">Selected by shaping case</p>
+          <div className="grid gap-1">
+            {ADVANCED_FONT_FIXTURES.map((fixture) => (
+              <button
+                className={`rounded-md border px-3 py-2 text-left ${activeFontFixture === fixture.id ? 'border-accent bg-surface-active text-foreground' : 'border-border bg-surface text-muted'}`}
+                key={fixture.id}
+                type="button"
+                onClick={() => onAdvancedFontFixture(fixture.id)}
+              >
+                <span className="block text-xs">{fixture.label}</span>
+                <span className="mt-1 block font-mono text-[8px] text-dim">
+                  {fixture.metadata}
+                  {showcaseFrame.caseDefinition.fontFixture === fixture.id ? ' · recommended' : ''}
+                </span>
+              </button>
+            ))}
           </div>
         ) : (
           <div className="grid gap-1">
@@ -898,6 +920,7 @@ function WorkloadRail({
 }
 
 function Scene({
+  activeFontFixture,
   activityWorkloads,
   animationEnabled,
   animationSpeed,
@@ -923,6 +946,7 @@ function Scene({
   onConformanceZoom,
   onLiveStats,
 }: {
+  readonly activeFontFixture: BenchmarkFontFixture
   readonly activityWorkloads: ActivityWorkloads
   readonly animationEnabled: boolean
   readonly animationSpeed: number
@@ -989,7 +1013,7 @@ function Scene({
               backend={location.backend}
               dpr={dpr}
               fontSize={fontSize}
-              fontFixture={fontFixture}
+              fontFixture={activeFontFixture}
               grid={grid}
               layoutWidthPercent={layoutWidthPercent}
               paintOpacityPercent={paintOpacityPercent}
@@ -1094,7 +1118,7 @@ function BenchmarkSurface({
   readonly animationSpeed: number
   readonly backend: GraphicsBackend
   readonly dpr: 1 | 2
-  readonly fontFixture: SelectableFontFixture
+  readonly fontFixture: BenchmarkFontFixture
   readonly fontSize: number
   readonly grid: boolean
   readonly layoutWidthPercent: number
@@ -1118,7 +1142,7 @@ function BenchmarkSurface({
         expectedGlyphCount: undefined,
         animatePresentation: false,
         features: showcaseFrame.caseDefinition.features,
-        fontFixture: showcaseFrame.caseDefinition.fontFixture,
+        fontFixture,
         language: showcaseFrame.caseDefinition.language,
         layoutWidthRatio: showcaseFrame.widthPermille / 1000,
         text: showcaseFrame.text,
@@ -2179,7 +2203,7 @@ function ComparisonWorkloadViewport({
   readonly animationSpeed: number
   readonly backend: GraphicsBackend
   readonly dpr: 1 | 2
-  readonly fontFixture: SelectableFontFixture
+  readonly fontFixture: BenchmarkFontFixture
   readonly fontSize: number
   readonly grid: boolean
   readonly layoutWidthRatio: number
@@ -2201,7 +2225,7 @@ function ComparisonWorkloadViewport({
   const surfaceKey = `${backend}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
   const [publishedStats, setPublishedStats] = useState<
     Readonly<{
-      fontFixture: SelectableFontFixture
+      fontFixture: BenchmarkFontFixture
       key: string
       value: ComparisonWorkloadStats
     }>
@@ -2943,7 +2967,7 @@ function PayloadInspector({
       >
         <div className="flex items-center justify-between gap-2">
           <p className="eyebrow">Selected payloads</p>
-          <span className="font-mono text-[8px] uppercase text-dim">download</span>
+          <span className="font-mono text-[8px] uppercase text-dim">gzip transfer</span>
         </div>
         <div className="mt-3 grid gap-2 border-b border-border pb-3">
           <PayloadRow
@@ -2954,10 +2978,14 @@ function PayloadInspector({
           <PayloadRow label={shaper.label} status="loaded" value={formatBytes(shaper.gzipBytes)} />
           <PayloadRow
             emphasis
-            label="Loaded library total"
+            label="Selected runtime · gzip"
             status="loaded"
             value={formatBytes(libraryTransferBytes)}
           />
+          <p className="text-[9px] leading-relaxed text-dim">
+            Includes the pmndrs/text core, selected raster runtime, and shaper. External Three.js
+            and React peers are not included; font assets are listed below.
+          </p>
         </div>
         <div className="grid gap-2 border-b border-border py-3">
           <PayloadRow

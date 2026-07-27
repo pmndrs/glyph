@@ -12,6 +12,9 @@ import { exactMipmappedTextureArrayBytes } from '../src/benchmark/texture-memory
 const outputDirectory = resolve('fixtures/rendering')
 const showcaseManifestOutput = resolve(outputDirectory, 'showcase-mtsdf-fixtures-v0.json')
 const check = process.argv.includes('--check')
+const requestedFixture = process.argv
+  .find((argument) => argument.startsWith('--fixture='))
+  ?.slice('--fixture='.length)
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-mtsdf-fixture-'))
 
 const fixtures = [
@@ -36,6 +39,11 @@ const fixtures = [
     output: 'dot-gothic-16-mtsdf.font.glb.gz',
   },
   {
+    fontFixture: 'noto-sans-cjk-showcase',
+    input: resolve('fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf'),
+    output: 'noto-sans-cjk-showcase-mtsdf.font.glb.gz',
+  },
+  {
     fontFixture: 'source-serif-4',
     input: resolve('fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf'),
     output: 'source-serif-4-mtsdf.font.glb.gz',
@@ -47,9 +55,26 @@ const fixtures = [
   },
 ] as const
 
+const selectedFixtures =
+  requestedFixture === undefined
+    ? fixtures
+    : fixtures.filter(({ fontFixture }) => fontFixture === requestedFixture)
+if (selectedFixtures.length === 0) {
+  throw new TypeError(`Unknown MTSDF fixture: ${String(requestedFixture)}`)
+}
+if (check && requestedFixture !== undefined) {
+  throw new TypeError('--fixture cannot weaken the complete MTSDF fixture check')
+}
+
 try {
-  const artifacts = []
-  for (const fixture of fixtures) {
+  const previousManifest = JSON.parse(await readFile(showcaseManifestOutput, 'utf8')) as {
+    readonly artifacts: Array<{ readonly fontFixture: string }>
+  }
+  const artifacts =
+    requestedFixture === undefined
+      ? []
+      : previousManifest.artifacts.filter(({ fontFixture }) => fontFixture !== requestedFixture)
+  for (const fixture of selectedFixtures) {
     const startedAt = performance.now()
     console.log(`Baking full ${fixture.fontFixture} MTSDF fixture...`)
     const bakedOutput = resolve(temporaryDirectory, `${fixture.fontFixture}-mtsdf.font.glb`)
@@ -122,6 +147,12 @@ try {
       `Baked ${fixture.fontFixture}: ${raster.pages.length} pages, ${formatBytes(baked.byteLength)} raw, ${formatBytes(compressed.byteLength)} gzip in ${formatDuration(performance.now() - startedAt)}`,
     )
   }
+
+  artifacts.sort(
+    (left, right) =>
+      fixtures.findIndex(({ fontFixture }) => fontFixture === left.fontFixture) -
+      fixtures.findIndex(({ fontFixture }) => fontFixture === right.fontFixture),
+  )
 
   const showcaseManifest = { schemaVersion: 0, artifacts }
 

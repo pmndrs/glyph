@@ -100,6 +100,24 @@
       }
     },
     {
+      "fontFixture": "noto-sans-cjk-showcase",
+      "file": "noto-sans-cjk-showcase-bitmap-16.font.glb",
+      "bytes": 65996,
+      "sha256": "3567e1cf4b3739ef746822c20084b79e886d35bf81bfb51053d2f3b4e9251511",
+      "raster": {
+        "decodedGpuBytes": 55440,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1008,
+            "height": 55,
+            "encodedBytes": 55588,
+            "decodedGpuBytes": 55440
+          }
+        ]
+      }
+    },
+    {
       "fontFixture": "source-serif-4",
       "file": "source-serif-4-bitmap-16.font.glb",
       "bytes": 468784,

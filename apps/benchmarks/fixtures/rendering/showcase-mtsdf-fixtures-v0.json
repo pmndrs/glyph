@@ -704,6 +704,45 @@
       }
     },
     {
+      "fontFixture": "noto-sans-cjk-showcase",
+      "file": "noto-sans-cjk-showcase-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 3172756,
+        "sha256": "33f4f0ae285764749847bd7317ca441ee87b6d5016ac330574bf3f7414f3d2da"
+      },
+      "compressed": {
+        "bytes": 1044110,
+        "sha256": "25baa13362c36b501958da04beed16efdbb0e9cdc0d160849106c14cb477bd7a"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 3100,
+        "serializedBytes": 3166320,
+        "decodedGpuBytes": 3162112,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 772,
+          "layers": 1,
+          "baseBytes": 3162112,
+          "mipmappedBytes": 4215804
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 772,
+            "encodedBytes": 3162308,
+            "decodedGpuBytes": 3162112
+          }
+        ]
+      }
+    },
+    {
       "fontFixture": "source-serif-4",
       "file": "source-serif-4-mtsdf.font.glb.gz",
       "transport": "gzip",

@@ -38,6 +38,11 @@ const fixtures = [
     output: 'dot-gothic-16-bitmap-16.font.glb',
   },
   {
+    fontFixture: 'noto-sans-cjk-showcase',
+    input: resolve('fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf'),
+    output: 'noto-sans-cjk-showcase-bitmap-16.font.glb',
+  },
+  {
     fontFixture: 'source-serif-4',
     input: resolve('fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf'),
     output: 'source-serif-4-bitmap-16.font.glb',

@@ -22,6 +22,10 @@ const fixtureIdentities = {
     glyphCount: 954,
   },
   'dot-gothic-16': { directory: 'fonts/dot-gothic-16/', glyphCount: 9362 },
+  'noto-sans-cjk-showcase': {
+    directory: 'fonts/noto-sans-cjk-showcase-v0/',
+    glyphCount: 155,
+  },
   'source-serif-4': { directory: 'fonts/source-serif-4.005/', glyphCount: 1464 },
   'dancing-script': { directory: 'fonts/dancing-script-3.000/', glyphCount: 1017 },
 } as const satisfies Readonly<Record<string, FixtureIdentity>>
