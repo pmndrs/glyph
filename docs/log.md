@@ -2,6 +2,8 @@
 
 ## 2026-07-26
 
+- **Repository-owned MTSDF core** — Concluded dependency admission in favor of a purpose-built `no_std + alloc` Rust generator under `packages/text/rust`. Added the primary Valve/Chlumský literature path, identified pinned native `msdfgen` as the canonical executable MTSDF reference, recorded Klyff, Rust bindings, OxiText, UIKit, and Zappar license/architecture findings, and made reusable scratch storage, data-oriented edge layout, scalar/SIMD equivalence, generated C ABI/JSON, and direct Wasm memory access explicit gates.
+
 - **MTSDF oracle corpus** — Routed one Rust-owned shape command stream through the candidate and pinned native `msdfgen` with explicit pixel-center framing. Six ordinary, corner, overlap, curve, and counter cases have zero reconstruction mismatches outside the one-byte quantization band; empty and malformed providers return structured errors. The self-intersection negative case exposes the unresolved candidate blocker at 768/1,600 pixels and remains deliberately red in admission status while its freshness test stays deterministic and CI-safe.
 
 - **MTSDF quality oracle** — Pinned Chlumsky `msdfgen` 1.13.0 by tag commit and source-archive SHA-256. A package-owned provisioner builds only the dependency-free native core and shape-description executable inside an ignored package cache; the oracle remains outside package files, browser dependencies, ordinary builds, and platform releases.

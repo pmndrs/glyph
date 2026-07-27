@@ -1,7 +1,7 @@
 ---
 type: Research
 title: MTSDF generator admission
-description: Audits generator candidates and defines the evidence required before Milestone 8 accepts one.
+description: Records the concluded dependency admission and the evidence required for the repository-owned Milestone 8 generator.
 tags: [rust, wasm, msdf, mtsdf, quality, fuzzing]
 sources:
   - id: klyff-msdf
@@ -21,12 +21,12 @@ sources:
     title: oxitext-sdf 0.2.0 documentation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T22:02:41Z"
+  at: "2026-07-27T00:28:33Z"
 ---
 
 # MTSDF generator admission
 
-Status: 🟡 `klyff_msdf` 0.1.3 is the leading patch candidate; no generator is accepted unchanged.
+Status: 🟢 dependency admission is concluded: the production generator is repository-owned; no reviewed generator is accepted as a product dependency.
 
 Milestone 8 needs deterministic linear RGBA8 MTSDF bytes from maintained font outlines in `wasm32-unknown-unknown`. The shipped baker must remain package-owned and platform-independent. A native implementation may serve as an independent oracle, but cannot silently become a browser dependency or a platform-binary release matrix.
 
@@ -34,10 +34,10 @@ Milestone 8 needs deterministic linear RGBA8 MTSDF bytes from maintained font ou
 
 | Candidate | Strengths | Admission blockers | Role |
 | --- | --- | --- | --- |
-| `klyff_msdf` 0.1.3 | MIT; pure Rust; direct CPU MTSDF generation; optional Skrifa and WGPU features; reusable allocation owner | Published core uses `std`; default feature selects Skrifa 0.40 rather than the repository's 0.45 line; public threshold setter asserts; intersecting-outline cleanup can panic, always constructs a diagnostic string, and flattens split quadratics to lines | Leading upstream-patch candidate |
+| `klyff_msdf` 0.1.3 | MIT metadata; pure Rust; direct CPU MTSDF generation; optional Skrifa and WGPU features; reusable allocation owner | Published core uses `std`; default feature selects Skrifa 0.40 rather than the repository's 0.45 line; public threshold setter asserts; intersecting-outline cleanup can panic, always constructs a diagnostic string, and flattens split quadratics to lines; the audited crate archive omits a standalone license file | Design reference and differential evidence only |
 | Rust `msdfgen` 0.2.1 bindings | Safe high-level API over the established implementation; error correction and estimation APIs | Ships C++ FFI through `msdfgen-sys`; native build/runtime surface conflicts with the Rust-only, platform-independent Wasm baker and creates an additional font-parser path | Rejected as product dependency |
 | `oxitext-sdf` 0.2.0 | Apache-2.0; pure-Rust MTSDF and atlas APIs | Pulls a separate OxiText/`ttf-parser`/Rayon stack, duplicates existing Fontations ownership, and has no demonstrated `no_std` or small Wasm profile | Rejected for current package boundary |
-| Chlumsky `msdfgen` | Canonical MTSDF behavior, error correction, test rendering, and mature outline corpus | C++/native toolchain and platform matrix | Pinned test-only quality oracle |
+| Chlumsky `msdfgen` | MIT; canonical MTSDF behavior, exact curve-distance selectors, overlap combination, error correction, test rendering, and mature outline corpus | C++/native toolchain and platform matrix | Pinned test-only quality oracle and port reference |
 
 The audited crates.io archive for `klyff_msdf` 0.1.3 has SHA-256 `ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235`. The audit used the exact published archive, not a moving repository branch.
 
@@ -49,18 +49,13 @@ The package-owned native-oracle corpus sends one command stream and explicit pix
 
 The self-intersection case remains a hard blocker: 768 of 1,600 reconstructed pixels disagree, with 22.500-byte alpha mean absolute error and 171-byte maximum error. The evidence intentionally reproduces that failure and changes state only when a hardened provider closes it; it is not a waived threshold. This also demonstrates why a deterministic candidate checksum alone was insufficient admission evidence.
 
-## Required upstreamable patch
+## Concluded ownership decision
 
-The first patch stays generator-generic and suitable for upstream review:
+The Klyff audit proved a viable Wasm size and exposed useful data-oriented mechanisms, but hardening crossed the geometry kernel's correctness boundary. The repository would have to co-own its panic model, degenerate-curve termination, self-intersection signs, allocation behavior, and Fontations integration. The permanent product boundary therefore owns a purpose-built Rust port rather than pinning a patched dependency or copying an external crate.
 
-1. replace the public threshold assertion with a fallible validated configuration boundary;
-2. return an explicit invalid-outline error when intersection cleanup removes every segment;
-3. construct diagnostic geometry only on the error path, with no formatting allocation in successful generation;
-4. preserve quadratic/cubic curve semantics across intersection splitting or prove a reviewed error bound before flattening;
-5. isolate `alloc` from `std`, remove `std::error::Error` as a core trait requirement, and compile CPU generation with default features disabled;
-6. let this repository supply a narrow OutlineProvider over its pinned Fontations/Skrifa version rather than enabling the candidate's older default font feature.
+The implementation may retain proven ideas—reusable scratch ownership, SoA edge traversal, compact distance values, and deterministic fixtures—but its types, API, limits, error model, curve policy, data layout, and control flow follow this repository's standards. Pinned native `msdfgen` remains an independent executable oracle and algorithm reference. The [generation research](mtsdf-generation-research.md) records the literature, reviewed libraries, license evidence, owned boundary, and SIMD hypotheses.
 
-No product-side `catch_unwind`, Wasm trap recovery, ignored panic, or copied private fork counts as closure. If upstream cannot take the complete patch promptly, the repository may pin a reviewed upstream branch only with explicit provenance, a replacement/removal condition, and identical tests.
+The shipped core must remain `no_std + alloc`, accept the package-selected allocator, expose typed failures without panic recovery, reuse bounded scratch storage, and connect to JavaScript through the same generated C ABI/JSON contract and direct Wasm memory access as the existing bakers. It does not acquire a second font parser, atlas owner, container writer, Worker abstraction, or binding generator.
 
 ## Admission evidence
 
@@ -75,4 +70,4 @@ Correctness precedes timing:
 
 The package-owned `measure:mtsdf-admission` script rebuilds and optimizes the Wasm, executes the synthetic export, rejects WGPU and duplicate-font-parser lock entries, rejects host imports, and compares every byte count/hash with the checked-in evidence. The intentionally green panic-detection test is a blocker sensor: it must be inverted or removed when the upstreamable fallible API lands; it is not evidence that trapping is acceptable.
 
-The admission record is an experiment, not a recommendation. Milestone 8 can recommend MSDF only after the generator, payload, runtime shader, visual corpus, transforms, effects, and performance gates all close.
+Dependency admission is closed; generator implementation remains active. Milestone 8 can recommend MSDF only after the repository-owned generator, payload, runtime shader, visual corpus, transforms, effects, and performance gates all close.
