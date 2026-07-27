@@ -208,6 +208,21 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "pmndrs-text-font-baker",
+ "pmndrs-text-mtsdf-admission",
+]
+
+[[package]]
+name = "pmndrs-text-mtsdf-admission"
+version = "0.0.0"
+dependencies = [
+ "pmndrs-text-mtsdf-core",
+]
+
+[[package]]
+name = "pmndrs-text-mtsdf-core"
+version = "0.0.0"
+dependencies = [
+ "core_maths",
 ]
 
 [[package]]
