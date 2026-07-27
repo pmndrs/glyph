@@ -19,6 +19,8 @@ required-features = ["std"]
 [features]
 default = ["std"]
 std = ["dep:serde_json", "serde_json/std", "pmndrs-text-mtsdf-core/std"]
+simd128-experiment = ["pmndrs-text-mtsdf-core/simd128-experiment"]
+allocation-evidence = []
 
 [dependencies]
 pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }

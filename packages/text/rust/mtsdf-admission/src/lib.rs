@@ -10,7 +10,9 @@ use pmndrs_text_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, O
 mod fontations;
 
 #[cfg(feature = "full-font-evidence")]
-pub use fontations::{FontPassEvidence, glyph_count, measure_font_pass};
+pub use fontations::{
+    FontPassEvidence, FontationsOutlineSource, font_outline_source, glyph_count, measure_font_pass,
+};
 
 #[cfg(feature = "fuzzing")]
 mod fuzzing;

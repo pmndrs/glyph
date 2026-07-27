@@ -11,6 +11,7 @@ publish = false
 [features]
 default = ["std"]
 std = []
+simd128-experiment = []
 
 [dependencies]
 core_maths = "0.1.1"

@@ -13,6 +13,7 @@ pub(crate) fn color_edges(
     contours: &[Range<usize>],
     output: &mut Vec<Edge>,
     output_contours: &mut Vec<Range<usize>>,
+    corners: &mut Vec<usize>,
 ) -> Result<(), BuildFailure> {
     output.clear();
     output_contours.clear();
@@ -25,7 +26,6 @@ pub(crate) fn color_edges(
 
     let mut seed = 0_u64;
     let mut color = initial_color(&mut seed);
-    let mut corners = Vec::new();
     for range in contours {
         let Some(edges) = source.get(range.clone()) else {
             return Err(BuildFailure::EdgeLimit);
@@ -37,7 +37,7 @@ pub(crate) fn color_edges(
         corners
             .try_reserve(edges.len())
             .map_err(|_| BuildFailure::Allocation)?;
-        find_corners(edges, &mut corners);
+        find_corners(edges, corners);
         let start = output.len();
         match corners.len() {
             0 => {
@@ -49,7 +49,7 @@ pub(crate) fn color_edges(
                 }
             }
             1 => color_teardrop(edges, corners[0], &mut color, &mut seed, output),
-            _ => color_cornered(edges, &corners, &mut color, &mut seed, output),
+            _ => color_cornered(edges, corners, &mut color, &mut seed, output),
         }
         output_contours.push(start..output.len());
     }
@@ -209,7 +209,15 @@ mod tests {
         };
         let mut output = Vec::new();
         let mut contours = Vec::new();
-        color_edges(&[edge], &alloc::vec![0..1], &mut output, &mut contours).expect("coloring");
+        let mut corners = Vec::new();
+        color_edges(
+            &[edge],
+            &alloc::vec![0..1],
+            &mut output,
+            &mut contours,
+            &mut corners,
+        )
+        .expect("coloring");
         assert_eq!(output.len(), 3);
         assert!(output.iter().all(|edge| matches!(edge, Edge::Cubic { .. })));
         assert_eq!(output[0].start(), output[2].end());

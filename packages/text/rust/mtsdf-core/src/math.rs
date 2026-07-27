@@ -101,8 +101,31 @@ pub(crate) fn clamp_unit(value: f32) -> f32 {
     value.clamp(0.0, 1.0)
 }
 
+#[cfg(any(not(target_arch = "wasm32"), not(feature = "simd128-experiment")))]
 pub(crate) fn quantize_unorm(value: f32) -> u8 {
     (value.clamp(0.0, 1.0) * 255.0) as u8
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "simd128-experiment"))]
+pub(crate) fn quantize_unorm4(values: [f32; 4]) -> [u8; 4] {
+    use core::arch::wasm32::{
+        f32x4, f32x4_max, f32x4_min, f32x4_mul, i32x4_extract_lane, i32x4_trunc_sat_f32x4,
+    };
+
+    let lanes = f32x4(values[0], values[1], values[2], values[3]);
+    let clamped = f32x4_min(f32x4_max(lanes, f32x4_splat(0.0)), f32x4_splat(1.0));
+    let quantized = i32x4_trunc_sat_f32x4(f32x4_mul(clamped, f32x4_splat(255.0)));
+    [
+        i32x4_extract_lane::<0>(quantized) as u8,
+        i32x4_extract_lane::<1>(quantized) as u8,
+        i32x4_extract_lane::<2>(quantized) as u8,
+        i32x4_extract_lane::<3>(quantized) as u8,
+    ]
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "simd128-experiment"))]
+fn f32x4_splat(value: f32) -> core::arch::wasm32::v128 {
+    core::arch::wasm32::f32x4_splat(value)
 }
 
 pub(crate) fn squared_distance(a: Point, b: Point) -> f32 {

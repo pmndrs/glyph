@@ -33,7 +33,7 @@ sources:
     title: Zappar MSDF generator 1.2.4
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T01:58:56Z"
+  at: "2026-07-27T02:26:42Z"
 ---
 
 # MTSDF generation research
@@ -97,7 +97,7 @@ Data layout follows measured access rather than a universal SoA rule:
 - output is linear row-major RGBA8 and writes without an intermediate float image;
 - scan direction, edge ordering, and tie-breaking are deterministic across native scalar and Wasm kernels.
 
-The scalar kernel is a test oracle and development baseline, not a public mode. A Wasm `simd128` kernel may evaluate four distance channels, adjacent query points, or same-kind edge batches where divergence remains bounded. If SIMD preserves the accepted reconstruction/error limits, improves representative full-font generation, and retains an acceptable code-size result, the distributed Wasm baker enables it by default. If it does not win that complete comparison, it is removed or remains test-only. The opinionated baker exposes no SIMD toggle, alternate artifact, or per-call capability branch. Auto-vectorization and explicit intrinsics are measured separately.
+The scalar kernel is both the correctness oracle and the selected production implementation, not a public mode. Compiler `simd128` auto-vectorization and explicit four-channel quantization preserve exact output and slightly reduce bytes, but regress representative Node and Chromium calls by roughly 5–6%. Their complete-Inter improvement remains below 0.5%. The internal explicit implementation therefore remains test-only so the decision can be reproduced; the opinionated baker exposes no SIMD toggle, alternate artifact, or per-call capability branch.
 
 ## Verification and optimization gates
 
@@ -108,7 +108,7 @@ The scalar kernel is a test oracle and development baseline, not a public mode. 
 - Scalar, auto-vectorized, and explicit-SIMD experiments report native/Wasm time, allocation counts, raw/optimized/gzip/Brotli bytes, and exact or bounded-error equivalence; exactly one winning Wasm kernel ships.
 - The final baker uses the repository's generated C ABI/JSON contract and direct Wasm memory access. It adds no WASI, Embind, wasm-bindgen, or per-call marshalling allocations.
 
-The scalar production boundary now satisfies that final ABI gate: the package build emits one optimized zero-import Wasm and its Rust-generated contract, while the TypeScript host validates the complete contract and writes fixed command records directly into one owned request allocation. All seven native-oracle hashes survive the host boundary. The remaining implementation experiment compares scalar, compiler auto-vectorization, and explicit `simd128`; only a complete quality, full-font, browser-call, allocation, and compressed-size win may replace the scalar kernel.
+The scalar production boundary satisfies that final ABI gate: the package build emits one optimized zero-import Wasm and its Rust-generated contract, while the TypeScript host validates the complete contract and writes fixed command records directly into one owned request allocation. All seven native-oracle hashes survive the host boundary. The completed scalar/auto/explicit comparison includes exact quality, the complete Inter pass, representative Node and Chromium calls, allocation/memory behavior, and compressed size. Scalar remains the sole production implementation because neither SIMD variant wins the complete comparison.
 
 [^valve-sdf]: Green, *Improved Alpha-Tested Magnification for Vector Textures and Special Effects*, 2007.
 [^chlumsky-thesis]: Chlumský, *Shape Decomposition for Multi-Channel Distance Fields*, 2015.

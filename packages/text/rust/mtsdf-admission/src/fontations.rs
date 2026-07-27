@@ -30,12 +30,30 @@ impl OutlineSource for FontationsOutlineSource<'_> {
 
     fn emit(&self, sink: &mut OutlineSink<'_>) -> Result<(), Self::Error> {
         sink.set_reversed(self.reversed);
+        self.draw(&mut CollectorPen(sink))
+    }
+}
+
+impl FontationsOutlineSource<'_> {
+    pub fn draw(&self, pen: &mut impl OutlinePen) -> Result<(), skrifa::outline::DrawError> {
         self.glyph
             .draw(
                 DrawSettings::unhinted(Size::unscaled(), LocationRef::default()),
-                &mut CollectorPen(sink),
+                pen,
             )
             .map(|_| ())
+    }
+
+    pub fn bounds(&self) -> Bounds {
+        self.bounds
+    }
+
+    pub fn units_per_em(&self) -> f32 {
+        self.units_per_em
+    }
+
+    pub fn reversed(&self) -> bool {
+        self.reversed
     }
 }
 
@@ -84,33 +102,9 @@ pub fn measure_font_pass(
     let mut checksum = 2_166_136_261_u32;
     for raw_glyph_id in 0..glyph_count {
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
-        let outlines = font.outline_glyphs();
-        let Some(glyph) = outlines.get(glyph_id) else {
+        let Some(source) = font_outline_source(&font, glyph_id) else {
             skipped_glyphs += 1;
             continue;
-        };
-        let Some(glyph_bounds) = font
-            .glyph_metrics(Size::unscaled(), LocationRef::default())
-            .bounds(glyph_id)
-        else {
-            skipped_glyphs += 1;
-            continue;
-        };
-        let source = FontationsOutlineSource {
-            glyph,
-            bounds: Bounds::new(
-                glyph_bounds.x_min,
-                glyph_bounds.y_min,
-                glyph_bounds.x_max,
-                glyph_bounds.y_max,
-            ),
-            units_per_em: font
-                .metrics(Size::unscaled(), LocationRef::default())
-                .units_per_em as f32,
-            reversed: matches!(
-                outlines.format(),
-                Some(OutlineGlyphFormat::Cff | OutlineGlyphFormat::Cff2)
-            ),
         };
         let Ok(mut outline) = generator.read_outline(&source) else {
             rejected_glyphs += 1;
@@ -132,6 +126,33 @@ pub fn measure_font_pass(
         rejected_glyphs,
         checksum,
     }
+}
+
+pub fn font_outline_source<'font>(
+    font: &'font FontRef<'font>,
+    glyph_id: GlyphId,
+) -> Option<FontationsOutlineSource<'font>> {
+    let outlines = font.outline_glyphs();
+    let glyph = outlines.get(glyph_id)?;
+    let glyph_bounds = font
+        .glyph_metrics(Size::unscaled(), LocationRef::default())
+        .bounds(glyph_id)?;
+    Some(FontationsOutlineSource {
+        glyph,
+        bounds: Bounds::new(
+            glyph_bounds.x_min,
+            glyph_bounds.y_min,
+            glyph_bounds.x_max,
+            glyph_bounds.y_max,
+        ),
+        units_per_em: font
+            .metrics(Size::unscaled(), LocationRef::default())
+            .units_per_em as f32,
+        reversed: matches!(
+            outlines.format(),
+            Some(OutlineGlyphFormat::Cff | OutlineGlyphFormat::Cff2)
+        ),
+    })
 }
 
 pub fn glyph_count(font: &FontRef<'_>) -> Result<u16, skrifa::raw::ReadError> {
