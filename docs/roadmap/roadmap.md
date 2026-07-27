@@ -110,7 +110,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
 | 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                  |  L   | 7.2        |
 | 8.2  |   ✅   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
-| 8.3  |   ⬜   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
+| 8.3  |   ✅   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
 | 8.4  |   ⬜   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
 | 8.5  |   ⬜   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |
 | 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
@@ -584,6 +584,24 @@ Exit only when MSDF is credible as the general-purpose recommendation across the
 - [x] Compare scalar, auto-vectorized, and explicit `simd128` kernels over exact quality hashes, the complete Inter pass, representative browser calls, allocation counts, and raw/optimized/gzip/Brotli size; retain one default implementation and no public toggle. Scalar remains the sole production kernel because SIMD regressed representative Node and browser calls by about 5–6% while its complete-Inter improvement stayed below 0.5%.
 
 The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. The implementation is repository-owned; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages. Item 8.1 is closed with the scalar production boundary as the single default. The internal `simd128-experiment` Cargo feature remains non-shipping evidence and is not a JavaScript option, alternate package artifact, or runtime branch.
+
+### 8.2 fixed-baker checklist
+
+- [x] Compose the admitted scalar kernel with the shared Fontations provider, fallible atlas/record writer, GLB framing, content hashing, and generated direct-memory ABI in one published zero-import Wasm.
+- [x] Fix one descriptor and one lossless linear RGBA8 MTSDF representation with exact page, padding, range, and plane-unit constants.
+- [x] Prove canonical Inter record/page identities, embedded/external byte parity, native/Wasm parity, deterministic output, and isolated baker/host size.
+- [x] Keep baker Wasm and generation dependencies outside shaping and rendering module graphs.
+
+### 8.3 runtime-and-validation checklist
+
+- [x] Ship optional `@pmndrs/text/raster/msdf` and `@pmndrs/text/bakers/msdf/validate` entries without importing baker Wasm from the renderer.
+- [x] Validate schema, Khronos core structure, reciprocal identity, fixed MTSDF constants, exact dense records, page bounds, embedded/external authentication, linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and generated-mip residency before publication.
+- [x] Share pure KTX2 and dense-record rules across bitmap/MTSDF renderers and standalone validators while keeping Khronos/Ajv outside renderer graphs.
+- [x] Use one instanced resource/batch family for fill, opacity, bounded outline, and translated hard shadow; reject effects beyond the encoded distance range.
+- [x] Generate mipmaps on upload, prevent neighboring-cell sampling, repaint owned attributes without reshaping, and dispose partial or complete texture/material/geometry ownership transactionally.
+- [x] Exercise all ten canonical Inter pages, embedded/external parity, field deletion, semantic mutation, KTX2 DFD corruption, GPU budgets, repaint, and repeated disposal through deterministic tests.
+
+Item 8.3 is closed. Browser shader execution, resize/transform/mipmap/effects scenes, and backend-specific pixel evidence remain item 8.4 rather than being inferred from TypeScript graph construction.
 
 ## Milestone 9 — Slug release renderer
 

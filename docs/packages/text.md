@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:d4da58a10dd1a431e8a071f158656b4eff7bbd6b999d87850655fdfbd47623bc"
+source_digest: "sha256:4d65ef554018f8be09ffc1bc12685902329297019429814686c0364c3a8f88e2"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -41,6 +41,9 @@ sources:
   - id: mtsdf-baker
     resource: ../../packages/text/src/bakers/msdf.ts
     title: Fixed MTSDF baker host
+  - id: mtsdf-validator
+    resource: ../../packages/text/src/bakers/msdf-validator.ts
+    title: Layered MTSDF artifact validator
   - id: mtsdf-fontations
     resource: ../../packages/text/rust/mtsdf-fontations
     title: Shared Fontations MTSDF provider
@@ -49,7 +52,16 @@ sources:
     title: Shared direct-memory raster baker host
   - id: raster-atlas-runtime
     resource: ../../packages/text/src/internal/raster-atlas.ts
-    title: Shared dense-record and lossless-atlas runtime
+    title: Shared lossless-atlas runtime adapter
+  - id: raster-ktx
+    resource: ../../packages/text/src/internal/raster-ktx.ts
+    title: Shared dependency-light KTX2 validation
+  - id: raster-records
+    resource: ../../packages/text/src/internal/raster-records.ts
+    title: Shared dependency-light dense-record validation
+  - id: raster-validation
+    resource: ../../packages/text/src/internal/raster-artifact-validation.ts
+    title: Shared standalone raster artifact validation
   - id: raster-batch-runtime
     resource: ../../packages/text/src/internal/raster-batch.ts
     title: Shared instanced-raster batch primitives
@@ -94,12 +106,12 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T04:33:55Z"
+  at: "2026-07-27T04:55:29Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 Milestone 8.3 runtime implementation active; strict artifact validation, product evidence, and deferred closure review pending
+Status: 🟡 Milestone 8.4 browser renderer evidence active; Milestone 8.3 runtime and strict artifact validation complete
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing types resolve through the repository's current `three/webgpu` subpath rather than the legacy root export, matching the renderer boundary used by first-party raster work. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
@@ -111,7 +123,9 @@ Milestone 8.2 composes that kernel into the fixed `@pmndrs/text/bakers/msdf` art
 
 The Binaryen-optimized fixed baker is a zero-import 529,891-byte Wasm module (204,975 gzip; 160,589 Brotli); its independent host is 13,455 raw, 9,031 minified, 3,129 gzip, and 2,799 Brotli bytes. These optional baker bytes do not enter the shaper or either renderer. Canonical Inter produces 58,740 record bytes and ten independently addressable lossless RGBA8 KTX2 pages. Their 39,111,736 decoded GPU bytes become 39,177,416 externally serialized bytes including the 63,720-byte companion GLB; each KTX2 adds only 196 container bytes. The exact companion and ten page hashes are integration fixtures, and one generated raster is repackaged into embedded and external forms to prove identical records and page bytes without paying for a second generation pass. A local Node direct-memory pass currently takes about 92 seconds and is recorded as bake cost, not renderer time.
 
-The first item 8.3 runtime slice promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the fixed browser module. It validates reciprocal font/raster identity, exact V0 constants, dense record length and bounds, single-level lossless linear RGBA8 KTX2 payloads, and a 256 MiB decoded-plus-generated-mip residency ceiling before publishing a resource. Bitmap and MTSDF now share one lossless-atlas decoder, dense-record validator, unit quad, parallel-array checks, and resolved-paint lookup rather than carrying technique-local copies. The MTSDF resource generates its mip chain on upload and owns one material per logical page; disposal releases materials and textures transactionally.
+Item 8.3 promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the fixed browser module and adds the isolated `@pmndrs/text/bakers/msdf/validate` entry. The standalone path layers the pinned Khronos validator, byte-identical Draft-04 schema, and semantic checks for reciprocal identity, fixed constants, view ownership, exact dense records, page bounds, embedded/external length and SHA-256 authentication, linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and a 256 MiB decoded-plus-generated-mip residency ceiling. Canonical Inter's ten pages round-trip through both packaging forms; field deletion, record/page mutations, KTX2 and DFD corruption, missing/tampered external pages, and budget failures are named negative controls.
+
+The runtime repeats no parallel wire-format implementation. Bitmap and MTSDF renderers plus both standalone validators consume the same dependency-light KTX2 and dense-record rules; only the standalone layer imports Khronos/Ajv. The renderers also share the lossless-atlas adapter, unit quad, parallel-array checks, and resolved-paint lookup. The MTSDF resource generates its mip chain on upload and owns one material per logical page; disposal releases materials and textures transactionally.
 
 One instanced batch family handles fill, outline, opacity, and translated hard shadow. The version-matched TSL graph reconstructs the fill edge from the RGB median and consumes alpha's true signed distance for effects. Shadow offsets expand each instance's geometric bounds and shift the same authenticated atlas sample, while clamped sampling and an explicit in-glyph mask prevent neighboring atlas cells from bleeding into the result. V0 outlines are bounded to the field's four outward atlas pixels; a larger request fails instead of silently clipping. Paint updates reuse geometry and rewrite only owned instance attributes. The canonical Inter integration test decodes all ten real pages, creates and repaints a live batch, verifies normalized effect attributes, and proves idempotent batch/resource cleanup without loading baker Wasm into the runtime graph.
 

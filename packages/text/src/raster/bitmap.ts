@@ -1,4 +1,4 @@
-import { VK_FORMAT_R8_UNORM } from 'ktx-parse'
+import { KHR_DF_CHANNEL_RGBSDA_RED, VK_FORMAT_R8_UNORM } from 'ktx-parse'
 import * as THREE from 'three/webgpu'
 import {
   add,
@@ -546,7 +546,10 @@ function decodeBitmapPage(
   return decodeEmbeddedLosslessAtlasPage(raster, value, path, {
     gpuFormat: 'r8unorm',
     vkFormat: VK_FORMAT_R8_UNORM,
-    bytesPerPixel: 1,
+    blockWidth: 1,
+    blockHeight: 1,
+    bytesPerBlock: 1,
+    uncompressedChannelTypes: [KHR_DF_CHANNEL_RGBSDA_RED],
     textureFormat: THREE.RedFormat,
     generateMipmaps: false,
     minFilter: THREE.LinearFilter,

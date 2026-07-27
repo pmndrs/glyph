@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-07-27
+
+- **MTSDF runtime and validator** — Closed roadmap item 8.3 with the optional fixed renderer and isolated strict validator. One dependency-light implementation now owns lossless KTX2 structure/data-format metadata and dense 20-byte record rules for bitmap and MTSDF runtime and standalone paths; Khronos/Ajv remain validator-only. Canonical Inter proves all ten pages in embedded and external forms, authenticated page identity, generated-mip residency, fill/outline/shadow batch updates, disposal, field-level mutations, and KTX2 DFD corruption without importing baker Wasm into rendering.
+
 ## 2026-07-26
 
 - **MTSDF runtime foundation** — Began roadmap item 8.3 with the optional fixed runtime module over one instanced batch family and one version-matched TSL graph. Strict in-module decoding checks identity, constants, dense records, lossless RGBA8 KTX2, and bounded mip residency before resource publication. RGB median reconstruction supplies fill; the true-distance alpha channel supplies four-atlas-pixel-bounded outline and translated hard shadow. Bitmap and MTSDF now share atlas decoding, record validation, quad construction, and paint/layout invariants. Canonical Inter decodes all ten real pages and exercises batch creation, repaint, and disposal without runtime baker Wasm.
