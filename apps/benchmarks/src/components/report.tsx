@@ -35,7 +35,7 @@ export function Report({
         </div>
       </header>
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
-        <Metric label="Median" value={ms(summary?.medianMs)} />
+        <Metric label="P50" value={ms(summary?.medianMs)} />
         <Metric label="P95" value={ms(summary?.p95Ms)} />
         <Metric label="Output" value={bytes(summary?.outputBytes)} />
       </div>
@@ -107,9 +107,9 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
       </header>
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
         <Metric label="FPS" value={stats.framesPerSecond.toFixed(1)} />
-        <Metric label="CPU frame" value={ms(stats.medianSubmitMs)} />
+        <Metric label="CPU frame · P50" value={ms(stats.medianSubmitMs)} />
         <Metric
-          label="GPU frame"
+          label="GPU frame · P50"
           value={
             stats.medianGpuMs === undefined
               ? stats.gpuTimingSupported
@@ -127,14 +127,14 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
         </p>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">CPU system samples</p>
+        <p className="eyebrow">System samples</p>
         <p className="mt-1 text-xs text-muted">
           {stats.textUpdateTimings.sampleCount} committed text updates ·{' '}
-          {stats.submitHistory.length} rendered frames
+          {stats.submitHistory.length} CPU frames · {stats.gpuHistory.length} GPU frames
         </p>
         <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 text-xs">
           <span className="font-mono text-[9px] uppercase text-dim">System</span>
-          <span className="font-mono text-[9px] uppercase text-dim">Median</span>
+          <span className="font-mono text-[9px] uppercase text-dim">P50</span>
           <span className="font-mono text-[9px] uppercase text-dim">P95</span>
           <TimingRow
             label="Schedule text update"
@@ -161,6 +161,7 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
             median={stats.medianSubmitMs}
             p95={stats.p95SubmitMs}
           />
+          <TimingRow label="GPU frame" median={stats.medianGpuMs} p95={stats.p95GpuMs} />
         </div>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
@@ -197,7 +198,15 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
   )
 }
 
-function TimingRow({ label, median, p95 }: { label: string; median: number; p95: number }) {
+function TimingRow({
+  label,
+  median,
+  p95,
+}: {
+  label: string
+  median: number | undefined
+  p95: number | undefined
+}) {
   return (
     <>
       <span className="text-dim">{label}</span>
