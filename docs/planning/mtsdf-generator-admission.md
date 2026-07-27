@@ -57,6 +57,8 @@ The implementation may retain proven ideas—reusable scratch ownership, SoA edg
 
 The shipped core must remain `no_std + alloc`, accept the package-selected allocator, expose typed failures without panic recovery, reuse bounded scratch storage, and connect to JavaScript through the same generated C ABI/JSON contract and direct Wasm memory access as the existing bakers. It does not acquire a second font parser, atlas owner, container writer, Worker abstraction, or binding generator.
 
+The owned boundary now separates those responsibilities concretely: `mtsdf-core` contains only geometry and reusable allocation-backed scratch, while `mtsdf-baker` owns `dlmalloc`, the generated contract, and the direct-memory C ABI. Its fixed request header points at fixed-size move/line/quadratic/cubic/close records in the same allocation. The Wasm validates exact request length and command framing before outline construction, returns status codes rather than crossing the ABI with Rust errors, and lends its RGBA8 result until the next generation call. The generated-contract command is named `generate-mtsdf-abi` for the artifact it produces. The current complete optimized boundary is 44,368 bytes, 17,930 gzip bytes, and 14,865 Brotli bytes with zero imports.
+
 ## Admission evidence
 
 Correctness precedes timing:

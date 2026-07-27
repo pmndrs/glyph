@@ -1,0 +1,39 @@
+[package]
+name = "pmndrs-text-mtsdf-baker"
+description = "Direct-memory Wasm boundary for the repository-owned pmndrs/text MTSDF core"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/text"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "generate-mtsdf-abi"
+path = "src/bin/generate-mtsdf-abi.rs"
+required-features = ["std"]
+
+[features]
+default = ["std"]
+std = ["dep:serde_json", "serde_json/std", "pmndrs-text-mtsdf-core/std"]
+
+[dependencies]
+pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }
+serde_json = { version = "1.0.145", default-features = false, features = [
+  "alloc",
+], optional = true }
+
+[build-dependencies]
+serde_json = "1.0.145"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dlmalloc = { version = "0.2.14", features = ["global"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

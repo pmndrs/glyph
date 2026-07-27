@@ -2,6 +2,8 @@
 
 ## 2026-07-26
 
+- **MTSDF direct-memory ABI** — Split host mechanics from geometry: `mtsdf-core` remains allocator-agnostic `no_std + alloc`, while `mtsdf-baker` owns `dlmalloc`, a Rust-generated JSON contract, and a checked C ABI over exact active allocations and borrowed RGBA8 results. The zero-import direct-memory integration test proves contract access, generation identity, release, and stale-pointer rejection. The complete Binaryen-optimized boundary is 44,368 bytes (17,930 gzip; 14,865 Brotli).
+
 - **Owned MTSDF evidence** — Implemented the `no_std + alloc` Rust geometry core with typed outline errors, reusable scratch, AoS-to-SoA lowering, true signed line/curve distances, contour-aware overlap resolution, and nonzero-fill sign correction. All seven native-msdfgen oracle cases now have zero coverage mismatches and 0.472–0.549-byte mean alpha error. The optimized no-import admission module is 42,607 bytes (18,318 gzip; 15,333 Brotli); 2,915 Inter glyphs are cold/warm checksum-stable, and the 40.173-second scalar median establishes the optimization baseline. A deterministic 1,000-run cargo-fuzz smoke completes without a crash.
 
 - **Repository-owned MTSDF core** — Concluded dependency admission in favor of a purpose-built `no_std + alloc` Rust generator under `packages/text/rust`. Added the primary Valve/Chlumský literature path, identified pinned native `msdfgen` as the canonical executable MTSDF reference, recorded Klyff, Rust bindings, OxiText, UIKit, and Zappar license/architecture findings, and made reusable scratch storage, data-oriented edge layout, scalar/SIMD equivalence, generated C ABI/JSON, and direct Wasm memory access explicit gates.
