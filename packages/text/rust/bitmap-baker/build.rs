@@ -1,6 +1,5 @@
 use std::{env, fs, path::PathBuf};
 
-use ktx2::{Format, dfd::Block};
 use serde_json::json;
 
 fn main() {
@@ -57,13 +56,4 @@ fn main() {
         serde_json::to_vec_pretty(&contract).expect("serialize bitmap ABI"),
     )
     .expect("write bitmap ABI");
-
-    let (basic, type_size) = ktx2::dfd::Basic::from_format(Format::R8_UNORM)
-        .expect("KTX2 crate supports the canonical R8 format");
-    assert_eq!(type_size, 1);
-    fs::write(
-        output_directory.join("r8-dfd.bin"),
-        Block::Basic(basic).to_vec(),
-    )
-    .expect("write canonical R8 DFD");
 }

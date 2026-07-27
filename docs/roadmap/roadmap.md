@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T02:26:42Z"
+  at: "2026-07-27T03:04:17Z"
 ---
 
 # Canonical implementation roadmap
@@ -109,7 +109,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
 | 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
 | 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                  |  L   | 7.2        |
-| 8.2  |   ⬜   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
+| 8.2  |   🟡   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
 | 8.3  |   ⬜   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
 | 8.4  |   ⬜   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
 | 8.5  |   ⬜   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |

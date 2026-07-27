@@ -17,7 +17,7 @@
   "rasterKey": "f7937b09fb0ad97c17f62d30bf9e0479aae1f8c068ed7319dddde096e8d29a02",
   "generator": {
     "version": "0.0.0",
-    "optimizedWasmBytes": 612472,
+    "optimizedWasmBytes": 621221,
     "dependencies": {
       "readFonts": "0.42.1",
       "skrifa": "0.45.1",

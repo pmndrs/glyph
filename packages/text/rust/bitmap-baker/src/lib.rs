@@ -10,7 +10,6 @@ extern crate alloc as std;
 mod abi_contract;
 mod error;
 mod glb;
-mod ktx;
 mod model;
 mod rasterize;
 
@@ -29,7 +28,6 @@ pub fn abi_json() -> &'static str {
     include_str!(concat!(env!("OUT_DIR"), "/bitmap-baker-abi-v0.json"))
 }
 
-use sha2::{Digest, Sha256};
 use std::{
     string::{String, ToString},
     vec::Vec,
@@ -146,13 +144,7 @@ pub fn descriptor_raster_key(descriptor: &BitmapDescriptorV0) -> String {
 }
 
 pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut output = String::with_capacity(64);
-    for byte in digest {
-        use core::fmt::Write;
-        let _ = write!(output, "{byte:02x}");
-    }
-    output
+    pmndrs_text_raster_artifact::sha256_hex(bytes)
 }
 
 fn validate_hash(name: &str, value: &str) -> Result<(), BitmapBakeError> {

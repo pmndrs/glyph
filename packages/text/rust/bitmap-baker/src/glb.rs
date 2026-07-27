@@ -1,10 +1,11 @@
 use std::{string::String, vec::Vec};
 
+use pmndrs_text_raster_artifact::{KtxFormat, append_buffer_view, encode_glb, encode_ktx2};
 use serde_json::{Value, json};
 
 use crate::{
-    error::{BitmapBakeError, BitmapBakeErrorCode, overflow},
-    hex_sha256, ktx,
+    error::BitmapBakeError,
+    hex_sha256,
     model::{BITMAP_EXTENSION, BITMAP_GENERATOR_LABEL, PagePackaging},
     rasterize::RasterizedStrike,
 };
@@ -39,7 +40,7 @@ pub(crate) fn build_bitmap_glb(
         let record_view = append_buffer_view(&mut binary, &mut buffer_views, &strike.records)?;
         let mut pages = Vec::<Value>::with_capacity(strike.pages.len());
         for (page_index, page) in strike.pages.iter().enumerate() {
-            let ktx2 = ktx::encode_r8(page.width, page.height, &page.texels)?;
+            let ktx2 = encode_ktx2(KtxFormat::R8Unorm, page.width, page.height, &page.texels)?;
             let sha256 = hex_sha256(&ktx2);
             let id = format!(
                 "bitmap-{shaping_hash}-{raster_key}-s{}-p{page_index}.ktx2",
@@ -109,64 +110,10 @@ pub(crate) fn build_bitmap_glb(
         "buffers": [{ "byteLength": logical_binary_length }],
         "bufferViews": buffer_views,
     });
-    let mut json_bytes = serde_json::to_vec(&root)
-        .map_err(|error| BitmapBakeError::new(BitmapBakeErrorCode::SerializationFailed, error))?;
-    while !json_bytes.len().is_multiple_of(4) {
-        json_bytes.push(b' ');
-    }
-    while !binary.len().is_multiple_of(4) {
-        binary.push(0);
-    }
-    let total_length = 12_usize
-        .checked_add(8)
-        .and_then(|value| value.checked_add(json_bytes.len()))
-        .and_then(|value| value.checked_add(8))
-        .and_then(|value| value.checked_add(binary.len()))
-        .ok_or_else(overflow)?;
-    let mut bytes = Vec::with_capacity(total_length);
-    bytes.extend_from_slice(b"glTF");
-    bytes.extend_from_slice(&2_u32.to_le_bytes());
-    bytes.extend_from_slice(
-        &u32::try_from(total_length)
-            .map_err(|_| overflow())?
-            .to_le_bytes(),
-    );
-    bytes.extend_from_slice(
-        &u32::try_from(json_bytes.len())
-            .map_err(|_| overflow())?
-            .to_le_bytes(),
-    );
-    bytes.extend_from_slice(b"JSON");
-    bytes.extend_from_slice(&json_bytes);
-    bytes.extend_from_slice(
-        &u32::try_from(binary.len())
-            .map_err(|_| overflow())?
-            .to_le_bytes(),
-    );
-    bytes.extend_from_slice(b"BIN\0");
-    bytes.extend_from_slice(&binary);
+    let bytes = encode_glb(&root, binary)?;
 
     Ok(BuiltRasterGlb {
         bytes,
         pages: page_artifacts,
     })
-}
-
-fn append_buffer_view(
-    binary: &mut Vec<u8>,
-    views: &mut Vec<Value>,
-    bytes: &[u8],
-) -> Result<usize, BitmapBakeError> {
-    while !binary.len().is_multiple_of(4) {
-        binary.push(0);
-    }
-    let offset = binary.len();
-    binary.extend_from_slice(bytes);
-    let index = views.len();
-    views.push(json!({
-        "buffer": 0,
-        "byteOffset": offset,
-        "byteLength": bytes.len(),
-    }));
-    Ok(index)
 }
