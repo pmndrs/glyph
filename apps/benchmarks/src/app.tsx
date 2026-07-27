@@ -3347,18 +3347,20 @@ function PayloadInspector({
         className="rounded-md border border-border bg-surface p-3"
         data-testid="payload-inspector"
       >
-        <div className="flex items-center justify-between gap-2">
-          <p className="eyebrow">Selected payloads</p>
-          <span className="font-mono text-[8px] uppercase text-dim">gzip transfer</span>
+        <div className="grid grid-cols-[1rem_minmax(0,1fr)_2.5rem_3.5rem] items-center gap-x-2">
+          <span aria-hidden="true" />
+          <p className="eyebrow">Payload</p>
+          <span className="text-center font-mono text-[8px] uppercase text-dim">Loaded</span>
+          <span className="text-right font-mono text-[8px] uppercase text-dim">Gzip</span>
         </div>
         <PayloadDisclosure
           className="mt-3 border-b border-border pb-3"
-          label="Selected runtime · gzip"
+          label="Runtime"
           status="loaded"
           value={formatBytes(libraryTransferBytes)}
         >
           <PayloadRow
-            label={runtime.label}
+            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} runtime`}
             status="loaded"
             value={formatBytes(runtime.gzipBytes)}
           />
@@ -3370,37 +3372,37 @@ function PayloadInspector({
         </PayloadDisclosure>
         <PayloadDisclosure
           className="border-b border-border py-3"
-          label="Runtime bake libraries · gzip"
+          label="Runtime bake"
           status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
           value={formatBytes(bakerTransferBytes)}
         >
           <PayloadRow
-            label={runtimeBakerHost.label}
+            label="Runtime baker host"
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(runtimeBakerHost.gzipBytes)}
           />
           <PayloadRow
-            label={runtimeBakerWorker.label}
+            label="Runtime baker worker"
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(runtimeBakerWorker.gzipBytes)}
           />
           <PayloadRow
-            label={coreBakerHost.label}
+            label="Core baker host"
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(coreBakerHost.gzipBytes)}
           />
           <PayloadRow
-            label={coreBakerWasm.label}
+            label="Core baker Wasm"
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(coreBakerWasm.gzipBytes)}
           />
           <PayloadRow
-            label={bakerHost.label}
+            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} baker host`}
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerHost.gzipBytes)}
           />
           <PayloadRow
-            label={bakerWasm.label}
+            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} baker Wasm`}
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerWasm.gzipBytes)}
           />
@@ -3489,18 +3491,44 @@ function PayloadRow({
   readonly value: string
 }) {
   return (
-    <div className={`flex items-center gap-2 text-[10px] ${emphasis ? 'font-medium' : ''}`}>
-      {status !== undefined && (
-        <span
-          className={`size-1.5 shrink-0 rounded-full ${status === 'loaded' ? 'bg-success' : 'bg-dim'}`}
-        />
-      )}
+    <div
+      className={`grid grid-cols-[minmax(0,1fr)_2.5rem_3.5rem] items-center gap-x-2 text-[10px] ${emphasis ? 'font-medium' : ''}`}
+    >
       <span className={emphasis ? 'text-foreground' : 'text-muted'}>{label}</span>
-      {status !== undefined && (
-        <span className="font-mono text-[8px] uppercase text-dim">{status}</span>
-      )}
-      <span className="ml-auto whitespace-nowrap font-mono text-dim">{value}</span>
+      {status === undefined ? <span aria-hidden="true" /> : <PayloadStatus status={status} />}
+      <span className="whitespace-nowrap text-right font-mono tabular-nums text-dim">{value}</span>
     </div>
+  )
+}
+
+function PayloadStatus({ status }: { readonly status: 'loaded' | 'unloaded' }) {
+  return (
+    <span
+      aria-label={status}
+      className={`grid size-4 place-items-center justify-self-center ${status === 'loaded' ? 'text-success' : 'text-dim'}`}
+      title={status}
+    >
+      <svg aria-hidden="true" className="size-3" viewBox="0 0 12 12">
+        {status === 'loaded' ? (
+          <path
+            d="m2 6 2.5 2.5L10 3"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+        ) : (
+          <path
+            d="m3 3 6 6m0-6L3 9"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeWidth="1.25"
+          />
+        )}
+      </svg>
+    </span>
   )
 }
 
@@ -3519,7 +3547,7 @@ function PayloadDisclosure({
 }) {
   return (
     <details className={`group ${className ?? ''}`}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-[10px] font-medium [&::-webkit-details-marker]:hidden">
+      <summary className="grid cursor-pointer list-none grid-cols-[1rem_minmax(0,1fr)_2.5rem_3.5rem] items-center gap-x-2 text-[10px] font-medium [&::-webkit-details-marker]:hidden">
         <svg
           aria-hidden="true"
           className="size-4 shrink-0 origin-center text-dim transition-transform duration-150 group-open:rotate-90"
@@ -3535,14 +3563,12 @@ function PayloadDisclosure({
           />
         </svg>
         <span className="text-foreground">{label}</span>
-        <span
-          className={`inline-flex h-4 items-center font-mono text-[8px] leading-none uppercase ${status === 'loaded' ? 'text-success' : 'text-dim'}`}
-        >
-          {status}
+        <PayloadStatus status={status} />
+        <span className="whitespace-nowrap text-right font-mono tabular-nums text-dim">
+          {value}
         </span>
-        <span className="ml-auto whitespace-nowrap font-mono text-dim">{value}</span>
       </summary>
-      <div className="mt-3 grid gap-2 pl-4">{children}</div>
+      <div className="mt-3 grid gap-2 pl-6">{children}</div>
     </details>
   )
 }
