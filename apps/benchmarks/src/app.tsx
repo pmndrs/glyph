@@ -1,16 +1,18 @@
 import {
   Activity,
+  lazy,
   Suspense,
   use,
+  useCallback,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
   useTransition,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
-  type WheelEvent as ReactWheelEvent,
 } from 'react'
 
 import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum'
@@ -49,9 +51,10 @@ import {
 import { ExportPanel } from './components/export-panel'
 import { InteractiveCanvas } from './components/interactive-canvas'
 import { Report } from './components/report'
+import { sparklineSampleX } from './components/sparkline'
 import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
 import packageSizes from './generated/package-sizes.json'
-import bitmapFixtures from '../fixtures/rendering/showcase-raster-fixtures-v0.json'
+import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
 import mtsdfFixtures from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
 import type {
   BitmapTextConformanceCapture,
@@ -71,8 +74,10 @@ import type {
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload'
 import type { LiveFrameHistoryCursor } from './renderer/live-frame-telemetry'
+import { createExclusiveLifecycleCoordinator } from './renderer/exclusive-lifecycle'
 import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference'
 import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance'
+import type { BakeProgress } from '@pmndrs/text'
 
 type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats
 
@@ -153,6 +158,8 @@ const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
 const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = []
 const GLYPH_POSITION_TRANSITION_MS = 110
 const TYPEWRITER_INTERVAL_MS = 65
+const liveRendererLifecycle = createExclusiveLifecycleCoordinator()
+const FontNoticesDialog = lazy(() => import('./components/font-notices-dialog'))
 function mtsdfFixtureFor(fontFixture: BenchmarkFontFixture) {
   const fixture = mtsdfFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture)
   if (fixture === undefined) {
@@ -271,6 +278,7 @@ function workloadHasLayoutWidth(workload: string): boolean {
   switch (workload) {
     case 'benchmark-ipsum':
     case 'dynamic-layout':
+    case 'paint-effects':
     case 'paragraph-stress':
       return true
     default:
@@ -376,14 +384,14 @@ function Harness() {
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true)
   const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false)
   const [location, setLocationState] = useState(() => {
-    const value = readHarnessLocation(locationSearch())
+    const value = readHarnessLocation(locationSearch(), defaultDeviceDpr())
     if (!environment.webgpu && !new URLSearchParams(locationSearch()).has('backend')) {
       return { ...value, backend: 'webgl2' as const }
     }
     return value
   })
   const [activityWorkloads, setActivityWorkloads] = useState<ActivityWorkloads>(() => {
-    const initial = readHarnessLocation(locationSearch())
+    const initial = readHarnessLocation(locationSearch(), defaultDeviceDpr())
     return {
       benchmark: initial.mode === 'benchmark' ? initial.workload : 'benchmark-ipsum',
       conformance: initial.mode === 'conformance' ? initial.workload : 'text-accuracy',
@@ -394,7 +402,7 @@ function Harness() {
   const [liveStats, setLiveStats] = useState<LiveTextStats>()
   const [liveCapture, setLiveCapture] = useState<LiveBenchmarkCapture>()
   const [error, setError] = useState<string>()
-  const [dpr, setDpr] = useState<1 | 2>(defaultDeviceDpr)
+  const [dpr, setDpr] = useState<1 | 2>(location.dpr)
   const [samples, setSamples] = useState(3)
   const [warmup, setWarmup] = useState(1)
   const [showGrid, setShowGrid] = useState(true)
@@ -411,7 +419,9 @@ function Harness() {
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
   const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('inter')
   const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot())
+  const [fontNoticesOpen, setFontNoticesOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const reportCaptureRequested = useRef(false)
 
   const workload = workloadById(location.mode, location.workload)
   const fontFixture = location.fontFixture
@@ -435,6 +445,7 @@ function Harness() {
       next.technique !== undefined ||
       next.backend !== undefined ||
       next.delivery !== undefined ||
+      next.dpr !== undefined ||
       next.workload !== undefined
     if (replacesLiveSurface) setLiveStats(undefined)
     if (replacesLiveSurface || next.fontFixture !== undefined) {
@@ -500,8 +511,7 @@ function Harness() {
     })
   }
 
-  function captureWindow(): void {
-    if (liveStats === undefined) return
+  function completeLiveCapture(stats: LiveTextStats): void {
     setLiveCapture({
       kind: 'live-benchmark',
       schemaVersion: 0,
@@ -512,9 +522,26 @@ function Harness() {
       dpr,
       fontFixture: activeFontFixture,
       environment,
-      stats: captureLiveTextStats(liveStats),
+      stats: captureLiveTextStats(stats),
     })
     setLocation({ view: 'report' })
+  }
+
+  function captureWindow(): void {
+    if (liveStats === undefined) return
+    if (showGrid || liveStats.showGrid) {
+      reportCaptureRequested.current = true
+      setShowGrid(false)
+      return
+    }
+    completeLiveCapture(liveStats)
+  }
+
+  function publishLiveStats(stats: LiveTextStats): void {
+    setLiveStats(stats)
+    if (!reportCaptureRequested.current || stats.showGrid) return
+    reportCaptureRequested.current = false
+    completeLiveCapture(stats)
   }
 
   function invalidateLiveCapture(): void {
@@ -535,6 +562,7 @@ function Harness() {
   useEffect(() => {
     if (
       location.mode !== 'benchmark' ||
+      location.workload !== 'advanced-shaping' ||
       !showcaseState.playing ||
       showcaseState.editedText !== undefined
     )
@@ -550,7 +578,7 @@ function Harness() {
     }
     animationFrame = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(animationFrame)
-  }, [location.mode, showcaseState.editedText, showcaseState.playing])
+  }, [location.mode, location.workload, showcaseState.editedText, showcaseState.playing])
 
   const controls = (
     <Controls
@@ -583,10 +611,9 @@ function Harness() {
       onDelivery={(delivery) => setLocation({ delivery })}
       onDpr={(value) => {
         setDpr(value)
-        setLiveStats(undefined)
-        setSummary(undefined)
-        setLiveCapture(undefined)
+        setLocation({ dpr: value })
       }}
+      onFontNotices={() => setFontNoticesOpen(true)}
       onConformanceReset={() => setConformanceView(INITIAL_CONFORMANCE_VIEW)}
       onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
       onFontSize={(value) => {
@@ -626,7 +653,11 @@ function Harness() {
       }}
       onSamples={setSamples}
       onShowcase={dispatchShowcase}
-      onShowGrid={setShowGrid}
+      onShowGrid={(value) => {
+        reportCaptureRequested.current = false
+        setShowGrid(value)
+        invalidateLiveCapture()
+      }}
       onShowLayoutBounds={(value) => {
         setShowLayoutBounds(value)
         invalidateLiveCapture()
@@ -637,6 +668,42 @@ function Harness() {
 
   const actionReady =
     available && backendAvailable && !isPending && (location.mode === 'conformance' || liveStats)
+
+  const scene = (
+    <Scene
+      activeFontFixture={activeFontFixture}
+      fontFixture={fontFixture}
+      dpr={dpr}
+      conformanceView={conformanceView}
+      error={error}
+      event={event}
+      grid={showGrid}
+      liveCapture={liveCapture}
+      liveStats={liveStats}
+      location={location}
+      activityWorkloads={activityWorkloads}
+      fontSize={fontSize}
+      layoutWidthPercent={layoutWidthPercent}
+      workloadAmount={workloadAmount}
+      animationEnabled={animationEnabled}
+      animationSpeed={animationSpeed}
+      paintOpacityPercent={paintOpacityPercent}
+      paintShadowEnabled={paintShadowEnabled}
+      paintStrokePercent={paintStrokePercent}
+      showLayoutBounds={showLayoutBounds}
+      summary={summary}
+      showcaseFrame={showcaseFrame}
+      onConformancePan={(deltaXPercent, deltaYPercent) =>
+        setConformanceView((view) => ({
+          ...view,
+          panXPercent: view.panXPercent + deltaXPercent,
+          panYPercent: view.panYPercent + deltaYPercent,
+        }))
+      }
+      onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
+      onLiveStats={publishLiveStats}
+    />
+  )
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -669,160 +736,101 @@ function Harness() {
         onTechnique={selectTechnique}
         workloadPanelOpen={workloadPanelOpen}
       />
-      {desktop ? (
-        <div
-          className="grid h-[calc(100vh-52px)] min-h-[680px] transition-[grid-template-columns] duration-200"
-          style={{
-            gridTemplateColumns: workloadPanelOpen
-              ? '224px minmax(640px, 1fr) 288px'
-              : '0 minmax(640px, 1fr) 288px',
-          }}
+      <div
+        className={
+          desktop
+            ? 'grid h-[calc(100vh-52px)] min-h-[680px] transition-[grid-template-columns] duration-200'
+            : phone
+              ? 'pb-[58px]'
+              : undefined
+        }
+        style={
+          desktop
+            ? {
+                gridTemplateColumns: workloadPanelOpen
+                  ? '224px minmax(640px, 1fr) 288px'
+                  : '0 minmax(640px, 1fr) 288px',
+              }
+            : undefined
+        }
+      >
+        <div className={desktop ? 'min-w-0 overflow-hidden' : 'hidden'}>
+          <WorkloadRail
+            activeFontFixture={activeFontFixture}
+            className="h-full w-56"
+            fontFixture={fontFixture}
+            location={location}
+            showcaseFrame={showcaseFrame}
+            onFontFixture={(value) => setLocation({ fontFixture: value })}
+            onAdvancedFontFixture={(value) => {
+              setAdvancedFontFixture(value)
+              invalidateLiveCapture()
+            }}
+            onLocation={setLocation}
+            onTechnique={selectTechnique}
+          />
+        </div>
+        <main
+          className={
+            desktop
+              ? 'min-w-0 overflow-auto border-r border-border bg-background p-4'
+              : 'min-h-[calc(100vh-52px)] p-3'
+          }
         >
-          <div className="min-w-0 overflow-hidden">
+          <div
+            className={
+              location.view === 'report' || location.view === 'export'
+                ? 'hidden'
+                : desktop
+                  ? 'h-full'
+                  : undefined
+            }
+          >
+            {scene}
+          </div>
+          {!desktop && location.view === 'controls' && (
+            <CompactSheet
+              phone={phone}
+              title="Controls"
+              onClose={() => setLocation({ view: 'scene' })}
+            >
+              {controls}
+            </CompactSheet>
+          )}
+          {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
+          {location.view === 'export' && (
+            <ExportPanel liveCapture={liveCapture} summary={summary} />
+          )}
+        </main>
+        <aside className={desktop ? 'overflow-auto bg-chrome p-4' : 'hidden'}>{controls}</aside>
+        {!desktop && workloadPanelOpen && (
+          <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
             <WorkloadRail
               activeFontFixture={activeFontFixture}
-              className="h-full w-56"
+              className="h-full w-full border-r-0"
               fontFixture={fontFixture}
               location={location}
               showcaseFrame={showcaseFrame}
-              onFontFixture={(value) => {
-                setLocation({ fontFixture: value })
-              }}
+              showTechnique={false}
+              onFontFixture={(value) => setLocation({ fontFixture: value })}
               onAdvancedFontFixture={(value) => {
                 setAdvancedFontFixture(value)
                 invalidateLiveCapture()
               }}
-              onLocation={setLocation}
+              onLocation={(value) => {
+                setLocation({ ...value, view: 'scene' })
+                setWorkloadPanelOpen(false)
+              }}
               onTechnique={selectTechnique}
             />
-          </div>
-          <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
-            <div
-              className={
-                location.view === 'report' || location.view === 'export' ? 'hidden' : undefined
-              }
-            >
-              <Scene
-                activeFontFixture={activeFontFixture}
-                fontFixture={fontFixture}
-                dpr={dpr}
-                conformanceView={conformanceView}
-                error={error}
-                event={event}
-                grid={showGrid}
-                liveCapture={liveCapture}
-                liveStats={liveStats}
-                location={location}
-                activityWorkloads={activityWorkloads}
-                fontSize={fontSize}
-                layoutWidthPercent={layoutWidthPercent}
-                workloadAmount={workloadAmount}
-                animationEnabled={animationEnabled}
-                animationSpeed={animationSpeed}
-                paintOpacityPercent={paintOpacityPercent}
-                paintShadowEnabled={paintShadowEnabled}
-                paintStrokePercent={paintStrokePercent}
-                showLayoutBounds={showLayoutBounds}
-                summary={summary}
-                showcaseFrame={showcaseFrame}
-                onConformancePan={(deltaXPercent, deltaYPercent) =>
-                  setConformanceView((view) => ({
-                    ...view,
-                    panXPercent: view.panXPercent + deltaXPercent,
-                    panYPercent: view.panYPercent + deltaYPercent,
-                  }))
-                }
-                onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
-                onLiveStats={setLiveStats}
-              />
-            </div>
-            {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
-            {location.view === 'export' && (
-              <ExportPanel liveCapture={liveCapture} summary={summary} />
-            )}
-          </main>
-          <aside className="overflow-auto bg-chrome p-4">{controls}</aside>
-        </div>
-      ) : (
-        <div className={phone ? 'pb-[58px]' : undefined}>
-          <main className="min-h-[calc(100vh-52px)] p-3">
-            <div
-              className={
-                location.view === 'report' || location.view === 'export' ? 'hidden' : undefined
-              }
-            >
-              <Scene
-                activeFontFixture={activeFontFixture}
-                fontFixture={fontFixture}
-                dpr={dpr}
-                conformanceView={conformanceView}
-                error={error}
-                event={event}
-                grid={showGrid}
-                liveCapture={liveCapture}
-                liveStats={liveStats}
-                location={location}
-                activityWorkloads={activityWorkloads}
-                fontSize={fontSize}
-                layoutWidthPercent={layoutWidthPercent}
-                workloadAmount={workloadAmount}
-                animationEnabled={animationEnabled}
-                animationSpeed={animationSpeed}
-                paintOpacityPercent={paintOpacityPercent}
-                paintShadowEnabled={paintShadowEnabled}
-                paintStrokePercent={paintStrokePercent}
-                showLayoutBounds={showLayoutBounds}
-                summary={summary}
-                showcaseFrame={showcaseFrame}
-                onConformancePan={(deltaXPercent, deltaYPercent) =>
-                  setConformanceView((view) => ({
-                    ...view,
-                    panXPercent: view.panXPercent + deltaXPercent,
-                    panYPercent: view.panYPercent + deltaYPercent,
-                  }))
-                }
-                onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
-                onLiveStats={setLiveStats}
-              />
-            </div>
-            {location.view === 'controls' && (
-              <CompactSheet
-                phone={phone}
-                title="Controls"
-                onClose={() => setLocation({ view: 'scene' })}
-              >
-                {controls}
-              </CompactSheet>
-            )}
-            {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
-            {location.view === 'export' && (
-              <ExportPanel liveCapture={liveCapture} summary={summary} />
-            )}
-          </main>
-          {workloadPanelOpen && (
-            <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
-              <WorkloadRail
-                activeFontFixture={activeFontFixture}
-                className="h-full w-full border-r-0"
-                fontFixture={fontFixture}
-                location={location}
-                showcaseFrame={showcaseFrame}
-                showTechnique={false}
-                onFontFixture={(value) => setLocation({ fontFixture: value })}
-                onAdvancedFontFixture={(value) => {
-                  setAdvancedFontFixture(value)
-                  invalidateLiveCapture()
-                }}
-                onLocation={(value) => {
-                  setLocation({ ...value, view: 'scene' })
-                  setWorkloadPanelOpen(false)
-                }}
-                onTechnique={selectTechnique}
-              />
-            </CompactWorkloadPanel>
-          )}
-          {phone && <MobileNavigation location={location} onLocation={setLocation} />}
-        </div>
+          </CompactWorkloadPanel>
+        )}
+        {!desktop && phone && <MobileNavigation location={location} onLocation={setLocation} />}
+      </div>
+      {fontNoticesOpen && (
+        <Suspense fallback={null}>
+          <FontNoticesDialog onClose={() => setFontNoticesOpen(false)} />
+        </Suspense>
       )}
     </div>
   )
@@ -1439,7 +1447,7 @@ function BenchmarkSurface({
         />
       </div>
       <div className="grid gap-3 min-[1400px]:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
-        <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3">
+        <div className="startup-cost-grid grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-4">
           <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
           <LiveCost label="Core bake" value={formatMs(stats?.coreBakeMs)} />
@@ -1521,6 +1529,7 @@ function BenchmarkSurface({
             showLayoutBounds={showLayoutBounds}
             technique={technique === 'mtsdf' ? 'mtsdf' : 'bitmap'}
             workload={comparisonWorkload}
+            key={`${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${comparisonWorkload}`}
             onStats={onStats}
           />
         ) : technique === 'mtsdf' ? (
@@ -1924,24 +1933,40 @@ function PixelBytesPanel({
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
   readonly onZoom: (zoom: number) => void
 }) {
-  function drawCapture(canvas: HTMLCanvasElement | null): void {
+  const interactionRef = useRef<HTMLButtonElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const zoomFromWheel = useEffectEvent((deltaY: number) => {
+    const direction = deltaY < 0 ? 0.25 : -0.25
+    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)))
+  })
+  useEffect(() => {
+    const interaction = interactionRef.current
+    if (interaction === null) return
+    const handleWheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      zoomFromWheel(event.deltaY)
+    }
+    interaction.addEventListener('wheel', handleWheel, { passive: false })
+    return () => interaction.removeEventListener('wheel', handleWheel)
+  }, [])
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current
     if (canvas === null || bytes === undefined || width === undefined || height === undefined)
       return
     canvas.width = width
     canvas.height = height
     const context = canvas.getContext('2d')
     if (context === null) throw new Error('Unable to create conformance inspection canvas')
-    context.putImageData(new ImageData(new Uint8ClampedArray(bytes), width, height), 0, 0)
-  }
+    const pixels =
+      bytes.buffer instanceof ArrayBuffer
+        ? new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        : new Uint8ClampedArray(bytes)
+    context.putImageData(new ImageData(pixels, width, height), 0, 0)
+  }, [bytes, height, width])
   function moveView(event: ReactPointerEvent<HTMLButtonElement>): void {
     if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return
     const bounds = event.currentTarget.getBoundingClientRect()
     onPan((event.movementX / bounds.width) * 100, (event.movementY / bounds.height) * 100)
-  }
-  function zoomView(event: ReactWheelEvent<HTMLButtonElement>): void {
-    event.preventDefault()
-    const direction = event.deltaY < 0 ? 0.25 : -0.25
-    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)))
   }
   return (
     <figure
@@ -1951,6 +1976,7 @@ function PixelBytesPanel({
         {label}
       </figcaption>
       <button
+        ref={interactionRef}
         type="button"
         aria-label={`Pan and zoom ${label}`}
         className={`grid min-h-[240px] flex-1 place-items-center overflow-hidden p-3 ${conformanceView.zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
@@ -1961,15 +1987,23 @@ function PixelBytesPanel({
         onDoubleClick={() => onZoom(conformanceView.zoom === 1 ? 2 : 1)}
         onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
         onPointerMove={moveView}
-        onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-        onWheel={zoomView}
+        onPointerCancel={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId)
+          }
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId)
+          }
+        }}
       >
         {bytes === undefined ? (
           <span className="font-mono text-[9px] text-dim">GENERATING</span>
         ) : (
           <canvas
             className="h-auto max-h-full w-full select-none [image-rendering:pixelated]"
-            ref={drawCapture}
+            ref={canvasRef}
             style={{
               transform: `translate3d(${conformanceView.panXPercent}%, ${conformanceView.panYPercent}%, 0) scale(${conformanceView.zoom})`,
               transformOrigin: 'center',
@@ -2032,7 +2066,6 @@ function BitmapTextViewport({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<BitmapTextPreview>(undefined)
-  const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const [stats, setStats] = useState<BitmapTextLiveStats>()
   const [settledRevision, setSettledRevision] = useState(0)
   const [settledTextLength, setSettledTextLength] = useState(0)
@@ -2044,6 +2077,13 @@ function BitmapTextViewport({
     targetGlyphs: 0,
   })
   const [error, setError] = useState<string>()
+  const {
+    active: bakeProgressActive,
+    finish: finishBakeProgress,
+    publish: publishBakeProgress,
+    reset: resetBakeProgress,
+    value: bakeProgressValue,
+  } = useBakeProgress('bitmap')
   const {
     anchor,
     animatePresentation,
@@ -2058,12 +2098,14 @@ function BitmapTextViewport({
     timelineTick,
   } = textConfiguration
   const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
+    finishBakeProgress()
     setStats(next)
     onStats(next)
     setError(undefined)
   })
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return
+    finishBakeProgress()
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   const previewConfiguration = useEffectEvent(() => ({
@@ -2105,10 +2147,12 @@ function BitmapTextViewport({
     const container = containerRef.current
     if (canvas === null || container === null) return
     const controller = new AbortController()
+    resetBakeProgress()
     const configuration = previewConfiguration()
     let preview:
       | Awaited<ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>>
       | undefined
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
     let cancelled = false
     const resize = (): void => {
       if (preview === undefined) return
@@ -2117,60 +2161,77 @@ function BitmapTextViewport({
     }
     const observer = new ResizeObserver(resize)
     observer.observe(container)
-    const initialization = previewLifecycleRef.current.then(async () => {
-      const { createBitmapTextPreview } = await import('./renderer/bitmap-text')
-      if (cancelled) return
-      const bounds = container.getBoundingClientRect()
-      const created = await createBitmapTextPreview({
-        anchor: configuration.anchor,
-        backend,
-        canvas,
-        delivery,
-        dpr,
-        ...(configuration.expectedGlyphCount === undefined
-          ? {}
-          : { expectedGlyphCount: configuration.expectedGlyphCount }),
-        fontFixture: configuration.fontFixture,
-        fontSize: configuration.fontSize,
-        height: Math.max(1, bounds.height),
-        showGrid: configuration.showGrid,
-        layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
-        text: configuration.text,
-        language: configuration.language,
-        direction: configuration.direction,
-        features: configuration.features,
-        width: Math.max(1, bounds.width),
-        signal: controller.signal,
-        onError: publishError,
-        onStats: publishStats,
-      })
-      if (cancelled) {
-        await created.dispose()
-        return
+    const initialization = (async () => {
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      try {
+        if (cancelled) return
+        const { createBitmapTextPreview } = await import('./renderer/bitmap-text')
+        if (cancelled) return
+        const bounds = container.getBoundingClientRect()
+        const created = await createBitmapTextPreview({
+          anchor: configuration.anchor,
+          backend,
+          canvas,
+          delivery,
+          dpr,
+          ...(configuration.expectedGlyphCount === undefined
+            ? {}
+            : { expectedGlyphCount: configuration.expectedGlyphCount }),
+          fontFixture: configuration.fontFixture,
+          fontSize: configuration.fontSize,
+          height: Math.max(1, bounds.height),
+          showGrid: configuration.showGrid,
+          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+          text: configuration.text,
+          language: configuration.language,
+          direction: configuration.direction,
+          features: configuration.features,
+          width: Math.max(1, bounds.width),
+          signal: controller.signal,
+          onError: publishError,
+          onStats: publishStats,
+          onBakeProgress: publishBakeProgress,
+        })
+        if (cancelled) {
+          await created.dispose()
+          return
+        }
+        preview = created
+        previewRef.current = created
+        publishSettledTimelineTick(configuration.timelineTick)
+        publishSettledTextLength(configuration.text.length)
+        resize()
+      } catch (caught) {
+        lifecycleLease.release()
+        lifecycleLease = undefined
+        throw caught
       }
-      preview = created
-      previewRef.current = created
-      publishSettledTimelineTick(configuration.timelineTick)
-      publishSettledTextLength(configuration.text.length)
-      resize()
-    })
+    })()
     void initialization.catch(publishError)
     return () => {
       cancelled = true
       controller.abort()
       observer.disconnect()
-      previewLifecycleRef.current = initialization.then(
+      void initialization.then(
         async () => {
-          if (preview === undefined) return
-          const current = preview
-          preview = undefined
-          if (previewRef.current === current) previewRef.current = undefined
-          await current.dispose()
+          try {
+            if (preview === undefined) return
+            const current = preview
+            preview = undefined
+            if (previewRef.current === current) previewRef.current = undefined
+            await current.dispose()
+          } finally {
+            lifecycleLease?.release()
+            lifecycleLease = undefined
+          }
         },
-        () => undefined,
+        () => {
+          lifecycleLease?.release()
+          lifecycleLease = undefined
+        },
       )
     }
-  }, [backend, delivery, dpr])
+  }, [backend, delivery, dpr, publishBakeProgress, resetBakeProgress])
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid)
@@ -2264,6 +2325,8 @@ function BitmapTextViewport({
       data-missing-glyph-count={stats?.missingGlyphCount}
       data-draw-count={stats?.drawCount}
       data-renderer-init-ms={stats?.rendererInitMs}
+      data-strike-ppem={stats?.strikePpem}
+      data-css-font-size={stats?.cssFontSize}
       data-rendered-device-px={stats?.renderedPpem}
       data-scale-ratio={stats?.scaleRatio}
       data-font-load-ms={stats?.fontLoadMs}
@@ -2304,18 +2367,17 @@ function BitmapTextViewport({
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          BAKED {stats?.strikePpem ?? 16} PPEM · {fontSize} CSS PX /{' '}
-          {stats?.renderedPpem ?? fontSize * dpr} DEVICE PX · {(stats?.scaleRatio ?? 1).toFixed(2)}×
+          {delivery === 'runtime' ? 'RUNTIME' : 'BAKED'} {stats?.strikePpem ?? 16} PPEM · {fontSize}{' '}
+          CSS PX / {stats?.renderedPpem ?? fontSize * dpr} DEVICE PX ·{' '}
+          {(stats?.scaleRatio ?? 1).toFixed(2)}×
         </span>
         <span>{dpr}× DPR</span>
       </div>
-      {stats === undefined && error === undefined && (
-        <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
-          INITIALIZING {backend.toUpperCase()}
-        </div>
+      {(stats === undefined || bakeProgressActive) && error === undefined && (
+        <BakeProgressOverlay backend={backend} progress={bakeProgressValue} technique="BITMAP" />
       )}
       {error !== undefined && (
-        <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
           {error}
         </div>
       )}
@@ -2343,18 +2405,26 @@ function MtsdfTextViewport({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<MtsdfTextPreview>(undefined)
-  const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const [stats, setStats] = useState<MtsdfTextLiveStats>()
   const [error, setError] = useState<string>()
+  const {
+    active: bakeProgressActive,
+    finish: finishBakeProgress,
+    publish: publishBakeProgress,
+    reset: resetBakeProgress,
+    value: bakeProgressValue,
+  } = useBakeProgress('MSDF')
   const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } =
     textConfiguration
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
+    finishBakeProgress()
     setStats(next)
     onStats(next)
     setError(undefined)
   })
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return
+    finishBakeProgress()
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   const previewConfiguration = useEffectEvent(() => ({
@@ -2374,8 +2444,10 @@ function MtsdfTextViewport({
     const container = containerRef.current
     if (canvas === null || container === null) return
     const controller = new AbortController()
+    resetBakeProgress()
     const configuration = previewConfiguration()
     let preview: MtsdfTextPreview | undefined
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
     let cancelled = false
     const resize = (): void => {
       if (preview === undefined) return
@@ -2384,56 +2456,73 @@ function MtsdfTextViewport({
     }
     const observer = new ResizeObserver(resize)
     observer.observe(container)
-    const initialization = previewLifecycleRef.current.then(async () => {
-      const { createMtsdfTextPreview } = await import('./renderer/mtsdf-text')
-      if (cancelled) return
-      const bounds = container.getBoundingClientRect()
-      const created = await createMtsdfTextPreview({
-        anchor: configuration.anchor,
-        backend,
-        canvas,
-        delivery,
-        dpr,
-        fontSize: configuration.fontSize,
-        fontFixture,
-        height: Math.max(1, bounds.height),
-        showGrid: configuration.showGrid,
-        layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
-        text: configuration.text,
-        textAlign: configuration.textAlign,
-        language: configuration.language,
-        direction: configuration.direction,
-        features: configuration.features,
-        width: Math.max(1, bounds.width),
-        signal: controller.signal,
-        onError: publishError,
-        onStats: publishStats,
-      })
-      if (cancelled) {
-        await created.dispose()
-        return
+    const initialization = (async () => {
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      try {
+        if (cancelled) return
+        const { createMtsdfTextPreview } = await import('./renderer/mtsdf-text')
+        if (cancelled) return
+        const bounds = container.getBoundingClientRect()
+        const created = await createMtsdfTextPreview({
+          anchor: configuration.anchor,
+          backend,
+          canvas,
+          delivery,
+          dpr,
+          fontSize: configuration.fontSize,
+          fontFixture,
+          height: Math.max(1, bounds.height),
+          showGrid: configuration.showGrid,
+          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+          text: configuration.text,
+          textAlign: configuration.textAlign,
+          language: configuration.language,
+          direction: configuration.direction,
+          features: configuration.features,
+          width: Math.max(1, bounds.width),
+          signal: controller.signal,
+          onError: publishError,
+          onStats: publishStats,
+          onBakeProgress: publishBakeProgress,
+        })
+        if (cancelled) {
+          await created.dispose()
+          return
+        }
+        preview = created
+        previewRef.current = created
+        resize()
+      } catch (caught) {
+        lifecycleLease.release()
+        lifecycleLease = undefined
+        throw caught
       }
-      preview = created
-      previewRef.current = created
-      resize()
-    })
+    })()
     void initialization.catch(publishError)
     return () => {
       cancelled = true
       controller.abort()
       observer.disconnect()
-      previewLifecycleRef.current = initialization.then(
+      void initialization.then(
         async () => {
-          if (preview === undefined) return
-          const current = preview
-          preview = undefined
-          if (previewRef.current === current) previewRef.current = undefined
-          await current.dispose()
+          try {
+            if (preview === undefined) return
+            const current = preview
+            preview = undefined
+            if (previewRef.current === current) previewRef.current = undefined
+            await current.dispose()
+          } finally {
+            lifecycleLease?.release()
+            lifecycleLease = undefined
+          }
         },
-        () => undefined,
+        () => {
+          lifecycleLease?.release()
+          lifecycleLease = undefined
+        },
       )
     }
-  }, [backend, delivery, dpr, fontFixture])
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress])
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid)
@@ -2485,8 +2574,10 @@ function MtsdfTextViewport({
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
       data-missing-glyph-count={stats?.missingGlyphCount}
-      data-rendered-device-px={fontSize * dpr}
-      data-scale-ratio={(fontSize * dpr) / 64}
+      data-rendered-device-px={stats?.renderedPpem}
+      data-raster-em-size={stats?.rasterEmSize}
+      data-raster-pixel-range={stats?.rasterPixelRange}
+      data-scale-ratio={stats?.scaleRatio}
       data-startup-ms={stats?.startupMs}
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
@@ -2504,18 +2595,16 @@ function MtsdfTextViewport({
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          MTSDF 64 PX/EM · {fontSize} CSS PX / {fontSize * dpr} DEVICE PX ·{' '}
-          {((fontSize * dpr) / 64).toFixed(2)}×
+          MTSDF {stats?.rasterEmSize ?? '—'} PX/EM · {fontSize} CSS PX /{' '}
+          {stats?.renderedPpem ?? '—'} DEVICE PX · {stats?.scaleRatio.toFixed(2) ?? '—'}×
         </span>
         <span>{dpr}× DPR</span>
       </div>
-      {stats === undefined && error === undefined && (
-        <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
-          LOADING MSDF {backend.toUpperCase()}
-        </div>
+      {(stats === undefined || bakeProgressActive) && error === undefined && (
+        <BakeProgressOverlay backend={backend} progress={bakeProgressValue} technique="MSDF" />
       )}
       {error !== undefined && (
-        <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
           {error}
         </div>
       )}
@@ -2563,7 +2652,6 @@ function ComparisonWorkloadViewport({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<ComparisonWorkloadPreview>(undefined)
-  const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const surfaceKey = `${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
   const [publishedStats, setPublishedStats] = useState<
     Readonly<{
@@ -2574,14 +2662,23 @@ function ComparisonWorkloadViewport({
   >()
   const stats = publishedStats?.value
   const [error, setError] = useState<string>()
+  const {
+    active: bakeProgressActive,
+    finish: finishBakeProgress,
+    publish: publishBakeProgress,
+    reset: resetBakeProgress,
+    value: bakeProgressValue,
+  } = useBakeProgress(technique === 'mtsdf' ? 'MSDF' : 'bitmap')
   const publishStats = useEffectEvent((key: string, next: ComparisonWorkloadStats) => {
     if (key !== surfaceKey) return
+    finishBakeProgress()
     setPublishedStats({ fontFixture, key, value: next })
     onStats(next)
     setError(undefined)
   })
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return
+    finishBakeProgress()
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   const currentConfiguration = useEffectEvent(() => ({
@@ -2604,8 +2701,10 @@ function ComparisonWorkloadViewport({
     const container = containerRef.current
     if (canvas === null || container === null) return
     const controller = new AbortController()
+    resetBakeProgress()
     const effectSurfaceKey = surfaceKey
     let preview: ComparisonWorkloadPreview | undefined
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
     let cancelled = false
     const resize = (): void => {
       if (preview === undefined) return
@@ -2614,49 +2713,76 @@ function ComparisonWorkloadViewport({
     }
     const observer = new ResizeObserver(resize)
     observer.observe(container)
-    const initialization = previewLifecycleRef.current.then(async () => {
-      const { createComparisonWorkloadPreview } = await preloadComparisonWorkload()
-      if (cancelled) return
-      const bounds = container.getBoundingClientRect()
-      const configuration = currentConfiguration()
-      const created = await createComparisonWorkloadPreview({
-        ...configuration,
-        backend,
-        canvas,
-        delivery,
-        dpr,
-        height: Math.max(1, bounds.height),
-        signal: controller.signal,
-        technique,
-        width: Math.max(1, bounds.width),
-        onError: publishError,
-        onStats: (next) => publishStats(effectSurfaceKey, next),
-      })
-      if (cancelled) {
-        await created.dispose()
-        return
+    const initialization = (async () => {
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      try {
+        if (cancelled) return
+        const { createComparisonWorkloadPreview } = await preloadComparisonWorkload()
+        if (cancelled) return
+        const bounds = container.getBoundingClientRect()
+        const configuration = currentConfiguration()
+        const created = await createComparisonWorkloadPreview({
+          ...configuration,
+          backend,
+          canvas,
+          delivery,
+          dpr,
+          height: Math.max(1, bounds.height),
+          signal: controller.signal,
+          technique,
+          width: Math.max(1, bounds.width),
+          onError: publishError,
+          onStats: (next) => publishStats(effectSurfaceKey, next),
+          onBakeProgress: publishBakeProgress,
+        })
+        if (cancelled) {
+          await created.dispose()
+          return
+        }
+        preview = created
+        previewRef.current = created
+        resize()
+      } catch (caught) {
+        lifecycleLease.release()
+        lifecycleLease = undefined
+        throw caught
       }
-      preview = created
-      previewRef.current = created
-      resize()
-    })
+    })()
     void initialization.catch(publishError)
     return () => {
       cancelled = true
       controller.abort()
       observer.disconnect()
-      previewLifecycleRef.current = initialization.then(
+      void initialization.then(
         async () => {
-          if (preview === undefined) return
-          const current = preview
-          preview = undefined
-          if (previewRef.current === current) previewRef.current = undefined
-          await current.dispose()
+          try {
+            if (preview === undefined) return
+            const current = preview
+            preview = undefined
+            if (previewRef.current === current) previewRef.current = undefined
+            await current.dispose()
+          } finally {
+            lifecycleLease?.release()
+            lifecycleLease = undefined
+          }
         },
-        () => undefined,
+        () => {
+          lifecycleLease?.release()
+          lifecycleLease = undefined
+        },
       )
     }
-  }, [backend, delivery, dpr, fontFixture, surfaceKey, technique, workload])
+  }, [
+    backend,
+    delivery,
+    dpr,
+    fontFixture,
+    publishBakeProgress,
+    resetBakeProgress,
+    surfaceKey,
+    technique,
+    workload,
+  ])
 
   useEffect(() => {
     const preview = previewRef.current
@@ -2729,7 +2855,10 @@ function ComparisonWorkloadViewport({
       }
       data-reflow-count={stats?.reflowCount}
       data-reflow-ms={stats?.lastReflowMs}
-      data-rendered-device-px={stats === undefined ? undefined : stats.appliedFontSize * dpr}
+      data-rendered-device-px={stats?.renderedPpem}
+      data-raster-em-size={stats?.technique === 'mtsdf' ? stats.rasterEmSize : undefined}
+      data-raster-pixel-range={stats?.technique === 'mtsdf' ? stats.rasterPixelRange : undefined}
+      data-scale-ratio={stats?.scaleRatio}
       data-startup-ms={stats?.startupMs}
       data-source-text-length={stats?.sourceTextLength}
       data-submit-history-length={stats?.submitHistoryLength}
@@ -2766,19 +2895,28 @@ function ComparisonWorkloadViewport({
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          {technique === 'mtsdf' ? 'MTSDF 64 PX/EM' : 'BITMAP 16 PX STRIKE'} · {rangeLabel}
+          {stats?.technique === 'mtsdf'
+            ? `MTSDF ${String(stats.rasterEmSize)} PX/EM`
+            : stats?.technique === 'bitmap'
+              ? `BITMAP ${String(stats.strikePpem)} PX STRIKE`
+              : technique === 'mtsdf'
+                ? 'MTSDF — PX/EM'
+                : 'BITMAP — PX STRIKE'}{' '}
+          · {rangeLabel}
         </span>
         <span>
           {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : 'PAN'} · {dpr}× DPR
         </span>
       </div>
-      {publishedStats === undefined && error === undefined && (
-        <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
-          LOADING {technique === 'mtsdf' ? 'MSDF' : 'BITMAP'} {workload.toUpperCase()}
-        </div>
+      {(publishedStats === undefined || bakeProgressActive) && error === undefined && (
+        <BakeProgressOverlay
+          backend={backend}
+          progress={bakeProgressValue}
+          technique={technique === 'mtsdf' ? 'MSDF' : 'BITMAP'}
+        />
       )}
       {error !== undefined && (
-        <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
           {error}
         </div>
       )}
@@ -2786,9 +2924,95 @@ function ComparisonWorkloadViewport({
   )
 }
 
+function useBakeProgress(label: string): {
+  readonly value: BakeProgress | undefined
+  readonly active: boolean
+  readonly publish: (progress: BakeProgress) => void
+  readonly finish: () => void
+  readonly reset: () => void
+} {
+  const [value, setValue] = useState<BakeProgress>()
+  const [active, setActive] = useState(false)
+  const lastConsoleKey = useRef('')
+  const publish = useCallback(
+    (progress: BakeProgress) => {
+      setValue(progress)
+      setActive(true)
+      if (!import.meta.env.DEV) return
+      const percentage = Math.round((progress.completed / progress.total) * 100)
+      const bucket = Math.floor(percentage / 10) * 10
+      const key = `${progress.stage}:${progress.phase}:${String(bucket)}`
+      if (key === lastConsoleKey.current) return
+      lastConsoleKey.current = key
+      console.info(
+        `[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`,
+      )
+    },
+    [label],
+  )
+  const finish = useCallback(() => setActive(false), [])
+  const reset = useCallback(() => {
+    setValue(undefined)
+    setActive(false)
+    lastConsoleKey.current = ''
+  }, [])
+  return { value, active, publish, finish, reset }
+}
+
+function BakeProgressOverlay({
+  backend,
+  progress,
+  technique,
+}: {
+  readonly backend: GraphicsBackend
+  readonly progress: BakeProgress | undefined
+  readonly technique: 'BITMAP' | 'MSDF'
+}) {
+  const percentage = bakeProgressPercentage(progress)
+  const label =
+    progress === undefined
+      ? `INITIALIZING ${technique} ${backend.toUpperCase()}`
+      : `${progress.stage === 'font' ? 'FONT' : technique} ${progress.phase.toUpperCase()}`
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center bg-background px-8">
+      <div className="w-full max-w-sm" data-testid="bake-progress">
+        <div className="mb-2 flex items-center justify-between font-mono text-[9px] text-dim">
+          <span>{label}</span>
+          <span>{percentage}%</span>
+        </div>
+        <progress
+          aria-label={label}
+          className="h-1.5 w-full overflow-hidden rounded-full bg-surface accent-accent"
+          max={100}
+          value={percentage}
+        />
+      </div>
+    </div>
+  )
+}
+
+function bakeProgressPercentage(progress: BakeProgress | undefined): number {
+  if (progress === undefined) return 0
+  const ratio = progress.completed / progress.total
+  if (progress.stage === 'font') {
+    if (progress.phase === 'loading') return 2
+    if (progress.phase === 'baking') return 8
+    if (progress.phase === 'packaging') return 16
+    if (progress.phase === 'transferring') return 19
+    if (progress.phase === 'complete') return 20
+    return Math.round(ratio * 20)
+  }
+  if (progress.phase === 'loading') return 22
+  if (progress.phase === 'rasterizing') return 25 + Math.round(ratio * 65)
+  if (progress.phase === 'packaging') return 92
+  if (progress.phase === 'transferring') return 97
+  if (progress.phase === 'complete') return 100
+  return 20
+}
+
 function LiveCost({ label, value }: { readonly label: string; readonly value: string }) {
   return (
-    <div className="border-b border-r border-border px-3 py-2 last:border-r-0">
+    <div className="border-b border-r border-border px-3 py-2">
       <p className="font-mono text-[8px] uppercase tracking-wider text-dim">{label}</p>
       <p className="mt-1 font-mono text-[11px] text-foreground">{value}</p>
     </div>
@@ -2824,10 +3048,25 @@ function Sparkline({
     if (canvas === null || cursor === undefined || values === undefined) return
     const context = canvas.getContext('2d')
     if (context === null) return
-    const width = canvas.width
-    const height = canvas.height
-    context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`)
-    context.lineWidth = 1.5
+    let width = 1
+    let height = 1
+    const resize = (): void => {
+      width = Math.max(1, canvas.clientWidth)
+      height = Math.max(1, canvas.clientHeight)
+      const pixelRatio = Math.max(1, window.devicePixelRatio)
+      const backingWidth = Math.max(1, Math.round(width * pixelRatio))
+      const backingHeight = Math.max(1, Math.round(height * pixelRatio))
+      if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+        canvas.width = backingWidth
+        canvas.height = backingHeight
+      }
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+      context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`)
+      context.lineWidth = 1.5
+    }
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(canvas)
+    resize()
     let animationFrame = 0
     const draw = (): void => {
       const historyLength = cursor.length
@@ -2840,7 +3079,7 @@ function Sparkline({
       context.beginPath()
       for (let index = 0; index < historyLength; index += 1) {
         const value = values[(start + index) % values.length] ?? 0
-        const x = historyLength < 2 ? 0 : (index / (historyLength - 1)) * width
+        const x = sparklineSampleX(index, historyLength, values.length, width)
         const y = height - (value / chartMaximum) * (height - 4) - 2
         if (index === 0) context.moveTo(x, y)
         else context.lineTo(x, y)
@@ -2849,7 +3088,10 @@ function Sparkline({
       animationFrame = requestAnimationFrame(draw)
     }
     animationFrame = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(animationFrame)
+    return () => {
+      cancelAnimationFrame(animationFrame)
+      resizeObserver.disconnect()
+    }
   }, [cursor, tone, values])
   return (
     <div className="bg-surface p-3" data-testid={`sparkline-${id}`} data-tone={tone}>
@@ -2865,9 +3107,7 @@ function Sparkline({
         <canvas
           aria-label={`${label} history`}
           className="absolute inset-0 size-full"
-          height={42}
           ref={canvasRef}
-          width={180}
         />
         {length === 0 && emptyLabel !== undefined && (
           <span className="absolute inset-0 grid place-items-center font-mono text-[8px] text-dim">
@@ -2929,6 +3169,7 @@ function Controls({
   onConformanceZoom,
   onDpr,
   onFontSize,
+  onFontNotices,
   onLayoutWidthPercent,
   onPaintOpacityPercent,
   onPaintShadowEnabled,
@@ -2974,6 +3215,7 @@ function Controls({
   readonly onConformanceZoom: (zoom: number) => void
   readonly onDpr: (dpr: 1 | 2) => void
   readonly onFontSize: (value: number) => void
+  readonly onFontNotices: () => void
   readonly onLayoutWidthPercent: (value: number) => void
   readonly onPaintOpacityPercent: (value: number) => void
   readonly onPaintShadowEnabled: (value: boolean) => void
@@ -3270,14 +3512,13 @@ function Controls({
         liveStats={liveStats}
         technique={technique}
       />
-      <a
+      <button
         className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
-        href="/font-notices.txt"
-        target="_blank"
-        rel="noreferrer"
+        type="button"
+        onClick={onFontNotices}
       >
         Font licenses &amp; notices
-      </a>
+      </button>
     </section>
   )
 }
@@ -3335,11 +3576,26 @@ function PayloadInspector({
           gpuBytes: page.decodedGpuBytes,
         }))
       : (bitmapStats?.atlasPages ?? bitmapFixture?.raster.pages ?? []).map((page) => ({
-          key: `16-${'pageIndex' in page ? page.pageIndex : page.index}`,
-          label: `16 px · page ${('pageIndex' in page ? page.pageIndex : page.index) + 1} · ${page.width}×${page.height}`,
+          key:
+            'strikePpem' in page ? `${page.strikePpem}-${page.pageIndex}` : `fixture-${page.index}`,
+          label:
+            'strikePpem' in page
+              ? `${page.strikePpem} px · page ${page.pageIndex + 1} · ${page.width}×${page.height}`
+              : `Page ${page.index + 1} · ${page.width}×${page.height}`,
           embeddedBytes: 'encodedBytes' in page ? page.encodedBytes : undefined,
           gpuBytes: 'gpuBytes' in page ? page.gpuBytes : page.decodedGpuBytes,
         }))
+  const pageGpuBytes = pages.reduce((total, page) => total + page.gpuBytes, 0)
+  const textureBaseBytes =
+    technique === 'mtsdf' ? mtsdfFixture?.raster.runtimeTextureArray.baseBytes : textureGpuBytes
+  const textureMipBytes =
+    textureGpuBytes === undefined || textureBaseBytes === undefined
+      ? undefined
+      : textureGpuBytes - textureBaseBytes
+  const texturePaddingBytes =
+    textureBaseBytes === undefined ? undefined : Math.max(0, textureBaseBytes - pageGpuBytes)
+  const displayedFontTransferBytes =
+    delivery === 'runtime' ? liveStats?.sourceFontBytes : fontTransferBytes
 
   return (
     <>
@@ -3347,13 +3603,8 @@ function PayloadInspector({
         className="rounded-md border border-border bg-surface p-3"
         data-testid="payload-inspector"
       >
-        <div className="grid grid-cols-[1rem_minmax(0,1fr)_2.5rem_3.5rem] items-center gap-x-2">
-          <span aria-hidden="true" />
-          <p className="eyebrow">Payload</p>
-          <span className="text-center font-mono text-[8px] uppercase text-dim">Loaded</span>
-          <span className="text-right font-mono text-[8px] uppercase text-dim">Gzip</span>
-        </div>
-        <PayloadDisclosure
+        <InspectorTableHeader label="Payload" valueLabel="Gzip" />
+        <InspectorDisclosure
           className="mt-3 border-b border-border pb-3"
           label="Runtime"
           status="loaded"
@@ -3369,10 +3620,10 @@ function PayloadInspector({
             Includes the pmndrs/text core, selected raster runtime, and shaper. External Three.js
             and React peers are not included; font assets are listed below.
           </p>
-        </PayloadDisclosure>
-        <PayloadDisclosure
-          className="border-b border-border py-3"
-          label="Runtime bake"
+        </InspectorDisclosure>
+        <InspectorDisclosure
+          className="pt-3"
+          label="Bake (lazy)"
           status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
           value={formatBytes(bakerTransferBytes)}
         >
@@ -3406,74 +3657,61 @@ function PayloadInspector({
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerWasm.gzipBytes)}
           />
-        </PayloadDisclosure>
-        <div className="grid gap-2 pt-3">
+        </InspectorDisclosure>
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
+        <InspectorTableHeader
+          label="Asset"
+          valueLabel={delivery === 'baked' && technique === 'mtsdf' ? 'Gzip' : 'Bytes'}
+        />
+        <div className="mt-3 pl-6">
           <PayloadRow
-            emphasis
-            label="Font assets · download"
-            value={formatBytes(
-              delivery === 'runtime' ? liveStats?.sourceFontBytes : fontTransferBytes,
-            )}
+            label={delivery === 'runtime' ? 'Source font' : 'Font assets'}
+            status={displayedFontTransferBytes === undefined ? 'unloaded' : 'loaded'}
+            value={formatBytes(displayedFontTransferBytes)}
           />
-          {delivery === 'runtime' && (
-            <>
-              <PayloadRow
-                label="Generated core artifact · CPU"
-                value={formatBytes(liveStats?.coreArtifactBytes)}
-              />
-              <PayloadRow
-                label={`Generated ${technique === 'mtsdf' ? 'MTSDF' : 'bitmap'} artifact · CPU`}
-                value={formatBytes(liveStats?.rasterArtifactBytes)}
-              />
-            </>
-          )}
-          {technique === 'mtsdf' && (
-            <PayloadRow
-              label="Decoded font artifact · CPU"
-              value={formatBytes(mtsdfFixture?.uncompressed.bytes)}
-            />
-          )}
         </div>
       </div>
       <div
         className="rounded-md border border-border bg-surface p-3"
         data-testid="gpu-resource-inspector"
       >
-        <div className="flex items-center justify-between gap-2">
-          <p className="eyebrow">GPU resources</p>
-          <span className="font-mono text-[8px] uppercase text-dim">GPU memory</span>
-        </div>
-        <div className="mt-3 grid gap-2 pb-3">
-          <PayloadRow
-            emphasis
-            label="Atlas texture memory · GPU"
-            value={formatBytes(textureGpuBytes)}
-          />
+        <InspectorTableHeader label="Resource" valueLabel="GPU" />
+        <InspectorDisclosure
+          className="mt-3"
+          label="Atlas textures"
+          status={textureGpuBytes === undefined ? 'unloaded' : 'loaded'}
+          value={formatBytes(textureGpuBytes)}
+        >
           {technique === 'mtsdf' && (
+            <p className="text-[9px] leading-relaxed text-dim">
+              MSDF · {mtsdfFixture?.configuration.emSize ?? 64} px/em ·{' '}
+              {mtsdfFixture?.configuration.pixelRange ?? 8} px range
+            </p>
+          )}
+          {pages.length === 0 ? (
+            <p className="text-[9px] text-dim">Page dimensions appear after the font loads.</p>
+          ) : (
+            pages.map((page) => (
+              <PayloadRow
+                key={page.key}
+                label={page.label}
+                status="loaded"
+                value={formatBytes(page.gpuBytes)}
+              />
+            ))
+          )}
+          {texturePaddingBytes !== undefined && texturePaddingBytes > 0 && (
             <PayloadRow
-              label="MTSDF"
-              value={`${mtsdfFixture?.configuration.emSize ?? 64} px/em · ${mtsdfFixture?.configuration.pixelRange ?? 8} px range`}
+              label="Layer padding"
+              status="loaded"
+              value={formatBytes(texturePaddingBytes)}
             />
           )}
-        </div>
-        <div className="border-t border-border pt-3">
-          <p className="font-mono text-[9px] uppercase text-muted">
-            Texture pages · {pages.length}
-          </p>
-          <div className="mt-2 grid max-h-56 gap-2 overflow-auto pr-1">
-            {pages.length === 0 ? (
-              <p className="text-[9px] text-dim">Page dimensions appear after the font loads.</p>
-            ) : (
-              pages.map((page) => (
-                <PayloadRow
-                  key={page.key}
-                  label={page.label}
-                  value={`${page.embeddedBytes === undefined ? '' : `${formatBytes(page.embeddedBytes)} embedded KTX2 · `}${formatBytes(page.gpuBytes)} GPU memory`}
-                />
-              ))
-            )}
-          </div>
-        </div>
+          {textureMipBytes !== undefined && textureMipBytes > 0 && (
+            <PayloadRow label="Mip levels" status="loaded" value={formatBytes(textureMipBytes)} />
+          )}
+        </InspectorDisclosure>
       </div>
     </>
   )
@@ -3532,7 +3770,18 @@ function PayloadStatus({ status }: { readonly status: 'loaded' | 'unloaded' }) {
   )
 }
 
-function PayloadDisclosure({
+function InspectorTableHeader({ label, valueLabel }: { label: string; valueLabel: string }) {
+  return (
+    <div className="grid grid-cols-[1rem_minmax(0,1fr)_2.5rem_3.5rem] items-center gap-x-2">
+      <span aria-hidden="true" />
+      <p className="eyebrow">{label}</p>
+      <span className="text-center font-mono text-[8px] uppercase text-dim">Loaded</span>
+      <span className="text-right font-mono text-[8px] uppercase text-dim">{valueLabel}</span>
+    </div>
+  )
+}
+
+function InspectorDisclosure({
   children,
   className,
   label,

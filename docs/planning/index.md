@@ -24,6 +24,7 @@
 - [Conformance plan](conformance-plan.md) — correctness oracles and acceptance gates.
 - [Tooling fixtures](tooling-fixtures.md) — reproducible sources, goldens, and validators.
 - [Autoresearch protocol](autoresearch.md) — controlled optimization workflow.
+- [Untrusted-resource validation library admission](untrusted-validation-research.md) — measured hand-validator, Zod Mini, Valibot, Ajv standalone, and TypeBox comparison.
 
 ## Shaping research
 
@@ -39,7 +40,7 @@
 - [Composable text effects over TSL](text-effect-composition.md) — research proposal for ordered node effects, object-local uniforms, shared-material safety, and dual-backend admission.
 - [Implementation difficulty](implementation-difficulty.md) — relative correctness and performance effort.
 - [Payload budget](payload-budget.md) — serialized, decoded, and resident cost model.
-- [GPU compression](gpu-compression.md) — transport and GPU-native compression constraints.
+- [GPU compression and Rust container ownership](gpu-compression.md) — transport/GPU compression constraints plus the GLB/KTX2 serializer decision.
 - [Slug audit](slug-audit.md) — prior-art findings and implementation disposition.
 
 ## Governance

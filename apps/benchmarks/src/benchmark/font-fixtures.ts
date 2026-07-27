@@ -35,6 +35,9 @@ export const SELECTABLE_FONT_FIXTURES: readonly BenchmarkFontFixtureDefinition[]
   },
 ] as const
 
+export const SELECTABLE_FONT_FIXTURE_IDS: readonly SelectableFontFixture[] =
+  SELECTABLE_FONT_FIXTURES.map(({ id }) => id)
+
 export const ADVANCED_FONT_FIXTURES: readonly AdvancedFontFixtureDefinition[] = [
   { id: 'inter', label: 'Inter Regular', metadata: 'Sans · Latin' },
   { id: 'source-serif-4', label: 'Source Serif 4', metadata: 'Serif · Latin' },
@@ -64,14 +67,9 @@ export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string
 }
 
 export function selectableFontFixture(value: string): SelectableFontFixture {
-  switch (value) {
-    case 'inter':
-    case 'source-serif-4':
-    case 'dancing-script':
-      return value
-    default:
-      throw new TypeError(`Unknown selectable font fixture: ${value}`)
-  }
+  const fixture = SELECTABLE_FONT_FIXTURE_IDS.find((candidate) => candidate === value)
+  if (fixture === undefined) throw new TypeError(`Unknown selectable font fixture: ${value}`)
+  return fixture
 }
 
 export function benchmarkIpsumText(): string {

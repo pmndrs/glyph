@@ -139,7 +139,8 @@ export function InteractiveCanvas({
   return (
     <canvas
       aria-label={label}
-      className={`absolute inset-0 size-full cursor-grab touch-none active:cursor-grabbing ${className ?? ''}`}
+      className={`absolute inset-0 size-full cursor-grab touch-none bg-background active:cursor-grabbing ${className ?? ''}`}
+      style={{ backgroundColor: '#070709' }}
       data-pan-enabled="true"
       data-pan-x="0"
       data-pan-y="0"

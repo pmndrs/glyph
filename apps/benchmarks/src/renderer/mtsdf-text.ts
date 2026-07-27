@@ -45,7 +45,11 @@ import {
   type SourceOutlineFidelityCapture,
 } from './source-outline-reference'
 import { compactRgba8Readback } from './tsl-baseline'
-import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  createConfiguredRenderer,
+  readRendererViewportState,
+  type RendererBackend,
+} from './webgpu-renderer'
 import {
   createFontDeliveryMetrics,
   loadRuntimeFont,
@@ -98,6 +102,11 @@ export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf'
   readonly backend: RendererBackend
   readonly dpr: number
+  readonly rasterEmSize: number
+  readonly rasterPixelRange: number
+  readonly renderedPpem: number
+  readonly scaleRatio: number
+  readonly showGrid: boolean
   readonly frameCount: number
   readonly framesPerSecond: number
   readonly medianSubmitMs: number
@@ -310,6 +319,7 @@ export async function createMtsdfTextPreview(options: {
   readonly width: number
   readonly onError: (error: unknown) => void
   readonly onStats: (stats: MtsdfTextLiveStats) => void
+  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener
 }): Promise<MtsdfTextPreview> {
   const {
     backend,
@@ -317,6 +327,7 @@ export async function createMtsdfTextPreview(options: {
     dpr,
     onError,
     onStats,
+    onBakeProgress,
     signal,
     text,
     language = 'en',
@@ -343,14 +354,16 @@ export async function createMtsdfTextPreview(options: {
     trackGpuTimestamps: true,
     width,
   })
+  let rendererViewport = readRendererViewportState(renderer)
   const canvasSurface = createCanvasSurface(renderer, width, height, options.showGrid)
+  let gridVisible = options.showGrid
   const textUpdateTelemetry = createTextUpdateTelemetry()
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: Text | undefined
   try {
     const fontStarted = performance.now()
-    const loaded = await loadMtsdfFont(signal, fontFixture, delivery)
+    const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress)
     font = loaded.font
     const fontLoadMs = performance.now() - fontStarted
     signal?.throwIfAborted()
@@ -362,7 +375,7 @@ export async function createMtsdfTextPreview(options: {
       font: activeFont,
       raster: loaded.raster,
       fontSize,
-      rasterPixelRatio: dpr,
+      rasterPixelRatio: rendererViewport.pixelRatio,
       lineHeight: LIVE_TEXT_LINE_HEIGHT,
       width: Math.max(120, width * layoutWidthRatio),
       wrap: 'word',
@@ -377,6 +390,7 @@ export async function createMtsdfTextPreview(options: {
     const readyAt = performance.now()
     signal?.throwIfAborted()
     const activeLine = line
+    const rasterConfiguration = await registeredMtsdfConfiguration(activeFont, signal)
     const textReadyMs = performance.now() - textStarted
     const startupMs = performance.now() - startupStarted
     const sceneStartedAt = performance.now()
@@ -432,7 +446,7 @@ export async function createMtsdfTextPreview(options: {
     }
 
     const renderFrame = (timestamp: number): void => {
-      if (closing || disposed) return
+      if (disposed) return
       try {
         const started = performance.now()
         canvasSurface.render(scene, camera)
@@ -441,16 +455,23 @@ export async function createMtsdfTextPreview(options: {
           firstDrawMs = submitMs
           firstDrawRecorded = true
         }
+        if (closing) return
         const telemetrySnapshot = telemetry.recordSubmit(timestamp, submitMs)
         if (telemetrySnapshot === undefined) return
         scheduleGpuTimestamp()
         const layout = committedLayout(activeLine)
-        const framebufferGpuBytes = Math.round(width * dpr) * Math.round(height * dpr) * 4
+        const framebufferGpuBytes =
+          rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
         const atlasGpuBytes = loaded.metrics.rasterGpuBytes || loaded.atlasGpuBytes
         onStats({
           technique: 'mtsdf',
           backend,
-          dpr,
+          dpr: rendererViewport.pixelRatio,
+          rasterEmSize: rasterConfiguration.emSize,
+          rasterPixelRange: rasterConfiguration.pixelRange,
+          renderedPpem: fontSize * rendererViewport.pixelRatio,
+          scaleRatio: (fontSize * rendererViewport.pixelRatio) / rasterConfiguration.emSize,
+          showGrid: gridVisible,
           ...telemetrySnapshot,
           glyphCount: renderedGlyphCount(activeLine),
           missingGlyphCount: missingGlyphCount(layout),
@@ -488,6 +509,7 @@ export async function createMtsdfTextPreview(options: {
         width = positiveViewportSize(nextWidth, 'MSDF preview width')
         height = positiveViewportSize(nextHeight, 'MSDF preview height')
         renderer.setSize(width, height, false)
+        rendererViewport = readRendererViewportState(renderer)
         canvasSurface.resize(width, height)
         camera.right = width
         camera.bottom = -height
@@ -522,6 +544,7 @@ export async function createMtsdfTextPreview(options: {
         scene.position.set(0, 0, 0)
       },
       setGridVisible(visible) {
+        gridVisible = visible
         canvasSurface.setGridVisible(visible)
       },
       async update(next) {
@@ -709,6 +732,7 @@ export async function loadMtsdfFont(
   signal?: AbortSignal,
   fixture: BenchmarkFontFixture = 'inter',
   delivery: FontDelivery = 'baked',
+  onProgress?: import('@pmndrs/text').BakeProgressListener,
 ): Promise<{
   readonly artifactBytes: number
   readonly atlasGpuBytes: number
@@ -722,14 +746,14 @@ export async function loadMtsdfFont(
   const manifest = mtsdfFixtureManifests.get(fixture)
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`)
   if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal)
+    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress)
     return {
       artifactBytes: metrics.coreArtifactBytes,
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
       font: loaded.font,
       metrics,
-      raster: measuredMsdfRaster(metrics),
+      raster: measuredMsdfRaster(metrics, onProgress),
     }
   }
   const response = await fetch(
@@ -754,6 +778,40 @@ export async function loadMtsdfFont(
     metrics,
     raster: msdf,
   }
+}
+
+export interface MtsdfRasterConfiguration {
+  readonly emSize: number
+  readonly pixelRange: number
+}
+
+export async function registeredMtsdfConfiguration(
+  font: RegisteredFont,
+  signal?: AbortSignal,
+): Promise<MtsdfRasterConfiguration> {
+  const rasterKey = await msdfDescriptorRasterKey()
+  const raster =
+    font.getRaster(rasterKey) ??
+    (await font.loadRaster(
+      { kind: 'msdf', rasterKey },
+      signal === undefined ? undefined : { signal },
+    ))
+  const extension = raster.extensionData
+  if (typeof extension !== 'object' || extension === null || Array.isArray(extension)) {
+    throw new TypeError('MTSDF extension must be an object')
+  }
+  if (!('emSize' in extension) || !('pixelRange' in extension)) {
+    throw new TypeError('MTSDF extension must declare emSize and pixelRange')
+  }
+  const emSize = extension.emSize
+  const pixelRange = extension.pixelRange
+  if (typeof emSize !== 'number' || !Number.isSafeInteger(emSize) || emSize <= 0) {
+    throw new TypeError('MTSDF emSize must be a positive safe integer')
+  }
+  if (typeof pixelRange !== 'number' || !Number.isFinite(pixelRange) || pixelRange <= 0) {
+    throw new TypeError('MTSDF pixelRange must be positive and finite')
+  }
+  return { emSize, pixelRange }
 }
 
 function positionLiveLine(

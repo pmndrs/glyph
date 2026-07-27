@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -140,8 +140,7 @@ try {
         throw new Error(`${fixture.output} is not byte-identical to a fresh package-owned bake`)
       }
     } else {
-      await mkdir(outputDirectory, { recursive: true })
-      await writeFile(compressedOutput, compressed)
+      await writeFile(resolve(temporaryDirectory, fixture.output), compressed)
     }
     console.log(
       `Baked ${fixture.fontFixture}: ${raster.pages.length} pages, ${formatBytes(baked.byteLength)} raw, ${formatBytes(compressed.byteLength)} gzip in ${formatDuration(performance.now() - startedAt)}`,
@@ -162,6 +161,13 @@ try {
       throw new Error('fresh showcase MTSDF fixtures do not match their canonical manifest')
     }
   } else {
+    await mkdir(outputDirectory, { recursive: true })
+    for (const fixture of selectedFixtures) {
+      await copyFile(
+        resolve(temporaryDirectory, fixture.output),
+        resolve(outputDirectory, fixture.output),
+      )
+    }
     await writeFile(showcaseManifestOutput, `${JSON.stringify(showcaseManifest, undefined, 2)}\n`)
   }
 } finally {

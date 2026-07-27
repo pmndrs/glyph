@@ -1,6 +1,6 @@
 {
   "schemaVersion": 0,
-  "strikePpem": 16,
+  "strikePpems": [16],
   "packaging": {
     "artifact": "embedded",
     "pages": "embedded"

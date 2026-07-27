@@ -50,6 +50,7 @@ describe('comparison workload updates', () => {
         layoutWidthRatio: 0.6,
       }),
     ).toBe('rebuild')
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('rebuild')
   })
 })
 

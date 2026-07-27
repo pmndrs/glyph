@@ -15,7 +15,7 @@
       "sample": 0,
       "durationMs": 11.300000004470348,
       "outputBytes": 17362,
-      "hash": "314418c3",
+      "hash": "51ba1d14",
       "metrics": {
         "caseCount": 5,
         "frameCount": 68,
@@ -31,7 +31,7 @@
       "sample": 1,
       "durationMs": 8.5,
       "outputBytes": 17362,
-      "hash": "314418c3",
+      "hash": "51ba1d14",
       "metrics": {
         "caseCount": 5,
         "frameCount": 68,
@@ -47,7 +47,7 @@
       "sample": 2,
       "durationMs": 8.799999997019768,
       "outputBytes": 17362,
-      "hash": "314418c3",
+      "hash": "51ba1d14",
       "metrics": {
         "caseCount": 5,
         "frameCount": 68,

@@ -9,12 +9,15 @@ export type CapturedBitmapTextLiveStats = Omit<
   | 'submitHistory'
   | 'submitHistoryLength'
   | 'submitHistoryNextIndex'
+  | 'submitHistoryCursor'
   | 'fpsHistory'
   | 'fpsHistoryLength'
   | 'fpsHistoryNextIndex'
+  | 'fpsHistoryCursor'
   | 'gpuHistory'
   | 'gpuHistoryLength'
   | 'gpuHistoryNextIndex'
+  | 'gpuHistoryCursor'
 > & {
   readonly submitHistory: readonly number[]
   readonly fpsHistory: readonly number[]
@@ -26,12 +29,15 @@ export type CapturedMtsdfTextLiveStats = Omit<
   | 'submitHistory'
   | 'submitHistoryLength'
   | 'submitHistoryNextIndex'
+  | 'submitHistoryCursor'
   | 'fpsHistory'
   | 'fpsHistoryLength'
   | 'fpsHistoryNextIndex'
+  | 'fpsHistoryCursor'
   | 'gpuHistory'
   | 'gpuHistoryLength'
   | 'gpuHistoryNextIndex'
+  | 'gpuHistoryCursor'
 > & {
   readonly submitHistory: readonly number[]
   readonly fpsHistory: readonly number[]
@@ -67,25 +73,50 @@ export function captureLiveTextStats(
 ): CapturedLiveTextStats {
   const {
     submitHistory,
-    submitHistoryLength,
-    submitHistoryNextIndex,
+    submitHistoryLength: _submitHistoryLength,
+    submitHistoryNextIndex: _submitHistoryNextIndex,
+    submitHistoryCursor,
     fpsHistory,
-    fpsHistoryLength,
-    fpsHistoryNextIndex,
+    fpsHistoryLength: _fpsHistoryLength,
+    fpsHistoryNextIndex: _fpsHistoryNextIndex,
+    fpsHistoryCursor,
     gpuHistory,
-    gpuHistoryLength,
-    gpuHistoryNextIndex,
+    gpuHistoryLength: _gpuHistoryLength,
+    gpuHistoryNextIndex: _gpuHistoryNextIndex,
+    gpuHistoryCursor,
     ...scalars
   } = stats
+  const capturedSubmitHistory = snapshotCircularSeries(
+    submitHistory,
+    submitHistoryCursor.length,
+    submitHistoryCursor.nextIndex,
+  )
+  const capturedFpsHistory = snapshotCircularSeries(
+    fpsHistory,
+    fpsHistoryCursor.length,
+    fpsHistoryCursor.nextIndex,
+  )
+  const capturedGpuHistory = snapshotCircularSeries(
+    gpuHistory,
+    gpuHistoryCursor.length,
+    gpuHistoryCursor.nextIndex,
+  )
   return {
     ...scalars,
-    submitHistory: snapshotCircularSeries(
-      submitHistory,
-      submitHistoryLength,
-      submitHistoryNextIndex,
-    ),
-    fpsHistory: snapshotCircularSeries(fpsHistory, fpsHistoryLength, fpsHistoryNextIndex),
-    gpuHistory: snapshotCircularSeries(gpuHistory, gpuHistoryLength, gpuHistoryNextIndex),
+    medianSubmitMs: capturedPercentile(capturedSubmitHistory, 0.5),
+    p95SubmitMs: capturedPercentile(capturedSubmitHistory, 0.95),
+    minimumSubmitMs: capturedMinimum(capturedSubmitHistory),
+    maximumSubmitMs: capturedMaximum(capturedSubmitHistory),
+    minimumFramesPerSecond: capturedMinimum(capturedFpsHistory),
+    maximumFramesPerSecond: capturedMaximum(capturedFpsHistory),
+    gpuFrameMs: capturedGpuHistory.at(-1),
+    medianGpuMs: capturedOptionalPercentile(capturedGpuHistory, 0.5),
+    p95GpuMs: capturedOptionalPercentile(capturedGpuHistory, 0.95),
+    minimumGpuMs: capturedOptionalMinimum(capturedGpuHistory),
+    maximumGpuMs: capturedOptionalMaximum(capturedGpuHistory),
+    submitHistory: capturedSubmitHistory,
+    fpsHistory: capturedFpsHistory,
+    gpuHistory: capturedGpuHistory,
   }
 }
 
@@ -100,4 +131,33 @@ export function snapshotCircularSeries(
     snapshot[index] = values[(start + index) % values.length] ?? 0
   }
   return snapshot
+}
+
+function capturedPercentile(values: readonly number[], fraction: number): number {
+  if (values.length === 0) return 0
+  const sorted = values.toSorted((left, right) => left - right)
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)] ?? 0
+}
+
+function capturedOptionalPercentile(
+  values: readonly number[],
+  fraction: number,
+): number | undefined {
+  return values.length === 0 ? undefined : capturedPercentile(values, fraction)
+}
+
+function capturedMinimum(values: readonly number[]): number {
+  return values.length === 0 ? 0 : Math.min(...values)
+}
+
+function capturedMaximum(values: readonly number[]): number {
+  return values.length === 0 ? 0 : Math.max(...values)
+}
+
+function capturedOptionalMinimum(values: readonly number[]): number | undefined {
+  return values.length === 0 ? undefined : capturedMinimum(values)
+}
+
+function capturedOptionalMaximum(values: readonly number[]): number | undefined {
+  return values.length === 0 ? undefined : capturedMaximum(values)
 }

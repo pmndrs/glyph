@@ -8,6 +8,7 @@ export interface HarnessLocation {
   readonly technique: RasterTechnique
   readonly backend: GraphicsBackend
   readonly delivery: FontDelivery
+  readonly dpr: 1 | 2
   readonly fontFixture: SelectableFontFixture
   readonly workload: string
   readonly view: 'scene' | 'controls' | 'report' | 'export'
@@ -18,12 +19,16 @@ export const defaultLocation: HarnessLocation = {
   technique: 'bitmap',
   backend: 'webgpu',
   delivery: 'baked',
+  dpr: 1,
   fontFixture: 'inter',
   workload: 'benchmark-ipsum',
   view: 'scene',
 }
 
-export function readHarnessLocation(search: string): HarnessLocation {
+export function readHarnessLocation(
+  search: string,
+  defaultDpr: 1 | 2 = defaultLocation.dpr,
+): HarnessLocation {
   const values = new URLSearchParams(search)
   const view = values.get('view')
   const legacyTarget = values.get('target')
@@ -42,9 +47,10 @@ export function readHarnessLocation(search: string): HarnessLocation {
       legacyTarget?.endsWith('webgl2') === true ? 'webgl2' : defaultLocation.backend,
     ),
     delivery: enumValue(values.get('delivery'), ['baked', 'runtime'], defaultLocation.delivery),
+    dpr: numericEnumValue(values.get('dpr'), [1, 2], defaultDpr),
     fontFixture: enumValue(
       values.get('font'),
-      ['inter', 'source-serif-4', 'dancing-script'],
+      SELECTABLE_FONT_FIXTURE_IDS,
       defaultLocation.fontFixture,
     ),
     workload:
@@ -60,10 +66,20 @@ export function writeHarnessLocation(value: HarnessLocation): string {
   values.set('technique', value.technique)
   values.set('backend', value.backend)
   values.set('delivery', value.delivery)
+  values.set('dpr', String(value.dpr))
   values.set('font', value.fontFixture)
   values.set('workload', value.workload)
   if (value.view !== 'scene') values.set('view', value.view)
   return `?${values.toString()}`
+}
+
+function numericEnumValue<const Value extends number>(
+  value: string | null,
+  allowed: readonly Value[],
+  fallback: Value,
+): Value {
+  const numericValue = value === null ? Number.NaN : Number(value)
+  return allowed.find((candidate) => candidate === numericValue) ?? fallback
 }
 
 function legacyWorkload(scenario: string | null): string {
@@ -77,4 +93,4 @@ function enumValue<const Value extends string>(
 ): Value {
   return allowed.find((candidate) => candidate === value) ?? fallback
 }
-import type { SelectableFontFixture } from './font-fixtures'
+import { SELECTABLE_FONT_FIXTURE_IDS, type SelectableFontFixture } from './font-fixtures'

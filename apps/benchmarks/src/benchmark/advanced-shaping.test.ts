@@ -114,7 +114,7 @@ describe('advanced-shaping timeline', () => {
       sample: 0,
       durationMs: 0,
       outputBytes: 17_362,
-      hash: '314418c3',
+      hash: '51ba1d14',
       metrics: {
         caseCount: 5,
         frameCount: 68,

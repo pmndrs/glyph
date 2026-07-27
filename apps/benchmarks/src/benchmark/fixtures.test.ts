@@ -232,7 +232,7 @@ describe('advanced-shaping result', () => {
     expect(
       result.measurements.every(
         ({ hash, metrics }: { hash: string; metrics: Record<string, number> }) =>
-          hash === '314418c3' &&
+          hash === '51ba1d14' &&
           metrics.caseCount === 5 &&
           metrics.frameCount === 68 &&
           metrics.layoutBytes === 17_362 &&
