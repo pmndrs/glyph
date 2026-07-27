@@ -12,6 +12,7 @@ describe('Field', () => {
 
     expect(markup).toContain('range-shell')
     expect(markup).toContain('range-control')
+    expect(markup).toContain('min-w-0')
     expect(markup).toContain('w-full')
     expect(markup).toContain('--range-progress:0.5')
     expect(markup).not.toContain('px-2.5')

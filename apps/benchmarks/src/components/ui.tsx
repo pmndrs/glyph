@@ -72,7 +72,7 @@ export function Field({
     />
   )
   return (
-    <label className={classes('grid gap-1.5', className)}>
+    <label className={classes('grid min-w-0 gap-1.5', className)}>
       <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
       {range ? (
         <span
@@ -114,7 +114,7 @@ export function SelectField({
   readonly onChange: (value: string) => void
 }) {
   return (
-    <label className="grid gap-1.5">
+    <label className="grid min-w-0 gap-1.5">
       <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
       <select
         className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-accent"
@@ -133,7 +133,7 @@ export function TextareaField({
   ...props
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & { readonly label: string }) {
   return (
-    <label className={classes('grid gap-1.5', className)}>
+    <label className={classes('grid min-w-0 gap-1.5', className)}>
       <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
       <textarea
         className="min-h-20 min-w-0 resize-y rounded-md border border-border bg-background px-2.5 py-2 text-xs leading-relaxed text-foreground outline-none focus:border-accent"
@@ -145,20 +145,28 @@ export function TextareaField({
 
 export function Toggle({
   checked,
+  disabled = false,
   label,
   onChange,
 }: {
   readonly checked: boolean
+  readonly disabled?: boolean
   readonly label: string
   readonly onChange: (value: boolean) => void
 }) {
   return (
-    <label className="flex min-h-8 cursor-pointer items-center justify-between gap-3 text-xs text-muted">
+    <label
+      className={classes(
+        'flex min-h-8 items-center justify-between gap-3 text-xs text-muted',
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+      )}
+    >
       <span>{label}</span>
       <input
         aria-label={label}
         checked={checked}
         className="peer sr-only"
+        disabled={disabled}
         type="checkbox"
         onChange={(event) => onChange(event.currentTarget.checked)}
       />
