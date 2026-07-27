@@ -1,4 +1,7 @@
 export type {
+  BakeProgress,
+  BakeProgressListener,
+  BakeProgressPhase,
   AnyRasterBakerModule,
   BakeArtifactV0,
   RasterBakeArtifact,

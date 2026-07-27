@@ -1,7 +1,7 @@
 import type { RegisteredFont } from './font.js'
 import type { ParagraphLayout } from './layout.js'
 import type { FontHandle, FontSlot, RasterHandle, RasterKey, Sha256Hex } from './identity.js'
-import type { RasterBakeArtifact } from './bake.js'
+import type { BakeProgressListener, RasterBakeArtifact } from './bake.js'
 import type { GlyphPaint } from './paint.js'
 import type { Object3D } from 'three/webgpu'
 
@@ -81,6 +81,7 @@ interface RuntimeRasterBakeRequestBase {
   readonly fontFaceIndex: number
   readonly rasterKey: RasterKey | string
   readonly signal?: AbortSignal
+  readonly onProgress?: BakeProgressListener
 }
 
 export type RuntimeRasterBakeRequest<Options> = RuntimeRasterBakeRequestBase &

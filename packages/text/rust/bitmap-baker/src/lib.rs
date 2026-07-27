@@ -11,6 +11,7 @@ mod abi_contract;
 mod error;
 mod glb;
 mod model;
+mod progress;
 mod rasterize;
 
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
@@ -56,15 +57,23 @@ pub fn bake_bitmap(
     }
 
     let mut strikes = Vec::with_capacity(request.descriptor.strikes.len());
-    for ppem in request.descriptor.strikes.iter().copied() {
+    let progress_total = u32::from(request.glyph_count)
+        .checked_mul(u32::try_from(request.descriptor.strikes.len()).unwrap_or(u32::MAX))
+        .unwrap_or(u32::MAX);
+    for (strike_index, ppem) in request.descriptor.strikes.iter().copied().enumerate() {
         let strike = rasterize::rasterize_strike(
             source,
             request.font_face_index,
             request.glyph_count,
             ppem,
+            u32::try_from(strike_index)
+                .unwrap_or(u32::MAX)
+                .saturating_mul(u32::from(request.glyph_count)),
+            progress_total,
         )?;
         strikes.push(strike);
     }
+    progress::report(progress_total, progress_total);
     let metadata_bytes = strikes
         .iter()
         .map(|strike| strike.records.len())

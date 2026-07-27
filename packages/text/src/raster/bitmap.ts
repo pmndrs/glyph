@@ -83,6 +83,14 @@ export interface BitmapStrikeResource {
   readonly pages: readonly BitmapPageResource[]
 }
 
+export function selectBitmapStrikePpem(
+  strikes: readonly { readonly ppem: number }[],
+  cssFontSize: number,
+  rasterPixelRatio: number,
+): number {
+  return strikes[nearestBitmapStrikeIndex(strikes, cssFontSize, rasterPixelRatio)]!.ppem
+}
+
 export interface BitmapResource {
   readonly strikes: readonly BitmapStrikeResource[]
 }

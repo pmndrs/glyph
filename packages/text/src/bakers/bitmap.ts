@@ -1,4 +1,5 @@
 import type {
+  BakeProgressListener,
   RasterBakeArtifact,
   RasterBakeRequest,
   RasterBakerModule,
@@ -41,6 +42,7 @@ export interface BitmapBakerRequestV0 {
 export interface BitmapBakerCoreRequestV0 {
   readonly source: Uint8Array
   readonly request: BitmapBakerRequestV0
+  readonly onProgress?: BakeProgressListener
 }
 
 export interface BitmapBakerCore {
@@ -55,6 +57,13 @@ export interface BitmapBakerAbiV0 {
   readonly endianness: 'little'
   readonly pointerWidth: 32
   readonly memory: 'memory'
+  readonly imports: {
+    readonly progress: {
+      readonly module: 'env'
+      readonly name: 'pmndrs_text_bake_progress'
+      readonly parameters: readonly ['completed', 'total']
+    }
+  }
   readonly versions: {
     readonly generator: '0.0.0'
     readonly bitmapFormat: 0
@@ -93,7 +102,25 @@ export class BitmapBakeError extends Error {
 }
 
 export async function createBitmapBaker(source: BitmapBakerWasmSource): Promise<BitmapBakerCore> {
-  return createBitmapBakerFromInstance(await instantiateWasm(source))
+  let listener: BakeProgressListener | undefined
+  const instance = await instantiateWasm(source, {
+    env: {
+      pmndrs_text_bake_progress(completed: number, total: number) {
+        listener?.({ stage: 'raster', phase: 'rasterizing', completed, total })
+      },
+    },
+  })
+  const core = createBitmapBakerFromInstance(instance)
+  return {
+    bake(request) {
+      listener = request.onProgress
+      try {
+        return core.bake(request)
+      } finally {
+        listener = undefined
+      }
+    },
+  }
 }
 
 export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): BitmapBakerCore {
@@ -121,13 +148,14 @@ export function readBitmapBakerAbi(instance: WebAssembly.Instance): BitmapBakerA
 
 function assertBitmapBakerAbi(value: unknown): asserts value is BitmapBakerAbiV0 {
   if (!isNonArrayObject(value)) throw new TypeError('unsupported bitmap baker ABI')
-  const { versions, functions, response } = value
+  const { imports, versions, functions, response } = value
   if (
     value.name !== 'pmndrs-text-bitmap-baker' ||
     value.version !== 0 ||
     value.endianness !== 'little' ||
     value.pointerWidth !== 32 ||
     value.memory !== 'memory' ||
+    !matchesProgressImport(imports) ||
     !isNonArrayObject(versions) ||
     versions.generator !== BITMAP_GENERATOR_VERSION ||
     versions.bitmapFormat !== BITMAP_FORMAT_VERSION ||
@@ -157,6 +185,19 @@ function assertBitmapBakerAbi(value: unknown): asserts value is BitmapBakerAbiV0
   }
 }
 
+function matchesProgressImport(value: unknown): boolean {
+  if (!isNonArrayObject(value) || !isNonArrayObject(value.progress)) return false
+  const { module, name, parameters } = value.progress
+  return (
+    module === 'env' &&
+    name === 'pmndrs_text_bake_progress' &&
+    Array.isArray(parameters) &&
+    parameters.length === 2 &&
+    parameters[0] === 'completed' &&
+    parameters[1] === 'total'
+  )
+}
+
 export function bitmapBakerFromCore(
   core: BitmapBakerCore,
 ): RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptorV0> {
@@ -169,6 +210,7 @@ export function bitmapBakerFromCore(
       request.signal?.throwIfAborted()
       const result = core.bake({
         source: request.font.source,
+        ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),
         request: {
           fontFaceIndex: request.font.fontFaceIndex,
           glyphCount: request.font.glyphCount,

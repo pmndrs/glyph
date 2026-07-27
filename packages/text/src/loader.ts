@@ -20,6 +20,7 @@ import type {
   RasterSelection,
   RegisteredRaster,
 } from './raster.js'
+import type { BakeProgressListener } from './bake.js'
 
 const DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 const DEFAULT_MAX_BUFFER_VIEWS = 4_096
@@ -47,6 +48,7 @@ export interface RuntimeFontBakeRequest {
   readonly sourceUrl: string
   readonly bakedUrl?: string
   readonly signal?: AbortSignal
+  readonly onProgress?: BakeProgressListener
 }
 
 export type RuntimeFontBake = (request: RuntimeFontBakeRequest) => Promise<ArrayBufferView>

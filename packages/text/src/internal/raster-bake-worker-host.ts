@@ -8,6 +8,7 @@ import {
   type RasterBakeWorkerResultV0,
 } from './raster-bake-worker-protocol.js'
 import { SerialWorkerHost } from './serial-worker-host.js'
+import { isBakeProgressMessageV0, type BakeProgressMessageV0 } from './bake-progress-protocol.js'
 
 class RuntimeRasterBakeError extends Error {
   readonly code: string
@@ -30,7 +31,8 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
     RuntimeRasterBakeRequest<Options>,
     RasterBakeWorkerRequestV0,
     RasterBakeWorkerResultV0,
-    RasterBakeArtifact<Kind>
+    RasterBakeArtifact<Kind>,
+    BakeProgressMessageV0
   >({
     name: options.name,
     workerUrl: options.workerUrl,
@@ -69,10 +71,17 @@ export function createRasterBakeWorkerHost<Kind extends string, Options>(options
         report: response.report,
       }
     },
+    progress: {
+      isProgress: isBakeProgressMessageV0,
+      progressId: (progress) => progress.id,
+      report: (request, { stage, phase, completed, total }) =>
+        request.onProgress?.({ stage, phase, completed, total }),
+    },
   })
   return {
     kind: options.kind,
     bake(request) {
+      request.onProgress?.({ stage: 'raster', phase: 'queued', completed: 0, total: 1 })
       return host.run(request, request.signal)
     },
   }

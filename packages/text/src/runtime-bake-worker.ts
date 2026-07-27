@@ -16,6 +16,7 @@ import {
   type RuntimeBakeSuccessV0,
 } from './internal/runtime-bake-protocol.js'
 import { cacheSuccessfulPromise } from './internal/successful-promise-cache.js'
+import { bakeProgressMessage } from './internal/bake-progress-protocol.js'
 
 const scope = globalThis as unknown as DedicatedWorkerGlobalScope
 const loadCore = cacheSuccessfulPromise<FontBakeCore>(async () => {
@@ -35,12 +36,15 @@ scope.addEventListener('message', (event: MessageEvent<unknown>) => {
 
 async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
   try {
+    scope.postMessage(bakeProgressMessage(value.id, 'font', 'loading', 0, 1))
     const core = await loadCore()
+    scope.postMessage(bakeProgressMessage(value.id, 'font', 'baking', 0, 1))
     const result = core.bake({
       source: new Uint8Array(value.source),
       descriptor: value.font,
     })
     const artifact = soleCoreFontArtifact(result)
+    scope.postMessage(bakeProgressMessage(value.id, 'font', 'packaging', 0, 1))
     const artifacts: RuntimeBakeSuccessV0['artifacts'] = [
       {
         role: artifact.role,
@@ -57,6 +61,8 @@ async function handleMessage(value: RuntimeBakeRequestV0): Promise<void> {
       report: result.report,
       warnings: result.warnings,
     }
+    scope.postMessage(bakeProgressMessage(value.id, 'font', 'transferring', 0, 1))
+    scope.postMessage(bakeProgressMessage(value.id, 'font', 'complete', 1, 1))
     scope.postMessage(
       response,
       artifacts.map(({ bytes }) => bytes),

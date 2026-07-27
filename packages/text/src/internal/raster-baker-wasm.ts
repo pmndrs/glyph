@@ -100,9 +100,10 @@ const textDecoder = new TextDecoder()
 
 export async function instantiateWasm(
   source: BufferSource | WebAssembly.Module,
+  imports: WebAssembly.Imports = {},
 ): Promise<WebAssembly.Instance> {
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source)
-  return WebAssembly.instantiate(module, {})
+  return WebAssembly.instantiate(module, imports)
 }
 
 export function readEmbeddedJsonAbi(

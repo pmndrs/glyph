@@ -3,6 +3,24 @@ import type { RasterKey, Sha256Hex } from './identity.js'
 
 export type { BakeWarning, SerializedBakeError } from '@pmndrs/text-font-baker'
 
+export type BakeProgressPhase =
+  | 'queued'
+  | 'loading'
+  | 'baking'
+  | 'rasterizing'
+  | 'packaging'
+  | 'transferring'
+  | 'complete'
+
+export interface BakeProgress {
+  readonly stage: 'font' | 'raster'
+  readonly phase: BakeProgressPhase
+  readonly completed: number
+  readonly total: number
+}
+
+export type BakeProgressListener = (progress: BakeProgress) => void
+
 export interface RasterPackagingV0 {
   readonly artifact: 'embedded' | 'external'
   readonly pages: 'embedded' | 'external'
@@ -28,6 +46,7 @@ export interface RasterBakeRequest<Descriptor extends JsonValue> {
   readonly packaging: RasterPackagingV0
   readonly descriptor: Descriptor
   readonly signal?: AbortSignal
+  readonly onProgress?: BakeProgressListener
 }
 
 export interface RasterPayloadReport {

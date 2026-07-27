@@ -9,6 +9,7 @@ import {
   type RasterBakeWorkerRequestV0,
   type RasterBakeWorkerSuccessV0,
 } from './raster-bake-worker-protocol.js'
+import { bakeProgressMessage } from './bake-progress-protocol.js'
 
 type OptionsNormalizer<Options> = (value: unknown) => Options
 
@@ -32,6 +33,7 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
   request: RasterBakeWorkerRequestV0,
 ): Promise<void> {
   try {
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'loading', 0, 1))
     const descriptor = baker.descriptor(normalizeOptions(request.options))
     const result = await baker.bake({
       font: {
@@ -43,7 +45,19 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
       rasterKey: request.rasterKey,
       packaging: { artifact: 'embedded', pages: 'embedded' },
       descriptor,
+      onProgress(progress) {
+        scope.postMessage(
+          bakeProgressMessage(
+            request.id,
+            'raster',
+            progress.phase,
+            progress.completed,
+            progress.total,
+          ),
+        )
+      },
     })
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'packaging', 0, 1))
     const artifacts: RasterBakeWorkerSuccessV0['artifacts'] = result.artifacts.map((artifact) => {
       if (artifact.role === 'font') {
         throw new TypeError(`${result.kind} raster baker returned a core font artifact`)
@@ -66,6 +80,8 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
       artifacts,
       report: result.report,
     }
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'transferring', 0, 1))
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'complete', 1, 1))
     scope.postMessage(
       response,
       artifacts.map(({ bytes }) => bytes),

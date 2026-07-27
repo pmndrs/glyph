@@ -122,7 +122,9 @@ test('the raster Worker entry frees its baker result before transferring exact a
   globalThis.addEventListener = (type, value) => {
     if (type === 'message') listener = value
   }
-  globalThis.postMessage = (value, transfer) => response.resolve({ value, transfer })
+  globalThis.postMessage = (value, transfer) => {
+    if (value.type === 'bake-raster-result-v0') response.resolve({ value, transfer })
+  }
   t.after(() => {
     restoreGlobal('addEventListener', originalAddEventListener)
     restoreGlobal('postMessage', originalPostMessage)

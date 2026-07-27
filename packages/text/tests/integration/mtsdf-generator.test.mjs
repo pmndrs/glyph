@@ -14,17 +14,20 @@ import { mtsdfOracleCases } from '../fixtures/mtsdf-oracle-cases.mjs'
 const wasmUrl = new URL('../../dist/mtsdf_baker.wasm', import.meta.url)
 const abiUrl = new URL('../../dist/mtsdf-baker-abi-v1.json', import.meta.url)
 const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'))
+const progressImports = { env: { pmndrs_text_bake_progress() {} } }
 
 async function setup() {
   const bytes = await readFile(wasmUrl)
   const module = await WebAssembly.compile(bytes)
-  const instance = await WebAssembly.instantiate(module, {})
+  const instance = await WebAssembly.instantiate(module, progressImports)
   return { module, instance, generator: await createMtsdfGenerator(module) }
 }
 
-test('ships an optimized zero-import module with the exact generated ABI', async () => {
+test('ships an optimized module with the exact generated progress import and ABI', async () => {
   const { module, instance } = await setup()
-  assert.deepEqual(WebAssembly.Module.imports(module), [])
+  assert.deepEqual(WebAssembly.Module.imports(module), [
+    { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
+  ])
   assert.deepEqual(readMtsdfGeneratorAbi(instance), publishedAbi)
 })
 

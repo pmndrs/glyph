@@ -18,11 +18,12 @@ const fontUrl = new URL(
 )
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09'
 const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'))
+const progressImports = { env: { pmndrs_text_bake_progress() {} } }
 
 async function setup() {
   const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(fontUrl)])
   const module = await WebAssembly.compile(wasm)
-  const instance = await WebAssembly.instantiate(module, {})
+  const instance = await WebAssembly.instantiate(module, progressImports)
   const core = await createBitmapBaker(module)
   return { wasm, source: new Uint8Array(source), module, instance, core }
 }
@@ -44,9 +45,11 @@ async function bake(core, source, pages) {
   })
 }
 
-test('ships a zero-import optimized Wasm module with its generated ABI', async () => {
+test('ships one generated progress import with its generated ABI', async () => {
   const { module, instance } = await setup()
-  assert.deepEqual(WebAssembly.Module.imports(module), [])
+  assert.deepEqual(WebAssembly.Module.imports(module), [
+    { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
+  ])
   const embedded = readBitmapBakerAbi(instance)
   assert.deepEqual(embedded, publishedAbi)
   assert.deepEqual(embedded.versions, {
