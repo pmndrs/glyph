@@ -1,5 +1,6 @@
 use std::{string::String, vec::Vec};
 
+pub use pmndrs_text_raster_artifact::{ArtifactPackaging, PagePackaging};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{BitmapBakeError, BitmapBakeErrorCode};
@@ -10,7 +11,6 @@ pub const BITMAP_FORMAT_VERSION: u8 = 0;
 pub const BITMAP_GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BITMAP_GENERATOR_LABEL: &str =
     concat!("@pmndrs/text bitmap baker ", env!("CARGO_PKG_VERSION"));
-pub const GLYPH_RECORD_STRIDE: usize = 20;
 pub const MAX_BITMAP_PPEM: u16 = 1022;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -56,20 +56,6 @@ impl BitmapDescriptorV0 {
 pub struct BitmapPackagingV0 {
     pub artifact: ArtifactPackaging,
     pub pages: PagePackaging,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ArtifactPackaging {
-    Embedded,
-    External,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PagePackaging {
-    Embedded,
-    External,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

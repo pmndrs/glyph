@@ -41,6 +41,19 @@ impl BitmapBakeError {
     }
 }
 
+impl From<pmndrs_text_raster_artifact::RasterArtifactError> for BitmapBakeError {
+    fn from(error: pmndrs_text_raster_artifact::RasterArtifactError) -> Self {
+        use pmndrs_text_raster_artifact::RasterArtifactError;
+
+        match error {
+            RasterArtifactError::Allocation | RasterArtifactError::ArithmeticOverflow => overflow(),
+            RasterArtifactError::InvalidTexture | RasterArtifactError::Serialization => {
+                Self::new(BitmapBakeErrorCode::SerializationFailed, error)
+            }
+        }
+    }
+}
+
 pub(crate) fn overflow() -> BitmapBakeError {
     BitmapBakeError::new(
         BitmapBakeErrorCode::ArithmeticOverflow,

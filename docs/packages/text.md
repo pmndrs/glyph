@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:081d9292c9499543b9790e18812f84089bca949c32a93b9391f9ad75aad12bd5"
+source_digest: "sha256:978a1cd2b292d6c29b7b4dc7dedb87bd5473cc78c640602d4edbf6717fa731ce"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -76,7 +76,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T02:26:42Z"
+  at: "2026-07-27T03:04:17Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -101,7 +101,7 @@ The Node host rejects distinct source files that collapse onto one output path b
 
 The browser-safe `@pmndrs/text/raster/bitmap` subpath now owns bitmap generator/format constants, the exact `1..=1022` ppem V0 range, runtime validation of the non-empty static strike tuple, ascending canonical strike order, the complete generator-versioned descriptor, RFC 8785 serialization, and SHA-256 raster-key derivation. Equivalent strike sets therefore produce one identity regardless of caller order, while duplicate, non-integral, non-finite, non-positive, or out-of-range values fail before baking. The implementation uses Web Crypto and imports no Node built-ins.[^bitmap-identity]
 
-The optional `@pmndrs/text/bakers/bitmap` subpath wraps a zero-import `no_std + alloc` Wasm generator through its Rust-generated JSON ABI and direct linear-memory shim. Fontations/Skrifa owns font and outline interpretation; a small pen bridge feeds Zeno's maintained antialiased rasterizer. A deterministic shelf packer emits one dense 20-byte record per source glyph plus lossless linear R8 KTX2 pages, either embedded in the companion GLB or emitted as hashed external artifacts. Artifact and page filenames bind both `shapingHash` and `rasterKey`, preventing two fonts with the same raster configuration from overwriting one another. Glyph masks are placed as they are rasterized instead of retaining a second full-face bitmap set, fixed buffers reserve fallibly, and the atlas-compatible ppem bound rejects structurally impossible requests before font work. The bridge decodes borrowed response metadata while the allocation is live and copies only returned artifact ranges. Canonical path remapping plus Binaryen 129.0.0 `-Oz` reduces the hardened distributed module to 612,472 bytes raw, 228,219 bytes gzip, and 175,741 bytes Brotli.
+The optional `@pmndrs/text/bakers/bitmap` subpath wraps a zero-import `no_std + alloc` Wasm generator through its Rust-generated JSON ABI and direct linear-memory shim. Fontations/Skrifa owns font and outline interpretation; a small pen bridge feeds Zeno's maintained antialiased rasterizer. The dependency-light `raster-artifact` crate now owns the dense 20-byte record writer, channel-agnostic shelf atlas, lossless R8/RGBA8 KTX2 encoding, GLB framing, content hashing, and packaging enums shared by bitmap and MTSDF bakers. Bitmap output remains byte-for-byte identical after the extraction. Artifact and page filenames bind both `shapingHash` and `rasterKey`, preventing two fonts with the same raster configuration from overwriting one another. Glyph masks are placed as they are rasterized instead of retaining a second full-face bitmap set, fixed buffers reserve fallibly, and the atlas-compatible ppem bound rejects structurally impossible requests before font work. The bridge decodes borrowed response metadata while the allocation is live and copies only returned artifact ranges. Canonical path remapping plus Binaryen 129.0.0 `-Oz` produces a hardened distributed module of 621,221 bytes raw, 231,151 bytes gzip, and 177,476 bytes Brotli. The 8,749-byte raw / 1,735-byte Brotli increase buys one checked artifact implementation before a second baker consumes it; it does not enter rendering or shaping bundles.
 
 The isolated `@pmndrs/text/bakers/bitmap/validate` entry reuses the core package's strict GLB framing and pinned Khronos validator, evaluates byte-identical Draft-04 bitmap/resource schemas, parses every declared page variant with `ktx-parse` 1.1.0, and enforces reciprocal identity, exact strikes, dense records, page bounds, KTX2 dimensions/format/levels, GPU-format/feature/quality mapping, external length/hash, arithmetic limits, and GPU budgets. Rust independently parses every native-test KTX2 through `ktx2` 0.5.0. Canonical Inter source/artifact/report/record/page identities, the fixed optimized Wasm size, embedded/external parity, 65,535-glyph boundaries, generated/published ABI identity, deterministic arbitrary-font Rust fuzz smoke, and fixed-seed artifact mutation fuzz smoke are executable fixtures. The source-remapped macOS arm64 and Ubuntu x64 modules have identical lengths and exact product output but different internal function-index order, so a release hash identifies the canonical builder output rather than pretending native code generators are cross-architecture byte canonicalizers.[^bitmap-baker]
 
