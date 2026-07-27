@@ -51,7 +51,7 @@ import {
 import { ExportPanel } from './components/export-panel'
 import { InteractiveCanvas } from './components/interactive-canvas'
 import { Report } from './components/report'
-import { sparklineSampleX } from './components/sparkline'
+import { sparklineCanvasMetrics, sparklineSampleX } from './components/sparkline'
 import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
 import packageSizes from './generated/package-sizes.json'
 import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
@@ -3050,25 +3050,32 @@ function Sparkline({
     if (context === null) return
     let width = 1
     let height = 1
+    let pixelRatio = 0
     const resize = (): void => {
-      width = Math.max(1, canvas.clientWidth)
-      height = Math.max(1, canvas.clientHeight)
-      const pixelRatio = Math.max(1, window.devicePixelRatio)
-      const backingWidth = Math.max(1, Math.round(width * pixelRatio))
-      const backingHeight = Math.max(1, Math.round(height * pixelRatio))
-      if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
-        canvas.width = backingWidth
-        canvas.height = backingHeight
+      const bounds = canvas.getBoundingClientRect()
+      const metrics = sparklineCanvasMetrics(bounds.width, bounds.height, window.devicePixelRatio)
+      width = metrics.cssWidth
+      height = metrics.cssHeight
+      pixelRatio = metrics.pixelRatio
+      if (canvas.width !== metrics.backingWidth || canvas.height !== metrics.backingHeight) {
+        canvas.width = metrics.backingWidth
+        canvas.height = metrics.backingHeight
       }
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+      context.setTransform(metrics.scaleX, 0, 0, metrics.scaleY, 0, 0)
       context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`)
       context.lineWidth = 1.5
+      canvas.dataset.backingHeight = String(metrics.backingHeight)
+      canvas.dataset.backingWidth = String(metrics.backingWidth)
+      canvas.dataset.cssHeight = String(metrics.cssHeight)
+      canvas.dataset.cssWidth = String(metrics.cssWidth)
+      canvas.dataset.pixelRatio = String(metrics.pixelRatio)
     }
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(canvas)
     resize()
     let animationFrame = 0
     const draw = (): void => {
+      if (pixelRatio !== Math.max(1, window.devicePixelRatio)) resize()
       const historyLength = cursor.length
       let chartMaximum = 1
       const start = historyLength === values.length ? cursor.nextIndex : 0
