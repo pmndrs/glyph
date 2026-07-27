@@ -23,7 +23,7 @@ Status: unresolved unless marked otherwise.
 
 1. Should subsetting use Skera/Fontations, HarfBuzz subset in native tooling, or a project-owned closure pass?
 2. What deterministic outline representation feeds Slug, MSDF, and bitmap generation?
-3. Which MTSDF generator is suitable for the MSDF module's safe Rust/Wasm, deterministic output, size, and licensing requirements? `klyff_msdf` 0.1.3 is the active admission candidate, not an accepted dependency; [D-097](decision-register.md) and the [admission audit](mtsdf-generator-admission.md) define the blockers and proof required.
+3. [x] Own a purpose-built `no_std + alloc` Rust MTSDF core with pinned native `msdfgen` as its test-only oracle; [D-097](decision-register.md), the [admission conclusion](mtsdf-generator-admission.md), and [generation research](mtsdf-generation-research.md) define the boundary and proof.
 4. Does V1 bitmap rendering include TrueType hinting, or use deterministic unhinted oversampling?
 5. What are default runtime-bake glyph ranges, time limits, memory limits, and atlas limits?
 6. Can WOFF2 decoding remain out of the always-loaded shaper module and live only in the baker?

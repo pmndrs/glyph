@@ -31,6 +31,7 @@
 
 ## Rendering analysis
 
+- [MTSDF generation research](mtsdf-generation-research.md) — primary literature, implementation/license survey, owned Rust boundary, and data-oriented optimization gates.
 - [Grayscale bitmap hinting research](bitmap-hinting-research.md) — native pixel placement, hinted strikes, and four-phase grayscale packing gates.
 - [Renderer capabilities](renderer-capabilities.md) — feature matrix and developer guidance.
 - [Implementation difficulty](implementation-difficulty.md) — relative correctness and performance effort.
