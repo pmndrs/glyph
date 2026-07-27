@@ -18,7 +18,7 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
     return candidate?.dataset.technique === technique &&
       candidate.dataset.workload === 'paint-effects' &&
       numberAttribute(candidate, 'data-gpu-history-length') >= 12 &&
-      candidate.dataset.uploadFrameGpuMs !== undefined
+      candidate.dataset.uploadFrameCompleteMs !== undefined
       ? candidate
       : undefined
   })
@@ -28,6 +28,7 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
     fontLoadMs: numberAttribute(viewport, 'data-font-load-ms'),
     textReadyMs: numberAttribute(viewport, 'data-text-ready-ms'),
     firstDrawSubmitMs: numberAttribute(viewport, 'data-first-draw-ms'),
+    uploadFrameCompleteMs: numberAttribute(viewport, 'data-upload-frame-complete-ms'),
     uploadFrameGpuMs: numberAttribute(viewport, 'data-upload-frame-gpu-ms'),
     startupMs: numberAttribute(viewport, 'data-startup-ms'),
     framesPerSecond: numberAttribute(viewport, 'data-frames-per-second'),

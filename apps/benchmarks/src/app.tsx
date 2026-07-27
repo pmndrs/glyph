@@ -1096,7 +1096,8 @@ function BenchmarkSurface({
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
           <LiveCost label="Text ready" value={formatMs(stats?.textReadyMs)} />
           <LiveCost label="First draw submit" value={formatMs(stats?.firstDrawMs)} />
-          <LiveCost label="Upload + first GPU frame" value={formatMs(stats?.uploadFrameGpuMs)} />
+          <LiveCost label="Upload frame complete" value={formatMs(stats?.uploadFrameCompleteMs)} />
+          <LiveCost label="First GPU frame" value={formatMs(stats?.uploadFrameGpuMs)} />
           <LiveCost label="Total startup" value={formatMs(stats?.startupMs)} />
           <LiveCost
             label="Artifact / GPU"
@@ -1798,6 +1799,7 @@ function BitmapTextViewport({
       data-text-ready-ms={stats?.textReadyMs}
       data-first-draw-ms={stats?.firstDrawMs}
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
+      data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-startup-ms={stats?.startupMs}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
@@ -1982,6 +1984,7 @@ function MtsdfTextViewport({
       data-scale-ratio={fontSize / 64}
       data-startup-ms={stats?.startupMs}
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
+      data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-submit-history-length={stats?.submitHistoryLength}
       data-testid="mtsdf-live-viewport"
       ref={containerRef}
@@ -2211,6 +2214,7 @@ function ComparisonWorkloadViewport({
       data-testid="comparison-live-viewport"
       data-total-gpu-bytes={stats?.totalGpuBytes}
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
+      data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-workload={stats?.workload}
       data-workload-amount={
         stats === undefined ||

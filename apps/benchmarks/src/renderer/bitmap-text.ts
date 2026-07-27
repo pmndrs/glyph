@@ -126,6 +126,7 @@ export interface BitmapTextLiveStats {
   readonly textReadyMs: number
   readonly firstDrawMs: number
   readonly uploadFrameGpuMs?: number
+  readonly uploadFrameCompleteMs?: number
   readonly startupMs: number
   readonly gpuTimingSupported: boolean
   readonly gpuFrameMs: number | undefined

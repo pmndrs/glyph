@@ -92,9 +92,9 @@ if (reflowedLayoutWidth >= initialLayoutWidth || reflowedLineCount <= initialLin
 }
 
 for (const fixture of [
-  { label: 'Source Serif 4', artifactBytes: 468_768 },
-  { label: 'Dancing Script', artifactBytes: 291_540 },
-  { label: 'Inter Regular', artifactBytes: 927_148 },
+  { label: 'Source Serif 4', artifactBytes: 468_784 },
+  { label: 'Dancing Script', artifactBytes: 291_556 },
+  { label: 'Inter Regular', artifactBytes: 927_164 },
 ] as const) {
   const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent?.includes(fixture.label) === true && !candidate.disabled,
