@@ -711,34 +711,26 @@ function msdfMaterial(atlas: MsdfAtlasResource): THREE.MeshBasicNodeMaterial {
   const shadowAlpha: Node<'float'> = mul(shadowColor.a, shadowCoverage)
   const outlineAlpha: Node<'float'> = mul(outlineColor.a, outlineOnly)
   const fillAlpha: Node<'float'> = mul(fillColor.a, fillCoverage)
-  const shadowRemainder: Node<'float'> = mul(shadowAlpha, sub(1, outlineAlpha))
-  const outlineOverShadowAlpha: Node<'float'> = add(outlineAlpha, shadowRemainder)
-  const outlineOverShadowRed: Node<'float'> = add(
-    mul(outlineColor.r, outlineAlpha),
-    mul(shadowColor.r, shadowRemainder),
-  )
-  const outlineOverShadowGreen: Node<'float'> = add(
-    mul(outlineColor.g, outlineAlpha),
-    mul(shadowColor.g, shadowRemainder),
-  )
-  const outlineOverShadowBlue: Node<'float'> = add(
-    mul(outlineColor.b, outlineAlpha),
-    mul(shadowColor.b, shadowRemainder),
-  )
-  const fillRemainder: Node<'float'> = sub(1, fillAlpha)
-  const outputAlpha: Node<'float'> = add(fillAlpha, mul(outlineOverShadowAlpha, fillRemainder))
-  const outputRed: Node<'float'> = add(
+  // Fill and outlineOnly are disjoint geometric coverages. Summing them forms the complete
+  // expanded glyph silhouette; compositing outlineOnly behind fill would attenuate it twice.
+  const glyphAlpha: Node<'float'> = add(fillAlpha, outlineAlpha)
+  const glyphRed: Node<'float'> = add(
     mul(fillColor.r, fillAlpha),
-    mul(outlineOverShadowRed, fillRemainder),
+    mul(outlineColor.r, outlineAlpha),
   )
-  const outputGreen: Node<'float'> = add(
+  const glyphGreen: Node<'float'> = add(
     mul(fillColor.g, fillAlpha),
-    mul(outlineOverShadowGreen, fillRemainder),
+    mul(outlineColor.g, outlineAlpha),
   )
-  const outputBlue: Node<'float'> = add(
+  const glyphBlue: Node<'float'> = add(
     mul(fillColor.b, fillAlpha),
-    mul(outlineOverShadowBlue, fillRemainder),
+    mul(outlineColor.b, outlineAlpha),
   )
+  const shadowRemainder: Node<'float'> = mul(shadowAlpha, sub(1, glyphAlpha))
+  const outputAlpha: Node<'float'> = add(glyphAlpha, shadowRemainder)
+  const outputRed: Node<'float'> = add(glyphRed, mul(shadowColor.r, shadowRemainder))
+  const outputGreen: Node<'float'> = add(glyphGreen, mul(shadowColor.g, shadowRemainder))
+  const outputBlue: Node<'float'> = add(glyphBlue, mul(shadowColor.b, shadowRemainder))
   const safeOutputAlpha: Node<'float'> = max(outputAlpha, 1e-6)
   const outputColor: Node<'vec3'> = vec3(
     div(outputRed, safeOutputAlpha),

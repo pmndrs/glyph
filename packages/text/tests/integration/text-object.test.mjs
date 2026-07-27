@@ -28,6 +28,7 @@ test('Text commits layout and draw generations atomically', async () => {
   const layouts = []
   const text = new Text({
     text: 'office AVATAR',
+    spans: [{ start: 0, end: 6, color: 0xff0000 }],
     font,
     raster: bitmap({ strikes: [16] }),
     fontSize: 16,
@@ -46,6 +47,14 @@ test('Text commits layout and draw generations atomically', async () => {
     await text.ready
     assert.equal(text.layout, initialLayout, 'paint-only updates retain the committed layout')
     assert.equal(text.children[0], initialBatch, 'paint-only updates retain the draw batch')
+
+    text.setProperties({
+      text: 'office AVATAR',
+      spans: [{ start: 0, end: 6, color: 0x0000ff }],
+    })
+    await text.ready
+    assert.equal(text.layout, initialLayout, 'span-color updates retain the committed layout')
+    assert.equal(text.children[0], initialBatch, 'span-color updates retain the draw batch')
 
     text.setProperties({ width: 72 })
     await text.ready
