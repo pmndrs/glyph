@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   comparisonWorkloadUpdateKind,
+  dynamicLayoutWidths,
   ladderCssSizes,
   paintWordHue,
   type ComparisonWorkloadConfiguration,
@@ -51,6 +52,36 @@ describe('comparison workload updates', () => {
       }),
     ).toBe('rebuild')
     expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('rebuild')
+  })
+
+  it('rebuilds paragraph stress when its text volume changes', () => {
+    const paragraphStress = {
+      ...baseConfiguration,
+      workload: 'paragraph-stress',
+    } satisfies ComparisonWorkloadConfiguration
+
+    expect(comparisonWorkloadUpdateKind(paragraphStress, { ...paragraphStress, amount: 80 })).toBe(
+      'rebuild',
+    )
+    expect(comparisonWorkloadUpdateKind(paragraphStress, paragraphStress)).toBe('retained')
+  })
+})
+
+describe('dynamic layout animation', () => {
+  it('starts with the same phase-offset widths used by live frames', () => {
+    const configuration = {
+      ...baseConfiguration,
+      workload: 'dynamic-layout',
+    } satisfies ComparisonWorkloadConfiguration
+
+    const widths = dynamicLayoutWidths(configuration, 1_000, 0)
+    const left = widths[0]!
+    const center = widths[1]!
+    const right = widths[2]!
+
+    expect(left).toBeCloseTo(576)
+    expect(center).toBeGreaterThan(left)
+    expect(right).toBeLessThan(left)
   })
 })
 

@@ -193,6 +193,7 @@ export async function createComparisonWorkloadPreview(options: {
   let disposal: Promise<void> | undefined
   let reflowCount = 0
   let lastReflowMs = 0
+  const animationEpoch = performance.now()
   const scene = new THREE.Scene()
   const camera = createWorkloadCamera(configuration.workload, width, height)
   const telemetry = createLiveFrameTelemetry()
@@ -222,6 +223,7 @@ export async function createComparisonWorkloadPreview(options: {
         rendererViewport.pixelRatio,
         width,
         height,
+        performance.now() - animationEpoch,
       )
       const scheduledAt = performance.now()
       try {
@@ -351,10 +353,18 @@ export async function createComparisonWorkloadPreview(options: {
       if (disposed) return
       try {
         if (!closing) {
-          animateEntries(entries, configuration, timestamp, width, height, onError, (duration) => {
-            reflowCount += 1
-            lastReflowMs = duration
-          })
+          animateEntries(
+            entries,
+            configuration,
+            Math.max(0, timestamp - animationEpoch),
+            width,
+            height,
+            onError,
+            (duration) => {
+              reflowCount += 1
+              lastReflowMs = duration
+            },
+          )
         }
         const started = performance.now()
         canvasSurface.render(scene, camera)
@@ -532,6 +542,7 @@ function createEntries(
   dpr: number,
   viewportWidth: number,
   viewportHeight: number,
+  animationElapsedMs: number,
 ): readonly WorkloadEntry[] {
   const base = {
     font,
@@ -580,9 +591,11 @@ function createEntries(
     ]
   }
   if (configuration.workload === 'dynamic-layout') {
-    const initialWidth = Math.max(160, viewportWidth * configuration.layoutWidthRatio * 0.72)
+    const initialWidths = dynamicLayoutWidths(configuration, viewportWidth, animationElapsedMs)
     return DYNAMIC_LAYOUT_TEXT.map((content, index) => {
       const alignment = (['start', 'center', 'end'] as const)[index]!
+      const animationPhase = index * ((Math.PI * 2) / 3)
+      const initialWidth = initialWidths[index]!
       const text = new Text({
         ...base,
         text: content,
@@ -601,7 +614,7 @@ function createEntries(
         node,
         bounds,
         alignment,
-        animationPhase: index * ((Math.PI * 2) / 3),
+        animationPhase,
         lastWidth: initialWidth,
       }
     })
@@ -782,9 +795,12 @@ export function comparisonWorkloadUpdateKind(
   next: ComparisonWorkloadConfiguration,
   viewportChanged = false,
 ): 'rebuild' | 'retained' {
+  const paragraphVolumeChanged =
+    next.workload === 'paragraph-stress' && previous.amount !== next.amount
   return viewportChanged ||
     previous.fontSize !== next.fontSize ||
-    previous.layoutWidthRatio !== next.layoutWidthRatio
+    previous.layoutWidthRatio !== next.layoutWidthRatio ||
+    paragraphVolumeChanged
     ? 'rebuild'
     : 'retained'
 }
@@ -803,12 +819,7 @@ function animateDynamicLayout(
     entries.some(({ reflowPending }) => reflowPending === true)
   )
     return
-  const phase = timestamp * 0.00045 * animationRate(configuration)
-  const amplitude = 0.08 + (configuration.amount / 100) * 0.28
-  const baseWidth = viewportWidth * configuration.layoutWidthRatio
-  const nextWidths = entries.map((entry) =>
-    Math.max(160, baseWidth * (0.72 + Math.sin(phase + (entry.animationPhase ?? 0)) * amplitude)),
-  )
+  const nextWidths = dynamicLayoutWidths(configuration, viewportWidth, timestamp)
   if (
     entries.every(
       (entry, index) =>
@@ -835,6 +846,22 @@ function animateDynamicLayout(
       for (const entry of entries) entry.reflowPending = false
       onError(error)
     },
+  )
+}
+
+export function dynamicLayoutWidths(
+  configuration: Pick<
+    ComparisonWorkloadConfiguration,
+    'amount' | 'animationSpeed' | 'layoutWidthRatio'
+  >,
+  viewportWidth: number,
+  animationElapsedMs: number,
+): readonly number[] {
+  const phase = animationElapsedMs * 0.00045 * animationRate(configuration)
+  const amplitude = 0.08 + (configuration.amount / 100) * 0.28
+  const baseWidth = viewportWidth * configuration.layoutWidthRatio
+  return DYNAMIC_LAYOUT_TEXT.map((_, index) =>
+    Math.max(160, baseWidth * (0.72 + Math.sin(phase + index * ((Math.PI * 2) / 3)) * amplitude)),
   )
 }
 
@@ -976,7 +1003,9 @@ function hslColor(hue: number, saturation: number, lightness: number): number {
   )
 }
 
-function animationRate(configuration: ComparisonWorkloadConfiguration): number {
+function animationRate(
+  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>,
+): number {
   return 0.25 + configuration.animationSpeed * 0.0175
 }
 
