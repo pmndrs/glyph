@@ -23,6 +23,13 @@ const shaperWasm = fileURLToPath(
   ),
 )
 const distributedShaperWasm = fileURLToPath(new URL('../dist/text_shaper.wasm', import.meta.url))
+const mtsdfWasm = fileURLToPath(
+  new URL(
+    '../rust/mtsdf-baker/target/wasm32-unknown-unknown/release/pmndrs_text_mtsdf_baker.wasm',
+    import.meta.url,
+  ),
+)
+const distributedMtsdfWasm = fileURLToPath(new URL('../dist/mtsdf_baker.wasm', import.meta.url))
 
 await run(
   'cargo',
@@ -30,6 +37,20 @@ await run(
     'build',
     '--manifest-path',
     'rust/bitmap-baker/Cargo.toml',
+    '--target',
+    'wasm32-unknown-unknown',
+    '--release',
+    '--locked',
+    '--no-default-features',
+  ],
+  rustEnvironment,
+)
+await run(
+  'cargo',
+  [
+    'build',
+    '--manifest-path',
+    'rust/mtsdf-baker/Cargo.toml',
     '--target',
     'wasm32-unknown-unknown',
     '--release',
@@ -71,6 +92,14 @@ await run(wasmOpt, [
   '-o',
   distributedShaperWasm,
 ])
+await run(wasmOpt, [
+  '--enable-bulk-memory',
+  '--enable-nontrapping-float-to-int',
+  '-Oz',
+  mtsdfWasm,
+  '-o',
+  distributedMtsdfWasm,
+])
 await writeFile(
   new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url),
   await runCapture('cargo', [
@@ -91,6 +120,18 @@ await writeFile(
     'rust/shaper/Cargo.toml',
     '--bin',
     'generate-shaper-abi',
+    '--locked',
+    '--quiet',
+  ]),
+)
+await writeFile(
+  new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url),
+  await runCapture('cargo', [
+    'run',
+    '--manifest-path',
+    'rust/mtsdf-baker/Cargo.toml',
+    '--bin',
+    'generate-mtsdf-abi',
     '--locked',
     '--quiet',
   ]),

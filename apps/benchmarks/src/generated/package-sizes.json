@@ -66,6 +66,26 @@
       "brotliBytes": 202523
     },
     {
+      "id": "mtsdf-generator-js",
+      "label": "MTSDF generator host JS",
+      "status": "measured",
+      "format": "javascript",
+      "rawBytes": 10643,
+      "minifiedBytes": 7338,
+      "gzipBytes": 2525,
+      "brotliBytes": 2221
+    },
+    {
+      "id": "mtsdf-generator-wasm",
+      "label": "MTSDF generator Wasm",
+      "status": "measured",
+      "format": "wasm",
+      "rawBytes": 43940,
+      "minifiedBytes": 43940,
+      "gzipBytes": 18087,
+      "brotliBytes": 14755
+    },
+    {
       "id": "portable-baker-js",
       "label": "Portable baker JS",
       "status": "measured",

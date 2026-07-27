@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T01:29:13Z"
+  at: "2026-07-27T01:58:56Z"
 ---
 
 # Canonical implementation roadmap
@@ -579,8 +579,11 @@ Exit only when MSDF is credible as the general-purpose recommendation across the
 - [x] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence for the owned core.
 - [x] Record raw/optimized/gzip/Brotli candidate-core Wasm size through a reproducible freshness-checked package script.
 - [x] Record cold/warm full-font generation cost after the owned generator and Fontations provider are integrated; Inter produces 2,915 glyphs with an identical checksum and a current scalar-oracle median of 40.173 seconds.
+- [x] Ship the Binaryen-optimized zero-import generator and generated ABI as package resources, validate the complete nested contract in TypeScript, copy borrowed RGBA8 before request release, and pass all seven native-oracle identities plus forged ownership, malformed host input, stale allocation, and cleanup cases through that host.
+- [x] Measure the generator host and Wasm independently under reviewed size ceilings, and provide a host-labeled cold/warm seven-case benchmark command whose hashes must pass before timings publish.
+- [ ] Compare scalar, auto-vectorized, and explicit `simd128` kernels over exact quality hashes, the complete Inter pass, representative browser calls, allocation counts, and raw/optimized/gzip/Brotli size; retain one default implementation and no public toggle.
 
-The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. The implementation is repository-owned; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages. SIMD and C ABI/package integration gates remain before item 8.1 closes.
+The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. The implementation is repository-owned; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages. The scalar production boundary is integrated; the evidence-based SIMD decision remains before item 8.1 closes.
 
 ## Milestone 9 — Slug release renderer
 

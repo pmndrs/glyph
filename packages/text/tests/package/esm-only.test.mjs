@@ -22,6 +22,8 @@ test('the published contract is ESM-only', async () => {
           './package.json',
           './bitmap-baker.wasm',
           './bitmap-abi.json',
+          './mtsdf-baker.wasm',
+          './mtsdf-abi.json',
           './text-shaper.wasm',
           './shaper-abi.json',
         ].includes(subpath),
