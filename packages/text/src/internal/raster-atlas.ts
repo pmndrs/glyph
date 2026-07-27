@@ -1,10 +1,18 @@
-import { KHR_SUPERCOMPRESSION_NONE, read as readKtx2, type KTX2Container } from 'ktx-parse'
 import * as THREE from 'three/webgpu'
 
+import {
+  RasterKtxValidationError,
+  validateNativeKtx2,
+  type NativeKtx2Format,
+} from './raster-ktx.js'
+import {
+  DENSE_GLYPH_RECORD_STRIDE,
+  DenseGlyphRecordError,
+  validateDenseGlyphRecordTable,
+} from './raster-records.js'
 import type { JsonValue, RegisteredRaster } from '../raster.js'
 
-export const DENSE_GLYPH_RECORD_STRIDE = 20 as const
-export const ABSENT_GLYPH_PAGE = 0xffff as const
+export { ABSENT_GLYPH_PAGE, DENSE_GLYPH_RECORD_STRIDE } from './raster-records.js'
 
 export interface RasterAtlasPage {
   readonly width: number
@@ -12,10 +20,8 @@ export interface RasterAtlasPage {
   readonly texture: THREE.DataTexture
 }
 
-export interface LosslessAtlasFormat {
+export interface LosslessAtlasFormat extends NativeKtx2Format {
   readonly gpuFormat: string
-  readonly vkFormat: number
-  readonly bytesPerPixel: number
   readonly textureFormat: THREE.PixelFormat
   readonly generateMipmaps: boolean
   readonly minFilter: THREE.MinificationTextureFilter
@@ -55,32 +61,17 @@ export function decodeEmbeddedLosslessAtlasPage(
     throw new TypeError(`${path} uses an external page; lazy page residency is not available yet`)
   }
   const bytes = raster.view(nonnegativeSafeInteger(source.bufferView, `${path} bufferView`))
-  const container = parseKtx2(bytes, path)
-  const expectedBytes = checkedProduct(
-    checkedProduct(width, height, path),
-    format.bytesPerPixel,
-    path,
-  )
-  const level = container.levels[0]
-  if (
-    container.vkFormat !== format.vkFormat ||
-    container.typeSize !== 1 ||
-    container.pixelWidth !== width ||
-    container.pixelHeight !== height ||
-    container.pixelDepth !== 0 ||
-    container.layerCount !== 0 ||
-    container.faceCount !== 1 ||
-    container.levelCount !== 1 ||
-    container.levels.length !== 1 ||
-    container.supercompressionScheme !== KHR_SUPERCOMPRESSION_NONE ||
-    level === undefined ||
-    level.levelData.byteLength !== expectedBytes ||
-    level.uncompressedByteLength !== expectedBytes
-  ) {
-    throw new TypeError(
-      `${path} KTX2 payload does not match its declared ${format.gpuFormat} dimensions`,
-    )
+  let container
+  try {
+    container = validateNativeKtx2(bytes, width, height, format)
+  } catch (error) {
+    if (error instanceof RasterKtxValidationError) {
+      throw new TypeError(`${path} contains invalid KTX2: ${error.message}`, { cause: error })
+    }
+    throw error
   }
+  const level = container.levels[0]
+  if (level === undefined) throw new TypeError(`${path} KTX2 contains no base level`)
   const texture = new THREE.DataTexture(
     level.levelData.slice(),
     width,
@@ -101,38 +92,20 @@ export function validateDenseGlyphRecords(
   records: Uint8Array,
   pages: readonly Pick<RasterAtlasPage, 'width' | 'height'>[],
   label: string,
+  requireNonEmptyPlaneSpans = false,
 ): void {
-  const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
-  for (let offset = 0; offset < records.byteLength; offset += DENSE_GLYPH_RECORD_STRIDE) {
-    const pageIndex = view.getUint16(offset + 16, true)
-    const flags = view.getUint16(offset + 18, true)
-    if (flags !== 0) throw new TypeError(`${label} record contains unsupported flags`)
-    if (pageIndex === ABSENT_GLYPH_PAGE) {
-      if (records.subarray(offset, offset + 16).some((value) => value !== 0)) {
-        throw new TypeError(`absent ${label} record contains payload data`)
-      }
-      continue
+  try {
+    validateDenseGlyphRecordTable(
+      records,
+      pages,
+      records.byteLength / DENSE_GLYPH_RECORD_STRIDE,
+      requireNonEmptyPlaneSpans,
+    )
+  } catch (error) {
+    if (error instanceof DenseGlyphRecordError) {
+      throw new TypeError(`${label} record ${error.message}`, { cause: error })
     }
-    const page = pages[pageIndex]
-    if (page === undefined) throw new TypeError(`${label} record references a missing page`)
-    const planeLeft = view.getInt16(offset, true)
-    const planeBottom = view.getInt16(offset + 2, true)
-    const planeRight = view.getInt16(offset + 4, true)
-    const planeTop = view.getInt16(offset + 6, true)
-    const atlasLeft = view.getUint16(offset + 8, true)
-    const atlasTop = view.getUint16(offset + 10, true)
-    const atlasRight = view.getUint16(offset + 12, true)
-    const atlasBottom = view.getUint16(offset + 14, true)
-    if (
-      planeLeft > planeRight ||
-      planeBottom > planeTop ||
-      atlasLeft >= atlasRight ||
-      atlasTop >= atlasBottom ||
-      atlasRight > page.width ||
-      atlasBottom > page.height
-    ) {
-      throw new TypeError(`${label} record is outside its validated plane or atlas bounds`)
-    }
+    throw error
   }
 }
 
@@ -167,22 +140,4 @@ export function nonnegativeSafeInteger(value: JsonValue | undefined, path: strin
 
 function isJsonArray(value: JsonValue | undefined): value is readonly JsonValue[] {
   return Array.isArray(value)
-}
-
-function parseKtx2(bytes: Uint8Array, path: string): KTX2Container {
-  try {
-    return readKtx2(bytes)
-  } catch (error) {
-    throw new TypeError(`${path} contains invalid KTX2: ${errorMessage(error)}`, { cause: error })
-  }
-}
-
-function checkedProduct(left: number, right: number, path: string): number {
-  const product = left * right
-  if (!Number.isSafeInteger(product)) throw new RangeError(`${path} texture size overflowed`)
-  return product
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

@@ -1,4 +1,10 @@
-import { VK_FORMAT_R8G8B8A8_UNORM } from 'ktx-parse'
+import {
+  KHR_DF_CHANNEL_RGBSDA_ALPHA,
+  KHR_DF_CHANNEL_RGBSDA_BLUE,
+  KHR_DF_CHANNEL_RGBSDA_GREEN,
+  KHR_DF_CHANNEL_RGBSDA_RED,
+  VK_FORMAT_R8G8B8A8_UNORM,
+} from 'ktx-parse'
 import * as THREE from 'three/webgpu'
 import {
   add,
@@ -202,7 +208,15 @@ function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Msd
         {
           gpuFormat: 'rgba8unorm',
           vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
-          bytesPerPixel: 4,
+          blockWidth: 1,
+          blockHeight: 1,
+          bytesPerBlock: 4,
+          uncompressedChannelTypes: [
+            KHR_DF_CHANNEL_RGBSDA_RED,
+            KHR_DF_CHANNEL_RGBSDA_GREEN,
+            KHR_DF_CHANNEL_RGBSDA_BLUE,
+            KHR_DF_CHANNEL_RGBSDA_ALPHA,
+          ],
           textureFormat: THREE.RGBAFormat,
           generateMipmaps: true,
           minFilter: THREE.LinearMipmapLinearFilter,
@@ -211,8 +225,7 @@ function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Msd
       gpuBytes = checkedGpuBytes(gpuBytes, page)
       pages.push(page)
     }
-    validateDenseGlyphRecords(records, pages, 'MTSDF')
-    validateMtsdfPlaneSpans(records)
+    validateDenseGlyphRecords(records, pages, 'MTSDF', true)
     return {
       emSize: MTSDF_EM_SIZE,
       pixelRange: MTSDF_PIXEL_RANGE,
@@ -235,19 +248,6 @@ function validateMtsdfPageDirectory(value: JsonValue, pageIndex: number): void {
   const variant = jsonObject(variants[0], `MTSDF page ${pageIndex} variant`)
   if (variant.gpuFormat !== 'rgba8unorm') {
     throw new TypeError('MTSDF V0 pages accept only the lossless rgba8unorm baseline')
-  }
-}
-
-function validateMtsdfPlaneSpans(records: Uint8Array): void {
-  const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
-  for (let offset = 0; offset < records.byteLength; offset += RECORD_STRIDE) {
-    if (view.getUint16(offset + 16, true) === ABSENT_PAGE) continue
-    if (view.getInt16(offset, true) >= view.getInt16(offset + 4, true)) {
-      throw new TypeError('MTSDF record has an empty horizontal plane span')
-    }
-    if (view.getInt16(offset + 2, true) >= view.getInt16(offset + 6, true)) {
-      throw new TypeError('MTSDF record has an empty vertical plane span')
-    }
   }
 }
 

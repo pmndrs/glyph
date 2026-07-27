@@ -7,13 +7,11 @@ import {
   type ParsedGlb,
 } from '@pmndrs/text-font-baker/validate'
 import {
-  KHR_SUPERCOMPRESSION_NONE,
   VK_FORMAT_ASTC_4x4_UNORM_BLOCK,
   VK_FORMAT_BC4_UNORM_BLOCK,
   VK_FORMAT_EAC_R11_UNORM_BLOCK,
   VK_FORMAT_R8_UNORM,
-  read as readKtx2,
-  type KTX2Container,
+  KHR_DF_CHANNEL_RGBSDA_RED,
 } from 'ktx-parse'
 
 import bitmapSchema from './schemas/glTF.PMNDRS_font_bitmap.schema.json' with { type: 'json' }
@@ -21,6 +19,28 @@ import sourceSchema from './schemas/resourceSource.PMNDRS_font.schema.json' with
 import pagesSchema from './schemas/texturePages.PMNDRS_font.schema.json' with { type: 'json' }
 import resourceSchema from './schemas/textureResource.PMNDRS_font.schema.json' with { type: 'json' }
 import type { RasterKey, Sha256Hex } from '../identity.js'
+import {
+  RasterArtifactValidationError,
+  asArray,
+  asInteger,
+  asString,
+  checkedProduct,
+  checkedSum,
+  claimCoreRasterViews,
+  claimOtherRasterExtensionViews,
+  claimRasterView,
+  fail,
+  isSha256,
+  requireNonArrayObject,
+  resolveRasterPageSource,
+  sliceRasterView,
+  stringArray,
+  validateDenseRasterRecords,
+  validateNativeKtx2,
+  validateRasterBufferViews,
+  withSchemaId,
+  type RasterArtifactValidationIssue,
+} from '../internal/raster-artifact-validation.js'
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
@@ -30,7 +50,6 @@ import {
 } from '../raster/bitmap.js'
 
 const RECORD_STRIDE = 20
-const ABSENT_PAGE = 0xffff
 
 const BITMAP_VARIANTS = {
   r8unorm: {
@@ -38,6 +57,7 @@ const BITMAP_VARIANTS = {
     blockWidth: 1,
     blockHeight: 1,
     bytesPerBlock: 1,
+    uncompressedChannelTypes: [KHR_DF_CHANNEL_RGBSDA_RED],
     requiredFeature: undefined,
     quality: 'lossless',
   },
@@ -69,11 +89,7 @@ const BITMAP_VARIANTS = {
 
 type BitmapGpuFormat = keyof typeof BITMAP_VARIANTS
 
-export interface BitmapArtifactValidationIssue {
-  readonly code: string
-  readonly message: string
-  readonly path?: string
-}
+export type BitmapArtifactValidationIssue = RasterArtifactValidationIssue
 
 export interface BitmapArtifactValidationLimits {
   readonly maxTextureDimension2D: number
@@ -135,18 +151,20 @@ export async function validateBitmapArtifact(
   bytes: Uint8Array,
   context: BitmapArtifactValidationContext,
 ): Promise<ValidatedBitmapArtifactV0> {
-  let parsed: ParsedGlb
-  let khronos: KhronosValidationReport
   try {
-    parsed = parseGlb(bytes)
-    khronos = await validateWithKhronos(bytes, parsed.document)
+    const parsed = parseGlb(bytes)
+    const khronos = await validateWithKhronos(bytes, parsed.document)
+    return await validateBitmapSemantics(parsed, khronos, context)
   } catch (error) {
-    if (error instanceof FontArtifactValidationError) {
+    if (error instanceof BitmapArtifactValidationError) throw error
+    if (
+      error instanceof FontArtifactValidationError ||
+      error instanceof RasterArtifactValidationError
+    ) {
       throw new BitmapArtifactValidationError(error.issues)
     }
     throw error
   }
-  return validateBitmapSemantics(parsed, khronos, context)
 }
 
 async function validateBitmapSemantics(
@@ -165,7 +183,7 @@ async function validateBitmapSemantics(
   if (context.rasterKey !== expectedKey) {
     fail('RASTER_KEY', 'expected raster key does not match the canonical descriptor', '/rasterKey')
   }
-  if (!isHash(context.shapingHash)) {
+  if (!isSha256(context.shapingHash)) {
     fail('SHAPING_HASH', 'expected shaping hash must be lowercase SHA-256', '/shapingHash')
   }
   if (
@@ -194,7 +212,7 @@ async function validateBitmapSemantics(
   )
   const schemaIssues = evaluateExtensionSchema(
     extension,
-    withId(
+    withSchemaId(
       bitmapSchema,
       'extensions/PMNDRS_font_bitmap/schema/glTF.PMNDRS_font_bitmap.schema.json',
     ),
@@ -229,9 +247,17 @@ async function validateBitmapSemantics(
     )
   }
 
-  const views = validateBufferViews(parsed)
+  const views = validateRasterBufferViews(parsed, 'bitmap')
   const claimedViews = new Set<number>()
-  if (combined) claimCoreViews(extensions.PMNDRS_font, claimedViews, views.length)
+  if (combined) {
+    claimCoreRasterViews(
+      extensions.PMNDRS_font,
+      claimedViews,
+      views.length,
+      BITMAP_EXTENSION,
+      'bitmap',
+    )
+  }
   const strikeValues = asArray(extension.strikes, `/extensions/${BITMAP_EXTENSION}/strikes`)
   if (strikeValues.length !== expectedDescriptor.strikes.length) {
     fail('STRIKE_TUPLE', 'artifact does not contain the exact declared strike tuple')
@@ -268,7 +294,7 @@ async function validateBitmapSemantics(
       0,
       views.length - 1,
     )
-    claimView(claimedViews, views, recordView, `${path}/recordBufferView`)
+    claimRasterView(claimedViews, views, recordView, `${path}/recordBufferView`, 'bitmap')
     const expectedRecordBytes = checkedProduct(context.glyphCount, RECORD_STRIDE, `${path}/records`)
     if (views[recordView]?.byteLength !== expectedRecordBytes) {
       fail(
@@ -322,15 +348,16 @@ async function validateBitmapSemantics(
           )
         }
         const source = requireNonArrayObject(variant.source, `${variantPath}/source`)
-        const resource = await resolvePageSource(
+        const resource = await resolveRasterPageSource(
           source,
           variantPath,
           parsed,
           views,
           claimedViews,
-          context,
+          context.externalPages,
+          'bitmap',
         )
-        validateKtx2(resource.bytes, width, height, gpuFormat, variantPath)
+        validateNativeKtx2(resource.bytes, width, height, format, variantPath)
         if (gpuFormat === 'r8unorm') {
           baselinePage = {
             width,
@@ -350,11 +377,13 @@ async function validateBitmapSemantics(
       }
       pages.push(baselinePage)
     }
-    const records = sliceView(parsed, views[recordView]!)
-    validateRecords(records, pages, context.glyphCount, path)
+    const records = sliceRasterView(parsed, views[recordView]!)
+    validateDenseRasterRecords(records, pages, context.glyphCount, path, 'bitmap')
     strikes.push({ ppem, planeUnitsPerEm, records, pages })
   }
-  if (combined) claimOtherExtensionViews(extensions, claimedViews, views.length)
+  if (combined) {
+    claimOtherRasterExtensionViews(extensions, claimedViews, views.length, BITMAP_EXTENSION)
+  }
   if (claimedViews.size !== views.length) {
     fail(
       'BUFFER_VIEW_UNCLAIMED',
@@ -373,360 +402,10 @@ async function validateBitmapSemantics(
   }
 }
 
-interface BufferView {
-  readonly byteOffset: number
-  readonly byteLength: number
-  readonly byteStride?: unknown
-  readonly target?: unknown
-}
-
-function validateBufferViews(parsed: ParsedGlb): readonly BufferView[] {
-  const values = asArray(parsed.document.bufferViews, '/bufferViews')
-  const views = values.map((value, index) => {
-    const path = `/bufferViews/${index}`
-    const view = requireNonArrayObject(value, path)
-    if (view.buffer !== 0) fail('BUFFER_VIEW_CONTRACT', 'buffer view must reference buffer 0', path)
-    const byteOffset =
-      view.byteOffset === undefined ? 0 : asInteger(view.byteOffset, `${path}/byteOffset`, 0)
-    const byteLength = asInteger(view.byteLength, `${path}/byteLength`, 1)
-    if (byteOffset % 4 !== 0 || byteOffset > parsed.declaredBinLength - byteLength) {
-      fail('BUFFER_VIEW_RANGE', 'bitmap buffer view is misaligned or outside the BIN range', path)
-    }
-    return {
-      byteOffset,
-      byteLength,
-      ...(view.byteStride === undefined ? {} : { byteStride: view.byteStride }),
-      ...(view.target === undefined ? {} : { target: view.target }),
-    }
-  })
-  const sorted = [...views].sort((left, right) => left.byteOffset - right.byteOffset)
-  let end = 0
-  for (const view of sorted) {
-    if (view.byteOffset < end) fail('BUFFER_VIEW_OVERLAP', 'bitmap buffer views overlap')
-    if (!allZero(parsed.bin.subarray(end, view.byteOffset))) {
-      fail('BUFFER_VIEW_GAP', 'bitmap buffer-view alignment gaps must be zero')
-    }
-    end = view.byteOffset + view.byteLength
-  }
-  if (!allZero(parsed.bin.subarray(end, parsed.declaredBinLength))) {
-    fail('BUFFER_TRAILING_DATA', 'bitmap BIN has unclaimed nonzero trailing data')
-  }
-  return views
-}
-
-function validateRecords(
-  records: Uint8Array,
-  pages: readonly ValidatedBitmapPageV0[],
-  glyphCount: number,
-  path: string,
-): void {
-  const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
-  for (let glyphId = 0; glyphId < glyphCount; glyphId += 1) {
-    const offset = glyphId * RECORD_STRIDE
-    const page = view.getUint16(offset + 16, true)
-    const flags = view.getUint16(offset + 18, true)
-    if (flags !== 0)
-      fail('RECORD_FLAGS', 'bitmap V0 record flags must be zero', `${path}/records/${glyphId}`)
-    if (page === ABSENT_PAGE) {
-      if (!allZero(records.subarray(offset, offset + 16))) {
-        fail(
-          'RECORD_ABSENT_DATA',
-          'absent bitmap records must zero every field except the page sentinel',
-          `${path}/records/${glyphId}`,
-        )
-      }
-      continue
-    }
-    const resource = pages[page]
-    if (resource === undefined) {
-      fail(
-        'RECORD_PAGE',
-        'bitmap record references a missing logical page',
-        `${path}/records/${glyphId}`,
-      )
-    }
-    const planeLeft = view.getInt16(offset, true)
-    const planeBottom = view.getInt16(offset + 2, true)
-    const planeRight = view.getInt16(offset + 4, true)
-    const planeTop = view.getInt16(offset + 6, true)
-    const atlasLeft = view.getUint16(offset + 8, true)
-    const atlasTop = view.getUint16(offset + 10, true)
-    const atlasRight = view.getUint16(offset + 12, true)
-    const atlasBottom = view.getUint16(offset + 14, true)
-    if (planeLeft > planeRight || planeBottom > planeTop) {
-      fail('RECORD_PLANE_BOUNDS', 'bitmap plane bounds are inverted', `${path}/records/${glyphId}`)
-    }
-    if (
-      atlasLeft >= atlasRight ||
-      atlasTop >= atlasBottom ||
-      atlasRight > resource.width ||
-      atlasBottom > resource.height
-    ) {
-      fail(
-        'RECORD_ATLAS_BOUNDS',
-        'bitmap atlas bounds exceed their logical page',
-        `${path}/records/${glyphId}`,
-      )
-    }
-  }
-}
-
-async function resolvePageSource(
-  source: Record<string, unknown>,
-  path: string,
-  parsed: ParsedGlb,
-  views: readonly BufferView[],
-  claimedViews: Set<number>,
-  context: BitmapArtifactValidationContext,
-): Promise<{ bytes: Uint8Array; source: 'embedded' | 'external'; uri?: string }> {
-  if (source.type === 'bufferView') {
-    const viewIndex = asInteger(source.bufferView, `${path}/source/bufferView`, 0, views.length - 1)
-    claimView(claimedViews, views, viewIndex, `${path}/source/bufferView`)
-    return { bytes: sliceView(parsed, views[viewIndex]!), source: 'embedded' }
-  }
-  if (source.type === 'external') {
-    const uri = asString(source.uri, `${path}/source/uri`)
-    const bytes =
-      context.externalPages?.get(uri) ??
-      fail(
-        'EXTERNAL_PAGE_MISSING',
-        `external page ${uri} was not supplied for validation`,
-        `${path}/source/uri`,
-      )
-    if (source.byteLength !== bytes.byteLength) {
-      fail('EXTERNAL_PAGE_LENGTH', 'external page byte length does not match its directory', path)
-    }
-    const actualHash = await sha256(bytes)
-    if (source.artifactHash !== actualHash) {
-      fail('EXTERNAL_PAGE_HASH', 'external page hash does not match its directory', path)
-    }
-    return { bytes, source: 'external', uri }
-  }
-  fail('PAGE_SOURCE', 'bitmap page source must be embedded or external', path)
-}
-
-function validateKtx2(
-  bytes: Uint8Array,
-  width: number,
-  height: number,
-  gpuFormat: BitmapGpuFormat,
-  path: string,
-): void {
-  let container: KTX2Container
-  try {
-    container = readKtx2(bytes)
-  } catch (error) {
-    fail('KTX2_INVALID', error instanceof Error ? error.message : String(error), path)
-  }
-  const format = BITMAP_VARIANTS[gpuFormat]
-  const horizontalBlocks = Math.ceil(width / format.blockWidth)
-  const verticalBlocks = Math.ceil(height / format.blockHeight)
-  const expectedBytes = checkedProduct(
-    checkedProduct(horizontalBlocks, verticalBlocks, path),
-    format.bytesPerBlock,
-    path,
-  )
-  if (
-    container.vkFormat !== format.vkFormat ||
-    container.typeSize !== 1 ||
-    container.pixelWidth !== width ||
-    container.pixelHeight !== height ||
-    container.pixelDepth !== 0 ||
-    container.layerCount !== 0 ||
-    container.faceCount !== 1 ||
-    container.levelCount !== 1 ||
-    container.supercompressionScheme !== KHR_SUPERCOMPRESSION_NONE ||
-    container.levels.length !== 1 ||
-    container.levels[0]?.levelData.byteLength !== expectedBytes ||
-    container.levels[0]?.uncompressedByteLength !== expectedBytes
-  ) {
-    fail(
-      'KTX2_VARIANT',
-      'KTX2 must be an uncompressed single-level native image matching its declared dimensions and GPU format',
-      path,
-    )
-  }
-}
-
 function isBitmapGpuFormat(value: string): value is BitmapGpuFormat {
   return Object.hasOwn(BITMAP_VARIANTS, value)
 }
 
-function withId(
-  schema: Readonly<Record<string, unknown>>,
-  id: string,
-): Readonly<Record<string, unknown>> {
-  return { ...schema, $id: id }
-}
-
-function sliceView(parsed: ParsedGlb, view: BufferView): Uint8Array {
-  return parsed.bin.subarray(view.byteOffset, view.byteOffset + view.byteLength)
-}
-
-function claimView(
-  claimed: Set<number>,
-  views: readonly BufferView[],
-  index: number,
-  path: string,
-): void {
-  if (claimed.has(index))
-    fail('BUFFER_VIEW_ALIAS', 'bitmap resources must use distinct views', path)
-  const view = views[index]
-  if (view?.byteStride !== undefined || view?.target !== undefined) {
-    fail('BUFFER_VIEW_CONTRACT', 'bitmap buffer views must omit byteStride and target', path)
-  }
-  claimed.add(index)
-}
-
-function claimCoreViews(value: unknown, claimed: Set<number>, viewCount: number): void {
-  const font = requireNonArrayObject(value, '/extensions/PMNDRS_font')
-  const shaping = requireNonArrayObject(font.shaping, '/extensions/PMNDRS_font/shaping')
-  const functions = requireNonArrayObject(
-    shaping.fontFunctions,
-    '/extensions/PMNDRS_font/shaping/fontFunctions',
-  )
-  for (const [candidate, path] of [
-    [shaping.bufferView, '/extensions/PMNDRS_font/shaping/bufferView'],
-    [
-      functions.glyphExtentsBufferView,
-      '/extensions/PMNDRS_font/shaping/fontFunctions/glyphExtentsBufferView',
-    ],
-    [
-      functions.glyphExtentsAvailabilityBufferView,
-      '/extensions/PMNDRS_font/shaping/fontFunctions/glyphExtentsAvailabilityBufferView',
-    ],
-  ] as const) {
-    const index = asInteger(candidate, path, 0, viewCount - 1)
-    if (claimed.has(index))
-      fail('CORE_BUFFER_VIEW_ALIAS', 'core font buffer views must be distinct', path)
-    claimed.add(index)
-  }
-  const rasters = asArray(font.rasters, '/extensions/PMNDRS_font/rasters')
-  const matches = rasters.filter((entry) => {
-    const raster = requireNonArrayObject(entry, '/extensions/PMNDRS_font/rasters')
-    const source = requireNonArrayObject(raster.source, '/extensions/PMNDRS_font/rasters/source')
-    return raster.extension === BITMAP_EXTENSION && source.type === 'embedded'
-  })
-  if (matches.length !== 1) {
-    fail(
-      'BITMAP_DIRECTORY',
-      'combined font GLB must contain exactly one embedded bitmap directory entry',
-      '/extensions/PMNDRS_font/rasters',
-    )
-  }
-}
-
-function claimOtherExtensionViews(
-  extensions: Readonly<Record<string, unknown>>,
-  claimed: Set<number>,
-  viewCount: number,
-): void {
-  for (const [name, extension] of Object.entries(extensions)) {
-    if (name === 'PMNDRS_font' || name === BITMAP_EXTENSION) continue
-    visit(extension, `/extensions/${name}`)
-  }
-
-  function visit(value: unknown, path: string): void {
-    if (Array.isArray(value)) {
-      value.forEach((entry, index) => visit(entry, `${path}/${index}`))
-      return
-    }
-    if (typeof value !== 'object' || value === null) return
-    for (const [key, child] of Object.entries(value)) {
-      const childPath = `${path}/${key}`
-      if (key === 'bufferView' || key.endsWith('BufferView')) {
-        const index = asInteger(child, childPath, 0, viewCount - 1)
-        if (claimed.has(index)) {
-          fail(
-            'BUFFER_VIEW_ALIAS',
-            'companion extensions must own distinct buffer views',
-            childPath,
-          )
-        }
-        claimed.add(index)
-      } else {
-        visit(child, childPath)
-      }
-    }
-  }
-}
-
 function equalNumbers(left: readonly number[], right: readonly number[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index])
-}
-
-function requireNonArrayObject(value: unknown, path: string): Record<string, unknown> {
-  assertNonArrayObject(value, path)
-  return value
-}
-
-function assertNonArrayObject(
-  value: unknown,
-  path: string,
-): asserts value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    fail('TYPE_OBJECT', 'value must be an object', path)
-  }
-}
-
-function asArray(value: unknown, path: string): unknown[] {
-  if (!Array.isArray(value)) fail('TYPE_ARRAY', 'value must be an array', path)
-  return value
-}
-
-function asString(value: unknown, path: string): string {
-  if (typeof value !== 'string') fail('TYPE_STRING', 'value must be a string', path)
-  return value
-}
-
-function stringArray(value: unknown, path: string): string[] {
-  return asArray(value, path).map((entry, index) => asString(entry, `${path}/${index}`))
-}
-
-function asInteger(
-  value: unknown,
-  path: string,
-  minimum: number,
-  maximum = Number.MAX_SAFE_INTEGER,
-): number {
-  if (
-    typeof value !== 'number' ||
-    !Number.isSafeInteger(value) ||
-    value < minimum ||
-    value > maximum
-  ) {
-    fail('TYPE_INTEGER', `value must be an integer in ${minimum}..=${maximum}`, path)
-  }
-  return value
-}
-
-function checkedProduct(left: number, right: number, path: string): number {
-  const value = left * right
-  if (!Number.isSafeInteger(value)) fail('ARITHMETIC_OVERFLOW', 'integer product overflowed', path)
-  return value
-}
-
-function checkedSum(left: number, right: number, path: string): number {
-  const value = left + right
-  if (!Number.isSafeInteger(value)) fail('ARITHMETIC_OVERFLOW', 'integer sum overflowed', path)
-  return value
-}
-
-function allZero(bytes: Uint8Array): boolean {
-  return bytes.every((value) => value === 0)
-}
-
-function isHash(value: unknown): value is string {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer)
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')
-}
-
-function fail(code: string, message: string, path?: string): never {
-  throw new BitmapArtifactValidationError([
-    { code, message, ...(path === undefined ? {} : { path }) },
-  ])
 }

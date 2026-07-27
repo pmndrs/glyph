@@ -40,6 +40,10 @@
       "types": "./dist/bakers/msdf.d.ts",
       "import": "./dist/bakers/msdf.js"
     },
+    "./bakers/msdf/validate": {
+      "types": "./dist/bakers/msdf-validator.d.ts",
+      "import": "./dist/bakers/msdf-validator.js"
+    },
     "./bake": {
       "types": "./dist/node/bake.d.ts",
       "import": "./dist/node/bake.js"

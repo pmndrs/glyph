@@ -9,6 +9,10 @@ import {
   readMtsdfBakerAbi,
 } from '@pmndrs/text/bakers/msdf'
 import {
+  MtsdfArtifactValidationError,
+  validateMtsdfArtifact,
+} from '@pmndrs/text/bakers/msdf/validate'
+import {
   MSDF_EXTENSION,
   MTSDF_EM_SIZE,
   MTSDF_PIXEL_RANGE,
@@ -112,7 +116,25 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   assert.equal(extension.planeUnitsPerEm, MTSDF_PLANE_UNITS_PER_EM)
   assert.equal(extension.recordStride, 20)
   assert.equal(extension.pages.length, pages.length)
+  await exerciseArtifactValidation(result, raster, pages, rasterKey)
   await exerciseRuntime(result, raster, extension, rasterKey)
+})
+
+test('keeps the packaged MTSDF schema byte-identical to its canonical source', async () => {
+  assert.deepEqual(
+    await readFile(
+      new URL(
+        '../../../../docs/planning/extensions/PMNDRS_font_distance_field/schema/glTF.PMNDRS_font_distance_field.schema.json',
+        import.meta.url,
+      ),
+    ),
+    await readFile(
+      new URL(
+        '../../src/bakers/schemas/glTF.PMNDRS_font_distance_field.schema.json',
+        import.meta.url,
+      ),
+    ),
+  )
 })
 
 test('rejects a malformed nested artifact contract', () => {
@@ -156,6 +178,226 @@ function glbRoot(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const jsonLength = view.getUint32(12, true)
   return JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)))
+}
+
+async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts, rasterKey) {
+  const context = {
+    rasterKey,
+    shapingHash,
+    glyphCount: 2937,
+    glyphIdWidth: 16,
+    descriptor: msdfDescriptor(),
+  }
+  const externalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes]))
+  const external = await validateMtsdfArtifact(rasterArtifact.bytes, {
+    ...context,
+    externalPages,
+  })
+  assert.equal(external.khronos.validatorVersion, '2.0.0-dev.3.10')
+  assert.equal(external.khronos.issues.numErrors, 0)
+  assert.equal(external.khronos.issues.numWarnings, 0)
+  assert.equal(external.records.byteLength, 2937 * 20)
+  assert.equal(external.pages.length, result.report.pages.length)
+  assert.ok(external.pages.every(({ source }) => source === 'external'))
+
+  const embeddedBytes = embedRasterPages(rasterArtifact.bytes, pageArtifacts)
+  const embedded = await validateMtsdfArtifact(embeddedBytes, context)
+  assert.deepEqual(embedded.records, external.records)
+  assert.ok(embedded.pages.every(({ source }) => source === 'embedded'))
+  assert.deepEqual(
+    embedded.pages.map(({ bytes }) => bytes),
+    external.pages.map(({ bytes }) => bytes),
+  )
+
+  const required = [
+    'version',
+    'rasterKey',
+    'shapingHash',
+    'glyphCount',
+    'glyphIdWidth',
+    'encoding',
+    'emSize',
+    'pixelRange',
+    'planeUnitsPerEm',
+    'recordBufferView',
+    'recordStride',
+    'pages',
+  ]
+  for (const field of required) {
+    const document = structuredClone(glbRoot(embeddedBytes))
+    delete document.extensions[MSDF_EXTENSION][field]
+    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_')
+  }
+  for (const field of ['width', 'height', 'mipLevelCount', 'colorSpace', 'variants']) {
+    const document = structuredClone(glbRoot(embeddedBytes))
+    delete document.extensions[MSDF_EXTENSION].pages[0][field]
+    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_')
+  }
+  for (const field of ['source', 'container', 'gpuFormat', 'quality']) {
+    const document = structuredClone(glbRoot(embeddedBytes))
+    delete document.extensions[MSDF_EXTENSION].pages[0].variants[0][field]
+    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_')
+  }
+  for (const field of ['type', 'bufferView']) {
+    const document = structuredClone(glbRoot(embeddedBytes))
+    delete document.extensions[MSDF_EXTENSION].pages[0].variants[0].source[field]
+    await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, document), context, 'SCHEMA_')
+  }
+
+  const decoded = decodeGlb(embeddedBytes)
+  const extension = decoded.document.extensions[MSDF_EXTENSION]
+  const recordView = decoded.document.bufferViews[extension.recordBufferView]
+  const recordsStart = decoded.binStart + recordView.byteOffset
+  const present = firstPresentGlyph(embedded.records)
+
+  const wrongIdentity = structuredClone(decoded.document)
+  wrongIdentity.extensions[MSDF_EXTENSION].shapingHash = '0'.repeat(64)
+  await rejectsMtsdf(
+    rewriteGlbDocument(embeddedBytes, wrongIdentity),
+    context,
+    'RECIPROCAL_IDENTITY',
+  )
+
+  const wrongConstant = structuredClone(decoded.document)
+  wrongConstant.extensions[MSDF_EXTENSION].pixelRange = MTSDF_PIXEL_RANGE + 1
+  await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, wrongConstant), context, 'MTSDF_CONSTANTS')
+
+  const flags = embeddedBytes.slice()
+  new DataView(flags.buffer).setUint16(recordsStart + present * 20 + 18, 1, true)
+  await rejectsMtsdf(flags, context, 'RECORD_FLAGS')
+
+  const emptyPlane = embeddedBytes.slice()
+  const emptyPlaneView = new DataView(emptyPlane.buffer)
+  emptyPlaneView.setInt16(
+    recordsStart + present * 20 + 4,
+    emptyPlaneView.getInt16(recordsStart + present * 20, true),
+    true,
+  )
+  await rejectsMtsdf(emptyPlane, context, 'RECORD_PLANE_BOUNDS')
+
+  const atlasBounds = embeddedBytes.slice()
+  new DataView(atlasBounds.buffer).setUint16(recordsStart + present * 20 + 12, 0xffff, true)
+  await rejectsMtsdf(atlasBounds, context, 'RECORD_ATLAS_BOUNDS')
+
+  const duplicateVariant = structuredClone(decoded.document)
+  duplicateVariant.extensions[MSDF_EXTENSION].pages[0].variants.push(
+    structuredClone(duplicateVariant.extensions[MSDF_EXTENSION].pages[0].variants[0]),
+  )
+  await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, duplicateVariant), context, 'VARIANT_COUNT')
+
+  const pageViewIndex = extension.pages[0].variants[0].source.bufferView
+  const pageView = decoded.document.bufferViews[pageViewIndex]
+  const badKtx = embeddedBytes.slice()
+  badKtx[decoded.binStart + pageView.byteOffset] ^= 0xff
+  await rejectsMtsdf(badKtx, context, 'KTX2_INVALID')
+
+  const badDfd = embeddedBytes.slice()
+  badDfd[decoded.binStart + pageView.byteOffset + 118] = 2
+  await rejectsMtsdf(badDfd, context, 'KTX2_DFD')
+
+  await rejectsMtsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 1 } }, 'GPU_BUDGET')
+  await rejectsMtsdf(rasterArtifact.bytes, context, 'EXTERNAL_PAGE_MISSING')
+
+  const tamperedExternalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes.slice()]))
+  const firstPage = tamperedExternalPages.values().next().value
+  firstPage[firstPage.byteLength - 1] ^= 1
+  await rejectsMtsdf(
+    rasterArtifact.bytes,
+    { ...context, externalPages: tamperedExternalPages },
+    'EXTERNAL_PAGE_HASH',
+  )
+}
+
+async function rejectsMtsdf(bytes, context, codePrefix) {
+  await assert.rejects(
+    validateMtsdfArtifact(bytes, context),
+    (error) =>
+      error instanceof MtsdfArtifactValidationError &&
+      error.issues.some(({ code }) => code.startsWith(codePrefix)),
+  )
+}
+
+function embedRasterPages(rasterBytes, pageArtifacts) {
+  const { document, views } = glbViews(rasterBytes)
+  const extension = document.extensions[MSDF_EXTENSION]
+  const records = views[extension.recordBufferView]
+  assert.ok(records)
+  const embeddedDocument = structuredClone(document)
+  embeddedDocument.extensions[MSDF_EXTENSION].recordBufferView = 0
+  for (const [pageIndex, page] of embeddedDocument.extensions[MSDF_EXTENSION].pages.entries()) {
+    page.variants[0].source = { type: 'bufferView', bufferView: pageIndex + 1 }
+  }
+  return buildGlb(embeddedDocument, [records, ...pageArtifacts.map(({ bytes }) => bytes)])
+}
+
+function buildGlb(document, chunks) {
+  const bufferViews = []
+  let binLength = 0
+  for (const bytes of chunks) {
+    binLength = align4(binLength)
+    bufferViews.push({ buffer: 0, byteOffset: binLength, byteLength: bytes.byteLength })
+    binLength += bytes.byteLength
+  }
+  const declaredBinLength = binLength
+  const paddedBinLength = align4(binLength)
+  const root = structuredClone(document)
+  root.buffers = [{ byteLength: declaredBinLength }]
+  root.bufferViews = bufferViews
+  const json = new TextEncoder().encode(JSON.stringify(root))
+  const paddedJsonLength = align4(json.byteLength)
+  const output = new Uint8Array(12 + 8 + paddedJsonLength + 8 + paddedBinLength)
+  output.fill(0x20, 20, 20 + paddedJsonLength)
+  const view = new DataView(output.buffer)
+  view.setUint32(0, 0x4654_6c67, true)
+  view.setUint32(4, 2, true)
+  view.setUint32(8, output.byteLength, true)
+  view.setUint32(12, paddedJsonLength, true)
+  view.setUint32(16, 0x4e4f_534a, true)
+  output.set(json, 20)
+  const binHeader = 20 + paddedJsonLength
+  view.setUint32(binHeader, paddedBinLength, true)
+  view.setUint32(binHeader + 4, 0x004e_4942, true)
+  for (const [index, bytes] of chunks.entries()) {
+    output.set(bytes, binHeader + 8 + bufferViews[index].byteOffset)
+  }
+  return output
+}
+
+function decodeGlb(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const jsonLength = view.getUint32(12, true)
+  return {
+    document: glbRoot(bytes),
+    binStart: 20 + jsonLength + 8,
+  }
+}
+
+function rewriteGlbDocument(source, document) {
+  const view = new DataView(source.buffer, source.byteOffset, source.byteLength)
+  const oldJsonLength = view.getUint32(12, true)
+  const oldBinHeader = 20 + oldJsonLength
+  const binLength = view.getUint32(oldBinHeader, true)
+  const bin = source.subarray(oldBinHeader + 8, oldBinHeader + 8 + binLength)
+  const json = new TextEncoder().encode(JSON.stringify(document))
+  const paddedJsonLength = align4(json.byteLength)
+  const output = new Uint8Array(12 + 8 + paddedJsonLength + 8 + bin.byteLength)
+  output.fill(0x20, 20, 20 + paddedJsonLength)
+  const outputView = new DataView(output.buffer)
+  outputView.setUint32(0, 0x4654_6c67, true)
+  outputView.setUint32(4, 2, true)
+  outputView.setUint32(8, output.byteLength, true)
+  outputView.setUint32(12, paddedJsonLength, true)
+  outputView.setUint32(16, 0x4e4f_534a, true)
+  output.set(json, 20)
+  const binHeader = 20 + paddedJsonLength
+  outputView.setUint32(binHeader, bin.byteLength, true)
+  outputView.setUint32(binHeader + 4, 0x004e_4942, true)
+  output.set(bin, binHeader + 8)
+  return output
+}
+
+function align4(value) {
+  return (value + 3) & ~3
 }
 
 async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
