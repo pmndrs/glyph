@@ -1,4 +1,5 @@
 import {
+  Activity,
   Suspense,
   use,
   useEffect,
@@ -102,6 +103,11 @@ interface ConformanceView {
   readonly zoom: number
   readonly panXPercent: number
   readonly panYPercent: number
+}
+
+interface ActivityWorkloads {
+  readonly benchmark: string
+  readonly conformance: string
 }
 
 const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
@@ -332,6 +338,13 @@ function Harness() {
     }
     return value
   })
+  const [activityWorkloads, setActivityWorkloads] = useState<ActivityWorkloads>(() => {
+    const initial = readHarnessLocation(locationSearch())
+    return {
+      benchmark: initial.mode === 'benchmark' ? initial.workload : 'benchmark-ipsum',
+      conformance: initial.mode === 'conformance' ? initial.workload : 'text-accuracy',
+    }
+  })
   const [summary, setSummary] = useState<BenchmarkSummary>()
   const [event, setEvent] = useState<RunnerEvent>()
   const [liveStats, setLiveStats] = useState<LiveTextStats>()
@@ -341,12 +354,14 @@ function Harness() {
   const [samples, setSamples] = useState(3)
   const [warmup, setWarmup] = useState(1)
   const [showGrid, setShowGrid] = useState(true)
+  const [showLayoutBounds, setShowLayoutBounds] = useState(true)
   const [fontSize, setFontSize] = useState(() => defaultFontSizeForWorkload(location.workload))
   const [layoutWidthPercent, setLayoutWidthPercent] = useState(82)
   const [workloadAmount, setWorkloadAmount] = useState(50)
   const [animationEnabled, setAnimationEnabled] = useState(true)
   const [animationSpeed, setAnimationSpeed] = useState(50)
   const [paintOpacityPercent, setPaintOpacityPercent] = useState(100)
+  const [paintShadowEnabled, setPaintShadowEnabled] = useState(true)
   const [paintStrokePercent, setPaintStrokePercent] = useState(50)
   const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW)
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
@@ -365,6 +380,9 @@ function Harness() {
 
   function setLocation(next: Partial<HarnessLocation>): void {
     const value = { ...location, ...next }
+    if (next.workload !== undefined) {
+      setActivityWorkloads((current) => ({ ...current, [value.mode]: value.workload }))
+    }
     if (next.workload !== undefined && next.workload !== location.workload) {
       setFontSize(defaultFontSizeForWorkload(next.workload))
     }
@@ -386,7 +404,7 @@ function Harness() {
   function selectMode(mode: HarnessMode): void {
     setLocation({
       mode,
-      workload: mode === 'benchmark' ? 'benchmark-ipsum' : 'text-accuracy',
+      workload: activityWorkloads[mode],
       view: 'scene',
     })
   }
@@ -464,7 +482,12 @@ function Harness() {
     setShowcaseState((state) => advanceAdvancedShaping(state))
   })
   useEffect(() => {
-    if (!showcaseState.playing || showcaseState.editedText !== undefined) return
+    if (
+      location.mode !== 'benchmark' ||
+      !showcaseState.playing ||
+      showcaseState.editedText !== undefined
+    )
+      return
     let animationFrame = 0
     let lastTickAt = performance.now()
     const animate = (timestamp: number): void => {
@@ -476,7 +499,7 @@ function Harness() {
     }
     animationFrame = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(animationFrame)
-  }, [showcaseState.editedText, showcaseState.playing])
+  }, [location.mode, showcaseState.editedText, showcaseState.playing])
 
   const controls = (
     <Controls
@@ -496,10 +519,12 @@ function Harness() {
       animationEnabled={animationEnabled}
       animationSpeed={animationSpeed}
       paintOpacityPercent={paintOpacityPercent}
+      paintShadowEnabled={paintShadowEnabled}
       paintStrokePercent={paintStrokePercent}
       selectedFontFixture={fontFixture}
       samples={samples}
       showGrid={showGrid}
+      showLayoutBounds={showLayoutBounds}
       warmup={warmup}
       webgpu={environment.webgpu}
       onBackend={(backend) => setLocation({ backend })}
@@ -535,6 +560,10 @@ function Harness() {
         setPaintOpacityPercent(value)
         invalidateLiveMeasurement()
       }}
+      onPaintShadowEnabled={(value) => {
+        setPaintShadowEnabled(value)
+        invalidateLiveMeasurement()
+      }}
       onPaintStrokePercent={(value) => {
         setPaintStrokePercent(value)
         invalidateLiveMeasurement()
@@ -545,6 +574,10 @@ function Harness() {
       onSamples={setSamples}
       onShowcase={dispatchShowcase}
       onShowGrid={setShowGrid}
+      onShowLayoutBounds={(value) => {
+        setShowLayoutBounds(value)
+        invalidateLiveMeasurement()
+      }}
       onWarmup={setWarmup}
     />
   )
@@ -585,13 +618,16 @@ function Harness() {
               liveCapture={liveCapture}
               liveStats={liveStats}
               location={location}
+              activityWorkloads={activityWorkloads}
               fontSize={fontSize}
               layoutWidthPercent={layoutWidthPercent}
               workloadAmount={workloadAmount}
               animationEnabled={animationEnabled}
               animationSpeed={animationSpeed}
               paintOpacityPercent={paintOpacityPercent}
+              paintShadowEnabled={paintShadowEnabled}
               paintStrokePercent={paintStrokePercent}
+              showLayoutBounds={showLayoutBounds}
               summary={summary}
               showcaseFrame={showcaseFrame}
               onConformancePan={(deltaXPercent, deltaYPercent) =>
@@ -621,13 +657,16 @@ function Harness() {
                 liveCapture={liveCapture}
                 liveStats={liveStats}
                 location={location}
+                activityWorkloads={activityWorkloads}
                 fontSize={fontSize}
                 layoutWidthPercent={layoutWidthPercent}
                 workloadAmount={workloadAmount}
                 animationEnabled={animationEnabled}
                 animationSpeed={animationSpeed}
                 paintOpacityPercent={paintOpacityPercent}
+                paintShadowEnabled={paintShadowEnabled}
                 paintStrokePercent={paintStrokePercent}
+                showLayoutBounds={showLayoutBounds}
                 summary={summary}
                 showcaseFrame={showcaseFrame}
                 onConformancePan={(deltaXPercent, deltaYPercent) =>
@@ -857,6 +896,7 @@ function WorkloadRail({
 }
 
 function Scene({
+  activityWorkloads,
   animationEnabled,
   animationSpeed,
   conformanceView,
@@ -868,7 +908,9 @@ function Scene({
   grid,
   layoutWidthPercent,
   paintOpacityPercent,
+  paintShadowEnabled,
   paintStrokePercent,
+  showLayoutBounds,
   workloadAmount,
   liveCapture,
   liveStats,
@@ -879,6 +921,7 @@ function Scene({
   onConformanceZoom,
   onLiveStats,
 }: {
+  readonly activityWorkloads: ActivityWorkloads
   readonly animationEnabled: boolean
   readonly animationSpeed: number
   readonly conformanceView: ConformanceView
@@ -890,7 +933,9 @@ function Scene({
   readonly grid: boolean
   readonly layoutWidthPercent: number
   readonly paintOpacityPercent: number
+  readonly paintShadowEnabled: boolean
   readonly paintStrokePercent: number
+  readonly showLayoutBounds: boolean
   readonly workloadAmount: number
   readonly liveCapture: LiveBenchmarkCapture | undefined
   readonly liveStats: LiveTextStats | undefined
@@ -902,9 +947,12 @@ function Scene({
   readonly onLiveStats: (stats: LiveTextStats) => void
 }) {
   const workload = workloadById(location.mode, location.workload)
-  const workloadStatus = workload.techniques[location.technique]
+  const benchmarkWorkload = workloadById('benchmark', activityWorkloads.benchmark)
+  const benchmarkStatus = benchmarkWorkload.techniques[location.technique]
+  const conformanceWorkload = workloadById('conformance', activityWorkloads.conformance)
+  const conformanceStatus = conformanceWorkload.techniques[location.technique]
   const liveFontFixture =
-    location.workload === 'advanced-shaping'
+    benchmarkWorkload.id === 'advanced-shaping'
       ? showcaseFrame.caseDefinition.fontFixture
       : fontFixture
   return (
@@ -928,47 +976,64 @@ function Scene({
           <Chip>{dpr}× DPR</Chip>
         </div>
       </header>
-      {workloadStatus.kind === 'planned' ? (
-        <PlannedWorkloadSurface
-          milestone={workloadStatus.milestone}
-          technique={location.technique}
-          workload={workload}
-        />
-      ) : location.mode === 'benchmark' ? (
-        <BenchmarkSurface
-          animationEnabled={animationEnabled}
-          animationSpeed={animationSpeed}
-          backend={location.backend}
-          dpr={dpr}
-          fontSize={fontSize}
-          fontFixture={fontFixture}
-          grid={grid}
-          layoutWidthPercent={layoutWidthPercent}
-          paintOpacityPercent={paintOpacityPercent}
-          paintStrokePercent={paintStrokePercent}
-          workloadAmount={workloadAmount}
-          key={`${location.backend}-${String(dpr)}-${liveFontFixture}-${location.workload}`}
-          showcaseFrame={showcaseFrame}
-          stats={liveStats}
-          technique={location.technique}
-          workload={location.workload}
-          onStats={onLiveStats}
-        />
-      ) : (
-        <ConformanceSurface
-          backend={location.backend}
-          conformanceView={conformanceView}
-          dpr={dpr}
-          event={event}
-          fontFixture={fontFixture}
-          key={`${location.backend}-${String(dpr)}-${fontFixture}`}
-          summary={summary}
-          technique={location.technique}
-          workload={location.workload}
-          onPan={onConformancePan}
-          onZoom={onConformanceZoom}
-        />
-      )}
+      <Activity name="benchmark" mode={location.mode === 'benchmark' ? 'visible' : 'hidden'}>
+        <div className="contents" data-activity="benchmark">
+          {benchmarkStatus.kind === 'planned' ? (
+            <PlannedWorkloadSurface
+              milestone={benchmarkStatus.milestone}
+              technique={location.technique}
+              workload={benchmarkWorkload}
+            />
+          ) : (
+            <BenchmarkSurface
+              animationEnabled={animationEnabled}
+              animationSpeed={animationSpeed}
+              backend={location.backend}
+              dpr={dpr}
+              fontSize={fontSize}
+              fontFixture={fontFixture}
+              grid={grid}
+              layoutWidthPercent={layoutWidthPercent}
+              paintOpacityPercent={paintOpacityPercent}
+              paintShadowEnabled={paintShadowEnabled}
+              paintStrokePercent={paintStrokePercent}
+              showLayoutBounds={showLayoutBounds}
+              workloadAmount={workloadAmount}
+              key={`${location.backend}-${String(dpr)}-${liveFontFixture}-${benchmarkWorkload.id}`}
+              showcaseFrame={showcaseFrame}
+              stats={liveStats}
+              technique={location.technique}
+              workload={benchmarkWorkload.id}
+              onStats={onLiveStats}
+            />
+          )}
+        </div>
+      </Activity>
+      <Activity name="conformance" mode={location.mode === 'conformance' ? 'visible' : 'hidden'}>
+        <div className="contents" data-activity="conformance">
+          {conformanceStatus.kind === 'planned' ? (
+            <PlannedWorkloadSurface
+              milestone={conformanceStatus.milestone}
+              technique={location.technique}
+              workload={conformanceWorkload}
+            />
+          ) : (
+            <ConformanceSurface
+              backend={location.backend}
+              conformanceView={conformanceView}
+              dpr={dpr}
+              event={event}
+              fontFixture={fontFixture}
+              key={`${location.backend}-${String(dpr)}-${fontFixture}-${conformanceWorkload.id}`}
+              summary={summary}
+              technique={location.technique}
+              workload={conformanceWorkload.id}
+              onPan={onConformancePan}
+              onZoom={onConformanceZoom}
+            />
+          )}
+        </div>
+      </Activity>
       {error !== undefined && (
         <div className="rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">
           {error}
@@ -1017,7 +1082,9 @@ function BenchmarkSurface({
   grid,
   layoutWidthPercent,
   paintOpacityPercent,
+  paintShadowEnabled,
   paintStrokePercent,
+  showLayoutBounds,
   workloadAmount,
   showcaseFrame,
   stats,
@@ -1034,7 +1101,9 @@ function BenchmarkSurface({
   readonly grid: boolean
   readonly layoutWidthPercent: number
   readonly paintOpacityPercent: number
+  readonly paintShadowEnabled: boolean
   readonly paintStrokePercent: number
+  readonly showLayoutBounds: boolean
   readonly workloadAmount: number
   readonly showcaseFrame: AdvancedShapingFrame
   readonly stats: LiveTextStats | undefined
@@ -1068,7 +1137,10 @@ function BenchmarkSurface({
         timelineTick: undefined,
       }
   return (
-    <div className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3">
+    <div
+      className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3"
+      data-testid="benchmark-surface"
+    >
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-5">
         <Metric
           label="Live FPS"
@@ -1150,7 +1222,9 @@ function BenchmarkSurface({
             grid={grid}
             layoutWidthRatio={layoutWidthPercent / 100}
             paintOpacity={paintOpacityPercent / 100}
+            paintShadowEnabled={paintShadowEnabled}
             paintStrokeWidth={paintStrokePercent / 100}
+            showLayoutBounds={showLayoutBounds}
             technique={technique === 'mtsdf' ? 'mtsdf' : 'bitmap'}
             workload={comparisonWorkload}
             onStats={onStats}
@@ -1277,7 +1351,11 @@ function ConformanceSurface({
   const isSourceOutline = workload === 'cross-technique-fidelity'
 
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(360px,1fr)_auto] gap-3">
+    <div
+      className="grid min-h-0 grid-rows-[auto_minmax(360px,1fr)_auto] gap-3"
+      data-conformance-ready={String(capture !== undefined)}
+      data-testid="conformance-surface"
+    >
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
         <Metric
           label={
@@ -2025,7 +2103,9 @@ function ComparisonWorkloadViewport({
   grid,
   layoutWidthRatio,
   paintOpacity,
+  paintShadowEnabled,
   paintStrokeWidth,
+  showLayoutBounds,
   technique,
   workload,
   onStats,
@@ -2040,7 +2120,9 @@ function ComparisonWorkloadViewport({
   readonly grid: boolean
   readonly layoutWidthRatio: number
   readonly paintOpacity: number
+  readonly paintShadowEnabled: boolean
   readonly paintStrokeWidth: number
+  readonly showLayoutBounds: boolean
   readonly technique: 'bitmap' | 'mtsdf'
   readonly workload: ComparisonWorkloadId
   readonly onStats: (stats: LiveTextStats) => void
@@ -2076,7 +2158,9 @@ function ComparisonWorkloadViewport({
     fontSize: fontSize / dpr,
     layoutWidthRatio,
     paintOpacity,
+    paintShadowEnabled,
     paintStrokeWidth,
+    showLayoutBounds,
     workload,
   }))
 
@@ -2151,7 +2235,9 @@ function ComparisonWorkloadViewport({
     fontSize,
     layoutWidthRatio,
     paintOpacity,
+    paintShadowEnabled,
     paintStrokeWidth,
+    showLayoutBounds,
     workload,
   ])
 
@@ -2201,8 +2287,18 @@ function ComparisonWorkloadViewport({
       data-paint-opacity={
         stats?.workload === 'paint-effects' ? stats.appliedPaintOpacity : undefined
       }
+      data-paint-shadow-enabled={
+        stats?.workload === 'paint-effects' ? String(stats.appliedPaintShadowEnabled) : undefined
+      }
       data-paint-stroke-width={
         stats?.workload === 'paint-effects' ? stats.appliedPaintStrokeWidth : undefined
+      }
+      data-paint-revision={stats?.workload === 'paint-effects' ? stats.paintRevision : undefined}
+      data-paint-update-ms={
+        stats?.workload === 'paint-effects' ? stats.lastPaintUpdateMs : undefined
+      }
+      data-layout-bounds-visible={
+        stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined
       }
       data-reflow-count={stats?.reflowCount}
       data-reflow-ms={stats?.lastReflowMs}
@@ -2342,6 +2438,7 @@ function Controls({
   fontSize,
   layoutWidthPercent,
   paintOpacityPercent,
+  paintShadowEnabled,
   paintStrokePercent,
   selectedFontFixture,
   workloadAmount,
@@ -2352,6 +2449,7 @@ function Controls({
   showcaseFrame,
   showcaseState,
   showGrid,
+  showLayoutBounds,
   warmup,
   webgpu,
   onBackend,
@@ -2363,12 +2461,14 @@ function Controls({
   onFontSize,
   onLayoutWidthPercent,
   onPaintOpacityPercent,
+  onPaintShadowEnabled,
   onPaintStrokePercent,
   onSelectedFontFixture,
   onWorkloadAmount,
   onSamples,
   onShowcase,
   onShowGrid,
+  onShowLayoutBounds,
   onWarmup,
 }: {
   readonly animationEnabled: boolean
@@ -2381,6 +2481,7 @@ function Controls({
   readonly fontSize: number
   readonly layoutWidthPercent: number
   readonly paintOpacityPercent: number
+  readonly paintShadowEnabled: boolean
   readonly paintStrokePercent: number
   readonly selectedFontFixture: SelectableFontFixture
   readonly workloadAmount: number
@@ -2391,6 +2492,7 @@ function Controls({
   readonly showcaseFrame: AdvancedShapingFrame
   readonly showcaseState: AdvancedShapingState
   readonly showGrid: boolean
+  readonly showLayoutBounds: boolean
   readonly warmup: number
   readonly webgpu: boolean
   readonly onBackend: (backend: GraphicsBackend) => void
@@ -2402,16 +2504,18 @@ function Controls({
   readonly onFontSize: (value: number) => void
   readonly onLayoutWidthPercent: (value: number) => void
   readonly onPaintOpacityPercent: (value: number) => void
+  readonly onPaintShadowEnabled: (value: boolean) => void
   readonly onPaintStrokePercent: (value: number) => void
   readonly onSelectedFontFixture: (value: SelectableFontFixture) => void
   readonly onWorkloadAmount: (value: number) => void
   readonly onSamples: (value: number) => void
   readonly onShowcase: (command: AdvancedShapingCommand) => void
   readonly onShowGrid: (value: boolean) => void
+  readonly onShowLayoutBounds: (value: boolean) => void
   readonly onWarmup: (value: number) => void
 }) {
   return (
-    <section className="grid gap-4" data-testid="controls">
+    <section className="grid min-w-0 gap-4 [&>*]:min-w-0" data-testid="controls">
       <div>
         <p className="eyebrow">Inspection controls</p>
         <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
@@ -2533,6 +2637,13 @@ function Controls({
               />
             </>
           )}
+          {workload === 'dynamic-layout' && (
+            <Toggle
+              checked={showLayoutBounds}
+              label="Show layout bounds"
+              onChange={onShowLayoutBounds}
+            />
+          )}
           {workload === 'paint-effects' && (
             <>
               <Field
@@ -2557,6 +2668,12 @@ function Controls({
                 type="range"
                 value={technique === 'mtsdf' ? paintStrokePercent : 0}
                 onChange={(event) => onPaintStrokePercent(event.currentTarget.valueAsNumber)}
+              />
+              <Toggle
+                checked={technique === 'mtsdf' && paintShadowEnabled}
+                disabled={technique !== 'mtsdf'}
+                label={technique === 'mtsdf' ? 'Shadow' : 'Shadow · unavailable for bitmap'}
+                onChange={onPaintShadowEnabled}
               />
             </>
           )}

@@ -48,17 +48,32 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
       if (numericAttribute(viewport, 'data-reflow-ms') <= 0) {
         throw new Error('Dynamic layout did not publish a measured asynchronous reflow')
       }
+      const boundsRevision = numericAttribute(viewport, 'data-configuration-revision')
+      setCheckbox('Show layout bounds', false)
+      await waitForAttribute(viewport, 'data-layout-bounds-visible', 'false')
+      await waitForGreaterAttribute(viewport, 'data-configuration-revision', boundsRevision)
+      setCheckbox('Show layout bounds', true)
+      await waitForAttribute(viewport, 'data-layout-bounds-visible', 'true')
     }
 
     if (workload.id === 'paint-effects') {
+      const paintRevision = numericAttribute(viewport, 'data-paint-revision')
+      const layoutWidth = numericAttribute(viewport, 'data-layout-width')
+      const reflowCount = numericAttribute(viewport, 'data-reflow-count')
       const revision = numericAttribute(viewport, 'data-configuration-revision')
       const opacity = setDifferentRange('Opacity', 68)
       await waitForAttribute(viewport, 'data-paint-opacity', String(opacity / 100))
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', revision)
       const stroke = rangeControl('Stroke width')
+      const shadow = checkboxControl(
+        technique === 'mtsdf' ? 'Shadow' : 'Shadow · unavailable for bitmap',
+      )
       if (technique === 'bitmap') {
         if (!stroke.disabled || stroke.value !== '0') {
           throw new Error('Bitmap Paint & Effects exposed an active stroke control')
+        }
+        if (!shadow.disabled || shadow.checked) {
+          throw new Error('Bitmap Paint & Effects exposed an active shadow control')
         }
       } else {
         if (stroke.disabled) throw new Error('MSDF Paint & Effects disabled its stroke control')
@@ -66,11 +81,46 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
         setRange('Stroke width', 61)
         await waitForAttribute(viewport, 'data-paint-stroke-width', '0.61')
         await waitForGreaterAttribute(viewport, 'data-configuration-revision', strokeRevision)
+        if (shadow.disabled || !shadow.checked) {
+          throw new Error('MSDF Paint & Effects did not initialize its shadow')
+        }
+        setCheckbox('Shadow', false)
+        await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false')
+        setCheckbox('Shadow', true)
+        await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'true')
+      }
+      await waitForGreaterAttribute(viewport, 'data-paint-revision', paintRevision)
+      if (
+        numericAttribute(viewport, 'data-layout-width') !== layoutWidth ||
+        numericAttribute(viewport, 'data-reflow-count') !== reflowCount
+      ) {
+        throw new Error('Paint animation triggered layout work instead of an in-place paint update')
       }
     }
     console.log('comparison-workload-ready', technique, workload.id)
   }
 }
+
+const activePaintViewport = await waitForReadyViewport('mtsdf', 'paint-effects')
+await clickButton('conformance', true)
+const benchmarkActivity = await waitForActivityVisibility('benchmark', false)
+const hiddenPaintRevision = numericAttribute(activePaintViewport, 'data-paint-revision')
+await waitForConformanceCapture()
+if (numericAttribute(activePaintViewport, 'data-paint-revision') !== hiddenPaintRevision) {
+  throw new Error('Hidden Benchmark Activity continued its paint animation loop')
+}
+await clickButton('benchmark', true)
+await waitForActivityVisibility('benchmark', true)
+const resumedPaintViewport = await waitForReadyViewport('mtsdf', 'paint-effects')
+await waitForGreaterAttribute(
+  resumedPaintViewport,
+  'data-paint-revision',
+  numericAttribute(resumedPaintViewport, 'data-paint-revision'),
+)
+if (getComputedStyle(benchmarkActivity).display === 'none') {
+  throw new Error('Benchmark Activity did not become visible after resuming')
+}
+console.log('activity-lifecycle-ready')
 
 console.log('comparison-workloads-ready', JSON.stringify({ techniques: 2, workloads: 5 }))
 
@@ -134,11 +184,35 @@ function setDifferentRange(label: string, preferred: number): number {
 }
 
 function setCheckbox(label: string, checked: boolean): void {
+  const control = checkboxControl(label)
+  if (control.checked !== checked) control.click()
+}
+
+function checkboxControl(label: string): HTMLInputElement {
   const control = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(
     (candidate) => candidate.getAttribute('aria-label') === label,
   )
   if (control === undefined) throw new Error(`${label} checkbox is unavailable`)
-  if (control.checked !== checked) control.click()
+  return control
+}
+
+function waitForActivityVisibility(name: string, visible: boolean): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined => {
+    const activity = document.querySelector<HTMLElement>(`[data-activity="${name}"]`)
+    if (activity === null) return undefined
+    return (getComputedStyle(activity).display !== 'none') === visible ? activity : undefined
+  }
+  const current = find()
+  return current === undefined ? observeDocument(find) : Promise.resolve(current)
+}
+
+function waitForConformanceCapture(): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined =>
+    document.querySelector<HTMLElement>(
+      '[data-testid="conformance-surface"][data-conformance-ready="true"]',
+    ) ?? undefined
+  const current = find()
+  return current === undefined ? observeDocument(find) : Promise.resolve(current)
 }
 
 function readyViewport(technique: 'bitmap' | 'mtsdf', workload: string): HTMLElement | undefined {

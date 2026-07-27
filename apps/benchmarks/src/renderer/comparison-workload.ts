@@ -28,9 +28,13 @@ export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats)
   readonly appliedFontSize: number
   readonly appliedLayoutWidthRatio: number
   readonly appliedPaintOpacity: number
+  readonly appliedPaintShadowEnabled: boolean
   readonly appliedPaintStrokeWidth: number
+  readonly appliedShowLayoutBounds: boolean
   readonly reflowCount: number
   readonly lastReflowMs: number
+  readonly paintRevision: number
+  readonly lastPaintUpdateMs: number
 }
 
 export interface ComparisonWorkloadConfiguration {
@@ -41,7 +45,9 @@ export interface ComparisonWorkloadConfiguration {
   readonly fontFixture: BenchmarkFontFixture
   readonly layoutWidthRatio: number
   readonly paintOpacity: number
+  readonly paintShadowEnabled: boolean
   readonly paintStrokeWidth: number
+  readonly showLayoutBounds: boolean
   readonly workload: ComparisonWorkloadId
 }
 
@@ -56,10 +62,15 @@ export interface ComparisonWorkloadPreview {
 interface WorkloadEntry {
   readonly node: THREE.Object3D
   readonly text: Text
+  readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>
   readonly role: 'primary' | 'secondary'
   readonly alignment?: 'start' | 'center' | 'end'
   readonly animationPhase?: number
   lastPaintFrame?: number
+  paintRevision?: number
+  lastPaintUpdateMs?: number
+  paintOutlineWidth?: number
+  paintShadowOffset?: readonly [number, number]
   lastWidth?: number
   reflowPending?: boolean
 }
@@ -79,11 +90,15 @@ const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.'
 const LADDER_GAP_CSS_PX = 10
 const LADDER_INSET_CSS_PX = 20
 const PAINT_EFFECTS_TEXT =
-  'Chromatic type moves through every word as color, opacity, and contour remain live at full paragraph scale.'
+  'Color begins as light, then the human eye turns wavelength into sensation. Our cones negotiate red, green, and blue while the brain invents every violet, amber, and electric cyan between them. Here each word carries its own chromatic phase, flowing through a continuous spectrum while opacity and contour remain live.'
+const PAINT_WORD_RANGES = Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match) => ({
+  start: match.index,
+  end: match.index + match[0].length,
+}))
 const DYNAMIC_LAYOUT_TEXT = [
-  'Left aligned text narrows and opens while every line is reshaped into its changing measure.',
-  'Centered paragraphs breathe independently, preserving rhythm as their containers move.',
-  'Right aligned lines reflow on their own cadence and stay anchored to the far edge.',
+  'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Left-aligned lines narrow and open while every word reshapes into its changing measure.',
+  'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. This centered paragraph breathes independently while preserving its typographic rhythm.',
+  'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris. Right-aligned lines reflow on their own cadence and remain anchored to the far edge.',
 ] as const
 
 export async function createComparisonWorkloadPreview(options: {
@@ -98,7 +113,9 @@ export async function createComparisonWorkloadPreview(options: {
   readonly height: number
   readonly layoutWidthRatio: number
   readonly paintOpacity: number
+  readonly paintShadowEnabled: boolean
   readonly paintStrokeWidth: number
+  readonly showLayoutBounds: boolean
   readonly signal?: AbortSignal
   readonly technique: Exclude<RasterTechnique, 'slug'>
   readonly width: number
@@ -264,9 +281,19 @@ export async function createComparisonWorkloadPreview(options: {
           appliedFontSize: configuration.fontSize,
           appliedLayoutWidthRatio: configuration.layoutWidthRatio,
           appliedPaintOpacity: configuration.paintOpacity,
+          appliedPaintShadowEnabled: technique === 'mtsdf' && configuration.paintShadowEnabled,
           appliedPaintStrokeWidth: technique === 'mtsdf' ? configuration.paintStrokeWidth : 0,
+          appliedShowLayoutBounds: configuration.showLayoutBounds,
           reflowCount,
           lastReflowMs,
+          paintRevision: entries.reduce(
+            (maximum, entry) => Math.max(maximum, entry.paintRevision ?? 0),
+            0,
+          ),
+          lastPaintUpdateMs: entries.reduce(
+            (maximum, entry) => Math.max(maximum, entry.lastPaintUpdateMs ?? 0),
+            0,
+          ),
         }
         if (technique === 'bitmap') {
           onStats({
@@ -363,24 +390,31 @@ function createEntries(
   }
   if (configuration.workload === 'paint-effects') {
     const maximumOutlineWidth = configuration.fontSize / 16
+    const paintOutlineWidth =
+      technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined
+    const paintShadowOffset =
+      technique === 'mtsdf' && configuration.paintShadowEnabled
+        ? ([
+            Math.max(1, configuration.fontSize / 12),
+            Math.max(1, configuration.fontSize / 12),
+          ] as const)
+        : undefined
     const text = new Text({
       ...base,
       text: PAINT_EFFECTS_TEXT,
-      spans: paintSpans(0, configuration.amount),
+      spans: paintSpans(0, configuration.amount, paintOutlineWidth, paintShadowOffset),
       fontSize: configuration.fontSize,
       opacity: configuration.paintOpacity,
       width: Math.max(160, viewportWidth * configuration.layoutWidthRatio),
       wrap: 'word',
-      ...(technique === 'mtsdf' && configuration.paintStrokeWidth > 0
-        ? {
-            outline: {
-              color: 0xffffff,
-              width: maximumOutlineWidth * configuration.paintStrokeWidth,
-            },
-          }
-        : {}),
     })
-    return [textEntry('primary', text)]
+    return [
+      {
+        ...textEntry('primary', text),
+        ...(paintOutlineWidth === undefined ? {} : { paintOutlineWidth }),
+        ...(paintShadowOffset === undefined ? {} : { paintShadowOffset }),
+      },
+    ]
   }
   if (configuration.workload === 'dynamic-layout') {
     const initialWidth = Math.max(160, viewportWidth * configuration.layoutWidthRatio * 0.72)
@@ -395,8 +429,14 @@ function createEntries(
         wrap: 'word',
         textAlign: alignment,
       })
+      const bounds = createLayoutBounds()
+      bounds.visible = configuration.showLayoutBounds
+      const node = new THREE.Group()
+      node.add(bounds, text)
       return {
         ...textEntry(index === 0 ? 'primary' : 'secondary', text),
+        node,
+        bounds,
         alignment,
         animationPhase: index * ((Math.PI * 2) / 3),
         lastWidth: initialWidth,
@@ -522,10 +562,19 @@ function animatePaint(
   const paintFrame = Math.floor(timestamp / 16)
   if (entry.lastPaintFrame === paintFrame) return
   entry.lastPaintFrame = paintFrame
+  const started = performance.now()
+  // Identical text and shaping-span ranges keep Text on its synchronous paint-only batch path.
   entry.text.setProperties({
     text: PAINT_EFFECTS_TEXT,
-    spans: paintSpans(timestamp * 0.00004 * animationRate(configuration), configuration.amount),
+    spans: paintSpans(
+      timestamp * 0.0002 * animationRate(configuration),
+      configuration.amount,
+      entry.paintOutlineWidth,
+      entry.paintShadowOffset,
+    ),
   })
+  entry.paintRevision = (entry.paintRevision ?? 0) + 1
+  entry.lastPaintUpdateMs = performance.now() - started
 }
 
 function animateDynamicLayout(
@@ -583,16 +632,108 @@ function layoutDynamicEntries(
           : inset
     const y = index * laneHeight + Math.max(inset, (laneHeight - layout.height) / 2)
     entry.text.position.set(x, -y, 0)
+    if (entry.bounds !== undefined)
+      updateLayoutBounds(entry.bounds, x, y, layout.width, layout.height)
   }
 }
 
-function paintSpans(phase: number, amount: number): readonly TextSpan[] {
-  const spread = 0.12 + (amount / 100) * 0.72
-  return Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match, index) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-    color: hslColor((phase + index * spread) % 1, 0.82, 0.62),
-  }))
+function createLayoutBounds(): THREE.LineSegments<
+  THREE.BufferGeometry,
+  THREE.LineBasicNodeMaterial
+> {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3))
+  const material = new THREE.LineBasicNodeMaterial({
+    color: 0xb6bac3,
+    depthTest: false,
+    depthWrite: false,
+    opacity: 0.55,
+    transparent: true,
+  })
+  return new THREE.LineSegments(geometry, material)
+}
+
+function updateLayoutBounds(
+  bounds: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const positions = bounds.geometry.getAttribute('position')
+  const right = x + width
+  const bottom = -(y + height)
+  const top = -y
+  const vertices = [
+    x,
+    top,
+    0,
+    right,
+    top,
+    0,
+    right,
+    top,
+    0,
+    right,
+    bottom,
+    0,
+    right,
+    bottom,
+    0,
+    x,
+    bottom,
+    0,
+    x,
+    bottom,
+    0,
+    x,
+    top,
+    0,
+  ]
+  if (!(positions.array instanceof Float32Array)) {
+    throw new TypeError('dynamic layout bounds require a Float32 position buffer')
+  }
+  positions.array.set(vertices)
+  positions.needsUpdate = true
+  bounds.geometry.computeBoundingSphere()
+}
+
+function paintSpans(
+  phase: number,
+  amount: number,
+  outlineWidth?: number,
+  shadowOffset?: readonly [number, number],
+): readonly TextSpan[] {
+  return PAINT_WORD_RANGES.map((range, index) => {
+    const hue = paintWordHue(index, PAINT_WORD_RANGES.length, phase, amount)
+    return {
+      ...range,
+      color: hslColor(hue, 0.88, 0.53),
+      ...(outlineWidth === undefined || outlineWidth === 0
+        ? {}
+        : { outline: { color: 0xffffff, width: outlineWidth } }),
+      ...(shadowOffset === undefined
+        ? {}
+        : { shadow: { color: hslColor(hue, 0.72, 0.16), offset: shadowOffset } }),
+    }
+  })
+}
+
+export function paintWordHue(
+  wordIndex: number,
+  wordCount: number,
+  phase: number,
+  amount: number,
+): number {
+  if (!Number.isSafeInteger(wordIndex) || wordIndex < 0 || wordIndex >= wordCount) {
+    throw new RangeError('paint word index must address the word sequence')
+  }
+  if (!Number.isSafeInteger(wordCount) || wordCount <= 0) {
+    throw new RangeError('paint word count must be a positive safe integer')
+  }
+  const cycles = 0.5 + (amount / 100) * 1.5
+  const hue = phase + (wordIndex / wordCount) * cycles
+  return ((hue % 1) + 1) % 1
 }
 
 function hslColor(hue: number, saturation: number, lightness: number): number {
@@ -685,6 +826,12 @@ function validateConfiguration(
   ) {
     throw new RangeError('comparison workload paint stroke width must be in [0, 1]')
   }
+  if (typeof configuration.showLayoutBounds !== 'boolean') {
+    throw new TypeError('comparison workload layout-bounds visibility must be boolean')
+  }
+  if (typeof configuration.paintShadowEnabled !== 'boolean') {
+    throw new TypeError('comparison workload shadow visibility must be boolean')
+  }
   return configuration
 }
 
@@ -695,7 +842,11 @@ function committedLayout(text: Text): ParagraphLayout {
 }
 
 function disposeEntries(entries: readonly WorkloadEntry[]): void {
-  for (const { text } of entries) text.dispose()
+  for (const { bounds, text } of entries) {
+    text.dispose()
+    bounds?.geometry.dispose()
+    bounds?.material.dispose()
+  }
 }
 
 function renderedGlyphCount(object: THREE.Object3D): number {
