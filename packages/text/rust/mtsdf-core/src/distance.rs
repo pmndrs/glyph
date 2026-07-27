@@ -39,7 +39,7 @@ impl Distance4 {
     pub(crate) fn evaluate(
         point: Point,
         edges: &EdgeSoa,
-        units_per_em: f32,
+        full_distance_range: f32,
         contours: &mut [ContourDistance],
     ) -> Self {
         for contour in &mut *contours {
@@ -78,7 +78,7 @@ impl Distance4 {
                 *lane = -*lane;
             }
         }
-        let normalize = |distance: f32| clamp_unit(distance / units_per_em + 0.5);
+        let normalize = |distance: f32| clamp_unit(distance / full_distance_range + 0.5);
         Self {
             lanes: signed.lanes.map(normalize),
         }

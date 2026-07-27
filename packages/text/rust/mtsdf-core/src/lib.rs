@@ -42,6 +42,36 @@ pub struct AtlasRegion {
     pub padding_y: usize,
 }
 
+/// Fixed sampling transform for an atlas region.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MtsdfTransform {
+    bounds: Bounds,
+    full_distance_range: f32,
+}
+
+impl MtsdfTransform {
+    pub fn new(bounds: Bounds, full_distance_range_font_units: f32) -> Option<Self> {
+        if !bounds.is_valid()
+            || !full_distance_range_font_units.is_finite()
+            || full_distance_range_font_units <= 0.0
+        {
+            return None;
+        }
+        Some(Self {
+            bounds,
+            full_distance_range: full_distance_range_font_units,
+        })
+    }
+
+    pub fn bounds(self) -> Bounds {
+        self.bounds
+    }
+
+    pub fn full_distance_range_font_units(self) -> f32 {
+        self.full_distance_range
+    }
+}
+
 impl AtlasRegion {
     pub fn total_width(self) -> Option<usize> {
         self.padding_x
@@ -99,6 +129,7 @@ impl<E: fmt::Display> fmt::Display for ReadOutlineError<E> {
 pub enum GenerateError {
     Allocation,
     InvalidRegion,
+    InvalidTransform,
     OutputLimit,
 }
 
@@ -107,6 +138,7 @@ impl fmt::Display for GenerateError {
         match self {
             Self::Allocation => formatter.write_str("MTSDF output allocation failed"),
             Self::InvalidRegion => formatter.write_str("MTSDF atlas region is invalid"),
+            Self::InvalidTransform => formatter.write_str("MTSDF sampling transform is invalid"),
             Self::OutputLimit => formatter.write_str("MTSDF output exceeded its byte limit"),
         }
     }
@@ -223,8 +255,29 @@ impl GlyphOutline<'_> {
     }
 
     pub fn generate_mtsdf(&mut self, region: AtlasRegion) -> Result<&[u8], GenerateError> {
+        let transform = MtsdfTransform {
+            bounds: self.bounds,
+            full_distance_range: self.units_per_em,
+        };
+        self.generate_mtsdf_with_transform(region, transform)
+    }
+
+    pub fn generate_mtsdf_with_transform(
+        &mut self,
+        region: AtlasRegion,
+        transform: MtsdfTransform,
+    ) -> Result<&[u8], GenerateError> {
         if region.inner_width == 0 || region.inner_height == 0 {
             return Err(GenerateError::InvalidRegion);
+        }
+        let source_bounds = self.bounds;
+        let bounds = transform.bounds;
+        if bounds.min_x > source_bounds.min_x
+            || bounds.min_y > source_bounds.min_y
+            || bounds.max_x < source_bounds.max_x
+            || bounds.max_y < source_bounds.max_y
+        {
+            return Err(GenerateError::InvalidTransform);
         }
         let Some(total_width) = region.total_width() else {
             return Err(GenerateError::InvalidRegion);
@@ -257,7 +310,6 @@ impl GlyphOutline<'_> {
             contour_distances.truncate(contour_count);
         }
 
-        let bounds = self.bounds;
         let edges = &self.generator.scratch.hot_edges;
         let contour_distances = &mut self.generator.scratch.contour_distances;
         for (output_y, row) in output.chunks_exact_mut(total_width * 4).enumerate() {
@@ -269,8 +321,13 @@ impl GlyphOutline<'_> {
                 let x_ratio =
                     (x as f32 + 0.5 - region.padding_x as f32) / region.inner_width as f32;
                 let point = Point::new(bounds.min_x + bounds.width() * x_ratio, y);
-                let lanes =
-                    Distance4::evaluate(point, edges, self.units_per_em, contour_distances).lanes();
+                let lanes = Distance4::evaluate(
+                    point,
+                    edges,
+                    transform.full_distance_range,
+                    contour_distances,
+                )
+                .lanes();
                 #[cfg(all(target_arch = "wasm32", feature = "simd128-experiment"))]
                 pixel.copy_from_slice(&math::quantize_unorm4(lanes));
                 #[cfg(not(all(target_arch = "wasm32", feature = "simd128-experiment")))]
@@ -359,6 +416,37 @@ mod tests {
                 ..REGION
             }),
             Err(GenerateError::InvalidRegion)
+        );
+    }
+
+    #[test]
+    fn fixed_transform_preserves_scale_and_rejects_clipping() {
+        let mut generator = MtsdfGenerator::default();
+        let baseline = generator
+            .read_outline(&Square)
+            .expect("square")
+            .generate_mtsdf(REGION)
+            .expect("baseline")
+            .to_vec();
+        let equivalent = generator
+            .read_outline(&Square)
+            .expect("square")
+            .generate_mtsdf_with_transform(
+                REGION,
+                MtsdfTransform::new(Square.bounds(), Square.units_per_em()).expect("transform"),
+            )
+            .expect("equivalent")
+            .to_vec();
+        assert_eq!(baseline, equivalent);
+
+        let clipped = MtsdfTransform::new(Bounds::new(200.0, 200.0, 800.0, 800.0), 125.0)
+            .expect("finite transform");
+        assert_eq!(
+            generator
+                .read_outline(&Square)
+                .expect("square")
+                .generate_mtsdf_with_transform(REGION, clipped),
+            Err(GenerateError::InvalidTransform)
         );
     }
 

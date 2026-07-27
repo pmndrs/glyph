@@ -21,7 +21,7 @@ sources:
     title: oxitext-sdf 0.2.0 documentation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T02:26:42Z"
+  at: "2026-07-27T03:13:33Z"
 ---
 
 # MTSDF generator admission
@@ -57,7 +57,7 @@ The implementation may retain proven ideas—reusable scratch ownership, SoA edg
 
 The shipped core must remain `no_std + alloc`, accept the package-selected allocator, expose typed failures without panic recovery, reuse bounded scratch storage, and connect to JavaScript through the same generated C ABI/JSON contract and direct Wasm memory access as the existing bakers. It does not acquire a second font parser, atlas owner, container writer, Worker abstraction, or binding generator.
 
-The owned boundary now separates those responsibilities concretely: `mtsdf-core` contains only geometry and reusable allocation-backed scratch, while `mtsdf-baker` owns `dlmalloc`, the generated contract, and the direct-memory C ABI. Its fixed request header points at fixed-size move/line/quadratic/cubic/close records in the same allocation. The Wasm validates exact request length and command framing before outline construction, returns status codes rather than crossing the ABI with Rust errors, and lends its RGBA8 result until the next generation call. The generated-contract command is named `generate-mtsdf-abi` for the artifact it produces. The production build publishes the optimized Wasm and JSON contract; a dependency-free TypeScript host validates both contract and requests, copies borrowed output, and releases every request transactionally. Seven native-oracle identities plus malformed values, invalid outline state, forged/stale ownership, ABI drift, and output cleanup pass through that host. The distributed zero-import boundary is 43,854 bytes, 18,015 gzip bytes, and 14,731 Brotli bytes; its host is 7,338 minified and 2,221 Brotli bytes.
+The owned boundary now separates those responsibilities concretely: `mtsdf-core` contains only geometry and reusable allocation-backed scratch, while `mtsdf-baker` owns `dlmalloc`, the generated contract, and the direct-memory C ABI. Its fixed request header points at fixed-size move/line/quadratic/cubic/close records in the same allocation. The Wasm validates exact request length and command framing before outline construction, returns status codes rather than crossing the ABI with Rust errors, and lends its RGBA8 result until the next generation call. A separate checked transform lets the fixed baker quantize bounds to a global plane grid and declare one distance range without changing the exact legacy oracle path. The generated-contract command is named `generate-mtsdf-abi` for the artifact it produces. The production build publishes the optimized Wasm and JSON contract; a dependency-free TypeScript host validates both contract and requests, copies borrowed output, and releases every request transactionally. Seven native-oracle identities plus malformed values, invalid outline state, forged/stale ownership, ABI drift, and output cleanup pass through that host. The distributed zero-import boundary is 44,018 bytes, 18,340 gzip bytes, and 14,947 Brotli bytes; its host is 7,338 minified and 2,221 Brotli bytes.
 
 ## Admission evidence
 

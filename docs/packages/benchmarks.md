@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:da8a4029709452c0b0010e4d5520eb73fe5b609a95e72da8d5fdb3764ca8470a"
+source_digest: "sha256:d0955a3a9f24be800a92bc4c76446271c19ec1abf7bbb70e733ab148ec5f5c20"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T02:26:42Z"
+  at: "2026-07-27T03:13:33Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -66,7 +66,7 @@ The CI-safe advanced-shaping target derives all 68 finite frames from that same 
 
 The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. This run observed 119.7–120.9 FPS, 0.1–0.2 ms median CPU submission, 0.3–0.7 ms CPU P95, 0.050–0.149 ms median GPU time, and 0.752–2.147 ms GPU P95 across one to three draws. Initial public `Text` readiness was 8.6–18.5 ms and total startup 23.4–119.0 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
 
-The package-size lane measures the item 8.1 MTSDF generator separately from every initial browser and unrelated raster graph. The validated TypeScript host is 10,643 raw, 7,338 minified, 2,525 gzip, and 2,221 Brotli bytes; the optimized zero-import scalar Wasm is 43,854 raw, 18,015 gzip, and 14,731 Brotli bytes. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. A package-owned command additionally reports compile, initialization, cold-corpus, and five warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. The local `capture:mtsdf-simd` command builds isolated scalar, auto-vectorized, and explicit-SIMD evidence modules, executes exact-hash-gated calls in GPU-enabled Chromium, and does not publish the two rejected variants.
+The package-size lane measures the item 8.1 MTSDF generator separately from every initial browser and unrelated raster graph. The validated TypeScript host is 10,643 raw, 7,338 minified, 2,525 gzip, and 2,221 Brotli bytes; the optimized zero-import scalar Wasm is 44,018 raw, 18,340 gzip, and 14,947 Brotli bytes. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. A package-owned command additionally reports compile, initialization, cold-corpus, and five warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. The local `capture:mtsdf-simd` command builds isolated scalar, auto-vectorized, and explicit-SIMD evidence modules, executes exact-hash-gated calls in GPU-enabled Chromium, and does not publish the two rejected variants.
 
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 13 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
