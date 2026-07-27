@@ -14,8 +14,8 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "b5ff7f8c5ec0524592c4a5ceda1c0a2793277ec54d1f169b3ee130ad3bf2f48c",
-      "bytes": 2368
+      "sha256": "9223555e42de666eb0f08692d6a019d69951aa518271c9737c9f29ffc236a4a3",
+      "bytes": 4395
     },
     {
       "id": "harness-admission",
@@ -26,7 +26,7 @@
     {
       "id": "bake-host-cold-warm",
       "path": "apps/benchmarks/fixtures/results/bake-host-baseline-v0.json",
-      "sha256": "c9e680c47956810b440ba304809d8cc01a8adb8be5f827b2f7dae046bc506b9f",
+      "sha256": "0aab5acf45c3684ecc3129ecd5ec311fd07cc9f3aae4313949520867978ad2de",
       "bytes": 1061
     },
     {

@@ -11,6 +11,10 @@ const paragraphPolicyHash = [
   paragraphBidiContract.uikit.resolved.layout.hash,
 ].join(':')
 const ADVANCED_SHAPING_HASH = '314418c3'
+const INTER_MTSDF_WEBGL2_SCENE_HASH =
+  'be1cf71aac61034ba96b5983ec0dde3e9b062272af607edff86fcdedcdbba3c9'
+const INTER_MTSDF_WEBGL2_CONFORMANCE_HASH =
+  'a21ba2802534643cc63bcb7d24afc92a45ec3725d936680d87ae4688a7fc1563'
 
 function deterministicValidation(hashes: readonly string[]): string {
   if (hashes.length === 0) throw new Error('Scenario produced no measurements')
@@ -53,14 +57,16 @@ function bitmapTextValidation(
     if (
       dpr === undefined ||
       value.outputBytes !== physicalWidth * physicalHeight * 4 ||
-      metrics?.glyphCount !== 120 ||
+      typeof metrics?.glyphCount !== 'number' ||
+      metrics.glyphCount <= 0 ||
       metrics.missingGlyphCount !== 0 ||
       metrics.drawCount !== 1 ||
       metrics.strikePpem !== 16 ||
       metrics.renderedPpem !== 16 ||
       metrics.cssFontSize !== 16 / dpr ||
       metrics.scaleRatio !== 1 ||
-      metrics.atlasGpuBytes !== 695_296 ||
+      typeof metrics.atlasGpuBytes !== 'number' ||
+      metrics.atlasGpuBytes <= 0 ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       metrics.totalGpuBytes !== metrics.atlasGpuBytes + metrics.renderTargetGpuBytes ||
       typeof metrics.litPixels !== 'number' ||
@@ -87,8 +93,94 @@ function bitmapTextValidation(
         'Bitmap text did not preserve its strike, scale, batch, GPU-memory, and pixel contract',
       )
     }
+    if (
+      metrics.fixtureIsInter === 1 &&
+      (metrics.glyphCount !== 120 || metrics.atlasGpuBytes !== 695_296)
+    ) {
+      throw new Error('Canonical Inter bitmap evidence drifted from its exact fixture contract')
+    }
   }
   return `${values.length}/${values.length} exact public Text frames with resize + clipping`
+}
+
+function mtsdfTextValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    const dpr = metrics?.dpr
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    const height = typeof dpr === 'number' ? Math.round(320 * dpr) : 0
+    if (
+      dpr === undefined ||
+      value.outputBytes !== width * height * 4 ||
+      metrics?.sceneCount !== 4 ||
+      metrics.textObjectCount !== 4 ||
+      typeof metrics.glyphCount !== 'number' ||
+      metrics.glyphCount < 40 ||
+      typeof metrics.drawCount !== 'number' ||
+      metrics.drawCount < 4 ||
+      typeof metrics.changedPixels !== 'number' ||
+      metrics.changedPixels < 500 ||
+      typeof metrics.distinctRgbColors !== 'number' ||
+      metrics.distinctRgbColors < 4 ||
+      metrics.artifactBytes !== 39_347_692 ||
+      metrics.compressedArtifactBytes !== 6_979_347 ||
+      metrics.renderTargetGpuBytes !== value.outputBytes ||
+      !finiteNonnegative(metrics.fontLoadMs) ||
+      !finiteNonnegative(metrics.firstDrawMs) ||
+      !finiteNonnegative(metrics.renderMs) ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error(
+        'MTSDF text did not preserve its resize, mip, transform, and effects contract',
+      )
+    }
+    if (dpr === 1 && metrics.backendWebGl2 === 1 && value.hash !== INTER_MTSDF_WEBGL2_SCENE_HASH) {
+      throw new Error('Canonical Inter WebGL2 MTSDF scene evidence drifted')
+    }
+  }
+  return `${values.length}/${values.length} deterministic MTSDF resize + mip + transform + effects frames`
+}
+
+function mtsdfSamplingValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    const dpr = metrics?.dpr
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    if (
+      dpr === undefined ||
+      value.outputBytes !== width * height * 4 ||
+      typeof metrics?.glyphCount !== 'number' ||
+      metrics.glyphCount <= 0 ||
+      !finiteNonnegative(metrics.meanAbsoluteError) ||
+      !finiteNonnegative(metrics.maximumError) ||
+      !finiteNonnegative(metrics.errorPixels) ||
+      typeof metrics.pixelCount !== 'number' ||
+      metrics.pixelCount !== width * height ||
+      metrics.meanAbsoluteError > 0.25 ||
+      metrics.maximumError > 48 ||
+      metrics.errorPixels > metrics.pixelCount * 0.02 ||
+      !finiteNonnegative(metrics.renderMs) ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error('MTSDF sampling did not preserve its GPU/CPU comparison contract')
+    }
+    if (
+      metrics.fixtureIsInter === 1 &&
+      dpr === 1 &&
+      (metrics.glyphCount !== 84 ||
+        (metrics.backendWebGl2 === 1 && value.hash !== INTER_MTSDF_WEBGL2_CONFORMANCE_HASH))
+    ) {
+      throw new Error('Canonical Inter MTSDF sampling evidence drifted')
+    }
+  }
+  return `${values.length}/${values.length} deterministic GPU frames with CPU MTSDF comparison`
 }
 
 function reactTextValidation(
@@ -267,6 +359,21 @@ function finiteNonnegative(value: unknown): value is number {
 }
 
 export const scenarios: readonly BenchmarkScenario[] = [
+  {
+    id: 'mtsdf-sampling-conformance',
+    label: 'MTSDF text accuracy',
+    description:
+      'GPU TSL sampling compared visually with an independent scalar CPU reconstruction.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: mtsdfSamplingValidation,
+  },
+  {
+    id: 'mtsdf-text-scenes',
+    label: 'MTSDF rendering scenes',
+    description: 'Resize, minification, transformed text, and fill/outline/shadow through TSL.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: mtsdfTextValidation,
+  },
   {
     id: 'advanced-shaping-conformance',
     label: 'Advanced shaping conformance',

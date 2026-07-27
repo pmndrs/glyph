@@ -1,5 +1,7 @@
 import type { BitmapTextLiveStats } from '../renderer/bitmap-text'
+import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text'
 import type { BenchmarkEnvironment } from './contracts'
+import type { BenchmarkFontFixture } from './font-fixtures'
 import type { GraphicsBackend, RasterTechnique } from './url-state'
 
 export type CapturedBitmapTextLiveStats = Omit<
@@ -19,6 +21,25 @@ export type CapturedBitmapTextLiveStats = Omit<
   readonly gpuHistory: readonly number[]
 }
 
+export type CapturedMtsdfTextLiveStats = Omit<
+  MtsdfTextLiveStats,
+  | 'submitHistory'
+  | 'submitHistoryLength'
+  | 'submitHistoryNextIndex'
+  | 'fpsHistory'
+  | 'fpsHistoryLength'
+  | 'fpsHistoryNextIndex'
+  | 'gpuHistory'
+  | 'gpuHistoryLength'
+  | 'gpuHistoryNextIndex'
+> & {
+  readonly submitHistory: readonly number[]
+  readonly fpsHistory: readonly number[]
+  readonly gpuHistory: readonly number[]
+}
+
+export type CapturedLiveTextStats = CapturedBitmapTextLiveStats | CapturedMtsdfTextLiveStats
+
 export interface LiveBenchmarkCapture {
   readonly kind: 'live-benchmark'
   readonly schemaVersion: 0
@@ -27,11 +48,23 @@ export interface LiveBenchmarkCapture {
   readonly backend: GraphicsBackend
   readonly workload: string
   readonly dpr: number
+  readonly fontFixture: BenchmarkFontFixture
   readonly environment: BenchmarkEnvironment
-  readonly stats: CapturedBitmapTextLiveStats
+  readonly stats: CapturedLiveTextStats
 }
 
 export function captureBitmapTextStats(stats: BitmapTextLiveStats): CapturedBitmapTextLiveStats {
+  return captureLiveTextStats(stats)
+}
+
+export function captureLiveTextStats(stats: BitmapTextLiveStats): CapturedBitmapTextLiveStats
+export function captureLiveTextStats(stats: MtsdfTextLiveStats): CapturedMtsdfTextLiveStats
+export function captureLiveTextStats(
+  stats: BitmapTextLiveStats | MtsdfTextLiveStats,
+): CapturedLiveTextStats
+export function captureLiveTextStats(
+  stats: BitmapTextLiveStats | MtsdfTextLiveStats,
+): CapturedLiveTextStats {
   const {
     submitHistory,
     submitHistoryLength,

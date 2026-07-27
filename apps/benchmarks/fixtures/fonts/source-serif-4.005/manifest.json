@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 0,
+  "id": "source-serif-4-regular-v0",
+  "purpose": "Serif face for human-selectable benchmark and conformance fixtures",
+  "source": {
+    "family": "Source Serif 4",
+    "style": "Regular",
+    "version": "4.005",
+    "releaseCommit": "5f220b17d27ed64873f22cde0dd593685387bd19",
+    "url": "https://raw.githubusercontent.com/adobe-fonts/source-serif/5f220b17d27ed64873f22cde0dd593685387bd19/TTF/SourceSerif4-Regular.ttf",
+    "fontFile": "SourceSerif4-Regular.ttf",
+    "fontBytes": 261868,
+    "fontSha256": "e5a4ee6a3d87bb9024796be390c6771e2a0eb1883dae25effaf57ca01668e24b",
+    "license": "OFL-1.1",
+    "licenseFile": "OFL.md",
+    "licenseBytes": 4491,
+    "licenseSha256": "c21d7293d87b6d7ab1d0229a2f55b77f33a7613a6a4e66f6693d68d7d8d09464"
+  },
+  "face": {
+    "fontIndex": 0,
+    "variations": {},
+    "glyphCount": 1464,
+    "outlineFormat": "truetype"
+  }
+}

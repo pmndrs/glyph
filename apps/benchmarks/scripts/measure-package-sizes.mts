@@ -60,7 +60,12 @@ async function bundle(
           {
             name: 'externalize-package-wasm-for-size-measurement',
             transform(code, id) {
-              const wasmAssets = ['font_baker.wasm', 'text_shaper.wasm', 'mtsdf_baker.wasm']
+              const wasmAssets = [
+                'bitmap_baker.wasm',
+                'font_baker.wasm',
+                'text_shaper.wasm',
+                'mtsdf_baker.wasm',
+              ]
               let transformed = code
               let changed = false
               for (const asset of wasmAssets) {
@@ -338,6 +343,34 @@ const entries: SizeEntry[] = [
     'text-shaper-wasm',
     'Text shaper Wasm',
     new URL('../../../packages/text/dist/text_shaper.wasm', import.meta.url),
+  ),
+  await measureJavaScript(
+    'bitmap-runtime-js',
+    'Bitmap runtime JS graph',
+    new URL('../size-entries/bitmap-runtime.ts', import.meta.url),
+    false,
+    true,
+    true,
+  ),
+  await measureJavaScript(
+    'mtsdf-runtime-js',
+    'MTSDF runtime JS graph',
+    new URL('../size-entries/mtsdf-runtime.ts', import.meta.url),
+    false,
+    true,
+    true,
+  ),
+  await measureWasm(
+    'bitmap-baker-wasm',
+    'Bitmap fixed baker Wasm',
+    new URL('../../../packages/text/dist/bitmap_baker.wasm', import.meta.url),
+  ),
+  await measureJavaScript(
+    'bitmap-baker-js',
+    'Bitmap fixed baker host JS',
+    new URL('../size-entries/bitmap-baker.ts', import.meta.url),
+    false,
+    true,
   ),
   await measureJavaScript(
     'mtsdf-generator-js',

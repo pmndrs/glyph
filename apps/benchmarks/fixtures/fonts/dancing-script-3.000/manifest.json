@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 0,
+  "id": "dancing-script-regular-v0",
+  "purpose": "Script face for human-selectable benchmark and conformance fixtures",
+  "source": {
+    "family": "Dancing Script",
+    "style": "Regular",
+    "version": "3.000",
+    "releaseCommit": "09b7abf420f296894dc6c878e7b0da4f9f8d27a6",
+    "url": "https://raw.githubusercontent.com/impallari/DancingScript/09b7abf420f296894dc6c878e7b0da4f9f8d27a6/fonts/DancingScript-Regular.otf",
+    "fontFile": "DancingScript-Regular.otf",
+    "fontBytes": 110396,
+    "fontSha256": "d71f864af9c13eeb740230fd67309c2390a902dba2326ae06f2275ca52663c6a",
+    "license": "OFL-1.1",
+    "licenseFile": "OFL.txt",
+    "licenseBytes": 4443,
+    "licenseSha256": "6f090277c00af96651ce6dbcc38ff1591047a3bffef486e80b6a32e8276a8201"
+  },
+  "face": {
+    "fontIndex": 0,
+    "variations": {},
+    "glyphCount": 1017,
+    "outlineFormat": "cff"
+  }
+}

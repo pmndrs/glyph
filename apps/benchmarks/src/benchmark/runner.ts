@@ -36,6 +36,7 @@ export async function runBenchmark(options: RunBenchmarkOptions): Promise<Benchm
   const missing = missingCapabilities(target, scenario)
   if (missing.length > 0) throw new Error(`Target lacks: ${missing.join(', ')}`)
   if (target.status(input) !== 'ready') throw new Error('Target is not ready for this input')
+  target.configure?.(input)
   executionSequence += 1
   const executionId = `run:${String(executionSequence)}`
 

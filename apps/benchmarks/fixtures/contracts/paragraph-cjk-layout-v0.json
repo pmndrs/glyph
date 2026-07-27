@@ -4,7 +4,7 @@
   "font": {
     "fixture": "noto-sans-cjk-jp-regular-v0",
     "sourceSha256": "68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5",
-    "artifactSha256": "6de5b0d787d9f47c0f8103bc70725cab881821d78f9294ac5ab783d3e9752310",
+    "artifactSha256": "d0023acf5415027667a5e3caa831ceeae74665de460744123e09ccd35002b44c",
     "shapingHash": "f4e77de31444f3ee9e4a7cbdded5d0c3077455275bf81ec5def82e31f6379d58",
     "sourceOracle": "../shaping/noto-sans-cjk/harfrust.json",
     "independentOracle": "../shaping/noto-sans-cjk/harfbuzz.json"

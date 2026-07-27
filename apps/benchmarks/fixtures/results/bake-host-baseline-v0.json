@@ -7,8 +7,8 @@
     "browser": "149.0.7827.55"
   },
   "artifact": {
-    "bytes": 172140,
-    "sha256": "296f23ff52aa50bdec3662b1037cd3648be814de089e122e828f88bd8f29c4f8"
+    "bytes": 172156,
+    "sha256": "af7bfb85f04a6a63c6462735a6e8ec6d739576adb354c07ca51e744814db2f7b"
   },
   "offline": {
     "coldMedianMs": 4.155290999999977,

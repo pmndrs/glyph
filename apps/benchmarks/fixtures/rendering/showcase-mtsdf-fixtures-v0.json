@@ -1,0 +1,834 @@
+{
+  "schemaVersion": 0,
+  "artifacts": [
+    {
+      "fontFixture": "inter",
+      "file": "inter-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 39347692,
+        "sha256": "77cd2afc7f1f396be3f7dff8a24ba86e078d288b6d9a4f5342f6e381d3c040c7"
+      },
+      "compressed": {
+        "bytes": 6979347,
+        "sha256": "668b289c6b09a705e46554a933044d48a853145279da43ac18064cfbdf0a2fe7"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 58740,
+        "serializedBytes": 39175608,
+        "decodedGpuBytes": 39111736,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 1024,
+          "layers": 10,
+          "baseBytes": 41943040,
+          "mipmappedBytes": 55924040
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 974,
+            "encodedBytes": 3989700,
+            "decodedGpuBytes": 3989504
+          },
+          {
+            "index": 1,
+            "width": 1023,
+            "height": 1024,
+            "encodedBytes": 4190404,
+            "decodedGpuBytes": 4190208
+          },
+          {
+            "index": 2,
+            "width": 1023,
+            "height": 1017,
+            "encodedBytes": 4161760,
+            "decodedGpuBytes": 4161564
+          },
+          {
+            "index": 3,
+            "width": 1020,
+            "height": 1014,
+            "encodedBytes": 4137316,
+            "decodedGpuBytes": 4137120
+          },
+          {
+            "index": 4,
+            "width": 1024,
+            "height": 989,
+            "encodedBytes": 4051140,
+            "decodedGpuBytes": 4050944
+          },
+          {
+            "index": 5,
+            "width": 1022,
+            "height": 971,
+            "encodedBytes": 3969644,
+            "decodedGpuBytes": 3969448
+          },
+          {
+            "index": 6,
+            "width": 990,
+            "height": 971,
+            "encodedBytes": 3845356,
+            "decodedGpuBytes": 3845160
+          },
+          {
+            "index": 7,
+            "width": 1023,
+            "height": 1021,
+            "encodedBytes": 4178128,
+            "decodedGpuBytes": 4177932
+          },
+          {
+            "index": 8,
+            "width": 1024,
+            "height": 1022,
+            "encodedBytes": 4186308,
+            "decodedGpuBytes": 4186112
+          },
+          {
+            "index": 9,
+            "width": 1022,
+            "height": 588,
+            "encodedBytes": 2403940,
+            "decodedGpuBytes": 2403744
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "amiri",
+      "file": "amiri-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 94640128,
+        "sha256": "4d8adbbc1f51f11c66d154cd8a1fa3696fd12b62007e15bb1f2e8aef04094ea7"
+      },
+      "compressed": {
+        "bytes": 14834912,
+        "sha256": "d5cbee8fc5a37a6ad53c5324b28e00927effe164b0adff04b1f1cd4fb7c801e8"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 134200,
+        "serializedBytes": 94461136,
+        "decodedGpuBytes": 94315540,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 1023,
+          "layers": 24,
+          "baseBytes": 100564992,
+          "mipmappedBytes": 134021280
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1022,
+            "height": 987,
+            "encodedBytes": 4035052,
+            "decodedGpuBytes": 4034856
+          },
+          {
+            "index": 1,
+            "width": 1015,
+            "height": 1005,
+            "encodedBytes": 4080496,
+            "decodedGpuBytes": 4080300
+          },
+          {
+            "index": 2,
+            "width": 1015,
+            "height": 1020,
+            "encodedBytes": 4141396,
+            "decodedGpuBytes": 4141200
+          },
+          {
+            "index": 3,
+            "width": 1020,
+            "height": 994,
+            "encodedBytes": 4055716,
+            "decodedGpuBytes": 4055520
+          },
+          {
+            "index": 4,
+            "width": 1019,
+            "height": 1018,
+            "encodedBytes": 4149564,
+            "decodedGpuBytes": 4149368
+          },
+          {
+            "index": 5,
+            "width": 1024,
+            "height": 1015,
+            "encodedBytes": 4157636,
+            "decodedGpuBytes": 4157440
+          },
+          {
+            "index": 6,
+            "width": 1022,
+            "height": 1022,
+            "encodedBytes": 4178132,
+            "decodedGpuBytes": 4177936
+          },
+          {
+            "index": 7,
+            "width": 1008,
+            "height": 960,
+            "encodedBytes": 3870916,
+            "decodedGpuBytes": 3870720
+          },
+          {
+            "index": 8,
+            "width": 1018,
+            "height": 974,
+            "encodedBytes": 3966324,
+            "decodedGpuBytes": 3966128
+          },
+          {
+            "index": 9,
+            "width": 1021,
+            "height": 993,
+            "encodedBytes": 4055608,
+            "decodedGpuBytes": 4055412
+          },
+          {
+            "index": 10,
+            "width": 1024,
+            "height": 996,
+            "encodedBytes": 4079812,
+            "decodedGpuBytes": 4079616
+          },
+          {
+            "index": 11,
+            "width": 1024,
+            "height": 1005,
+            "encodedBytes": 4116676,
+            "decodedGpuBytes": 4116480
+          },
+          {
+            "index": 12,
+            "width": 1022,
+            "height": 979,
+            "encodedBytes": 4002348,
+            "decodedGpuBytes": 4002152
+          },
+          {
+            "index": 13,
+            "width": 1022,
+            "height": 991,
+            "encodedBytes": 4051404,
+            "decodedGpuBytes": 4051208
+          },
+          {
+            "index": 14,
+            "width": 1021,
+            "height": 967,
+            "encodedBytes": 3949424,
+            "decodedGpuBytes": 3949228
+          },
+          {
+            "index": 15,
+            "width": 1024,
+            "height": 993,
+            "encodedBytes": 4067524,
+            "decodedGpuBytes": 4067328
+          },
+          {
+            "index": 16,
+            "width": 1022,
+            "height": 1023,
+            "encodedBytes": 4182220,
+            "decodedGpuBytes": 4182024
+          },
+          {
+            "index": 17,
+            "width": 1022,
+            "height": 1009,
+            "encodedBytes": 4124988,
+            "decodedGpuBytes": 4124792
+          },
+          {
+            "index": 18,
+            "width": 1024,
+            "height": 965,
+            "encodedBytes": 3952836,
+            "decodedGpuBytes": 3952640
+          },
+          {
+            "index": 19,
+            "width": 1023,
+            "height": 1022,
+            "encodedBytes": 4182220,
+            "decodedGpuBytes": 4182024
+          },
+          {
+            "index": 20,
+            "width": 1024,
+            "height": 992,
+            "encodedBytes": 4063428,
+            "decodedGpuBytes": 4063232
+          },
+          {
+            "index": 21,
+            "width": 1022,
+            "height": 1019,
+            "encodedBytes": 4165868,
+            "decodedGpuBytes": 4165672
+          },
+          {
+            "index": 22,
+            "width": 1021,
+            "height": 1018,
+            "encodedBytes": 4157708,
+            "decodedGpuBytes": 4157512
+          },
+          {
+            "index": 23,
+            "width": 1009,
+            "height": 132,
+            "encodedBytes": 532948,
+            "decodedGpuBytes": 532752
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "noto-sans-devanagari",
+      "file": "noto-sans-devanagari-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 13776012,
+        "sha256": "316efa62e63796abfec460f4ca7d8ddf047c03ef9c98092726a50d3e52462286"
+      },
+      "compressed": {
+        "bytes": 3167988,
+        "sha256": "ca6dd6c14fc9cbf44c4a95f71ae73c53fa77b7e98d9ff6f7e635fad360a1355e"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 19080,
+        "serializedBytes": 13717360,
+        "decodedGpuBytes": 13695832,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 1011,
+          "layers": 4,
+          "baseBytes": 16564224,
+          "mipmappedBytes": 22076784
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1019,
+            "height": 968,
+            "encodedBytes": 3945764,
+            "decodedGpuBytes": 3945568
+          },
+          {
+            "index": 1,
+            "width": 1024,
+            "height": 1011,
+            "encodedBytes": 4141252,
+            "decodedGpuBytes": 4141056
+          },
+          {
+            "index": 2,
+            "width": 1018,
+            "height": 999,
+            "encodedBytes": 4068124,
+            "decodedGpuBytes": 4067928
+          },
+          {
+            "index": 3,
+            "width": 1014,
+            "height": 380,
+            "encodedBytes": 1541476,
+            "decodedGpuBytes": 1541280
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dot-gothic-16",
+      "file": "dot-gothic-16-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 175910020,
+        "sha256": "88c2a614a9fab74ebaa052e11812d9581624a844768de0de73e23830a8913a5e"
+      },
+      "compressed": {
+        "bytes": 49364322,
+        "sha256": "da681cf2f80e2c07c1226e0c4d868b74c111128c1832c2408f6d8abf2ab16987"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 187240,
+        "serializedBytes": 175613544,
+        "decodedGpuBytes": 175405952,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 1017,
+          "layers": 44,
+          "baseBytes": 183287808,
+          "mipmappedBytes": 244308944
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1023,
+            "height": 982,
+            "encodedBytes": 4018540,
+            "decodedGpuBytes": 4018344
+          },
+          {
+            "index": 1,
+            "width": 1024,
+            "height": 1006,
+            "encodedBytes": 4120772,
+            "decodedGpuBytes": 4120576
+          },
+          {
+            "index": 2,
+            "width": 1023,
+            "height": 978,
+            "encodedBytes": 4002172,
+            "decodedGpuBytes": 4001976
+          },
+          {
+            "index": 3,
+            "width": 1020,
+            "height": 977,
+            "encodedBytes": 3986356,
+            "decodedGpuBytes": 3986160
+          },
+          {
+            "index": 4,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 5,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 6,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 7,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 8,
+            "width": 1004,
+            "height": 994,
+            "encodedBytes": 3992100,
+            "decodedGpuBytes": 3991904
+          },
+          {
+            "index": 9,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 10,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 11,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 12,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 13,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 14,
+            "width": 1004,
+            "height": 994,
+            "encodedBytes": 3992100,
+            "decodedGpuBytes": 3991904
+          },
+          {
+            "index": 15,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 16,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 17,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 18,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 19,
+            "width": 1023,
+            "height": 994,
+            "encodedBytes": 4067644,
+            "decodedGpuBytes": 4067448
+          },
+          {
+            "index": 20,
+            "width": 1021,
+            "height": 994,
+            "encodedBytes": 4059692,
+            "decodedGpuBytes": 4059496
+          },
+          {
+            "index": 21,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 22,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 23,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 24,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 25,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 26,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 27,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 28,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 29,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 30,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 31,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 32,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 33,
+            "width": 1024,
+            "height": 994,
+            "encodedBytes": 4071620,
+            "decodedGpuBytes": 4071424
+          },
+          {
+            "index": 34,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 35,
+            "width": 1008,
+            "height": 994,
+            "encodedBytes": 4008004,
+            "decodedGpuBytes": 4007808
+          },
+          {
+            "index": 36,
+            "width": 1022,
+            "height": 1006,
+            "encodedBytes": 4112724,
+            "decodedGpuBytes": 4112528
+          },
+          {
+            "index": 37,
+            "width": 1009,
+            "height": 998,
+            "encodedBytes": 4028124,
+            "decodedGpuBytes": 4027928
+          },
+          {
+            "index": 38,
+            "width": 1020,
+            "height": 954,
+            "encodedBytes": 3892516,
+            "decodedGpuBytes": 3892320
+          },
+          {
+            "index": 39,
+            "width": 1012,
+            "height": 1006,
+            "encodedBytes": 4072484,
+            "decodedGpuBytes": 4072288
+          },
+          {
+            "index": 40,
+            "width": 1020,
+            "height": 994,
+            "encodedBytes": 4055716,
+            "decodedGpuBytes": 4055520
+          },
+          {
+            "index": 41,
+            "width": 1016,
+            "height": 1017,
+            "encodedBytes": 4133284,
+            "decodedGpuBytes": 4133088
+          },
+          {
+            "index": 42,
+            "width": 1024,
+            "height": 1004,
+            "encodedBytes": 4112580,
+            "decodedGpuBytes": 4112384
+          },
+          {
+            "index": 43,
+            "width": 1018,
+            "height": 609,
+            "encodedBytes": 2480044,
+            "decodedGpuBytes": 2479848
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "source-serif-4",
+      "file": "source-serif-4-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 16966556,
+        "sha256": "53113556e9b7750ded5748bc1fee3f61898941acb0d66a401562346aba5c262a"
+      },
+      "compressed": {
+        "bytes": 3943909,
+        "sha256": "467a5766f3166ba80154535f727e9f5c988c4985cdbd2db367b7b40d13966a52"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 29280,
+        "serializedBytes": 16830176,
+        "decodedGpuBytes": 16798004,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 994,
+          "layers": 5,
+          "baseBytes": 20357120,
+          "mipmappedBytes": 27139020
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 962,
+            "encodedBytes": 3940548,
+            "decodedGpuBytes": 3940352
+          },
+          {
+            "index": 1,
+            "width": 1024,
+            "height": 990,
+            "encodedBytes": 4055236,
+            "decodedGpuBytes": 4055040
+          },
+          {
+            "index": 2,
+            "width": 1024,
+            "height": 973,
+            "encodedBytes": 3985604,
+            "decodedGpuBytes": 3985408
+          },
+          {
+            "index": 3,
+            "width": 1022,
+            "height": 994,
+            "encodedBytes": 4063668,
+            "decodedGpuBytes": 4063472
+          },
+          {
+            "index": 4,
+            "width": 997,
+            "height": 189,
+            "encodedBytes": 753928,
+            "decodedGpuBytes": 753732
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dancing-script",
+      "file": "dancing-script-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 13048380,
+        "sha256": "acda5614aee7b3bf0ea63b4a39c56142367f4f5b7359a19a84cf3395d149bfbc"
+      },
+      "compressed": {
+        "bytes": 2329148,
+        "sha256": "9b82a349151fe2f0ce1809ced484a1bbd8efe47f4d1c3d886a12c94efebac17f"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 20340,
+        "serializedBytes": 13004512,
+        "decodedGpuBytes": 12981724,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 1005,
+          "layers": 4,
+          "baseBytes": 16465920,
+          "mipmappedBytes": 21946736
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1021,
+            "height": 978,
+            "encodedBytes": 3994348,
+            "decodedGpuBytes": 3994152
+          },
+          {
+            "index": 1,
+            "width": 1018,
+            "height": 999,
+            "encodedBytes": 4068124,
+            "decodedGpuBytes": 4067928
+          },
+          {
+            "index": 2,
+            "width": 1024,
+            "height": 1005,
+            "encodedBytes": 4116676,
+            "decodedGpuBytes": 4116480
+          },
+          {
+            "index": 3,
+            "width": 1009,
+            "height": 199,
+            "encodedBytes": 803360,
+            "decodedGpuBytes": 803164
+          }
+        ]
+      }
+    }
+  ]
+}

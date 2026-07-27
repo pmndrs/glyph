@@ -1,25 +1,139 @@
 {
   "schemaVersion": 0,
   "strikePpem": 16,
-  "packaging": { "artifact": "embedded", "pages": "embedded" },
+  "packaging": {
+    "artifact": "embedded",
+    "pages": "embedded"
+  },
   "artifacts": [
     {
-      "fontFixture": "amiri-regular-v0",
+      "fontFixture": "inter",
+      "file": "inter-bitmap-16.font.glb",
+      "bytes": 927164,
+      "sha256": "55e0f03fcd9cec9312b03f58de112d299982e82db368d9a666db120ef8a4f471",
+      "raster": {
+        "decodedGpuBytes": 695296,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 679,
+            "encodedBytes": 695444,
+            "decodedGpuBytes": 695296
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "amiri",
       "file": "amiri-bitmap-16.font.glb",
-      "bytes": 1987832,
-      "sha256": "50a1e69888bcffc544f183fc0af797803c8e037ab8e4ad68b7b231f432e966da"
+      "bytes": 1987848,
+      "sha256": "d031b766ae12cc83b4369d08695d8f6295d43cec65ca2b754dc5548fe7618bdd",
+      "raster": {
+        "decodedGpuBytes": 1673216,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 1024,
+            "encodedBytes": 1048724,
+            "decodedGpuBytes": 1048576
+          },
+          {
+            "index": 1,
+            "width": 1024,
+            "height": 610,
+            "encodedBytes": 624788,
+            "decodedGpuBytes": 624640
+          }
+        ]
+      }
     },
     {
-      "fontFixture": "noto-sans-devanagari-showcase-v0",
+      "fontFixture": "noto-sans-devanagari",
       "file": "noto-sans-devanagari-bitmap-16.font.glb",
-      "bytes": 312228,
-      "sha256": "6709802a47a9f8220f49663a84eeccf86a922e4be1459780bb04de0c0069e366"
+      "bytes": 312248,
+      "sha256": "4772ac45c29fdc705e0eea25879994afe95802b85c0904f933a77e3110921555",
+      "raster": {
+        "decodedGpuBytes": 233472,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 228,
+            "encodedBytes": 233620,
+            "decodedGpuBytes": 233472
+          }
+        ]
+      }
     },
     {
-      "fontFixture": "dot-gothic-16-japanese-showcase-v0",
+      "fontFixture": "dot-gothic-16",
       "file": "dot-gothic-16-bitmap-16.font.glb",
-      "bytes": 3294368,
-      "sha256": "c10716c4dbb5f0266c3d57789c567f10242cf6f7d03318ba0ee604be43c7c47c"
+      "bytes": 3294384,
+      "sha256": "20d46619345575e7c36a94248293e375a433eb9fa0f973dc040cc7499270d53c",
+      "raster": {
+        "decodedGpuBytes": 2808832,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 1013,
+            "encodedBytes": 1037460,
+            "decodedGpuBytes": 1037312
+          },
+          {
+            "index": 1,
+            "width": 1024,
+            "height": 1008,
+            "encodedBytes": 1032340,
+            "decodedGpuBytes": 1032192
+          },
+          {
+            "index": 2,
+            "width": 1024,
+            "height": 722,
+            "encodedBytes": 739476,
+            "decodedGpuBytes": 739328
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "source-serif-4",
+      "file": "source-serif-4-bitmap-16.font.glb",
+      "bytes": 468784,
+      "sha256": "81ec296517f7dd91a2d1b5e5280cc2a43a6793c15a8ea35fe3a567bbccef3cf5",
+      "raster": {
+        "decodedGpuBytes": 302080,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 295,
+            "encodedBytes": 302228,
+            "decodedGpuBytes": 302080
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dancing-script",
+      "file": "dancing-script-bitmap-16.font.glb",
+      "bytes": 291556,
+      "sha256": "4f9120e970b7a5697a9cc8336576eca5bae567444e93abecaf472c8ea2258e8b",
+      "raster": {
+        "decodedGpuBytes": 226304,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 221,
+            "encodedBytes": 226452,
+            "decodedGpuBytes": 226304
+          }
+        ]
+      }
     }
   ]
 }

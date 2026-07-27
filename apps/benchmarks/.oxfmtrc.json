@@ -2,5 +2,5 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "all",
-  "ignorePatterns": [".cache/**", "dist/**"]
+  "ignorePatterns": [".cache/**", "dist/**", "fixtures/fonts/**"]
 }
