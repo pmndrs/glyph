@@ -13,6 +13,7 @@ import {
   MTSDF_EM_SIZE,
   MTSDF_PIXEL_RANGE,
   MTSDF_PLANE_UNITS_PER_EM,
+  msdf,
   msdfDescriptor,
   msdfDescriptorRasterKey,
 } from '@pmndrs/text/raster/msdf'
@@ -111,6 +112,7 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   assert.equal(extension.planeUnitsPerEm, MTSDF_PLANE_UNITS_PER_EM)
   assert.equal(extension.recordStride, 20)
   assert.equal(extension.pages.length, pages.length)
+  await exerciseRuntime(result, raster, extension, rasterKey)
 })
 
 test('rejects a malformed nested artifact contract', () => {
@@ -154,6 +156,111 @@ function glbRoot(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const jsonLength = view.getUint32(12, true)
   return JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)))
+}
+
+async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
+  const { document, views } = glbViews(rasterArtifact.bytes)
+  const records = views[extension.recordBufferView]
+  assert.ok(records)
+  const pageArtifacts = result.artifacts.filter((artifact) => artifact.role === 'raster-page')
+  const runtimeExtension = structuredClone(extension)
+  for (const [pageIndex, page] of runtimeExtension.pages.entries()) {
+    page.variants[0].source = { type: 'bufferView', bufferView: pageIndex + 1 }
+  }
+  const font = {
+    handle: 7,
+    shapingHash,
+    glyphCount: 2937,
+  }
+  const runtimeRaster = {
+    font: font.handle,
+    handle: 11,
+    kind: 'msdf',
+    extension: MSDF_EXTENSION,
+    version: 0,
+    rasterKey,
+    extensionData: runtimeExtension,
+    view(index) {
+      if (index === 0) return records
+      const page = pageArtifacts[index - 1]
+      if (page === undefined) throw new RangeError('missing synthetic MTSDF runtime view')
+      return page.bytes
+    },
+    dispose() {},
+  }
+  assert.equal(document.extensions[MSDF_EXTENSION].recordBufferView, 0)
+  const resource = await msdf.decode(font, runtimeRaster)
+  assert.equal(resource.records.byteLength, 2937 * 20)
+  assert.equal(resource.pages.length, 10)
+  assert.ok(resource.pages.every(({ texture }) => texture.generateMipmaps))
+  const glyphId = firstPresentGlyph(records)
+  const layout = {
+    glyphIds: Uint16Array.of(glyphId),
+    glyphFontSlots: Uint16Array.of(0),
+    glyphFontSizes: Float32Array.of(64),
+    x: Float32Array.of(12),
+    y: Float32Array.of(24),
+  }
+  const paint = {
+    paintIndices: Uint16Array.of(0),
+    palette: [
+      {
+        color: [1, 0.75, 0.5, 1],
+        outline: { color: [0, 0, 0, 1], width: 2 },
+        shadow: { color: [0, 0, 0, 0.5], offset: [3, 4] },
+      },
+    ],
+  }
+  const batch = msdf.buildBatches(layout, resource, 0, paint)
+  assert.equal(batch.glyphCount, 1)
+  assert.equal(batch.drawCount, 1)
+  const mesh = batch.object.children[0]
+  assert.ok(mesh)
+  const geometry = mesh.geometry
+  assert.equal(geometry.getAttribute('msdfOutlineWidth').getX(0), 0.25)
+  assert.deepEqual(
+    [
+      geometry.getAttribute('msdfShadowOffset').getX(0),
+      geometry.getAttribute('msdfShadowOffset').getY(0),
+    ].map((value) => Number(value.toFixed(8))),
+    [
+      Number((3 / resource.pages[0].width).toFixed(8)),
+      Number((-4 / resource.pages[0].height).toFixed(8)),
+    ],
+  )
+  batch.updatePaint({
+    paintIndices: Uint16Array.of(0),
+    palette: [{ color: [0.25, 0.5, 1, 0.75] }],
+  })
+  assert.equal(geometry.getAttribute('msdfOutlineWidth').getX(0), 0)
+  batch.dispose()
+  assert.throws(() => batch.updatePaint(paint), /disposed/)
+  let disposedTextures = 0
+  for (const page of resource.pages)
+    page.texture.addEventListener('dispose', () => disposedTextures++)
+  msdf.dispose(resource)
+  assert.equal(disposedTextures, resource.pages.length)
+}
+
+function glbViews(bytes) {
+  const document = glbRoot(bytes)
+  const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const jsonLength = data.getUint32(12, true)
+  const binaryStart = 20 + jsonLength + 8
+  return {
+    document,
+    views: document.bufferViews.map(({ byteOffset = 0, byteLength }) =>
+      bytes.subarray(binaryStart + byteOffset, binaryStart + byteOffset + byteLength),
+    ),
+  }
+}
+
+function firstPresentGlyph(records) {
+  const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
+  for (let glyphId = 0; glyphId < records.byteLength / 20; glyphId += 1) {
+    if (view.getUint16(glyphId * 20 + 16, true) !== 0xffff) return glyphId
+  }
+  throw new Error('canonical MTSDF fixture has no present glyph')
 }
 
 function fakeMtsdfBakerInstance({
