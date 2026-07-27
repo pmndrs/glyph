@@ -128,6 +128,11 @@ interface TextPaintProperties {
   shadow?: { color: ColorRepresentation; offset: readonly [number, number] }
 }
 
+interface TextRasterProperties {
+  /** Physical device pixels represented by one paragraph-local CSS pixel. */
+  rasterPixelRatio?: number
+}
+
 interface TextSpan extends TextShapingProperties, TextPaintProperties {
   start: number
   end: number
@@ -149,6 +154,7 @@ type TextContentProperties =
 type TextProperties = TextLayoutProperties &
   TextShapingProperties &
   TextPaintProperties &
+  TextRasterProperties &
   TextFontProperties &
   TextContentProperties & {
     onLayout?: (layout: ParagraphLayout) => void
@@ -163,7 +169,7 @@ declare class Text extends Group {
 }
 ```
 
-`width` and `height` are local Three.js units. A supplied dimension maps to an `exactly` paragraph axis; an omitted dimension maps to `unconstrained`. Standard `Object3D` transforms remain standard Three.js/R3F properties rather than being duplicated in `TextProperties`. Direct text properties follow Drei and uikit conventions; there is no second CSS-like `style` object in V0. React users can create styled wrapper components with ordinary component composition. `lineHeight` is a unitless multiplier of the effective `fontSize`.
+`width` and `height` are local Three.js units. A supplied dimension maps to an `exactly` paragraph axis; an omitted dimension maps to `unconstrained`. Standard `Object3D` transforms remain standard Three.js/R3F properties rather than being duplicated in `TextProperties`. Direct text properties follow Drei and uikit conventions; there is no second CSS-like `style` object in V0. React users can create styled wrapper components with ordinary component composition. `lineHeight` is a unitless multiplier of the effective `fontSize`. `rasterPixelRatio` defaults to one, describes physical pixels per paragraph-local CSS pixel, and changes raster batch selection without changing shaping or logical layout. Browser/native integrations supply it explicitly; the core never reads a platform global.
 
 `Text` owns a paragraph instance, the raster resources required by its font slots, and raster-specific Three.js draw objects. The normal `font` value is a composed `FontToken`; callers may instead provide a raw font input plus a raster definition for one-off use. Both forms normalize through the same caches. Because the framework-neutral `Text` class is deliberately non-generic, the raw form is runtime-validated; reusable `defineFont` tokens and `RasterRuntime.load` retain package-owned option types at compile time. The token's raster definition resolves a deterministic serialized raster key; callers never invent that key. `ready` waits for every distinct root/span font, shared-shaper initialization, selected raster index, initial shape/layout, and raster pages required by that initial layout; raw or registered span fonts inherit the root raster definition, while a span `FontToken` carries its own. Once those exist, span inputs are resolved to `FontHandle`s before paragraph creation. The object stays hidden until that first computation completes, but shaping and layout do not introduce another Suspense resource. Updating only transform or paint uniforms does not reflow; updating width reflows; updating text or shaping styles invalidates the affected shaping cache. A later update that needs different pages retains the last complete draw generation until the replacement pages are ready, then swaps batches atomically; stale or cancelled page preparation never replaces newer output.
 
