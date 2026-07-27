@@ -150,12 +150,6 @@ async function checkEvidence(report) {
       throw new Error(`${variant.id} MTSDF allocation evidence is stale`)
     }
   }
-  const distributed = await readFile(new URL('../dist/mtsdf_baker.wasm', import.meta.url))
-  const distributedSha256 = createHash('sha256').update(distributed).digest('hex')
-  const scalar = report.variants.find((variant) => variant.id === 'scalar')
-  if (scalar === undefined || distributedSha256 !== scalar.wasm.optimizedSha256) {
-    throw new Error('distributed MTSDF generator is not the admitted scalar artifact')
-  }
 }
 
 async function retainArtifacts(variants) {

@@ -17,16 +17,41 @@ path = "src/bin/generate-mtsdf-abi.rs"
 required-features = ["std"]
 
 [features]
-default = ["std"]
-std = ["dep:serde_json", "serde_json/std", "pmndrs-text-mtsdf-core/std"]
+default = ["std", "artifact-baker"]
+std = [
+  "dep:serde_json",
+  "serde_json/std",
+  "pmndrs-text-mtsdf-core/std",
+  "pmndrs-text-mtsdf-fontations?/std",
+  "pmndrs-text-raster-artifact?/std",
+  "serde?/std",
+  "skrifa?/std",
+]
+artifact-baker = [
+  "dep:pmndrs-text-mtsdf-fontations",
+  "dep:pmndrs-text-raster-artifact",
+  "dep:serde",
+  "dep:serde_json",
+  "dep:skrifa",
+  "dep:thiserror",
+]
 simd128-experiment = ["pmndrs-text-mtsdf-core/simd128-experiment"]
 allocation-evidence = []
 
 [dependencies]
+core_maths = "0.1.1"
 pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }
+pmndrs-text-mtsdf-fontations = { path = "../mtsdf-fontations", default-features = false, optional = true }
+pmndrs-text-raster-artifact = { path = "../raster-artifact", default-features = false, optional = true }
+serde = { version = "1.0.229", default-features = false, features = [
+  "alloc",
+  "derive",
+], optional = true }
 serde_json = { version = "1.0.145", default-features = false, features = [
   "alloc",
 ], optional = true }
+skrifa = { version = "=0.45.1", default-features = false, features = ["libm"], optional = true }
+thiserror = { version = "2.0.19", default-features = false, optional = true }
 
 [build-dependencies]
 serde_json = "1.0.145"

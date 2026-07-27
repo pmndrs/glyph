@@ -53,15 +53,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
-name = "pmndrs-text-mtsdf-admission"
-version = "0.0.0"
-dependencies = [
- "pmndrs-text-mtsdf-core",
- "pmndrs-text-mtsdf-fontations",
- "skrifa",
-]
-
-[[package]]
 name = "pmndrs-text-mtsdf-core"
 version = "0.0.0"
 dependencies = [

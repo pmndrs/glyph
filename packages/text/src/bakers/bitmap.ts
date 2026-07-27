@@ -1,13 +1,17 @@
 import type {
-  BakeArtifactV0,
   RasterBakeArtifact,
   RasterBakeRequest,
   RasterBakerModule,
-  RasterPagePayloadReport,
-  RasterPayloadReport,
   SerializedBakeError,
 } from '../bake.js'
-import type { RasterKey, Sha256Hex } from '../identity.js'
+import {
+  createDirectRasterBakerFromInstance,
+  instantiateWasm,
+  isNonArrayObject,
+  matchesAbiFunction,
+  readEmbeddedJsonAbi,
+  type AbiFunction,
+} from '../internal/raster-baker-wasm.js'
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js'
 import {
   BITMAP_EXTENSION,
@@ -76,45 +80,6 @@ export interface BitmapBakerAbiV0 {
   }
 }
 
-interface AbiFunction {
-  readonly export: string
-  readonly parameters: readonly string[]
-  readonly result?: string
-}
-
-interface BitmapArtifactMetadata {
-  readonly role: 'raster' | 'raster-page'
-  readonly id: string
-  readonly sha256: Sha256Hex
-  readonly byteOffset: number
-  readonly byteLength: number
-}
-
-interface BitmapResultMetadata {
-  readonly rasterKey: string
-  readonly kind: 'bitmap'
-  readonly extension: 'PMNDRS_font_bitmap'
-  readonly version: 0
-  readonly artifacts: readonly BitmapArtifactMetadata[]
-  readonly report: RasterPayloadReport
-}
-
-interface BitmapBakerExports {
-  readonly memory: WebAssembly.Memory
-  readonly allocate: (length: number) => number
-  readonly deallocate: (pointer: number, length: number) => void
-  readonly bake: (
-    sourcePointer: number,
-    sourceLength: number,
-    requestPointer: number,
-    requestLength: number,
-  ) => number
-  readonly responseLength: () => number
-}
-
-const textEncoder = new TextEncoder()
-const textDecoder = new TextDecoder()
-
 export class BitmapBakeError extends Error {
   readonly code: string
   readonly path: string | undefined
@@ -128,53 +93,27 @@ export class BitmapBakeError extends Error {
 }
 
 export async function createBitmapBaker(source: BitmapBakerWasmSource): Promise<BitmapBakerCore> {
-  const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source)
-  const instance = await WebAssembly.instantiate(module, {})
-  return createBitmapBakerFromInstance(instance)
+  return createBitmapBakerFromInstance(await instantiateWasm(source))
 }
 
 export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): BitmapBakerCore {
   const abi = readBitmapBakerAbi(instance)
-  const exports = readExports(instance.exports, abi)
-  return {
-    bake({ source, request }) {
-      const requestBytes = textEncoder.encode(JSON.stringify(request))
-      let sourcePointer = 0
-      let requestPointer = 0
-      let responsePointer = 0
-      let responseLength = 0
-      try {
-        sourcePointer = copyIntoWasm(exports, source)
-        requestPointer = copyIntoWasm(exports, requestBytes)
-        responsePointer = exports.bake(
-          sourcePointer,
-          source.byteLength,
-          requestPointer,
-          requestBytes.byteLength,
-        )
-        responseLength = exports.responseLength()
-        const response = new Uint8Array(exports.memory.buffer, responsePointer, responseLength)
-        return decodeResponse(response, abi)
-      } finally {
-        if (sourcePointer !== 0) exports.deallocate(sourcePointer, source.byteLength)
-        if (requestPointer !== 0) exports.deallocate(requestPointer, requestBytes.byteLength)
-        if (responsePointer !== 0 && responseLength !== 0) {
-          exports.deallocate(responsePointer, responseLength)
-        }
-      }
-    },
-  }
+  return createDirectRasterBakerFromInstance<BitmapBakerRequestV0, 'bitmap'>(instance, abi, {
+    label: 'bitmap baker',
+    kind: BITMAP_KIND,
+    extension: BITMAP_EXTENSION,
+    version: BITMAP_FORMAT_VERSION,
+    pageFormat: 'r8unorm',
+    createError: (error) => new BitmapBakeError(error),
+  })
 }
 
 export function readBitmapBakerAbi(instance: WebAssembly.Instance): BitmapBakerAbiV0 {
-  const pointer = readBootstrap(instance.exports, 'pmndrs_bitmap_baker_abi_ptr')()
-  const length = readBootstrap(instance.exports, 'pmndrs_bitmap_baker_abi_len')()
-  const memory = instance.exports.memory
-  if (!(memory instanceof WebAssembly.Memory)) {
-    throw new TypeError('bitmap baker ABI bootstrap is missing linear memory')
-  }
-  const value: unknown = JSON.parse(
-    textDecoder.decode(new Uint8Array(memory.buffer, pointer, length)),
+  const value = readEmbeddedJsonAbi(
+    instance,
+    'pmndrs_bitmap_baker_abi_ptr',
+    'pmndrs_bitmap_baker_abi_len',
+    'bitmap baker',
   )
   assertBitmapBakerAbi(value)
   return value
@@ -216,218 +155,6 @@ function assertBitmapBakerAbi(value: unknown): asserts value is BitmapBakerAbiV0
   ) {
     throw new TypeError('unsupported bitmap baker ABI')
   }
-}
-
-function readExports(wasmExports: WebAssembly.Exports, abi: BitmapBakerAbiV0): BitmapBakerExports {
-  const memory = wasmExports[abi.memory]
-  const allocate = wasmExports[abi.functions.allocate.export]
-  const deallocate = wasmExports[abi.functions.deallocate.export]
-  const bake = wasmExports[abi.functions.bake.export]
-  const responseLength = wasmExports[abi.functions.responseByteLength.export]
-  if (
-    !(memory instanceof WebAssembly.Memory) ||
-    typeof allocate !== 'function' ||
-    typeof deallocate !== 'function' ||
-    typeof bake !== 'function' ||
-    typeof responseLength !== 'function'
-  ) {
-    throw new TypeError('invalid bitmap baker Wasm exports')
-  }
-  return {
-    memory,
-    allocate: allocate as BitmapBakerExports['allocate'],
-    deallocate: deallocate as BitmapBakerExports['deallocate'],
-    bake: bake as BitmapBakerExports['bake'],
-    responseLength: responseLength as BitmapBakerExports['responseLength'],
-  }
-}
-
-function readBootstrap(wasmExports: WebAssembly.Exports, name: string): () => number {
-  const value = wasmExports[name]
-  if (typeof value !== 'function') throw new TypeError(`bitmap baker ABI is missing ${name}`)
-  return value as () => number
-}
-
-function copyIntoWasm(exports: BitmapBakerExports, bytes: Uint8Array): number {
-  const pointer = exports.allocate(bytes.byteLength)
-  if (pointer === 0 && bytes.byteLength !== 0) {
-    throw new RangeError('bitmap baker Wasm allocation failed')
-  }
-  try {
-    new Uint8Array(exports.memory.buffer, pointer, bytes.byteLength).set(bytes)
-    return pointer
-  } catch (error) {
-    if (pointer !== 0) exports.deallocate(pointer, bytes.byteLength)
-    throw error
-  }
-}
-
-function decodeResponse(response: Uint8Array, abi: BitmapBakerAbiV0): RasterBakeArtifact<'bitmap'> {
-  const contract = abi.response
-  if (response.byteLength < contract.headerByteLength) {
-    throw new TypeError('bitmap baker response is shorter than its ABI header')
-  }
-  if (textDecoder.decode(response.subarray(0, contract.magic.length)) !== contract.magic) {
-    throw new TypeError('bitmap baker response magic does not match its ABI')
-  }
-  const view = new DataView(response.buffer, response.byteOffset, response.byteLength)
-  const status = view.getUint32(contract.statusOffset, true)
-  const metadataLength = view.getUint32(contract.metadataByteLengthOffset, true)
-  const artifactLength = view.getUint32(contract.artifactByteLengthOffset, true)
-  const metadataStart = contract.payloadOffset
-  const metadataEnd = checkedEnd(metadataStart, metadataLength, response.byteLength)
-  const artifactEnd = checkedEnd(metadataEnd, artifactLength, response.byteLength)
-  if (artifactEnd !== response.byteLength) {
-    throw new TypeError('bitmap baker response carries undeclared trailing bytes')
-  }
-  const metadata: unknown = JSON.parse(
-    textDecoder.decode(response.subarray(metadataStart, metadataEnd)),
-  )
-  if (status !== contract.successStatus) {
-    throw new BitmapBakeError(parseSerializedBakeError(metadata))
-  }
-  assertBitmapResultMetadata(metadata, artifactLength)
-  const result = metadata
-  const artifacts = result.artifacts.map<BakeArtifactV0>((artifact) => ({
-    role: artifact.role,
-    id: artifact.id,
-    bytes: response
-      .subarray(
-        metadataEnd + artifact.byteOffset,
-        metadataEnd + artifact.byteOffset + artifact.byteLength,
-      )
-      .slice(),
-    sha256: artifact.sha256,
-  }))
-  return {
-    rasterKey: result.rasterKey as RasterKey,
-    kind: result.kind,
-    extension: result.extension,
-    version: result.version,
-    artifacts,
-    report: result.report,
-  }
-}
-
-function assertBitmapResultMetadata(
-  result: unknown,
-  artifactLength: number,
-): asserts result is BitmapResultMetadata {
-  if (
-    !isNonArrayObject(result) ||
-    result.kind !== BITMAP_KIND ||
-    result.extension !== BITMAP_EXTENSION ||
-    result.version !== BITMAP_FORMAT_VERSION ||
-    !isHash(result.rasterKey) ||
-    !Array.isArray(result.artifacts) ||
-    !isRasterPayloadReport(result.report)
-  ) {
-    throw new TypeError('bitmap baker returned invalid result metadata')
-  }
-  let expectedOffset = 0
-  for (const artifact of result.artifacts) {
-    if (
-      !isBitmapArtifactMetadata(artifact) ||
-      artifact.id.length === 0 ||
-      artifact.byteOffset !== expectedOffset ||
-      artifact.byteLength <= 0
-    ) {
-      throw new TypeError('bitmap baker returned an invalid artifact directory')
-    }
-    expectedOffset = checkedEnd(artifact.byteOffset, artifact.byteLength, artifactLength)
-  }
-  if (expectedOffset !== artifactLength) {
-    throw new TypeError('bitmap baker artifact directory does not cover its payload')
-  }
-}
-
-function isBitmapArtifactMetadata(value: unknown): value is BitmapArtifactMetadata {
-  return (
-    isNonArrayObject(value) &&
-    (value.role === 'raster' || value.role === 'raster-page') &&
-    typeof value.id === 'string' &&
-    isHash(value.sha256) &&
-    Number.isSafeInteger(value.byteOffset) &&
-    Number.isSafeInteger(value.byteLength)
-  )
-}
-
-function isRasterPayloadReport(value: unknown): value is RasterPayloadReport {
-  return (
-    isNonArrayObject(value) &&
-    isNonnegativeSafeInteger(value.metadataBytes) &&
-    isNonnegativeSafeInteger(value.serializedBytes) &&
-    isNonnegativeSafeInteger(value.gpuBytes) &&
-    Array.isArray(value.pages) &&
-    value.pages.every(isRasterPagePayloadReport)
-  )
-}
-
-function isRasterPagePayloadReport(value: unknown): value is RasterPagePayloadReport {
-  return (
-    isNonArrayObject(value) &&
-    isPositiveSafeInteger(value.width) &&
-    isPositiveSafeInteger(value.height) &&
-    value.format === 'r8unorm' &&
-    isPositiveSafeInteger(value.mipBytes) &&
-    (value.source === 'embedded' || value.source === 'external') &&
-    isPositiveSafeInteger(value.encodedBytes)
-  )
-}
-
-function isNonArrayObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isNonnegativeSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isHash(value: unknown): value is Sha256Hex {
-  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
-}
-
-function parseSerializedBakeError(value: unknown): SerializedBakeError {
-  if (
-    !isNonArrayObject(value) ||
-    typeof value.code !== 'string' ||
-    typeof value.message !== 'string' ||
-    (value.path !== undefined && typeof value.path !== 'string')
-  ) {
-    throw new TypeError('bitmap baker returned invalid error metadata')
-  }
-  return {
-    code: value.code,
-    message: value.message,
-    ...(value.path === undefined ? {} : { path: value.path }),
-  }
-}
-
-function matchesAbiFunction(
-  value: unknown,
-  parameters: readonly string[],
-  result?: string,
-): value is AbiFunction {
-  return (
-    isNonArrayObject(value) &&
-    typeof value.export === 'string' &&
-    Array.isArray(value.parameters) &&
-    value.parameters.length === parameters.length &&
-    value.parameters.every((parameter, index) => parameter === parameters[index]) &&
-    value.result === result
-  )
-}
-
-function checkedEnd(start: number, length: number, limit: number): number {
-  const end = start + length
-  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(length) || length < 0 || end > limit) {
-    throw new TypeError('bitmap baker response range is outside its payload')
-  }
-  return end
 }
 
 export function bitmapBakerFromCore(

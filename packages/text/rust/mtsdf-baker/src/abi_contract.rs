@@ -5,8 +5,8 @@ pub const ABI_VERSION: u32 = 0;
 pub const REQUEST_HEADER_SIZE: u32 = 48;
 pub const COMMAND_SIZE: u32 = 28;
 
-pub fn json() -> String {
-    json!({
+pub fn json(include_artifact_baker: bool) -> String {
+    let mut contract = json!({
         "name": "pmndrs-text-mtsdf-baker",
         "version": ABI_VERSION,
         "endianness": "little",
@@ -51,6 +51,38 @@ pub fn json() -> String {
         "commands": { "move": 0, "line": 1, "quadratic": 2, "cubic": 3, "close": 4 },
         "output": { "format": "rgba8", "order": "row-major-top-down", "ownership": "borrowed-until-next-generate" },
         "status": { "ok": 0, "invalidRequest": 1, "invalidOutline": 2, "generationFailed": 3 }
-    })
-    .to_string()
+    });
+    if include_artifact_baker {
+        contract["artifactBaker"] = json!({
+            "versions": {
+                "generator": env!("CARGO_PKG_VERSION"),
+                "msdfFormat": 0,
+                "skrifa": "0.45.1",
+                "readFonts": "0.42.1",
+                "ktx2": "0.5.0",
+            },
+            "functions": {
+                "bake": {
+                    "export": "pmndrs_text_mtsdf_bake",
+                    "parameters": ["sourcePointer", "sourceByteLength", "requestPointer", "requestByteLength"],
+                    "result": "responsePointer",
+                },
+                "responseByteLength": {
+                    "export": "pmndrs_text_mtsdf_bake_result_len",
+                    "parameters": [],
+                    "result": "byteLength",
+                },
+            },
+            "response": {
+                "headerByteLength": 16,
+                "magic": "PMMS",
+                "statusOffset": 4,
+                "metadataByteLengthOffset": 8,
+                "artifactByteLengthOffset": 12,
+                "payloadOffset": 16,
+                "successStatus": 0,
+            },
+        });
+    }
+    contract.to_string()
 }
