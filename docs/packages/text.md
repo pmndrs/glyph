@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:432c50d5d594f17c6faf88193fd16863d8465fe896d9f5e08cbf92d2ce1ed2bc"
+source_digest: "sha256:d4da58a10dd1a431e8a071f158656b4eff7bbd6b999d87850655fdfbd47623bc"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -37,7 +37,7 @@ sources:
     title: MTSDF direct-memory TypeScript host
   - id: mtsdf-contract
     resource: ../../packages/text/src/raster/msdf.ts
-    title: Fixed MTSDF descriptor and raster identity
+    title: Fixed MTSDF runtime module
   - id: mtsdf-baker
     resource: ../../packages/text/src/bakers/msdf.ts
     title: Fixed MTSDF baker host
@@ -47,6 +47,12 @@ sources:
   - id: raster-wasm-host
     resource: ../../packages/text/src/internal/raster-baker-wasm.ts
     title: Shared direct-memory raster baker host
+  - id: raster-atlas-runtime
+    resource: ../../packages/text/src/internal/raster-atlas.ts
+    title: Shared dense-record and lossless-atlas runtime
+  - id: raster-batch-runtime
+    resource: ../../packages/text/src/internal/raster-batch.ts
+    title: Shared instanced-raster batch primitives
   - id: composition
     resource: ../../packages/text/src/internal/compose-bake.ts
     title: Generic core/raster artifact composer
@@ -88,12 +94,12 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:46:34Z"
+  at: "2026-07-27T04:33:55Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 Milestone 8.2 fixed baker complete; runtime, renderer, evidence, and deferred closure review pending
+Status: 🟡 Milestone 8.3 runtime implementation active; strict artifact validation, product evidence, and deferred closure review pending
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing types resolve through the repository's current `three/webgpu` subpath rather than the legacy root export, matching the renderer boundary used by first-party raster work. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
@@ -104,6 +110,10 @@ The geometry core is independent of its host boundary. A sibling `mtsdf-baker` c
 Milestone 8.2 composes that kernel into the fixed `@pmndrs/text/bakers/msdf` artifact path. One shared Fontations adapter supplies maintained unscaled line, quadratic, and cubic outlines to both admission evidence and the baker; no second parser or outline bridge exists. The fixed descriptor hashes to `e944ba8d…fe93` and carries no tuning options. Each glyph is expanded onto the global 64-unit plane grid, receives the full eight-pixel distance range plus four field-padding texels, and is streamed into 1024-pixel pages through the shared fallible atlas and dense-record writer. Degenerate non-rendering font slots become exact absent records, while malformed command streams remain typed failures. The shared TypeScript direct-memory host now owns allocation, response framing, nested metadata validation, copying, and transactional cleanup for both bitmap and MTSDF bakers.
 
 The Binaryen-optimized fixed baker is a zero-import 529,891-byte Wasm module (204,975 gzip; 160,589 Brotli); its independent host is 13,455 raw, 9,031 minified, 3,129 gzip, and 2,799 Brotli bytes. These optional baker bytes do not enter the shaper or either renderer. Canonical Inter produces 58,740 record bytes and ten independently addressable lossless RGBA8 KTX2 pages. Their 39,111,736 decoded GPU bytes become 39,177,416 externally serialized bytes including the 63,720-byte companion GLB; each KTX2 adds only 196 container bytes. The exact companion and ten page hashes are integration fixtures, and one generated raster is repackaged into embedded and external forms to prove identical records and page bytes without paying for a second generation pass. A local Node direct-memory pass currently takes about 92 seconds and is recorded as bake cost, not renderer time.
+
+The first item 8.3 runtime slice promotes `@pmndrs/text/raster/msdf` from an identity-only contract to the fixed browser module. It validates reciprocal font/raster identity, exact V0 constants, dense record length and bounds, single-level lossless linear RGBA8 KTX2 payloads, and a 256 MiB decoded-plus-generated-mip residency ceiling before publishing a resource. Bitmap and MTSDF now share one lossless-atlas decoder, dense-record validator, unit quad, parallel-array checks, and resolved-paint lookup rather than carrying technique-local copies. The MTSDF resource generates its mip chain on upload and owns one material per logical page; disposal releases materials and textures transactionally.
+
+One instanced batch family handles fill, outline, opacity, and translated hard shadow. The version-matched TSL graph reconstructs the fill edge from the RGB median and consumes alpha's true signed distance for effects. Shadow offsets expand each instance's geometric bounds and shift the same authenticated atlas sample, while clamped sampling and an explicit in-glyph mask prevent neighboring atlas cells from bleeding into the result. V0 outlines are bounded to the field's four outward atlas pixels; a larger request fails instead of silently clipping. Paint updates reuse geometry and rewrite only owned instance attributes. The canonical Inter integration test decodes all ten real pages, creates and repaints a live batch, verifies normalized effect attributes, and proves idempotent batch/resource cleanup without loading baker Wasm into the runtime graph.
 
 The checked SIMD comparison builds scalar, compiler-auto-vectorized, and explicit-four-lane kernels from isolated target directories. Every variant preserves all seven native-oracle hashes and the complete Inter result of 2,915 generated glyphs, 22 non-rendering rejected slots, and checksum `c0c1764d`; an instrumented warm seven-call corpus records seven request allocations, zero reallocations, and seven deallocations, one owned output copy occurs per call, and Wasm memory does not grow after the cold corpus. On Node 24, scalar measured 9.12 ms for seven warm calls versus 9.69–9.70 ms for SIMD. Chromium 149 measured 9.2 ms versus 9.7 ms. SIMD improved the 44.77-second complete Inter pass by only 0.37–0.45% and saved 139–160 Brotli bytes. That workload-dependent result does not justify a required target feature or a second artifact, so scalar remains the only kernel in the fixed baker. The repository-local Vitexec capture and full-font request emitter preserve the rejected experiment as repeatable evidence rather than product complexity.
 

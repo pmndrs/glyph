@@ -1,4 +1,4 @@
-import { KHR_SUPERCOMPRESSION_NONE, VK_FORMAT_R8_UNORM, read as readKtx2 } from 'ktx-parse'
+import { VK_FORMAT_R8_UNORM } from 'ktx-parse'
 import * as THREE from 'three/webgpu'
 import {
   add,
@@ -22,7 +22,23 @@ import { deriveRasterKey } from '../internal/raster-identity.js'
 import type { RegisteredFont } from '../font.js'
 import type { RasterKey } from '../identity.js'
 import type { ParagraphLayout } from '../layout.js'
-import type { GlyphPaint, LinearRgba } from '../paint.js'
+import type { GlyphPaint } from '../paint.js'
+import {
+  assertParallelRasterLayout,
+  assertParallelRasterPaint,
+  resolvedGlyphColor,
+  unitRasterQuadGeometry,
+} from '../internal/raster-batch.js'
+import {
+  ABSENT_GLYPH_PAGE,
+  DENSE_GLYPH_RECORD_STRIDE,
+  decodeEmbeddedLosslessAtlasPage,
+  jsonArray,
+  jsonObject,
+  nonnegativeSafeInteger,
+  positiveSafeInteger,
+  validateDenseGlyphRecords,
+} from '../internal/raster-atlas.js'
 import {
   defineRaster,
   type JsonValue,
@@ -122,8 +138,8 @@ interface BitmapGlyphPositionSnapshotData {
   readonly origins: Float32Array
 }
 
-const RECORD_STRIDE = 20
-const ABSENT_PAGE = 0xffff
+const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE
+const ABSENT_PAGE = ABSENT_GLYPH_PAGE
 const materialByPageTexture = new WeakMap<THREE.DataTexture, THREE.MeshBasicNodeMaterial>()
 const presentableBatchByObject = new WeakMap<THREE.Object3D, PresentableBitmapBatch>()
 const snapshotDataByToken = new WeakMap<
@@ -453,7 +469,7 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
   ) {
     throw new TypeError('bitmap raster is not bound to the supplied font')
   }
-  const extension = objectValue(raster.extensionData, 'bitmap extension')
+  const extension = jsonObject(raster.extensionData, 'bitmap extension')
   if (
     extension.version !== BITMAP_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
@@ -465,14 +481,14 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
   }
   const strikes: BitmapStrikeResource[] = []
   try {
-    const strikeValues = arrayValue(extension.strikes, 'bitmap strikes')
+    const strikeValues = jsonArray(extension.strikes, 'bitmap strikes')
     if (strikeValues.length === 0)
       throw new TypeError('bitmap raster must contain at least one strike')
     for (let strikeIndex = 0; strikeIndex < strikeValues.length; strikeIndex += 1) {
-      const strike = objectValue(strikeValues[strikeIndex], `bitmap strike ${strikeIndex}`)
-      const ppem = positiveInteger(strike.ppemX, `bitmap strike ${strikeIndex} ppemX`)
+      const strike = jsonObject(strikeValues[strikeIndex], `bitmap strike ${strikeIndex}`)
+      const ppem = positiveSafeInteger(strike.ppemX, `bitmap strike ${strikeIndex} ppemX`)
       if (strike.ppemY !== ppem) throw new TypeError('bitmap runtime requires square strikes')
-      const planeUnitsPerEm = positiveInteger(
+      const planeUnitsPerEm = positiveSafeInteger(
         strike.planeUnitsPerEm,
         `bitmap strike ${strikeIndex} planeUnitsPerEm`,
       )
@@ -480,7 +496,7 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
         throw new TypeError(`bitmap records must use ${RECORD_STRIDE}-byte stride`)
       }
       const records = raster.view(
-        nonnegativeInteger(
+        nonnegativeSafeInteger(
           strike.recordBufferView,
           `bitmap strike ${strikeIndex} recordBufferView`,
         ),
@@ -490,7 +506,7 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
       }
       const pages: BitmapPageResource[] = []
       try {
-        for (const [pageIndex, pageValue] of arrayValue(
+        for (const [pageIndex, pageValue] of jsonArray(
           strike.pages,
           `bitmap strike ${strikeIndex} pages`,
         ).entries()) {
@@ -498,7 +514,7 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
             decodeBitmapPage(raster, pageValue, `bitmap strike ${strikeIndex} page ${pageIndex}`),
           )
         }
-        validateBitmapRecords(records, pages)
+        validateDenseGlyphRecords(records, pages, 'bitmap')
         strikes.push({ ppem, planeUnitsPerEm, records, pages })
       } catch (error) {
         for (const page of pages) page.texture.dispose()
@@ -527,94 +543,14 @@ function decodeBitmapPage(
   value: JsonValue,
   path: string,
 ): BitmapPageResource {
-  const page = objectValue(value, path)
-  const width = positiveInteger(page.width, `${path} width`)
-  const height = positiveInteger(page.height, `${path} height`)
-  if (page.mipLevelCount !== 1 || page.colorSpace !== 'linear') {
-    throw new TypeError(`${path} must be a single-level linear texture`)
-  }
-  const baseline = arrayValue(page.variants, `${path} variants`).find((variantValue) => {
-    const variant = objectValue(variantValue, `${path} variant`)
-    return variant.gpuFormat === 'r8unorm'
+  return decodeEmbeddedLosslessAtlasPage(raster, value, path, {
+    gpuFormat: 'r8unorm',
+    vkFormat: VK_FORMAT_R8_UNORM,
+    bytesPerPixel: 1,
+    textureFormat: THREE.RedFormat,
+    generateMipmaps: false,
+    minFilter: THREE.LinearFilter,
   })
-  if (baseline === undefined) throw new TypeError(`${path} has no lossless R8 variant`)
-  const variant = objectValue(baseline, `${path} R8 variant`)
-  if (variant.container !== 'ktx2' || variant.quality !== 'lossless') {
-    throw new TypeError(`${path} R8 variant is not the lossless KTX2 baseline`)
-  }
-  const source = objectValue(variant.source, `${path} R8 source`)
-  if (source.type !== 'bufferView') {
-    throw new TypeError(`${path} uses an external page; lazy page residency is not available yet`)
-  }
-  const bytes = raster.view(nonnegativeInteger(source.bufferView, `${path} bufferView`))
-  const container = readKtx2(bytes)
-  const level = container.levels[0]
-  if (
-    container.vkFormat !== VK_FORMAT_R8_UNORM ||
-    container.typeSize !== 1 ||
-    container.pixelWidth !== width ||
-    container.pixelHeight !== height ||
-    container.pixelDepth !== 0 ||
-    container.layerCount !== 0 ||
-    container.faceCount !== 1 ||
-    container.levelCount !== 1 ||
-    container.supercompressionScheme !== KHR_SUPERCOMPRESSION_NONE ||
-    level === undefined ||
-    level.levelData.byteLength !== width * height ||
-    level.uncompressedByteLength !== width * height
-  ) {
-    throw new TypeError(`${path} KTX2 payload does not match its declared R8 dimensions`)
-  }
-  const data = level.levelData.slice()
-  const pageTexture = new THREE.DataTexture(
-    data,
-    width,
-    height,
-    THREE.RedFormat,
-    THREE.UnsignedByteType,
-  )
-  pageTexture.colorSpace = THREE.NoColorSpace
-  pageTexture.flipY = true
-  pageTexture.generateMipmaps = false
-  pageTexture.minFilter = THREE.LinearFilter
-  pageTexture.magFilter = THREE.LinearFilter
-  pageTexture.needsUpdate = true
-  return { width, height, texture: pageTexture }
-}
-
-function validateBitmapRecords(records: Uint8Array, pages: readonly BitmapPageResource[]): void {
-  const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
-  for (let offset = 0; offset < records.byteLength; offset += RECORD_STRIDE) {
-    const pageIndex = view.getUint16(offset + 16, true)
-    const flags = view.getUint16(offset + 18, true)
-    if (flags !== 0) throw new TypeError('bitmap record contains unsupported flags')
-    if (pageIndex === ABSENT_PAGE) {
-      if (records.subarray(offset, offset + 16).some((value) => value !== 0)) {
-        throw new TypeError('absent bitmap record contains payload data')
-      }
-      continue
-    }
-    const page = pages[pageIndex]
-    if (page === undefined) throw new TypeError('bitmap record references a missing page')
-    const planeLeft = view.getInt16(offset, true)
-    const planeBottom = view.getInt16(offset + 2, true)
-    const planeRight = view.getInt16(offset + 4, true)
-    const planeTop = view.getInt16(offset + 6, true)
-    const atlasLeft = view.getUint16(offset + 8, true)
-    const atlasTop = view.getUint16(offset + 10, true)
-    const atlasRight = view.getUint16(offset + 12, true)
-    const atlasBottom = view.getUint16(offset + 14, true)
-    if (
-      planeLeft > planeRight ||
-      planeBottom > planeTop ||
-      atlasLeft >= atlasRight ||
-      atlasTop >= atlasBottom ||
-      atlasRight > page.width ||
-      atlasBottom > page.height
-    ) {
-      throw new TypeError('bitmap record is outside its validated plane or atlas bounds')
-    }
-  }
 }
 
 function buildBitmapBatches(
@@ -623,7 +559,7 @@ function buildBitmapBatches(
   fontSlot: number,
   paint: GlyphPaint,
 ): BitmapDrawBatch {
-  assertParallelLayout(layout, paint)
+  assertParallelRasterLayout(layout, paint)
   const strike = selectBitmapStrike(resource.strikes, layout, fontSlot)
   const records = new DataView(
     strike.records.buffer,
@@ -679,7 +615,7 @@ function buildBitmapBatches(
     strikePpem: strike.ppem,
     updatePaint(nextPaint) {
       if (disposed) throw new TypeError('bitmap draw batch has been disposed')
-      assertParallelPaint(layout, nextPaint)
+      assertParallelRasterPaint(layout, nextPaint)
       for (const run of runs) updateRunPaint(run, nextPaint)
     },
     dispose() {
@@ -756,10 +692,10 @@ function createBitmapRun(
       [(atlasRight - atlasLeft) / page.width, (atlasBottom - atlasTop) / page.height],
       instance * 2,
     )
-    colors.set(paintColor(paint, glyphIndex), instance * 4)
+    colors.set(resolvedGlyphColor(paint, glyphIndex), instance * 4)
   }
 
-  const geometry = unitQuadGeometry()
+  const geometry = unitRasterQuadGeometry()
   geometry.instanceCount = count
   const originAttribute = new THREE.InstancedBufferAttribute(origins, 2)
   geometry.setAttribute('bitmapOrigin', originAttribute)
@@ -779,17 +715,6 @@ function createBitmapRun(
     geometry,
     mesh,
   }
-}
-
-function unitQuadGeometry(): THREE.InstancedBufferGeometry {
-  const geometry = new THREE.InstancedBufferGeometry()
-  geometry.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0], 3),
-  )
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 1, 1], 2))
-  geometry.setIndex([0, 1, 2, 2, 1, 3])
-  return geometry
 }
 
 function bitmapMaterial(page: THREE.DataTexture): THREE.MeshBasicNodeMaterial {
@@ -847,16 +772,9 @@ function snapClipAxis(
 function updateRunPaint(run: BitmapBatchRun, paint: GlyphPaint): void {
   const values = run.colorAttribute.array as Float32Array
   for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    values.set(paintColor(paint, run.glyphIndices[instance]!), instance * 4)
+    values.set(resolvedGlyphColor(paint, run.glyphIndices[instance]!), instance * 4)
   }
   run.colorAttribute.needsUpdate = true
-}
-
-function paintColor(paint: GlyphPaint, glyphIndex: number): LinearRgba {
-  const paintIndex = paint.paintIndices[glyphIndex]
-  const resolved = paintIndex === undefined ? undefined : paint.palette[paintIndex]
-  if (resolved === undefined) throw new TypeError('glyph paint references a missing palette entry')
-  return resolved.color
 }
 
 function assertBitmapPaint(paint: GlyphPaint): void {
@@ -865,51 +783,4 @@ function assertBitmapPaint(paint: GlyphPaint): void {
       throw new TypeError('bitmap raster does not support outline or shadow paint')
     }
   }
-}
-
-function assertParallelLayout(layout: ParagraphLayout, paint: GlyphPaint): void {
-  const glyphCount = layout.glyphIds.length
-  for (const values of [layout.glyphFontSlots, layout.glyphFontSizes, layout.x, layout.y]) {
-    if (values.length !== glyphCount) throw new TypeError('paragraph glyph arrays are not parallel')
-  }
-  assertParallelPaint(layout, paint)
-}
-
-function assertParallelPaint(layout: ParagraphLayout, paint: GlyphPaint): void {
-  if (paint.paintIndices.length !== layout.glyphIds.length || paint.palette.length === 0) {
-    throw new TypeError('glyph paint does not match the paragraph layout')
-  }
-}
-
-function objectValue(
-  value: JsonValue | undefined,
-  path: string,
-): Readonly<Record<string, JsonValue>> {
-  if (typeof value !== 'object' || value === null || isJsonArray(value)) {
-    throw new TypeError(`${path} must be an object`)
-  }
-  return value
-}
-
-function arrayValue(value: JsonValue | undefined, path: string): readonly JsonValue[] {
-  if (!isJsonArray(value)) throw new TypeError(`${path} must be an array`)
-  return value
-}
-
-function isJsonArray(value: JsonValue | undefined): value is readonly JsonValue[] {
-  return Array.isArray(value)
-}
-
-function positiveInteger(value: JsonValue | undefined, path: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
-    throw new TypeError(`${path} must be a positive integer`)
-  }
-  return value
-}
-
-function nonnegativeInteger(value: JsonValue | undefined, path: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError(`${path} must be a non-negative integer`)
-  }
-  return value
 }
