@@ -44,8 +44,8 @@ Use ordinary JavaScript only for graph structure known while building. Use TSL n
 
 ```ts
 import * as THREE from 'three/webgpu'
+import type { Node } from 'three/webgpu'
 import { vec3 } from 'three/tsl'
-import type Node from 'three/src/nodes/core/Node.js'
 
 const material = new THREE.MeshStandardNodeMaterial()
 const colorNode: Node<'vec3'> = vec3(0.2, 0.5, 1)

@@ -2,6 +2,8 @@
 
 ## 2026-07-27
 
+- **MTSDF compute research** — Documented a measured-admission WebGPU compute generator follow-up: CPU topology and packing remain authoritative, scalar Wasm remains the offline fallback, and no second implementation ships without a material end-to-end win against the native oracle.
+- **TSL boundary** — Moved every remaining Three.js node type to the public `three/webgpu` export, aligned the repository-local TSL skill, and made package/app lint reject legacy root, internal source, addons/examples, and bare R3F imports.
 - **Workload lifecycle** — Keyed live renderer lifecycles by workload after the combined probe exposed a fast-navigation race: switching from Benchmark Ipsum to Advanced Shaping while the shared Inter surface was initializing could publish the previous 1,358-character configuration indefinitely. Each workload now initializes, measures, and disposes its own renderer surface.
 - **Live-suite isolation** — Moved the advanced-shaping performance observation ahead of GPU-heavy interaction and conformance probes. The combined local lane now measures a fresh product surface before accumulated renderer work while retaining the same later control and correctness coverage.
 - **Probe lifecycle** — Removed the mobile product probe's fixed-port child process. Its Vite server now selects an available local port and shares transactional cleanup with headed Chromium, so an occupied development port or browser-launch failure cannot strand the responsive evidence lane.

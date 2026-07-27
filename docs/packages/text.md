@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:1a4c7527c3a227d1a058b21163b8fa9bc3c13fec55a27c6523578f36a373676e"
+source_digest: "sha256:4b09e051de6bdf97fce946afbe3f1f4e8ca4084892e0fd93bdbc0329538eb0ad"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -106,14 +106,14 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T04:55:29Z"
+  at: "2026-07-27T11:07:37Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
-Status: 🟡 Milestone 8.4 browser renderer evidence active; Milestone 8.3 runtime and strict artifact validation complete
+Status: 🟡 Milestone 8 implementation complete; final Milestone 6/8 adversarial closure review remains active
 
-This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing types resolve through the repository's current `three/webgpu` subpath rather than the legacy root export, matching the renderer boundary used by first-party raster work. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
+This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing runtime values and types resolve through the public `three/webgpu` and `three/tsl` subpaths rather than the legacy root or internal source exports, matching the renderer boundary used by first-party raster work; package lint rejects those forbidden imports. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
 Milestone 8.1 adds a repository-owned `no_std + alloc` Rust MTSDF core and a non-shipping admission harness beside the package's existing bakers. Typed AoS outline construction lowers once into kind-segregated SoA spans with contour identity; reusable scratch keeps per-pixel traversal allocation-free and now retains corner-coloring storage between glyphs. True signed curve distances, contour-aware overlap combination, nonzero-fill sign correction, and deterministic edge coloring produce zero coverage mismatches against pinned native `msdfgen` 1.13.0 across ordinary, acute, overlapping, self-intersecting, quadratic, cubic, and counter fixtures. Mean alpha error stays between 0.472 and 0.549 bytes. The optimized `wasm32-unknown-unknown` admission module imports nothing and its compiled graph contains no font parser, WGPU, native binding, or WASI dependency. A bounded cargo-fuzz lane covers malformed outline streams. The oracle and explicit SIMD implementation remain test-only; scalar is the single production kernel.
 

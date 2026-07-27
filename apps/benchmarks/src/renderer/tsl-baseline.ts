@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu'
+import type { Node } from 'three/webgpu'
 import { float, mul, vec3 } from 'three/tsl'
-import type Node from 'three/src/nodes/core/Node.js'
 
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'

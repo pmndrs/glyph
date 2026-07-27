@@ -1,5 +1,6 @@
 import { KHR_DF_CHANNEL_RGBSDA_RED, VK_FORMAT_R8_UNORM } from 'ktx-parse'
 import * as THREE from 'three/webgpu'
+import type { Node } from 'three/webgpu'
 import {
   add,
   attribute,
@@ -16,8 +17,6 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import type Node from 'three/src/nodes/core/Node.js'
-
 import type { RegisteredFont } from '../font.js'
 import type { ParagraphLayout } from '../layout.js'
 import type { GlyphPaint } from '../paint.js'
