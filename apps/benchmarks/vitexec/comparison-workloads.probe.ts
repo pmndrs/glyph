@@ -84,8 +84,12 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
         if (shadow.disabled || !shadow.checked) {
           throw new Error('MSDF Paint & Effects did not initialize its shadow')
         }
+        const paintRevisionBeforeShadow = numericAttribute(viewport, 'data-paint-revision')
         setCheckbox('Shadow', false)
         await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false')
+        if (numericAttribute(viewport, 'data-paint-revision') <= paintRevisionBeforeShadow) {
+          throw new Error('MSDF shadow control replaced or reset the retained paint batch')
+        }
         setCheckbox('Shadow', true)
         await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'true')
       }

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:14a05a523a29978d63ab843fddff867f83b528c9b2c141b968616dc18c151ad3"
+source_digest: "sha256:4c9d005787bf6523eb13ff8a93da39c63928642c6f5ffebfb89a9e3096a32fec"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T12:32:30Z"
+  at: "2026-07-27T12:40:34Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -30,7 +30,7 @@ The primary product surface is organized for humans by mode, technique, backend,
 
 The Benchmark and Conformance tabs are named React 19.2 Activities. Each remembers its last selected workload and preserves its React state, while React disconnects effects for the hidden tree. Hiding Benchmark therefore runs the renderer cleanup that stops its animation loop, drains any active GPU timestamp query, and releases its renderer; hiding Conformance aborts any in-flight finite capture. Advanced-shaping playback is also gated by the visible Benchmark mode because its coordinator lives above the Activity boundary. The live product proof holds a hidden paint revision constant through a complete three-sample Conformance run, then returns to the preserved Paint & Effects workload and observes rendering resume.
 
-The comparison workloads retain framework-neutral `Text` objects behind the React surface. Paint & Effects advances one circular per-word chromatic sequence directly on the renderer RAF through the synchronous paint-only batch path; shaping, paragraph layout, geometry, and React do not drive individual color frames. The live probe observes a causal paint revision and rejects layout work during that update. Dynamic Layout renders three independently changing paragraph measures with neutral inspection frames; a default-on control can hide or restore those frames through the same typed configuration boundary.
+The Vite build runs the pinned React Compiler preset and emitted production bundles import React's compiler runtime. The compiler optimizes the React tree; renderer identity remains an application responsibility. The comparison workloads therefore retain framework-neutral `Text` objects behind the React surface. Paint & Effects advances one circular per-word chromatic sequence directly on the renderer RAF through the synchronous paint-only batch path; shaping, paragraph layout, geometry, and React do not drive individual color frames. Animate, speed, hue, opacity, shadow, stroke, and layout-bounds controls mutate retained scene state and never enter the scene-rebuild path. Font-size and layout-width changes alone may create a replacement layout, with the previous complete scene retained until readiness. The live probe observes causal, monotonically increasing paint revisions and rejects layout work or batch replacement during paint updates. Dynamic Layout renders three independently changing paragraph measures with neutral inspection frames; a default-on control can hide or restore those frames through the same typed configuration boundary.
 
 The responsive shell reserves the three-column rail/main/control layout for viewports at least 1,200 CSS pixels wide; narrower tablet and phone widths use the bottom-navigation flow so the fixed rails never squeeze the scene or create horizontal overflow. Form controls inherit only the design-system font family, leaving their explicit Tailwind size and line-height utilities authoritative. The scene header stacks before its chips on narrow widths, startup costs use two columns before the small breakpoint, and control labels stay at or below 13 CSS pixels without clipping while interactive controls retain at least 28 CSS pixels of height. Shared range controls remove text-field padding and draw their visible rail exactly one half-thumb radius inside each edge, so the minimum and maximum rail endpoints equal the native thumb-center travel. An accent segment fills from the minimum to the controlled value over the remaining neutral rail. Component tests distinguish range and text geometry, normalize and clamp fill progress, and the live product probe verifies zero horizontal padding, the explicit inset, visible fill/rail layers, and both numeric endpoints. The responsive product probe owns the wider layout invariants at 390, 1,024, and 1,280 CSS pixels; its in-process Vite lifecycle selects an available local port and closes both browser and server after success or failure.
 
