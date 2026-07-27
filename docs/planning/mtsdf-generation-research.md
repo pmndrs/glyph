@@ -33,7 +33,7 @@ sources:
     title: Zappar MSDF generator 1.2.4
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:13:33Z"
+  at: "2026-07-27T03:46:34Z"
 ---
 
 # MTSDF generation research
@@ -109,6 +109,8 @@ The scalar kernel is both the correctness oracle and the selected production imp
 - The final baker uses the repository's generated C ABI/JSON contract and direct Wasm memory access. It adds no WASI, Embind, wasm-bindgen, or per-call marshalling allocations.
 
 The scalar production boundary satisfies that final ABI gate: the package build emits one optimized zero-import Wasm and its Rust-generated contract, while the TypeScript host validates the complete contract and writes fixed command records directly into one owned request allocation. All seven native-oracle hashes survive the host boundary. The production baker uses an explicit checked transform: outline bounds are expanded onto one global 64-unit-per-em plane grid, the RGBA field uses one full eight-pixel distance range, and four texels of padding surround each glyph. This preserves one texel-to-plane scale across the face and prevents independently rounded glyph rectangles from stretching their fields. The completed scalar/auto/explicit comparison includes exact quality, the complete Inter pass, representative Node and Chromium calls, allocation/memory behavior, and compressed size. Scalar remains the sole production implementation because neither SIMD variant wins the complete comparison.
+
+The fixed baker integrates the selected kernel without publishing a duplicate standalone generator Wasm. A feature-minimal build remains the reproducible 44,109-byte admission measurement; the package resource is the 529,891-byte full baker containing the same scalar core plus Fontations, dense records, atlas packing, hashing, KTX2, GLB, and its second generated ABI surface. Canonical Inter occupies ten near-full 1024-pixel RGBA8 pages: 39,111,736 GPU bytes and 39,177,416 externally serialized bytes. Uncompressed KTX2 contributes only 196 bytes per page, so container removal would not materially change this result. Reversible KTX2 supercompression, lossy GPU block formats, subsetting, lower generation resolution, and paging address different costs and remain separate measured decisions; no lossy format replaces the exact baseline by default.
 
 [^valve-sdf]: Green, *Improved Alpha-Tested Magnification for Vector Textures and Special Effects*, 2007.
 [^chlumsky-thesis]: Chlumský, *Shape Decomposition for Multi-Channel Distance Fields*, 2015.

@@ -1,9 +1,16 @@
+#[cfg(feature = "artifact-baker")]
+use alloc::string::ToString;
 use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "allocation-evidence")]
 use core::alloc::{GlobalAlloc, Layout};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use pmndrs_text_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, OutlineSource};
+#[cfg(feature = "artifact-baker")]
+use serde::Serialize;
+
+#[cfg(feature = "artifact-baker")]
+use crate::{MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mtsdf};
 
 #[cfg(not(feature = "allocation-evidence"))]
 #[global_allocator]
@@ -45,6 +52,8 @@ unsafe impl GlobalAlloc for CountingAllocator {
 }
 
 const MAX_REQUEST_BYTES: u32 = 64 * 1024 * 1024;
+#[cfg(feature = "artifact-baker")]
+const MAX_RESPONSE_BYTES: usize = MAX_REQUEST_BYTES as usize;
 const REQUEST_HEADER_SIZE: usize = 48;
 const COMMAND_SIZE: usize = 28;
 const STATUS_OK: u32 = 0;
@@ -90,6 +99,7 @@ pub extern "C" fn pmndrs_text_mtsdf_generate(pointer: u32, length: u32) -> u32 {
             allocations,
             result_pointer,
             result_length,
+            ..
         } = state;
         let Some(bytes) = owned_bytes(allocations, pointer, length) else {
             return STATUS_INVALID_REQUEST;
@@ -125,6 +135,46 @@ pub extern "C" fn pmndrs_text_mtsdf_result_len() -> u32 {
     with_state(|state| state.result_length)
 }
 
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_bake(
+    source_pointer: u32,
+    source_length: u32,
+    request_pointer: u32,
+    request_length: u32,
+) -> u32 {
+    let result = with_state(|state| {
+        let Some(source) = owned_bytes(&state.allocations, source_pointer, source_length) else {
+            return Err(crate::MtsdfBakeError::new(
+                crate::MtsdfBakeErrorCode::InvalidDescriptor,
+                "MTSDF baker source range is not an active module allocation",
+            ));
+        };
+        let Some(request_bytes) = owned_bytes(&state.allocations, request_pointer, request_length)
+        else {
+            return Err(crate::MtsdfBakeError::new(
+                crate::MtsdfBakeErrorCode::InvalidDescriptor,
+                "MTSDF baker request range is not an active module allocation",
+            ));
+        };
+        serde_json::from_slice::<MtsdfBakeRequestV0>(request_bytes)
+            .map_err(|error| {
+                crate::MtsdfBakeError::new(
+                    crate::MtsdfBakeErrorCode::InvalidDescriptor,
+                    error.to_string(),
+                )
+            })
+            .and_then(|request| bake_mtsdf(source, request))
+    });
+    leak_artifact_response(encode_artifact_response(result))
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_bake_result_len() -> u32 {
+    with_state(|state| state.artifact_result_length)
+}
+
 #[cfg(feature = "allocation-evidence")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_mtsdf_reset_allocation_counts() {
@@ -157,6 +207,10 @@ struct WasmState {
     allocations: Vec<Allocation>,
     result_pointer: u32,
     result_length: u32,
+    #[cfg(feature = "artifact-baker")]
+    artifact_result_pointer: u32,
+    #[cfg(feature = "artifact-baker")]
+    artifact_result_length: u32,
 }
 
 struct Allocation {
@@ -175,23 +229,29 @@ impl WasmState {
             return 0;
         }
         bytes.resize(length as usize, 0);
-        let Some(pointer) = u32::try_from(bytes.as_mut_ptr() as usize).ok() else {
-            return 0;
-        };
+        self.adopt(bytes).map_or(0, |(pointer, _)| pointer)
+    }
+
+    fn adopt(&mut self, mut bytes: Vec<u8>) -> Option<(u32, u32)> {
+        let length = u32::try_from(bytes.len()).ok()?;
+        if length == 0 || self.allocations.try_reserve(1).is_err() {
+            return None;
+        }
+        let pointer = u32::try_from(bytes.as_mut_ptr() as usize).ok()?;
         if pointer == 0
             || self
                 .allocations
                 .iter()
                 .any(|allocation| allocation.pointer == pointer)
         {
-            return 0;
+            return None;
         }
         self.allocations.push(Allocation {
             pointer,
             length,
             bytes,
         });
-        pointer
+        Some((pointer, length))
     }
 
     fn deallocate(&mut self, pointer: u32, length: u32) {
@@ -201,8 +261,147 @@ impl WasmState {
             .position(|allocation| allocation.pointer == pointer && allocation.length == length)
         {
             self.allocations.swap_remove(index);
+            #[cfg(feature = "artifact-baker")]
+            if self.artifact_result_pointer == pointer {
+                self.artifact_result_pointer = 0;
+                self.artifact_result_length = 0;
+            }
         }
     }
+}
+
+#[cfg(feature = "artifact-baker")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmResultMetadata<'result> {
+    raster_key: &'result str,
+    kind: &'result str,
+    extension: &'result str,
+    version: u8,
+    artifacts: Vec<WasmArtifactMetadata<'result>>,
+    report: &'result crate::MtsdfPayloadReportV0,
+}
+
+#[cfg(feature = "artifact-baker")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmArtifactMetadata<'artifact> {
+    role: &'artifact str,
+    id: &'artifact str,
+    sha256: &'artifact str,
+    byte_offset: usize,
+    byte_length: usize,
+}
+
+#[cfg(feature = "artifact-baker")]
+fn encode_artifact_response(result: Result<MtsdfBakeResultV0, crate::MtsdfBakeError>) -> Vec<u8> {
+    const HEADER_LENGTH: usize = 16;
+    let (status, metadata, artifact_bytes): (u32, Vec<u8>, Vec<u8>) = match result {
+        Ok(result) => {
+            let mut offset = 0_usize;
+            let mut artifacts = Vec::new();
+            if artifacts.try_reserve_exact(result.artifacts.len()).is_err() {
+                return Vec::new();
+            }
+            for artifact in &result.artifacts {
+                let Some(next_offset) = offset.checked_add(artifact.bytes.len()) else {
+                    return encode_artifact_response(Err(crate::MtsdfBakeError::new(
+                        crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+                        "MTSDF baker artifact offsets exceed the ABI address space",
+                    )));
+                };
+                artifacts.push(WasmArtifactMetadata {
+                    role: &artifact.role,
+                    id: &artifact.id,
+                    sha256: &artifact.sha256,
+                    byte_offset: offset,
+                    byte_length: artifact.bytes.len(),
+                });
+                offset = next_offset;
+            }
+            if offset > MAX_RESPONSE_BYTES || u32::try_from(offset).is_err() {
+                return encode_artifact_response(Err(crate::MtsdfBakeError::new(
+                    crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+                    "MTSDF baker artifact bytes exceed the ABI address space",
+                )));
+            }
+            let metadata = WasmResultMetadata {
+                raster_key: &result.raster_key,
+                kind: &result.kind,
+                extension: &result.extension,
+                version: result.version,
+                artifacts,
+                report: &result.report,
+            };
+            let metadata = serde_json::to_vec(&metadata).unwrap_or_else(|_| serialization_error());
+            let mut artifact_bytes = Vec::new();
+            if artifact_bytes.try_reserve_exact(offset).is_err() {
+                return Vec::new();
+            }
+            for artifact in result.artifacts {
+                artifact_bytes.extend_from_slice(&artifact.bytes);
+            }
+            (0, metadata, artifact_bytes)
+        }
+        Err(error) => (
+            1,
+            serde_json::to_vec(&error).unwrap_or_else(|_| serialization_error()),
+            Vec::new(),
+        ),
+    };
+    let Ok(metadata_length) = u32::try_from(metadata.len()) else {
+        return encode_artifact_response(Err(crate::MtsdfBakeError::new(
+            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+            "MTSDF baker response metadata exceeds the ABI address space",
+        )));
+    };
+    let Ok(artifact_length) = u32::try_from(artifact_bytes.len()) else {
+        return encode_artifact_response(Err(crate::MtsdfBakeError::new(
+            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+            "MTSDF baker response artifact exceeds the ABI address space",
+        )));
+    };
+    let Some(total_length) = HEADER_LENGTH
+        .checked_add(metadata.len())
+        .and_then(|value| value.checked_add(artifact_bytes.len()))
+        .filter(|value| *value <= MAX_RESPONSE_BYTES && u32::try_from(*value).is_ok())
+    else {
+        return encode_artifact_response(Err(crate::MtsdfBakeError::new(
+            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+            "MTSDF baker response length exceeds the ABI address space",
+        )));
+    };
+    let mut response = Vec::new();
+    if response.try_reserve_exact(total_length).is_err() {
+        return Vec::new();
+    }
+    response.resize(HEADER_LENGTH, 0);
+    response[..4].copy_from_slice(b"PMMS");
+    response[4..8].copy_from_slice(&status.to_le_bytes());
+    response[8..12].copy_from_slice(&metadata_length.to_le_bytes());
+    response[12..16].copy_from_slice(&artifact_length.to_le_bytes());
+    response.extend_from_slice(&metadata);
+    response.extend_from_slice(&artifact_bytes);
+    response
+}
+
+#[cfg(feature = "artifact-baker")]
+fn serialization_error() -> Vec<u8> {
+    b"{\"code\":\"SERIALIZATION_FAILED\",\"message\":\"failed to serialize MTSDF result\"}".to_vec()
+}
+
+#[cfg(feature = "artifact-baker")]
+fn leak_artifact_response(bytes: Vec<u8>) -> u32 {
+    with_state(|state| {
+        state.artifact_result_pointer = 0;
+        state.artifact_result_length = 0;
+        let Some((pointer, length)) = state.adopt(bytes) else {
+            return 0;
+        };
+        state.artifact_result_pointer = pointer;
+        state.artifact_result_length = length;
+        pointer
+    })
 }
 
 fn owned_bytes(allocations: &[Allocation], pointer: u32, length: u32) -> Option<&[u8]> {

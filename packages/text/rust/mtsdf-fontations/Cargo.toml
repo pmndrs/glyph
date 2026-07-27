@@ -1,0 +1,17 @@
+[package]
+name = "pmndrs-text-mtsdf-fontations"
+description = "Shared Fontations outline adapter for the pmndrs/text MTSDF generator"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/text"
+publish = false
+
+[features]
+default = ["std"]
+std = ["pmndrs-text-mtsdf-core/std", "skrifa/std"]
+
+[dependencies]
+pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }
+skrifa = { version = "=0.45.1", default-features = false, features = ["libm"] }

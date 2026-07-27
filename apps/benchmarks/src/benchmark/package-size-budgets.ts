@@ -47,6 +47,18 @@ export const packageSizeBudgets = {
     gzipBytes: 19_000,
     brotliBytes: 15_500,
   },
+  'mtsdf-baker-wasm': {
+    rawBytes: 540_000,
+    minifiedBytes: 540_000,
+    gzipBytes: 210_000,
+    brotliBytes: 165_000,
+  },
+  'mtsdf-baker-js': {
+    rawBytes: 25_000,
+    minifiedBytes: 20_000,
+    gzipBytes: 6_000,
+    brotliBytes: 5_500,
+  },
   'portable-baker-js': {
     rawBytes: 10_100,
     minifiedBytes: 6_700,

@@ -13,7 +13,9 @@ test('the published contract is ESM-only', async () => {
   assert.equal(manifest.main, undefined)
   assert.equal(manifest.module, undefined)
   assert.deepEqual(manifest.bin, { 'pmndrs-text-bake': './dist/node/cli.js' })
-  assert.deepEqual(manifest.pmndrs, { text: { bitmap: './bakers/bitmap' } })
+  assert.deepEqual(manifest.pmndrs, {
+    text: { bitmap: './bakers/bitmap', msdf: './bakers/msdf' },
+  })
 
   for (const [subpath, target] of Object.entries(manifest.exports)) {
     if (typeof target === 'string') {

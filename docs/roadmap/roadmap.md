@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:04:17Z"
+  at: "2026-07-27T03:46:34Z"
 ---
 
 # Canonical implementation roadmap
@@ -50,12 +50,12 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     4 |   ✅   | Integrate HarfRust Wasm shaping                                       | L      | 2–3                 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags.                |
 |     5 |   ✅   | Implement paragraph reflow and validate universal shaping assumptions | L      | 4                   | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence.    |
 |     6 |   🟡   | Prove rendering with bitmap inside the benchmark harness              | L      | 3, 5                | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload.                |
-|     7 |   ⬜   | Harden the integration proof                                          | L      | 1–6                 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review.                |
-|     8 |   ⬜   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
+|     7 |   ✅   | Harden the integration proof                                          | L      | 1–6                 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review.                |
+|     8 |   🟡   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
 |     9 |   ⬜   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
 |    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–5 are closed. Milestone 6 is active: item 6.4 reorients the benchmark harness around human-facing live cost inspection before the milestone receives its closure review.
+Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.3. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -109,7 +109,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
 | 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
 | 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                  |  L   | 7.2        |
-| 8.2  |   🟡   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
+| 8.2  |   ✅   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
 | 8.3  |   ⬜   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
 | 8.4  |   ⬜   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
 | 8.5  |   ⬜   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |

@@ -10,7 +10,7 @@ publish = false
 
 [features]
 oracle = []
-full-font-evidence = ["dep:skrifa"]
+full-font-evidence = ["dep:pmndrs-text-mtsdf-fontations", "dep:skrifa"]
 fuzzing = []
 
 [lib]
@@ -33,6 +33,7 @@ required-features = ["full-font-evidence"]
 
 [dependencies]
 pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }
+pmndrs-text-mtsdf-fontations = { path = "../mtsdf-fontations", optional = true }
 skrifa = { version = "=0.45.1", default-features = false, features = ["std"], optional = true }
 
 [profile.release]

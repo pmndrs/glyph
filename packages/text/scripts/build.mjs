@@ -56,6 +56,8 @@ await run(
     '--release',
     '--locked',
     '--no-default-features',
+    '--features',
+    'artifact-baker',
   ],
   rustEnvironment,
 )
