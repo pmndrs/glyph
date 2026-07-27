@@ -10,10 +10,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 314058,
-      "minifiedBytes": 240013,
-      "gzipBytes": 70448,
-      "brotliBytes": 53998
+      "rawBytes": 314244,
+      "minifiedBytes": 240169,
+      "gzipBytes": 70490,
+      "brotliBytes": 54050
     },
     {
       "id": "font-validator-js",
@@ -70,20 +70,20 @@
       "label": "Bitmap runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 345559,
-      "minifiedBytes": 260167,
-      "gzipBytes": 76214,
-      "brotliBytes": 58923
+      "rawBytes": 346446,
+      "minifiedBytes": 260712,
+      "gzipBytes": 76354,
+      "brotliBytes": 59069
     },
     {
       "id": "mtsdf-runtime-js",
       "label": "MTSDF runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 352285,
-      "minifiedBytes": 263631,
-      "gzipBytes": 77439,
-      "brotliBytes": 60106
+      "rawBytes": 352471,
+      "minifiedBytes": 263786,
+      "gzipBytes": 77486,
+      "brotliBytes": 60001
     },
     {
       "id": "bitmap-baker-wasm",

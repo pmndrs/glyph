@@ -26,13 +26,37 @@ function waitForElement(selector: string): Promise<HTMLElement> {
   })
 }
 
+function waitForCurrentElementAttribute(
+  selector: string,
+  name: string,
+  value: string,
+): Promise<HTMLElement> {
+  const current = document.querySelector<HTMLElement>(selector)
+  if (current?.getAttribute(name) === value) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const element = document.querySelector<HTMLElement>(selector)
+      if (element?.getAttribute(name) !== value) return
+      observer.disconnect()
+      resolve(element)
+    })
+    observer.observe(document.documentElement, { attributes: true, childList: true, subtree: true })
+  })
+}
+
 const scene = await waitForElement('[data-testid="scene"]')
 if (!scene.textContent?.includes('Benchmark ipsum')) {
   throw new Error('Default live benchmark workload is not visible')
 }
 
+;(await waitForEnabledButton('1× DPR')).click()
+
 const captureWindow = await waitForEnabledButton('Capture window')
-let viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
+let viewport = await waitForCurrentElementAttribute(
+  '[data-testid="bitmap-live-viewport"]',
+  'data-dpr',
+  '1',
+)
 const controls = await waitForElement('[data-testid="controls"]')
 const gpuResourceInspector = await waitForElement('[data-testid="gpu-resource-inspector"]')
 const sparklineCards = [...document.querySelectorAll<HTMLElement>('[data-testid^="sparkline-"]')]

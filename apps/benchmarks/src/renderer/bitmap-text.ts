@@ -32,6 +32,7 @@ import {
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createCanvasSurface } from './canvas-surface'
+import { finiteCanvasDelta } from './canvas-view'
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
 import {
   LIVE_TEXT_COLOR,
@@ -182,6 +183,8 @@ export interface BitmapTextConformanceCapture {
 
 export interface BitmapTextPreview {
   resize(width: number, height: number): void
+  panBy(deltaX: number, deltaY: number): void
+  resetView(): void
   setGridVisible(visible: boolean): void
   update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>
   setPresentationProgress(revision: number, progress: number): BitmapTextPreviewSnapshot
@@ -321,7 +324,7 @@ async function createResources(
   try {
     const loadedFont = await loadBitmapFont(undefined, fontFixture)
     font = loadedFont.font
-    line = await createBitmapLine(font, conformanceText(), BITMAP_FONT_SIZE / dpr)
+    line = await createBitmapLine(font, conformanceText(), BITMAP_FONT_SIZE / dpr, dpr)
     line.object.position.set(
       quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
       quarterDevicePosition(-Math.max(4, (HEIGHT - line.height) / 2), dpr),
@@ -405,6 +408,7 @@ async function createBitmapLine(
   font: RegisteredFont,
   text: string,
   fontSize: number,
+  rasterPixelRatio: number,
   signal?: AbortSignal,
   layoutWidth?: number,
   shaping: {
@@ -421,6 +425,7 @@ async function createBitmapLine(
     font,
     raster: bitmapRequest,
     fontSize,
+    rasterPixelRatio,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
     color: LIVE_TEXT_COLOR,
     language: shaping.language,
@@ -648,7 +653,7 @@ export async function createBitmapTextPreview(
     signal?.throwIfAborted()
     const scene = new THREE.Scene()
     const textStarted = performance.now()
-    line = await createBitmapLine(font, text, fontSize, signal, layoutWidth, {
+    line = await createBitmapLine(font, text, fontSize, dpr, signal, layoutWidth, {
       language,
       direction,
       features,
@@ -904,6 +909,14 @@ export async function createBitmapTextPreview(
               onError(error)
             }
           })
+      },
+      panBy(deltaX, deltaY) {
+        if (closing || disposed) return
+        scene.position.x += finiteCanvasDelta(deltaX, 'bitmap preview horizontal pan')
+        scene.position.y -= finiteCanvasDelta(deltaY, 'bitmap preview vertical pan')
+      },
+      resetView() {
+        scene.position.set(0, 0, 0)
       },
       setGridVisible(visible) {
         canvasSurface.setGridVisible(visible)

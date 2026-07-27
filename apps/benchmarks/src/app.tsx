@@ -46,6 +46,7 @@ import {
   type RasterTechnique,
 } from './benchmark/url-state'
 import { ExportPanel } from './components/export-panel'
+import { InteractiveCanvas } from './components/interactive-canvas'
 import { Report } from './components/report'
 import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
 import packageSizes from './generated/package-sizes.json'
@@ -86,6 +87,35 @@ type WorkloadTechniqueStatus =
 
 const READY: WorkloadTechniqueStatus = { kind: 'ready' }
 const PLANNED_M9: WorkloadTechniqueStatus = { kind: 'planned', milestone: 9 }
+
+let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined
+
+function importComparisonWorkload() {
+  return import('./renderer/comparison-workload')
+}
+
+function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {
+  comparisonWorkloadModule ??= importComparisonWorkload()
+  return comparisonWorkloadModule
+}
+
+function scheduleComparisonWorkloadPreload(): () => void {
+  if (globalThis.requestIdleCallback === undefined) return () => undefined
+  const request = globalThis.requestIdleCallback(() => {
+    void preloadComparisonWorkload()
+  })
+  return () => globalThis.cancelIdleCallback(request)
+}
+
+function isComparisonWorkload(workload: string): boolean {
+  return (
+    workload === 'text-ladder' ||
+    workload === 'off-axis-3d' ||
+    workload === 'dynamic-layout' ||
+    workload === 'paragraph-stress' ||
+    workload === 'paint-effects'
+  )
+}
 
 interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
   readonly animatePresentation: boolean
@@ -371,6 +401,7 @@ function Harness() {
   const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW)
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
   const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('inter')
+  const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot())
   const [isPending, startTransition] = useTransition()
 
   const workload = workloadById(location.mode, location.workload)
@@ -593,30 +624,48 @@ function Harness() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <TopBar
+        compact={!desktop}
+        location={location}
         mode={location.mode}
         pending={isPending}
         ready={Boolean(actionReady)}
         webgpu={environment.webgpu}
         onAction={location.mode === 'benchmark' ? captureWindow : runConformance}
+        onControls={() =>
+          setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' })
+        }
+        onMenu={() => setWorkloadPanelOpen((open) => !open)}
         onMode={selectMode}
+        onTechnique={selectTechnique}
+        workloadPanelOpen={workloadPanelOpen}
       />
       {desktop ? (
-        <div className="grid h-[calc(100vh-52px)] min-h-[680px] grid-cols-[224px_minmax(640px,1fr)_288px]">
-          <WorkloadRail
-            activeFontFixture={activeFontFixture}
-            fontFixture={fontFixture}
-            location={location}
-            showcaseFrame={showcaseFrame}
-            onFontFixture={(value) => {
-              setLocation({ fontFixture: value })
-            }}
-            onAdvancedFontFixture={(value) => {
-              setAdvancedFontFixture(value)
-              invalidateLiveCapture()
-            }}
-            onLocation={setLocation}
-            onTechnique={selectTechnique}
-          />
+        <div
+          className="grid h-[calc(100vh-52px)] min-h-[680px] transition-[grid-template-columns] duration-200"
+          style={{
+            gridTemplateColumns: workloadPanelOpen
+              ? '224px minmax(640px, 1fr) 288px'
+              : '0 minmax(640px, 1fr) 288px',
+          }}
+        >
+          <div className="min-w-0 overflow-hidden">
+            <WorkloadRail
+              activeFontFixture={activeFontFixture}
+              className="w-56"
+              fontFixture={fontFixture}
+              location={location}
+              showcaseFrame={showcaseFrame}
+              onFontFixture={(value) => {
+                setLocation({ fontFixture: value })
+              }}
+              onAdvancedFontFixture={(value) => {
+                setAdvancedFontFixture(value)
+                invalidateLiveCapture()
+              }}
+              onLocation={setLocation}
+              onTechnique={selectTechnique}
+            />
+          </div>
           <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
             <Scene
               activeFontFixture={activeFontFixture}
@@ -655,9 +704,13 @@ function Harness() {
           <aside className="overflow-auto bg-chrome p-4">{controls}</aside>
         </div>
       ) : (
-        <div className="pb-[58px]">
-          <main className="min-h-[calc(100vh-110px)] p-3">
-            <div className={location.view === 'scene' ? undefined : 'hidden'}>
+        <div>
+          <main className="min-h-[calc(100vh-92px)] p-3">
+            <div
+              className={
+                location.view === 'report' || location.view === 'export' ? 'hidden' : undefined
+              }
+            >
               <Scene
                 activeFontFixture={activeFontFixture}
                 fontFixture={fontFixture}
@@ -693,16 +746,37 @@ function Harness() {
               />
             </div>
             {location.view === 'controls' && (
-              <MobileSheet title="Controls" onClose={() => setLocation({ view: 'scene' })}>
+              <CompactSheet title="Controls" onClose={() => setLocation({ view: 'scene' })}>
                 {controls}
-              </MobileSheet>
+              </CompactSheet>
             )}
             {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
             {location.view === 'export' && (
               <ExportPanel liveCapture={liveCapture} summary={summary} />
             )}
           </main>
-          <MobileNavigation location={location} onLocation={setLocation} />
+          {workloadPanelOpen && (
+            <CompactWorkloadPanel onClose={() => setWorkloadPanelOpen(false)}>
+              <WorkloadRail
+                activeFontFixture={activeFontFixture}
+                className="h-full w-full border-r-0"
+                fontFixture={fontFixture}
+                location={location}
+                showcaseFrame={showcaseFrame}
+                showTechnique={false}
+                onFontFixture={(value) => setLocation({ fontFixture: value })}
+                onAdvancedFontFixture={(value) => {
+                  setAdvancedFontFixture(value)
+                  invalidateLiveCapture()
+                }}
+                onLocation={(value) => {
+                  setLocation({ ...value, view: 'scene' })
+                  setWorkloadPanelOpen(false)
+                }}
+                onTechnique={selectTechnique}
+              />
+            </CompactWorkloadPanel>
+          )}
         </div>
       )}
     </div>
@@ -749,86 +823,130 @@ function workloadRailDescription(workload: WorkloadOption, technique: RasterTech
 }
 
 function TopBar({
+  compact,
+  location,
   mode,
   pending,
   ready,
   webgpu,
   onAction,
+  onControls,
+  onMenu,
   onMode,
+  onTechnique,
+  workloadPanelOpen,
 }: {
+  readonly compact: boolean
+  readonly location: HarnessLocation
   readonly mode: HarnessMode
   readonly pending: boolean
   readonly ready: boolean
   readonly webgpu: boolean
   readonly onAction: () => void
+  readonly onControls: () => void
+  readonly onMenu: () => void
   readonly onMode: (mode: HarnessMode) => void
+  readonly onTechnique: (technique: RasterTechnique) => void
+  readonly workloadPanelOpen: boolean
 }) {
   return (
-    <header className="flex h-[52px] items-center gap-2 border-b border-border bg-chrome px-2 sm:gap-3 sm:px-3 lg:px-4">
-      <div className="grid size-7 place-items-center rounded-md bg-accent font-serif text-lg">
-        a
-      </div>
-      <div className="hidden min-w-0 sm:block">
-        <div className="text-sm font-semibold leading-none">pmndrs/text</div>
-        <div className="mt-1 font-mono text-[9px] text-dim">TEXT PERFORMANCE LAB</div>
-      </div>
-      <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
-        {(['benchmark', 'conformance'] as const).map((value) => (
-          <button
-            className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'}`}
-            key={value}
-            type="button"
-            onClick={() => onMode(value)}
+    <header className="border-b border-border bg-chrome">
+      <div className="flex h-[52px] items-center gap-2 px-2 sm:gap-3 sm:px-3 lg:px-4">
+        <button
+          aria-expanded={workloadPanelOpen}
+          aria-label={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
+          className="grid size-7 shrink-0 place-items-center rounded-md bg-accent font-serif text-lg text-white hover:brightness-110"
+          type="button"
+          onClick={onMenu}
+        >
+          a
+        </button>
+        <div className="hidden min-w-0 sm:block">
+          <div className="text-sm font-semibold leading-none">pmndrs/text</div>
+          <div className="mt-1 font-mono text-[9px] text-dim">TEXT PERFORMANCE LAB</div>
+        </div>
+        <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
+          {(['benchmark', 'conformance'] as const).map((value) => (
+            <button
+              className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'}`}
+              key={value}
+              type="button"
+              onClick={() => onMode(value)}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        <span className="hidden sm:inline-flex">
+          <Chip tone={webgpu ? 'success' : 'warning'}>
+            {webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
+          </Chip>
+        </span>
+        {compact && (
+          <Button
+            aria-label="Open render controls"
+            className="px-2 text-[10px] sm:px-3"
+            variant={location.view === 'controls' ? 'primary' : 'secondary'}
+            onClick={onControls}
           >
-            {value}
-          </button>
-        ))}
-      </div>
-      <div className="flex-1" />
-      <span className="hidden sm:inline-flex">
-        <Chip tone={webgpu ? 'success' : 'warning'}>
-          {webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
-        </Chip>
-      </span>
-      <Button
-        aria-label={mode === 'benchmark' ? 'Capture window' : 'Run conformance'}
-        className="px-2 text-[10px] sm:px-3 sm:text-xs"
-        disabled={!ready}
-        variant="primary"
-        onClick={onAction}
-      >
-        {pending ? (
-          'Running…'
-        ) : mode === 'benchmark' ? (
-          <>
-            <span className="sm:hidden">Capture</span>
-            <span className="hidden sm:inline">Capture window</span>
-          </>
-        ) : (
-          <>
-            <span className="sm:hidden">Run</span>
-            <span className="hidden sm:inline">Run conformance</span>
-          </>
+            Controls
+          </Button>
         )}
-      </Button>
+        <Button
+          aria-label={mode === 'benchmark' ? 'Capture window' : 'Run conformance'}
+          className="px-2 text-[10px] sm:px-3 sm:text-xs"
+          disabled={!ready}
+          variant="primary"
+          onClick={onAction}
+        >
+          {pending ? (
+            'Running…'
+          ) : mode === 'benchmark' ? (
+            <>
+              <span className="sm:hidden">Capture</span>
+              <span className="hidden sm:inline">Capture window</span>
+            </>
+          ) : (
+            <>
+              <span className="sm:hidden">Run</span>
+              <span className="hidden sm:inline">Run conformance</span>
+            </>
+          )}
+        </Button>
+      </div>
+      {compact && (
+        <div className="flex h-10 items-center border-t border-border px-2 sm:px-3">
+          <span className="mr-2 font-mono text-[9px] uppercase text-dim">Technique</span>
+          <TechniqueSwitcher
+            className="grid w-full max-w-sm grid-cols-3 gap-1"
+            technique={location.technique}
+            onTechnique={onTechnique}
+          />
+        </div>
+      )}
     </header>
   )
 }
 
 function WorkloadRail({
   activeFontFixture,
+  className = '',
   fontFixture,
   location,
   showcaseFrame,
+  showTechnique = true,
   onAdvancedFontFixture,
   onFontFixture,
   onLocation,
   onTechnique,
 }: {
   readonly activeFontFixture: BenchmarkFontFixture
+  readonly className?: string
   readonly fontFixture: SelectableFontFixture
   readonly location: HarnessLocation
   readonly showcaseFrame: AdvancedShapingFrame
+  readonly showTechnique?: boolean
   readonly onAdvancedFontFixture: (fontFixture: BenchmarkFontFixture) => void
   readonly onFontFixture: (fontFixture: SelectableFontFixture) => void
   readonly onLocation: (value: Partial<HarnessLocation>) => void
@@ -842,22 +960,18 @@ function WorkloadRail({
       ? '16 px grayscale bitmap strike'
       : `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
   return (
-    <aside className="overflow-auto border-r border-border bg-chrome p-3">
-      <p className="eyebrow">Technique</p>
-      <div className="mt-2 grid grid-cols-3 gap-1">
-        {(['bitmap', 'mtsdf', 'slug'] as const).map((technique) => (
-          <button
-            className={`rounded-md border px-2 py-2 text-[10px] capitalize ${location.technique === technique ? 'border-accent bg-surface-active text-foreground' : 'border-transparent bg-transparent text-foreground hover:border-border hover:bg-surface'} disabled:cursor-not-allowed disabled:text-dim`}
-            disabled={technique === 'slug'}
-            key={technique}
-            type="button"
-            onClick={() => onTechnique(technique)}
-          >
-            {technique === 'mtsdf' ? 'MSDF' : technique}
-          </button>
-        ))}
-      </div>
-      <p className="eyebrow mb-2 mt-5">
+    <aside className={`overflow-auto border-r border-border bg-chrome p-3 ${className}`}>
+      {showTechnique && (
+        <>
+          <p className="eyebrow">Technique</p>
+          <TechniqueSwitcher
+            className="mt-2 grid grid-cols-3 gap-1"
+            technique={location.technique}
+            onTechnique={onTechnique}
+          />
+        </>
+      )}
+      <p className={`eyebrow mb-2 ${showTechnique ? 'mt-5' : ''}`}>
         {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
       </p>
       <nav className="grid gap-1">
@@ -868,6 +982,12 @@ function WorkloadRail({
             key={workload.id}
             type="button"
             onClick={() => onLocation({ workload: workload.id })}
+            onFocus={() => {
+              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload()
+            }}
+            onPointerEnter={() => {
+              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload()
+            }}
           >
             <span
               className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-transparent'}`}
@@ -916,6 +1036,32 @@ function WorkloadRail({
         <p className="mt-2 font-mono text-[9px] text-dim">{rasterDescription}</p>
       </div>
     </aside>
+  )
+}
+
+function TechniqueSwitcher({
+  className,
+  technique,
+  onTechnique,
+}: {
+  readonly className: string
+  readonly technique: RasterTechnique
+  readonly onTechnique: (technique: RasterTechnique) => void
+}) {
+  return (
+    <div className={className} data-testid="technique-switcher">
+      {(['bitmap', 'mtsdf', 'slug'] as const).map((value) => (
+        <button
+          className={`rounded-md border px-2 py-2 text-[10px] capitalize ${technique === value ? 'border-accent bg-surface-active text-foreground' : 'border-transparent bg-transparent text-foreground hover:border-border hover:bg-surface'} disabled:cursor-not-allowed disabled:text-dim`}
+          disabled={value === 'slug'}
+          key={value}
+          type="button"
+          onClick={() => onTechnique(value)}
+        >
+          {value === 'mtsdf' ? 'MSDF' : value}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -1021,7 +1167,7 @@ function Scene({
               paintStrokePercent={paintStrokePercent}
               showLayoutBounds={showLayoutBounds}
               workloadAmount={workloadAmount}
-              key={`${location.backend}-${String(dpr)}-${benchmarkWorkload.id}`}
+              key={`${location.backend}-${String(dpr)}`}
               showcaseFrame={showcaseFrame}
               stats={liveStats}
               technique={location.technique}
@@ -1133,6 +1279,9 @@ function BenchmarkSurface({
   readonly workload: string
   readonly onStats: (stats: LiveTextStats) => void
 }) {
+  useEffect(() => {
+    return scheduleComparisonWorkloadPreload()
+  }, [])
   const advanced = workload === 'advanced-shaping'
   const comparisonWorkload = comparisonWorkloadId(workload)
   const textConfiguration: LiveTextConfiguration = advanced
@@ -1746,7 +1895,7 @@ function BitmapTextViewport({
     expectedGlyphCount,
     features,
     fontFixture,
-    fontSize: fontSize / dpr,
+    fontSize,
     language,
     layoutWidthRatio,
     showGrid: grid,
@@ -1864,7 +2013,7 @@ function BitmapTextViewport({
     void preview
       .update({
         anchor,
-        fontSize: fontSize / dpr,
+        fontSize,
         layoutWidthRatio,
         text,
         language,
@@ -1964,15 +2113,15 @@ function BitmapTextViewport({
       data-testid="bitmap-live-viewport"
       ref={containerRef}
     >
-      <canvas
-        aria-label={`Live bitmap benchmark using ${backend}`}
-        className="absolute inset-0 size-full"
-        ref={canvasRef}
+      <InteractiveCanvas
+        label={`Live bitmap benchmark using ${backend}`}
+        canvasRef={canvasRef}
+        controllerRef={previewRef}
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          BAKED {stats?.strikePpem ?? 16} PX · RENDERED {stats?.renderedPpem ?? 16} DEVICE PX ·{' '}
-          {(stats?.scaleRatio ?? 1).toFixed(2)}×
+          BAKED {stats?.strikePpem ?? 16} PPEM · {fontSize} CSS PX /{' '}
+          {stats?.renderedPpem ?? fontSize * dpr} DEVICE PX · {(stats?.scaleRatio ?? 1).toFixed(2)}×
         </span>
         <span>{dpr}× DPR</span>
       </div>
@@ -2026,7 +2175,7 @@ function MtsdfTextViewport({
     anchor,
     direction,
     features,
-    fontSize: fontSize / dpr,
+    fontSize,
     language,
     layoutWidthRatio,
     showGrid: grid,
@@ -2111,7 +2260,7 @@ function MtsdfTextViewport({
         anchor,
         direction,
         features,
-        fontSize: fontSize / dpr,
+        fontSize,
         language,
         layoutWidthRatio,
         text,
@@ -2143,8 +2292,8 @@ function MtsdfTextViewport({
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
       data-missing-glyph-count={stats?.missingGlyphCount}
-      data-rendered-device-px={fontSize}
-      data-scale-ratio={fontSize / 64}
+      data-rendered-device-px={fontSize * dpr}
+      data-scale-ratio={(fontSize * dpr) / 64}
       data-startup-ms={stats?.startupMs}
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
@@ -2155,14 +2304,15 @@ function MtsdfTextViewport({
       data-testid="mtsdf-live-viewport"
       ref={containerRef}
     >
-      <canvas
-        aria-label={`Live MSDF benchmark using ${backend}`}
-        className="absolute inset-0 size-full"
-        ref={canvasRef}
+      <InteractiveCanvas
+        label={`Live MSDF benchmark using ${backend}`}
+        canvasRef={canvasRef}
+        controllerRef={previewRef}
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          MTSDF 64 PX/EM · RENDERED {fontSize} DEVICE PX · {(fontSize / 64).toFixed(2)}×
+          MTSDF 64 PX/EM · {fontSize} CSS PX / {fontSize * dpr} DEVICE PX ·{' '}
+          {((fontSize * dpr) / 64).toFixed(2)}×
         </span>
         <span>{dpr}× DPR</span>
       </div>
@@ -2219,9 +2369,6 @@ function ComparisonWorkloadViewport({
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<ComparisonWorkloadPreview>(undefined)
   const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
-  const panGestureRef = useRef<
-    { readonly pointerId: number; readonly x: number; readonly y: number } | undefined
-  >(undefined)
   const surfaceKey = `${backend}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
   const [publishedStats, setPublishedStats] = useState<
     Readonly<{
@@ -2247,7 +2394,7 @@ function ComparisonWorkloadViewport({
     animationEnabled,
     animationSpeed,
     fontFixture,
-    fontSize: fontSize / dpr,
+    fontSize,
     layoutWidthRatio,
     paintOpacity,
     paintShadowEnabled,
@@ -2273,7 +2420,7 @@ function ComparisonWorkloadViewport({
     const observer = new ResizeObserver(resize)
     observer.observe(container)
     const initialization = previewLifecycleRef.current.then(async () => {
-      const { createComparisonWorkloadPreview } = await import('./renderer/comparison-workload')
+      const { createComparisonWorkloadPreview } = await preloadComparisonWorkload()
       if (cancelled) return
       const bounds = container.getBoundingClientRect()
       const configuration = currentConfiguration()
@@ -2335,26 +2482,7 @@ function ComparisonWorkloadViewport({
     workload,
   ])
 
-  const rangeLabel =
-    workload === 'text-ladder' ? '8–512 DEVICE PX' : `RENDERED ${fontSize} DEVICE PX`
-  function beginPan(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (workload !== 'text-ladder' || event.button !== 0) return
-    event.currentTarget.setPointerCapture(event.pointerId)
-    panGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
-  }
-  function continuePan(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    const gesture = panGestureRef.current
-    if (gesture?.pointerId !== event.pointerId) return
-    previewRef.current?.panBy(event.clientX - gesture.x, event.clientY - gesture.y)
-    panGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
-  }
-  function endPan(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (panGestureRef.current?.pointerId !== event.pointerId) return
-    panGestureRef.current = undefined
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-  }
+  const rangeLabel = workload === 'text-ladder' ? '8–512 CSS PX' : `${fontSize} CSS PX`
   return (
     <div
       className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
@@ -2428,21 +2556,19 @@ function ComparisonWorkloadViewport({
       }
       ref={containerRef}
     >
-      <canvas
-        aria-label={`Live ${technique === 'mtsdf' ? 'MSDF' : 'bitmap'} ${workload} benchmark using ${backend}`}
-        className={`absolute inset-0 size-full ${workload === 'text-ladder' ? 'cursor-grab touch-none active:cursor-grabbing' : ''}`}
-        ref={canvasRef}
-        onDoubleClick={() => previewRef.current?.resetView()}
-        onPointerCancel={endPan}
-        onPointerDown={beginPan}
-        onPointerMove={continuePan}
-        onPointerUp={endPan}
+      <InteractiveCanvas
+        label={`Live ${technique === 'mtsdf' ? 'MSDF' : 'bitmap'} ${workload} benchmark using ${backend}`}
+        canvasRef={canvasRef}
+        controllerRef={previewRef}
+        zoom={workload === 'off-axis-3d'}
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
           {technique === 'mtsdf' ? 'MTSDF 64 PX/EM' : 'BITMAP 16 PX STRIKE'} · {rangeLabel}
         </span>
-        <span>{workload === 'text-ladder' ? `DRAG TO PAN · ${dpr}× DPR` : `${dpr}× DPR`}</span>
+        <span>
+          {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : 'PAN'} · {dpr}× DPR
+        </span>
       </div>
       {publishedStats === undefined && error === undefined && (
         <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
@@ -2728,11 +2854,11 @@ function Controls({
           <p className="eyebrow">Live workload</p>
           {workload === 'text-ladder' ? (
             <p className="font-mono text-[9px] uppercase text-muted">
-              Rendered range · 8–512 device px
+              Rendered range · 8–512 CSS px
             </p>
           ) : (
             <Field
-              label={`Rendered size · ${fontSize} device px`}
+              label={`Rendered size · ${fontSize} CSS px`}
               max={96}
               min={8}
               step={1}
@@ -3103,7 +3229,7 @@ function measuredPackageSize(id: string): MeasuredPackageSize {
   return entry
 }
 
-function MobileSheet({
+function CompactSheet({
   children,
   title,
   onClose,
@@ -3113,38 +3239,45 @@ function MobileSheet({
   readonly onClose: () => void
 }) {
   return (
-    <section className="fixed inset-x-0 bottom-[58px] z-20 max-h-[calc(100vh-86px)] overflow-auto rounded-t-xl border border-border bg-chrome p-4 shadow-2xl">
-      <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{title}</h1>
-        <Button aria-label="Close controls" onClick={onClose}>
-          ×
-        </Button>
-      </div>
-      {children}
-    </section>
+    <>
+      <button
+        aria-label="Close controls"
+        className="fixed inset-0 top-[92px] z-20 bg-black/40"
+        type="button"
+        onClick={onClose}
+      />
+      <section className="fixed inset-x-2 bottom-2 z-30 h-[60dvh] max-h-[60dvh] overflow-y-auto overscroll-contain rounded-xl border border-border bg-chrome p-4 shadow-2xl sm:left-auto sm:w-[min(420px,calc(100vw-16px))]">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-lg font-semibold">{title}</h1>
+          <Button aria-label="Close controls" onClick={onClose}>
+            ×
+          </Button>
+        </div>
+        {children}
+      </section>
+    </>
   )
 }
 
-function MobileNavigation({
-  location,
-  onLocation,
+function CompactWorkloadPanel({
+  children,
+  onClose,
 }: {
-  readonly location: HarnessLocation
-  readonly onLocation: (value: Partial<HarnessLocation>) => void
+  readonly children: ReactNode
+  readonly onClose: () => void
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[58px] grid-cols-4 border-t border-border bg-chrome p-2 min-[1200px]:hidden">
-      {(['scene', 'controls', 'report', 'export'] as const).map((view) => (
-        <button
-          className={`rounded-md font-mono text-[10px] capitalize ${location.view === view ? 'bg-surface-active text-foreground' : 'text-dim'}`}
-          key={view}
-          type="button"
-          onClick={() => onLocation({ view })}
-        >
-          {view}
-        </button>
-      ))}
-    </nav>
+    <>
+      <button
+        aria-label="Close workload menu"
+        className="fixed inset-0 top-[92px] z-20 bg-black/40"
+        type="button"
+        onClick={onClose}
+      />
+      <div className="fixed inset-y-0 left-0 top-[92px] z-30 w-[min(360px,88vw)] overflow-hidden border-r border-border bg-chrome shadow-2xl">
+        {children}
+      </div>
+    </>
   )
 }

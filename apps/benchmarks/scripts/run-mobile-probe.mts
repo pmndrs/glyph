@@ -3,6 +3,7 @@ import { chromium, type Page } from 'playwright'
 import { createServer } from 'vite'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
+process.chdir(root)
 const server = await createServer({
   root,
   server: {
@@ -50,43 +51,62 @@ try {
     )
   }
   await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-scene.png' })
+  step = 'phone technique switcher'
+  const phoneTechniqueSwitcher = page.locator('[data-testid="technique-switcher"]:visible')
+  await phoneTechniqueSwitcher.waitFor()
+  await phoneTechniqueSwitcher.getByRole('button', { name: 'MSDF', exact: true }).click()
+  await page.locator('[data-testid="mtsdf-live-viewport"]:visible').waitFor()
+  await assertResponsiveSurface(page, '390 px MSDF scene')
+  step = 'phone workload menu'
+  await page.getByRole('button', { name: 'Open workload menu', exact: true }).click()
+  await page.getByText('Advanced shaping', { exact: true }).waitFor()
+  await assertResponsiveSurface(page, '390 px workload menu')
+  await page.getByRole('button', { name: 'Close workload menu', exact: true }).first().click()
   step = 'controls navigation'
-  await page.getByRole('button', { name: 'controls', exact: true }).click()
+  await page.getByRole('button', { name: 'Open render controls', exact: true }).click()
   await page.locator('[data-testid="controls"]:visible').waitFor()
+  await page.locator('[data-testid="scene"]:visible').waitFor()
+  const controlsHeight = await page
+    .locator('[data-testid="controls"]:visible')
+    .evaluate((controls) => controls.parentElement?.getBoundingClientRect().height)
+  if (controlsHeight === undefined || controlsHeight > 844 * 0.62) {
+    throw new Error(`Phone controls panel is not capped near 60vh: ${String(controlsHeight)}`)
+  }
   await assertResponsiveSurface(page, '390 px controls')
   await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-controls.png' })
-  step = 'report navigation'
-  await page.getByRole('button', { name: 'report', exact: true }).click()
-  await page.locator('[data-testid="report"]:visible').waitFor()
-  await page.getByText('Consumer cost snapshot', { exact: true }).waitFor()
-  await assertResponsiveSurface(page, '390 px report')
-  await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-report.png' })
-  step = 'export navigation'
-  await page.getByRole('button', { name: 'export', exact: true }).click()
-  await page.locator('[data-testid="export-panel"]:visible').waitFor()
-  await page.getByText('"kind": "live-benchmark"', { exact: false }).waitFor()
-  await assertResponsiveSurface(page, '390 px export')
+  await page.getByRole('button', { name: 'Close controls', exact: true }).last().click()
   await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile.png' })
 
   step = 'tablet flow'
   await page.setViewportSize({ width: 1024, height: 768 })
-  await page.getByRole('button', { name: 'scene', exact: true }).click()
   await page.locator('[data-testid="scene"]:visible').waitFor()
   await assertResponsiveSurface(page, '1024 px scene')
-  if (!(await page.getByRole('button', { name: 'controls', exact: true }).isVisible())) {
-    throw new Error('1024 px flow hid the mobile navigation before the desktop layout fits')
+  await page.getByRole('button', { name: 'Open render controls', exact: true }).click()
+  await page.locator('[data-testid="controls"]:visible').waitFor()
+  await page.locator('[data-testid="scene"]:visible').waitFor()
+  const tabletControlsHeight = await page
+    .locator('[data-testid="controls"]:visible')
+    .evaluate((controls) => controls.parentElement?.getBoundingClientRect().height)
+  if (tabletControlsHeight === undefined || tabletControlsHeight > 768 * 0.62) {
+    throw new Error(
+      `Tablet controls panel is not capped near 60vh: ${String(tabletControlsHeight)}`,
+    )
   }
+  await page.getByRole('button', { name: 'Close controls', exact: true }).last().click()
 
   step = 'desktop flow'
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.locator('[data-testid="scene"]:visible').waitFor()
   await assertResponsiveSurface(page, '1280 px scene')
-  if (await page.getByRole('button', { name: 'controls', exact: true }).isVisible()) {
-    throw new Error('1280 px flow retained mobile navigation in the desktop layout')
+  if (await page.getByRole('button', { name: 'Open render controls', exact: true }).isVisible()) {
+    throw new Error('1280 px flow retained compact controls in the desktop layout')
   }
+  await page.getByRole('button', { name: 'Open workload menu', exact: true }).click()
+  await page.getByRole('button', { name: /^Benchmark ipsum/ }).waitFor()
+  await page.getByRole('button', { name: 'Close workload menu', exact: true }).click()
 
   if (errors.length > 0) throw new Error(`Mobile browser errors: ${errors.join(' | ')}`)
-  console.log('mobile-ready', JSON.stringify({ width: 390, height: 844, view: 'export' }))
+  console.log('mobile-ready', JSON.stringify({ width: 390, height: 844, view: 'scene' }))
 } finally {
   await browser?.close()
   await server.close()
@@ -111,6 +131,7 @@ async function assertResponsiveSurface(page: Page, label: string): Promise<void>
         const labelElements = visibleLabels.length > 0 ? visibleLabels : [button]
         return {
           label: button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '',
+          iconOnly: (button.textContent?.trim().length ?? 0) <= 1,
           fontSize: Math.max(
             ...labelElements.map((labelElement) =>
               Number.parseFloat(getComputedStyle(labelElement).fontSize),
@@ -129,7 +150,7 @@ async function assertResponsiveSurface(page: Page, label: string): Promise<void>
       `${label} overflows horizontally: ${String(result.contentWidth)} > ${String(result.viewportWidth)}`,
     )
   }
-  const oversized = result.buttons.filter((button) => button.fontSize > 13)
+  const oversized = result.buttons.filter((button) => !button.iconOnly && button.fontSize > 13)
   if (oversized.length > 0) {
     throw new Error(
       `${label} has oversized control labels: ${oversized.map((button) => button.label).join(', ')}`,
