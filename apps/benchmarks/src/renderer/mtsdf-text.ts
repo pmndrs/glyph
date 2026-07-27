@@ -22,7 +22,8 @@ import {
 } from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
-import { createLiveFrameTelemetry } from './live-frame-telemetry'
+import { createCanvasSurface } from './canvas-surface'
+import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
 import {
   LIVE_TEXT_COLOR,
   LIVE_TEXT_LINE_HEIGHT,
@@ -115,12 +116,15 @@ export interface MtsdfTextLiveStats {
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
+  readonly submitHistoryCursor: LiveFrameHistoryCursor
   readonly fpsHistory: Float32Array
   readonly fpsHistoryLength: number
   readonly fpsHistoryNextIndex: number
+  readonly fpsHistoryCursor: LiveFrameHistoryCursor
   readonly gpuHistory: Float32Array
   readonly gpuHistoryLength: number
   readonly gpuHistoryNextIndex: number
+  readonly gpuHistoryCursor: LiveFrameHistoryCursor
 }
 
 export interface MtsdfTextPreviewUpdate {
@@ -131,10 +135,12 @@ export interface MtsdfTextPreviewUpdate {
   readonly language: string
   readonly layoutWidthRatio: number
   readonly text: string
+  readonly textAlign: 'start' | 'center'
 }
 
 export interface MtsdfTextPreview {
   resize(width: number, height: number): void
+  setGridVisible(visible: boolean): void
   update(update: MtsdfTextPreviewUpdate): Promise<void>
   dispose(): Promise<void>
 }
@@ -269,10 +275,12 @@ export async function createMtsdfTextPreview(options: {
   readonly fontSize: number
   readonly fontFixture?: BenchmarkFontFixture
   readonly height: number
+  readonly showGrid: boolean
   readonly language?: string
   readonly layoutWidth: number
   readonly signal?: AbortSignal
   readonly text: string
+  readonly textAlign?: 'start' | 'center'
   readonly width: number
   readonly onError: (error: unknown) => void
   readonly onStats: (stats: MtsdfTextLiveStats) => void
@@ -288,6 +296,7 @@ export async function createMtsdfTextPreview(options: {
     language = 'en',
     direction = 'ltr',
     features = [],
+    textAlign = 'start',
     fontFixture = 'inter',
   } = options
   signal?.throwIfAborted()
@@ -300,7 +309,6 @@ export async function createMtsdfTextPreview(options: {
   assertLayoutWidthRatio(layoutWidthRatio)
   const rendererStarted = performance.now()
   const renderer = await createConfiguredRenderer({
-    alpha: true,
     backend,
     canvas,
     dpr,
@@ -308,6 +316,7 @@ export async function createMtsdfTextPreview(options: {
     trackGpuTimestamps: true,
     width,
   })
+  const canvasSurface = createCanvasSurface(renderer, width, height, options.showGrid)
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: Text | undefined
@@ -331,6 +340,7 @@ export async function createMtsdfTextPreview(options: {
       language,
       direction,
       features,
+      textAlign,
       color: LIVE_TEXT_COLOR,
     })
     await line.ready
@@ -343,8 +353,6 @@ export async function createMtsdfTextPreview(options: {
     const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000)
     camera.position.z = 500
     camera.updateProjectionMatrix()
-    renderer.setClearColor(0x000000, 0)
-
     const telemetry = createLiveFrameTelemetry()
     const gpuTimingSupported = renderer.hasFeature('timestamp-query')
     let firstDrawMs = 0
@@ -388,9 +396,7 @@ export async function createMtsdfTextPreview(options: {
       if (closing || disposed) return
       try {
         const started = performance.now()
-        renderer.setRenderTarget(null)
-        renderer.clear()
-        renderer.render(scene, camera)
+        canvasSurface.render(scene, camera)
         const submitMs = performance.now() - started
         if (!firstDrawRecorded) {
           firstDrawMs = submitMs
@@ -436,6 +442,7 @@ export async function createMtsdfTextPreview(options: {
         width = positiveViewportSize(nextWidth, 'MSDF preview width')
         height = positiveViewportSize(nextHeight, 'MSDF preview height')
         renderer.setSize(width, height, false)
+        canvasSurface.resize(width, height)
         camera.right = width
         camera.bottom = -height
         camera.updateProjectionMatrix()
@@ -449,6 +456,9 @@ export async function createMtsdfTextPreview(options: {
           .catch((error: unknown) => {
             if (!closing && !disposed) onError(error)
           })
+      },
+      setGridVisible(visible) {
+        canvasSurface.setGridVisible(visible)
       },
       async update(next) {
         if (closing || disposed) {
@@ -466,6 +476,7 @@ export async function createMtsdfTextPreview(options: {
           language: next.language,
           direction: next.direction,
           features: next.features,
+          textAlign: next.textAlign,
         })
         await activeLine.ready
         if (closing || disposed || revision !== updateRevision) {
@@ -483,6 +494,7 @@ export async function createMtsdfTextPreview(options: {
           await renderer.setAnimationLoop(null)
           activeLine.dispose()
           activeFont.dispose()
+          canvasSurface.dispose()
           await renderer.dispose()
         })()
         return disposal
@@ -491,6 +503,7 @@ export async function createMtsdfTextPreview(options: {
   } catch (error) {
     line?.dispose()
     font?.dispose()
+    canvasSurface.dispose()
     await renderer.dispose()
     throw error
   }
@@ -661,7 +674,7 @@ function positionLiveLine(
 ): void {
   const layout = committedLayout(line)
   const positionedWidth =
-    anchor === 'top-start' ? Math.max(120, viewportWidth * layoutWidthRatio) : layout.width
+    anchor === 'center' ? layout.width : Math.max(120, viewportWidth * layoutWidthRatio)
   const [x, y] = liveTextPosition(
     anchor,
     viewportWidth,

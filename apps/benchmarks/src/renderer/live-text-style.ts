@@ -2,7 +2,7 @@
 export const LIVE_TEXT_COLOR = 0xffffff
 export const LIVE_TEXT_LINE_HEIGHT = 1.25
 
-export type LiveTextAnchor = 'center' | 'top-start'
+export type LiveTextAnchor = 'center' | 'measure-center' | 'top-start'
 
 export function liveTextPosition(
   anchor: LiveTextAnchor,

@@ -67,6 +67,7 @@ import type {
   ComparisonWorkloadPreview,
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload'
+import type { LiveFrameHistoryCursor } from './renderer/live-frame-telemetry'
 import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference'
 
 type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats
@@ -141,43 +142,43 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
   {
     id: 'benchmark-ipsum',
     label: 'Benchmark ipsum',
-    description: 'Paragraph-scale text with continuous rendering and responsive reflow.',
+    description: 'Tests the everyday cost of rendering and reflowing a full paragraph.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'advanced-shaping',
     label: 'Advanced shaping',
-    description: 'Editable deterministic playback across complex shaping and line breaking.',
+    description: 'Tests whether complex text stays correct as it types and wraps.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'text-ladder',
     label: 'Text ladder',
-    description: 'Native and scaled strike quality across screen-space sizes.',
+    description: 'Tests how text quality holds up from 8 to 512 pixels.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'off-axis-3d',
     label: 'Off-axis / 3D',
-    description: 'Perspective transforms and oblique sampling.',
+    description: 'Tests text quality and cost at steep, moving viewing angles.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'dynamic-layout',
     label: 'Dynamic layout',
-    description: 'Continuous container reflow and authoritative reshaping.',
+    description: 'Tests whether animated containers reflow text smoothly and correctly.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'paragraph-stress',
     label: 'Paragraph stress',
-    description: 'High-volume layout, batching, and memory pressure.',
+    description: 'Tests rendering cost as paragraphs, glyphs, and atlas pressure grow.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'paint-effects',
     label: 'Paint & effects',
-    description: 'Animated per-word color with opacity and technique-appropriate stroke.',
+    description: 'Tests the live cost and visual quality of animated text effects.',
     techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
 ]
@@ -251,22 +252,24 @@ function defaultFontSizeForWorkload(workload: string): number {
   }
 }
 
-function liveWorkloadControlDescription(workload: string): string {
+function liveWorkloadControlDescription(workload: string, technique: RasterTechnique): string {
   switch (workload) {
     case 'advanced-shaping':
-      return 'A grapheme-safe typewriter reshapes into one stable paragraph measure.'
+      return technique === 'bitmap'
+        ? 'Bitmap text looks best at its baked 16 px strike; scaling exposes the need for additional strikes.'
+        : 'MSDF text uses one 64 px/em atlas to stay crisp across the rendered-size range.'
     case 'text-ladder':
-      return 'One left-aligned specimen column spans the complete 8–512 device-pixel range.'
+      return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.'
     case 'off-axis-3d':
-      return 'Perspective intensity controls the receding plane and its animated glancing-angle wobble.'
+      return 'Increase perspective to inspect text at steeper viewing angles.'
     case 'dynamic-layout':
-      return 'Three independently animated left, center, and right paragraphs continuously reshape and reflow.'
+      return 'Adjust reflow to stress three independently resizing paragraphs.'
     case 'paragraph-stress':
-      return 'Text volume controls glyph, line, and batching pressure.'
+      return 'Increase text volume to inspect layout, draw, memory, CPU, and GPU cost.'
     case 'paint-effects':
-      return 'Every word moves through a continuous hue wave; opacity applies to both techniques and MSDF adds adjustable stroke.'
+      return 'Adjust color, opacity, stroke, and shadow while watching their live rendering cost.'
     default:
-      return 'Resizing the scene or changing its layout width commits a new paragraph reflow.'
+      return 'Change the paragraph width to inspect live reflow quality and cost.'
   }
 }
 
@@ -276,19 +279,19 @@ function liveWorkloadSceneDescription(
 ): string {
   switch (workload) {
     case 'advanced-shaping':
-      return `${showcaseFrame.caseDefinition.label} types from one fixed origin and wraps through exact shaping states.`
+      return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`
     case 'text-ladder':
-      return 'One specimen renders from 8 through 512 device pixels for direct technique comparison.'
+      return 'Tests one sentence at every size from 8 through 512 pixels.'
     case 'off-axis-3d':
-      return 'The specimen renders through the shared oblique transform while frame costs remain live.'
+      return 'Tests readability and frame cost as a paragraph leans deep into the scene.'
     case 'dynamic-layout':
-      return 'Three aligned paragraph regions resize independently and reflow without stretching glyph geometry.'
+      return 'Tests whether three animated paragraphs reflow without stretching their glyphs.'
     case 'paragraph-stress':
-      return 'A scalable paragraph corpus exposes glyph, line, draw, memory, CPU, and GPU cost.'
+      return 'Tests glyph, line, draw, memory, CPU, and GPU cost under paragraph pressure.'
     case 'paint-effects':
-      return 'A paragraph of per-word color shifts continuously with live opacity and technique-aware stroke.'
+      return 'Tests the live cost and quality of animated color, opacity, stroke, and shadow.'
     default:
-      return 'Paragraph-scale text renders continuously and reflows with its live viewport.'
+      return 'Tests paragraph rendering cost while the viewport reflows the text.'
   }
 }
 
@@ -762,7 +765,7 @@ function TopBar({
       <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
         {(['benchmark', 'conformance'] as const).map((value) => (
           <button
-            className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-dim'}`}
+            className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'}`}
             key={value}
             type="button"
             onClick={() => onMode(value)}
@@ -834,7 +837,7 @@ function WorkloadRail({
       <div className="mt-2 grid grid-cols-3 gap-1">
         {(['bitmap', 'mtsdf', 'slug'] as const).map((technique) => (
           <button
-            className={`rounded-md border px-2 py-2 text-[10px] capitalize ${location.technique === technique ? 'border-accent bg-surface-active' : 'border-border bg-surface text-dim'}`}
+            className={`rounded-md border px-2 py-2 text-[10px] capitalize ${location.technique === technique ? 'border-accent bg-surface-active text-foreground' : 'border-transparent bg-transparent text-foreground hover:border-border hover:bg-surface'} disabled:cursor-not-allowed disabled:text-dim`}
             disabled={technique === 'slug'}
             key={technique}
             type="button"
@@ -850,17 +853,17 @@ function WorkloadRail({
       <nav className="grid gap-1">
         {workloads.map((workload) => (
           <button
-            className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
+            className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-foreground hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
             disabled={workload.techniques[location.technique].kind !== 'ready'}
             key={workload.id}
             type="button"
             onClick={() => onLocation({ workload: workload.id })}
           >
             <span
-              className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-border'}`}
+              className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-transparent'}`}
             />
             <span className="block text-xs">{workload.label}</span>
-            <span className="mt-1 block font-mono text-[8px] leading-relaxed text-dim">
+            <span className="mt-1 block font-mono text-[8px] leading-relaxed text-muted">
               {workloadRailDescription(workload, location.technique)}
             </span>
           </button>
@@ -1110,7 +1113,7 @@ function BenchmarkSurface({
   const comparisonWorkload = comparisonWorkloadId(workload)
   const textConfiguration: LiveTextConfiguration = advanced
     ? {
-        anchor: 'top-start',
+        anchor: 'measure-center',
         direction: showcaseFrame.caseDefinition.direction,
         expectedGlyphCount: undefined,
         animatePresentation: false,
@@ -1119,6 +1122,7 @@ function BenchmarkSurface({
         language: showcaseFrame.caseDefinition.language,
         layoutWidthRatio: showcaseFrame.widthPermille / 1000,
         text: showcaseFrame.text,
+        textAlign: 'start',
         timelineTick: showcaseFrame.tick,
       }
     : {
@@ -1131,6 +1135,7 @@ function BenchmarkSurface({
         language: 'en',
         layoutWidthRatio: layoutWidthPercent / 100,
         text: benchmarkIpsumText(),
+        textAlign: 'start',
         timelineTick: undefined,
       }
   return (
@@ -1138,7 +1143,7 @@ function BenchmarkSurface({
       className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3"
       data-testid="benchmark-surface"
     >
-      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-5">
+      <div className="metric-summary-grid grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-5">
         <Metric
           label="Live FPS"
           value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
@@ -1163,7 +1168,7 @@ function BenchmarkSurface({
           value={stats === undefined ? '—' : String(stats.missingGlyphCount)}
         />
       </div>
-      <div className="grid gap-3">
+      <div className="grid gap-3 min-[1400px]:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
         <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3">
           <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
@@ -1177,14 +1182,14 @@ function BenchmarkSurface({
             value={`${formatBytes(stats?.artifactBytes)} / ${formatBytes(stats?.totalGpuBytes)}`}
           />
         </div>
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
+        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border min-[1400px]:grid-cols-1">
           <Sparkline
             id="fps"
             label="FPS"
             length={stats?.fpsHistoryLength ?? 0}
             maximum={stats?.maximumFramesPerSecond}
             minimum={stats?.minimumFramesPerSecond}
-            nextIndex={stats?.fpsHistoryNextIndex ?? 0}
+            cursor={stats?.fpsHistoryCursor}
             tone="success"
             unit="fps"
             values={stats?.fpsHistory}
@@ -1195,7 +1200,7 @@ function BenchmarkSurface({
             length={stats?.submitHistoryLength ?? 0}
             maximum={stats?.maximumSubmitMs}
             minimum={stats?.minimumSubmitMs}
-            nextIndex={stats?.submitHistoryNextIndex ?? 0}
+            cursor={stats?.submitHistoryCursor}
             tone="cyan"
             unit="ms"
             values={stats?.submitHistory}
@@ -1209,7 +1214,7 @@ function BenchmarkSurface({
             length={stats?.gpuHistoryLength ?? 0}
             maximum={stats?.maximumGpuMs}
             minimum={stats?.minimumGpuMs}
-            nextIndex={stats?.gpuHistoryNextIndex ?? 0}
+            cursor={stats?.gpuHistoryCursor}
             tone="warning"
             unit="ms"
             values={stats?.gpuHistory}
@@ -1699,6 +1704,7 @@ function BitmapTextViewport({
     language,
     layoutWidthRatio,
     text,
+    textAlign,
     timelineTick,
   } = textConfiguration
   const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
@@ -1719,7 +1725,9 @@ function BitmapTextViewport({
     fontSize: fontSize / dpr,
     language,
     layoutWidthRatio,
+    showGrid: grid,
     text,
+    textAlign,
     timelineTick,
   }))
   const publishSettledRevision = useEffectEvent((revision: number) => {
@@ -1774,6 +1782,7 @@ function BitmapTextViewport({
         fontFixture: configuration.fontFixture,
         fontSize: configuration.fontSize,
         height: Math.max(1, bounds.height),
+        showGrid: configuration.showGrid,
         layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
         text: configuration.text,
         language: configuration.language,
@@ -1813,6 +1822,10 @@ function BitmapTextViewport({
   }, [backend, dpr])
 
   useEffect(() => {
+    previewRef.current?.setGridVisible(grid)
+  }, [grid])
+
+  useEffect(() => {
     const preview = previewRef.current
     if (preview === undefined) return
     let cancelled = false
@@ -1833,6 +1846,7 @@ function BitmapTextViewport({
         language,
         direction,
         features,
+        textAlign,
       })
       .then((snapshot) => {
         if (cancelled) return
@@ -1873,12 +1887,14 @@ function BitmapTextViewport({
     language,
     layoutWidthRatio,
     text,
+    textAlign,
     timelineTick,
   ])
 
   return (
     <div
-      className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      data-canvas-grid={String(grid)}
       data-anchor={anchor}
       data-layout-width={stats?.layoutWidth}
       data-layout-width-ratio={layoutWidthRatio}
@@ -1906,6 +1922,7 @@ function BitmapTextViewport({
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-startup-ms={stats?.startupMs}
       data-source-text-length={text.length}
+      data-text-align={textAlign}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
       data-total-gpu-bytes={stats?.totalGpuBytes}
@@ -1970,7 +1987,7 @@ function MtsdfTextViewport({
   const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const [stats, setStats] = useState<MtsdfTextLiveStats>()
   const [error, setError] = useState<string>()
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text } =
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } =
     textConfiguration
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
     setStats(next)
@@ -1988,7 +2005,9 @@ function MtsdfTextViewport({
     fontSize: fontSize / dpr,
     language,
     layoutWidthRatio,
+    showGrid: grid,
     text,
+    textAlign,
   }))
 
   useEffect(() => {
@@ -2018,8 +2037,10 @@ function MtsdfTextViewport({
         fontSize: configuration.fontSize,
         fontFixture,
         height: Math.max(1, bounds.height),
+        showGrid: configuration.showGrid,
         layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
         text: configuration.text,
+        textAlign: configuration.textAlign,
         language: configuration.language,
         direction: configuration.direction,
         features: configuration.features,
@@ -2055,6 +2076,10 @@ function MtsdfTextViewport({
   }, [backend, dpr, fontFixture])
 
   useEffect(() => {
+    previewRef.current?.setGridVisible(grid)
+  }, [grid])
+
+  useEffect(() => {
     const preview = previewRef.current
     if (preview === undefined) return
     void preview
@@ -2066,13 +2091,15 @@ function MtsdfTextViewport({
         language,
         layoutWidthRatio,
         text,
+        textAlign,
       })
       .catch(publishError)
-  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text])
+  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text, textAlign])
 
   return (
     <div
-      className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      data-canvas-grid={String(grid)}
       data-anchor={anchor}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
@@ -2099,6 +2126,7 @@ function MtsdfTextViewport({
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-submit-history-length={stats?.submitHistoryLength}
       data-source-text-length={text.length}
+      data-text-align={textAlign}
       data-timeline-tick={textConfiguration.timelineTick}
       data-testid="mtsdf-live-viewport"
       ref={containerRef}
@@ -2200,6 +2228,7 @@ function ComparisonWorkloadViewport({
     paintOpacity,
     paintShadowEnabled,
     paintStrokeWidth,
+    showGrid: grid,
     showLayoutBounds,
     workload,
   }))
@@ -2277,6 +2306,7 @@ function ComparisonWorkloadViewport({
     paintOpacity,
     paintShadowEnabled,
     paintStrokeWidth,
+    grid,
     showLayoutBounds,
     workload,
   ])
@@ -2303,7 +2333,8 @@ function ComparisonWorkloadViewport({
   }
   return (
     <div
-      className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      data-canvas-grid={String(grid)}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
       data-backend={stats?.backend}
@@ -2413,52 +2444,61 @@ function LiveCost({ label, value }: { readonly label: string; readonly value: st
 }
 
 function Sparkline({
+  cursor,
   emptyLabel,
   id,
   label,
   length,
   maximum,
   minimum,
-  nextIndex,
   tone,
   unit,
   values,
 }: {
+  readonly cursor: LiveFrameHistoryCursor | undefined
   readonly emptyLabel?: string
   readonly id: 'cpu' | 'fps' | 'gpu'
   readonly label: string
   readonly length: number
   readonly maximum: number | undefined
   readonly minimum: number | undefined
-  readonly nextIndex: number
   readonly tone: 'cyan' | 'success' | 'warning'
   readonly unit: 'fps' | 'ms'
   readonly values: Float32Array | undefined
 }) {
-  function draw(canvas: HTMLCanvasElement | null): void {
-    if (canvas === null || values === undefined || length === 0) return
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (canvas === null || cursor === undefined || values === undefined) return
     const context = canvas.getContext('2d')
     if (context === null) return
     const width = canvas.width
     const height = canvas.height
-    let chartMaximum = 1
-    const start = length === values.length ? nextIndex : 0
-    for (let index = 0; index < length; index += 1) {
-      chartMaximum = Math.max(chartMaximum, values[(start + index) % values.length] ?? 0)
-    }
-    context.clearRect(0, 0, width, height)
-    context.beginPath()
-    for (let index = 0; index < length; index += 1) {
-      const value = values[(start + index) % values.length] ?? 0
-      const x = length < 2 ? 0 : (index / (length - 1)) * width
-      const y = height - (value / chartMaximum) * (height - 4) - 2
-      if (index === 0) context.moveTo(x, y)
-      else context.lineTo(x, y)
-    }
     context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`)
     context.lineWidth = 1.5
-    context.stroke()
-  }
+    let animationFrame = 0
+    const draw = (): void => {
+      const historyLength = cursor.length
+      let chartMaximum = 1
+      const start = historyLength === values.length ? cursor.nextIndex : 0
+      for (let index = 0; index < historyLength; index += 1) {
+        chartMaximum = Math.max(chartMaximum, values[(start + index) % values.length] ?? 0)
+      }
+      context.clearRect(0, 0, width, height)
+      context.beginPath()
+      for (let index = 0; index < historyLength; index += 1) {
+        const value = values[(start + index) % values.length] ?? 0
+        const x = historyLength < 2 ? 0 : (index / (historyLength - 1)) * width
+        const y = height - (value / chartMaximum) * (height - 4) - 2
+        if (index === 0) context.moveTo(x, y)
+        else context.lineTo(x, y)
+      }
+      context.stroke()
+      animationFrame = requestAnimationFrame(draw)
+    }
+    animationFrame = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(animationFrame)
+  }, [cursor, tone, values])
   return (
     <div className="bg-surface p-3" data-testid={`sparkline-${id}`} data-tone={tone}>
       <div
@@ -2474,7 +2514,7 @@ function Sparkline({
           aria-label={`${label} history`}
           className="absolute inset-0 size-full"
           height={42}
-          ref={draw}
+          ref={canvasRef}
           width={180}
         />
         {length === 0 && emptyLabel !== undefined && (
@@ -2753,8 +2793,8 @@ function Controls({
               />
             </>
           )}
-          <p className="text-[10px] leading-relaxed text-muted">
-            {liveWorkloadControlDescription(workload)}
+          <p className="min-h-[30px] text-[10px] leading-relaxed text-muted">
+            {liveWorkloadControlDescription(workload, technique)}
           </p>
         </div>
       )}
@@ -2782,16 +2822,14 @@ function Controls({
             value={showcaseFrame.text}
             onChange={(event) => onShowcase({ kind: 'edit', text: event.currentTarget.value })}
           />
-          <div className="grid grid-cols-4 gap-1.5">
-            <Button onClick={() => onShowcase({ kind: 'step', ticks: -1 })}>−1</Button>
+          <div className="grid grid-cols-2 gap-1.5">
             <Button
               variant={showcaseState.playing ? 'primary' : 'secondary'}
               onClick={() => onShowcase({ kind: showcaseState.playing ? 'pause' : 'play' })}
             >
               {showcaseState.playing ? 'Pause' : 'Play'}
             </Button>
-            <Button onClick={() => onShowcase({ kind: 'step', ticks: 1 })}>+1</Button>
-            <Button onClick={() => onShowcase({ kind: 'restore-authored-text' })}>Reset</Button>
+            <Button onClick={() => onShowcase({ kind: 'reset' })}>Reset</Button>
           </div>
           <Field
             label={`Timeline · ${showcaseFrame.tick} / ${showcaseFrame.tickCount}`}

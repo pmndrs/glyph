@@ -7,6 +7,7 @@ import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
 import { benchmarkIpsumText } from '../benchmark/font-fixtures'
 import type { RasterTechnique } from '../benchmark/url-state'
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text'
+import { createCanvasSurface } from './canvas-surface'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
 import { loadMtsdfFont, type MtsdfTextLiveStats } from './mtsdf-text'
@@ -48,6 +49,7 @@ export interface ComparisonWorkloadConfiguration {
   readonly paintOpacity: number
   readonly paintShadowEnabled: boolean
   readonly paintStrokeWidth: number
+  readonly showGrid: boolean
   readonly showLayoutBounds: boolean
   readonly workload: ComparisonWorkloadId
 }
@@ -118,6 +120,7 @@ export async function createComparisonWorkloadPreview(options: {
   readonly paintOpacity: number
   readonly paintShadowEnabled: boolean
   readonly paintStrokeWidth: number
+  readonly showGrid: boolean
   readonly showLayoutBounds: boolean
   readonly signal?: AbortSignal
   readonly technique: Exclude<RasterTechnique, 'slug'>
@@ -134,7 +137,6 @@ export async function createComparisonWorkloadPreview(options: {
   const startupStarted = performance.now()
   const rendererStarted = performance.now()
   const renderer = await createConfiguredRenderer({
-    alpha: true,
     backend,
     canvas,
     dpr,
@@ -142,6 +144,7 @@ export async function createComparisonWorkloadPreview(options: {
     trackGpuTimestamps: true,
     width,
   })
+  const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid)
   const rendererInitMs = performance.now() - rendererStarted
   let font: LoadedTechniqueFont | undefined
   let entries: readonly WorkloadEntry[] = []
@@ -159,7 +162,6 @@ export async function createComparisonWorkloadPreview(options: {
   let lastReflowMs = 0
   const scene = new THREE.Scene()
   const camera = createWorkloadCamera(configuration.workload, width, height)
-  renderer.setClearColor(0x000000, 0)
   const telemetry = createLiveFrameTelemetry()
   const gpuTimingSupported = renderer.hasFeature('timestamp-query')
 
@@ -195,9 +197,7 @@ export async function createComparisonWorkloadPreview(options: {
     await commit(configuration)
     signal?.throwIfAborted()
     const uploadFrameStarted = performance.now()
-    renderer.setRenderTarget(null)
-    renderer.clear()
-    renderer.render(scene, camera)
+    canvasSurface.render(scene, camera)
     firstDrawMs = performance.now() - uploadFrameStarted
     if (gpuTimingSupported) {
       uploadFrameGpuMs = await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
@@ -241,9 +241,7 @@ export async function createComparisonWorkloadPreview(options: {
           reflowCount += 1
           lastReflowMs = duration
         })
-        renderer.setRenderTarget(null)
-        renderer.clear()
-        renderer.render(scene, camera)
+        canvasSurface.render(scene, camera)
         const submitMs = performance.now() - started
         if (firstDrawMs === 0) firstDrawMs = submitMs
         const snapshot = telemetry.recordSubmit(timestamp, submitMs)
@@ -324,6 +322,7 @@ export async function createComparisonWorkloadPreview(options: {
         width = positive(nextWidth, 'comparison workload width')
         height = positive(nextHeight, 'comparison workload height')
         renderer.setSize(width, height, false)
+        canvasSurface.resize(width, height)
         resizeWorkloadCamera(camera, width, height)
         void commit(configuration).catch(onError)
       },
@@ -338,6 +337,7 @@ export async function createComparisonWorkloadPreview(options: {
       async update(next) {
         if (closing || disposed) return
         const validated = validateConfiguration(next)
+        canvasSurface.setGridVisible(validated.showGrid)
         if (comparisonWorkloadUpdateKind(configuration, validated) === 'rebuild') {
           configuration = validated
           await commit(configuration)
@@ -361,6 +361,7 @@ export async function createComparisonWorkloadPreview(options: {
           disposeEntries(entries)
           entries = []
           activeFont.font.dispose()
+          canvasSurface.dispose()
           await renderer.dispose()
         })()
         return disposal
@@ -369,6 +370,7 @@ export async function createComparisonWorkloadPreview(options: {
   } catch (error) {
     disposeEntries(entries)
     font?.font.dispose()
+    canvasSurface.dispose()
     await renderer.dispose()
     throw error
   }
@@ -407,8 +409,8 @@ function createEntries(
     const paintShadowOffset =
       technique === 'mtsdf' && configuration.paintShadowEnabled
         ? ([
-            Math.max(1, configuration.fontSize / 12),
-            Math.max(1, configuration.fontSize / 12),
+            Math.max(3, configuration.fontSize / 10),
+            Math.max(3, configuration.fontSize / 10),
           ] as const)
         : undefined
     const text = new Text({
@@ -604,8 +606,8 @@ function applyRetainedConfiguration(
   const paintShadowOffset =
     technique === 'mtsdf' && configuration.paintShadowEnabled
       ? ([
-          Math.max(1, configuration.fontSize / 12),
-          Math.max(1, configuration.fontSize / 12),
+          Math.max(3, configuration.fontSize / 10),
+          Math.max(3, configuration.fontSize / 10),
         ] as const)
       : undefined
   for (const entry of entries) {
@@ -772,7 +774,7 @@ function paintSpans(
         : { outline: { color: 0xffffff, width: outlineWidth } }),
       ...(shadowOffset === undefined
         ? {}
-        : { shadow: { color: hslColor(hue, 0.72, 0.16), offset: shadowOffset } }),
+        : { shadow: { color: hslColor(hue, 0.68, 0.28), offset: shadowOffset } }),
     }
   })
 }
@@ -886,6 +888,9 @@ function validateConfiguration(
   }
   if (typeof configuration.showLayoutBounds !== 'boolean') {
     throw new TypeError('comparison workload layout-bounds visibility must be boolean')
+  }
+  if (typeof configuration.showGrid !== 'boolean') {
+    throw new TypeError('comparison workload canvas-grid visibility must be boolean')
   }
   if (typeof configuration.paintShadowEnabled !== 'boolean') {
     throw new TypeError('comparison workload shadow visibility must be boolean')

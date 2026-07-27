@@ -12,6 +12,14 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
     await clickButton(workload.label, false)
     let viewport = await waitForReadyViewport(technique, workload.id)
 
+    if (technique === 'bitmap' && workload.id === 'text-ladder') {
+      await waitForAttribute(viewport, 'data-canvas-grid', 'true')
+      setCheckbox('Show canvas grid', false)
+      await waitForAttribute(viewport, 'data-canvas-grid', 'false')
+      setCheckbox('Show canvas grid', true)
+      await waitForAttribute(viewport, 'data-canvas-grid', 'true')
+    }
+
     if (workload.id !== 'text-ladder') {
       const revision = numericAttribute(viewport, 'data-configuration-revision')
       assertRangeVisualTravel(rangeControl('Rendered size'))
