@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     9 |   ⬜   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
 |    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.3. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
+Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.4. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -111,8 +111,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                  |  L   | 7.2        |
 | 8.2  |   ✅   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
 | 8.3  |   ✅   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
-| 8.4  |   ⬜   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
-| 8.5  |   ⬜   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |
+| 8.4  |   ✅   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
+| 8.5  |   🟡   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |
 | 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
 | 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.x, 9.x   |
 | 10.2 |   ⬜   | Complete release validation, guidance, and migration material.                                                                                                                           |  M   | 10.1       |
@@ -466,7 +466,7 @@ The first real font frame travels through composed Inter GLB loading, the public
 
 Items 6.2 and 6.3 are implemented and their first adversarial-review findings are remediated. Item 6.4 is active before the milestone closure review because the initial shell exposed internal target/scenario mechanics and presented conformance duration too prominently. The corrected human default is a continuously rendered benchmark control plane showing consumer-facing startup, retained-size, CPU-frame, FPS, and supported GPU-time evidence. Conformance is a separate finite deep-inspection surface showing candidate, reference, difference, structured evidence, and end-to-end test duration. Technique, backend, and workload are independent user controls; target and scenario remain internal runner concepts. The Figma wireframe supplies visual direction rather than prescribing product information architecture.
 
-The five-line, 120-glyph text above is now named the diagnostic conformance specimen. The separate paragraph-scale live benchmark renders 1,150 glyphs through the same single-draw bitmap path.
+The five-line, 120-glyph text above is now named the diagnostic conformance specimen. The separate paragraph-scale live benchmark renders 1,151 glyphs through the same single-draw bitmap path.
 
 ### 6.2 closure checklist
 
@@ -490,7 +490,7 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 - [x] Human-facing controls use mode, technique, backend, and workload; target/scenario terminology is absent from the primary UI.
 - [x] Benchmark mode continuously renders paragraph-scale benchmark ipsum and separates startup/loading costs, retained sizes, CPU-frame time, FPS, and GPU time when supported.
 - [x] Conformance mode is finite and visibly presents candidate, reference, difference, correctness statistics, and end-to-end test duration without calling that duration render performance.
-- [x] Bitmap frame is classified as conformance; text ladder, off-axis/3D, dynamic layout, and paragraph stress are classified as live visual benchmarks.
+- [x] Bitmap frame is classified as conformance; text ladder, off-axis/3D, dynamic layout, paragraph stress, and Paint & Effects are classified as live visual benchmarks.
 - [x] WebGPU/WebGL2 and 1×/2× DPR remain explicit, shareable, and independently testable.
 - [x] The benchmark-ipsum concept documents the diagnostic specimen and paragraph-scale workload separately.
 - [x] Live telemetry uses fixed-capacity preallocated histories, presents CPU/FPS/GPU graphs without inventing unavailable GPU data, and snapshots histories only on explicit capture.
@@ -601,7 +601,25 @@ The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) record
 - [x] Generate mipmaps on upload, prevent neighboring-cell sampling, repaint owned attributes without reshaping, and dispose partial or complete texture/material/geometry ownership transactionally.
 - [x] Exercise all ten canonical Inter pages, embedded/external parity, field deletion, semantic mutation, KTX2 DFD corruption, GPU budgets, repaint, and repeated disposal through deterministic tests.
 
-Item 8.3 is closed. Browser shader execution, resize/transform/mipmap/effects scenes, and backend-specific pixel evidence remain item 8.4 rather than being inferred from TypeScript graph construction.
+Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGPU and forced WebGL2, with deterministic resize, minification, transformed-text, and fill/outline/shadow scenes plus a finite flat-sampling comparison against an independent scalar CPU atlas reconstruction.
+
+### 8.4 dual-backend rendering checklist
+
+- [x] Render one public `Text`/MTSDF batch family through version-matched TSL on WebGPU and forced WebGL2.
+- [x] Exercise resize, mip minification, perspective transform, fill, opacity, outline, and hard shadow without technique-specific scene forks.
+- [x] Pin the canonical forced-WebGL2 scene identity and reject a deterministic static substitute with a negative control.
+- [x] Compare a 64-device-pixel base-level specimen against an independent scalar CPU reconstruction so the oracle and GPU sample the same texture level.
+- [x] Gate mean, maximum, and over-tolerance pixel errors; canonical Inter measures `0.0969` mean / `30` maximum / `3,231` over-tolerance pixels on forced WebGL2 and `0.0187` / `1` / `0` on the admitted WebGPU probe.
+- [x] Run all five live comparison workloads for Bitmap and MSDF, including renderer-confirmed controls, measured asynchronous dynamic reflow, and Paint & Effects with animated per-word color, opacity, and MSDF-only stroke.
+
+### 8.5 evidence-and-closure checklist
+
+- [x] Publish six complete-font Bitmap and MTSDF fixtures with authenticated source identity, full glyph counts, page directories, transport bytes, decoded bytes, and exact mip-chain GPU totals.
+- [x] Surface loaded/unloaded library and baker totals, font download/decoded bytes, texture-array memory, and every atlas page in the human benchmark inspector.
+- [x] Keep runtime rendering independent of baker Wasm; optional Bitmap and MTSDF bakers execute only through one serial lazy module Worker.
+- [x] Exercise deterministic WebGL2 headless conformance and maintainer-local GPU WebGPU product probes without sleeps, retries, or timer cushions.
+- [ ] Add the cross-technique source-outline fidelity corpus at the end of the conformance list and record reviewed acceptance envelopes.
+- [ ] Record and review committed upload, first-draw, steady CPU-frame, GPU-frame, and bundle-isolation baselines for the accepted corpus, then complete the final adversarial Milestone 6/8 closure review.
 
 ## Milestone 9 — Slug release renderer
 

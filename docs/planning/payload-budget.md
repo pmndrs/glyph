@@ -147,9 +147,9 @@ Relevant prior art:
 - [Glyph paging design](https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/planning/perf/glyph-paging-design.md)
 - [uikit Lucide package](https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/uikit-lucide)
 
-## Measured bitmap and modeled MSDF budgets
+## Measured bitmap and MTSDF budgets
 
-The Inter 16 ppem bitmap row is now an exact generator result. Remaining rows are capacity estimates and stay labeled as such. Exact MSDF atlas dimensions, occupancy, distance range, and transport compression become benchmark results only when that generator exists.
+The Inter 16 ppem bitmap row and six full-face MTSDF fixtures are exact generator results. Rows explicitly labeled modeled remain capacity estimates.
 
 Assumptions:
 
@@ -181,7 +181,7 @@ The canonical full-face Inter 4.1 bitmap at 16 ppem measures:
 | Embedded raster GLB | 755,064 B |
 | External raster index GLB | 59,808 B |
 | External index + page | 755,252 B |
-| Combined core + embedded raster GLB | 927,148 B |
+| Combined core + embedded raster GLB | 927,164 B |
 | Core with external directory | 172,476 B |
 | Optimized bitmap baker Wasm | 612,472 B raw; 228,219 B gzip; 175,741 B Brotli q11 |
 
@@ -191,11 +191,12 @@ Useful exact formulas:
 
 ```text
 bitmap GPU bytes = Σ(pageWidth × pageHeight × bytesPerPixel)
-MSDF GPU bytes   = Σ(pageWidth × pageHeight × 4) // MTSDF RGBA8
+MSDF base bytes  = textureArrayWidth × textureArrayHeight × pageCount × 4
+MSDF GPU bytes   = Σ(each floor-halved texture-array mip level)
 metadata bytes   = glyphRecordStride × representedGlyphCount + page directory
 ```
 
-Mipmaps add approximately one third to the base texture size when a full chain is resident. Report them explicitly rather than hiding them in an atlas total.
+Mipmaps approach one third of the base texture size for large power-of-two dimensions, but reports use exact floor-halved level sums. The harness presents download bytes, decoded artifact bytes, and exact GPU texture memory separately.
 
 ## Planning totals
 
@@ -204,7 +205,7 @@ For the non-subsetted 2,937-glyph Inter V0 face, the shared cost is fixed and th
 | Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
 | Generated bitmap, 16 ppem | 167.0 KiB | 695,296 B | 58,740 B records; 755,064 B embedded companion GLB. |
-| MSDF | 167.0 KiB | generator report required | MTSDF RGBA8; 58,740 B records; legacy subset was modeled at 4–8 MiB. |
+| MTSDF | 167.0 KiB | 55,924,040 B | 10-page full-face Inter texture array with exact mip chain; 6,979,347 B gzip transport and 39,347,692 B decoded GLB. |
 | Slug | 167.0 KiB | generator report required | 40 B × 2,937 = 117,480 B records; legacy subset derived near 2 MiB. |
 
 For the non-subsetted 1,403-glyph Font Awesome V0 face:
