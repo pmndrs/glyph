@@ -80,10 +80,10 @@
       "label": "MTSDF generator Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 43854,
-      "minifiedBytes": 43854,
-      "gzipBytes": 18015,
-      "brotliBytes": 14731
+      "rawBytes": 44018,
+      "minifiedBytes": 44018,
+      "gzipBytes": 18340,
+      "brotliBytes": 14947
     },
     {
       "id": "portable-baker-js",
