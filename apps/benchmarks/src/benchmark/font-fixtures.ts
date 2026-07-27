@@ -1,10 +1,5 @@
 import type { AdvancedShapingFontFixture } from './advanced-shaping'
-import {
-  BENCHMARK_IPSUM_CONFORMANCE_TEXT,
-  BENCHMARK_IPSUM_TEXT,
-  DISPLAY_FACE_CONFORMANCE_TEXT,
-  DISPLAY_FACE_IPSUM_TEXT,
-} from './benchmark-ipsum'
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT, BENCHMARK_IPSUM_TEXT } from './benchmark-ipsum'
 
 export type BenchmarkFontFixture = AdvancedShapingFontFixture | 'source-serif-4' | 'dancing-script'
 
@@ -50,12 +45,10 @@ export function selectableFontFixture(value: string): SelectableFontFixture {
   }
 }
 
-export function benchmarkIpsumForFont(fontFixture: BenchmarkFontFixture): string {
-  return fontFixture === 'dancing-script' ? DISPLAY_FACE_IPSUM_TEXT : BENCHMARK_IPSUM_TEXT
+export function benchmarkIpsumText(): string {
+  return BENCHMARK_IPSUM_TEXT
 }
 
-export function conformanceTextForFont(fontFixture: BenchmarkFontFixture): string {
-  return fontFixture === 'dancing-script'
-    ? DISPLAY_FACE_CONFORMANCE_TEXT
-    : BENCHMARK_IPSUM_CONFORMANCE_TEXT
+export function conformanceText(): string {
+  return BENCHMARK_IPSUM_CONFORMANCE_TEXT
 }

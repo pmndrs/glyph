@@ -6,9 +6,15 @@ export interface LiveFrameTelemetrySnapshot {
   readonly framesPerSecond: number
   readonly medianSubmitMs: number
   readonly p95SubmitMs: number
+  readonly minimumSubmitMs: number
+  readonly maximumSubmitMs: number
+  readonly minimumFramesPerSecond: number
+  readonly maximumFramesPerSecond: number
   readonly gpuFrameMs: number | undefined
   readonly medianGpuMs: number | undefined
   readonly p95GpuMs: number | undefined
+  readonly minimumGpuMs: number | undefined
+  readonly maximumGpuMs: number | undefined
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -90,11 +96,19 @@ export function createLiveFrameTelemetry(options?: {
         framesPerSecond,
         medianSubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.5),
         p95SubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.95),
+        minimumSubmitMs: historyMinimum(submitHistory, submitHistoryLength),
+        maximumSubmitMs: historyMaximum(submitHistory, submitHistoryLength),
+        minimumFramesPerSecond: historyMinimum(fpsHistory, fpsHistoryLength),
+        maximumFramesPerSecond: historyMaximum(fpsHistory, fpsHistoryLength),
         gpuFrameMs,
         medianGpuMs:
           gpuHistoryLength === 0 ? undefined : quantile(gpuQuantileScratch, gpuHistoryLength, 0.5),
         p95GpuMs:
           gpuHistoryLength === 0 ? undefined : quantile(gpuQuantileScratch, gpuHistoryLength, 0.95),
+        minimumGpuMs:
+          gpuHistoryLength === 0 ? undefined : historyMinimum(gpuHistory, gpuHistoryLength),
+        maximumGpuMs:
+          gpuHistoryLength === 0 ? undefined : historyMaximum(gpuHistory, gpuHistoryLength),
         submitHistory,
         submitHistoryLength,
         submitHistoryNextIndex,
@@ -107,6 +121,22 @@ export function createLiveFrameTelemetry(options?: {
       }
     },
   }
+}
+
+function historyMinimum(history: Float32Array, length: number): number {
+  let minimum = Number.POSITIVE_INFINITY
+  for (let index = 0; index < length; index += 1) {
+    minimum = Math.min(minimum, history[index] ?? minimum)
+  }
+  return length === 0 ? 0 : minimum
+}
+
+function historyMaximum(history: Float32Array, length: number): number {
+  let maximum = Number.NEGATIVE_INFINITY
+  for (let index = 0; index < length; index += 1) {
+    maximum = Math.max(maximum, history[index] ?? maximum)
+  }
+  return length === 0 ? 0 : maximum
 }
 
 function copyAndSort(source: Float32Array, target: Float32Array, length: number): void {

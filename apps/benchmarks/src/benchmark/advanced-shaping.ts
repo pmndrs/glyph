@@ -1,3 +1,5 @@
+import { graphemeSegments } from 'unicode-segmenter/grapheme'
+
 export type AdvancedShapingCaseId =
   | 'latin-features'
   | 'arabic-joining'
@@ -18,10 +20,14 @@ export interface AdvancedShapingCase {
   readonly language: string
   readonly direction: 'ltr' | 'rtl'
   readonly features: readonly { readonly tag: string; readonly value: number }[]
-  /** Authored reveal units. A unit is never split by deterministic typewriter playback. */
+  /** Focused authored units retained by the finite conformance matrix. */
   readonly revealUnits: readonly string[]
   /** Thousandths of the viewport width, keeping timeline math integer and reproducible. */
   readonly widthPermille: readonly number[]
+  /** Longer grapheme-safe product copy used by the live typewriter. */
+  readonly showcaseRevealUnits: readonly string[]
+  /** Stable live paragraph measure in thousandths of the viewport width. */
+  readonly showcaseWidthPermille: number
 }
 
 export interface AdvancedShapingState {
@@ -86,6 +92,10 @@ export const ADVANCED_SHAPING_CASES: readonly AdvancedShapingCase[] = [
       'l',
     ],
     widthPermille: [820, 510, 700, 430, 760],
+    showcaseRevealUnits: revealUnits(
+      'AVATAR office é ä ffl. Affinity, efficient files, and fine forms reveal where ligatures join and kerning pairs settle. Café, naïve, and coöperate keep their marks intact while To, Ta, Wa, and Yo adjust their rhythm. Every arriving character reshapes the paragraph, and every completed word wraps from the same quiet starting edge.',
+    ),
+    showcaseWidthPermille: 720,
   },
   {
     id: 'arabic-joining',
@@ -96,6 +106,10 @@ export const ADVANCED_SHAPING_CASES: readonly AdvancedShapingCase[] = [
     features: [],
     revealUnits: ['ا', 'ل', 'ن', 'ّ', 'ص', ' ', 'ا', 'ل', 'ع', 'ر', 'ب', 'ي', 'ّ'],
     widthPermille: [760, 470, 680, 420, 720],
+    showcaseRevealUnits: revealUnits(
+      'النص العربي يتدفق بوضوح، وتتصل الحروف وتتغير أشكالها مع كل حرف جديد. في هذا السطر نراقب التشكيل وإعادة الترتيب والالتفاف لحظة بلحظة، بينما تبقى بداية الفقرة ثابتة وتستمر الكلمات في بناء إيقاعها.',
+    ),
+    showcaseWidthPermille: 720,
   },
   {
     id: 'indic-reordering',
@@ -106,6 +120,10 @@ export const ADVANCED_SHAPING_CASES: readonly AdvancedShapingCase[] = [
     features: [],
     revealUnits: ['कर्म', ' ', 'क्षेत्र', ' ', 'में', ' ', 'प्रगति'],
     widthPermille: [780, 450, 640, 390, 720],
+    showcaseRevealUnits: revealUnits(
+      'कर्म क्षेत्र में प्रगति निरंतर चलती है। प्रत्येक नया अक्षर शब्दों को आकार देता है, मात्राएँ सही स्थान पर आती हैं, संयुक्त रूप बदलते हैं, और अनुच्छेद अपनी स्थिर शुरुआत से पंक्ति दर पंक्ति आगे बढ़ता है।',
+    ),
+    showcaseWidthPermille: 720,
   },
   {
     id: 'mixed-bidi',
@@ -116,6 +134,10 @@ export const ADVANCED_SHAPING_CASES: readonly AdvancedShapingCase[] = [
     features: [],
     revealUnits: ['PMNDRS', ' ', '2026', ' — ', 'النص', ' ', 'يتدفق', ' ', 'بوضوح', '.'],
     widthPermille: [840, 520, 710, 440, 780],
+    showcaseRevealUnits: revealUnits(
+      'PMNDRS 2026 — النص العربي يتدفق بوضوح، while Latin words and 0123456789 keep their own direction. علامات الترقيم meet office ligatures, and the paragraph resolves every run before wrapping from one stable edge.',
+    ),
+    showcaseWidthPermille: 760,
   },
   {
     id: 'cjk-line-breaks',
@@ -139,6 +161,10 @@ export const ADVANCED_SHAPING_CASES: readonly AdvancedShapingCase[] = [
       '。',
     ],
     widthPermille: [790, 440, 610, 360, 690],
+    showcaseRevealUnits: revealUnits(
+      '文字組版では、空白なしでも自然に改行します。新しい文字が一つずつ現れるたびに、禁則処理と句読点の位置を保ちながら段落が伸びていきます。固定された始点から複数の行へ滑らかに折り返し、日本語の密度とリズムをそのまま観察できます。',
+    ),
+    showcaseWidthPermille: 700,
   },
 ] as const
 
@@ -149,7 +175,7 @@ export function initialAdvancedShapingState(): AdvancedShapingState {
   return {
     caseId: definition.id,
     playing: false,
-    tick: definition.revealUnits.length,
+    tick: definition.showcaseRevealUnits.length,
     editedText: undefined,
   }
 }
@@ -164,7 +190,7 @@ export function updateAdvancedShaping(
       return {
         ...state,
         playing: true,
-        tick: state.tick >= definition.revealUnits.length ? 0 : state.tick,
+        tick: state.tick >= definition.showcaseRevealUnits.length ? 0 : state.tick,
       }
     case 'pause':
       return { ...state, playing: false }
@@ -172,47 +198,46 @@ export function updateAdvancedShaping(
       return {
         ...state,
         playing: false,
-        tick: clampTick(state.tick + command.ticks, definition.revealUnits.length),
+        tick: clampTick(state.tick + command.ticks, definition.showcaseRevealUnits.length),
       }
     case 'seek':
       return {
         ...state,
         playing: false,
-        tick: clampTick(command.tick, definition.revealUnits.length),
+        tick: clampTick(command.tick, definition.showcaseRevealUnits.length),
       }
     case 'select-case':
       return {
         caseId: command.caseId,
         playing: state.playing,
-        tick: advancedShapingCase(command.caseId).revealUnits.length,
+        tick: advancedShapingCase(command.caseId).showcaseRevealUnits.length,
         editedText: undefined,
       }
     case 'edit':
       return { ...state, playing: false, editedText: command.text }
     case 'restore-authored-text':
-      return { ...state, tick: definition.revealUnits.length, editedText: undefined }
+      return { ...state, tick: definition.showcaseRevealUnits.length, editedText: undefined }
   }
 }
 
 export function advanceAdvancedShaping(state: AdvancedShapingState): AdvancedShapingState {
   if (!state.playing || state.editedText !== undefined) return state
-  const tickCount = advancedShapingCase(state.caseId).revealUnits.length
+  const tickCount = advancedShapingCase(state.caseId).showcaseRevealUnits.length
   if (state.tick >= tickCount) return { ...state, playing: false }
   return { ...state, tick: state.tick + 1 }
 }
 
 export function advancedShapingFrame(state: AdvancedShapingState): AdvancedShapingFrame {
   const caseDefinition = advancedShapingCase(state.caseId)
-  const tickCount = caseDefinition.revealUnits.length
+  const tickCount = caseDefinition.showcaseRevealUnits.length
   const tick = clampTick(state.tick, tickCount)
-  const widthIndex = tick % caseDefinition.widthPermille.length
   return {
     caseDefinition,
     playing: state.playing,
-    text: state.editedText ?? caseDefinition.revealUnits.slice(0, tick).join(''),
+    text: state.editedText ?? caseDefinition.showcaseRevealUnits.slice(0, tick).join(''),
     tick,
     tickCount,
-    widthPermille: caseDefinition.widthPermille[widthIndex]!,
+    widthPermille: caseDefinition.showcaseWidthPermille,
     progress: tickCount === 0 ? 1 : tick / tickCount,
     isEdited: state.editedText !== undefined,
   }
@@ -224,18 +249,27 @@ export function advancedShapingCase(id: AdvancedShapingCaseId): AdvancedShapingC
   return definition
 }
 
-/** Derive the complete finite conformance matrix from the authored product corpus. */
+/** Derive the complete finite conformance matrix from the focused authored corpus. */
 export function advancedShapingFrames(): readonly AdvancedShapingFrame[] {
   return ADVANCED_SHAPING_CASES.flatMap((definition) =>
-    Array.from({ length: definition.revealUnits.length + 1 }, (_, tick) =>
-      advancedShapingFrame({
-        caseId: definition.id,
+    Array.from({ length: definition.revealUnits.length + 1 }, (_, tick) => {
+      const widthIndex = tick % definition.widthPermille.length
+      return {
+        caseDefinition: definition,
         playing: false,
+        text: definition.revealUnits.slice(0, tick).join(''),
         tick,
-        editedText: undefined,
-      }),
-    ),
+        tickCount: definition.revealUnits.length,
+        widthPermille: definition.widthPermille[widthIndex]!,
+        progress: definition.revealUnits.length === 0 ? 1 : tick / definition.revealUnits.length,
+        isEdited: false,
+      }
+    }),
   )
+}
+
+function revealUnits(text: string): readonly string[] {
+  return Object.freeze(Array.from(graphemeSegments(text), ({ segment }) => segment))
 }
 
 function clampTick(value: number, tickCount: number): number {

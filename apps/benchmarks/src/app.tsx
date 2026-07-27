@@ -31,7 +31,7 @@ import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/pro
 import {
   BENCHMARK_FONT_LABELS,
   SELECTABLE_FONT_FIXTURES,
-  benchmarkIpsumForFont,
+  benchmarkIpsumText,
   selectableFontFixture,
   type BenchmarkFontFixture,
   type SelectableFontFixture,
@@ -118,6 +118,7 @@ const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
 
 const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = []
 const GLYPH_POSITION_TRANSITION_MS = 110
+const TYPEWRITER_INTERVAL_MS = 65
 function mtsdfFixtureFor(fontFixture: BenchmarkFontFixture) {
   const fixture = mtsdfFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture)
   if (fixture === undefined) {
@@ -253,7 +254,7 @@ function defaultFontSizeForWorkload(workload: string): number {
 function liveWorkloadControlDescription(workload: string): string {
   switch (workload) {
     case 'advanced-shaping':
-      return 'The authored timeline changes layout width and commits exact paragraph states.'
+      return 'A grapheme-safe typewriter reshapes into one stable paragraph measure.'
     case 'text-ladder':
       return 'One left-aligned specimen column spans the complete 8–512 device-pixel range.'
     case 'off-axis-3d':
@@ -275,7 +276,7 @@ function liveWorkloadSceneDescription(
 ): string {
   switch (workload) {
     case 'advanced-shaping':
-      return `${showcaseFrame.caseDefinition.label} reshapes at exact timeline states while the live viewport reflows.`
+      return `${showcaseFrame.caseDefinition.label} types from one fixed origin and wraps through exact shaping states.`
     case 'text-ladder':
       return 'One specimen renders from 8 through 512 device pixels for direct technique comparison.'
     case 'off-axis-3d':
@@ -386,14 +387,13 @@ function Harness() {
     if (next.workload !== undefined && next.workload !== location.workload) {
       setFontSize(defaultFontSizeForWorkload(next.workload))
     }
-    if (
+    const replacesLiveSurface =
       next.mode !== undefined ||
       next.technique !== undefined ||
       next.backend !== undefined ||
-      next.fontFixture !== undefined ||
       next.workload !== undefined
-    ) {
-      setLiveStats(undefined)
+    if (replacesLiveSurface) setLiveStats(undefined)
+    if (replacesLiveSurface || next.fontFixture !== undefined) {
       setSummary(undefined)
       setLiveCapture(undefined)
     }
@@ -468,14 +468,13 @@ function Harness() {
     })
   }
 
-  function invalidateLiveMeasurement(): void {
-    setLiveStats(undefined)
+  function invalidateLiveCapture(): void {
     setLiveCapture(undefined)
   }
 
   function dispatchShowcase(command: AdvancedShapingCommand): void {
     setShowcaseState((state) => updateAdvancedShaping(state, command))
-    invalidateLiveMeasurement()
+    invalidateLiveCapture()
   }
 
   const advanceShowcase = useEffectEvent(() => {
@@ -491,7 +490,7 @@ function Harness() {
     let animationFrame = 0
     let lastTickAt = performance.now()
     const animate = (timestamp: number): void => {
-      if (timestamp - lastTickAt >= 140) {
+      if (timestamp - lastTickAt >= TYPEWRITER_INTERVAL_MS) {
         advanceShowcase()
         lastTickAt = timestamp
       }
@@ -538,35 +537,35 @@ function Harness() {
       onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
       onFontSize={(value) => {
         setFontSize(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onLayoutWidthPercent={(value) => {
         setLayoutWidthPercent(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onWorkloadAmount={(value) => {
         setWorkloadAmount(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onAnimationEnabled={(value) => {
         setAnimationEnabled(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onAnimationSpeed={(value) => {
         setAnimationSpeed(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onPaintOpacityPercent={(value) => {
         setPaintOpacityPercent(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onPaintShadowEnabled={(value) => {
         setPaintShadowEnabled(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onPaintStrokePercent={(value) => {
         setPaintStrokePercent(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onSelectedFontFixture={(value) => {
         setLocation({ fontFixture: value })
@@ -576,7 +575,7 @@ function Harness() {
       onShowGrid={setShowGrid}
       onShowLayoutBounds={(value) => {
         setShowLayoutBounds(value)
-        invalidateLiveMeasurement()
+        invalidateLiveCapture()
       }}
       onWarmup={setWarmup}
     />
@@ -951,10 +950,6 @@ function Scene({
   const benchmarkStatus = benchmarkWorkload.techniques[location.technique]
   const conformanceWorkload = workloadById('conformance', activityWorkloads.conformance)
   const conformanceStatus = conformanceWorkload.techniques[location.technique]
-  const liveFontFixture =
-    benchmarkWorkload.id === 'advanced-shaping'
-      ? showcaseFrame.caseDefinition.fontFixture
-      : fontFixture
   return (
     <section
       className="grid min-h-full min-w-0 grid-rows-[auto_minmax(520px,1fr)_auto] gap-3"
@@ -999,7 +994,7 @@ function Scene({
               paintStrokePercent={paintStrokePercent}
               showLayoutBounds={showLayoutBounds}
               workloadAmount={workloadAmount}
-              key={`${location.backend}-${String(dpr)}-${liveFontFixture}-${benchmarkWorkload.id}`}
+              key={`${location.backend}-${String(dpr)}-${benchmarkWorkload.id}`}
               showcaseFrame={showcaseFrame}
               stats={liveStats}
               technique={location.technique}
@@ -1115,9 +1110,10 @@ function BenchmarkSurface({
   const comparisonWorkload = comparisonWorkloadId(workload)
   const textConfiguration: LiveTextConfiguration = advanced
     ? {
+        anchor: 'top-start',
         direction: showcaseFrame.caseDefinition.direction,
         expectedGlyphCount: undefined,
-        animatePresentation: showcaseFrame.playing,
+        animatePresentation: false,
         features: showcaseFrame.caseDefinition.features,
         fontFixture: showcaseFrame.caseDefinition.fontFixture,
         language: showcaseFrame.caseDefinition.language,
@@ -1126,6 +1122,7 @@ function BenchmarkSurface({
         timelineTick: showcaseFrame.tick,
       }
     : {
+        anchor: 'center',
         direction: 'ltr',
         expectedGlyphCount: fontFixture === 'inter' ? BENCHMARK_IPSUM_INTER_GLYPH_COUNT : undefined,
         animatePresentation: false,
@@ -1133,7 +1130,7 @@ function BenchmarkSurface({
         fontFixture,
         language: 'en',
         layoutWidthRatio: layoutWidthPercent / 100,
-        text: benchmarkIpsumForFont(fontFixture),
+        text: benchmarkIpsumText(),
         timelineTick: undefined,
       }
   return (
@@ -1161,8 +1158,12 @@ function BenchmarkSurface({
           label="Glyphs / draws"
           value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
         />
+        <Metric
+          label="Missing glyphs"
+          value={stats === undefined ? '—' : String(stats.missingGlyphCount)}
+        />
       </div>
-      <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
+      <div className="grid gap-3">
         <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3">
           <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
@@ -1178,24 +1179,39 @@ function BenchmarkSurface({
         </div>
         <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
           <Sparkline
-            label="CPU frame ms"
-            length={stats?.submitHistoryLength ?? 0}
-            nextIndex={stats?.submitHistoryNextIndex ?? 0}
-            values={stats?.submitHistory}
-          />
-          <Sparkline
+            id="fps"
             label="FPS"
             length={stats?.fpsHistoryLength ?? 0}
+            maximum={stats?.maximumFramesPerSecond}
+            minimum={stats?.minimumFramesPerSecond}
             nextIndex={stats?.fpsHistoryNextIndex ?? 0}
+            tone="success"
+            unit="fps"
             values={stats?.fpsHistory}
+          />
+          <Sparkline
+            id="cpu"
+            label="CPU frame ms"
+            length={stats?.submitHistoryLength ?? 0}
+            maximum={stats?.maximumSubmitMs}
+            minimum={stats?.minimumSubmitMs}
+            nextIndex={stats?.submitHistoryNextIndex ?? 0}
+            tone="cyan"
+            unit="ms"
+            values={stats?.submitHistory}
           />
           <Sparkline
             emptyLabel={
               stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
             }
             label="GPU frame ms"
+            id="gpu"
             length={stats?.gpuHistoryLength ?? 0}
+            maximum={stats?.maximumGpuMs}
+            minimum={stats?.minimumGpuMs}
             nextIndex={stats?.gpuHistoryNextIndex ?? 0}
+            tone="warning"
+            unit="ms"
             values={stats?.gpuHistory}
           />
         </div>
@@ -1235,6 +1251,7 @@ function BenchmarkSurface({
             dpr={dpr}
             fontSize={fontSize}
             grid={grid}
+            key={textConfiguration.fontFixture}
             textConfiguration={textConfiguration}
             onStats={onStats}
           />
@@ -1244,6 +1261,7 @@ function BenchmarkSurface({
             dpr={dpr}
             fontSize={fontSize}
             grid={grid}
+            key={textConfiguration.fontFixture}
             textConfiguration={textConfiguration}
             onStats={onStats}
           />
@@ -1672,6 +1690,7 @@ function BitmapTextViewport({
   })
   const [error, setError] = useState<string>()
   const {
+    anchor,
     animatePresentation,
     direction,
     expectedGlyphCount,
@@ -1692,6 +1711,7 @@ function BitmapTextViewport({
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   const previewConfiguration = useEffectEvent(() => ({
+    anchor,
     direction,
     expectedGlyphCount,
     features,
@@ -1744,6 +1764,7 @@ function BitmapTextViewport({
       if (cancelled) return
       const bounds = container.getBoundingClientRect()
       const created = await createBitmapTextPreview({
+        anchor: configuration.anchor,
         backend,
         canvas,
         dpr,
@@ -1805,6 +1826,7 @@ function BitmapTextViewport({
     }
     void preview
       .update({
+        anchor,
         fontSize: fontSize / dpr,
         layoutWidthRatio,
         text,
@@ -1842,6 +1864,7 @@ function BitmapTextViewport({
       if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
     }
   }, [
+    anchor,
     animatePresentation,
     direction,
     dpr,
@@ -1856,10 +1879,13 @@ function BitmapTextViewport({
   return (
     <div
       className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      data-anchor={anchor}
       data-layout-width={stats?.layoutWidth}
+      data-layout-width-ratio={layoutWidthRatio}
       data-line-count={stats?.lineCount}
       data-frame-count={stats?.frameCount}
       data-frames-per-second={stats?.framesPerSecond}
+      data-font-fixture={fontFixture}
       data-median-submit-ms={stats?.medianSubmitMs}
       data-p95-submit-ms={stats?.p95SubmitMs}
       data-gpu-frame-ms={stats?.gpuFrameMs}
@@ -1879,6 +1905,7 @@ function BitmapTextViewport({
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-startup-ms={stats?.startupMs}
+      data-source-text-length={text.length}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
       data-total-gpu-bytes={stats?.totalGpuBytes}
@@ -1943,7 +1970,8 @@ function MtsdfTextViewport({
   const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
   const [stats, setStats] = useState<MtsdfTextLiveStats>()
   const [error, setError] = useState<string>()
-  const { direction, features, fontFixture, language, layoutWidthRatio, text } = textConfiguration
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text } =
+    textConfiguration
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
     setStats(next)
     onStats(next)
@@ -1954,6 +1982,7 @@ function MtsdfTextViewport({
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   const previewConfiguration = useEffectEvent(() => ({
+    anchor,
     direction,
     features,
     fontSize: fontSize / dpr,
@@ -1982,6 +2011,7 @@ function MtsdfTextViewport({
       if (cancelled) return
       const bounds = container.getBoundingClientRect()
       const created = await createMtsdfTextPreview({
+        anchor: configuration.anchor,
         backend,
         canvas,
         dpr,
@@ -2029,6 +2059,7 @@ function MtsdfTextViewport({
     if (preview === undefined) return
     void preview
       .update({
+        anchor,
         direction,
         features,
         fontSize: fontSize / dpr,
@@ -2037,11 +2068,12 @@ function MtsdfTextViewport({
         text,
       })
       .catch(publishError)
-  }, [direction, dpr, features, fontSize, language, layoutWidthRatio, text])
+  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text])
 
   return (
     <div
       className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      data-anchor={anchor}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
       data-backend={stats?.backend}
@@ -2050,10 +2082,12 @@ function MtsdfTextViewport({
       data-fps-history-length={stats?.fpsHistoryLength}
       data-frame-count={stats?.frameCount}
       data-frames-per-second={stats?.framesPerSecond}
+      data-font-fixture={fontFixture}
       data-glyph-count={stats?.glyphCount}
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-layout-width={stats?.layoutWidth}
+      data-layout-width-ratio={layoutWidthRatio}
       data-line-count={stats?.lineCount}
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
@@ -2064,6 +2098,8 @@ function MtsdfTextViewport({
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-submit-history-length={stats?.submitHistoryLength}
+      data-source-text-length={text.length}
+      data-timeline-tick={textConfiguration.timelineTick}
       data-testid="mtsdf-live-viewport"
       ref={containerRef}
     >
@@ -2136,13 +2172,17 @@ function ComparisonWorkloadViewport({
   >(undefined)
   const surfaceKey = `${backend}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
   const [publishedStats, setPublishedStats] = useState<
-    Readonly<{ key: string; value: ComparisonWorkloadStats }>
+    Readonly<{
+      fontFixture: SelectableFontFixture
+      key: string
+      value: ComparisonWorkloadStats
+    }>
   >()
-  const stats = publishedStats?.key === surfaceKey ? publishedStats.value : undefined
+  const stats = publishedStats?.value
   const [error, setError] = useState<string>()
   const publishStats = useEffectEvent((key: string, next: ComparisonWorkloadStats) => {
     if (key !== surfaceKey) return
-    setPublishedStats({ key, value: next })
+    setPublishedStats({ fontFixture, key, value: next })
     onStats(next)
     setError(undefined)
   })
@@ -2270,6 +2310,7 @@ function ComparisonWorkloadViewport({
       data-dpr={stats?.dpr}
       data-draw-count={stats?.drawCount}
       data-first-draw-ms={stats?.firstDrawMs}
+      data-font-fixture={publishedStats?.fontFixture ?? fontFixture}
       data-font-load-ms={stats?.fontLoadMs}
       data-frames-per-second={stats?.framesPerSecond}
       data-glyph-count={stats?.glyphCount}
@@ -2297,6 +2338,7 @@ function ComparisonWorkloadViewport({
       data-paint-update-ms={
         stats?.workload === 'paint-effects' ? stats.lastPaintUpdateMs : undefined
       }
+      data-presentation-pending={publishedStats !== undefined && publishedStats.key !== surfaceKey}
       data-layout-bounds-visible={
         stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined
       }
@@ -2304,6 +2346,7 @@ function ComparisonWorkloadViewport({
       data-reflow-ms={stats?.lastReflowMs}
       data-rendered-device-px={stats === undefined ? undefined : stats.appliedFontSize * dpr}
       data-startup-ms={stats?.startupMs}
+      data-source-text-length={stats?.sourceTextLength}
       data-submit-history-length={stats?.submitHistoryLength}
       data-text-ready-ms={stats?.textReadyMs}
       data-technique={technique}
@@ -2346,7 +2389,7 @@ function ComparisonWorkloadViewport({
         </span>
         <span>{workload === 'text-ladder' ? `DRAG TO PAN · ${dpr}× DPR` : `${dpr}× DPR`}</span>
       </div>
-      {stats === undefined && error === undefined && (
+      {publishedStats === undefined && error === undefined && (
         <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
           LOADING {technique === 'mtsdf' ? 'MSDF' : 'BITMAP'} {workload.toUpperCase()}
         </div>
@@ -2371,15 +2414,25 @@ function LiveCost({ label, value }: { readonly label: string; readonly value: st
 
 function Sparkline({
   emptyLabel,
+  id,
   label,
   length,
+  maximum,
+  minimum,
   nextIndex,
+  tone,
+  unit,
   values,
 }: {
   readonly emptyLabel?: string
+  readonly id: 'cpu' | 'fps' | 'gpu'
   readonly label: string
   readonly length: number
+  readonly maximum: number | undefined
+  readonly minimum: number | undefined
   readonly nextIndex: number
+  readonly tone: 'cyan' | 'success' | 'warning'
+  readonly unit: 'fps' | 'ms'
   readonly values: Float32Array | undefined
 }) {
   function draw(canvas: HTMLCanvasElement | null): void {
@@ -2388,27 +2441,34 @@ function Sparkline({
     if (context === null) return
     const width = canvas.width
     const height = canvas.height
-    let maximum = 1
+    let chartMaximum = 1
     const start = length === values.length ? nextIndex : 0
     for (let index = 0; index < length; index += 1) {
-      maximum = Math.max(maximum, values[(start + index) % values.length] ?? 0)
+      chartMaximum = Math.max(chartMaximum, values[(start + index) % values.length] ?? 0)
     }
     context.clearRect(0, 0, width, height)
     context.beginPath()
     for (let index = 0; index < length; index += 1) {
       const value = values[(start + index) % values.length] ?? 0
       const x = length < 2 ? 0 : (index / (length - 1)) * width
-      const y = height - (value / maximum) * (height - 4) - 2
+      const y = height - (value / chartMaximum) * (height - 4) - 2
       if (index === 0) context.moveTo(x, y)
       else context.lineTo(x, y)
     }
-    context.strokeStyle = getComputedStyle(canvas).getPropertyValue('--cyan')
+    context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`)
     context.lineWidth = 1.5
     context.stroke()
   }
   return (
-    <div className="bg-surface p-3">
-      <p className="font-mono text-[8px] uppercase tracking-wider text-dim">{label}</p>
+    <div className="bg-surface p-3" data-testid={`sparkline-${id}`} data-tone={tone}>
+      <div
+        className={`flex items-baseline justify-between gap-2 font-mono text-[8px] uppercase tracking-wider ${sparklineToneClass(tone)}`}
+      >
+        <p>{label}</p>
+        <p className="text-right tabular-nums">
+          LOW {formatSparklineValue(minimum, unit)} · HIGH {formatSparklineValue(maximum, unit)}
+        </p>
+      </div>
       <div className="relative mt-2 h-[42px] w-full">
         <canvas
           aria-label={`${label} history`}
@@ -2425,6 +2485,22 @@ function Sparkline({
       </div>
     </div>
   )
+}
+
+function formatSparklineValue(value: number | undefined, unit: 'fps' | 'ms'): string {
+  if (value === undefined) return '—'
+  return unit === 'fps' ? value.toFixed(1) : `${value.toFixed(2)} ms`
+}
+
+function sparklineToneClass(tone: 'cyan' | 'success' | 'warning'): string {
+  switch (tone) {
+    case 'cyan':
+      return 'text-cyan'
+    case 'success':
+      return 'text-success'
+    case 'warning':
+      return 'text-warning'
+  }
 }
 
 function Controls({

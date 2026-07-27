@@ -14,7 +14,7 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "9223555e42de666eb0f08692d6a019d69951aa518271c9737c9f29ffc236a4a3",
+      "sha256": "001d3d9191e76e00991c49e0ba041e0f5152fe86a294a36afceb038089c738ff",
       "bytes": 4395
     },
     {
@@ -62,8 +62,8 @@
     {
       "id": "advanced-shaping-performance",
       "path": "apps/benchmarks/fixtures/results/advanced-shaping-performance-chromium149.json",
-      "sha256": "fa4de867f5dec2b85712636147047f08b4c4c7501d7ed118a44d0217f9f5ef3d",
-      "bytes": 3590
+      "sha256": "2d19dd573f8628cbb5e01b03a28288da45b6b653a925d5a5e3de8d3be377380d",
+      "bytes": 3597
     }
   ]
 }
