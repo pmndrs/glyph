@@ -21,7 +21,6 @@ const optimizedWasm = fileURLToPath(
   new URL('../rust/mtsdf-admission/target/mtsdf-admission-opt.wasm', import.meta.url),
 )
 const evidenceUrl = new URL('../rust/mtsdf-admission/evidence/size-v0.json', import.meta.url)
-const cargoLockUrl = new URL('../rust/mtsdf-admission/Cargo.lock', import.meta.url)
 
 await run('cargo', [
   'build',
@@ -41,13 +40,21 @@ await run(wasmOpt, [
   optimizedWasm,
 ])
 
-const [rawBytes, optimizedBytes, cargoLock] = await Promise.all([
+const [rawBytes, optimizedBytes, dependencyTree] = await Promise.all([
   readFile(rawWasm),
   readFile(optimizedWasm),
-  readFile(cargoLockUrl, 'utf8'),
+  capture('cargo', [
+    'tree',
+    '--manifest-path',
+    'rust/mtsdf-admission/Cargo.toml',
+    '--edges',
+    'normal',
+    '--no-default-features',
+    '--locked',
+  ]),
 ])
 for (const forbiddenDependency of ['skrifa', 'wgpu', 'ttf-parser']) {
-  if (cargoLock.includes(`name = "${forbiddenDependency}"`)) {
+  if (dependencyTree.includes(`${forbiddenDependency} v`)) {
     throw new Error(`MTSDF admission graph unexpectedly contains ${forbiddenDependency}`)
   }
 }
@@ -62,7 +69,7 @@ if (typeof checksumExport !== 'function') {
   throw new TypeError('optimized admission Wasm is missing its checksum export')
 }
 const outputChecksum = checksumExport()
-if (outputChecksum !== 0x1627_af29) {
+if (outputChecksum !== 0x3d96_25f1) {
   throw new Error(`optimized admission Wasm returned unexpected checksum ${String(outputChecksum)}`)
 }
 
@@ -70,9 +77,9 @@ const evidence = {
   schemaVersion: 0,
   kind: 'mtsdf-generator-admission-size',
   candidate: {
-    crate: 'klyff_msdf',
-    version: '0.1.3',
-    crateSha256: 'ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235',
+    crate: 'pmndrs-text-mtsdf-core',
+    version: '0.0.0',
+    source: 'repository-owned',
     defaultFeatures: false,
   },
   toolchain: {
@@ -109,6 +116,23 @@ function run(command, args) {
     child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) resolve()
+      else reject(new Error(`${command} exited with ${code ?? signal}`))
+    })
+  })
+}
+
+function capture(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: packageRoot,
+      env: rustEnvironment,
+      stdio: ['ignore', 'pipe', 'inherit'],
+    })
+    const chunks = []
+    child.stdout.on('data', (chunk) => chunks.push(chunk))
+    child.once('error', reject)
+    child.once('exit', (code, signal) => {
+      if (code === 0) resolve(Buffer.concat(chunks).toString('utf8'))
       else reject(new Error(`${command} exited with ${code ?? signal}`))
     })
   })

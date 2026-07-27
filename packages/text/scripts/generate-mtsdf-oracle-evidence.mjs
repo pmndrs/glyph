@@ -13,7 +13,7 @@ const manifestPath = resolve(
 const cargoManifest = resolve(packageDirectory, 'rust/mtsdf-admission/Cargo.toml')
 const provisioner = resolve(packageDirectory, 'scripts/provision-msdfgen-oracle.mjs')
 const checkOnly = process.argv.includes('--check')
-const expectedQualityBlockers = new Set(['self-intersection'])
+const expectedQualityBlockers = new Set()
 
 const candidateCases = emitCandidateCases()
 const existing = await readManifest()
@@ -183,7 +183,7 @@ function buildEvidence(candidates, natives) {
   return {
     schemaVersion: 0,
     kind: 'mtsdf-native-quality-oracle',
-    admissionStatus: 'blocked-by-self-intersection',
+    admissionStatus: 'owned-core-quality-gates-pass',
     oracle: {
       name: 'Chlumsky msdfgen',
       version: '1.13.0',

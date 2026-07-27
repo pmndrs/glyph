@@ -1,14 +1,24 @@
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 
 const fuzzDirectory = new URL("../fuzz/", import.meta.url);
-const corpusDirectory = new URL("target/corpus/bake_font/", fuzzDirectory);
-await mkdir(new URL("target/artifacts/bake_font/", fuzzDirectory), { recursive: true });
+const arguments_ = process.argv.slice(2);
+while (arguments_[0] === "--") arguments_.shift();
+const target = ["bake_font", "mtsdf_outline"].includes(arguments_[0])
+  ? arguments_.shift()
+  : "bake_font";
+while (arguments_[0] === "--") arguments_.shift();
+const corpusDirectory = new URL(`target/corpus/${target}/`, fuzzDirectory);
+await mkdir(new URL(`target/artifacts/${target}/`, fuzzDirectory), { recursive: true });
 await mkdir(corpusDirectory, { recursive: true });
-await copyFile(
-  new URL("../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf", fuzzDirectory),
-  new URL("inter-v4.1-40d692fc.ttf", corpusDirectory),
-);
+if (target === "bake_font") {
+  await copyFile(
+    new URL("../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf", fuzzDirectory),
+    new URL("inter-v4.1-40d692fc.ttf", corpusDirectory),
+  );
+} else {
+  await writeFile(new URL("crossing-contour.bin", corpusDirectory), crossingContourSeed());
+}
 const rustc = spawnSync("mise", ["exec", "--", "rustc", "--version"], {
   cwd: fuzzDirectory,
   encoding: "utf8",
@@ -35,8 +45,6 @@ if (mise.stdout.trim() !== "cargo-fuzz 0.13.2") {
   throw new Error(`Expected cargo-fuzz 0.13.2, received ${mise.stdout.trim()}`);
 }
 
-const arguments_ = process.argv.slice(2);
-while (arguments_[0] === "--") arguments_.shift();
 const result = spawnSync(
   "mise",
   [
@@ -45,16 +53,39 @@ const result = spawnSync(
     "cargo",
     "fuzz",
     "run",
-    "bake_font",
+    target,
     "--fuzz-dir",
     ".",
-    "target/corpus/bake_font",
+    `target/corpus/${target}`,
     "--",
     "-seed=1347243588",
-    "-artifact_prefix=target/artifacts/bake_font/",
-    ...(arguments_.length === 0 ? ["-max_len=1048576"] : arguments_),
+    `-artifact_prefix=target/artifacts/${target}/`,
+    ...(arguments_.length === 0
+      ? [`-max_len=${target === "bake_font" ? 1_048_576 : 1_666}`]
+      : arguments_),
   ],
   { cwd: fuzzDirectory, stdio: "inherit" },
 );
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;
+
+function crossingContourSeed() {
+  const points = [
+    [100, 100],
+    [900, 900],
+    [100, 900],
+    [900, 100],
+  ];
+  const bytes = [16, 16];
+  for (const [index, [x, y]] of points.entries()) {
+    const command = new Uint8Array(13);
+    command[0] = index === 0 ? 0 : 1;
+    new DataView(command.buffer).setInt16(1, x, true);
+    new DataView(command.buffer).setInt16(3, y, true);
+    bytes.push(...command);
+  }
+  const close = new Uint8Array(13);
+  close[0] = 4;
+  bytes.push(...close);
+  return Uint8Array.from(bytes);
+}

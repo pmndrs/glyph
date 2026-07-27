@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:529c6a7b600babed7edd6fb28ceb80a25ad46d47554dc853b917142a8f903a14"
+source_digest: "sha256:d0d60318f2c3bc1be76d27d708df028eded934302ad50621ebbeebfa708d595f"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -46,6 +46,8 @@ Font interpretation is library-owned: Fontations `read-fonts` parses SFNT/TTC ta
 
 The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, discover application fonts, or provide a filesystem/Worker host. The public Node host now wraps it from `@pmndrs/text/bake`; the Worker and runtime shaper remain separate packages. Its host-only `generate-shaping-oracle` binary uses pinned HarfRust 0.12.0 to produce deterministic UTF-16 fixture JSON and is not linked into the `no_std` Wasm artifact. The oracle-only `inspect-font-fixture` binary uses Fontations rather than a project parser to emit deterministic glyph/table/cmap facts. Mandatory package E2E lanes authenticate Inter 4.1, Amiri 1.002, and Noto Sans CJK JP 2.004 before exercising the compiled Wasm API; none can skip based on the environment. Noto proves the 65,535-glyph boundary, `cmap` formats 12/14, supplementary/variation mappings, exact source/reduced HarfRust and HarfBuzz equality, and exact retention of source `BASE`, `VORG`, `vhea`, and `vmtx` without fabricating absent tables or implementing vertical layout.
 
+The isolated nightly fuzz workspace also hosts the repository-owned MTSDF outline target because cargo-fuzz remains centralized under one pinned exception. That target depends on the non-shipping admission adapter, not on a product dependency or font parser, and mutates bounded contour commands through core generation. Its separate command, corpus, and artifact directory keep shaping-font and geometry failures attributable.
+
 ## Package scripts
 
 | Script | Purpose |
@@ -58,6 +60,7 @@ The portable bake path does not run HarfRust, shape Unicode, generate a bitmap, 
 | `test` | Build and run unit, integration, fuzz-smoke, and real-font end-to-end layers. |
 | `fuzz:validator` | Run the longer seeded TypeScript validator mutation driver locally. |
 | `fuzz:rust` | Run pinned cargo-fuzz/libFuzzer against the public bake boundary using the nested mise-owned nightly workspace. |
+| `fuzz:mtsdf` | Run pinned cargo-fuzz/libFuzzer against bounded repository-owned MTSDF outline generation. |
 | `fuzz:rust-mutation` | Run the longer deterministic stable-Rust source-font mutation driver. |
 | `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths. |
 | `inspect:font-fixture` | Emit deterministic Fontations-owned glyph, table, cmap-format, nominal, SVS, and IVS facts for an explicit fixture. |

@@ -2,10 +2,24 @@ use core::convert::Infallible;
 #[cfg(not(target_arch = "wasm32"))]
 use core::fmt::Write;
 
-use klyff_msdf::{Aabb, AtlasRegionSize, MsdfGenerator, OutlineProvider, SegmentCollector};
+#[cfg(test)]
+use pmndrs_text_mtsdf_core::ReadOutlineError;
+use pmndrs_text_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, OutlineSource};
+
+#[cfg(feature = "full-font-evidence")]
+mod fontations;
+
+#[cfg(feature = "full-font-evidence")]
+pub use fontations::{FontPassEvidence, glyph_count, measure_font_pass};
+
+#[cfg(feature = "fuzzing")]
+mod fuzzing;
+
+#[cfg(feature = "fuzzing")]
+pub use fuzzing::exercise_outline_bytes;
 
 pub const UNITS_PER_EM: f32 = 1_000.0;
-pub const REGION: AtlasRegionSize = AtlasRegionSize {
+pub const REGION: AtlasRegion = AtlasRegion {
     inner_width: 32,
     inner_height: 32,
     padding_x: 4,
@@ -187,44 +201,45 @@ impl OracleCase {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl OutlineProvider for OracleCase {
-    type ReadFontError = Infallible;
+impl OutlineSource for OracleCase {
+    type Error = Infallible;
 
-    fn length_per_em(&self) -> f32 {
+    fn units_per_em(&self) -> f32 {
         UNITS_PER_EM
     }
 
-    fn collect_outline<'collect>(
-        &self,
-        collector: &mut SegmentCollector<'collect>,
-    ) -> Result<Aabb, klyff_msdf::ReadGlyphOutlineError<Self::ReadFontError>> {
+    fn bounds(&self) -> Bounds {
+        Bounds::new(
+            self.bounds[0],
+            self.bounds[1],
+            self.bounds[2],
+            self.bounds[3],
+        )
+    }
+
+    fn emit(&self, collector: &mut OutlineSink<'_>) -> Result<(), Self::Error> {
         for command in self.commands {
             match *command {
                 OutlineCommand::Move(x, y) => collector.move_to(x, y),
                 OutlineCommand::Line(x, y) => collector.line_to(x, y),
                 OutlineCommand::Quad(cx, cy, x, y) => collector.quad_to(cx, cy, x, y),
                 OutlineCommand::Cubic(cx0, cy0, cx1, cy1, x, y) => {
-                    collector.curve_to(cx0, cy0, cx1, cy1, x, y);
+                    collector.cubic_to(cx0, cy0, cx1, cy1, x, y);
                 }
                 OutlineCommand::Close => collector.close(),
             }
         }
-        Ok(Aabb::new(
-            self.bounds[0],
-            self.bounds[1],
-            self.bounds[2],
-            self.bounds[3],
-        ))
+        Ok(())
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn generate_case(case: &OracleCase) -> Option<Vec<u8>> {
-    let mut generator = MsdfGenerator::new();
-    let Ok(mut outline) = generator.read_glyph(case) else {
+    let mut generator = MtsdfGenerator::default();
+    let Ok(mut outline) = generator.read_outline(case) else {
         return None;
     };
-    Some(outline.generate_mtsdf(REGION).to_vec())
+    Some(outline.generate_mtsdf(REGION).ok()?.to_vec())
 }
 
 fn fnv1a(bytes: &[u8]) -> u32 {
@@ -235,32 +250,36 @@ fn fnv1a(bytes: &[u8]) -> u32 {
 
 struct AdmissionSquare;
 
-impl OutlineProvider for AdmissionSquare {
-    type ReadFontError = Infallible;
+impl OutlineSource for AdmissionSquare {
+    type Error = Infallible;
 
-    fn length_per_em(&self) -> f32 {
+    fn units_per_em(&self) -> f32 {
         UNITS_PER_EM
     }
 
-    fn collect_outline<'collect>(
-        &self,
-        collector: &mut SegmentCollector<'collect>,
-    ) -> Result<Aabb, klyff_msdf::ReadGlyphOutlineError<Self::ReadFontError>> {
+    fn bounds(&self) -> Bounds {
+        Bounds::new(100.0, 100.0, 900.0, 900.0)
+    }
+
+    fn emit(&self, collector: &mut OutlineSink<'_>) -> Result<(), Self::Error> {
         collector.move_to(100.0, 100.0);
         collector.line_to(100.0, 900.0);
         collector.line_to(900.0, 900.0);
         collector.line_to(900.0, 100.0);
         collector.close();
-        Ok(Aabb::new(100.0, 100.0, 900.0, 900.0))
+        Ok(())
     }
 }
 
 fn square_mtsdf_checksum() -> u32 {
-    let mut generator = MsdfGenerator::new();
-    let Ok(mut outline) = generator.read_glyph(&AdmissionSquare) else {
+    let mut generator = MtsdfGenerator::default();
+    let Ok(mut outline) = generator.read_outline(&AdmissionSquare) else {
         return 0;
     };
-    fnv1a(outline.generate_mtsdf(REGION))
+    let Ok(bytes) = outline.generate_mtsdf(REGION) else {
+        return 0;
+    };
+    fnv1a(bytes)
 }
 
 /// Retains the complete CPU generator in the admission Wasm size measurement.
@@ -286,35 +305,37 @@ mod tests {
 
     struct EmptyOutline;
 
-    impl OutlineProvider for EmptyOutline {
-        type ReadFontError = Infallible;
+    impl OutlineSource for EmptyOutline {
+        type Error = Infallible;
 
-        fn length_per_em(&self) -> f32 {
+        fn units_per_em(&self) -> f32 {
             UNITS_PER_EM
         }
 
-        fn collect_outline<'collect>(
-            &self,
-            _collector: &mut SegmentCollector<'collect>,
-        ) -> Result<Aabb, klyff_msdf::ReadGlyphOutlineError<Self::ReadFontError>> {
-            Ok(Aabb::new(0.0, 0.0, 0.0, 0.0))
+        fn bounds(&self) -> Bounds {
+            Bounds::new(0.0, 0.0, 1.0, 1.0)
+        }
+
+        fn emit(&self, _collector: &mut OutlineSink<'_>) -> Result<(), Self::Error> {
+            Ok(())
         }
     }
 
     struct MalformedOutline;
 
-    impl OutlineProvider for MalformedOutline {
-        type ReadFontError = InvalidOutline;
+    impl OutlineSource for MalformedOutline {
+        type Error = InvalidOutline;
 
-        fn length_per_em(&self) -> f32 {
+        fn units_per_em(&self) -> f32 {
             UNITS_PER_EM
         }
 
-        fn collect_outline<'collect>(
-            &self,
-            _collector: &mut SegmentCollector<'collect>,
-        ) -> Result<Aabb, klyff_msdf::ReadGlyphOutlineError<Self::ReadFontError>> {
-            Err(klyff_msdf::ReadGlyphOutlineError::Other(InvalidOutline))
+        fn bounds(&self) -> Bounds {
+            Bounds::new(0.0, 0.0, 1.0, 1.0)
+        }
+
+        fn emit(&self, _collector: &mut OutlineSink<'_>) -> Result<(), Self::Error> {
+            Err(InvalidOutline)
         }
     }
 
@@ -323,7 +344,7 @@ mod tests {
         let first = square_mtsdf_checksum();
         let second = square_mtsdf_checksum();
         assert_eq!(first, second);
-        assert_eq!(first, 0x1627_af29);
+        assert_eq!(first, 0x3d96_25f1);
     }
 
     #[test]
@@ -334,7 +355,7 @@ mod tests {
             assert_eq!(first, second, "{} changed between runs", case.id);
             assert_eq!(
                 first.len(),
-                REGION.total_width() * REGION.total_height() * 4
+                REGION.total_width().expect("width") * REGION.total_height().expect("height") * 4
             );
             assert!(first.iter().any(|byte| *byte != 0), "{} is empty", case.id);
         }
@@ -346,23 +367,20 @@ mod tests {
 
     #[test]
     fn candidate_rejects_empty_and_malformed_outlines() {
-        let mut generator = MsdfGenerator::new();
+        let mut generator = MtsdfGenerator::default();
         assert!(matches!(
-            generator.read_glyph(&EmptyOutline),
-            Err(klyff_msdf::ReadGlyphOutlineError::EmptyGlyph)
+            generator.read_outline(&EmptyOutline),
+            Err(ReadOutlineError::EmptyOutline)
         ));
         assert!(matches!(
-            generator.read_glyph(&MalformedOutline),
-            Err(klyff_msdf::ReadGlyphOutlineError::Other(InvalidOutline))
+            generator.read_outline(&MalformedOutline),
+            Err(ReadOutlineError::Source(InvalidOutline))
         ));
     }
 
     #[test]
-    fn published_threshold_api_still_panics_on_invalid_input() {
-        let result = std::panic::catch_unwind(|| {
-            let mut generator = MsdfGenerator::new();
-            generator.set_segment_deviation_threshold(0.0);
-        });
-        assert!(result.is_err(), "candidate unexpectedly stopped panicking");
+    fn owned_core_has_no_threshold_panic_surface() {
+        let generator = MtsdfGenerator::default();
+        assert!(generator.limits().max_edges > 0);
     }
 }

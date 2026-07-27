@@ -570,17 +570,17 @@ Exit only when MSDF is credible as the general-purpose recommendation across the
 ### 8.1 generator-admission checklist
 
 - [x] Audit current Rust candidates against the accepted MTSDF, maintained-font-library, Wasm, licensing, panic-resistance, and package-size constraints.
-- [ ] Remove panic/assert paths and unconditional diagnostic allocation from the selected generator through an upstreamable patch rather than a product-side catch or trap policy.
+- [x] Replace the rejected dependency surface with repository-owned typed failures, fallible bounded allocation, and no unconditional diagnostic construction.
 - [x] Pin the exact candidate with default features disabled and compile its CPU generator for `wasm32-unknown-unknown` without WGPU/native bindings, duplicate font parsers, or host imports.
-- [ ] Remove or explicitly justify the candidate's remaining `std` dependency and allocator behavior before it enters a shipping baker.
-- [ ] Compare deterministic RGBA8 output and reconstructed glyph error against pinned native `msdfgen` over ordinary, acute-corner, overlap, cubic, quadratic, empty, malformed, and complex-outline fixtures.
+- [x] Keep the owned kernel `no_std + alloc`; the package-selected allocator remains a Wasm-host concern rather than a geometry dependency.
+- [x] Compare deterministic RGBA8 output and reconstructed glyph error against pinned native `msdfgen` over ordinary, acute-corner, overlap, cubic, quadratic, empty, malformed, and complex-outline fixtures.
   - [x] Pin the native core-only oracle and admit ordinary, acute-corner, overlapping-contour, cubic, quadratic, counter, empty, and provider-malformed cases through one explicit framing contract.
-  - [ ] Resolve the self-intersection mismatch currently detected at 768 of 1,600 reconstructed pixels; do not waive or remove the negative case.
-- [ ] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence before accepting the dependency.
+  - [x] Resolve self-intersection signs through nonzero-fill scanline correction; the unchanged negative case now has zero coverage mismatches.
+- [x] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence for the owned core.
 - [x] Record raw/optimized/gzip/Brotli candidate-core Wasm size through a reproducible freshness-checked package script.
-- [ ] Record cold/warm full-font generation cost after the hardened generator and Fontations provider are integrated.
+- [x] Record cold/warm full-font generation cost after the owned generator and Fontations provider are integrated; Inter produces 2,915 glyphs with an identical checksum and a current scalar-oracle median of 40.173 seconds.
 
-The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. `klyff_msdf` 0.1.3 is the leading patch candidate; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages.
+The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) records why no published candidate is accepted unchanged. The implementation is repository-owned; native Chlumsky `msdfgen` is the independent quality oracle and does not ship in browser packages. SIMD and C ABI/package integration gates remain before item 8.1 closes.
 
 ## Milestone 9 — Slug release renderer
 

@@ -42,6 +42,7 @@
     "test:e2e": "node --test tests/e2e/*.test.mjs",
     "fuzz:validator": "pnpm build && node scripts/fuzz-validator.mjs",
     "fuzz:rust": "node scripts/fuzz-rust.mjs",
+    "fuzz:mtsdf": "node scripts/fuzz-rust.mjs mtsdf_outline",
     "fuzz:rust-mutation": "node scripts/fuzz-rust-mutation.mjs"
   },
   "dependencies": {

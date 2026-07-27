@@ -2,9 +2,9 @@
   "schemaVersion": 0,
   "kind": "mtsdf-generator-admission-size",
   "candidate": {
-    "crate": "klyff_msdf",
-    "version": "0.1.3",
-    "crateSha256": "ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235",
+    "crate": "pmndrs-text-mtsdf-core",
+    "version": "0.0.0",
+    "source": "repository-owned",
     "defaultFeatures": false
   },
   "toolchain": {
@@ -12,11 +12,11 @@
     "binaryen": "129.0.0",
     "target": "wasm32-unknown-unknown"
   },
-  "syntheticOutputFnv1a32": "1627af29",
+  "syntheticOutputFnv1a32": "3d9625f1",
   "wasmImportCount": 0,
-  "rawBytes": 81308,
-  "optimizedBytes": 72510,
-  "gzipBytes": 32161,
-  "brotliBytes": 27829,
-  "optimizedSha256": "8d030554f650590e313a60f99575da59275e9beabaf05aead3639641e2ae71cf"
+  "rawBytes": 47088,
+  "optimizedBytes": 42607,
+  "gzipBytes": 18318,
+  "brotliBytes": 15333,
+  "optimizedSha256": "c3dd51d99cc3f2a9488030823954661d80485179b93b75b73d865f8cda417c5b"
 }
