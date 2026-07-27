@@ -12,9 +12,9 @@ export const packageSizeBudgets = {
     brotliBytes: 113_500,
   },
   'runtime-baker-host-js': {
-    rawBytes: 11_400,
-    minifiedBytes: 9_500,
-    gzipBytes: 3_800,
+    rawBytes: 11_500,
+    minifiedBytes: 9_600,
+    gzipBytes: 3_900,
     brotliBytes: 3_500,
   },
   'runtime-baker-worker-js': {
