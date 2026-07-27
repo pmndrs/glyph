@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:46:34Z"
+  at: "2026-07-27T23:09:57Z"
 ---
 
 # Decision register
@@ -110,7 +110,7 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | D-071 | The Node baker statically discovers `defineFont` uses and literal raster descriptors without executing application code; dynamic font origins remain valid when an unambiguous local pathname can be resolved, otherwise runtime fallback remains authoritative. | Accepted |
 | D-070 | Bitmap strike tuples are non-empty, duplicate-free static positive integer literals and are part of raster identity; a missing declared strike makes a baked raster incompatible. | Accepted |
 | D-077 | The portable bake core ships one `wasm32-unknown-unknown` module behind a versioned JSON-described C ABI and direct linear-memory TypeScript shim; it ships no platform binaries, WASI dependency, Embind, or binding-generator runtime. | Settled for V0 |
-| D-078 | The bake Wasm uses `no_std + alloc` and aborting panics; its allocator is ABI-private. `dlmalloc` is the baseline, `rlsf` is the primary challenger, and any replacement requires representative benchmark evidence. Host code owns gzip/Brotli measurement. | Experiment |
+| D-078 | The bake Wasm uses `no_std + alloc` and aborting panics; its allocator is ABI-private. `dlmalloc` is the baseline, `rlsf` and `talc` are the reusable-memory challengers, and any replacement requires representative whole-baker evidence. An arena/reset configuration is eligible only with proven request-lifetime ownership. Host code owns gzip/Brotli measurement. | Experiment |
 | D-084 | Font format parsing and outline/metric interpretation use maintained Fontations `read-fonts` and `skrifa`; project code owns bake policy and artifact contracts, not a parallel OpenType parser or geometry engine. | Settled for V0 |
 
 The [architecture](architecture.md) owns loading behavior and dependency rules. The [API contract](api-shapes.md) owns host and Worker shapes.
@@ -144,6 +144,8 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-100 | Text size is logical CSS geometry. A rendering integration supplies an explicit raster pixel ratio; bitmap targets `CSS size × ratio`, deterministically selects the nearest declared physical strike, and never changes paragraph geometry to compensate for DPR. The core installs no DOM or gesture listeners. | Accepted |
 | D-101 | Bitmap density strikes remain independent grayscale record/texture sets rather than RGB(A)-channel packing. A combined artifact may carry several strikes, while Milestone 13 adds independently fetched and evictable strike pages. | Accepted |
 | D-102 | Language delivery is exact-coverage-first and locale-aware. A family directory may route grapheme-safe runs to font-local units, but language labels alone never prove coverage and units never split contextual shaping runs. Compiler-produced shaping closure/remapping remains Milestone 17. | Accepted |
+| D-103 | Explicit and fallback runtime raster baking accept normalized bounded coverage and raster options through the same Worker-only path. Coverage may be seeded by Unicode ranges, authored text, or exact font-local glyph IDs, but it reduces atlas generation only: it does not subset the shaping font, remap glyph IDs, or claim transitive shaping closure. | Accepted |
+| D-104 | Every direct-memory Wasm ABI layout is represented by fixed-width `#[repr(C)]` Rust types. Published JSON derives size, alignment, and field offsets from `size_of`, `align_of`, and `offset_of!`, while compile-time assertions pin the intended stable layout. WebAssembly direct memory uses its guaranteed little-endian order; portable GLB, KTX2, SFNT, and extension encodings retain their format-defined byte order. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 

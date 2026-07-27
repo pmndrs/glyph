@@ -17,10 +17,13 @@ sources:
   - id: "citation-4"
     resource: "https://github.com/rustwasm/wee_alloc"
     title: "`wee_alloc`"
+  - id: "citation-5"
+    resource: "https://docs.rs/talc/latest/talc/"
+    title: "`talc` documentation"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-27T23:09:57Z"
 ---
 
 # Wasm allocator experiment
@@ -35,6 +38,7 @@ The portable font baker performs substantial temporary allocation while parsing 
 | --- | :---: | --- |
 | Rust `dlmalloc` | 🟡 baseline | Already compiles for the `no_std` Wasm package and supports reuse across repeated bakes. Measure it before replacing it. |
 | `rlsf::SmallGlobalTlsf` | 🟡 benchmark | Explicitly supports non-atomic `wasm32`; TLSF provides constant-time allocation/deallocation and reusable pools. This is the primary challenger. |
+| `talc` with its Wasm heap owner | 🟡 benchmark | Current releases explicitly target `no_std` and WebAssembly, support dynamically claimed/resized spans, and offer a global-allocator wrapper. Its arena and dynamic configurations make it a credible size/time/peak-memory challenger, but only a full optimized baker comparison can establish a win. |
 | `lol_alloc::LeakingAllocator` | 🟡 conditional benchmark | O(1), very small, and plausible when one Worker instance performs exactly one bake before termination. It never frees or reuses memory, so it is not a general repeated-bake allocator. |
 | `lol_alloc::FreeListAllocator` | ⬜ optional benchmark | Small and reusable, but allocation/free cost grows with free-list length. Test only if code size dominates and fragmentation remains controlled. |
 | `wee_alloc` | ⬜ low priority | Very small, but its main allocation path is O(n) and its own guidance says it is a poor choice when allocation is a bottleneck. |
@@ -50,8 +54,8 @@ Use the shared benchmark harness when its package-size and Worker lanes exist. E
 4. repeated malformed inputs to cover cleanup on error paths;
 5. cancellation at the host boundary between requests.
 
-Record raw and Brotli Wasm bytes, cold and warm bake time, peak linear-memory pages, retained pages after each request, artifact hash parity, and allocator-induced traps. Do not select an allocator from microbenchmarks that omit font parsing and GLB construction.
+Record raw and Brotli Wasm bytes, cold and warm bake time, peak linear-memory pages, retained pages after each request, artifact hash parity, and allocator-induced traps. For MTSDF, separately report texel-generation time so allocator changes are not credited for distance-kernel work they did not improve. Do not select an allocator from microbenchmarks that omit font parsing, raster generation, and GLB construction.
 
 ## Selection gate
 
-Keep `dlmalloc` until the benchmark harness shows a material improvement with identical artifacts and diagnostics. Prefer `rlsf` if it improves repeated-bake time or retained memory without an unacceptable payload increase. Use a leaking bump allocator only if the Worker lifecycle is explicitly one request per instance and total wall time, including Worker startup, wins on the representative corpus.
+Keep `dlmalloc` until the benchmark harness shows a material improvement with identical artifacts and diagnostics. Select between `rlsf` and `talc` from complete cold and reused-Worker evidence, not reputation or allocator-only microbenchmarks. A per-request arena is valid only when the baker proves every temporary allocation shares one lifetime and persistent Worker state lives outside the reset span. Use a leaking bump allocator only if the Worker lifecycle is explicitly one request per instance and total wall time, including Worker startup, wins on the representative corpus.
