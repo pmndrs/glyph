@@ -6,11 +6,14 @@ const WORKLOADS = [
   { label: 'Paint & effects', id: 'paint-effects', amountLabel: 'Hue spread' },
 ] as const
 
+await clickButton('1× DPR', true)
+
 for (const technique of ['bitmap', 'mtsdf'] as const) {
   await clickButton(technique === 'mtsdf' ? 'MSDF' : 'bitmap', true)
   for (const workload of WORKLOADS) {
     await clickButton(workload.label, false)
     let viewport = await waitForReadyViewport(technique, workload.id)
+    verifyCanvasNavigation(viewport, workload.id === 'off-axis-3d')
 
     if (technique === 'bitmap' && workload.id === 'text-ladder') {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true')
@@ -110,6 +113,34 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
       }
     }
     console.log('comparison-workload-ready', technique, workload.id)
+  }
+}
+
+function verifyCanvasNavigation(viewport: HTMLElement, zoomEnabled: boolean): void {
+  const canvas = viewport.querySelector<HTMLCanvasElement>('canvas[data-pan-enabled="true"]')
+  if (canvas === null || canvas.dataset.touchPan !== 'two-finger') {
+    throw new Error('Live workload canvas did not expose shared mouse and touch panning')
+  }
+  canvas.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 41, clientX: 20 }),
+  )
+  canvas.dispatchEvent(
+    new PointerEvent('pointermove', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }),
+  )
+  canvas.dispatchEvent(
+    new PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }),
+  )
+  if (Number(canvas.dataset.panX) !== 15) throw new Error('Mouse drag did not pan the live canvas')
+  if (canvas.dataset.zoomEnabled !== String(zoomEnabled)) {
+    throw new Error('Live workload canvas exposed the wrong zoom capability')
+  }
+  if (zoomEnabled) {
+    canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -80 }))
+    if (Number(canvas.dataset.zoom) <= 1) throw new Error('Zoom-enabled canvas ignored wheel zoom')
+  }
+  canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+  if (canvas.dataset.panX !== '0' || canvas.dataset.zoom !== '1') {
+    throw new Error('Canvas view reset did not restore pan and zoom')
   }
 }
 

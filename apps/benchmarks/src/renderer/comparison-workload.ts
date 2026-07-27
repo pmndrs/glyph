@@ -58,6 +58,7 @@ export interface ComparisonWorkloadPreview {
   resize(width: number, height: number): void
   panBy(deltaX: number, deltaY: number): void
   resetView(): void
+  zoomBy(factor: number): void
   update(configuration: ComparisonWorkloadConfiguration): Promise<void>
   dispose(): Promise<void>
 }
@@ -87,8 +88,16 @@ interface LoadedTechniqueFont {
   readonly font: RegisteredFont
 }
 
+interface PendingConfigurationUpdate {
+  configuration: ComparisonWorkloadConfiguration
+  readonly waiters: Array<{
+    readonly resolve: () => void
+    readonly reject: (reason: unknown) => void
+  }>
+}
+
 const bitmapRaster = bitmap({ strikes: [16] as const })
-const LADDER_DEVICE_SIZES = [
+const LADDER_CSS_SIZES = [
   8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512,
 ] as const
 const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.'
@@ -196,6 +205,55 @@ export async function createComparisonWorkloadPreview(options: {
 
     await commit(configuration)
     signal?.throwIfAborted()
+    let pendingUpdate: PendingConfigurationUpdate | undefined
+    let updateDrain: Promise<void> | undefined
+
+    async function applyConfiguration(next: ComparisonWorkloadConfiguration): Promise<void> {
+      canvasSurface.setGridVisible(next.showGrid)
+      if (comparisonWorkloadUpdateKind(configuration, next) === 'rebuild') {
+        configuration = next
+        await commit(configuration)
+        return
+      }
+      configuration = next
+      revision += 1
+      applyRetainedConfiguration(entries, technique, configuration)
+    }
+
+    function startUpdateDrain(): void {
+      if (updateDrain !== undefined) return
+      updateDrain = (async () => {
+        while (pendingUpdate !== undefined) {
+          if (closing || disposed) break
+          const current = pendingUpdate
+          pendingUpdate = undefined
+          try {
+            await applyConfiguration(current.configuration)
+            for (const waiter of current.waiters) waiter.resolve()
+          } catch (error) {
+            for (const waiter of current.waiters) waiter.reject(error)
+          }
+        }
+      })().finally(() => {
+        updateDrain = undefined
+        if (pendingUpdate !== undefined && !closing && !disposed) startUpdateDrain()
+      })
+    }
+
+    function enqueueUpdate(next: ComparisonWorkloadConfiguration): Promise<void> {
+      if (closing || disposed) {
+        return Promise.reject(new DOMException('The comparison preview is disposed', 'AbortError'))
+      }
+      return new Promise<void>((resolve, reject) => {
+        if (pendingUpdate === undefined) {
+          pendingUpdate = { configuration: next, waiters: [{ resolve, reject }] }
+        } else {
+          pendingUpdate.configuration = next
+          pendingUpdate.waiters.push({ resolve, reject })
+        }
+        startUpdateDrain()
+      })
+    }
     const uploadFrameStarted = performance.now()
     canvasSurface.render(scene, camera)
     firstDrawMs = performance.now() - uploadFrameStarted
@@ -324,35 +382,36 @@ export async function createComparisonWorkloadPreview(options: {
         renderer.setSize(width, height, false)
         canvasSurface.resize(width, height)
         resizeWorkloadCamera(camera, width, height)
-        void commit(configuration).catch(onError)
+        void enqueueUpdate(configuration).catch(onError)
       },
       panBy(deltaX, deltaY) {
-        if (closing || disposed || configuration.workload !== 'text-ladder') return
-        scene.position.x += finite(deltaX, 'text ladder horizontal pan')
-        scene.position.y -= finite(deltaY, 'text ladder vertical pan')
+        if (closing || disposed) return
+        scene.position.x += finite(deltaX, 'workload horizontal pan')
+        scene.position.y -= finite(deltaY, 'workload vertical pan')
       },
       resetView() {
         scene.position.set(0, 0, 0)
+        camera.zoom = 1
+        camera.updateProjectionMatrix()
       },
-      async update(next) {
-        if (closing || disposed) return
-        const validated = validateConfiguration(next)
-        canvasSurface.setGridVisible(validated.showGrid)
-        if (comparisonWorkloadUpdateKind(configuration, validated) === 'rebuild') {
-          configuration = validated
-          await commit(configuration)
-          return
-        }
-        configuration = validated
-        revision += 1
-        applyRetainedConfiguration(entries, technique, configuration)
+      zoomBy(factor) {
+        if (closing || disposed || configuration.workload !== 'off-axis-3d') return
+        camera.zoom = Math.min(4, Math.max(0.25, camera.zoom * finite(factor, 'camera zoom')))
+        camera.updateProjectionMatrix()
+      },
+      update(next) {
+        return enqueueUpdate(validateConfiguration(next))
       },
       dispose() {
         if (disposal !== undefined) return disposal
         closing = true
         revision += 1
+        const disposalReason = new DOMException('The comparison preview is disposed', 'AbortError')
+        for (const waiter of pendingUpdate?.waiters ?? []) waiter.reject(disposalReason)
+        pendingUpdate = undefined
         if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
         disposal = (async () => {
+          await updateDrain
           await gpuTimestampResolution
           disposed = true
           await renderer.setAnimationLoop(null)
@@ -388,15 +447,16 @@ function createEntries(
   const base = {
     font,
     raster,
+    rasterPixelRatio: dpr,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
   }
   if (configuration.workload === 'text-ladder') {
-    return ladderDeviceSizes(viewportHeight, dpr).map((deviceSize) => {
-      const content = `${deviceSize} px  ${LADDER_SENTENCE}`
+    return ladderCssSizes(viewportHeight).map((cssSize) => {
+      const content = `${cssSize} px  ${LADDER_SENTENCE}`
       const text = new Text({
         ...base,
         text: content,
-        fontSize: deviceSize / dpr,
+        fontSize: cssSize,
         color: LIVE_TEXT_COLOR,
       })
       return textEntry('primary', text, content)
@@ -646,33 +706,42 @@ function animateDynamicLayout(
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
-  if (!configuration.animationEnabled) return
+  if (
+    !configuration.animationEnabled ||
+    entries.some(({ reflowPending }) => reflowPending === true)
+  )
+    return
   const phase = timestamp * 0.00045 * animationRate(configuration)
   const amplitude = 0.08 + (configuration.amount / 100) * 0.28
   const baseWidth = viewportWidth * configuration.layoutWidthRatio
-  for (const entry of entries) {
-    if (entry.reflowPending === true) continue
-    const nextWidth = Math.max(
-      160,
-      baseWidth * (0.72 + Math.sin(phase + (entry.animationPhase ?? 0)) * amplitude),
+  const nextWidths = entries.map((entry) =>
+    Math.max(160, baseWidth * (0.72 + Math.sin(phase + (entry.animationPhase ?? 0)) * amplitude)),
+  )
+  if (
+    entries.every(
+      (entry, index) =>
+        entry.lastWidth !== undefined && Math.abs(nextWidths[index]! - entry.lastWidth) < 1,
     )
-    if (entry.lastWidth !== undefined && Math.abs(nextWidth - entry.lastWidth) < 1) continue
-    entry.reflowPending = true
-    entry.lastWidth = nextWidth
-    const reflowStarted = performance.now()
-    entry.text.setProperties({ width: nextWidth })
-    void entry.text.ready.then(
-      () => {
-        entry.reflowPending = false
-        onReflow(performance.now() - reflowStarted)
-        layoutDynamicEntries(entries, viewportWidth, viewportHeight)
-      },
-      (error: unknown) => {
-        entry.reflowPending = false
-        onError(error)
-      },
-    )
+  ) {
+    return
   }
+  const reflowStarted = performance.now()
+  for (const [index, entry] of entries.entries()) {
+    entry.reflowPending = true
+    entry.lastWidth = nextWidths[index]!
+    entry.text.setProperties({ width: nextWidths[index]! })
+  }
+  void Promise.all(entries.map(({ text }) => text.ready)).then(
+    () => {
+      for (const entry of entries) entry.reflowPending = false
+      layoutDynamicEntries(entries, viewportWidth, viewportHeight)
+      onReflow(performance.now() - reflowStarted)
+    },
+    (error: unknown) => {
+      for (const entry of entries) entry.reflowPending = false
+      onError(error)
+    },
+  )
 }
 
 function layoutDynamicEntries(
@@ -817,10 +886,9 @@ function animationRate(configuration: ComparisonWorkloadConfiguration): number {
   return 0.25 + configuration.animationSpeed * 0.0175
 }
 
-export function ladderDeviceSizes(viewportHeight: number, dpr: number): readonly number[] {
+export function ladderCssSizes(viewportHeight: number): readonly number[] {
   positive(viewportHeight, 'text ladder viewport height')
-  positive(dpr, 'text ladder DPR')
-  return LADDER_DEVICE_SIZES
+  return LADDER_CSS_SIZES
 }
 
 async function loadTechniqueFont(

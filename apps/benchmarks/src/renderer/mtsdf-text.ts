@@ -24,6 +24,7 @@ import {
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import { createCanvasSurface } from './canvas-surface'
+import { finiteCanvasDelta } from './canvas-view'
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
 import {
   LIVE_TEXT_COLOR,
@@ -142,6 +143,8 @@ export interface MtsdfTextPreviewUpdate {
 
 export interface MtsdfTextPreview {
   resize(width: number, height: number): void
+  panBy(deltaX: number, deltaY: number): void
+  resetView(): void
   setGridVisible(visible: boolean): void
   update(update: MtsdfTextPreviewUpdate): Promise<void>
   dispose(): Promise<void>
@@ -336,6 +339,7 @@ export async function createMtsdfTextPreview(options: {
       font: activeFont,
       raster: msdf,
       fontSize,
+      rasterPixelRatio: dpr,
       lineHeight: LIVE_TEXT_LINE_HEIGHT,
       width: Math.max(120, width * layoutWidthRatio),
       wrap: 'word',
@@ -458,6 +462,14 @@ export async function createMtsdfTextPreview(options: {
           .catch((error: unknown) => {
             if (!closing && !disposed) onError(error)
           })
+      },
+      panBy(deltaX, deltaY) {
+        if (closing || disposed) return
+        scene.position.x += finiteCanvasDelta(deltaX, 'MSDF preview horizontal pan')
+        scene.position.y -= finiteCanvasDelta(deltaY, 'MSDF preview vertical pan')
+      },
+      resetView() {
+        scene.position.set(0, 0, 0)
       },
       setGridVisible(visible) {
         canvasSurface.setGridVisible(visible)
@@ -854,6 +866,7 @@ async function createFlatMtsdfConformanceResources(
       // Match the baked 64 px/em base level in device pixels. Minification and
       // generated mip selection are exercised by the separate scene corpus.
       fontSize: 64 / dpr,
+      rasterPixelRatio: dpr,
       lineHeight: 1.2,
       width: 476,
       wrap: 'word',
