@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T23:09:57Z"
+  at: "2026-07-27T23:45:47Z"
 ---
 
 # Canonical implementation roadmap
@@ -637,7 +637,7 @@ Runtime baking is a supported delivery path, not merely a missing-asset recovery
 - [ ] Keep Wasm direct-memory values little-endian because WebAssembly linear memory is normatively little-endian, while retaining explicit format-mandated byte order in GLB, KTX2, SFNT, and other portable serialized artifacts.
 - [ ] Regenerate every affected ABI JSON file, optimized Wasm resource, baked fixture, identity, size record, and package digest; run the complete Rust, TypeScript, Node/Worker parity, artifact-validation, renderer, conformance, and live-product regression sweep before accepting the new boundary.
 - [ ] Instrument the baker by phase and publish small, medium, and complete-face results for glyph selection, outline extraction, MTSDF texel generation, packing, mip generation, container serialization, Wasm-to-Worker copying, peak memory, and output bytes. Reports must include glyphs, generated texels, edges visited, and throughput rather than one opaque wall-clock duration.
-- [ ] Optimize the measured dominant phase without weakening native-msdfgen quality or deterministic artifact gates. Compare scalar improvements and bounded parallel/GPU research only from identical work; the runtime default must be suitable for bounded interactive atlases, while complete-face generation remains an explicit stress/offline case.
+- [ ] Optimize the measured dominant phase without weakening native-msdfgen quality or deterministic artifact gates. If texel generation dominates, compare an equivalent scalar tile kernel with a true adjacent-texel SIMD kernel; the earlier four-channel quantization experiment does not settle this question. Compare bounded TypeGPU/WebGPU compute research only from identical work, keep scalar Wasm as the universal oracle/fallback, and require the runtime default to suit bounded interactive atlases while complete-face generation remains an explicit stress/offline case.
 - [ ] Compare `dlmalloc`, `rlsf`, and `talc` on identical cold, reused-Worker, error, and cancellation workloads. An arena/reset strategy is admissible only when ownership proves that all per-request allocations die together; allocator selection requires byte-identical artifacts plus a material time, peak-memory, or optimized-size win.
 - [ ] Complete the final adversarial Milestone 6/8 review with no unresolved actionable findings.
 
@@ -665,8 +665,9 @@ Deliver:
 - interactive comparison scenarios for bitmap, MSDF, and Slug with correctness/visual gates and downloadable raw results;
 - second-font registration and raster-binding smoke fixtures;
 - release-level conformance, browser, GPU, memory, package-size, and malformed-input suites;
-- reviewed public API, migration notes, and versioned extension schemas.
-- matching Three.js and React examples with no React-only font behavior.
+- reviewed public API, migration notes, and versioned extension schemas;
+- matching Three.js and React examples with no React-only font behavior;
+- renderer-neutral prepared raster batches and resource ownership extracted only after Slug proves the shared requirements, with the existing Three.js implementation retained as an adapter over the direct integration boundary.
 
 The project cannot ship before this gate passes.
 
