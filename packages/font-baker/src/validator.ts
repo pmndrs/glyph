@@ -350,15 +350,13 @@ async function validateFontSemantics(
     "provenance",
     "/extensions/PMNDRS_font/provenance",
   );
-  if (provenance.fontFaceIndex !== undefined) {
-    asInteger(
-      provenance.fontFaceIndex,
-      "fontFaceIndex",
-      "/extensions/PMNDRS_font/provenance/fontFaceIndex",
-      0,
-      0xffff_ffff,
-    );
-  }
+  asInteger(
+    provenance.fontFaceIndex,
+    "fontFaceIndex",
+    "/extensions/PMNDRS_font/provenance/fontFaceIndex",
+    0,
+    0xffff_ffff,
+  );
   const glyphCount = asInteger(
     metrics.glyphCount,
     "glyphCount",

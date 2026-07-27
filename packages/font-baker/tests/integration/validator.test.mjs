@@ -208,6 +208,7 @@ test("covers every PMNDRS_font required field and raster-source union one field 
     ...[
       "sourceHash",
       "descriptorHash",
+      "fontFaceIndex",
       "bakerVersion",
       "harfrustVersion",
       "harfbuzzReferenceVersion",

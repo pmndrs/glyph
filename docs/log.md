@@ -2,6 +2,8 @@
 
 ## 2026-07-27
 
+- **Correction** — Made `provenance.fontFaceIndex` a required unpublished V0 artifact field across the canonical and packaged PMNDRS font schemas, the validator, and exhaustive required-field coverage; no legacy compatibility exception remains.
+
 - **Payload inspection** — Replaced the always-expanded selected-runtime and runtime-bake component lists with default-collapsed total disclosures. Fixed label, status, and byte columns keep totals and detail rows aligned; shorter labels plus a green check or gray X replace repeated loaded/unloaded prose, while a neutral SVG chevron rotates around its true center. Font assets remain immediately visible.
 - **Inspector density** — Replaced the branded accent workload control with a neutral panel-direction icon, aligned payload state labels in an explicit line box, and removed the explanatory measurement-policy card whose data was already expressed by the live metrics and captured report.
 - **Explicit runtime delivery** — Added `{ source, baked: null }` as the unambiguous per-request source/runtime form while preserving baked-first sibling discovery for omitted `baked`. The benchmark now switches between baked and runtime delivery, reports the complete conditional core/raster baker graphs plus generated artifact costs, and compares both rendered frames exactly. Canonical Inter produced zero differing RGBA bytes for Bitmap and MSDF in live WebGPU evidence; a core-only integration regression authenticates and attaches the generated raster without weakening public companion rules.
