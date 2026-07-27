@@ -13,6 +13,7 @@ import dancingScriptCompressedFontUrl from '../../fixtures/rendering/dancing-scr
 import dotGothicCompressedFontUrl from '../../fixtures/rendering/dot-gothic-16-mtsdf.font.glb.gz?url'
 import interCompressedFontUrl from '../../fixtures/rendering/inter-mtsdf.font.glb.gz?url'
 import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz?url'
+import notoCjkShowcaseCompressedFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-mtsdf.font.glb.gz?url'
 import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-4-mtsdf.font.glb.gz?url'
 import showcaseManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
 import {
@@ -55,6 +56,7 @@ const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interCompressedFontUrl,
   amiri: amiriCompressedFontUrl,
   'noto-sans-devanagari': devanagariCompressedFontUrl,
+  'noto-sans-cjk-showcase': notoCjkShowcaseCompressedFontUrl,
   'dot-gothic-16': dotGothicCompressedFontUrl,
   'source-serif-4': sourceSerifCompressedFontUrl,
   'dancing-script': dancingScriptCompressedFontUrl,

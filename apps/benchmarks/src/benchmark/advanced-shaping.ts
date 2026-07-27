@@ -11,7 +11,7 @@ export type AdvancedShapingFontFixture =
   | 'inter'
   | 'amiri'
   | 'noto-sans-devanagari'
-  | 'dot-gothic-16'
+  | 'noto-sans-cjk-showcase'
 
 export interface AdvancedShapingCase {
   readonly id: AdvancedShapingCaseId
@@ -141,7 +141,7 @@ export const ADVANCED_SHAPING_CASES: readonly AdvancedShapingCase[] = [
   {
     id: 'cjk-line-breaks',
     label: 'CJK line breaking',
-    fontFixture: 'dot-gothic-16',
+    fontFixture: 'noto-sans-cjk-showcase',
     language: 'ja',
     direction: 'ltr',
     features: [],

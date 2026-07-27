@@ -244,6 +244,29 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     throw new Error(`${definition.id} did not expose live paragraph wrapping`)
   }
   console.log('advanced-shaping-settled', definition.id)
+  if (definition.id === 'cjk-line-breaks') {
+    const pixelStyleFont = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => candidate.textContent?.includes('DotGothic16') === true,
+    )
+    if (pixelStyleFont === undefined) throw new Error('CJK pixel-style font option is missing')
+    pixelStyleFont.click()
+    await waitForLiveViewportState({
+      'data-font-fixture': 'dot-gothic-16',
+      'data-missing-glyph-count': '0',
+      'data-presentation-progress': '1',
+    })
+    const recommendedFont = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => candidate.textContent?.includes('Noto Sans CJK JP') === true,
+    )
+    if (recommendedFont === undefined) throw new Error('recommended CJK font option is missing')
+    recommendedFont.click()
+    await waitForLiveViewportState({
+      'data-font-fixture': 'noto-sans-cjk-showcase',
+      'data-missing-glyph-count': '0',
+      'data-presentation-progress': '1',
+    })
+    console.log('advanced-shaping-font-switch', definition.id)
+  }
   const editors = document.querySelectorAll<HTMLTextAreaElement>('textarea')
   const editor = editors.length === 1 ? editors[0] : undefined
   if (editor === undefined || editor.value !== authoredText) {
