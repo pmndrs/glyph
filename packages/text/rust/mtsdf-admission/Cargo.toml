@@ -26,6 +26,11 @@ name = "measure-mtsdf-font"
 path = "src/bin/measure-mtsdf-font.rs"
 required-features = ["full-font-evidence"]
 
+[[bin]]
+name = "emit-mtsdf-font-requests"
+path = "src/bin/emit-mtsdf-font-requests.rs"
+required-features = ["full-font-evidence"]
+
 [dependencies]
 pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }
 skrifa = { version = "=0.45.1", default-features = false, features = ["std"], optional = true }

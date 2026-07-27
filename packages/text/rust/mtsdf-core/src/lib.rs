@@ -15,7 +15,7 @@ pub use outline::{Bounds, OutlineSink, OutlineSource};
 use crate::{
     color::color_edges,
     distance::{ContourDistance, Distance4},
-    math::{Point, quantize_unorm},
+    math::Point,
     outline::{BuildFailure, Edge, EdgeSoa, OutlineStorage},
 };
 
@@ -123,6 +123,7 @@ struct GeneratorScratch {
     input: OutlineStorage,
     colored_edges: Vec<Edge>,
     colored_contours: Vec<core::ops::Range<usize>>,
+    corners: Vec<usize>,
     hot_edges: EdgeSoa,
     contour_distances: Vec<ContourDistance>,
     output: Vec<u8>,
@@ -177,6 +178,7 @@ impl MtsdfGenerator {
             &self.scratch.input.contours,
             &mut self.scratch.colored_edges,
             &mut self.scratch.colored_contours,
+            &mut self.scratch.corners,
         )
         .map_err(map_build_failure)?;
         if self.scratch.colored_edges.len() > self.limits.max_edges.saturating_mul(3) {
@@ -269,10 +271,15 @@ impl GlyphOutline<'_> {
                 let point = Point::new(bounds.min_x + bounds.width() * x_ratio, y);
                 let lanes =
                     Distance4::evaluate(point, edges, self.units_per_em, contour_distances).lanes();
-                pixel[0] = quantize_unorm(lanes[0]);
-                pixel[1] = quantize_unorm(lanes[1]);
-                pixel[2] = quantize_unorm(lanes[2]);
-                pixel[3] = quantize_unorm(lanes[3]);
+                #[cfg(all(target_arch = "wasm32", feature = "simd128-experiment"))]
+                pixel.copy_from_slice(&math::quantize_unorm4(lanes));
+                #[cfg(not(all(target_arch = "wasm32", feature = "simd128-experiment")))]
+                {
+                    pixel[0] = math::quantize_unorm(lanes[0]);
+                    pixel[1] = math::quantize_unorm(lanes[1]);
+                    pixel[2] = math::quantize_unorm(lanes[2]);
+                    pixel[3] = math::quantize_unorm(lanes[3]);
+                }
             }
         }
         Ok(output)
@@ -352,6 +359,34 @@ mod tests {
                 ..REGION
             }),
             Err(GenerateError::InvalidRegion)
+        );
+    }
+
+    #[test]
+    fn corner_and_output_scratch_are_reused_between_glyphs() {
+        let mut generator = MtsdfGenerator::default();
+        generator
+            .read_outline(&Square)
+            .expect("first square")
+            .generate_mtsdf(REGION)
+            .expect("first MTSDF");
+        let first_capacities = (
+            generator.scratch.corners.capacity(),
+            generator.scratch.output.capacity(),
+        );
+        generator
+            .read_outline(&Square)
+            .expect("second square")
+            .generate_mtsdf(REGION)
+            .expect("second MTSDF");
+        assert!(first_capacities.0 > 0);
+        assert!(first_capacities.1 > 0);
+        assert_eq!(
+            first_capacities,
+            (
+                generator.scratch.corners.capacity(),
+                generator.scratch.output.capacity(),
+            )
         );
     }
 }

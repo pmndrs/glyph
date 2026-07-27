@@ -59,7 +59,9 @@
     "generate:bitmap-abi": "cargo run --manifest-path rust/bitmap-baker/Cargo.toml --bin generate-bitmap-abi --locked --quiet",
     "measure:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs",
     "measure:mtsdf-generator": "pnpm build && node ./scripts/measure-mtsdf-generator.mjs",
+    "measure:mtsdf-simd": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs",
     "check:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs --check",
+    "check:mtsdf-simd": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs --check",
     "provision:mtsdf-oracle": "node ./scripts/provision-msdfgen-oracle.mjs",
     "generate:mtsdf-oracle": "node ./scripts/generate-mtsdf-oracle-evidence.mjs",
     "check:mtsdf-oracle": "node ./scripts/generate-mtsdf-oracle-evidence.mjs --check",
@@ -72,7 +74,7 @@
     "lint": "oxlint --deny-warnings .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
-    "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-admission/Cargo.toml --lib --locked && pnpm test:mtsdf-core-wasm && pnpm check:mtsdf-admission && pnpm check:mtsdf-oracle",
+    "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-admission/Cargo.toml --lib --locked && pnpm test:mtsdf-core-wasm && pnpm check:mtsdf-admission && pnpm check:mtsdf-simd && pnpm check:mtsdf-oracle",
     "test:integration": "pnpm check:unicode-tests && cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && cargo test --manifest-path rust/shaper/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
     "test:fuzz-smoke": "node --test tests/fuzz/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"

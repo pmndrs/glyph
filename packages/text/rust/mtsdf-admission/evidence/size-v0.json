@@ -14,9 +14,9 @@
   },
   "syntheticOutputFnv1a32": "3d9625f1",
   "wasmImportCount": 0,
-  "rawBytes": 47088,
-  "optimizedBytes": 42607,
-  "gzipBytes": 18318,
-  "brotliBytes": 15333,
-  "optimizedSha256": "c3dd51d99cc3f2a9488030823954661d80485179b93b75b73d865f8cda417c5b"
+  "rawBytes": 47052,
+  "optimizedBytes": 42562,
+  "gzipBytes": 18270,
+  "brotliBytes": 15267,
+  "optimizedSha256": "71dc625a58f9c79728ba1fc07aaad4503290674229a29a7c17c521250135df3e"
 }

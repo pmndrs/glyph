@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 0,
+  "kind": "mtsdf-simd-decision",
+  "decision": {
+    "selected": "scalar",
+    "reason": "simd128 did not produce a material complete-font win and regressed representative Node and browser calls"
+  },
+  "toolchain": {
+    "rust": "1.97.1",
+    "binaryen": "129.0.0",
+    "node": "24.18.0",
+    "browser": "Chromium 149",
+    "platform": "darwin-arm64"
+  },
+  "quality": {
+    "oracle": "native-oracle-v0.json",
+    "allSevenCandidateHashesExact": true,
+    "completeInterChecksumExact": true
+  },
+  "variants": {
+    "scalar": {
+      "targetFeatures": [],
+      "optimizedBytes": 43854,
+      "gzipBytes": 18015,
+      "brotliBytes": 14731,
+      "optimizedSha256": "fba63fe1a50727614dc99f99348d3bb3ee48485b2e08aeb21e730ef7dc19cd01",
+      "nodeSevenCaseWarmMedianMs": 9.115,
+      "browserSevenCaseWarmMedianMs": 9.2,
+      "interColdMs": 44757.871,
+      "interWarmMs": 44771.219
+    },
+    "auto-vectorized": {
+      "targetFeatures": ["simd128"],
+      "optimizedBytes": 43386,
+      "gzipBytes": 17531,
+      "brotliBytes": 14592,
+      "optimizedSha256": "125b7e3450e83caf92361b57d3af29fae7b6c2a819eeb7bd655b8f353539797e",
+      "nodeSevenCaseWarmMedianMs": 9.691,
+      "browserSevenCaseWarmMedianMs": 9.7,
+      "interColdMs": 44692.573,
+      "interWarmMs": 44606.159
+    },
+    "explicit-simd128": {
+      "targetFeatures": ["simd128"],
+      "optimizedBytes": 43363,
+      "gzipBytes": 17540,
+      "brotliBytes": 14571,
+      "optimizedSha256": "bf765bea6d17ada4749f69653efbee3a7336f6a27046dab2694139ca0875d44d",
+      "nodeSevenCaseWarmMedianMs": 9.698,
+      "browserSevenCaseWarmMedianMs": 9.7,
+      "interColdMs": 44591.33,
+      "interWarmMs": 44568.145
+    }
+  },
+  "completeInter": {
+    "fixture": "apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
+    "glyphSlots": 2937,
+    "generatedGlyphs": 2915,
+    "rejectedGlyphs": 22,
+    "rejectedGlyphIds": [
+      1,
+      1422,
+      1423,
+      1424,
+      1777,
+      1778,
+      1779,
+      1780,
+      1781,
+      1782,
+      1783,
+      1784,
+      1785,
+      1786,
+      1787,
+      1788,
+      1789,
+      1790,
+      1791,
+      1792,
+      2572,
+      2728
+    ],
+    "checksum": "c0c1764d",
+    "compositeSha256": "f03351f14f57ce650cd3f1c3ccaf5c3dcefe66cdcd8f12bd845cc43e704dfa9e"
+  },
+  "allocation": {
+    "requestAllocationsPerCall": 1,
+    "ownedOutputCopiesPerCall": 1,
+    "warmSevenCaseCorpus": {
+      "allocations": 7,
+      "reallocations": 0,
+      "deallocations": 7
+    },
+    "steadyStateWasmMemoryGrowthBytes": 0,
+    "coreCornerScratchReused": true
+  }
+}

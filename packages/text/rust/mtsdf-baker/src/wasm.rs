@@ -1,10 +1,48 @@
 use alloc::{boxed::Box, vec::Vec};
+#[cfg(feature = "allocation-evidence")]
+use core::alloc::{GlobalAlloc, Layout};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use pmndrs_text_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, OutlineSource};
 
+#[cfg(not(feature = "allocation-evidence"))]
 #[global_allocator]
 static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
+
+#[cfg(feature = "allocation-evidence")]
+static ALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "allocation-evidence")]
+static REALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "allocation-evidence")]
+static DEALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "allocation-evidence")]
+struct CountingAllocator;
+
+#[cfg(feature = "allocation-evidence")]
+#[global_allocator]
+static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+#[cfg(feature = "allocation-evidence")]
+unsafe impl GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: this wrapper forwards the allocator contract and exact layout unchanged.
+        unsafe { GlobalAlloc::alloc(&dlmalloc::GlobalDlmalloc, layout) }
+    }
+
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        DEALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: the pointer and layout came from this wrapper's dlmalloc allocation domain.
+        unsafe { GlobalAlloc::dealloc(&dlmalloc::GlobalDlmalloc, pointer, layout) };
+    }
+
+    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        REALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: the pointer and layout came from this wrapper and new_size is forwarded unchanged.
+        unsafe { GlobalAlloc::realloc(&dlmalloc::GlobalDlmalloc, pointer, layout, new_size) }
+    }
+}
 
 const MAX_REQUEST_BYTES: u32 = 64 * 1024 * 1024;
 const REQUEST_HEADER_SIZE: usize = 48;
@@ -85,6 +123,32 @@ pub extern "C" fn pmndrs_text_mtsdf_result_ptr() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_mtsdf_result_len() -> u32 {
     with_state(|state| state.result_length)
+}
+
+#[cfg(feature = "allocation-evidence")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_reset_allocation_counts() {
+    ALLOCATION_CALLS.store(0, Ordering::Relaxed);
+    REALLOCATION_CALLS.store(0, Ordering::Relaxed);
+    DEALLOCATION_CALLS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(feature = "allocation-evidence")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_allocation_calls() -> u32 {
+    u32::try_from(ALLOCATION_CALLS.load(Ordering::Relaxed)).unwrap_or(u32::MAX)
+}
+
+#[cfg(feature = "allocation-evidence")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_reallocation_calls() -> u32 {
+    u32::try_from(REALLOCATION_CALLS.load(Ordering::Relaxed)).unwrap_or(u32::MAX)
+}
+
+#[cfg(feature = "allocation-evidence")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_deallocation_calls() -> u32 {
+    u32::try_from(DEALLOCATION_CALLS.load(Ordering::Relaxed)).unwrap_or(u32::MAX)
 }
 
 #[derive(Default)]
