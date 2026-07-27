@@ -32,12 +32,7 @@ required-features = ["fuzzing"]
 
 [features]
 default = ["compression"]
-std = [
-  "read-fonts/std",
-  "serde/std",
-  "serde_json/std",
-  "skrifa/std",
-]
+std = ["read-fonts/std", "serde/std", "serde_json/std", "skrifa/std"]
 compression = ["std", "dep:brotli", "dep:flate2"]
 fuzzing = ["std"]
 oracle = ["std", "dep:harfrust"]
@@ -45,7 +40,9 @@ oracle = ["std", "dep:harfrust"]
 [dependencies]
 brotli = { version = "8.0.4", optional = true }
 core_maths = "0.1.1"
-flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"], optional = true }
+flate2 = { version = "1.1.9", default-features = false, features = [
+  "rust_backend",
+], optional = true }
 harfrust = { version = "0.12.0", default-features = false, features = ["libm"], optional = true }
 read-fonts = { version = "0.42.1", default-features = false, features = ["libm"] }
 serde = { version = "1.0.229", default-features = false, features = ["alloc", "derive"] }

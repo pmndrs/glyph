@@ -23,16 +23,20 @@ const rustWasm = fileURLToPath(
 );
 const distributedWasm = fileURLToPath(new URL("../dist/font_baker.wasm", import.meta.url));
 
-await run("cargo", [
-  "build",
-  "--manifest-path",
-  "rust/Cargo.toml",
-  "--target",
-  "wasm32-unknown-unknown",
-  "--release",
-  "--locked",
-  "--no-default-features",
-], rustEnvironment);
+await run(
+  "cargo",
+  [
+    "build",
+    "--manifest-path",
+    "rust/Cargo.toml",
+    "--target",
+    "wasm32-unknown-unknown",
+    "--release",
+    "--locked",
+    "--no-default-features",
+  ],
+  rustEnvironment,
+);
 await run("tsc", ["-p", "tsconfig.build.json"]);
 await mkdir(new URL("../dist/", import.meta.url), { recursive: true });
 await copyFile(

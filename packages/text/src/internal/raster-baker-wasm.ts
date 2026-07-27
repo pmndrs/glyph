@@ -30,6 +30,20 @@ export interface DirectRasterBakerAbi {
     readonly payloadOffset: number
     readonly successStatus: number
   }
+  readonly segmented?: {
+    readonly chunkByteLength: number
+    readonly unavailableStatus: number
+    readonly functions: {
+      readonly status: AbiFunction
+      readonly metadataPointer: AbiFunction
+      readonly metadataByteLength: AbiFunction
+      readonly artifactCount: AbiFunction
+      readonly artifactByteLength: AbiFunction
+      readonly chunkPointer: AbiFunction
+      readonly chunkByteLength: AbiFunction
+      readonly release: AbiFunction
+    }
+  }
 }
 
 interface DirectRasterBakerExports {
@@ -43,6 +57,16 @@ interface DirectRasterBakerExports {
     requestLength: number,
   ) => number
   readonly responseLength: () => number
+  readonly segmented?: {
+    readonly status: () => number
+    readonly metadataPointer: () => number
+    readonly metadataByteLength: () => number
+    readonly artifactCount: () => number
+    readonly artifactByteLength: (index: number) => number
+    readonly chunkPointer: (index: number, offset: number) => number
+    readonly chunkByteLength: (index: number, offset: number) => number
+    readonly release: () => void
+  }
 }
 
 interface ArtifactMetadata {
@@ -87,8 +111,8 @@ export function readEmbeddedJsonAbi(
   lengthExport: string,
   label: string,
 ): unknown {
-  const pointer = readBootstrap(instance.exports, pointerExport, label)()
-  const length = readBootstrap(instance.exports, lengthExport, label)()
+  const pointer = u32(readBootstrap(instance.exports, pointerExport, label)())
+  const length = u32(readBootstrap(instance.exports, lengthExport, label)())
   const memory = instance.exports.memory
   if (!(memory instanceof WebAssembly.Memory)) {
     throw new TypeError(`${label} ABI bootstrap is missing linear memory`)
@@ -111,16 +135,18 @@ export function createDirectRasterBakerFromInstance<Request, Kind extends string
       let requestPointer = 0
       let responsePointer = 0
       let responseLength = 0
+      let segmentedResponse = false
       try {
         sourcePointer = copyIntoWasm(exports, source, spec.label)
         requestPointer = copyIntoWasm(exports, requestBytes, spec.label)
-        responsePointer = exports.bake(
-          sourcePointer,
-          source.byteLength,
-          requestPointer,
-          requestBytes.byteLength,
+        responsePointer = u32(
+          exports.bake(sourcePointer, source.byteLength, requestPointer, requestBytes.byteLength),
         )
-        responseLength = exports.responseLength()
+        responseLength = u32(exports.responseLength())
+        if (responsePointer === 0 && responseLength === 0 && exports.segmented !== undefined) {
+          segmentedResponse = true
+          return decodeSegmentedResponse(exports, abi, spec)
+        }
         const response = memoryRange(exports.memory, responsePointer, responseLength, spec.label)
         return decodeResponse(response, abi, spec)
       } finally {
@@ -129,6 +155,7 @@ export function createDirectRasterBakerFromInstance<Request, Kind extends string
         if (responsePointer !== 0 && responseLength !== 0) {
           exports.deallocate(responsePointer, responseLength)
         }
+        if (segmentedResponse) exports.segmented?.release()
       }
     },
   }
@@ -153,17 +180,42 @@ function readExports(
   ) {
     throw new TypeError(`invalid ${label} Wasm exports`)
   }
+  const segmented = readSegmentedExports(wasmExports, abi, label)
   return {
     memory,
     allocate: allocate as DirectRasterBakerExports['allocate'],
     deallocate: deallocate as DirectRasterBakerExports['deallocate'],
     bake: bake as DirectRasterBakerExports['bake'],
     responseLength: responseLength as DirectRasterBakerExports['responseLength'],
+    ...(segmented === undefined ? {} : { segmented }),
   }
 }
 
+function readSegmentedExports(
+  wasmExports: WebAssembly.Exports,
+  abi: DirectRasterBakerAbi,
+  label: string,
+): DirectRasterBakerExports['segmented'] {
+  if (abi.segmented === undefined) return undefined
+  const functions = abi.segmented.functions
+  const values = {
+    status: wasmExports[functions.status.export],
+    metadataPointer: wasmExports[functions.metadataPointer.export],
+    metadataByteLength: wasmExports[functions.metadataByteLength.export],
+    artifactCount: wasmExports[functions.artifactCount.export],
+    artifactByteLength: wasmExports[functions.artifactByteLength.export],
+    chunkPointer: wasmExports[functions.chunkPointer.export],
+    chunkByteLength: wasmExports[functions.chunkByteLength.export],
+    release: wasmExports[functions.release.export],
+  }
+  if (Object.values(values).some((value) => typeof value !== 'function')) {
+    throw new TypeError(`invalid ${label} segmented Wasm exports`)
+  }
+  return values as DirectRasterBakerExports['segmented']
+}
+
 function copyIntoWasm(exports: DirectRasterBakerExports, bytes: Uint8Array, label: string): number {
-  const pointer = exports.allocate(bytes.byteLength)
+  const pointer = u32(exports.allocate(bytes.byteLength))
   if (pointer === 0 && bytes.byteLength !== 0) {
     throw new RangeError(`${label} Wasm allocation failed`)
   }
@@ -173,6 +225,91 @@ function copyIntoWasm(exports: DirectRasterBakerExports, bytes: Uint8Array, labe
   } catch (error) {
     if (pointer !== 0) exports.deallocate(pointer, bytes.byteLength)
     throw error
+  }
+}
+
+function decodeSegmentedResponse<Kind extends string>(
+  exports: DirectRasterBakerExports,
+  abi: DirectRasterBakerAbi,
+  spec: DirectRasterBakerSpec<Kind>,
+): RasterBakeArtifact<Kind> {
+  const contract = abi.segmented
+  const segmented = exports.segmented
+  if (contract === undefined || segmented === undefined) {
+    throw new TypeError(`${spec.label} did not expose its declared segmented response`)
+  }
+  const status = u32(segmented.status())
+  if (status === contract.unavailableStatus) {
+    throw new TypeError(`${spec.label} returned neither a direct nor segmented response`)
+  }
+  const metadataLength = u32(segmented.metadataByteLength())
+  const metadataPointer = u32(segmented.metadataPointer())
+  if (metadataLength === 0 || metadataPointer === 0) {
+    throw new TypeError(`${spec.label} returned empty segmented metadata`)
+  }
+  const metadata: unknown = JSON.parse(
+    textDecoder.decode(memoryRange(exports.memory, metadataPointer, metadataLength, spec.label)),
+  )
+  if (status !== abi.response.successStatus)
+    throw spec.createError(parseError(metadata, spec.label))
+
+  const artifactCount = u32(segmented.artifactCount())
+  if (
+    !isNonArrayObject(metadata) ||
+    !Array.isArray(metadata.artifacts) ||
+    artifactCount !== metadata.artifacts.length
+  ) {
+    throw new TypeError(`${spec.label} segmented artifact count does not match its metadata`)
+  }
+  const artifactLengths = new Array<number>(artifactCount)
+  let artifactLength = 0
+  for (let index = 0; index < artifactCount; index += 1) {
+    const length = u32(segmented.artifactByteLength(index))
+    if (!Number.isSafeInteger(length) || length <= 0) {
+      throw new TypeError(`${spec.label} returned an invalid segmented artifact length`)
+    }
+    artifactLengths[index] = length
+    artifactLength = checkedEnd(artifactLength, length, Number.MAX_SAFE_INTEGER, spec.label)
+  }
+  assertResultMetadata(metadata, artifactLength, spec)
+  const result = metadata
+  const artifacts = result.artifacts.map<BakeArtifactV0>((artifact, index) => {
+    const byteLength = artifactLengths[index]
+    if (byteLength === undefined || byteLength !== artifact.byteLength) {
+      throw new TypeError(`${spec.label} segmented artifact length does not match its directory`)
+    }
+    const bytes = new Uint8Array(byteLength)
+    let offset = 0
+    while (offset < byteLength) {
+      const chunkLength = u32(segmented.chunkByteLength(index, offset))
+      const chunkPointer = u32(segmented.chunkPointer(index, offset))
+      const remaining = byteLength - offset
+      if (
+        chunkPointer === 0 ||
+        !Number.isSafeInteger(chunkLength) ||
+        chunkLength <= 0 ||
+        chunkLength > contract.chunkByteLength ||
+        chunkLength > remaining
+      ) {
+        throw new TypeError(`${spec.label} returned an invalid segmented artifact chunk`)
+      }
+      bytes.set(memoryRange(exports.memory, chunkPointer, chunkLength, spec.label), offset)
+      offset += chunkLength
+    }
+    return {
+      role: artifact.role,
+      id: artifact.id,
+      bytes,
+      sha256: artifact.sha256,
+    }
+  })
+  return {
+    rasterKey: result.rasterKey as RasterKey,
+    kind: result.kind,
+    extension: result.extension,
+    version: result.version,
+    artifacts,
+    report: result.report,
   }
 }
 
@@ -324,6 +461,10 @@ function readBootstrap(
   const value = wasmExports[name]
   if (typeof value !== 'function') throw new TypeError(`${label} ABI is missing ${name}`)
   return value as () => number
+}
+
+function u32(value: number): number {
+  return value >>> 0
 }
 
 function memoryRange(

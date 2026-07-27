@@ -20,7 +20,7 @@ import {
   BITMAP_KIND,
   bitmapDescriptor,
   type BitmapDescriptorV0,
-} from '../raster/bitmap.js'
+} from '../internal/bitmap-contract.js'
 
 export interface BitmapBakerOptions {
   readonly strikes: readonly [number, ...number[]]

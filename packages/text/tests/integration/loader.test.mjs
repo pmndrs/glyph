@@ -108,6 +108,7 @@ test('canonical source forms converge on one validated baked hit without source 
 
   const validated = await validateFontArtifact(embeddedBytes)
   const extracted = getRegisteredFontData(first)
+  assert.equal(extracted.fontFaceIndex, 0)
   assert.deepEqual(Buffer.from(extracted.shapingSfnt), Buffer.from(validated.shapingSfnt))
   assert.deepEqual(Buffer.from(extracted.glyphExtents), Buffer.from(validated.glyphExtents))
   assert.deepEqual(

@@ -25,22 +25,22 @@ project discovery, filesystem output, bitmap baking, Worker orchestration, or
 runtime shaping.
 
 ```ts
-import { createFontBaker } from '@pmndrs/text-font-baker'
+import { createFontBaker } from "@pmndrs/text-font-baker";
 
-const wasm = await fetch(wasmUrl).then((response) => response.arrayBuffer())
-const baker = await createFontBaker(wasm)
+const wasm = await fetch(wasmUrl).then((response) => response.arrayBuffer());
+const baker = await createFontBaker(wasm);
 const result = baker.bake({
   source: sourceBytes,
   descriptor: { formatVersion: 0, fontFaceIndex: 0 },
-})
+});
 ```
 
 Validate untrusted baked bytes before registration:
 
 ```ts
-import { validateFontArtifact } from '@pmndrs/text-font-baker/validate'
+import { validateFontArtifact } from "@pmndrs/text-font-baker/validate";
 
-const validated = await validateFontArtifact(result.artifacts[0].bytes)
+const validated = await validateFontArtifact(result.artifacts[0].bytes);
 ```
 
 Build and verify the package from the repository root:

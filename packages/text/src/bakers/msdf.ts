@@ -21,7 +21,7 @@ import {
   MSDF_KIND,
   msdfDescriptor,
   type MsdfDescriptorV0,
-} from '../raster/msdf.js'
+} from '../internal/msdf-contract.js'
 
 export type MsdfBakerOptions = undefined
 
@@ -48,9 +48,9 @@ export interface MtsdfBakerCore {
 
 export type MtsdfBakerWasmSource = BufferSource | WebAssembly.Module
 
-export interface MtsdfBakerAbiV0 {
+export interface MtsdfBakerAbiV1 {
   readonly name: 'pmndrs-text-mtsdf-baker'
-  readonly version: 0
+  readonly version: 1
   readonly endianness: 'little'
   readonly pointerWidth: 32
   readonly memory: 'memory'
@@ -69,8 +69,21 @@ export interface MtsdfBakerAbiV0 {
     readonly functions: {
       readonly bake: AbiFunction
       readonly responseByteLength: AbiFunction
+      readonly segmentedStatus: AbiFunction
+      readonly segmentedMetadataPointer: AbiFunction
+      readonly segmentedMetadataByteLength: AbiFunction
+      readonly segmentedArtifactCount: AbiFunction
+      readonly segmentedArtifactByteLength: AbiFunction
+      readonly segmentedChunkPointer: AbiFunction
+      readonly segmentedChunkByteLength: AbiFunction
+      readonly releaseSegmentedResponse: AbiFunction
     }
-    readonly response: DirectRasterBakerAbi['response']
+    readonly response: DirectRasterBakerAbi['response'] & {
+      readonly segmented: {
+        readonly chunkByteLength: 8_388_608
+        readonly unavailableStatus: 4_294_967_295
+      }
+    }
   }
 }
 
@@ -108,6 +121,20 @@ export function createMtsdfBakerFromInstance(instance: WebAssembly.Instance): Mt
       responseByteLength: abi.artifactBaker.functions.responseByteLength,
     },
     response: abi.artifactBaker.response,
+    segmented: {
+      chunkByteLength: abi.artifactBaker.response.segmented.chunkByteLength,
+      unavailableStatus: abi.artifactBaker.response.segmented.unavailableStatus,
+      functions: {
+        status: abi.artifactBaker.functions.segmentedStatus,
+        metadataPointer: abi.artifactBaker.functions.segmentedMetadataPointer,
+        metadataByteLength: abi.artifactBaker.functions.segmentedMetadataByteLength,
+        artifactCount: abi.artifactBaker.functions.segmentedArtifactCount,
+        artifactByteLength: abi.artifactBaker.functions.segmentedArtifactByteLength,
+        chunkPointer: abi.artifactBaker.functions.segmentedChunkPointer,
+        chunkByteLength: abi.artifactBaker.functions.segmentedChunkByteLength,
+        release: abi.artifactBaker.functions.releaseSegmentedResponse,
+      },
+    },
   }
   return createDirectRasterBakerFromInstance<MtsdfBakerRequestV0, 'msdf'>(instance, directAbi, {
     label: 'MTSDF baker',
@@ -119,7 +146,7 @@ export function createMtsdfBakerFromInstance(instance: WebAssembly.Instance): Mt
   })
 }
 
-export function readMtsdfBakerAbi(instance: WebAssembly.Instance): MtsdfBakerAbiV0 {
+export function readMtsdfBakerAbi(instance: WebAssembly.Instance): MtsdfBakerAbiV1 {
   const value = readEmbeddedJsonAbi(
     instance,
     'pmndrs_text_mtsdf_abi_ptr',
@@ -130,12 +157,12 @@ export function readMtsdfBakerAbi(instance: WebAssembly.Instance): MtsdfBakerAbi
   return value
 }
 
-function assertMtsdfBakerAbi(value: unknown): asserts value is MtsdfBakerAbiV0 {
+function assertMtsdfBakerAbi(value: unknown): asserts value is MtsdfBakerAbiV1 {
   if (!isNonArrayObject(value)) throw new TypeError('unsupported MTSDF baker ABI')
   const { functions, artifactBaker } = value
   if (
     value.name !== 'pmndrs-text-mtsdf-baker' ||
-    value.version !== 0 ||
+    value.version !== 1 ||
     value.endianness !== 'little' ||
     value.pointerWidth !== 32 ||
     value.memory !== 'memory' ||
@@ -161,6 +188,26 @@ function assertMtsdfBakerAbi(value: unknown): asserts value is MtsdfBakerAbiV0 {
       'responsePointer',
     ) ||
     !matchesAbiFunction(artifactFunctions.responseByteLength, [], 'byteLength') ||
+    !matchesAbiFunction(artifactFunctions.segmentedStatus, [], 'status') ||
+    !matchesAbiFunction(artifactFunctions.segmentedMetadataPointer, [], 'pointer') ||
+    !matchesAbiFunction(artifactFunctions.segmentedMetadataByteLength, [], 'byteLength') ||
+    !matchesAbiFunction(artifactFunctions.segmentedArtifactCount, [], 'count') ||
+    !matchesAbiFunction(
+      artifactFunctions.segmentedArtifactByteLength,
+      ['artifactIndex'],
+      'byteLength',
+    ) ||
+    !matchesAbiFunction(
+      artifactFunctions.segmentedChunkPointer,
+      ['artifactIndex', 'byteOffset'],
+      'pointer',
+    ) ||
+    !matchesAbiFunction(
+      artifactFunctions.segmentedChunkByteLength,
+      ['artifactIndex', 'byteOffset'],
+      'byteLength',
+    ) ||
+    !matchesAbiFunction(artifactFunctions.releaseSegmentedResponse, []) ||
     !isNonArrayObject(response) ||
     response.headerByteLength !== 16 ||
     response.magic !== 'PMMS' ||
@@ -168,7 +215,10 @@ function assertMtsdfBakerAbi(value: unknown): asserts value is MtsdfBakerAbiV0 {
     response.metadataByteLengthOffset !== 8 ||
     response.artifactByteLengthOffset !== 12 ||
     response.payloadOffset !== 16 ||
-    response.successStatus !== 0
+    response.successStatus !== 0 ||
+    !isNonArrayObject(response.segmented) ||
+    response.segmented.chunkByteLength !== 8_388_608 ||
+    response.segmented.unavailableStatus !== 4_294_967_295
   ) {
     throw new TypeError('unsupported MTSDF baker ABI')
   }

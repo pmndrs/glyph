@@ -23,7 +23,7 @@ import {
 } from '@pmndrs/text/raster/msdf'
 
 const wasmUrl = new URL('../../dist/mtsdf_baker.wasm', import.meta.url)
-const abiUrl = new URL('../../dist/mtsdf-baker-abi-v0.json', import.meta.url)
+const abiUrl = new URL('../../dist/mtsdf-baker-abi-v1.json', import.meta.url)
 const fontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf',
   import.meta.url,
@@ -171,6 +171,88 @@ test('releases a source allocation when the request allocation fails', () => {
     /allocation failed/,
   )
   assert.deepEqual(released, [[4096, 8]])
+})
+
+test('copies a segmented response in bounded chunks and releases its Wasm ownership', () => {
+  const artifactBytes = Uint8Array.from({ length: 10 }, (_, index) => index + 1)
+  const metadata = {
+    rasterKey: '1'.repeat(64),
+    kind: 'msdf',
+    extension: MSDF_EXTENSION,
+    version: 0,
+    artifacts: [
+      {
+        role: 'raster',
+        id: 'segmented.glb',
+        sha256: '2'.repeat(64),
+        byteOffset: 0,
+        byteLength: artifactBytes.byteLength,
+      },
+    ],
+    report: {
+      metadataBytes: 20,
+      serializedBytes: artifactBytes.byteLength,
+      gpuBytes: 4,
+      pages: [
+        {
+          width: 1,
+          height: 1,
+          format: 'rgba8unorm',
+          mipBytes: 4,
+          source: 'embedded',
+          encodedBytes: artifactBytes.byteLength,
+        },
+      ],
+    },
+  }
+  const metadataBytes = new TextEncoder().encode(JSON.stringify(metadata))
+  const metadataPointer = 8_192
+  const artifactPointer = 16_384
+  let allocationPointer = 32_768
+  let releases = 0
+  const chunkOffsets = []
+  const instance = fakeMtsdfBakerInstance({
+    allocate: (length) => {
+      const pointer = allocationPointer
+      allocationPointer += length
+      return pointer
+    },
+    segmented: {
+      status: () => 0,
+      metadataPointer: () => metadataPointer,
+      metadataByteLength: () => metadataBytes.byteLength,
+      artifactCount: () => 1,
+      artifactByteLength: () => artifactBytes.byteLength,
+      chunkPointer: (_index, offset) => artifactPointer + offset,
+      chunkByteLength: (_index, offset) => {
+        chunkOffsets.push(offset)
+        return Math.min(4, artifactBytes.byteLength - offset)
+      },
+      release: () => releases++,
+    },
+  })
+  new Uint8Array(instance.exports.memory.buffer, metadataPointer, metadataBytes.byteLength).set(
+    metadataBytes,
+  )
+  new Uint8Array(instance.exports.memory.buffer, artifactPointer, artifactBytes.byteLength).set(
+    artifactBytes,
+  )
+
+  const result = createMtsdfBakerFromInstance(instance).bake({
+    source: new Uint8Array([1]),
+    request: {
+      fontFaceIndex: 0,
+      glyphCount: 1,
+      shapingHash: '0'.repeat(64),
+      rasterKey: '1'.repeat(64),
+      packaging: { artifact: 'embedded', pages: 'embedded' },
+      descriptor: msdfDescriptor(),
+    },
+  })
+
+  assert.deepEqual(result.artifacts[0].bytes, artifactBytes)
+  assert.deepEqual(chunkOffsets, [0, 4, 8])
+  assert.equal(releases, 1)
 })
 
 function glbRoot(bytes) {
@@ -434,17 +516,21 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   const resource = await msdf.decode(font, runtimeRaster)
   assert.equal(resource.records.byteLength, 2937 * 20)
   assert.equal(resource.pages.length, 10)
-  assert.ok(resource.pages.every(({ texture }) => texture.generateMipmaps))
-  const glyphId = firstPresentGlyph(records)
+  assert.equal(resource.atlas.width, 1024)
+  assert.equal(resource.atlas.height, 1024)
+  assert.equal(resource.atlas.layers, 10)
+  assert.equal(resource.atlas.texture.generateMipmaps, true)
+  assert.equal(resource.gpuBytes, 55_924_040)
+  const glyphIds = firstPresentGlyphByPage(records, resource.pages.length)
   const layout = {
-    glyphIds: Uint16Array.of(glyphId),
-    glyphFontSlots: Uint16Array.of(0),
-    glyphFontSizes: Float32Array.of(64),
-    x: Float32Array.of(12),
-    y: Float32Array.of(24),
+    glyphIds,
+    glyphFontSlots: new Uint16Array(glyphIds.length),
+    glyphFontSizes: new Float32Array(glyphIds.length).fill(64),
+    x: Float32Array.from(glyphIds, (_glyphId, index) => 12 + index * 80),
+    y: new Float32Array(glyphIds.length).fill(24),
   }
   const paint = {
-    paintIndices: Uint16Array.of(0),
+    paintIndices: new Uint16Array(glyphIds.length),
     palette: [
       {
         color: [1, 0.75, 0.5, 1],
@@ -454,7 +540,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
     ],
   }
   const batch = msdf.buildBatches(layout, resource, 0, paint)
-  assert.equal(batch.glyphCount, 1)
+  assert.equal(batch.glyphCount, resource.pages.length)
   assert.equal(batch.drawCount, 1)
   const mesh = batch.object.children[0]
   assert.ok(mesh)
@@ -466,22 +552,24 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
       geometry.getAttribute('msdfShadowOffset').getY(0),
     ].map((value) => Number(value.toFixed(8))),
     [
-      Number((3 / resource.pages[0].width).toFixed(8)),
-      Number((-4 / resource.pages[0].height).toFixed(8)),
+      Number((3 / resource.atlas.width).toFixed(8)),
+      Number((-4 / resource.atlas.height).toFixed(8)),
     ],
   )
+  for (let pageIndex = 0; pageIndex < resource.pages.length; pageIndex += 1) {
+    assert.equal(geometry.getAttribute('msdfPageIndex').getX(pageIndex), pageIndex)
+  }
   batch.updatePaint({
-    paintIndices: Uint16Array.of(0),
+    paintIndices: new Uint16Array(glyphIds.length),
     palette: [{ color: [0.25, 0.5, 1, 0.75] }],
   })
   assert.equal(geometry.getAttribute('msdfOutlineWidth').getX(0), 0)
   batch.dispose()
   assert.throws(() => batch.updatePaint(paint), /disposed/)
   let disposedTextures = 0
-  for (const page of resource.pages)
-    page.texture.addEventListener('dispose', () => disposedTextures++)
+  resource.atlas.texture.addEventListener('dispose', () => disposedTextures++)
   msdf.dispose(resource)
-  assert.equal(disposedTextures, resource.pages.length)
+  assert.equal(disposedTextures, 1)
 }
 
 function glbViews(bytes) {
@@ -497,6 +585,20 @@ function glbViews(bytes) {
   }
 }
 
+function firstPresentGlyphByPage(records, pageCount) {
+  const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
+  const glyphs = new Uint16Array(pageCount)
+  const found = new Uint8Array(pageCount)
+  for (let glyphId = 0; glyphId < records.byteLength / 20; glyphId += 1) {
+    const pageIndex = view.getUint16(glyphId * 20 + 16, true)
+    if (pageIndex === 0xffff || found[pageIndex] === 1) continue
+    glyphs[pageIndex] = glyphId
+    found[pageIndex] = 1
+    if (found.every((value) => value === 1)) return glyphs
+  }
+  throw new Error('canonical MTSDF fixture has no present glyph on every page')
+}
+
 function firstPresentGlyph(records) {
   const view = new DataView(records.buffer, records.byteOffset, records.byteLength)
   for (let glyphId = 0; glyphId < records.byteLength / 20; glyphId += 1) {
@@ -509,6 +611,7 @@ function fakeMtsdfBakerInstance({
   abi = publishedAbi,
   allocate = () => 0,
   deallocate = () => undefined,
+  segmented = {},
 } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 })
   const abiBytes = new TextEncoder().encode(JSON.stringify(abi))
@@ -522,6 +625,14 @@ function fakeMtsdfBakerInstance({
       pmndrs_text_mtsdf_dealloc: deallocate,
       pmndrs_text_mtsdf_bake: () => 0,
       pmndrs_text_mtsdf_bake_result_len: () => 0,
+      pmndrs_text_mtsdf_segmented_status: segmented.status ?? (() => -1),
+      pmndrs_text_mtsdf_segmented_metadata_ptr: segmented.metadataPointer ?? (() => 0),
+      pmndrs_text_mtsdf_segmented_metadata_len: segmented.metadataByteLength ?? (() => 0),
+      pmndrs_text_mtsdf_segmented_artifact_count: segmented.artifactCount ?? (() => 0),
+      pmndrs_text_mtsdf_segmented_artifact_len: segmented.artifactByteLength ?? (() => 0),
+      pmndrs_text_mtsdf_segmented_chunk_ptr: segmented.chunkPointer ?? (() => 0),
+      pmndrs_text_mtsdf_segmented_chunk_len: segmented.chunkByteLength ?? (() => 0),
+      pmndrs_text_mtsdf_segmented_release: segmented.release ?? (() => undefined),
     },
   }
 }

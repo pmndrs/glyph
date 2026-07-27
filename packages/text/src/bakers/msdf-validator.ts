@@ -48,7 +48,7 @@ import {
   MTSDF_PLANE_UNITS_PER_EM,
   msdfDescriptorRasterKey,
   type MsdfDescriptorV0,
-} from '../raster/msdf.js'
+} from '../internal/msdf-contract.js'
 
 const RECORD_STRIDE = 20
 const BYTES_PER_PIXEL = 4

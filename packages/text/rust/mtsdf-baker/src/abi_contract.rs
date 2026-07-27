@@ -1,7 +1,7 @@
 use alloc::string::{String, ToString};
 use serde_json::json;
 
-pub const ABI_VERSION: u32 = 0;
+pub const ABI_VERSION: u32 = 1;
 pub const REQUEST_HEADER_SIZE: u32 = 48;
 pub const COMMAND_SIZE: u32 = 28;
 
@@ -72,6 +72,45 @@ pub fn json(include_artifact_baker: bool) -> String {
                     "parameters": [],
                     "result": "byteLength",
                 },
+                "segmentedStatus": {
+                    "export": "pmndrs_text_mtsdf_segmented_status",
+                    "parameters": [],
+                    "result": "status",
+                },
+                "segmentedMetadataPointer": {
+                    "export": "pmndrs_text_mtsdf_segmented_metadata_ptr",
+                    "parameters": [],
+                    "result": "pointer",
+                },
+                "segmentedMetadataByteLength": {
+                    "export": "pmndrs_text_mtsdf_segmented_metadata_len",
+                    "parameters": [],
+                    "result": "byteLength",
+                },
+                "segmentedArtifactCount": {
+                    "export": "pmndrs_text_mtsdf_segmented_artifact_count",
+                    "parameters": [],
+                    "result": "count",
+                },
+                "segmentedArtifactByteLength": {
+                    "export": "pmndrs_text_mtsdf_segmented_artifact_len",
+                    "parameters": ["artifactIndex"],
+                    "result": "byteLength",
+                },
+                "segmentedChunkPointer": {
+                    "export": "pmndrs_text_mtsdf_segmented_chunk_ptr",
+                    "parameters": ["artifactIndex", "byteOffset"],
+                    "result": "pointer",
+                },
+                "segmentedChunkByteLength": {
+                    "export": "pmndrs_text_mtsdf_segmented_chunk_len",
+                    "parameters": ["artifactIndex", "byteOffset"],
+                    "result": "byteLength",
+                },
+                "releaseSegmentedResponse": {
+                    "export": "pmndrs_text_mtsdf_segmented_release",
+                    "parameters": [],
+                },
             },
             "response": {
                 "headerByteLength": 16,
@@ -81,6 +120,10 @@ pub fn json(include_artifact_baker: bool) -> String {
                 "artifactByteLengthOffset": 12,
                 "payloadOffset": 16,
                 "successStatus": 0,
+                "segmented": {
+                    "chunkByteLength": 8388608,
+                    "unavailableStatus": 4294967295_u32,
+                },
             },
         });
     }

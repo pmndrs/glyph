@@ -12,7 +12,7 @@ import {
 import { mtsdfOracleCases } from '../fixtures/mtsdf-oracle-cases.mjs'
 
 const wasmUrl = new URL('../../dist/mtsdf_baker.wasm', import.meta.url)
-const abiUrl = new URL('../../dist/mtsdf-baker-abi-v0.json', import.meta.url)
+const abiUrl = new URL('../../dist/mtsdf-baker-abi-v1.json', import.meta.url)
 const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'))
 
 async function setup() {

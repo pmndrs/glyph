@@ -491,6 +491,149 @@ test('RasterRuntime rejects and disposes a decode completed after font disposal'
   await assertPendingRasterInvalidation((_runtime, font) => font.dispose())
 })
 
+test('RasterRuntime aborts cooperative pending work when it is disposed', async () => {
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const runtime = new RasterRuntime()
+  const decodeStarted = Promise.withResolvers()
+  const releaseDecode = Promise.withResolvers()
+  const module = rasterRuntimeTestModule({
+    async decode(_font, _raster, signal) {
+      decodeStarted.resolve(signal)
+      await releaseDecode.promise
+      signal?.throwIfAborted()
+      return { decoded: true }
+    },
+  })
+
+  const pending = runtime.load(font, { module })
+  const decodeSignal = await decodeStarted.promise
+  runtime.dispose()
+  releaseDecode.resolve()
+
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.ok(decodeSignal)
+  assert.equal(decodeSignal.aborted, true)
+  font.dispose()
+})
+
+test('RasterRuntime keeps shared work alive when one consumer aborts', async (context) => {
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const runtime = new RasterRuntime()
+  const decodeStarted = Promise.withResolvers()
+  const releaseDecode = Promise.withResolvers()
+  const firstConsumer = new AbortController()
+  const retainedConsumer = new AbortController()
+  const retainedConsumerAttached = Promise.withResolvers()
+  const addEventListener = retainedConsumer.signal.addEventListener
+  context.mock.method(
+    retainedConsumer.signal,
+    'addEventListener',
+    function (type, listener, options) {
+      if (type === 'abort') retainedConsumerAttached.resolve()
+      return addEventListener.call(this, type, listener, options)
+    },
+  )
+  let decodeCount = 0
+  const module = rasterRuntimeTestModule({
+    async decode(_font, _raster, signal) {
+      decodeCount += 1
+      decodeStarted.resolve(signal)
+      await releaseDecode.promise
+      signal?.throwIfAborted()
+      return { decoded: true }
+    },
+  })
+
+  const cancelled = runtime.load(font, { module }, { signal: firstConsumer.signal })
+  await decodeStarted.promise
+  const retained = runtime.load(font, { module }, { signal: retainedConsumer.signal })
+  await retainedConsumerAttached.promise
+  firstConsumer.abort(new DOMException('consumer cancelled', 'AbortError'))
+  await assert.rejects(cancelled, { name: 'AbortError' })
+  releaseDecode.resolve()
+
+  assert.deepEqual(await retained, await runtime.load(font, { module }))
+  assert.equal(decodeCount, 1)
+  runtime.dispose()
+  font.dispose()
+})
+
+test('RasterRuntime aborts shared work after its final consumer detaches', async () => {
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const runtime = new RasterRuntime()
+  const decodeStarted = Promise.withResolvers()
+  const releaseFirstDecode = Promise.withResolvers()
+  const firstDecodeFinished = Promise.withResolvers()
+  const consumer = new AbortController()
+  let decodeCount = 0
+  const module = rasterRuntimeTestModule({
+    async decode(_font, _raster, signal) {
+      decodeCount += 1
+      if (decodeCount === 1) {
+        decodeStarted.resolve(signal)
+        try {
+          await releaseFirstDecode.promise
+          signal?.throwIfAborted()
+        } finally {
+          firstDecodeFinished.resolve()
+        }
+      }
+      return { generation: decodeCount }
+    },
+  })
+
+  const cancelled = runtime.load(font, { module }, { signal: consumer.signal })
+  const sharedSignal = await decodeStarted.promise
+  consumer.abort(new DOMException('consumer cancelled', 'AbortError'))
+  await assert.rejects(cancelled, { name: 'AbortError' })
+
+  assert.ok(sharedSignal)
+  assert.equal(sharedSignal.aborted, true)
+  releaseFirstDecode.resolve()
+  await firstDecodeFinished.promise
+  const retained = await runtime.load(font, { module })
+  assert.equal(retained.resource.generation, 2)
+  assert.equal(decodeCount, 2)
+  runtime.dispose()
+  font.dispose()
+})
+
+test('RasterRuntime replaces a cached resource whose public artifact became stale', async () => {
+  const registry = new FontRegistry()
+  const font = await registry.registerAsset(await readFile(fixtureUrl))
+  const runtime = new RasterRuntime()
+  let decodeCount = 0
+  let disposeCount = 0
+  const module = rasterRuntimeTestModule({
+    async decode() {
+      decodeCount += 1
+      return { generation: decodeCount }
+    },
+    dispose() {
+      disposeCount += 1
+    },
+  })
+
+  const first = await runtime.load(font, { module })
+  first.artifact.dispose()
+  const [second, concurrent] = await Promise.all([
+    runtime.load(font, { module }),
+    runtime.load(font, { module }),
+  ])
+
+  assert.notEqual(second.artifact.handle, first.artifact.handle)
+  assert.equal(concurrent.resource, second.resource)
+  assert.equal(second.resource.generation, 2)
+  assert.equal(disposeCount, 1)
+  runtime.dispose()
+  await Promise.resolve()
+  assert.equal(disposeCount, 2)
+  font.dispose()
+})
+
 async function assertPendingRasterInvalidation(invalidate) {
   const registry = new FontRegistry()
   const font = await registry.registerAsset(await readFile(fixtureUrl))
@@ -529,6 +672,24 @@ async function assertPendingRasterInvalidation(invalidate) {
   assert.equal(disposeCount, 1)
   runtime.dispose()
   font.dispose()
+}
+
+function rasterRuntimeTestModule({ decode, dispose = () => undefined }) {
+  return defineRaster({
+    kind: 'bitmap',
+    extension: 'PMNDRS_font_bitmap',
+    version: 0,
+    descriptor() {
+      return { generatorVersion: '0.0.0', strikes: [16] }
+    },
+    decode,
+    async prepare() {},
+    buildBatches() {
+      throw new Error('not used by RasterRuntime lifecycle tests')
+    },
+    updatePaint() {},
+    dispose,
+  })
 }
 
 function bitmapOrigins(object) {

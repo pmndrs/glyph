@@ -43,6 +43,7 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
         ProvenanceV0 {
             source_hash,
             descriptor_hash,
+            font_face_index: descriptor.font_face_index,
             baker_version: abi_contract::BAKER_VERSION.to_owned(),
             harfrust_version: abi_contract::HARFRUST_VERSION.to_owned(),
             harfbuzz_reference_version: abi_contract::HARFBUZZ_REFERENCE_VERSION.to_owned(),

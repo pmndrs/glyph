@@ -152,6 +152,7 @@ export class FontRegistry {
     const metricsValue = requireNonArrayObject(fontExtension.metrics, 'PMNDRS_font.metrics')
     const provenance = requireNonArrayObject(fontExtension.provenance, 'PMNDRS_font.provenance')
     const sourceHash = string(provenance.sourceHash, 'provenance.sourceHash')
+    const fontFaceIndex = await authenticatedFontFaceIndex(provenance)
     if (context.sourceBytes !== undefined && (await sha256(context.sourceBytes)) !== sourceHash) {
       throw new FontLoadError(
         'FONT_SOURCE_IDENTITY',
@@ -209,6 +210,7 @@ export class FontRegistry {
     })
     const rasterSources = new Map<string, RegisteredRasterSourceData>()
     setRegisteredFontData(font, {
+      fontFaceIndex,
       sourceHash,
       ...(context.sourceBytes === undefined ? {} : { sourceBytes: context.sourceBytes.slice() }),
       sourceCandidates:
@@ -1272,6 +1274,30 @@ function sameExternalSource(
   right: Extract<RasterReference['source'], { readonly type: 'external' }>,
 ): boolean {
   return left.uri === right.uri && left.artifactHash === right.artifactHash
+}
+
+async function authenticatedFontFaceIndex(
+  provenance: Readonly<Record<string, unknown>>,
+): Promise<number> {
+  const descriptorHash = string(provenance.descriptorHash, 'provenance.descriptorHash')
+  const declared = provenance.fontFaceIndex
+  const fontFaceIndex = declared === undefined ? 0 : integer(declared, 'provenance.fontFaceIndex')
+  if (fontFaceIndex < 0 || fontFaceIndex > 0xffff_ffff) {
+    throw new FontLoadError(
+      'INVALID_FONT_ASSET',
+      'provenance.fontFaceIndex must be an unsigned 32-bit integer',
+    )
+  }
+  const canonical = new TextEncoder().encode(`{"fontFaceIndex":${fontFaceIndex},"formatVersion":0}`)
+  if ((await sha256(canonical)) !== descriptorHash) {
+    throw new FontLoadError(
+      'INVALID_FONT_ASSET',
+      declared === undefined
+        ? 'legacy font artifact does not identify its nonzero collection face'
+        : 'font face index does not match the authenticated bake descriptor',
+    )
+  }
+  return fontFaceIndex
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {

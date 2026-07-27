@@ -42,9 +42,9 @@ export interface MtsdfGenerator {
   generate(request: MtsdfGlyphRequest): MtsdfGlyph
 }
 
-export interface MtsdfGeneratorAbiV0 {
+export interface MtsdfGeneratorAbiV1 {
   readonly name: 'pmndrs-text-mtsdf-baker'
-  readonly version: 0
+  readonly version: 1
   readonly endianness: 'little'
   readonly pointerWidth: 32
   readonly memory: 'memory'
@@ -102,6 +102,7 @@ export interface MtsdfGeneratorAbiV0 {
     readonly invalidOutline: 2
     readonly generationFailed: 3
   }
+  readonly artifactBaker?: unknown
 }
 
 export type MtsdfGenerationErrorCode = 'INVALID_REQUEST' | 'INVALID_OUTLINE' | 'GENERATION_FAILED'
@@ -178,7 +179,7 @@ export function createMtsdfGeneratorFromInstance(instance: WebAssembly.Instance)
   }
 }
 
-export function readMtsdfGeneratorAbi(instance: WebAssembly.Instance): MtsdfGeneratorAbiV0 {
+export function readMtsdfGeneratorAbi(instance: WebAssembly.Instance): MtsdfGeneratorAbiV1 {
   const pointer = readBootstrap(instance.exports, 'pmndrs_text_mtsdf_abi_ptr')()
   const length = readBootstrap(instance.exports, 'pmndrs_text_mtsdf_abi_len')()
   const memory = instance.exports.memory
@@ -190,7 +191,7 @@ export function readMtsdfGeneratorAbi(instance: WebAssembly.Instance): MtsdfGene
   return value
 }
 
-function encodeRequest(request: MtsdfGlyphRequest, abi: MtsdfGeneratorAbiV0): Uint8Array {
+function encodeRequest(request: MtsdfGlyphRequest, abi: MtsdfGeneratorAbiV1): Uint8Array {
   validateRequest(request)
   const requestLayout = abi.layouts.request
   const commandLayout = abi.layouts.command
@@ -295,7 +296,7 @@ function checkedDimension(inner: number, padding: number, label: string): number
 
 function readExports(
   wasmExports: WebAssembly.Exports,
-  abi: MtsdfGeneratorAbiV0,
+  abi: MtsdfGeneratorAbiV1,
 ): MtsdfGeneratorExports {
   const memory = wasmExports[abi.memory]
   const allocate = wasmExports[abi.functions.allocate]
@@ -323,7 +324,7 @@ function readExports(
   }
 }
 
-function statusCode(status: number, abi: MtsdfGeneratorAbiV0): MtsdfGenerationErrorCode {
+function statusCode(status: number, abi: MtsdfGeneratorAbiV1): MtsdfGenerationErrorCode {
   if (status === abi.status.invalidRequest) return 'INVALID_REQUEST'
   if (status === abi.status.invalidOutline) return 'INVALID_OUTLINE'
   return 'GENERATION_FAILED'
@@ -372,12 +373,12 @@ function checkedSum(...values: number[]): number {
   return sum
 }
 
-function assertMtsdfGeneratorAbi(value: unknown): asserts value is MtsdfGeneratorAbiV0 {
+function assertMtsdfGeneratorAbi(value: unknown): asserts value is MtsdfGeneratorAbiV1 {
   if (!isNonArrayObject(value)) throw new TypeError('unsupported MTSDF generator ABI')
   const { functions, layouts, commands, output, status } = value
   if (
     value.name !== 'pmndrs-text-mtsdf-baker' ||
-    value.version !== 0 ||
+    value.version !== 1 ||
     value.endianness !== 'little' ||
     value.pointerWidth !== 32 ||
     value.memory !== 'memory' ||
@@ -427,7 +428,8 @@ function assertMtsdfGeneratorAbi(value: unknown): asserts value is MtsdfGenerato
       invalidRequest: 1,
       invalidOutline: 2,
       generationFailed: 3,
-    })
+    }) ||
+    (value.artifactBaker !== undefined && !isNonArrayObject(value.artifactBaker))
   ) {
     throw new TypeError('unsupported MTSDF generator ABI')
   }

@@ -38,6 +38,7 @@ const abi = JSON.parse(
   new TextDecoder().decode(new Uint8Array(memory.buffer, abiPointer, abiLength)),
 )
 assert.equal(abi.name, 'pmndrs-text-mtsdf-baker')
+assert.equal(abi.artifactBaker, undefined)
 assert.equal(abi.layouts.request.size, 48)
 assert.equal(abi.layouts.command.size, 28)
 
@@ -74,6 +75,22 @@ const output = new Uint8Array(memory.buffer, resultPointer, resultLength)
 let hash = 0x811c9dc5
 for (const byte of output) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0
 assert.equal(hash, 0x3d9625f1)
+
+const { createMtsdfGenerator } = await import('../dist/internal/mtsdf-generator.js')
+const generator = await createMtsdfGenerator(module)
+const generated = generator.generate({
+  unitsPerEm: 1_000,
+  bounds: { minX: 100, minY: 100, maxX: 900, maxY: 900 },
+  region: { innerWidth: 32, innerHeight: 32, paddingX: 4, paddingY: 4 },
+  commands: [
+    { kind: 'move', x: 100, y: 100 },
+    { kind: 'line', x: 100, y: 900 },
+    { kind: 'line', x: 900, y: 900 },
+    { kind: 'line', x: 900, y: 100 },
+    { kind: 'close' },
+  ],
+})
+assert.equal(generated.rgba.byteLength, 40 * 40 * 4)
 
 exports.pmndrs_text_mtsdf_dealloc(requestPointer, requestLength)
 assert.equal(

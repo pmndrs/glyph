@@ -15,8 +15,29 @@
         "properties": {
           "source": { "$ref": "resourceSource.PMNDRS_font.schema.json" },
           "container": { "type": "string", "enum": ["ktx2"] },
-          "gpuFormat": { "type": "string", "enum": ["r8unorm", "rgba8unorm", "rgba16float", "r16uint", "r32uint", "bc4-r-unorm", "bc7-rgba-unorm", "eac-r11unorm", "etc2-rgba8unorm", "astc-4x4-unorm"] },
-          "requiredFeature": { "type": "string", "enum": ["texture-compression-bc", "texture-compression-etc2", "texture-compression-astc"] },
+          "gpuFormat": {
+            "type": "string",
+            "enum": [
+              "r8unorm",
+              "rgba8unorm",
+              "rgba16float",
+              "r16uint",
+              "r32uint",
+              "bc4-r-unorm",
+              "bc7-rgba-unorm",
+              "eac-r11unorm",
+              "etc2-rgba8unorm",
+              "astc-4x4-unorm"
+            ]
+          },
+          "requiredFeature": {
+            "type": "string",
+            "enum": [
+              "texture-compression-bc",
+              "texture-compression-etc2",
+              "texture-compression-astc"
+            ]
+          },
           "quality": { "type": "string", "enum": ["lossless", "quality-gated"] }
         },
         "required": ["source", "container", "gpuFormat", "quality"]

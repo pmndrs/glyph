@@ -123,10 +123,7 @@ export function parseGlb(bytes: Uint8Array): ParsedGlb {
   if (cursor !== bytes.byteLength)
     fail("GLB_TRAILING_BYTES", "chunks must consume the complete GLB");
   if (chunks.length !== 2 || chunks[0]?.type !== JSON_CHUNK || chunks[1]?.type !== BIN_CHUNK) {
-    fail(
-      "GLB_CHUNK_ORDER",
-      "GLB must contain exactly one JSON chunk followed by one BIN chunk",
-    );
+    fail("GLB_CHUNK_ORDER", "GLB must contain exactly one JSON chunk followed by one BIN chunk");
   }
 
   const jsonChunk = bytes.subarray(chunks[0].start, chunks[0].end);
@@ -145,8 +142,7 @@ export function parseGlb(bytes: Uint8Array): ParsedGlb {
   }
   const root = requireNonArrayObject(document, "GLB JSON root", "/json");
   const buffers = asArray(root.buffers, "buffers", "/buffers");
-  if (buffers.length !== 1)
-    fail("BUFFER_COUNT", "GLB must contain exactly one buffer", "/buffers");
+  if (buffers.length !== 1) fail("BUFFER_COUNT", "GLB must contain exactly one buffer", "/buffers");
   const buffer = requireNonArrayObject(buffers[0], "buffer", "/buffers/0");
   if (buffer.uri !== undefined) fail("BUFFER_URI", "GLB buffer must be embedded", "/buffers/0/uri");
   const declaredBinLength = asInteger(
@@ -337,7 +333,11 @@ async function validateFontSemantics(
     fail("FONT_EXTENSION_REQUIRED", "PMNDRS_font must be used and required");
   }
   const extensions = requireNonArrayObject(document.extensions, "extensions", "/extensions");
-  const font = requireNonArrayObject(extensions.PMNDRS_font, "PMNDRS_font", "/extensions/PMNDRS_font");
+  const font = requireNonArrayObject(
+    extensions.PMNDRS_font,
+    "PMNDRS_font",
+    "/extensions/PMNDRS_font",
+  );
   const shaping = requireNonArrayObject(font.shaping, "shaping", "/extensions/PMNDRS_font/shaping");
   const functions = requireNonArrayObject(
     shaping.fontFunctions,
@@ -345,7 +345,20 @@ async function validateFontSemantics(
     "/extensions/PMNDRS_font/shaping/fontFunctions",
   );
   const metrics = requireNonArrayObject(font.metrics, "metrics", "/extensions/PMNDRS_font/metrics");
-  const provenance = requireNonArrayObject(font.provenance, "provenance", "/extensions/PMNDRS_font/provenance");
+  const provenance = requireNonArrayObject(
+    font.provenance,
+    "provenance",
+    "/extensions/PMNDRS_font/provenance",
+  );
+  if (provenance.fontFaceIndex !== undefined) {
+    asInteger(
+      provenance.fontFaceIndex,
+      "fontFaceIndex",
+      "/extensions/PMNDRS_font/provenance/fontFaceIndex",
+      0,
+      0xffff_ffff,
+    );
+  }
   const glyphCount = asInteger(
     metrics.glyphCount,
     "glyphCount",
@@ -736,7 +749,11 @@ function stringArray(value: unknown, name: string, path: string): string[] {
   return asArray(value, name, path).map((item, index) => asString(item, name, `${path}/${index}`));
 }
 
-function requireNonArrayObject(value: unknown, name: string, path: string): Record<string, unknown> {
+function requireNonArrayObject(
+  value: unknown,
+  name: string,
+  path: string,
+): Record<string, unknown> {
   assertNonArrayObject(value, name, path);
   return value;
 }

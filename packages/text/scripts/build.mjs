@@ -78,6 +78,7 @@ await run(
 await run('tsc', ['-p', 'tsconfig.build.json'])
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true })
 await rm(new URL('../dist/font_baker.wasm', import.meta.url), { force: true })
+await rm(new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url), { force: true })
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
@@ -127,7 +128,7 @@ await writeFile(
   ]),
 )
 await writeFile(
-  new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url),
+  new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url),
   await runCapture('cargo', [
     'run',
     '--manifest-path',

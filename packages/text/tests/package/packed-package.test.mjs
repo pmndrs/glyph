@@ -34,6 +34,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   const manifest = JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'))
   const packedFiles = await readdir(installedDirectory, { recursive: true })
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false)
+  assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v0.json'), false)
+  assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v1.json'), true)
   assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
     'dist',
     'package.json',
@@ -66,10 +68,13 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   }
 
   const runtimeHost = await readFile(join(installedDirectory, 'dist/runtime-bake.js'), 'utf8')
-  assert.match(
-    runtimeHost,
-    /new Worker\(new URL\(["']\.\/runtime-bake-worker\.js["'][\s\S]*type:\s*["']module["']/,
+  const serialWorkerHost = await readFile(
+    join(installedDirectory, 'dist/internal/serial-worker-host.js'),
+    'utf8',
   )
+  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/)
+  assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/)
+  assert.match(serialWorkerHost, /type:\s*["']module["']/)
 
   const cli = join(installedDirectory, 'dist/node/cli.js')
   assert.notEqual((await stat(cli)).mode & 0o111, 0, 'the packed CLI must be executable')

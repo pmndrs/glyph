@@ -19,7 +19,11 @@
             "glyphExtentsStride": { "type": "integer", "enum": [8] },
             "glyphExtentsAvailabilityBufferView": { "type": "integer", "minimum": 0 }
           },
-          "required": ["glyphExtentsBufferView", "glyphExtentsStride", "glyphExtentsAvailabilityBufferView"]
+          "required": [
+            "glyphExtentsBufferView",
+            "glyphExtentsStride",
+            "glyphExtentsAvailabilityBufferView"
+          ]
         }
       },
       "required": ["format", "bufferView", "hash", "fontFunctions"]
@@ -43,12 +47,20 @@
       "properties": {
         "sourceHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "descriptorHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "fontFaceIndex": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
         "bakerVersion": { "type": "string", "minLength": 1 },
         "harfrustVersion": { "type": "string", "minLength": 1 },
         "harfbuzzReferenceVersion": { "type": "string", "minLength": 1 },
         "unicodeVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$" }
       },
-      "required": ["sourceHash", "descriptorHash", "bakerVersion", "harfrustVersion", "harfbuzzReferenceVersion", "unicodeVersion"]
+      "required": [
+        "sourceHash",
+        "descriptorHash",
+        "bakerVersion",
+        "harfrustVersion",
+        "harfbuzzReferenceVersion",
+        "unicodeVersion"
+      ]
     },
     "rasters": {
       "type": "array",
