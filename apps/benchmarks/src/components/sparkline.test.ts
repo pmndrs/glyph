@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest'
 
-import { sparklineSampleX } from './sparkline'
+import { sparklineCanvasMetrics, sparklineSampleX } from './sparkline'
+
+describe('sparklineCanvasMetrics', () => {
+  it('maps a fractional CSS box exactly onto its physical backing store', () => {
+    expect(sparklineCanvasMetrics(287.5, 42, 2)).toEqual({
+      backingHeight: 84,
+      backingWidth: 575,
+      cssHeight: 42,
+      cssWidth: 287.5,
+      pixelRatio: 2,
+      scaleX: 2,
+      scaleY: 2,
+    })
+  })
+
+  it('uses the effective rounded backing-store scale instead of stretching later', () => {
+    const metrics = sparklineCanvasMetrics(287.25, 41.75, 2)
+
+    expect(metrics.backingWidth).toBe(575)
+    expect(metrics.backingHeight).toBe(84)
+    expect(metrics.cssWidth * metrics.scaleX).toBe(575)
+    expect(metrics.cssHeight * metrics.scaleY).toBe(84)
+  })
+})
 
 describe('sparklineSampleX', () => {
   it('streams partial history in from the right without rescaling its width', () => {
