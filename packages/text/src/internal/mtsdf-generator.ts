@@ -48,6 +48,13 @@ export interface MtsdfGeneratorAbiV1 {
   readonly endianness: 'little'
   readonly pointerWidth: 32
   readonly memory: 'memory'
+  readonly imports?: {
+    readonly progress: {
+      readonly module: 'env'
+      readonly name: 'pmndrs_text_bake_progress'
+      readonly parameters: readonly ['completed', 'total']
+    }
+  }
   readonly functions: {
     readonly allocate: 'pmndrs_text_mtsdf_alloc'
     readonly deallocate: 'pmndrs_text_mtsdf_dealloc'
@@ -139,7 +146,11 @@ export async function createMtsdfGenerator(
   source: MtsdfGeneratorWasmSource,
 ): Promise<MtsdfGenerator> {
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source)
-  return createMtsdfGeneratorFromInstance(await WebAssembly.instantiate(module, {}))
+  return createMtsdfGeneratorFromInstance(
+    await WebAssembly.instantiate(module, {
+      env: { pmndrs_text_bake_progress() {} },
+    }),
+  )
 }
 
 export function createMtsdfGeneratorFromInstance(instance: WebAssembly.Instance): MtsdfGenerator {
@@ -429,10 +440,23 @@ function assertMtsdfGeneratorAbi(value: unknown): asserts value is MtsdfGenerato
       invalidOutline: 2,
       generationFailed: 3,
     }) ||
+    (value.imports !== undefined && !matchesProgressImport(value.imports)) ||
     (value.artifactBaker !== undefined && !isNonArrayObject(value.artifactBaker))
   ) {
     throw new TypeError('unsupported MTSDF generator ABI')
   }
+}
+
+function matchesProgressImport(value: unknown): boolean {
+  if (!isNonArrayObject(value) || !isNonArrayObject(value.progress)) return false
+  return (
+    value.progress.module === 'env' &&
+    value.progress.name === 'pmndrs_text_bake_progress' &&
+    Array.isArray(value.progress.parameters) &&
+    value.progress.parameters.length === 2 &&
+    value.progress.parameters[0] === 'completed' &&
+    value.progress.parameters[1] === 'total'
+  )
 }
 
 function matchesExactObject(

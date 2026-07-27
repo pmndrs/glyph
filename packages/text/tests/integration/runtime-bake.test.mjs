@@ -223,7 +223,7 @@ test('the Worker entry runs the portable baker and transfers the exact canonical
     return new Response(await readFile(new URL(fontBakerWasmUrl)))
   }
   globalThis.postMessage = (value, transfer) => {
-    result.resolve({ value, transfer })
+    if (value.type === 'bake-font-result-v0') result.resolve({ value, transfer })
   }
   t.after(() => {
     restoreGlobal('addEventListener', originals.addEventListener)
@@ -271,7 +271,7 @@ test('the Worker retries a failed Wasm fetch and retains the recovered core', as
     return new Response(await readFile(new URL(fontBakerWasmUrl)))
   }
   globalThis.postMessage = (value, transfer) => {
-    response.resolve({ value, transfer })
+    if (value.type === 'bake-font-result-v0') response.resolve({ value, transfer })
   }
   t.after(() => {
     restoreGlobal('addEventListener', originals.addEventListener)

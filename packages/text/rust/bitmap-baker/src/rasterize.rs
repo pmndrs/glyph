@@ -66,6 +66,8 @@ pub(crate) fn rasterize_strike(
     face_index: u32,
     expected_glyph_count: u16,
     ppem: u16,
+    progress_offset: u32,
+    progress_total: u32,
 ) -> Result<RasterizedStrike, BitmapBakeError> {
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         BitmapBakeError::new(BitmapBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
@@ -97,7 +99,12 @@ pub(crate) fn rasterize_strike(
     pages.push(AtlasPage::new(ATLAS_LIMIT, 1)?);
 
     let outlines = font.outline_glyphs();
+    crate::progress::report(progress_offset, progress_total);
     for raw_glyph_id in 0..glyph_count {
+        crate::progress::report(
+            progress_offset.saturating_add(u32::from(raw_glyph_id)),
+            progress_total,
+        );
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
         let Some(outline) = outlines.get(glyph_id) else {
             records.mark_absent(raw_glyph_id)?;

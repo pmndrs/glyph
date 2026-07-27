@@ -152,7 +152,9 @@ fn rasterize_font(
     pages.push(AtlasPage::new(ATLAS_LIMIT, 4)?);
     let mut generator = MtsdfGenerator::default();
 
+    crate::progress::report(0, u32::from(actual_glyph_count));
     for raw_glyph_id in 0..actual_glyph_count {
+        crate::progress::report(u32::from(raw_glyph_id), u32::from(actual_glyph_count));
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
         let Some(source) = font_outline_source(&font, glyph_id) else {
             records.mark_absent(raw_glyph_id)?;
@@ -196,6 +198,7 @@ fn rasterize_font(
             u16::try_from(page_index).map_err(|_| overflow())?,
         )?;
     }
+    crate::progress::report(u32::from(actual_glyph_count), u32::from(actual_glyph_count));
 
     let mut finished_pages = Vec::new();
     finished_pages

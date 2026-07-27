@@ -9,12 +9,17 @@ import {
   type RuntimeBakeResultV0,
 } from './internal/runtime-bake-protocol.js'
 import { SerialWorkerHost } from './internal/serial-worker-host.js'
+import {
+  isBakeProgressMessageV0,
+  type BakeProgressMessageV0,
+} from './internal/bake-progress-protocol.js'
 
 const host = new SerialWorkerHost<
   RuntimeFontBakeRequest,
   RuntimeBakeRequestV0,
   RuntimeBakeResultV0,
-  Uint8Array
+  Uint8Array,
+  BakeProgressMessageV0
 >({
   name: 'pmndrs-text-font-baker',
   workerUrl: new URL('./runtime-bake-worker.js', import.meta.url),
@@ -36,6 +41,15 @@ const host = new SerialWorkerHost<
     if (!response.ok) throw new FontBakeError(response.error)
     return new Uint8Array(response.artifacts[0]!.bytes)
   },
+  progress: {
+    isProgress: isBakeProgressMessageV0,
+    progressId: (progress) => progress.id,
+    report: (request, { stage, phase, completed, total }) =>
+      request.onProgress?.({ stage, phase, completed, total }),
+  },
 })
 
-export const bakeFontInWorker: RuntimeFontBake = (request) => host.run(request, request.signal)
+export const bakeFontInWorker: RuntimeFontBake = (request) => {
+  request.onProgress?.({ stage: 'font', phase: 'queued', completed: 0, total: 1 })
+  return host.run(request, request.signal)
+}

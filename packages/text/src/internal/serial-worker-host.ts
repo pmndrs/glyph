@@ -3,17 +3,23 @@ export interface PreparedWorkerMessage<Message> {
   readonly transfer: Transferable[]
 }
 
-export interface SerialWorkerProtocol<Request, Message, Response, Result> {
+export interface SerialWorkerProtocol<Request, Message, Response, Result, Progress = never> {
   readonly name: string
   readonly workerUrl: URL
   prepare(request: Request, id: number): PreparedWorkerMessage<Message>
   isResponse(value: unknown): value is Response
   responseId(response: Response): number
   resolve(response: Response): Result
+  readonly progress?: {
+    isProgress(value: unknown): value is Progress
+    progressId(progress: Progress): number
+    report(request: Request, progress: Progress): void
+  }
 }
 
-interface QueuedWorkerRequest<Message, Result> {
+interface QueuedWorkerRequest<Request, Message, Result> {
   readonly id: number
+  readonly request: Request
   readonly message: Message
   readonly transfer: Transferable[]
   readonly resolve: (value: Result) => void
@@ -21,14 +27,14 @@ interface QueuedWorkerRequest<Message, Result> {
   removeAbortListener(): void
 }
 
-export class SerialWorkerHost<Request, Message, Response, Result> {
-  readonly #protocol: SerialWorkerProtocol<Request, Message, Response, Result>
-  readonly #queue: QueuedWorkerRequest<Message, Result>[] = []
-  #active: QueuedWorkerRequest<Message, Result> | undefined
+export class SerialWorkerHost<Request, Message, Response, Result, Progress = never> {
+  readonly #protocol: SerialWorkerProtocol<Request, Message, Response, Result, Progress>
+  readonly #queue: QueuedWorkerRequest<Request, Message, Result>[] = []
+  #active: QueuedWorkerRequest<Request, Message, Result> | undefined
   #nextId = 1
   #worker: Worker | undefined
 
-  constructor(protocol: SerialWorkerProtocol<Request, Message, Response, Result>) {
+  constructor(protocol: SerialWorkerProtocol<Request, Message, Response, Result, Progress>) {
     this.#protocol = protocol
   }
 
@@ -42,8 +48,9 @@ export class SerialWorkerHost<Request, Message, Response, Result> {
       return Promise.reject(error)
     }
     return new Promise<Result>((resolve, reject) => {
-      const queued: QueuedWorkerRequest<Message, Result> = {
+      const queued: QueuedWorkerRequest<Request, Message, Result> = {
         id,
+        request,
         ...prepared,
         resolve,
         reject,
@@ -93,6 +100,17 @@ export class SerialWorkerHost<Request, Message, Response, Result> {
   #receive(worker: Worker, value: unknown): void {
     if (worker !== this.#worker) return
     const active = this.#active
+    if (active !== undefined && this.#protocol.progress?.isProgress(value) === true) {
+      if (this.#protocol.progress.progressId(value) !== active.id) {
+        this.#failAll(
+          worker,
+          new TypeError(`${this.#protocol.name} returned progress for the wrong request`),
+        )
+        return
+      }
+      this.#protocol.progress.report(active.request, value)
+      return
+    }
     if (
       active === undefined ||
       !this.#protocol.isResponse(value) ||
@@ -114,7 +132,7 @@ export class SerialWorkerHost<Request, Message, Response, Result> {
     this.#startNext()
   }
 
-  #cancel(job: QueuedWorkerRequest<Message, Result>, reason: unknown): void {
+  #cancel(job: QueuedWorkerRequest<Request, Message, Result>, reason: unknown): void {
     if (job === this.#active) {
       this.#active = undefined
       job.removeAbortListener()

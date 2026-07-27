@@ -53,6 +53,13 @@ pub fn json(include_artifact_baker: bool) -> String {
         "status": { "ok": 0, "invalidRequest": 1, "invalidOutline": 2, "generationFailed": 3 }
     });
     if include_artifact_baker {
+        contract["imports"] = json!({
+            "progress": {
+                "module": "env",
+                "name": "pmndrs_text_bake_progress",
+                "parameters": ["completed", "total"],
+            },
+        });
         contract["artifactBaker"] = json!({
             "versions": {
                 "generator": env!("CARGO_PKG_VERSION"),

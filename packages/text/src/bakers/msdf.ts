@@ -1,4 +1,5 @@
 import type {
+  BakeProgressListener,
   RasterBakeArtifact,
   RasterBakeRequest,
   RasterBakerModule,
@@ -40,6 +41,7 @@ export interface MtsdfBakerRequestV0 {
 export interface MtsdfBakerCoreRequestV0 {
   readonly source: Uint8Array
   readonly request: MtsdfBakerRequestV0
+  readonly onProgress?: BakeProgressListener
 }
 
 export interface MtsdfBakerCore {
@@ -54,6 +56,13 @@ export interface MtsdfBakerAbiV1 {
   readonly endianness: 'little'
   readonly pointerWidth: 32
   readonly memory: 'memory'
+  readonly imports: {
+    readonly progress: {
+      readonly module: 'env'
+      readonly name: 'pmndrs_text_bake_progress'
+      readonly parameters: readonly ['completed', 'total']
+    }
+  }
   readonly functions: {
     readonly allocate: 'pmndrs_text_mtsdf_alloc'
     readonly deallocate: 'pmndrs_text_mtsdf_dealloc'
@@ -100,7 +109,25 @@ export class MtsdfBakeError extends Error {
 }
 
 export async function createMtsdfBaker(source: MtsdfBakerWasmSource): Promise<MtsdfBakerCore> {
-  return createMtsdfBakerFromInstance(await instantiateWasm(source))
+  let listener: BakeProgressListener | undefined
+  const instance = await instantiateWasm(source, {
+    env: {
+      pmndrs_text_bake_progress(completed: number, total: number) {
+        listener?.({ stage: 'raster', phase: 'rasterizing', completed, total })
+      },
+    },
+  })
+  const core = createMtsdfBakerFromInstance(instance)
+  return {
+    bake(request) {
+      listener = request.onProgress
+      try {
+        return core.bake(request)
+      } finally {
+        listener = undefined
+      }
+    },
+  }
 }
 
 export function createMtsdfBakerFromInstance(instance: WebAssembly.Instance): MtsdfBakerCore {
@@ -159,13 +186,14 @@ export function readMtsdfBakerAbi(instance: WebAssembly.Instance): MtsdfBakerAbi
 
 function assertMtsdfBakerAbi(value: unknown): asserts value is MtsdfBakerAbiV1 {
   if (!isNonArrayObject(value)) throw new TypeError('unsupported MTSDF baker ABI')
-  const { functions, artifactBaker } = value
+  const { imports, functions, artifactBaker } = value
   if (
     value.name !== 'pmndrs-text-mtsdf-baker' ||
     value.version !== 1 ||
     value.endianness !== 'little' ||
     value.pointerWidth !== 32 ||
     value.memory !== 'memory' ||
+    !matchesProgressImport(imports) ||
     !isNonArrayObject(functions) ||
     functions.allocate !== 'pmndrs_text_mtsdf_alloc' ||
     functions.deallocate !== 'pmndrs_text_mtsdf_dealloc' ||
@@ -224,6 +252,19 @@ function assertMtsdfBakerAbi(value: unknown): asserts value is MtsdfBakerAbiV1 {
   }
 }
 
+function matchesProgressImport(value: unknown): boolean {
+  if (!isNonArrayObject(value) || !isNonArrayObject(value.progress)) return false
+  const { module, name, parameters } = value.progress
+  return (
+    module === 'env' &&
+    name === 'pmndrs_text_bake_progress' &&
+    Array.isArray(parameters) &&
+    parameters.length === 2 &&
+    parameters[0] === 'completed' &&
+    parameters[1] === 'total'
+  )
+}
+
 export function msdfBakerFromCore(
   core: MtsdfBakerCore,
 ): RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptorV0> {
@@ -236,6 +277,7 @@ export function msdfBakerFromCore(
       request.signal?.throwIfAborted()
       const result = core.bake({
         source: request.font.source,
+        ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),
         request: {
           fontFaceIndex: request.font.fontFaceIndex,
           glyphCount: request.font.glyphCount,

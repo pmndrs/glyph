@@ -13,6 +13,8 @@ mod error;
 mod glb;
 #[cfg(feature = "artifact-baker")]
 mod model;
+#[cfg(feature = "artifact-baker")]
+mod progress;
 
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 mod wasm;

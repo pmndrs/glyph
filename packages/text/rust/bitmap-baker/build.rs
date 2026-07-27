@@ -10,6 +10,13 @@ fn main() {
         "endianness": "little",
         "pointerWidth": 32,
         "memory": "memory",
+        "imports": {
+            "progress": {
+                "module": "env",
+                "name": "pmndrs_text_bake_progress",
+                "parameters": ["completed", "total"],
+            },
+        },
         "versions": {
             "generator": env!("CARGO_PKG_VERSION"),
             "bitmapFormat": 0,
