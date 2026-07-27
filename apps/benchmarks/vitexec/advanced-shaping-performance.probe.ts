@@ -20,12 +20,12 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   console.log('advanced-shaping-performance-select', definition.id)
   setSelectValue.call(caseSelector, definition.id)
   caseSelector.dispatchEvent(new Event('change', { bubbles: true }))
-  const authoredText = definition.revealUnits.join('')
+  const authoredText = definition.showcaseRevealUnits.join('')
   const viewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
     'data-dpr': '1',
     'data-presentation-progress': '1',
-    'data-settled-tick': String(definition.revealUnits.length),
+    'data-settled-tick': String(definition.showcaseRevealUnits.length),
     'data-settled-text-length': String(authoredText.length),
     'data-missing-glyph-count': '0',
   })

@@ -105,6 +105,28 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
   }
 }
 
+await clickButton('Paragraph stress', false)
+await waitForReadyViewport('mtsdf', 'paragraph-stress')
+const fontSwitchContinuity = monitorLivePresentationContinuity()
+let paragraphStressTextLength: number | undefined
+for (const fixture of [
+  { button: 'Inter Regular', id: 'inter' },
+  { button: 'Source Serif 4', id: 'source-serif-4' },
+  { button: 'Dancing Script', id: 'dancing-script' },
+] as const) {
+  await clickButton(fixture.button, false)
+  const viewport = await waitForRenderedFixture('mtsdf', 'paragraph-stress', fixture.id)
+  const sourceTextLength = numericAttribute(viewport, 'data-source-text-length')
+  paragraphStressTextLength ??= sourceTextLength
+  if (sourceTextLength !== paragraphStressTextLength) {
+    throw new Error(`${fixture.id} changed the Paragraph Stress source text`)
+  }
+}
+fontSwitchContinuity.assertContinuous()
+console.log('font-fixture-corpus-ready', paragraphStressTextLength)
+
+await clickButton('Inter Regular', false)
+await clickButton('Paint & effects', false)
 const activePaintViewport = await waitForReadyViewport('mtsdf', 'paint-effects')
 await clickButton('conformance', true)
 const benchmarkActivity = await waitForActivityVisibility('benchmark', false)
@@ -127,6 +149,60 @@ if (getComputedStyle(benchmarkActivity).display === 'none') {
 console.log('activity-lifecycle-ready')
 
 console.log('comparison-workloads-ready', JSON.stringify({ techniques: 2, workloads: 5 }))
+
+function monitorLivePresentationContinuity(): { assertContinuous(): void } {
+  const surface = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"]')
+  if (surface === null) throw new Error('Benchmark surface is unavailable for continuity checks')
+  const labels = ['CPU frame ms history', 'FPS history', 'GPU frame ms history'] as const
+  const canvases = labels.map((label) =>
+    document.querySelector<HTMLCanvasElement>(`canvas[aria-label="${label}"]`),
+  )
+  if (canvases.some((canvas) => canvas === null)) {
+    throw new Error('Benchmark graph canvas is unavailable for continuity checks')
+  }
+  let emptyMetricTransitions = 0
+  let loadingOverlayTransitions = 0
+  let replacedCanvases = 0
+  const observer = new MutationObserver(() => {
+    if (liveMetricValue('CPU frame submit') === '—') emptyMetricTransitions += 1
+    if (surface.textContent?.includes('LOADING MSDF')) loadingOverlayTransitions += 1
+    for (let index = 0; index < labels.length; index += 1) {
+      const current = document.querySelector<HTMLCanvasElement>(
+        `canvas[aria-label="${labels[index]}"]`,
+      )
+      if (current !== canvases[index]) replacedCanvases += 1
+    }
+  })
+  observer.observe(surface, {
+    attributes: true,
+    characterData: true,
+    childList: true,
+    subtree: true,
+  })
+  return {
+    assertContinuous() {
+      observer.disconnect()
+      if (emptyMetricTransitions !== 0) {
+        throw new Error(`Font switching emptied live metrics ${emptyMetricTransitions} times`)
+      }
+      if (loadingOverlayTransitions !== 0) {
+        throw new Error(
+          `Font switching restored the loading overlay ${loadingOverlayTransitions} times`,
+        )
+      }
+      if (replacedCanvases !== 0) {
+        throw new Error(`Font switching replaced graph canvases ${replacedCanvases} times`)
+      }
+    },
+  }
+}
+
+function liveMetricValue(label: string): string | undefined {
+  const labelNode = [...document.querySelectorAll<HTMLElement>('div')].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  )
+  return labelNode?.nextElementSibling?.textContent?.trim()
+}
 
 async function clickButton(label: string, exact: boolean): Promise<void> {
   const find = (): HTMLButtonElement | undefined =>
@@ -244,6 +320,30 @@ function waitForReadyViewport(
   const current = readyViewport(technique, workload)
   if (current !== undefined) return Promise.resolve(current)
   return observeDocument(() => readyViewport(technique, workload))
+}
+
+function waitForRenderedFixture(
+  technique: 'bitmap' | 'mtsdf',
+  workload: string,
+  fontFixture: string,
+): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]')
+    if (
+      viewport === null ||
+      viewport.getAttribute('data-technique') !== technique ||
+      viewport.getAttribute('data-workload') !== workload ||
+      viewport.getAttribute('data-font-fixture') !== fontFixture ||
+      positiveAttribute(viewport, 'data-glyph-count') === false ||
+      positiveAttribute(viewport, 'data-draw-count') === false ||
+      positiveAttribute(viewport, 'data-source-text-length') === false
+    ) {
+      return undefined
+    }
+    return viewport
+  }
+  const current = find()
+  return current === undefined ? observeDocument(find) : Promise.resolve(current)
 }
 
 function waitForViewportAttribute(

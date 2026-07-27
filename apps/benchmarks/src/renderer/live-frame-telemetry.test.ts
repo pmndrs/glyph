@@ -12,9 +12,13 @@ describe('live frame telemetry', () => {
       frameCount: 1,
       medianSubmitMs: 0.25,
       p95SubmitMs: 0.25,
+      minimumSubmitMs: 0.25,
+      maximumSubmitMs: 0.25,
       gpuFrameMs: 0.75,
       medianGpuMs: 0.75,
       p95GpuMs: 0.75,
+      minimumGpuMs: 0.75,
+      maximumGpuMs: 0.75,
       submitHistoryLength: 1,
       fpsHistoryLength: 1,
       gpuHistoryLength: 1,
@@ -30,8 +34,12 @@ describe('live frame telemetry', () => {
       frameCount: 4,
       medianSubmitMs: 0.75,
       p95SubmitMs: 1,
+      minimumSubmitMs: 0.5,
+      maximumSubmitMs: 1,
       medianGpuMs: 1.25,
       p95GpuMs: 1.5,
+      minimumGpuMs: 1,
+      maximumGpuMs: 1.5,
       submitHistoryLength: 3,
       fpsHistoryLength: 3,
       gpuHistoryLength: 3,
@@ -39,6 +47,9 @@ describe('live frame telemetry', () => {
     expect(wrapped?.submitHistory).toBe(first?.submitHistory)
     expect(wrapped?.fpsHistory).toBe(first?.fpsHistory)
     expect(wrapped?.gpuHistory).toBe(first?.gpuHistory)
+    expect(wrapped?.minimumFramesPerSecond).toBeLessThanOrEqual(
+      wrapped?.maximumFramesPerSecond ?? 0,
+    )
   })
 
   it('rejects invalid configuration and measurements', () => {

@@ -24,14 +24,19 @@ import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
 import sourceSerifBitmapFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url'
 import {
-  conformanceTextForFont,
+  conformanceText,
   type BenchmarkFontFixture,
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
+import {
+  LIVE_TEXT_COLOR,
+  LIVE_TEXT_LINE_HEIGHT,
+  liveTextPosition,
+  type LiveTextAnchor,
+} from './live-text-style'
 import {
   captureSourceOutlineFidelity,
   type SourceOutlineFidelityCapture,
@@ -106,6 +111,10 @@ export interface BitmapTextLiveStats {
   readonly framesPerSecond: number
   readonly medianSubmitMs: number
   readonly p95SubmitMs: number
+  readonly minimumSubmitMs: number
+  readonly maximumSubmitMs: number
+  readonly minimumFramesPerSecond: number
+  readonly maximumFramesPerSecond: number
   readonly glyphCount: number
   readonly missingGlyphCount: number
   readonly drawCount: number
@@ -132,6 +141,8 @@ export interface BitmapTextLiveStats {
   readonly gpuFrameMs: number | undefined
   readonly medianGpuMs: number | undefined
   readonly p95GpuMs: number | undefined
+  readonly minimumGpuMs: number | undefined
+  readonly maximumGpuMs: number | undefined
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -172,6 +183,7 @@ export interface BitmapTextPreview {
 }
 
 export interface BitmapTextPreviewUpdate {
+  readonly anchor: LiveTextAnchor
   readonly fontSize: number
   readonly layoutWidthRatio: number
   readonly text: string
@@ -212,6 +224,7 @@ type BitmapTextPresentation =
     }
 
 export interface BitmapTextPreviewOptions {
+  readonly anchor?: LiveTextAnchor
   readonly backend: RendererBackend
   readonly canvas: HTMLCanvasElement
   readonly dpr: number
@@ -298,7 +311,7 @@ async function createResources(
   try {
     const loadedFont = await loadBitmapFont(undefined, fontFixture)
     font = loadedFont.font
-    line = await createBitmapLine(font, conformanceTextForFont(fontFixture), BITMAP_FONT_SIZE / dpr)
+    line = await createBitmapLine(font, conformanceText(), BITMAP_FONT_SIZE / dpr)
     line.object.position.set(
       quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
       quarterDevicePosition(-Math.max(4, (HEIGHT - line.height) / 2), dpr),
@@ -388,6 +401,7 @@ async function createBitmapLine(
     readonly language: string
     readonly direction: 'ltr' | 'rtl'
     readonly features: readonly FontFeature[]
+    readonly rejectMissingGlyphs?: boolean
   } = { language: 'en', direction: 'ltr', features: [] },
 ): Promise<BitmapLine> {
   signal?.throwIfAborted()
@@ -414,7 +428,7 @@ async function createBitmapLine(
       (count, glyphId) => count + (glyphId === 0 ? 1 : 0),
       0,
     )
-    if (missingGlyphCount !== 0) {
+    if (shaping.rejectMissingGlyphs !== false && missingGlyphCount !== 0) {
       throw new Error(`benchmark specimen contains ${missingGlyphCount} missing glyphs`)
     }
     return {
@@ -625,6 +639,7 @@ export async function createBitmapTextPreview(
       language,
       direction,
       features,
+      rejectMissingGlyphs: expectedGlyphCount !== undefined,
     })
     if (expectedGlyphCount !== undefined && line.glyphCount !== expectedGlyphCount) {
       throw new Error(
@@ -651,14 +666,15 @@ export async function createBitmapTextPreview(
     let disposal: Promise<void> | undefined
     let layoutRevision = 0
     let firstDrawMs = 0
+    let anchor = options.anchor ?? 'center'
     const targetLinePosition = (): readonly [number, number] => {
       const layout = activeLine.object.layout
-      const currentLayoutWidth = layout?.width ?? activeLine.width
+      const currentLayoutWidth =
+        anchor === 'top-start'
+          ? Math.max(120, width * layoutWidthRatio)
+          : (layout?.width ?? activeLine.width)
       const layoutHeight = layout?.height ?? activeLine.height
-      return [
-        Math.max(12, (width - currentLayoutWidth) / 2),
-        -Math.max(12, (viewportHeight - layoutHeight) / 2),
-      ]
+      return liveTextPosition(anchor, width, viewportHeight, currentLayoutWidth, layoutHeight)
     }
     const initialPosition = targetLinePosition()
     activeLine.object.position.set(initialPosition[0], initialPosition[1], 0)
@@ -880,6 +896,7 @@ export async function createBitmapTextPreview(
           return Promise.reject(new DOMException('The bitmap preview is disposed', 'AbortError'))
         }
         currentFontSize = positiveViewportSize(next.fontSize, 'bitmap preview font size')
+        anchor = next.anchor
         if (
           !Number.isFinite(next.layoutWidthRatio) ||
           next.layoutWidthRatio <= 0 ||
@@ -984,7 +1001,7 @@ export async function captureBitmapSourceOutlineFidelity(options: {
       layout: resources.line.layout,
       originX: resources.line.object.position.x,
       originY: resources.line.object.position.y,
-      text: conformanceTextForFont(options.fontFixture),
+      text: conformanceText(),
       renderSubmitMs: rendered.renderMs,
     })
   } finally {

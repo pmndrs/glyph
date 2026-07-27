@@ -35,6 +35,25 @@ const captureWindow = await waitForEnabledButton('Capture window')
 let viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
 const controls = await waitForElement('[data-testid="controls"]')
 const gpuResourceInspector = await waitForElement('[data-testid="gpu-resource-inspector"]')
+const sparklineCards = [...document.querySelectorAll<HTMLElement>('[data-testid^="sparkline-"]')]
+const sparklineContract = sparklineCards.map((card) => ({
+  id: card.dataset.testid,
+  tone: card.dataset.tone,
+  text: card.textContent,
+}))
+if (
+  JSON.stringify(sparklineContract.map(({ id, tone }) => [id, tone])) !==
+  JSON.stringify([
+    ['sparkline-fps', 'success'],
+    ['sparkline-cpu', 'cyan'],
+    ['sparkline-gpu', 'warning'],
+  ])
+) {
+  throw new Error('Live telemetry graphs did not preserve FPS/CPU/GPU order and tones')
+}
+if (sparklineContract.some(({ text }) => !text?.includes('LOW') || !text.includes('HIGH'))) {
+  throw new Error('Live telemetry graphs did not expose readable low/high watermarks')
+}
 await waitForText(gpuResourceInspector, 'Texture pages · 1')
 if (!gpuResourceInspector.textContent?.includes('16 px · page 1 · 1024×679')) {
   throw new Error('Bitmap payload inspector did not expose the canonical strike page')
@@ -90,11 +109,12 @@ const reflowedLineCount = numericAttribute(viewport, 'data-line-count')
 if (reflowedLayoutWidth >= initialLayoutWidth || reflowedLineCount <= initialLineCount) {
   throw new Error('Live layout width control did not commit a narrower paragraph reflow')
 }
+const benchmarkSourceTextLength = numericAttribute(viewport, 'data-source-text-length')
 
 for (const fixture of [
-  { label: 'Source Serif 4', artifactBytes: 468_784 },
-  { label: 'Dancing Script', artifactBytes: 291_556 },
-  { label: 'Inter Regular', artifactBytes: 927_164 },
+  { id: 'source-serif-4', label: 'Source Serif 4', artifactBytes: 468_784 },
+  { id: 'dancing-script', label: 'Dancing Script', artifactBytes: 291_556 },
+  { id: 'inter', label: 'Inter Regular', artifactBytes: 927_164 },
 ] as const) {
   const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent?.includes(fixture.label) === true && !candidate.disabled,
@@ -103,8 +123,12 @@ for (const fixture of [
   const previousViewport = viewport
   button.click()
   viewport = await waitForReplacement(previousViewport, '[data-testid="bitmap-live-viewport"]')
+  await waitForAttribute(viewport, 'data-font-fixture', fixture.id)
   await waitForAttribute(viewport, 'data-artifact-bytes', String(fixture.artifactBytes))
-  await waitForAttribute(viewport, 'data-missing-glyph-count', '0')
+  if (numericAttribute(viewport, 'data-source-text-length') !== benchmarkSourceTextLength) {
+    throw new Error(`${fixture.label} changed the benchmark source corpus`)
+  }
+  numericAttribute(viewport, 'data-missing-glyph-count')
 }
 
 captureWindow.click()
@@ -189,14 +213,19 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   console.log('advanced-shaping-select', definition.id)
   setSelectValue.call(caseSelector, definition.id)
   caseSelector.dispatchEvent(new Event('change', { bubbles: true }))
-  const authoredText = definition.revealUnits.join('')
-  await waitForLiveViewportState({
+  const authoredText = definition.showcaseRevealUnits.join('')
+  const settledViewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
+    'data-anchor': 'top-start',
+    'data-layout-width-ratio': String(definition.showcaseWidthPermille / 1000),
     'data-presentation-progress': '1',
-    'data-settled-tick': String(definition.revealUnits.length),
+    'data-settled-tick': String(definition.showcaseRevealUnits.length),
     'data-settled-text-length': String(authoredText.length),
     'data-missing-glyph-count': '0',
   })
+  if (numericAttribute(settledViewport, 'data-line-count') <= 1) {
+    throw new Error(`${definition.id} did not expose live paragraph wrapping`)
+  }
   console.log('advanced-shaping-settled', definition.id)
   const editors = document.querySelectorAll<HTMLTextAreaElement>('textarea')
   const editor = editors.length === 1 ? editors[0] : undefined
@@ -211,7 +240,7 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   const steppedViewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
     'data-presentation-progress': '1',
-    'data-settled-tick': String(definition.revealUnits.length - 1),
+    'data-settled-tick': String(definition.showcaseRevealUnits.length - 1),
     'data-missing-glyph-count': '0',
   })
   if (
@@ -239,7 +268,7 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     await waitForLiveViewportState({
       'data-backend': 'webgpu',
       'data-presentation-progress': '1',
-      'data-settled-tick': String(definition.revealUnits.length),
+      'data-settled-tick': String(definition.showcaseRevealUnits.length),
       'data-settled-text-length': String(authoredText.length),
       'data-missing-glyph-count': '0',
     })

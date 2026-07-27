@@ -41,7 +41,7 @@ describe('advanced-shaping timeline', () => {
     })
     const restored = updateAdvancedShaping(edited, { kind: 'restore-authored-text' })
     expect(advancedShapingFrame(restored).text).toBe(
-      ADVANCED_SHAPING_CASES[0]!.revealUnits.join(''),
+      ADVANCED_SHAPING_CASES[0]!.showcaseRevealUnits.join(''),
     )
   })
 
@@ -55,8 +55,32 @@ describe('advanced-shaping timeline', () => {
     ])
     for (const definition of ADVANCED_SHAPING_CASES) {
       expect(definition.revealUnits.every((unit) => unit.length > 0)).toBe(true)
+      expect(definition.showcaseRevealUnits.length).toBeGreaterThan(100)
+      expect(definition.showcaseRevealUnits.every((unit) => unit.length > 0)).toBe(true)
+      expect(Number.isSafeInteger(definition.showcaseWidthPermille)).toBe(true)
+      expect(definition.showcaseWidthPermille).toBeGreaterThanOrEqual(300)
+      expect(definition.showcaseWidthPermille).toBeLessThanOrEqual(900)
       expect(definition.widthPermille.every((width) => Number.isSafeInteger(width))).toBe(true)
       expect(definition.widthPermille.every((width) => width >= 300 && width <= 900)).toBe(true)
+    }
+  })
+
+  it('keeps the live typewriter measure stable from its first to final grapheme', () => {
+    for (const definition of ADVANCED_SHAPING_CASES) {
+      const widths = [
+        0,
+        Math.floor(definition.showcaseRevealUnits.length / 2),
+        definition.showcaseRevealUnits.length,
+      ].map(
+        (tick) =>
+          advancedShapingFrame({
+            caseId: definition.id,
+            playing: false,
+            tick,
+            editedText: undefined,
+          }).widthPermille,
+      )
+      expect(new Set(widths)).toEqual(new Set([definition.showcaseWidthPermille]))
     }
   })
 

@@ -4,7 +4,7 @@ import { msdf } from '@pmndrs/text/raster/msdf'
 import * as THREE from 'three/webgpu'
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
-import { benchmarkIpsumForFont } from '../benchmark/font-fixtures'
+import { benchmarkIpsumText } from '../benchmark/font-fixtures'
 import type { RasterTechnique } from '../benchmark/url-state'
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
@@ -35,6 +35,7 @@ export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats)
   readonly lastReflowMs: number
   readonly paintRevision: number
   readonly lastPaintUpdateMs: number
+  readonly sourceTextLength: number
 }
 
 export interface ComparisonWorkloadConfiguration {
@@ -61,6 +62,7 @@ export interface ComparisonWorkloadPreview {
 
 interface WorkloadEntry {
   readonly node: THREE.Object3D
+  readonly sourceText: string
   readonly text: Text
   readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>
   readonly role: 'primary' | 'secondary'
@@ -295,6 +297,7 @@ export async function createComparisonWorkloadPreview(options: {
             (maximum, entry) => Math.max(maximum, entry.lastPaintUpdateMs ?? 0),
             0,
           ),
+          sourceTextLength: entries.reduce((total, entry) => total + entry.sourceText.length, 0),
         }
         if (technique === 'bitmap') {
           onStats({
@@ -387,13 +390,14 @@ function createEntries(
   }
   if (configuration.workload === 'text-ladder') {
     return ladderDeviceSizes(viewportHeight, dpr).map((deviceSize) => {
+      const content = `${deviceSize} px  ${LADDER_SENTENCE}`
       const text = new Text({
         ...base,
-        text: `${deviceSize} px  ${LADDER_SENTENCE}`,
+        text: content,
         fontSize: deviceSize / dpr,
         color: LIVE_TEXT_COLOR,
       })
-      return textEntry('primary', text)
+      return textEntry('primary', text, content)
     })
   }
   if (configuration.workload === 'paint-effects') {
@@ -418,7 +422,7 @@ function createEntries(
     })
     return [
       {
-        ...textEntry('primary', text),
+        ...textEntry('primary', text, PAINT_EFFECTS_TEXT),
         ...(paintOutlineWidth === undefined ? {} : { paintOutlineWidth }),
         ...(paintShadowOffset === undefined ? {} : { paintShadowOffset }),
       },
@@ -442,7 +446,7 @@ function createEntries(
       const node = new THREE.Group()
       node.add(bounds, text)
       return {
-        ...textEntry(index === 0 ? 'primary' : 'secondary', text),
+        ...textEntry(index === 0 ? 'primary' : 'secondary', text, content),
         node,
         bounds,
         alignment,
@@ -454,13 +458,11 @@ function createEntries(
   const text =
     configuration.workload === 'paragraph-stress'
       ? Array.from({ length: Math.max(2, Math.round(configuration.amount / 10)) }, () =>
-          benchmarkIpsumForFont(configuration.fontFixture),
+          benchmarkIpsumText(),
         ).join('\n')
       : configuration.workload === 'off-axis-3d'
-        ? configuration.fontFixture === 'dancing-script'
-          ? 'Perspective text in motion\nleans through depth and light\nAVATAR · office · affine\nBitmap · MSDF · Slug'
-          : 'Perspective text in motion\nleans through depth and light\nAVATAR · office · ∑≈∞\nBitmap · MSDF · Slug'
-        : benchmarkIpsumForFont(configuration.fontFixture)
+        ? 'Perspective text in motion\nleans through depth and light\nAVATAR · office · ∑≈∞\nBitmap · MSDF · Slug'
+        : benchmarkIpsumText()
   const textObject = new Text({
     ...base,
     text,
@@ -473,13 +475,13 @@ function createEntries(
   if (configuration.workload === 'off-axis-3d') {
     const pivot = new THREE.Group()
     pivot.add(textObject)
-    return [{ node: pivot, role: 'primary', text: textObject }]
+    return [{ node: pivot, role: 'primary', sourceText: text, text: textObject }]
   }
-  return [textEntry('primary', textObject)]
+  return [textEntry('primary', textObject, text)]
 }
 
-function textEntry(role: WorkloadEntry['role'], text: Text): WorkloadEntry {
-  return { node: text, role, text }
+function textEntry(role: WorkloadEntry['role'], text: Text, sourceText: string): WorkloadEntry {
+  return { node: text, role, sourceText, text }
 }
 
 function layoutEntries(

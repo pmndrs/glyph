@@ -16,14 +16,19 @@ import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-deva
 import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-4-mtsdf.font.glb.gz?url'
 import showcaseManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
 import {
-  conformanceTextForFont,
+  conformanceText,
   type BenchmarkFontFixture,
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
+import {
+  LIVE_TEXT_COLOR,
+  LIVE_TEXT_LINE_HEIGHT,
+  liveTextPosition,
+  type LiveTextAnchor,
+} from './live-text-style'
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference'
 import {
   captureSourceOutlineFidelity,
@@ -80,6 +85,10 @@ export interface MtsdfTextLiveStats {
   readonly framesPerSecond: number
   readonly medianSubmitMs: number
   readonly p95SubmitMs: number
+  readonly minimumSubmitMs: number
+  readonly maximumSubmitMs: number
+  readonly minimumFramesPerSecond: number
+  readonly maximumFramesPerSecond: number
   readonly glyphCount: number
   readonly missingGlyphCount: number
   readonly drawCount: number
@@ -101,6 +110,8 @@ export interface MtsdfTextLiveStats {
   readonly gpuFrameMs: number | undefined
   readonly medianGpuMs: number | undefined
   readonly p95GpuMs: number | undefined
+  readonly minimumGpuMs: number | undefined
+  readonly maximumGpuMs: number | undefined
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -113,6 +124,7 @@ export interface MtsdfTextLiveStats {
 }
 
 export interface MtsdfTextPreviewUpdate {
+  readonly anchor: LiveTextAnchor
   readonly direction: 'ltr' | 'rtl'
   readonly features: readonly FontFeature[]
   readonly fontSize: number
@@ -248,6 +260,7 @@ export function createMtsdfConformanceTarget(backend: RendererBackend): Benchmar
 }
 
 export async function createMtsdfTextPreview(options: {
+  readonly anchor?: LiveTextAnchor
   readonly backend: RendererBackend
   readonly canvas: HTMLCanvasElement
   readonly direction?: 'ltr' | 'rtl'
@@ -282,6 +295,7 @@ export async function createMtsdfTextPreview(options: {
   let width = positiveViewportSize(options.width, 'MSDF preview width')
   let height = positiveViewportSize(options.height, 'MSDF preview height')
   let fontSize = positiveViewportSize(options.fontSize, 'MSDF preview font size')
+  let anchor = options.anchor ?? 'center'
   let layoutWidthRatio = options.layoutWidth / width
   assertLayoutWidthRatio(layoutWidthRatio)
   const rendererStarted = performance.now()
@@ -324,7 +338,7 @@ export async function createMtsdfTextPreview(options: {
     const activeLine = line
     const textReadyMs = performance.now() - textStarted
     const startupMs = performance.now() - startupStarted
-    positionLiveLine(activeLine, width, height)
+    positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio)
     scene.add(activeLine)
     const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000)
     camera.position.z = 500
@@ -430,7 +444,7 @@ export async function createMtsdfTextPreview(options: {
         void activeLine.ready
           .then(() => {
             if (closing || disposed || revision !== updateRevision) return
-            positionLiveLine(activeLine, width, height)
+            positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio)
           })
           .catch((error: unknown) => {
             if (!closing && !disposed) onError(error)
@@ -441,6 +455,7 @@ export async function createMtsdfTextPreview(options: {
           throw new DOMException('The MSDF preview is disposed', 'AbortError')
         }
         fontSize = positiveViewportSize(next.fontSize, 'MSDF preview font size')
+        anchor = next.anchor
         assertLayoutWidthRatio(next.layoutWidthRatio)
         layoutWidthRatio = next.layoutWidthRatio
         const revision = ++updateRevision
@@ -456,7 +471,7 @@ export async function createMtsdfTextPreview(options: {
         if (closing || disposed || revision !== updateRevision) {
           throw new DOMException('The MSDF preview update was superseded', 'AbortError')
         }
-        positionLiveLine(activeLine, width, height)
+        positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio)
       },
       dispose() {
         if (disposal !== undefined) return disposal
@@ -637,13 +652,24 @@ export async function loadMtsdfFont(
   }
 }
 
-function positionLiveLine(line: Text, viewportWidth: number, viewportHeight: number): void {
+function positionLiveLine(
+  line: Text,
+  viewportWidth: number,
+  viewportHeight: number,
+  anchor: LiveTextAnchor = 'center',
+  layoutWidthRatio = 1,
+): void {
   const layout = committedLayout(line)
-  line.position.set(
-    Math.max(12, (viewportWidth - layout.width) / 2),
-    -Math.max(12, (viewportHeight - layout.height) / 2),
-    0,
+  const positionedWidth =
+    anchor === 'top-start' ? Math.max(120, viewportWidth * layoutWidthRatio) : layout.width
+  const [x, y] = liveTextPosition(
+    anchor,
+    viewportWidth,
+    viewportHeight,
+    positionedWidth,
+    layout.height,
   )
+  line.position.set(x, y, 0)
 }
 
 function committedLayout(line: Text): ParagraphLayout {
@@ -771,7 +797,7 @@ export async function captureMtsdfSourceOutlineFidelity(options: {
       layout: committedLayout(resources.line),
       originX: resources.line.position.x,
       originY: resources.line.position.y,
-      text: conformanceTextForFont(options.fontFixture),
+      text: conformanceText(),
       renderSubmitMs: capture.renderSubmitMs,
     })
   } finally {
@@ -807,7 +833,7 @@ async function createFlatMtsdfConformanceResources(
     )
     resource = await msdf.decode(font, raster, signal)
     line = new Text({
-      text: conformanceTextForFont(fontFixture),
+      text: conformanceText(),
       font,
       raster: msdf,
       // Match the baked 64 px/em base level in device pixels. Minification and

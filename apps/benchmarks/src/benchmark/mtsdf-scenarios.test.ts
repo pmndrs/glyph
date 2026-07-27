@@ -7,7 +7,7 @@ const sceneMeasurement: BenchmarkMeasurement = {
   sample: 0,
   durationMs: 1,
   outputBytes: 512 * 320 * 4,
-  hash: 'be1cf71aac61034ba96b5983ec0dde3e9b062272af607edff86fcdedcdbba3c9',
+  hash: '57e86b4b1e299a4574354a6eb46a13be150ac5a627c0dc0042739bd904e5a1e7',
   metrics: {
     backendWebGpu: 0,
     backendWebGl2: 1,

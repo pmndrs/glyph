@@ -12,7 +12,7 @@ const paragraphPolicyHash = [
 ].join(':')
 const ADVANCED_SHAPING_HASH = '314418c3'
 const INTER_MTSDF_WEBGL2_SCENE_HASH =
-  'be1cf71aac61034ba96b5983ec0dde3e9b062272af607edff86fcdedcdbba3c9'
+  '57e86b4b1e299a4574354a6eb46a13be150ac5a627c0dc0042739bd904e5a1e7'
 const INTER_MTSDF_WEBGL2_CONFORMANCE_HASH =
   'a21ba2802534643cc63bcb7d24afc92a45ec3725d936680d87ae4688a7fc1563'
 
@@ -138,7 +138,7 @@ function mtsdfTextValidation(
       )
     }
     if (dpr === 1 && metrics.backendWebGl2 === 1 && value.hash !== INTER_MTSDF_WEBGL2_SCENE_HASH) {
-      throw new Error('Canonical Inter WebGL2 MTSDF scene evidence drifted')
+      throw new Error(`Canonical Inter WebGL2 MTSDF scene evidence drifted: ${value.hash}`)
     }
   }
   return `${values.length}/${values.length} deterministic MTSDF resize + mip + transform + effects frames`

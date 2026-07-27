@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   SELECTABLE_FONT_FIXTURES,
-  benchmarkIpsumForFont,
-  conformanceTextForFont,
+  benchmarkIpsumText,
+  conformanceText,
   selectableFontFixture,
 } from './font-fixtures'
 
@@ -111,10 +111,10 @@ describe('human-selectable font fixtures', () => {
     expect(() => selectableFontFixture('unknown')).toThrow('Unknown selectable font fixture')
   })
 
-  it('uses a Latin-only long and finite corpus for the script face', () => {
-    expect(benchmarkIpsumForFont('dancing-script')).not.toContain('∞')
-    expect(benchmarkIpsumForFont('dancing-script').length).toBeGreaterThan(900)
-    expect(conformanceTextForFont('dancing-script')).not.toContain('π')
-    expect(benchmarkIpsumForFont('source-serif-4')).toContain('π')
+  it('keeps benchmark and conformance text independent of the selected fixture', () => {
+    expect(benchmarkIpsumText()).toContain('∞')
+    expect(benchmarkIpsumText()).toContain('π')
+    expect(benchmarkIpsumText().length).toBeGreaterThan(1_000)
+    expect(conformanceText()).toContain('π')
   })
 })

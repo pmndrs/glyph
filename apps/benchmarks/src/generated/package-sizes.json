@@ -80,10 +80,10 @@
       "label": "MTSDF runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 352505,
-      "minifiedBytes": 263673,
-      "gzipBytes": 77441,
-      "brotliBytes": 60060
+      "rawBytes": 352285,
+      "minifiedBytes": 263631,
+      "gzipBytes": 77439,
+      "brotliBytes": 60106
     },
     {
       "id": "bitmap-baker-wasm",
