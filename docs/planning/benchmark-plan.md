@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5.6"
-  at: "2026-07-26T18:54:55Z"
+  at: "2026-07-27T01:29:13Z"
 ---
 
 # Benchmark plan
@@ -263,7 +263,7 @@ Each workload has unique-text and repeated-text variants.
 - Devanagari or another USE-heavy font;
 - emoji-capable font subset;
 - private-use icon font and manifest-backed standalone SVG set;
-- one pinned pan-CJK face exercised as a complete shaping source in item 5.4 and as small, medium, large, and complete raster-coverage tiers in Milestone 12;
+- one pinned pan-CJK face exercised as a complete shaping source in item 5.4 and as small, medium, large, and complete raster-coverage tiers in Milestone 13;
 - one font with class kerning and one with many explicit pairs.
 
 ## Shaper benchmarks
@@ -375,7 +375,7 @@ CJK and icon benchmarks share one page-stress lane. The same pinned sources are 
 - cancellation and stale-generation behavior when text changes during preparation;
 - selected icon subset versus complete icon-library stress case.
 
-The synthetic maximum-cardinality contract fixture runs early to protect the format. Full-face raster generation, long page walks, and device residency measurements belong to scheduled/manual jobs and Milestone 12; they do not block the Latin-first V1 renderer gate. Item 5.4 consumes the complete CJK source for shaping but does not create these raster tiers.
+The synthetic maximum-cardinality contract fixture runs early to protect the format. Full-face raster generation, long page walks, and device residency measurements belong to scheduled/manual jobs and Milestone 13; they do not block the Latin-first V1 renderer gate. Item 5.4 consumes the complete CJK source for shaping but does not create these raster tiers.
 
 ## Raster benchmarks
 

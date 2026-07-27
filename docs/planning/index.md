@@ -28,6 +28,7 @@
 ## Shaping research
 
 - [Shaping compilation and execution research](shaping-compilation-research.md) — closed-corpus baking, semantic bytecode, per-font CPU/Wasm specialization, and WebGPU execution research.
+- [Responsive editorial flow and mixed-raster composition](editorial-flow-layout.md) — post-V1 exclusion regions, responsive columns, and a bitmap/MTSDF/Slug benchmark.
 
 ## Rendering analysis
 
