@@ -31,9 +31,18 @@ sources:
   - id: zappar-generator
     resource: https://www.npmjs.com/package/@zappar/msdf-generator/v/1.2.4
     title: Zappar MSDF generator 1.2.4
+  - id: typegpu-pipelines
+    resource: https://docs.swmansion.com/TypeGPU/apis/pipelines/
+    title: TypeGPU pipelines
+  - id: typegpu-interop
+    resource: https://docs.swmansion.com/TypeGPU/integration/webgpu-interoperability/
+    title: TypeGPU WebGPU interoperability
+  - id: typegpu-functions
+    resource: https://docs.swmansion.com/TypeGPU/apis/functions/
+    title: TypeGPU functions and WGSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T11:07:37Z"
+  at: "2026-07-27T23:45:47Z"
 ---
 
 # MTSDF generation research
@@ -97,7 +106,9 @@ Data layout follows measured access rather than a universal SoA rule:
 - output is linear row-major RGBA8 and writes without an intermediate float image;
 - scan direction, edge ordering, and tie-breaking are deterministic across native scalar and Wasm kernels.
 
-The scalar kernel is both the correctness oracle and the selected production implementation, not a public mode. Compiler `simd128` auto-vectorization and explicit four-channel quantization preserve exact output and slightly reduce bytes, but regress representative Node and Chromium calls by roughly 5–6%. Their complete-Inter improvement remains below 0.5%. The internal explicit implementation therefore remains test-only so the decision can be reproduced; the opinionated baker exposes no SIMD toggle, alternate artifact, or per-call capability branch.
+The scalar kernel is both the correctness oracle and the selected production implementation, not a public mode. Compiler `simd128` auto-vectorization and explicit four-channel quantization preserve exact output and slightly reduce bytes, but regress representative Node and Chromium calls by roughly 5–6%. Their complete-Inter improvement remains below 0.5%. That experiment vectorized the final four-channel quantization for one texel; it did not evaluate several texels through the expensive curve-distance traversal. The internal explicit implementation therefore remains test-only so the decision can be reproduced, but it does not reject SIMD as a category.
+
+Before Slug work begins, item 8.6 may admit one second SIMD experiment after phase instrumentation identifies texel generation as dominant. The challenger evaluates a fixed adjacent-texel tile through one shared edge traversal, keeps per-lane contour and winding state, reuses precomputed curve coefficients, and writes the same row-major RGBA8 bytes. It compares against an equivalent scalar tile kernel rather than the older scalar loop so tiling and SIMD are measured separately. The production baker still exposes no SIMD toggle: SIMD replaces the scalar kernel only if exact native-oracle and artifact bytes hold while bounded Worker bakes, the complete offline face, optimized transfer size, peak memory, and representative Node and Chromium calls show a material aggregate win. Conservative edge bins or bounds remain a separate measured optimization because avoiding distance evaluations may matter more than vectorizing them.
 
 ## Verification and optimization gates
 
@@ -114,13 +125,17 @@ The fixed baker integrates the selected kernel without publishing a duplicate st
 
 ## WebGPU compute generation
 
-The per-texel distance search is the part of MTSDF generation that plausibly benefits from GPU parallelism. A future hybrid path would keep outline validation, contour topology, edge coloring, atlas placement, and checked size arithmetic on the CPU, upload the compact colored-edge representation once, and dispatch one WebGPU invocation per atlas texel into an RGBA8 storage texture. Runtime-generated atlases could remain GPU-resident; a downloadable GLB still requires texture-to-buffer copy, asynchronous readback, canonical byte ordering, KTX2 framing, hashing, and transfer to the caller.
+The per-texel distance search is the part of MTSDF generation that plausibly benefits from GPU parallelism. A future hybrid path would keep outline validation, contour topology, edge coloring, atlas placement, and checked size arithmetic on the CPU, upload the compact colored-edge representation once, and dispatch one WebGPU invocation per atlas texel into an RGBA8 storage texture. Workgroups should evaluate adjacent texel tiles and stage bounded chunks of one glyph's colored edges in workgroup memory. Runtime-generated atlases could remain GPU-resident only when generation shares the renderer's `GPUDevice`; a Worker-owned device requires texture readback and transferable bytes unless the renderer also lives in that Worker. A downloadable GLB always requires texture-to-buffer copy, asynchronous readback, canonical byte ordering, KTX2 framing, hashing, and transfer to the caller.
 
-Three.js 0.185.1 exposes the required storage-buffer, storage-texture, workgroup, and compute surfaces through `three/webgpu` and `three/tsl`. That makes an experiment implementable without raw WGSL or a second renderer. It does not yet make the path preferable: the accepted baker must also run offline and without WebGPU, the present serial Worker keeps generation off the main thread, and no repository measurement proves that pipeline compilation, edge upload, dispatch, synchronization, readback, packaging, and additional bundle bytes beat the scalar Wasm host end to end.
+TypeGPU is the preferred research host for this optional compute baker rather than Three.js or TSL. It supplies typed buffer schemas, storage resources, compute pipelines, timestamp support, and granular raw-WebGPU interoperability, including initialization from an integration-owned `GPUDevice`.[^typegpu-pipelines][^typegpu-interop] The distance kernel may remain explicit auditable WGSL inside typed shells, avoiding the TypeGPU source transform while still sharing typed bindings.[^typegpu-functions] This creates useful crossover with a future direct WebGPU raster integration without putting TypeGPU, Three.js, or a compute implementation in shaping, layout, baked-hit, scalar-Wasm, or unselected-raster graphs.
+
+The accepted baker must still run offline and without WebGPU, the present serial Worker keeps portable generation off the main thread, and no repository measurement yet proves that pipeline compilation, edge upload, dispatch, synchronization, readback, packaging, and additional bundle bytes beat the scalar Wasm host end to end. A same-device resident-atlas path is an integration capability, not a reason for core to acquire a device, install browser listeners, or own renderer lifecycle.
 
 Admission requires byte-identical or independently bounded output against the same native `msdfgen` corpus plus full-font measurements of every phase above, peak CPU/GPU memory, device-loss cleanup, and Worker availability. If that evidence shows a material end-to-end win, ordinary JavaScript must select the WebGPU compute graph before compilation and retain scalar Wasm as the non-WebGPU/offline path. The WGSL build then contains only the compute implementation; the fallback build does not carry a runtime shader branch. Until that threshold is met, adding compute would create a second generation implementation without evidence and is rejected by D-060.
 
-The runtime text renderer has a different boundary. Its hot work is already one instanced TSL draw sampling a resident atlas; a pre-render compute pass would add dispatch and synchronization without removing the fragment samples. No compute branch is proposed for Bitmap or MTSDF rendering.
+The runtime text renderer has a different boundary. Its hot work is already one instanced draw sampling a resident atlas; a pre-render compute pass would add dispatch and synchronization without removing the fragment samples. No compute branch is proposed for Bitmap or MTSDF rendering.
+
+V1 sequencing deliberately postpones the renderer-neutral extraction until Slug lands. Slug first ports through the current Three.js/TSL integration so its real curve-resource, shader-composition, batching, and lifetime requirements are executable rather than guessed. Milestone 10 then extracts the common direct integration contract beneath all three rasters: core shaping and layout remain renderer-neutral, raster plugins expose backend-neutral prepared batches and resources, a direct WebGPU integration owns raw devices and pipelines, and Three.js becomes one supported adapter over that boundary. A future TypeGPU renderer adapter may reuse the same contract, but the compute-baker experiment can proceed independently and must not force this refactor before Slug provides the missing requirements.
 
 [^valve-sdf]: Green, *Improved Alpha-Tested Magnification for Vector Textures and Special Effects*, 2007.
 [^chlumsky-thesis]: Chlumský, *Shape Decomposition for Multi-Channel Distance Fields*, 2015.
@@ -128,3 +143,6 @@ The runtime text renderer has a different boundary. Its hot work is already one 
 [^msdfgen]: Chlumsky `msdfgen` 1.13 source and documentation.
 [^uikit-loader]: Current pmndrs/uikit `TTFLoader` source.
 [^zappar-generator]: Published `@zappar/msdf-generator` 1.2.4 metadata, README, archive contents, and license notice.
+[^typegpu-pipelines]: TypeGPU pipeline documentation for compute dispatch, bindings, and timestamp measurement.
+[^typegpu-interop]: TypeGPU interoperability documentation for raw resource access and `initFromDevice`.
+[^typegpu-functions]: TypeGPU function documentation for explicit WGSL shells without the source transformation plugin.
