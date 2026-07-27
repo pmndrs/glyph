@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T11:22:26Z"
+  at: "2026-07-27T23:09:57Z"
 ---
 
 # Canonical implementation roadmap
@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     9 |   ⬜   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
 |    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.5. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
+Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.6. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -112,7 +112,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 8.2  |   ✅   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
 | 8.3  |   ✅   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
 | 8.4  |   ✅   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
-| 8.5  |   🟡   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state performance evidence and close Milestone 8.                                                               |  XL  | 8.4        |
+| 8.5  |   ✅   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state rendering evidence.                                                                                       |  XL  | 8.4        |
+| 8.6  |   🟡   | Add bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                                               |  XL  | 8.5        |
 | 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
 | 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.x, 9.x   |
 | 10.2 |   ⬜   | Complete release validation, guidance, and migration material.                                                                                                                           |  M   | 10.1       |
@@ -623,7 +624,22 @@ Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGP
 - [x] Expose baked-asset and explicit source/runtime delivery as one benchmark axis, report both baker graphs and generated artifact costs, and prove exact baked/runtime frame parity for Bitmap and MSDF.
 - [x] Add the cross-technique source-outline fidelity corpus at the end of the conformance list and record reviewed acceptance envelopes.
 - [x] Record and review committed upload, first-draw, steady CPU-frame, GPU-frame, and bundle-isolation baselines for the accepted corpus.
-- [ ] Complete the final adversarial Milestone 6/8 closure review with no unresolved actionable findings.
+- [x] Carry the final adversarial closure review into item 8.6 after its ABI, selective-bake, and generator-performance changes regenerate the affected evidence.
+
+### 8.6 selective runtime bake, ABI, and performance checklist
+
+Runtime baking is a supported delivery path, not merely a missing-asset recovery mechanism. Callers may deliberately generate Bitmap or MTSDF atlases in the module Worker, but interactive use must not require rasterizing an entire large face when the application knows its bounded coverage. Coverage selection reduces raster work only: the complete shaping font, font-local glyph IDs, and HarfRust behavior remain unchanged until Milestone 17 proves true source subsetting and shaping closure.
+
+- [ ] Add one typed runtime-bake options contract shared by explicit runtime delivery and automatic fallback. It must carry the selected raster descriptor plus bounded coverage seeds, reject duplicates/out-of-range values deterministically, and report missing raster coverage explicitly.
+- [ ] Define Unicode-range, authored-text, and exact glyph-ID selection semantics. Unicode/text inputs must resolve through the selected face; exact glyph IDs remain an expert path. None may claim transitive GSUB/GPOS closure, source-font subsetting, or glyph-ID remapping.
+- [ ] Flow the normalized options through Node and the serial module Worker into Bitmap and MTSDF bakers without adding either baker to baked-hit or unselected-raster graphs. Prove identical bytes for equal normalized requests and deterministic cancellation/progress for bounded and complete passes.
+- [ ] Replace hand-maintained ABI size/offset mirrors with fixed-width `#[repr(C)]` layout types. Generate JSON sizes, alignments, and offsets with `size_of`, `align_of`, and `offset_of!`; add compile-time assertions for the intended stable layout and tests that TypeScript consumes those exact compiler facts.
+- [ ] Keep Wasm direct-memory values little-endian because WebAssembly linear memory is normatively little-endian, while retaining explicit format-mandated byte order in GLB, KTX2, SFNT, and other portable serialized artifacts.
+- [ ] Regenerate every affected ABI JSON file, optimized Wasm resource, baked fixture, identity, size record, and package digest; run the complete Rust, TypeScript, Node/Worker parity, artifact-validation, renderer, conformance, and live-product regression sweep before accepting the new boundary.
+- [ ] Instrument the baker by phase and publish small, medium, and complete-face results for glyph selection, outline extraction, MTSDF texel generation, packing, mip generation, container serialization, Wasm-to-Worker copying, peak memory, and output bytes. Reports must include glyphs, generated texels, edges visited, and throughput rather than one opaque wall-clock duration.
+- [ ] Optimize the measured dominant phase without weakening native-msdfgen quality or deterministic artifact gates. Compare scalar improvements and bounded parallel/GPU research only from identical work; the runtime default must be suitable for bounded interactive atlases, while complete-face generation remains an explicit stress/offline case.
+- [ ] Compare `dlmalloc`, `rlsf`, and `talc` on identical cold, reused-Worker, error, and cancellation workloads. An arena/reset strategy is admissible only when ownership proves that all per-request allocations die together; allocator selection requires byte-identical artifacts plus a material time, peak-memory, or optimized-size win.
+- [ ] Complete the final adversarial Milestone 6/8 review with no unresolved actionable findings.
 
 ## Milestone 9 — Slug release renderer
 
