@@ -45,11 +45,12 @@ test('the published contract is ESM-only', async () => {
 test('the public loader graph exposes registration without eager baker or Node host edges', async () => {
   assert.equal(typeof FontLoader, 'function')
   assert.equal(typeof FontRegistry, 'function')
-  const [entry, loader, runtimeHost, runtimeWorker] = await Promise.all([
+  const [entry, loader, runtimeHost, runtimeWorker, serialWorkerHost] = await Promise.all([
     readFile(new URL('../../dist/index.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/loader.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/runtime-bake.js', import.meta.url), 'utf8'),
     readFile(new URL('../../dist/runtime-bake-worker.js', import.meta.url), 'utf8'),
+    readFile(new URL('../../dist/internal/serial-worker-host.js', import.meta.url), 'utf8'),
   ])
   const initialGraph = `${entry}\n${loader}`
   assert.match(loader, /import\(["']\.\/runtime-bake\.js["']\)/)
@@ -58,7 +59,9 @@ test('the public loader graph exposes registration without eager baker or Node h
     /(?:from\s+["']\.\/runtime-bake|new Worker|font_baker\.wasm|node:)/,
   )
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/)
-  assert.match(runtimeHost, /new Worker\(new URL\(["']\.\/runtime-bake-worker\.js["']/)
+  assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/)
+  assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/)
+  assert.match(serialWorkerHost, /type:\s*["']module["']/)
   assert.match(runtimeWorker, /from ["']@pmndrs\/text-font-baker\/wasm-url["']/)
   assert.doesNotMatch(
     `${runtimeHost}\n${runtimeWorker}`,

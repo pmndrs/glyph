@@ -88,6 +88,9 @@ The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md),
 | D-062 | Core and raster schemas are identical whether embedded or split. | Accepted |
 | D-089 | Raster artifact filenames bind both the font's shaping hash and the package-owned raster key; bitmap V0 accepts only atlas-representable `1..=1022` ppem strikes. | Accepted |
 | D-090 | Runtime font baking defaults to one active FIFO Worker job; queued work shares that instance, active cancellation replaces it, and a parallel Worker pool requires representative multi-font throughput and memory evidence before adoption. | Accepted |
+| D-100 | Every dynamically loaded first-party raster baker executes behind one package-owned serial ESM module Worker. Source bytes are copied before transfer, result buffers transfer back exactly once, idle Workers terminate, and bundlers resolve the static `new URL(..., import.meta.url)` boundary. | Accepted |
+| D-101 | Direct raster-baker ABI V1 returns ordinary artifacts inline when bounded and large artifacts through explicit metadata plus fixed-size borrowed windows. The Worker copies each window, releases Wasm ownership before transfer, and callers never retain a view into Wasm memory. | Settled for V0 |
+| D-102 | Core-font provenance carries the selected collection face index and authenticates it against the descriptor hash. Legacy artifacts may omit the field only when their descriptor proves face zero; runtime raster baking must reuse the retained face rather than defaulting silently. | Settled for V0 |
 
 Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, and extension version match. See the [`PMNDRS_font` extension family](extensions/) and [registration draft](gltf-extension-registration.md).
 

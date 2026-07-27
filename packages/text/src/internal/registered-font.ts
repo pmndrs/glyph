@@ -21,6 +21,7 @@ export interface RegisteredRasterExternalCandidate {
 }
 
 export interface RegisteredFontData {
+  readonly fontFaceIndex: number
   readonly sourceHash: string
   sourceBytes?: Uint8Array
   readonly sourceCandidates: RegisteredFontSourceCandidate[]

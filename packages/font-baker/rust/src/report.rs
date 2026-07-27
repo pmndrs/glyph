@@ -86,6 +86,7 @@ pub struct FontMetricsV0 {
 pub struct ProvenanceV0 {
     pub source_hash: String,
     pub descriptor_hash: String,
+    pub font_face_index: u32,
     pub baker_version: String,
     pub harfrust_version: String,
     pub harfbuzz_reference_version: String,

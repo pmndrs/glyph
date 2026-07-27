@@ -10,7 +10,7 @@ use pmndrs_text_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, O
 use serde::Serialize;
 
 #[cfg(feature = "artifact-baker")]
-use crate::{MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mtsdf};
+use crate::{MtsdfBakeArtifactV0, MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mtsdf};
 
 #[cfg(not(feature = "allocation-evidence"))]
 #[global_allocator]
@@ -53,7 +53,9 @@ unsafe impl GlobalAlloc for CountingAllocator {
 
 const MAX_REQUEST_BYTES: u32 = 64 * 1024 * 1024;
 #[cfg(feature = "artifact-baker")]
-const MAX_RESPONSE_BYTES: usize = MAX_REQUEST_BYTES as usize;
+const MAX_SINGLE_RESPONSE_BYTES: usize = MAX_REQUEST_BYTES as usize;
+#[cfg(feature = "artifact-baker")]
+const RESPONSE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 const REQUEST_HEADER_SIZE: usize = 48;
 const COMMAND_SIZE: usize = 28;
 const STATUS_OK: u32 = 0;
@@ -143,6 +145,9 @@ pub extern "C" fn pmndrs_text_mtsdf_bake(
     request_pointer: u32,
     request_length: u32,
 ) -> u32 {
+    with_state(|state| {
+        state.segmented_response = None;
+    });
     let result = with_state(|state| {
         let Some(source) = owned_bytes(&state.allocations, source_pointer, source_length) else {
             return Err(crate::MtsdfBakeError::new(
@@ -166,13 +171,116 @@ pub extern "C" fn pmndrs_text_mtsdf_bake(
             })
             .and_then(|request| bake_mtsdf(source, request))
     });
-    leak_artifact_response(encode_artifact_response(result))
+    let prepared = prepare_artifact_response(result);
+    if prepared.encoded_byte_length() <= MAX_SINGLE_RESPONSE_BYTES {
+        match encode_artifact_response(prepared) {
+            Ok(response) => leak_artifact_response(response),
+            Err(prepared) => retain_segmented_response(prepared),
+        }
+    } else {
+        retain_segmented_response(prepared)
+    }
 }
 
 #[cfg(feature = "artifact-baker")]
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_mtsdf_bake_result_len() -> u32 {
     with_state(|state| state.artifact_result_length)
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_status() -> u32 {
+    with_state(|state| {
+        state
+            .segmented_response
+            .as_ref()
+            .map_or(u32::MAX, |response| response.status)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_metadata_ptr() -> u32 {
+    with_state(|state| {
+        state
+            .segmented_response
+            .as_ref()
+            .and_then(|response| u32::try_from(response.metadata.as_ptr() as usize).ok())
+            .unwrap_or(0)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_metadata_len() -> u32 {
+    with_state(|state| {
+        state
+            .segmented_response
+            .as_ref()
+            .and_then(|response| u32::try_from(response.metadata.len()).ok())
+            .unwrap_or(0)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_artifact_count() -> u32 {
+    with_state(|state| {
+        state
+            .segmented_response
+            .as_ref()
+            .and_then(|response| u32::try_from(response.artifacts.len()).ok())
+            .unwrap_or(0)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_artifact_len(index: u32) -> u32 {
+    with_state(|state| {
+        segmented_artifact(state, index)
+            .and_then(|bytes| u32::try_from(bytes.len()).ok())
+            .unwrap_or(0)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_chunk_ptr(index: u32, offset: u32) -> u32 {
+    with_state(|state| {
+        let Some(bytes) = segmented_artifact(state, index) else {
+            return 0;
+        };
+        let offset = offset as usize;
+        if offset >= bytes.len() {
+            return 0;
+        }
+        u32::try_from(bytes[offset..].as_ptr() as usize).unwrap_or(0)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_chunk_len(index: u32, offset: u32) -> u32 {
+    with_state(|state| {
+        let Some(bytes) = segmented_artifact(state, index) else {
+            return 0;
+        };
+        let offset = offset as usize;
+        if offset >= bytes.len() {
+            return 0;
+        }
+        u32::try_from((bytes.len() - offset).min(RESPONSE_CHUNK_BYTES)).unwrap_or(0)
+    })
+}
+
+#[cfg(feature = "artifact-baker")]
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_mtsdf_segmented_release() {
+    with_state(|state| {
+        state.segmented_response = None;
+    });
 }
 
 #[cfg(feature = "allocation-evidence")]
@@ -211,6 +319,8 @@ struct WasmState {
     artifact_result_pointer: u32,
     #[cfg(feature = "artifact-baker")]
     artifact_result_length: u32,
+    #[cfg(feature = "artifact-baker")]
+    segmented_response: Option<PreparedArtifactResponse>,
 }
 
 struct Allocation {
@@ -294,95 +404,121 @@ struct WasmArtifactMetadata<'artifact> {
 }
 
 #[cfg(feature = "artifact-baker")]
-fn encode_artifact_response(result: Result<MtsdfBakeResultV0, crate::MtsdfBakeError>) -> Vec<u8> {
-    const HEADER_LENGTH: usize = 16;
-    let (status, metadata, artifact_bytes): (u32, Vec<u8>, Vec<u8>) = match result {
-        Ok(result) => {
-            let mut offset = 0_usize;
-            let mut artifacts = Vec::new();
-            if artifacts.try_reserve_exact(result.artifacts.len()).is_err() {
-                return Vec::new();
-            }
-            for artifact in &result.artifacts {
-                let Some(next_offset) = offset.checked_add(artifact.bytes.len()) else {
-                    return encode_artifact_response(Err(crate::MtsdfBakeError::new(
-                        crate::MtsdfBakeErrorCode::ArithmeticOverflow,
-                        "MTSDF baker artifact offsets exceed the ABI address space",
-                    )));
-                };
-                artifacts.push(WasmArtifactMetadata {
-                    role: &artifact.role,
-                    id: &artifact.id,
-                    sha256: &artifact.sha256,
-                    byte_offset: offset,
-                    byte_length: artifact.bytes.len(),
-                });
-                offset = next_offset;
-            }
-            if offset > MAX_RESPONSE_BYTES || u32::try_from(offset).is_err() {
-                return encode_artifact_response(Err(crate::MtsdfBakeError::new(
-                    crate::MtsdfBakeErrorCode::ArithmeticOverflow,
-                    "MTSDF baker artifact bytes exceed the ABI address space",
-                )));
-            }
-            let metadata = WasmResultMetadata {
-                raster_key: &result.raster_key,
-                kind: &result.kind,
-                extension: &result.extension,
-                version: result.version,
-                artifacts,
-                report: &result.report,
-            };
-            let metadata = serde_json::to_vec(&metadata).unwrap_or_else(|_| serialization_error());
-            let mut artifact_bytes = Vec::new();
-            if artifact_bytes.try_reserve_exact(offset).is_err() {
-                return Vec::new();
-            }
-            for artifact in result.artifacts {
-                artifact_bytes.extend_from_slice(&artifact.bytes);
-            }
-            (0, metadata, artifact_bytes)
-        }
-        Err(error) => (
-            1,
-            serde_json::to_vec(&error).unwrap_or_else(|_| serialization_error()),
-            Vec::new(),
-        ),
+struct PreparedArtifactResponse {
+    status: u32,
+    metadata: Vec<u8>,
+    artifacts: Vec<MtsdfBakeArtifactV0>,
+    artifact_bytes_length: usize,
+}
+
+#[cfg(feature = "artifact-baker")]
+impl PreparedArtifactResponse {
+    fn encoded_byte_length(&self) -> usize {
+        16_usize
+            .checked_add(self.metadata.len())
+            .and_then(|value| value.checked_add(self.artifact_bytes_length))
+            .unwrap_or(usize::MAX)
+    }
+}
+
+#[cfg(feature = "artifact-baker")]
+fn prepare_artifact_response(
+    result: Result<MtsdfBakeResultV0, crate::MtsdfBakeError>,
+) -> PreparedArtifactResponse {
+    let result = match result {
+        Ok(result) => result,
+        Err(error) => return prepared_error_response(error),
     };
-    let Ok(metadata_length) = u32::try_from(metadata.len()) else {
-        return encode_artifact_response(Err(crate::MtsdfBakeError::new(
+    let mut offset = 0_usize;
+    let mut artifacts = Vec::new();
+    if artifacts.try_reserve_exact(result.artifacts.len()).is_err() {
+        return prepared_error_response(crate::MtsdfBakeError::new(
+            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+            "MTSDF baker response metadata allocation failed",
+        ));
+    }
+    for artifact in &result.artifacts {
+        let Some(next_offset) = offset.checked_add(artifact.bytes.len()) else {
+            return prepared_error_response(crate::MtsdfBakeError::new(
+                crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+                "MTSDF baker artifact offsets exceed the ABI address space",
+            ));
+        };
+        artifacts.push(WasmArtifactMetadata {
+            role: &artifact.role,
+            id: &artifact.id,
+            sha256: &artifact.sha256,
+            byte_offset: offset,
+            byte_length: artifact.bytes.len(),
+        });
+        offset = next_offset;
+    }
+    if u32::try_from(offset).is_err() {
+        return prepared_error_response(crate::MtsdfBakeError::new(
+            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
+            "MTSDF baker artifact bytes exceed the ABI address space",
+        ));
+    }
+    let metadata = WasmResultMetadata {
+        raster_key: &result.raster_key,
+        kind: &result.kind,
+        extension: &result.extension,
+        version: result.version,
+        artifacts,
+        report: &result.report,
+    };
+    let Ok(metadata) = serde_json::to_vec(&metadata) else {
+        return prepared_error_response(crate::MtsdfBakeError::new(
+            crate::MtsdfBakeErrorCode::SerializationFailed,
+            "failed to serialize MTSDF result metadata",
+        ));
+    };
+    if u32::try_from(metadata.len()).is_err() {
+        return prepared_error_response(crate::MtsdfBakeError::new(
             crate::MtsdfBakeErrorCode::ArithmeticOverflow,
             "MTSDF baker response metadata exceeds the ABI address space",
-        )));
-    };
-    let Ok(artifact_length) = u32::try_from(artifact_bytes.len()) else {
-        return encode_artifact_response(Err(crate::MtsdfBakeError::new(
-            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
-            "MTSDF baker response artifact exceeds the ABI address space",
-        )));
-    };
-    let Some(total_length) = HEADER_LENGTH
-        .checked_add(metadata.len())
-        .and_then(|value| value.checked_add(artifact_bytes.len()))
-        .filter(|value| *value <= MAX_RESPONSE_BYTES && u32::try_from(*value).is_ok())
-    else {
-        return encode_artifact_response(Err(crate::MtsdfBakeError::new(
-            crate::MtsdfBakeErrorCode::ArithmeticOverflow,
-            "MTSDF baker response length exceeds the ABI address space",
-        )));
-    };
+        ));
+    }
+    PreparedArtifactResponse {
+        status: 0,
+        metadata,
+        artifacts: result.artifacts,
+        artifact_bytes_length: offset,
+    }
+}
+
+#[cfg(feature = "artifact-baker")]
+fn prepared_error_response(error: crate::MtsdfBakeError) -> PreparedArtifactResponse {
+    PreparedArtifactResponse {
+        status: 1,
+        metadata: serde_json::to_vec(&error).unwrap_or_else(|_| serialization_error()),
+        artifacts: Vec::new(),
+        artifact_bytes_length: 0,
+    }
+}
+
+#[cfg(feature = "artifact-baker")]
+fn encode_artifact_response(
+    prepared: PreparedArtifactResponse,
+) -> Result<Vec<u8>, PreparedArtifactResponse> {
+    const HEADER_LENGTH: usize = 16;
+    let metadata_length = prepared.metadata.len() as u32;
+    let artifact_length = prepared.artifact_bytes_length as u32;
+    let total_length = prepared.encoded_byte_length();
     let mut response = Vec::new();
     if response.try_reserve_exact(total_length).is_err() {
-        return Vec::new();
+        return Err(prepared);
     }
     response.resize(HEADER_LENGTH, 0);
     response[..4].copy_from_slice(b"PMMS");
-    response[4..8].copy_from_slice(&status.to_le_bytes());
+    response[4..8].copy_from_slice(&prepared.status.to_le_bytes());
     response[8..12].copy_from_slice(&metadata_length.to_le_bytes());
     response[12..16].copy_from_slice(&artifact_length.to_le_bytes());
-    response.extend_from_slice(&metadata);
-    response.extend_from_slice(&artifact_bytes);
-    response
+    response.extend_from_slice(&prepared.metadata);
+    for artifact in prepared.artifacts {
+        response.extend_from_slice(&artifact.bytes);
+    }
+    Ok(response)
 }
 
 #[cfg(feature = "artifact-baker")]
@@ -402,6 +538,26 @@ fn leak_artifact_response(bytes: Vec<u8>) -> u32 {
         state.artifact_result_length = length;
         pointer
     })
+}
+
+#[cfg(feature = "artifact-baker")]
+fn retain_segmented_response(prepared: PreparedArtifactResponse) -> u32 {
+    with_state(|state| {
+        state.artifact_result_pointer = 0;
+        state.artifact_result_length = 0;
+        state.segmented_response = Some(prepared);
+    });
+    0
+}
+
+#[cfg(feature = "artifact-baker")]
+fn segmented_artifact(state: &WasmState, index: u32) -> Option<&[u8]> {
+    state
+        .segmented_response
+        .as_ref()?
+        .artifacts
+        .get(index as usize)
+        .map(|artifact| artifact.bytes.as_slice())
 }
 
 fn owned_bytes(allocations: &[Allocation], pointer: u32, length: u32) -> Option<&[u8]> {

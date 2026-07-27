@@ -17,6 +17,14 @@ type LoadedAnyRaster = LoadedRaster<AnyRasterModule>
 
 interface CachedRaster {
   readonly promise: Promise<LoadedAnyRaster>
+  readonly controller: AbortController
+  consumers: number
+  settled: boolean
+}
+
+interface ObservedRegistry {
+  readonly fonts: Set<RegisteredFont>
+  readonly unsubscribe: () => void
 }
 
 /**
@@ -25,7 +33,7 @@ interface CachedRaster {
  */
 export class RasterRuntime {
   readonly #fonts = new Map<RegisteredFont, Map<AnyRasterModule, Map<string, CachedRaster>>>()
-  readonly #registries = new Map<ReturnType<typeof registeredFontRegistry>, () => void>()
+  readonly #registries = new Map<ReturnType<typeof registeredFontRegistry>, ObservedRegistry>()
   #disposed = false
 
   load<const Module extends AnyRasterModule>(
@@ -41,9 +49,9 @@ export class RasterRuntime {
   dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
-    for (const unsubscribe of this.#registries.values()) unsubscribe()
+    for (const { unsubscribe } of this.#registries.values()) unsubscribe()
     this.#registries.clear()
-    for (const font of this.#fonts.keys()) this.#disposeFont(font)
+    for (const font of this.#fonts.keys()) this.#disposeFontResources(font)
   }
 
   async #load<Module extends AnyRasterModule>(
@@ -75,27 +83,53 @@ export class RasterRuntime {
     }
     const existing = rasters.get(rasterKey)
     if (existing !== undefined) {
-      return awaitWithSignal(existing.promise as Promise<LoadedRaster<Module>>, options.signal)
+      if (existing.controller.signal.aborted) {
+        if (rasters.get(rasterKey) === existing) rasters.delete(rasterKey)
+        return this.#load(font, request, options)
+      }
+      const loaded = await consumeCachedRaster<Module>(existing, options.signal)
+      if (this.#fonts.get(font)?.get(module)?.get(rasterKey) !== existing) {
+        throw rasterLoadInvalidated()
+      }
+      if (isCurrentRaster(font, rasterKey, loaded.artifact)) return loaded
+      rasters.delete(rasterKey)
+      module.dispose(loaded.resource)
+      return this.#load(font, request, options)
     }
 
-    const loadOptions = options.resolve === undefined ? {} : { resolve: options.resolve }
+    const controller = new AbortController()
+    const loadOptions: RasterLoadOptions = {
+      ...(options.resolve === undefined ? {} : { resolve: options.resolve }),
+      signal: controller.signal,
+    }
+    let cached!: CachedRaster
     const promise = this.#loadUncached(font, request, rasterKey, loadOptions)
       .then((loaded) => {
         if (
           this.#disposed ||
-          this.#fonts.get(font)?.get(module)?.get(rasterKey)?.promise !== promise
+          controller.signal.aborted ||
+          this.#fonts.get(font)?.get(module)?.get(rasterKey) !== cached ||
+          !isCurrentRaster(font, rasterKey, loaded.artifact)
         ) {
           module.dispose(loaded.resource)
-          throw new DOMException('The raster load was invalidated', 'AbortError')
+          throw rasterLoadInvalidated()
         }
         return loaded
       })
-      .catch((error: unknown) => {
-        if (rasters?.get(rasterKey)?.promise === promise) rasters.delete(rasterKey)
-        throw error
-      })
-    rasters.set(rasterKey, { promise })
-    return awaitWithSignal(promise, options.signal)
+      .then(
+        (loaded) => {
+          cached.settled = true
+          return loaded
+        },
+        (error: unknown) => {
+          cached.settled = true
+          if (rasters?.get(rasterKey) === cached) rasters.delete(rasterKey)
+          throw error
+        },
+      )
+    cached = { promise, controller, consumers: 0, settled: false }
+    rasters.set(rasterKey, cached)
+    return consumeCachedRaster<Module>(cached, options.signal)
   }
 
   async #loadUncached<Module extends AnyRasterModule>(
@@ -115,7 +149,8 @@ export class RasterRuntime {
     }
     options.signal?.throwIfAborted()
     const resource = await module.decode(font, artifact, options.signal)
-    options.signal?.throwIfAborted()
+    // The cache publication guard owns this resource once decode returns, including
+    // disposal when a module ignores cancellation and completes after invalidation.
     return { module, artifact, resource }
   }
 
@@ -132,7 +167,8 @@ export class RasterRuntime {
         `${request.module.kind} has no baked artifact or runtime baker`,
       )
     }
-    const source = getRegisteredFontData(font).sourceBytes
+    const registeredData = getRegisteredFontData(font)
+    const source = registeredData.sourceBytes
     if (source === undefined) {
       throw new FontLoadError(
         'RASTER_SOURCE_UNAVAILABLE',
@@ -146,7 +182,7 @@ export class RasterRuntime {
     const baked = await baker.bake({
       source: source.slice(),
       font,
-      fontFaceIndex: 0,
+      fontFaceIndex: registeredData.fontFaceIndex,
       rasterKey,
       options: request.options,
       ...(signal === undefined ? {} : { signal }),
@@ -174,19 +210,38 @@ export class RasterRuntime {
 
   #observeRegistry(font: RegisteredFont): void {
     const registry = registeredFontRegistry(font)
-    if (this.#registries.has(registry)) return
-    this.#registries.set(
-      registry,
-      registry._onFontDispose((disposed) => this.#disposeFont(disposed)),
-    )
+    const observed = this.#registries.get(registry)
+    if (observed !== undefined) {
+      observed.fonts.add(font)
+      return
+    }
+    this.#registries.set(registry, {
+      fonts: new Set([font]),
+      unsubscribe: registry._onFontDispose((disposed) => this.#disposeFont(disposed, registry)),
+    })
   }
 
-  #disposeFont(font: RegisteredFont): void {
+  #disposeFont(
+    font: RegisteredFont,
+    registry: ReturnType<typeof registeredFontRegistry>,
+  ): void {
+    this.#disposeFontResources(font)
+    const observed = this.#registries.get(registry)
+    if (observed === undefined) return
+    observed.fonts.delete(font)
+    if (observed.fonts.size === 0) {
+      observed.unsubscribe()
+      this.#registries.delete(registry)
+    }
+  }
+
+  #disposeFontResources(font: RegisteredFont): void {
     const modules = this.#fonts.get(font)
     if (modules === undefined) return
     this.#fonts.delete(font)
     for (const [module, rasters] of modules) {
-      for (const { promise } of rasters.values()) {
+      for (const { promise, controller } of rasters.values()) {
+        controller.abort(rasterLoadInvalidated())
         void promise.then(
           ({ resource }) => module.dispose(resource),
           () => undefined,
@@ -198,6 +253,22 @@ export class RasterRuntime {
   #assertActive(): void {
     if (this.#disposed) throw new Error('raster runtime is disposed')
   }
+}
+
+function isCurrentRaster(
+  font: RegisteredFont,
+  rasterKey: RasterKey,
+  raster: LoadedAnyRaster['artifact'],
+): boolean {
+  try {
+    return font.getRaster(rasterKey) === raster
+  } catch {
+    return false
+  }
+}
+
+function rasterLoadInvalidated(): DOMException {
+  return new DOMException('The raster load was invalidated', 'AbortError')
 }
 
 function isRasterMiss(error: unknown): boolean {
@@ -237,22 +308,37 @@ function assertMatchingArtifact(
   }
 }
 
-function awaitWithSignal<Value>(
-  promise: Promise<Value>,
+function consumeCachedRaster<Module extends AnyRasterModule>(
+  cached: CachedRaster,
   signal: AbortSignal | undefined,
-): Promise<Value> {
-  if (signal === undefined) return promise
-  signal.throwIfAborted()
-  return new Promise<Value>((resolve, reject) => {
-    const abort = (): void => reject(signal.reason)
-    signal.addEventListener('abort', abort, { once: true })
-    void promise.then(
+): Promise<LoadedRaster<Module>> {
+  signal?.throwIfAborted()
+  cached.consumers += 1
+  return new Promise<LoadedRaster<Module>>((resolve, reject) => {
+    let active = true
+    const release = (): void => {
+      if (!active) return
+      active = false
+      signal?.removeEventListener('abort', aborted)
+      cached.consumers -= 1
+      if (cached.consumers === 0 && !cached.settled) {
+        cached.controller.abort(signal?.reason ?? rasterLoadInvalidated())
+      }
+    }
+    const aborted = (): void => {
+      release()
+      reject(signal?.reason ?? rasterLoadInvalidated())
+    }
+    signal?.addEventListener('abort', aborted, { once: true })
+    void (cached.promise as Promise<LoadedRaster<Module>>).then(
       (value) => {
-        signal.removeEventListener('abort', abort)
+        if (!active) return
+        release()
         resolve(value)
       },
       (error: unknown) => {
-        signal.removeEventListener('abort', abort)
+        if (!active) return
+        release()
         reject(error)
       },
     )

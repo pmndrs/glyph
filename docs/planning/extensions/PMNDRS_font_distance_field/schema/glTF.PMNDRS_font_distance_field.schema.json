@@ -39,5 +39,18 @@
       }
     }
   },
-  "required": ["version", "rasterKey", "shapingHash", "glyphCount", "glyphIdWidth", "encoding", "emSize", "pixelRange", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
+  "required": [
+    "version",
+    "rasterKey",
+    "shapingHash",
+    "glyphCount",
+    "glyphIdWidth",
+    "encoding",
+    "emSize",
+    "pixelRange",
+    "planeUnitsPerEm",
+    "recordBufferView",
+    "recordStride",
+    "pages"
+  ]
 }

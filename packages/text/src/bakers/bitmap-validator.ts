@@ -47,7 +47,7 @@ import {
   bitmapDescriptorRasterKey,
   canonicalizeBitmapDescriptor,
   type BitmapDescriptorV0,
-} from '../raster/bitmap.js'
+} from '../internal/bitmap-contract.js'
 
 const RECORD_STRIDE = 20
 
