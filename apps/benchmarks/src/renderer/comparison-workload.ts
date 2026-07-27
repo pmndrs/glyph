@@ -1,14 +1,20 @@
-import { Text, type ParagraphLayout, type RegisteredFont, type TextSpan } from '@pmndrs/text'
-import { bitmap } from '@pmndrs/text/raster/bitmap'
-import { msdf } from '@pmndrs/text/raster/msdf'
+import {
+  Text,
+  type AnyRasterInput,
+  type ParagraphLayout,
+  type RegisteredFont,
+  type TextSpan,
+} from '@pmndrs/text'
 import * as THREE from 'three/webgpu'
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
 import { benchmarkIpsumText } from '../benchmark/font-fixtures'
-import type { RasterTechnique } from '../benchmark/url-state'
+import type { FontDelivery, RasterTechnique } from '../benchmark/url-state'
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text'
 import { createCanvasSurface } from './canvas-surface'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
+import { createTextUpdateTelemetry } from './text-update-telemetry'
+import type { FontDeliveryMetrics } from './font-delivery'
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
 import { loadMtsdfFont, type MtsdfTextLiveStats } from './mtsdf-text'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
@@ -86,6 +92,8 @@ interface LoadedTechniqueFont {
   readonly atlasGpuBytes: number
   readonly atlasPages: BitmapTextLiveStats['atlasPages']
   readonly font: RegisteredFont
+  readonly metrics: FontDeliveryMetrics
+  readonly raster: AnyRasterInput
 }
 
 interface PendingConfigurationUpdate {
@@ -96,7 +104,6 @@ interface PendingConfigurationUpdate {
   }>
 }
 
-const bitmapRaster = bitmap({ strikes: [16] as const })
 const LADDER_CSS_SIZES = [
   8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512,
 ] as const
@@ -124,6 +131,7 @@ export async function createComparisonWorkloadPreview(options: {
   readonly dpr: number
   readonly fontSize: number
   readonly fontFixture: BenchmarkFontFixture
+  readonly delivery: FontDelivery
   readonly height: number
   readonly layoutWidthRatio: number
   readonly paintOpacity: number
@@ -172,31 +180,50 @@ export async function createComparisonWorkloadPreview(options: {
   const scene = new THREE.Scene()
   const camera = createWorkloadCamera(configuration.workload, width, height)
   const telemetry = createLiveFrameTelemetry()
+  const textUpdateTelemetry = createTextUpdateTelemetry()
   const gpuTimingSupported = renderer.hasFeature('timestamp-query')
 
   try {
     const fontStarted = performance.now()
-    font = await loadTechniqueFont(technique, configuration.fontFixture, signal)
+    font = await loadTechniqueFont(technique, configuration.fontFixture, options.delivery, signal)
     const fontLoadMs = performance.now() - fontStarted
     const activeFont = font
 
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
       const commitRevision = ++revision
       const readyStarted = performance.now()
-      const nextEntries = createEntries(activeFont.font, technique, next, dpr, width, height)
+      const nextEntries = createEntries(
+        activeFont.font,
+        activeFont.raster,
+        technique,
+        next,
+        dpr,
+        width,
+        height,
+      )
+      const scheduledAt = performance.now()
       try {
         await Promise.all(nextEntries.map(({ text }) => text.ready))
+        const readyAt = performance.now()
         if (disposed || commitRevision !== revision) {
           disposeEntries(nextEntries)
           return
         }
+        const sceneStartedAt = performance.now()
         layoutEntries(nextEntries, next, width, height)
         const previous = entries
         entries = nextEntries
         scene.clear()
         for (const { node } of entries) scene.add(node)
         disposeEntries(previous)
-        textReadyMs = performance.now() - readyStarted
+        const finishedAt = performance.now()
+        textReadyMs = finishedAt - readyStarted
+        textUpdateTelemetry.record({
+          scheduleMs: scheduledAt - readyStarted,
+          readyMs: readyAt - scheduledAt,
+          sceneMs: finishedAt - sceneStartedAt,
+          totalMs: finishedAt - readyStarted,
+        })
       } catch (error) {
         disposeEntries(nextEntries)
         throw error
@@ -324,6 +351,12 @@ export async function createComparisonWorkloadPreview(options: {
           framebufferGpuBytes,
           totalGpuBytes: activeFont.atlasGpuBytes + framebufferGpuBytes,
           artifactBytes: activeFont.artifactBytes,
+          delivery: activeFont.metrics.delivery,
+          sourceFontBytes: activeFont.metrics.sourceFontBytes,
+          coreArtifactBytes: activeFont.metrics.coreArtifactBytes,
+          coreBakeMs: activeFont.metrics.coreBakeMs,
+          rasterArtifactBytes: activeFont.metrics.rasterArtifactBytes,
+          rasterBakeMs: activeFont.metrics.rasterBakeMs,
           rendererInitMs,
           fontLoadMs,
           textReadyMs,
@@ -332,6 +365,7 @@ export async function createComparisonWorkloadPreview(options: {
           ...(uploadFrameCompleteMs === undefined ? {} : { uploadFrameCompleteMs }),
           startupMs,
           gpuTimingSupported,
+          textUpdateTimings: textUpdateTelemetry.summary(),
           configurationRevision: revision,
           workload: configuration.workload,
           appliedAmount: configuration.amount,
@@ -437,13 +471,13 @@ export async function createComparisonWorkloadPreview(options: {
 
 function createEntries(
   font: RegisteredFont,
+  raster: AnyRasterInput,
   technique: 'bitmap' | 'mtsdf',
   configuration: ComparisonWorkloadConfiguration,
   dpr: number,
   viewportWidth: number,
   viewportHeight: number,
 ): readonly WorkloadEntry[] {
-  const raster = technique === 'bitmap' ? bitmapRaster : msdf
   const base = {
     font,
     raster,
@@ -894,24 +928,29 @@ export function ladderCssSizes(viewportHeight: number): readonly number[] {
 async function loadTechniqueFont(
   technique: 'bitmap' | 'mtsdf',
   fontFixture: BenchmarkFontFixture,
+  delivery: FontDelivery,
   signal?: AbortSignal,
 ): Promise<LoadedTechniqueFont> {
   if (technique === 'bitmap') {
-    const loaded = await loadBitmapFont(signal, fontFixture)
+    const loaded = await loadBitmapFont(signal, fontFixture, delivery)
     const atlas = await registeredBitmapAtlas(loaded.font)
     return {
       artifactBytes: loaded.artifactBytes,
       atlasGpuBytes: atlas.gpuBytes,
       atlasPages: atlas.pages,
       font: loaded.font,
+      metrics: loaded.metrics,
+      raster: loaded.raster,
     }
   }
-  const loaded = await loadMtsdfFont(signal, fontFixture)
+  const loaded = await loadMtsdfFont(signal, fontFixture, delivery)
   return {
     artifactBytes: loaded.compressedBytes,
     atlasGpuBytes: loaded.atlasGpuBytes,
     atlasPages: [],
     font: loaded.font,
+    metrics: loaded.metrics,
+    raster: loaded.raster,
   }
 }
 

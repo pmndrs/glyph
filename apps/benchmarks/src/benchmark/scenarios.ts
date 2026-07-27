@@ -213,6 +213,23 @@ function sourceOutlineFidelityValidation(
   return `${values.length}/${values.length} deterministic source-outline comparisons within reviewed envelopes`
 }
 
+function runtimeFallbackValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    if (
+      value.metrics?.mismatchBytes !== 0 ||
+      value.metrics.changedPixels !== 0 ||
+      value.metrics.maximumError !== 0 ||
+      !finiteNonnegative(value.metrics.renderMs)
+    ) {
+      throw new Error('runtime-baked rendering diverged from the checked-in baked asset')
+    }
+  }
+  return `${values.length}/${values.length} exact baked/runtime fallback frames`
+}
+
 function reactTextValidation(
   values: readonly import('./contracts').BenchmarkMeasurement[],
 ): string {
@@ -435,6 +452,13 @@ export const scenarios: readonly BenchmarkScenario[] = [
       'Bitmap and MSDF candidates compared independently with browser Canvas2D using the same pinned source font.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
     validate: sourceOutlineFidelityValidation,
+  },
+  {
+    id: 'runtime-fallback-parity',
+    label: 'Runtime fallback parity',
+    description: 'Source-font runtime baking compared exactly with the checked-in baked render.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: runtimeFallbackValidation,
   },
   {
     id: 'tsl-shader-baseline',

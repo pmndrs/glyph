@@ -66,7 +66,27 @@ const sourceOutlineMeasurement: BenchmarkMeasurement = {
   },
 }
 
+const runtimeFallbackMeasurement: BenchmarkMeasurement = {
+  sample: 0,
+  durationMs: 1,
+  outputBytes: 384 * 128 * 4,
+  hash: 'runtime-fallback-frame',
+  metrics: { mismatchBytes: 0, changedPixels: 0, maximumError: 0, renderMs: 1 },
+}
+
 describe('MTSDF scenario acceptance', () => {
+  it('requires exact runtime fallback parity', () => {
+    const scenario = scenarioById('runtime-fallback-parity')
+    expect(scenario.validate([runtimeFallbackMeasurement])).toContain('exact baked/runtime')
+    expect(() =>
+      scenario.validate([
+        {
+          ...runtimeFallbackMeasurement,
+          metrics: { ...runtimeFallbackMeasurement.metrics, changedPixels: 1 },
+        },
+      ]),
+    ).toThrow('runtime-baked rendering diverged')
+  })
   it('rejects a deterministic substitute for the canonical WebGL2 scene', () => {
     const scenario = scenarioById('mtsdf-text-scenes')
     expect(scenario.validate([sceneMeasurement])).toContain('deterministic MTSDF')

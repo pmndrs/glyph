@@ -55,7 +55,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     9 |   ⬜   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
 |    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.4. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
+Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.5. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -619,6 +619,7 @@ Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGP
 - [x] Surface loaded/unloaded library and baker totals, font download/decoded bytes, texture-array memory, and every atlas page in the human benchmark inspector.
 - [x] Keep runtime rendering independent of baker Wasm; optional Bitmap and MTSDF bakers execute only through one serial lazy module Worker.
 - [x] Exercise deterministic WebGL2 headless conformance and maintainer-local GPU WebGPU product probes without sleeps, retries, or timer cushions.
+- [x] Expose baked-asset and explicit source/runtime delivery as one benchmark axis, report both baker graphs and generated artifact costs, and prove exact baked/runtime frame parity for Bitmap and MSDF.
 - [x] Add the cross-technique source-outline fidelity corpus at the end of the conformance list and record reviewed acceptance envelopes.
 - [x] Record and review committed upload, first-draw, steady CPU-frame, GPU-frame, and bundle-isolation baselines for the accepted corpus.
 - [ ] Complete the final adversarial Milestone 6/8 closure review with no unresolved actionable findings.

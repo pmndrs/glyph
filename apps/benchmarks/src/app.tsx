@@ -40,6 +40,7 @@ import {
 import {
   readHarnessLocation,
   writeHarnessLocation,
+  type FontDelivery,
   type GraphicsBackend,
   type HarnessLocation,
   type HarnessMode,
@@ -71,6 +72,7 @@ import type {
 } from './renderer/comparison-workload'
 import type { LiveFrameHistoryCursor } from './renderer/live-frame-telemetry'
 import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference'
+import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance'
 
 type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats
 
@@ -215,6 +217,12 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
 ]
 
 const conformanceWorkloads: readonly WorkloadOption[] = [
+  {
+    id: 'runtime-fallback',
+    label: 'Runtime fallback parity',
+    description: 'Tests whether source-font runtime baking reproduces the checked-in baked render.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+  },
   {
     id: 'text-accuracy',
     label: 'Pipeline accuracy',
@@ -366,6 +374,7 @@ export function App() {
 function Harness() {
   const environment = use(environmentResource())
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true)
+  const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false)
   const [location, setLocationState] = useState(() => {
     const value = readHarnessLocation(locationSearch())
     if (!environment.webgpu && !new URLSearchParams(locationSearch()).has('backend')) {
@@ -425,6 +434,7 @@ function Harness() {
       next.mode !== undefined ||
       next.technique !== undefined ||
       next.backend !== undefined ||
+      next.delivery !== undefined ||
       next.workload !== undefined
     if (replacesLiveSurface) setLiveStats(undefined)
     if (replacesLiveSurface || next.fontFixture !== undefined) {
@@ -463,17 +473,21 @@ function Harness() {
       try {
         const value = await runRegisteredBenchmark({
           targetId:
-            location.workload === 'cross-technique-fidelity'
-              ? `source-outline-${location.technique}-${location.backend}`
-              : location.technique === 'mtsdf'
-                ? `mtsdf-conformance-${location.backend}`
-                : `bitmap-text-${location.backend}`,
+            location.workload === 'runtime-fallback'
+              ? `runtime-fallback-${location.technique}-${location.backend}`
+              : location.workload === 'cross-technique-fidelity'
+                ? `source-outline-${location.technique}-${location.backend}`
+                : location.technique === 'mtsdf'
+                  ? `mtsdf-conformance-${location.backend}`
+                  : `bitmap-text-${location.backend}`,
           scenarioId:
-            location.workload === 'cross-technique-fidelity'
-              ? 'source-outline-fidelity'
-              : location.technique === 'mtsdf'
-                ? 'mtsdf-sampling-conformance'
-                : 'bitmap-text-frame',
+            location.workload === 'runtime-fallback'
+              ? 'runtime-fallback-parity'
+              : location.workload === 'cross-technique-fidelity'
+                ? 'source-outline-fidelity'
+                : location.technique === 'mtsdf'
+                  ? 'mtsdf-sampling-conformance'
+                  : 'bitmap-text-frame',
           input: { fontFixture: activeFontFixture },
           controls: { dpr, samples, warmup },
           environment,
@@ -500,6 +514,7 @@ function Harness() {
       environment,
       stats: captureLiveTextStats(liveStats),
     })
+    setLocation({ view: 'report' })
   }
 
   function invalidateLiveCapture(): void {
@@ -540,6 +555,7 @@ function Harness() {
   const controls = (
     <Controls
       backend={location.backend}
+      delivery={location.delivery}
       dpr={dpr}
       conformanceView={conformanceView}
       fontFixture={activeFontFixture}
@@ -564,6 +580,7 @@ function Harness() {
       warmup={warmup}
       webgpu={environment.webgpu}
       onBackend={(backend) => setLocation({ backend })}
+      onDelivery={(delivery) => setLocation({ delivery })}
       onDpr={(value) => {
         setDpr(value)
         setLiveStats(undefined)
@@ -625,16 +642,29 @@ function Harness() {
     <div className="min-h-screen bg-background text-foreground">
       <TopBar
         compact={!desktop}
+        phone={phone}
         location={location}
         mode={location.mode}
         pending={isPending}
         ready={Boolean(actionReady)}
         webgpu={environment.webgpu}
-        onAction={location.mode === 'benchmark' ? captureWindow : runConformance}
-        onControls={() =>
-          setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' })
+        onAction={
+          location.mode === 'benchmark'
+            ? location.view === 'report'
+              ? () => setLocation({ view: 'scene' })
+              : captureWindow
+            : runConformance
         }
-        onMenu={() => setWorkloadPanelOpen((open) => !open)}
+        onControls={() => {
+          setWorkloadPanelOpen(false)
+          setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' })
+        }}
+        onMenu={() => {
+          if (!workloadPanelOpen && location.view === 'controls') {
+            setLocation({ view: 'scene' })
+          }
+          setWorkloadPanelOpen((open) => !open)
+        }}
         onMode={selectMode}
         onTechnique={selectTechnique}
         workloadPanelOpen={workloadPanelOpen}
@@ -651,7 +681,7 @@ function Harness() {
           <div className="min-w-0 overflow-hidden">
             <WorkloadRail
               activeFontFixture={activeFontFixture}
-              className="w-56"
+              className="h-full w-56"
               fontFixture={fontFixture}
               location={location}
               showcaseFrame={showcaseFrame}
@@ -667,45 +697,55 @@ function Harness() {
             />
           </div>
           <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
-            <Scene
-              activeFontFixture={activeFontFixture}
-              fontFixture={fontFixture}
-              dpr={dpr}
-              conformanceView={conformanceView}
-              error={error}
-              event={event}
-              grid={showGrid}
-              liveCapture={liveCapture}
-              liveStats={liveStats}
-              location={location}
-              activityWorkloads={activityWorkloads}
-              fontSize={fontSize}
-              layoutWidthPercent={layoutWidthPercent}
-              workloadAmount={workloadAmount}
-              animationEnabled={animationEnabled}
-              animationSpeed={animationSpeed}
-              paintOpacityPercent={paintOpacityPercent}
-              paintShadowEnabled={paintShadowEnabled}
-              paintStrokePercent={paintStrokePercent}
-              showLayoutBounds={showLayoutBounds}
-              summary={summary}
-              showcaseFrame={showcaseFrame}
-              onConformancePan={(deltaXPercent, deltaYPercent) =>
-                setConformanceView((view) => ({
-                  ...view,
-                  panXPercent: view.panXPercent + deltaXPercent,
-                  panYPercent: view.panYPercent + deltaYPercent,
-                }))
+            <div
+              className={
+                location.view === 'report' || location.view === 'export' ? 'hidden' : undefined
               }
-              onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
-              onLiveStats={setLiveStats}
-            />
+            >
+              <Scene
+                activeFontFixture={activeFontFixture}
+                fontFixture={fontFixture}
+                dpr={dpr}
+                conformanceView={conformanceView}
+                error={error}
+                event={event}
+                grid={showGrid}
+                liveCapture={liveCapture}
+                liveStats={liveStats}
+                location={location}
+                activityWorkloads={activityWorkloads}
+                fontSize={fontSize}
+                layoutWidthPercent={layoutWidthPercent}
+                workloadAmount={workloadAmount}
+                animationEnabled={animationEnabled}
+                animationSpeed={animationSpeed}
+                paintOpacityPercent={paintOpacityPercent}
+                paintShadowEnabled={paintShadowEnabled}
+                paintStrokePercent={paintStrokePercent}
+                showLayoutBounds={showLayoutBounds}
+                summary={summary}
+                showcaseFrame={showcaseFrame}
+                onConformancePan={(deltaXPercent, deltaYPercent) =>
+                  setConformanceView((view) => ({
+                    ...view,
+                    panXPercent: view.panXPercent + deltaXPercent,
+                    panYPercent: view.panYPercent + deltaYPercent,
+                  }))
+                }
+                onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
+                onLiveStats={setLiveStats}
+              />
+            </div>
+            {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
+            {location.view === 'export' && (
+              <ExportPanel liveCapture={liveCapture} summary={summary} />
+            )}
           </main>
           <aside className="overflow-auto bg-chrome p-4">{controls}</aside>
         </div>
       ) : (
-        <div>
-          <main className="min-h-[calc(100vh-92px)] p-3">
+        <div className={phone ? 'pb-[58px]' : undefined}>
+          <main className="min-h-[calc(100vh-52px)] p-3">
             <div
               className={
                 location.view === 'report' || location.view === 'export' ? 'hidden' : undefined
@@ -746,7 +786,11 @@ function Harness() {
               />
             </div>
             {location.view === 'controls' && (
-              <CompactSheet title="Controls" onClose={() => setLocation({ view: 'scene' })}>
+              <CompactSheet
+                phone={phone}
+                title="Controls"
+                onClose={() => setLocation({ view: 'scene' })}
+              >
                 {controls}
               </CompactSheet>
             )}
@@ -756,7 +800,7 @@ function Harness() {
             )}
           </main>
           {workloadPanelOpen && (
-            <CompactWorkloadPanel onClose={() => setWorkloadPanelOpen(false)}>
+            <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
               <WorkloadRail
                 activeFontFixture={activeFontFixture}
                 className="h-full w-full border-r-0"
@@ -777,6 +821,7 @@ function Harness() {
               />
             </CompactWorkloadPanel>
           )}
+          {phone && <MobileNavigation location={location} onLocation={setLocation} />}
         </div>
       )}
     </div>
@@ -798,6 +843,20 @@ function desktopSnapshot(): boolean {
   return (
     typeof globalThis.matchMedia !== 'function' ||
     globalThis.matchMedia('(min-width: 1200px)').matches
+  )
+}
+
+function subscribePhone(listener: () => void): () => void {
+  if (typeof globalThis.matchMedia !== 'function') return () => undefined
+  const media = globalThis.matchMedia('(max-width: 699px)')
+  media.addEventListener('change', listener)
+  return () => media.removeEventListener('change', listener)
+}
+
+function phoneSnapshot(): boolean {
+  return (
+    typeof globalThis.matchMedia === 'function' &&
+    globalThis.matchMedia('(max-width: 699px)').matches
   )
 }
 
@@ -824,6 +883,7 @@ function workloadRailDescription(workload: WorkloadOption, technique: RasterTech
 
 function TopBar({
   compact,
+  phone,
   location,
   mode,
   pending,
@@ -837,6 +897,7 @@ function TopBar({
   workloadPanelOpen,
 }: {
   readonly compact: boolean
+  readonly phone: boolean
   readonly location: HarnessLocation
   readonly mode: HarnessMode
   readonly pending: boolean
@@ -855,11 +916,16 @@ function TopBar({
         <button
           aria-expanded={workloadPanelOpen}
           aria-label={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
-          className="grid size-7 shrink-0 place-items-center rounded-md bg-accent font-serif text-lg text-white hover:brightness-110"
+          aria-pressed={workloadPanelOpen}
+          className={`flex h-7 w-11 shrink-0 items-center justify-center gap-1 rounded-md border font-serif text-lg transition-colors ${workloadPanelOpen ? 'border-accent bg-accent text-white' : 'border-border bg-surface-raised text-foreground hover:border-accent'}`}
+          title={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
           type="button"
           onClick={onMenu}
         >
-          a
+          <span>a</span>
+          <span aria-hidden="true" className="font-sans text-[9px]">
+            {workloadPanelOpen ? '◀' : '▶'}
+          </span>
         </button>
         <div className="hidden min-w-0 sm:block">
           <div className="text-sm font-semibold leading-none">pmndrs/text</div>
@@ -877,13 +943,20 @@ function TopBar({
             </button>
           ))}
         </div>
+        {compact && (
+          <TechniqueSwitcher
+            className="w-[120px] sm:w-[168px]"
+            technique={location.technique}
+            onTechnique={onTechnique}
+          />
+        )}
         <div className="flex-1" />
-        <span className="hidden sm:inline-flex">
+        <span className="hidden min-[900px]:inline-flex">
           <Chip tone={webgpu ? 'success' : 'warning'}>
             {webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
           </Chip>
         </span>
-        {compact && (
+        {compact && !phone && (
           <Button
             aria-label="Open render controls"
             className="px-2 text-[10px] sm:px-3"
@@ -894,7 +967,13 @@ function TopBar({
           </Button>
         )}
         <Button
-          aria-label={mode === 'benchmark' ? 'Capture window' : 'Run conformance'}
+          aria-label={
+            mode === 'benchmark'
+              ? location.view === 'report'
+                ? 'Return to live benchmark'
+                : 'Capture report'
+              : 'Run conformance'
+          }
           className="px-2 text-[10px] sm:px-3 sm:text-xs"
           disabled={!ready}
           variant="primary"
@@ -903,10 +982,14 @@ function TopBar({
           {pending ? (
             'Running…'
           ) : mode === 'benchmark' ? (
-            <>
-              <span className="sm:hidden">Capture</span>
-              <span className="hidden sm:inline">Capture window</span>
-            </>
+            location.view === 'report' ? (
+              'Live view'
+            ) : (
+              <>
+                <span className="sm:hidden">Capture</span>
+                <span className="hidden sm:inline">Capture report</span>
+              </>
+            )
           ) : (
             <>
               <span className="sm:hidden">Run</span>
@@ -915,16 +998,6 @@ function TopBar({
           )}
         </Button>
       </div>
-      {compact && (
-        <div className="flex h-10 items-center border-t border-border px-2 sm:px-3">
-          <span className="mr-2 font-mono text-[9px] uppercase text-dim">Technique</span>
-          <TechniqueSwitcher
-            className="grid w-full max-w-sm grid-cols-3 gap-1"
-            technique={location.technique}
-            onTechnique={onTechnique}
-          />
-        </div>
-      )}
     </header>
   )
 }
@@ -965,7 +1038,7 @@ function WorkloadRail({
         <>
           <p className="eyebrow">Technique</p>
           <TechniqueSwitcher
-            className="mt-2 grid grid-cols-3 gap-1"
+            className="mt-2"
             technique={location.technique}
             onTechnique={onTechnique}
           />
@@ -1049,10 +1122,14 @@ function TechniqueSwitcher({
   readonly onTechnique: (technique: RasterTechnique) => void
 }) {
   return (
-    <div className={className} data-testid="technique-switcher">
+    <div
+      className={`grid grid-cols-3 rounded-md border border-border bg-background p-0.5 ${className}`}
+      data-testid="technique-switcher"
+    >
       {(['bitmap', 'mtsdf', 'slug'] as const).map((value) => (
         <button
-          className={`rounded-md border px-2 py-2 text-[10px] capitalize ${technique === value ? 'border-accent bg-surface-active text-foreground' : 'border-transparent bg-transparent text-foreground hover:border-border hover:bg-surface'} disabled:cursor-not-allowed disabled:text-dim`}
+          aria-pressed={technique === value}
+          className={`min-h-7 rounded px-2 text-[10px] font-medium capitalize transition-colors ${technique === value ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'} disabled:cursor-not-allowed disabled:opacity-45`}
           disabled={value === 'slug'}
           key={value}
           type="button"
@@ -1141,6 +1218,7 @@ function Scene({
         <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
           <Chip tone="accent">{location.technique === 'mtsdf' ? 'MSDF' : 'Bitmap'}</Chip>
           <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}</Chip>
+          <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
           <Chip>{dpr}× DPR</Chip>
         </div>
       </header>
@@ -1157,6 +1235,7 @@ function Scene({
               animationEnabled={animationEnabled}
               animationSpeed={animationSpeed}
               backend={location.backend}
+              delivery={location.delivery}
               dpr={dpr}
               fontSize={fontSize}
               fontFixture={activeFontFixture}
@@ -1167,7 +1246,7 @@ function Scene({
               paintStrokePercent={paintStrokePercent}
               showLayoutBounds={showLayoutBounds}
               workloadAmount={workloadAmount}
-              key={`${location.backend}-${String(dpr)}`}
+              key={`${location.backend}-${location.delivery}-${String(dpr)}`}
               showcaseFrame={showcaseFrame}
               stats={liveStats}
               technique={location.technique}
@@ -1244,6 +1323,7 @@ function BenchmarkSurface({
   animationEnabled,
   animationSpeed,
   backend,
+  delivery,
   dpr,
   fontFixture,
   fontSize,
@@ -1263,6 +1343,7 @@ function BenchmarkSurface({
   readonly animationEnabled: boolean
   readonly animationSpeed: number
   readonly backend: GraphicsBackend
+  readonly delivery: FontDelivery
   readonly dpr: 1 | 2
   readonly fontFixture: BenchmarkFontFixture
   readonly fontSize: number
@@ -1345,6 +1426,8 @@ function BenchmarkSurface({
         <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3">
           <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
+          <LiveCost label="Core bake" value={formatMs(stats?.coreBakeMs)} />
+          <LiveCost label="Raster bake" value={formatMs(stats?.rasterBakeMs)} />
           <LiveCost label="Text ready" value={formatMs(stats?.textReadyMs)} />
           <LiveCost label="First draw submit" value={formatMs(stats?.firstDrawMs)} />
           <LiveCost label="Upload frame complete" value={formatMs(stats?.uploadFrameCompleteMs)} />
@@ -1410,6 +1493,7 @@ function BenchmarkSurface({
             animationEnabled={animationEnabled}
             animationSpeed={animationSpeed}
             backend={backend}
+            delivery={delivery}
             dpr={dpr}
             fontSize={fontSize}
             fontFixture={fontFixture}
@@ -1426,6 +1510,7 @@ function BenchmarkSurface({
         ) : technique === 'mtsdf' ? (
           <MtsdfTextViewport
             backend={backend}
+            delivery={delivery}
             dpr={dpr}
             fontSize={fontSize}
             grid={grid}
@@ -1436,6 +1521,7 @@ function BenchmarkSurface({
         ) : (
           <BitmapTextViewport
             backend={backend}
+            delivery={delivery}
             dpr={dpr}
             fontSize={fontSize}
             grid={grid}
@@ -1476,6 +1562,7 @@ function ConformanceSurface({
     | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
     | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
     | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
+    | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture }
   >()
   const [error, setError] = useState<string>()
   const publishCapture = useEffectEvent(
@@ -1483,7 +1570,8 @@ function ConformanceSurface({
       value:
         | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
         | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
-        | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture },
+        | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
+        | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture },
     ) => {
       setCapture(value)
       setError(undefined)
@@ -1496,47 +1584,62 @@ function ConformanceSurface({
   useEffect(() => {
     const controller = new AbortController()
     const request =
-      workload === 'cross-technique-fidelity'
-        ? technique === 'mtsdf'
-          ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfSourceOutlineFidelity }) => ({
-              kind: 'source-outline' as const,
-              value: await captureMtsdfSourceOutlineFidelity({
+      workload === 'runtime-fallback'
+        ? import('./renderer/runtime-fallback-conformance').then(
+            async ({ captureRuntimeFallbackConformance }) => ({
+              kind: 'runtime-fallback' as const,
+              value: await captureRuntimeFallbackConformance({
                 backend,
                 dpr,
                 fontFixture,
                 signal: controller.signal,
+                technique: technique === 'mtsdf' ? 'mtsdf' : 'bitmap',
               }),
-            }))
-          : import('./renderer/bitmap-text').then(
-              async ({ captureBitmapSourceOutlineFidelity }) => ({
-                kind: 'source-outline' as const,
-                value: await captureBitmapSourceOutlineFidelity({
+            }),
+          )
+        : workload === 'cross-technique-fidelity'
+          ? technique === 'mtsdf'
+            ? import('./renderer/mtsdf-text').then(
+                async ({ captureMtsdfSourceOutlineFidelity }) => ({
+                  kind: 'source-outline' as const,
+                  value: await captureMtsdfSourceOutlineFidelity({
+                    backend,
+                    dpr,
+                    fontFixture,
+                    signal: controller.signal,
+                  }),
+                }),
+              )
+            : import('./renderer/bitmap-text').then(
+                async ({ captureBitmapSourceOutlineFidelity }) => ({
+                  kind: 'source-outline' as const,
+                  value: await captureBitmapSourceOutlineFidelity({
+                    backend,
+                    dpr,
+                    fontFixture,
+                    signal: controller.signal,
+                  }),
+                }),
+              )
+          : technique === 'mtsdf'
+            ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
+                kind: 'mtsdf' as const,
+                value: await captureMtsdfTextConformance({
                   backend,
                   dpr,
                   fontFixture,
                   signal: controller.signal,
                 }),
-              }),
-            )
-        : technique === 'mtsdf'
-          ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
-              kind: 'mtsdf' as const,
-              value: await captureMtsdfTextConformance({
-                backend,
-                dpr,
-                fontFixture,
-                signal: controller.signal,
-              }),
-            }))
-          : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
-              kind: 'bitmap' as const,
-              value: await captureBitmapTextConformance({
-                backend,
-                dpr,
-                fontFixture,
-                signal: controller.signal,
-              }),
-            }))
+              }))
+            : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
+                kind: 'bitmap' as const,
+                value: await captureBitmapTextConformance({
+                  backend,
+                  dpr,
+                  fontFixture,
+                  signal: controller.signal,
+                }),
+              }))
     void request.then(publishCapture).catch(publishError)
     return () => controller.abort()
   }, [backend, dpr, fontFixture, technique, workload])
@@ -1544,65 +1647,90 @@ function ConformanceSurface({
   const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined
   const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined
   const sourceOutlineCapture = capture?.kind === 'source-outline' ? capture.value : undefined
+  const runtimeFallbackCapture = capture?.kind === 'runtime-fallback' ? capture.value : undefined
   const isSourceOutline = workload === 'cross-technique-fidelity'
+  const isRuntimeFallback = workload === 'runtime-fallback'
 
   return (
     <div
       className="grid min-h-0 grid-rows-[auto_minmax(360px,1fr)_auto] gap-3"
       data-conformance-ready={String(capture !== undefined)}
+      data-runtime-fallback-mismatch-bytes={runtimeFallbackCapture?.mismatchBytes}
+      data-runtime-fallback-changed-pixels={runtimeFallbackCapture?.changedPixels}
+      data-runtime-fallback-maximum-error={runtimeFallbackCapture?.maximumError}
       data-testid="conformance-surface"
     >
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
         <Metric
           label={
-            isSourceOutline || technique === 'mtsdf' ? 'Mean error · 0–255' : 'Reference mismatch'
+            isRuntimeFallback
+              ? 'Mismatched bytes'
+              : isSourceOutline || technique === 'mtsdf'
+                ? 'Mean error · 0–255'
+                : 'Reference mismatch'
           }
           value={
-            isSourceOutline
-              ? sourceOutlineCapture === undefined
-                ? '—'
-                : `${sourceOutlineCapture.meanAbsoluteError.toFixed(3)} · ${((sourceOutlineCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
-              : technique === 'mtsdf'
-                ? mtsdfCapture === undefined
+            isRuntimeFallback
+              ? String(runtimeFallbackCapture?.mismatchBytes ?? '—')
+              : isSourceOutline
+                ? sourceOutlineCapture === undefined
                   ? '—'
-                  : `${mtsdfCapture.meanAbsoluteError.toFixed(3)} · ${((mtsdfCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
-                : bitmapCapture === undefined
-                  ? '—'
-                  : String(bitmapCapture.mismatchBytes)
+                  : `${sourceOutlineCapture.meanAbsoluteError.toFixed(3)} · ${((sourceOutlineCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
+                : technique === 'mtsdf'
+                  ? mtsdfCapture === undefined
+                    ? '—'
+                    : `${mtsdfCapture.meanAbsoluteError.toFixed(3)} · ${((mtsdfCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
+                  : bitmapCapture === undefined
+                    ? '—'
+                    : String(bitmapCapture.mismatchBytes)
           }
         />
         <Metric
           label={
-            isSourceOutline || technique === 'mtsdf' ? 'Pixels > 2 / 255' : 'Half-coverage ink'
+            isRuntimeFallback
+              ? 'Changed pixels'
+              : isSourceOutline || technique === 'mtsdf'
+                ? 'Pixels > 2 / 255'
+                : 'Half-coverage ink'
           }
           value={
-            isSourceOutline
-              ? sourceOutlineCapture === undefined
-                ? '—'
-                : `${sourceOutlineCapture.errorPixels} · ${((sourceOutlineCapture.errorPixels / (sourceOutlineCapture.width * sourceOutlineCapture.height)) * 100).toFixed(2)}%`
-              : technique === 'mtsdf'
-                ? mtsdfCapture === undefined
+            isRuntimeFallback
+              ? String(runtimeFallbackCapture?.changedPixels ?? '—')
+              : isSourceOutline
+                ? sourceOutlineCapture === undefined
                   ? '—'
-                  : `${mtsdfCapture.errorPixels} · ${((mtsdfCapture.errorPixels / (mtsdfCapture.width * mtsdfCapture.height)) * 100).toFixed(2)}%`
-                : bitmapCapture === undefined
-                  ? '—'
-                  : String(bitmapCapture.inkPixels)
+                  : `${sourceOutlineCapture.errorPixels} · ${((sourceOutlineCapture.errorPixels / (sourceOutlineCapture.width * sourceOutlineCapture.height)) * 100).toFixed(2)}%`
+                : technique === 'mtsdf'
+                  ? mtsdfCapture === undefined
+                    ? '—'
+                    : `${mtsdfCapture.errorPixels} · ${((mtsdfCapture.errorPixels / (mtsdfCapture.width * mtsdfCapture.height)) * 100).toFixed(2)}%`
+                  : bitmapCapture === undefined
+                    ? '—'
+                    : String(bitmapCapture.inkPixels)
           }
         />
         <Metric
-          label={isSourceOutline || technique === 'mtsdf' ? 'Maximum error · 0–255' : 'Lit pixels'}
+          label={
+            isRuntimeFallback
+              ? 'Maximum error · 0–255'
+              : isSourceOutline || technique === 'mtsdf'
+                ? 'Maximum error · 0–255'
+                : 'Lit pixels'
+          }
           value={
-            isSourceOutline
-              ? sourceOutlineCapture === undefined
-                ? '—'
-                : `${sourceOutlineCapture.maximumError} / 255`
-              : technique === 'mtsdf'
-                ? mtsdfCapture === undefined
+            isRuntimeFallback
+              ? `${runtimeFallbackCapture?.maximumError ?? '—'} / 255`
+              : isSourceOutline
+                ? sourceOutlineCapture === undefined
                   ? '—'
-                  : `${mtsdfCapture.maximumError} / 255`
-                : bitmapCapture === undefined
-                  ? '—'
-                  : String(bitmapCapture.litPixels)
+                  : `${sourceOutlineCapture.maximumError} / 255`
+                : technique === 'mtsdf'
+                  ? mtsdfCapture === undefined
+                    ? '—'
+                    : `${mtsdfCapture.maximumError} / 255`
+                  : bitmapCapture === undefined
+                    ? '—'
+                    : String(bitmapCapture.litPixels)
           }
         />
         <Metric
@@ -1611,7 +1739,38 @@ function ConformanceSurface({
         />
         <Metric label="Suite duration" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
       </div>
-      {isSourceOutline ? (
+      {isRuntimeFallback ? (
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+          <PixelBytesPanel
+            bytes={runtimeFallbackCapture?.baked}
+            conformanceView={conformanceView}
+            height={runtimeFallbackCapture?.height}
+            label="Checked-in baked asset"
+            width={runtimeFallbackCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelBytesPanel
+            bytes={runtimeFallbackCapture?.runtime}
+            conformanceView={conformanceView}
+            height={runtimeFallbackCapture?.height}
+            label="Source font · runtime bake"
+            width={runtimeFallbackCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelBytesPanel
+            bytes={runtimeFallbackCapture?.difference}
+            className="md:col-span-2"
+            conformanceView={conformanceView}
+            height={runtimeFallbackCapture?.height}
+            label="Baked / runtime difference heatmap ×8"
+            width={runtimeFallbackCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+        </div>
+      ) : isSourceOutline ? (
         <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
           <PixelBytesPanel
             bytes={sourceOutlineCapture?.candidate}
@@ -1839,6 +1998,7 @@ function PixelPanel({
 
 function BitmapTextViewport({
   backend,
+  delivery,
   dpr,
   fontSize,
   grid,
@@ -1846,6 +2006,7 @@ function BitmapTextViewport({
   onStats,
 }: {
   readonly backend: GraphicsBackend
+  readonly delivery: FontDelivery
   readonly dpr: 1 | 2
   readonly fontSize: number
   readonly grid: boolean
@@ -1948,6 +2109,7 @@ function BitmapTextViewport({
         anchor: configuration.anchor,
         backend,
         canvas,
+        delivery,
         dpr,
         ...(configuration.expectedGlyphCount === undefined
           ? {}
@@ -1992,7 +2154,7 @@ function BitmapTextViewport({
         () => undefined,
       )
     }
-  }, [backend, dpr])
+  }, [backend, delivery, dpr])
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid)
@@ -2108,6 +2270,12 @@ function BitmapTextViewport({
       data-presentation-target-glyphs={presentationEvidence.targetGlyphs}
       data-backend={stats?.backend}
       data-dpr={stats?.dpr}
+      data-font-delivery={stats?.delivery}
+      data-core-bake-ms={stats?.coreBakeMs}
+      data-raster-bake-ms={stats?.rasterBakeMs}
+      data-source-font-bytes={stats?.sourceFontBytes}
+      data-core-artifact-bytes={stats?.coreArtifactBytes}
+      data-raster-artifact-bytes={stats?.rasterArtifactBytes}
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-testid="bitmap-live-viewport"
@@ -2141,6 +2309,7 @@ function BitmapTextViewport({
 
 function MtsdfTextViewport({
   backend,
+  delivery,
   dpr,
   fontSize,
   grid,
@@ -2148,6 +2317,7 @@ function MtsdfTextViewport({
   onStats,
 }: {
   readonly backend: GraphicsBackend
+  readonly delivery: FontDelivery
   readonly dpr: 1 | 2
   readonly fontSize: number
   readonly grid: boolean
@@ -2206,6 +2376,7 @@ function MtsdfTextViewport({
         anchor: configuration.anchor,
         backend,
         canvas,
+        delivery,
         dpr,
         fontSize: configuration.fontSize,
         fontFixture,
@@ -2246,7 +2417,7 @@ function MtsdfTextViewport({
         () => undefined,
       )
     }
-  }, [backend, dpr, fontFixture])
+  }, [backend, delivery, dpr, fontFixture])
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid)
@@ -2278,6 +2449,12 @@ function MtsdfTextViewport({
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
       data-backend={stats?.backend}
       data-dpr={stats?.dpr}
+      data-font-delivery={stats?.delivery}
+      data-core-bake-ms={stats?.coreBakeMs}
+      data-raster-bake-ms={stats?.rasterBakeMs}
+      data-source-font-bytes={stats?.sourceFontBytes}
+      data-core-artifact-bytes={stats?.coreArtifactBytes}
+      data-raster-artifact-bytes={stats?.rasterArtifactBytes}
       data-draw-count={stats?.drawCount}
       data-fps-history-length={stats?.fpsHistoryLength}
       data-frame-count={stats?.frameCount}
@@ -2335,6 +2512,7 @@ function ComparisonWorkloadViewport({
   animationEnabled,
   animationSpeed,
   backend,
+  delivery,
   dpr,
   fontFixture,
   fontSize,
@@ -2352,6 +2530,7 @@ function ComparisonWorkloadViewport({
   readonly animationEnabled: boolean
   readonly animationSpeed: number
   readonly backend: GraphicsBackend
+  readonly delivery: FontDelivery
   readonly dpr: 1 | 2
   readonly fontFixture: BenchmarkFontFixture
   readonly fontSize: number
@@ -2369,7 +2548,7 @@ function ComparisonWorkloadViewport({
   const containerRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<ComparisonWorkloadPreview>(undefined)
   const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
-  const surfaceKey = `${backend}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
+  const surfaceKey = `${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
   const [publishedStats, setPublishedStats] = useState<
     Readonly<{
       fontFixture: BenchmarkFontFixture
@@ -2428,6 +2607,7 @@ function ComparisonWorkloadViewport({
         ...configuration,
         backend,
         canvas,
+        delivery,
         dpr,
         height: Math.max(1, bounds.height),
         signal: controller.signal,
@@ -2460,7 +2640,7 @@ function ComparisonWorkloadViewport({
         () => undefined,
       )
     }
-  }, [backend, dpr, fontFixture, surfaceKey, technique, workload])
+  }, [backend, delivery, dpr, fontFixture, surfaceKey, technique, workload])
 
   useEffect(() => {
     const preview = previewRef.current
@@ -2491,6 +2671,12 @@ function ComparisonWorkloadViewport({
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
       data-backend={stats?.backend}
       data-dpr={stats?.dpr}
+      data-font-delivery={stats?.delivery}
+      data-core-bake-ms={stats?.coreBakeMs}
+      data-raster-bake-ms={stats?.rasterBakeMs}
+      data-source-font-bytes={stats?.sourceFontBytes}
+      data-core-artifact-bytes={stats?.coreArtifactBytes}
+      data-raster-artifact-bytes={stats?.rasterArtifactBytes}
       data-draw-count={stats?.drawCount}
       data-first-draw-ms={stats?.firstDrawMs}
       data-font-fixture={publishedStats?.fontFixture ?? fontFixture}
@@ -2697,6 +2883,7 @@ function Controls({
   animationEnabled,
   animationSpeed,
   backend,
+  delivery,
   conformanceView,
   dpr,
   fontFixture,
@@ -2719,6 +2906,7 @@ function Controls({
   warmup,
   webgpu,
   onBackend,
+  onDelivery,
   onAnimationEnabled,
   onAnimationSpeed,
   onConformanceReset,
@@ -2740,6 +2928,7 @@ function Controls({
   readonly animationEnabled: boolean
   readonly animationSpeed: number
   readonly backend: GraphicsBackend
+  readonly delivery: FontDelivery
   readonly conformanceView: ConformanceView
   readonly dpr: 1 | 2
   readonly fontFixture: BenchmarkFontFixture
@@ -2762,6 +2951,7 @@ function Controls({
   readonly warmup: number
   readonly webgpu: boolean
   readonly onBackend: (backend: GraphicsBackend) => void
+  readonly onDelivery: (delivery: FontDelivery) => void
   readonly onAnimationEnabled: (value: boolean) => void
   readonly onAnimationSpeed: (value: number) => void
   readonly onConformanceReset: () => void
@@ -2819,19 +3009,60 @@ function Controls({
           </Button>
         </div>
       </div>
-      <div>
-        <p className="mb-2 font-mono text-[9px] uppercase text-dim">Device pixel ratio</p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant={dpr === 1 ? 'primary' : 'secondary'} onClick={() => onDpr(1)}>
-            1× DPR
-          </Button>
-          <Button variant={dpr === 2 ? 'primary' : 'secondary'} onClick={() => onDpr(2)}>
-            2× DPR
-          </Button>
+      <div data-testid="font-delivery-switcher">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
+          <fieldset className="grid min-w-0 gap-1.5">
+            <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
+            <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
+              <button
+                aria-pressed={dpr === 1}
+                className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 1 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                type="button"
+                onClick={() => onDpr(1)}
+              >
+                1×
+              </button>
+              <button
+                aria-pressed={dpr === 2}
+                className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 2 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                type="button"
+                onClick={() => onDpr(2)}
+              >
+                2×
+              </button>
+            </div>
+          </fieldset>
+          <div className="grid gap-1.5">
+            <p className="font-mono text-[9px] uppercase text-dim">Source</p>
+            <Button
+              aria-pressed={delivery === 'baked'}
+              className="min-w-[84px] gap-1.5"
+              variant={delivery === 'baked' ? 'primary' : 'secondary'}
+              onClick={() => onDelivery(delivery === 'baked' ? 'runtime' : 'baked')}
+            >
+              <span aria-hidden="true" className="inline-block w-3 text-center">
+                {delivery === 'baked' ? '✓' : ''}
+              </span>
+              Baked
+            </Button>
+          </div>
+          <div className="grid gap-1.5">
+            <p className="font-mono text-[9px] uppercase text-dim">Grid</p>
+            <Button
+              aria-label="Show canvas grid"
+              aria-pressed={showGrid}
+              className="w-8 px-0"
+              title="Show canvas grid"
+              variant={showGrid ? 'primary' : 'secondary'}
+              onClick={() => onShowGrid(!showGrid)}
+            >
+              <svg aria-hidden="true" className="size-3.5" fill="none" viewBox="0 0 16 16">
+                <path d="M1.5 5.5h13m-13 5h13m-9-9v13m5-13v13" stroke="currentColor" />
+                <rect height="13" rx="1" stroke="currentColor" width="13" x="1.5" y="1.5" />
+              </svg>
+            </Button>
+          </div>
         </div>
-      </div>
-      <div className="border-y border-border py-2">
-        <Toggle checked={showGrid} label="Show canvas grid" onChange={onShowGrid} />
       </div>
       {mode === 'conformance' && (
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-md border border-border bg-surface p-3">
@@ -3025,7 +3256,12 @@ function Controls({
             : 'The finite suite includes readback, reference composition, comparison, clipping, and hashing.'}
         </p>
       </div>
-      <PayloadInspector fontFixture={fontFixture} liveStats={liveStats} technique={technique} />
+      <PayloadInspector
+        delivery={delivery}
+        fontFixture={fontFixture}
+        liveStats={liveStats}
+        technique={technique}
+      />
       <a
         className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
         href="/font-notices.txt"
@@ -3039,10 +3275,12 @@ function Controls({
 }
 
 function PayloadInspector({
+  delivery,
   fontFixture,
   liveStats,
   technique,
 }: {
+  readonly delivery: FontDelivery
   readonly fontFixture: BenchmarkFontFixture
   readonly liveStats: LiveTextStats | undefined
   readonly technique: RasterTechnique
@@ -3059,8 +3297,18 @@ function PayloadInspector({
   const shaper = measuredPackageSize('text-shaper-wasm')
   const bakerHost = measuredPackageSize(`${technique}-baker-js`)
   const bakerWasm = measuredPackageSize(`${technique}-baker-wasm`)
+  const runtimeBakerHost = measuredPackageSize('runtime-baker-host-js')
+  const runtimeBakerWorker = measuredPackageSize('runtime-baker-worker-js')
+  const coreBakerHost = measuredPackageSize('portable-baker-js')
+  const coreBakerWasm = measuredPackageSize('portable-baker-wasm')
   const libraryTransferBytes = runtime.gzipBytes + shaper.gzipBytes
-  const bakerTransferBytes = bakerHost.gzipBytes + bakerWasm.gzipBytes
+  const bakerTransferBytes =
+    runtimeBakerHost.gzipBytes +
+    runtimeBakerWorker.gzipBytes +
+    coreBakerHost.gzipBytes +
+    coreBakerWasm.gzipBytes +
+    bakerHost.gzipBytes +
+    bakerWasm.gzipBytes
   const bitmapStats = liveStats?.technique === 'bitmap' ? liveStats : undefined
   const mtsdfFixture = technique === 'mtsdf' ? mtsdfFixtureFor(fontFixture) : undefined
   const bitmapFixture = technique === 'bitmap' ? bitmapFixtureFor(fontFixture) : undefined
@@ -3115,19 +3363,39 @@ function PayloadInspector({
         </div>
         <div className="grid gap-2 border-b border-border py-3">
           <PayloadRow
+            label={runtimeBakerHost.label}
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
+            value={formatBytes(runtimeBakerHost.gzipBytes)}
+          />
+          <PayloadRow
+            label={runtimeBakerWorker.label}
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
+            value={formatBytes(runtimeBakerWorker.gzipBytes)}
+          />
+          <PayloadRow
+            label={coreBakerHost.label}
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
+            value={formatBytes(coreBakerHost.gzipBytes)}
+          />
+          <PayloadRow
+            label={coreBakerWasm.label}
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
+            value={formatBytes(coreBakerWasm.gzipBytes)}
+          />
+          <PayloadRow
             label={bakerHost.label}
-            status="unloaded"
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerHost.gzipBytes)}
           />
           <PayloadRow
             label={bakerWasm.label}
-            status="unloaded"
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerWasm.gzipBytes)}
           />
           <PayloadRow
             emphasis
-            label="Optional baker total"
-            status="unloaded"
+            label="Runtime bake libraries · gzip"
+            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerTransferBytes)}
           />
         </div>
@@ -3135,8 +3403,22 @@ function PayloadInspector({
           <PayloadRow
             emphasis
             label="Font assets · download"
-            value={formatBytes(fontTransferBytes)}
+            value={formatBytes(
+              delivery === 'runtime' ? liveStats?.sourceFontBytes : fontTransferBytes,
+            )}
           />
+          {delivery === 'runtime' && (
+            <>
+              <PayloadRow
+                label="Generated core artifact · CPU"
+                value={formatBytes(liveStats?.coreArtifactBytes)}
+              />
+              <PayloadRow
+                label={`Generated ${technique === 'mtsdf' ? 'MTSDF' : 'bitmap'} artifact · CPU`}
+                value={formatBytes(liveStats?.rasterArtifactBytes)}
+              />
+            </>
+          )}
           {technique === 'mtsdf' && (
             <PayloadRow
               label="Decoded font artifact · CPU"
@@ -3231,10 +3513,12 @@ function measuredPackageSize(id: string): MeasuredPackageSize {
 
 function CompactSheet({
   children,
+  phone,
   title,
   onClose,
 }: {
   readonly children: ReactNode
+  readonly phone: boolean
   readonly title: string
   readonly onClose: () => void
 }) {
@@ -3242,12 +3526,17 @@ function CompactSheet({
     <>
       <button
         aria-label="Close controls"
-        className="fixed inset-0 top-[92px] z-20 bg-black/40"
+        className="fixed inset-0 top-[52px] z-20 bg-black/40"
         type="button"
         onClick={onClose}
       />
-      <section className="fixed inset-x-2 bottom-2 z-30 h-[60dvh] max-h-[60dvh] overflow-y-auto overscroll-contain rounded-xl border border-border bg-chrome p-4 shadow-2xl sm:left-auto sm:w-[min(420px,calc(100vw-16px))]">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
+      <section
+        className={
+          phone
+            ? 'fixed inset-x-2 bottom-[66px] z-30 max-h-[calc(100dvh-126px)] overflow-y-auto overscroll-contain rounded-xl border border-border bg-chrome p-4 shadow-2xl'
+            : 'fixed right-2 top-[60px] z-30 max-h-[60dvh] w-[min(420px,calc(100vw-16px))] overflow-y-auto overscroll-contain rounded-xl border border-border bg-chrome p-4 shadow-2xl before:absolute before:-top-1.5 before:right-24 before:size-3 before:rotate-45 before:border-l before:border-t before:border-border before:bg-chrome'
+        }
+      >
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-lg font-semibold">{title}</h1>
           <Button aria-label="Close controls" onClick={onClose}>
@@ -3262,22 +3551,50 @@ function CompactSheet({
 
 function CompactWorkloadPanel({
   children,
+  phone,
   onClose,
 }: {
   readonly children: ReactNode
+  readonly phone: boolean
   readonly onClose: () => void
 }) {
   return (
     <>
       <button
         aria-label="Close workload menu"
-        className="fixed inset-0 top-[92px] z-20 bg-black/40"
+        className="fixed inset-0 top-[52px] z-20 bg-black/40"
         type="button"
         onClick={onClose}
       />
-      <div className="fixed inset-y-0 left-0 top-[92px] z-30 w-[min(360px,88vw)] overflow-hidden border-r border-border bg-chrome shadow-2xl">
+      <div
+        className={`fixed left-2 top-[60px] z-30 max-h-[calc(100dvh-72px)] w-[min(360px,calc(100vw-16px))] overflow-hidden rounded-xl border border-border bg-chrome shadow-2xl before:absolute before:-top-1.5 before:left-3 before:size-3 before:rotate-45 before:border-l before:border-t before:border-border before:bg-chrome ${phone ? 'bottom-[66px]' : ''}`}
+      >
         {children}
       </div>
     </>
+  )
+}
+
+function MobileNavigation({
+  location,
+  onLocation,
+}: {
+  readonly location: HarnessLocation
+  readonly onLocation: (value: Partial<HarnessLocation>) => void
+}) {
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[58px] grid-cols-4 border-t border-border bg-chrome p-2 min-[700px]:hidden">
+      {(['scene', 'controls', 'report', 'export'] as const).map((view) => (
+        <button
+          aria-pressed={location.view === view}
+          className={`rounded-md font-mono text-[10px] capitalize ${location.view === view ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+          key={view}
+          type="button"
+          onClick={() => onLocation({ view })}
+        >
+          {view}
+        </button>
+      ))}
+    </nav>
   )
 }

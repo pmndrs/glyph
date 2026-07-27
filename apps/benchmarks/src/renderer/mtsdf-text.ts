@@ -5,7 +5,12 @@ import {
   type ParagraphLayout,
   type RegisteredFont,
 } from '@pmndrs/text'
-import { msdf, msdfDescriptorRasterKey, type MsdfResource } from '@pmndrs/text/raster/msdf'
+import {
+  msdf,
+  msdfDescriptorRasterKey,
+  type MsdfModule,
+  type MsdfResource,
+} from '@pmndrs/text/raster/msdf'
 import * as THREE from 'three/webgpu'
 
 import amiriCompressedFontUrl from '../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url'
@@ -22,10 +27,12 @@ import {
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
+import type { FontDelivery } from '../benchmark/url-state'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import { createCanvasSurface } from './canvas-surface'
 import { finiteCanvasDelta } from './canvas-view'
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
+import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry'
 import {
   LIVE_TEXT_COLOR,
   LIVE_TEXT_LINE_HEIGHT,
@@ -39,6 +46,12 @@ import {
 } from './source-outline-reference'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  createFontDeliveryMetrics,
+  loadRuntimeFont,
+  measuredMsdfRaster,
+  type FontDeliveryMetrics,
+} from './font-delivery'
 
 const WIDTH = 512
 const HEIGHT = 320
@@ -103,6 +116,12 @@ export interface MtsdfTextLiveStats {
   readonly framebufferGpuBytes: number
   readonly totalGpuBytes: number
   readonly artifactBytes: number
+  readonly delivery: FontDelivery
+  readonly sourceFontBytes: number
+  readonly coreArtifactBytes: number
+  readonly coreBakeMs: number
+  readonly rasterArtifactBytes: number
+  readonly rasterBakeMs: number
   readonly rendererInitMs: number
   readonly fontLoadMs: number
   readonly textReadyMs: number
@@ -116,6 +135,7 @@ export interface MtsdfTextLiveStats {
   readonly p95GpuMs: number | undefined
   readonly minimumGpuMs: number | undefined
   readonly maximumGpuMs: number | undefined
+  readonly textUpdateTimings: TextUpdateTimingSummary
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -279,6 +299,7 @@ export async function createMtsdfTextPreview(options: {
   readonly features?: readonly FontFeature[]
   readonly fontSize: number
   readonly fontFixture?: BenchmarkFontFixture
+  readonly delivery?: FontDelivery
   readonly height: number
   readonly showGrid: boolean
   readonly language?: string
@@ -303,6 +324,7 @@ export async function createMtsdfTextPreview(options: {
     features = [],
     textAlign = 'start',
     fontFixture = 'inter',
+    delivery = 'baked',
   } = options
   signal?.throwIfAborted()
   const startupStarted = performance.now()
@@ -322,12 +344,13 @@ export async function createMtsdfTextPreview(options: {
     width,
   })
   const canvasSurface = createCanvasSurface(renderer, width, height, options.showGrid)
+  const textUpdateTelemetry = createTextUpdateTelemetry()
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: Text | undefined
   try {
     const fontStarted = performance.now()
-    const loaded = await loadMtsdfFont(signal, fontFixture)
+    const loaded = await loadMtsdfFont(signal, fontFixture, delivery)
     font = loaded.font
     const fontLoadMs = performance.now() - fontStarted
     signal?.throwIfAborted()
@@ -337,7 +360,7 @@ export async function createMtsdfTextPreview(options: {
     line = new Text({
       text,
       font: activeFont,
-      raster: msdf,
+      raster: loaded.raster,
       fontSize,
       rasterPixelRatio: dpr,
       lineHeight: LIVE_TEXT_LINE_HEIGHT,
@@ -349,13 +372,23 @@ export async function createMtsdfTextPreview(options: {
       textAlign,
       color: LIVE_TEXT_COLOR,
     })
+    const scheduledAt = performance.now()
     await line.ready
+    const readyAt = performance.now()
     signal?.throwIfAborted()
     const activeLine = line
     const textReadyMs = performance.now() - textStarted
     const startupMs = performance.now() - startupStarted
+    const sceneStartedAt = performance.now()
     positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio)
     scene.add(activeLine)
+    const sceneFinishedAt = performance.now()
+    textUpdateTelemetry.record({
+      scheduleMs: scheduledAt - textStarted,
+      readyMs: readyAt - scheduledAt,
+      sceneMs: sceneFinishedAt - sceneStartedAt,
+      totalMs: sceneFinishedAt - textStarted,
+    })
     const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000)
     camera.position.z = 500
     camera.updateProjectionMatrix()
@@ -413,7 +446,7 @@ export async function createMtsdfTextPreview(options: {
         scheduleGpuTimestamp()
         const layout = committedLayout(activeLine)
         const framebufferGpuBytes = Math.round(width * dpr) * Math.round(height * dpr) * 4
-        const atlasGpuBytes = loaded.atlasGpuBytes
+        const atlasGpuBytes = loaded.metrics.rasterGpuBytes || loaded.atlasGpuBytes
         onStats({
           technique: 'mtsdf',
           backend,
@@ -429,12 +462,19 @@ export async function createMtsdfTextPreview(options: {
           framebufferGpuBytes,
           totalGpuBytes: atlasGpuBytes + framebufferGpuBytes,
           artifactBytes: loaded.compressedBytes,
+          delivery,
+          sourceFontBytes: loaded.metrics.sourceFontBytes,
+          coreArtifactBytes: loaded.metrics.coreArtifactBytes,
+          coreBakeMs: loaded.metrics.coreBakeMs,
+          rasterArtifactBytes: loaded.metrics.rasterArtifactBytes,
+          rasterBakeMs: loaded.metrics.rasterBakeMs,
           rendererInitMs,
           fontLoadMs,
           textReadyMs,
           firstDrawMs,
           startupMs,
           gpuTimingSupported,
+          textUpdateTimings: textUpdateTelemetry.summary(),
         })
       } catch (error) {
         onError(error)
@@ -452,12 +492,22 @@ export async function createMtsdfTextPreview(options: {
         camera.right = width
         camera.bottom = -height
         camera.updateProjectionMatrix()
+        const updateStartedAt = performance.now()
         const revision = ++updateRevision
         activeLine.setProperties({ width: Math.max(120, width * layoutWidthRatio) })
+        const resizeScheduledAt = performance.now()
         void activeLine.ready
           .then(() => {
             if (closing || disposed || revision !== updateRevision) return
+            const resizeSceneStartedAt = performance.now()
             positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio)
+            const finishedAt = performance.now()
+            textUpdateTelemetry.record({
+              scheduleMs: resizeScheduledAt - updateStartedAt,
+              readyMs: resizeSceneStartedAt - resizeScheduledAt,
+              sceneMs: finishedAt - resizeSceneStartedAt,
+              totalMs: finishedAt - updateStartedAt,
+            })
           })
           .catch((error: unknown) => {
             if (!closing && !disposed) onError(error)
@@ -478,6 +528,7 @@ export async function createMtsdfTextPreview(options: {
         if (closing || disposed) {
           throw new DOMException('The MSDF preview is disposed', 'AbortError')
         }
+        const updateStartedAt = performance.now()
         fontSize = positiveViewportSize(next.fontSize, 'MSDF preview font size')
         anchor = next.anchor
         assertLayoutWidthRatio(next.layoutWidthRatio)
@@ -492,11 +543,20 @@ export async function createMtsdfTextPreview(options: {
           features: next.features,
           textAlign: next.textAlign,
         })
+        const updateScheduledAt = performance.now()
         await activeLine.ready
         if (closing || disposed || revision !== updateRevision) {
           throw new DOMException('The MSDF preview update was superseded', 'AbortError')
         }
+        const updateSceneStartedAt = performance.now()
         positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio)
+        const finishedAt = performance.now()
+        textUpdateTelemetry.record({
+          scheduleMs: updateScheduledAt - updateStartedAt,
+          readyMs: updateSceneStartedAt - updateScheduledAt,
+          sceneMs: finishedAt - updateSceneStartedAt,
+          totalMs: finishedAt - updateStartedAt,
+        })
       },
       dispose() {
         if (disposal !== undefined) return disposal
@@ -648,15 +708,30 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
 export async function loadMtsdfFont(
   signal?: AbortSignal,
   fixture: BenchmarkFontFixture = 'inter',
+  delivery: FontDelivery = 'baked',
 ): Promise<{
   readonly artifactBytes: number
   readonly atlasGpuBytes: number
   readonly compressedBytes: number
   readonly font: RegisteredFont
+  readonly metrics: FontDeliveryMetrics
+  readonly raster: MsdfModule
 }> {
   signal?.throwIfAborted()
+  const metrics = createFontDeliveryMetrics(delivery)
   const manifest = mtsdfFixtureManifests.get(fixture)
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`)
+  if (delivery === 'runtime') {
+    const loaded = await loadRuntimeFont(fixture, metrics, signal)
+    return {
+      artifactBytes: metrics.coreArtifactBytes,
+      atlasGpuBytes: 0,
+      compressedBytes: metrics.sourceFontBytes,
+      font: loaded.font,
+      metrics,
+      raster: measuredMsdfRaster(metrics),
+    }
+  }
   const response = await fetch(
     compressedFontUrls[fixture],
     signal === undefined ? undefined : { signal },
@@ -676,6 +751,8 @@ export async function loadMtsdfFont(
     atlasGpuBytes: manifest.raster.runtimeTextureArray.mipmappedBytes,
     compressedBytes: manifest.compressed.bytes,
     font: await registry.registerAsset(artifact),
+    metrics,
+    raster: msdf,
   }
 }
 
@@ -777,6 +854,7 @@ async function renderMtsdfText(resources: MtsdfTextResources): Promise<TargetRun
 
 export async function captureMtsdfTextConformance(options: {
   readonly backend: RendererBackend
+  readonly delivery?: FontDelivery
   readonly dpr: number
   readonly fontFixture?: BenchmarkFontFixture
   readonly signal?: AbortSignal
@@ -787,6 +865,7 @@ export async function captureMtsdfTextConformance(options: {
     options.dpr,
     options.fontFixture,
     options.signal,
+    options.delivery,
   )
   try {
     options.signal?.throwIfAborted()
@@ -837,6 +916,7 @@ async function createFlatMtsdfConformanceResources(
   dpr: number,
   fontFixture: BenchmarkFontFixture = 'inter',
   signal?: AbortSignal,
+  delivery: FontDelivery = 'baked',
 ): Promise<FlatMtsdfConformanceResources> {
   signal?.throwIfAborted()
   const canvas = document.createElement('canvas')
@@ -852,17 +932,13 @@ async function createFlatMtsdfConformanceResources(
   let line: Text | undefined
   let resource: MsdfResource | undefined
   try {
-    font = (await loadMtsdfFont(signal, fontFixture)).font
+    const loaded = await loadMtsdfFont(signal, fontFixture, delivery)
+    font = loaded.font
     const rasterKey = await msdfDescriptorRasterKey()
-    const raster = await font.loadRaster(
-      { rasterKey, kind: msdf.kind },
-      signal === undefined ? undefined : { signal },
-    )
-    resource = await msdf.decode(font, raster, signal)
     line = new Text({
       text: conformanceText(),
       font,
-      raster: msdf,
+      raster: loaded.raster,
       // Match the baked 64 px/em base level in device pixels. Minification and
       // generated mip selection are exercised by the separate scene corpus.
       fontSize: 64 / dpr,
@@ -873,6 +949,11 @@ async function createFlatMtsdfConformanceResources(
       color: 0xffffff,
     })
     await line.ready
+    const raster = await font.loadRaster(
+      { rasterKey, kind: msdf.kind },
+      signal === undefined ? undefined : { signal },
+    )
+    resource = await loaded.raster.decode(font, raster, signal)
     signal?.throwIfAborted()
     line.position.set(18, -18, 0)
     const scene = new THREE.Scene()
