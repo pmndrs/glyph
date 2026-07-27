@@ -12,6 +12,8 @@ describe('independent package-size report', () => {
       'runtime-baker-worker-js',
       'text-shaper-js',
       'text-shaper-wasm',
+      'mtsdf-generator-js',
+      'mtsdf-generator-wasm',
       'portable-baker-js',
       'portable-baker-wasm',
       'unicode-analysis-js',

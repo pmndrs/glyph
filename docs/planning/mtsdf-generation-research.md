@@ -33,7 +33,7 @@ sources:
     title: Zappar MSDF generator 1.2.4
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T00:28:33Z"
+  at: "2026-07-27T01:58:56Z"
 ---
 
 # MTSDF generation research
@@ -107,6 +107,8 @@ The scalar kernel is a test oracle and development baseline, not a public mode. 
 - Full Inter plus representative Arabic, Devanagari, and CJK outlines must generate without panic or missing non-empty glyphs.
 - Scalar, auto-vectorized, and explicit-SIMD experiments report native/Wasm time, allocation counts, raw/optimized/gzip/Brotli bytes, and exact or bounded-error equivalence; exactly one winning Wasm kernel ships.
 - The final baker uses the repository's generated C ABI/JSON contract and direct Wasm memory access. It adds no WASI, Embind, wasm-bindgen, or per-call marshalling allocations.
+
+The scalar production boundary now satisfies that final ABI gate: the package build emits one optimized zero-import Wasm and its Rust-generated contract, while the TypeScript host validates the complete contract and writes fixed command records directly into one owned request allocation. All seven native-oracle hashes survive the host boundary. The remaining implementation experiment compares scalar, compiler auto-vectorization, and explicit `simd128`; only a complete quality, full-font, browser-call, allocation, and compressed-size win may replace the scalar kernel.
 
 [^valve-sdf]: Green, *Improved Alpha-Tested Magnification for Vector Textures and Special Effects*, 2007.
 [^chlumsky-thesis]: Chlumský, *Shape Decomposition for Multi-Channel Distance Fields*, 2015.

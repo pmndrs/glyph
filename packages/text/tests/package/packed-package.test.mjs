@@ -54,6 +54,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     './shaper-abi.json',
     './bitmap-baker.wasm',
     './bitmap-abi.json',
+    './mtsdf-baker.wasm',
+    './mtsdf-abi.json',
   ]) {
     const specifier = `@pmndrs/text${subpath.slice(1)}`
     const resolved = import.meta.resolve(specifier, consumerEntry)

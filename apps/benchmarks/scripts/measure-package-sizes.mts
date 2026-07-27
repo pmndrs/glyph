@@ -298,6 +298,16 @@ const entries: SizeEntry[] = [
     new URL('../../../packages/text/dist/text_shaper.wasm', import.meta.url),
   ),
   await measureJavaScript(
+    'mtsdf-generator-js',
+    'MTSDF generator host JS',
+    new URL('../size-entries/mtsdf-generator.ts', import.meta.url),
+  ),
+  await measureWasm(
+    'mtsdf-generator-wasm',
+    'MTSDF generator Wasm',
+    new URL('../../../packages/text/dist/mtsdf_baker.wasm', import.meta.url),
+  ),
+  await measureJavaScript(
     'portable-baker-js',
     'Portable baker JS',
     new URL('../size-entries/font-baker.ts', import.meta.url),

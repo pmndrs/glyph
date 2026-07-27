@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:1fad2d4e8e4ee5e03e6a3f07a19fd199c4e3ede56ae3e0285e3b08cf9c679f90"
+source_digest: "sha256:909a8a4bc21ad00538032e004ee7791c44f865e618f254ba8af7a47c7800dba9"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -32,6 +32,9 @@ sources:
   - id: mtsdf-admission
     resource: ../../packages/text/rust/mtsdf-admission
     title: Non-shipping MTSDF generator admission harness
+  - id: mtsdf-host
+    resource: ../../packages/text/src/internal/mtsdf-generator.ts
+    title: MTSDF direct-memory TypeScript host
   - id: composition
     resource: ../../packages/text/src/internal/compose-bake.ts
     title: Generic core/raster artifact composer
@@ -73,7 +76,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T01:29:13Z"
+  at: "2026-07-27T01:58:56Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -84,7 +87,7 @@ This package owns the accepted public core and React contract types. Its fixture
 
 Milestone 8.1 adds a repository-owned `no_std + alloc` Rust MTSDF core and a non-shipping admission harness beside the package's existing bakers. Typed AoS outline construction lowers once into kind-segregated SoA spans with contour identity; reusable scratch keeps per-pixel traversal allocation-free. True signed curve distances, contour-aware overlap combination, nonzero-fill sign correction, and deterministic edge coloring produce zero coverage mismatches against pinned native `msdfgen` 1.13.0 across ordinary, acute, overlapping, self-intersecting, quadratic, cubic, and counter fixtures. Mean alpha error stays between 0.472 and 0.549 bytes. The optimized 42,607-byte `wasm32-unknown-unknown` admission module imports nothing and its compiled graph contains no font parser, WGPU, native binding, or WASI dependency. Full Inter generation is checksum-stable across cold/warm passes; its roughly 40.2-second scalar pass is retained as the optimization baseline, not the final performance target. A bounded cargo-fuzz lane covers malformed outline streams. The oracle remains test-only, and the scalar kernel remains a correctness oracle while the single shipped SIMD decision is measured.
 
-The geometry core is independent of its host boundary. A sibling `mtsdf-baker` crate owns the package allocator, generated little-endian JSON contract, and seven-function C ABI for allocation, release, generation, borrowed-result access, and embedded-contract access. Callers write one checked header plus fixed command records directly into Wasm memory; the module accepts only exact active pointer/length pairs and rejects a released allocation. A package test compiles and instantiates the zero-import module, reads the embedded contract, generates the canonical square through direct memory, verifies the RGBA8 checksum, releases the request, and proves reuse is rejected. Binaryen `-Oz` currently measures the complete boundary at 44,368 bytes (17,930 gzip; 14,865 Brotli). The production TypeScript wrapper and published artifact remain item 8.1 work rather than being implied by this internal boundary.
+The geometry core is independent of its host boundary. A sibling `mtsdf-baker` crate owns the package allocator, generated little-endian JSON contract, and seven-function C ABI for allocation, release, generation, borrowed-result access, and embedded-contract access. Callers write one checked header plus fixed command records directly into Wasm memory; the module accepts only exact active pointer/length pairs and rejects a released allocation. The production build now publishes the Binaryen-optimized zero-import Wasm and generated contract as package resources. Its internal TypeScript host validates every nested ABI field and host request once, writes discriminated move/line/quadratic/cubic/close commands directly into linear memory, maps statuses to typed errors, verifies the exact RGBA8 length, copies borrowed output before release, and releases requests after every later failure. All seven native-oracle cases retain their independent SHA-256 identities through the host; malformed numeric/outline input, forged release ranges, stale allocations, ABI drift, and cleanup after invalid output are named regressions. The distributed boundary is 43,940 bytes raw, 18,087 gzip, and 14,755 Brotli; the host is 10,643 raw, 7,338 minified, 2,525 gzip, and 2,221 Brotli bytes under separate ceilings. A local Node 24 arm64 observation measured the seven-case 44,800-byte corpus at 18.6 ms cold and 9.24 ms warm median after 2.7 ms compilation and 1.0 ms host initialization; hashes gate publication, while timings remain environment observations rather than thresholds. The scalar/SIMD comparison is the remaining item 8.1 gate.
 
 The framework-neutral `Text` object is now a real Three.js `Group` rather than a contract shim. It validates one complete candidate state before committing a patch, resolves every distinct root/span font through registry-scoped loader and HarfRust caches, shares decoded raster resources through `RasterRuntime`, and owns the resulting paragraph and raster batches as one generation. The first incomplete generation stays hidden; a later load keeps the prior complete generation visible until the replacement can swap atomically. Revision-scoped cancellation prevents stale work from publishing. Every committed replacement releases its superseded font-disposal subscription while preserving a shared paragraph when only constraints changed. Text edits synchronously revalidate span and feature ranges; a paragraph-wide feature over empty text normalizes to a no-op. Paint-only updates reuse the positioned layout, semantic no-op paint updates skip instance uploads, width updates reuse paragraph shaping, shaping changes replace the paragraph, and disposal releases every owned batch and paragraph. A raw span font inherits the root raster definition but resolves its own font-local resource, preventing cross-font atlas reuse.
 

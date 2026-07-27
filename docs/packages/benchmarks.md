@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:214d745d3c80cdd69b5029e58c5458d0c2c972307b6333d6a6cdd62864c46d05"
+source_digest: "sha256:e99b135255a78f065b6a558baad1bdf059a2236fcc026b759fc5aba79cc92eec"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T01:29:13Z"
+  at: "2026-07-27T01:58:56Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -65,6 +65,8 @@ The showcase corpus is now an immutable TypeScript discriminated union with exac
 The CI-safe advanced-shaping target derives all 68 finite frames from that same corpus and sends each through the public `Text` object and bitmap batch construction at an explicit 800 CSS-pixel viewport and 16 px font size. Its exact Chromium 149 record covers five cases, 709 laid-out glyphs, 625 rendered instances, 72 draws, zero missing glyphs, 17,362 normalized layout bytes, and composite hash `314418c3`; a wrong hash and a missing-glyph mutation are negative controls. The three recorded 8.5–11.3 ms durations describe this machine's end-to-end conformance execution only. They are neither live renderer costs nor portability thresholds. Hardware GPU pixels remain owned by the exact bitmap readback lane, while the admitted Vitexec product probe proves that each authenticated showcase fixture reaches the live WebGPU canvas.
 
 The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. This run observed 119.7–120.9 FPS, 0.1–0.2 ms median CPU submission, 0.3–0.7 ms CPU P95, 0.050–0.149 ms median GPU time, and 0.752–2.147 ms GPU P95 across one to three draws. Initial public `Text` readiness was 8.6–18.5 ms and total startup 23.4–119.0 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
+
+The package-size lane now measures the item 8.1 MTSDF generator separately from every initial browser and unrelated raster graph. The validated TypeScript host is 10,643 raw, 7,338 minified, 2,525 gzip, and 2,221 Brotli bytes; the optimized zero-import Wasm is 43,940 raw, 18,087 gzip, and 14,755 Brotli bytes. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. A package-owned command additionally reports compile, initialization, cold-corpus, and five warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance.
 
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 13 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
