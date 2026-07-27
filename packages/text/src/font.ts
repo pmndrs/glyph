@@ -41,7 +41,8 @@ export interface RegisteredFont {
 
 export interface FontSourceOverride {
   readonly source: string | URL
-  readonly baked?: string | URL
+  /** Explicitly set null to skip baked-sibling discovery for this load. */
+  readonly baked?: string | URL | null
 }
 
 export interface BakedFontSource {

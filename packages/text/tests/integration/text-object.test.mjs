@@ -5,7 +5,7 @@ import test from 'node:test'
 import { createFontBaker } from '@pmndrs/text-font-baker'
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate'
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/text/bakers/bitmap'
-import { FontRegistry, RasterRuntime, Text, defineRaster } from '../../dist/index.js'
+import { FontLoader, FontRegistry, RasterRuntime, Text, defineRaster } from '../../dist/index.js'
 import {
   bitmap,
   bitmapDescriptor,
@@ -449,6 +449,70 @@ test('Text resolves independent raster resources for two fonts in one paragraph'
     inter.dispose()
     amiri.dispose()
     restoreFetch()
+  }
+})
+
+test('RasterRuntime authenticates and attaches a raster generated from a source-only font', async () => {
+  const sourceUrl = new URL(
+    '../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf',
+    import.meta.url,
+  )
+  const [source, fontWasm, bitmapWasm] = await Promise.all([
+    readFile(sourceUrl),
+    readFile(new URL('../../../font-baker/dist/font_baker.wasm', import.meta.url)),
+    readFile(new URL('../../dist/bitmap_baker.wasm', import.meta.url)),
+  ])
+  const core = (await createFontBaker(fontWasm)).bake({
+    source,
+    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+  })
+  const coreBytes = core.artifacts[0].bytes
+  const baker = bitmapBakerFromCore(await createBitmapBaker(bitmapWasm))
+  const requestedRaster = bitmap({ strikes: [16] })
+  const runtimeRaster = defineRaster({
+    ...requestedRaster.module,
+    runtimeBaker: async () => ({
+      kind: 'bitmap',
+      async bake(request) {
+        return baker.bake({
+          font: {
+            source: request.source,
+            fontFaceIndex: request.fontFaceIndex,
+            glyphCount: request.font.glyphCount,
+            shapingHash: request.font.shapingHash,
+          },
+          rasterKey: request.rasterKey,
+          packaging: { artifact: 'embedded', pages: 'embedded' },
+          descriptor: bitmapDescriptor(request.options),
+          signal: request.signal,
+        })
+      },
+    }),
+  })
+  const loader = new FontLoader({
+    async fetch(input) {
+      assert.equal(String(input), sourceUrl.href)
+      return new Response(source)
+    },
+    async runtimeBake() {
+      return coreBytes
+    },
+  })
+  const font = await loader.load({ source: sourceUrl, baked: null })
+  const runtime = new RasterRuntime()
+
+  try {
+    assert.equal(font.rasterReferences.length, 0)
+    const loaded = await runtime.load(font, {
+      module: runtimeRaster,
+      options: requestedRaster.options,
+    })
+    assert.equal(loaded.artifact.kind, 'bitmap')
+    assert.equal(font.rasterReferences.length, 1)
+    assert.equal(font.getRaster(loaded.artifact.rasterKey), loaded.artifact)
+  } finally {
+    runtime.dispose()
+    font.dispose()
   }
 })
 
