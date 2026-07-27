@@ -2,6 +2,10 @@
 
 ## 2026-07-27
 
+- **Hardening** — Completed the item-8.4 dual-backend MTSDF renderer and base-level scalar conformance oracle; added reviewed error envelopes and negative controls, causal Bitmap/MSDF workload probes, explicit dynamic-reflow timing, and the existing Paint & Effects workload's live per-word hue with opacity plus MSDF-only stroke.
+- **Implementation** — Published six authenticated full-face Bitmap/MTSDF benchmark fixture families, exact NPOT mip-chain accounting, payload/page/GPU inspection, downloadable font notices, and streaming artifact identity tests; DotGothic16 and Amiri remain labeled stress fixtures pending paging.
+- **Hardening** — Enforced serial lazy module Workers for runtime raster bakers, bounded segmented Wasm artifact transfer, unsigned ABI normalization, asynchronous Worker preparation failures, registry subscription release, authenticated collection-face reuse, generator-only MTSDF host compatibility, and removal of obsolete packed ABI V0 output.
+- **Benchmark payload terminology** — Renamed transferred font data as font assets and labeled atlas allocation as GPU texture memory. Per-page rows now distinguish download bytes from GPU bytes without implying that every resident texture is uncompressed.
 - **MTSDF runtime and validator** — Closed roadmap item 8.3 with the optional fixed renderer and isolated strict validator. One dependency-light implementation now owns lossless KTX2 structure/data-format metadata and dense 20-byte record rules for bitmap and MTSDF runtime and standalone paths; Khronos/Ajv remain validator-only. Canonical Inter proves all ten pages in embedded and external forms, authenticated page identity, generated-mip residency, fill/outline/shadow batch updates, disposal, field-level mutations, and KTX2 DFD corruption without importing baker Wasm into rendering.
 
 ## 2026-07-26
