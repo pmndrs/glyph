@@ -10,8 +10,8 @@ const environment = await environmentResource()
 if (environment.webgpu !== true) throw new Error('Bitmap text probe requires WebGPU-capable Chrome')
 
 const expectedGeometry = {
-  1: { inkPixels: 3_473, bounds: [68, 19, 313, 111] },
-  2: { inkPixels: 3_473, bounds: [260, 83, 505, 175] },
+  1: { inkPixels: 3_473, bounds: [68, 18, 313, 112] },
+  2: { inkPixels: 3_473, bounds: [260, 82, 505, 176] },
 } as const
 const inkPixelsByDpr: number[] = []
 

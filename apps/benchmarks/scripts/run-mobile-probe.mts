@@ -1,37 +1,31 @@
-import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
+import { createServer } from 'vite'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url))
-const mobilePort = 5174
-const server = spawn(vite, ['--host', '127.0.0.1', '--port', String(mobilePort), '--strictPort'], {
-  cwd: root,
-  stdio: ['ignore', 'pipe', 'pipe'],
+const server = await createServer({
+  root,
+  server: {
+    host: '127.0.0.1',
+    port: 0,
+  },
 })
-
-let serverOutput = ''
-const ready = new Promise<void>((resolve, reject) => {
-  server.once('error', reject)
-  server.once('exit', (code) => reject(new Error(`Vite exited before readiness (${String(code)})`)))
-  for (const stream of [server.stdout, server.stderr]) {
-    stream.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      serverOutput += text
-      if (serverOutput.includes('Local:')) resolve()
-    })
-  }
-})
-
-await ready
-const browser = await chromium.launch({
-  headless: false,
-  args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
-})
+await server.listen()
+const address = server.httpServer?.address()
+if (address === null || address === undefined || typeof address === 'string') {
+  await server.close()
+  throw new Error('Vite did not publish a local TCP address')
+}
+const mobilePort = address.port
 const errors: string[] = []
 let step = 'launch'
+let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
 
 try {
+  browser = await chromium.launch({
+    headless: false,
+    args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
+  })
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`${step}: ${message.text()}`)
@@ -94,8 +88,8 @@ try {
   if (errors.length > 0) throw new Error(`Mobile browser errors: ${errors.join(' | ')}`)
   console.log('mobile-ready', JSON.stringify({ width: 390, height: 844, view: 'export' }))
 } finally {
-  await browser.close()
-  server.kill('SIGTERM')
+  await browser?.close()
+  await server.close()
 }
 
 async function assertResponsiveSurface(page: Page, label: string): Promise<void> {

@@ -9,6 +9,7 @@ const [{ ADVANCED_SHAPING_CASES }, { environmentResource }] = await Promise.all(
 ;(await waitForEnabledButton('WebGPU')).click()
 ;(await waitForEnabledButton('1× DPR')).click()
 ;(await waitForEnabledButton('Advanced shaping', true)).click()
+console.log('advanced-shaping-performance-start')
 
 const caseSelector = await waitForSelect('Case')
 const setSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
@@ -16,6 +17,7 @@ if (setSelectValue === undefined) throw new Error('Native select value setter is
 
 const cases: Array<Record<string, number | string>> = []
 for (const definition of ADVANCED_SHAPING_CASES) {
+  console.log('advanced-shaping-performance-select', definition.id)
   setSelectValue.call(caseSelector, definition.id)
   caseSelector.dispatchEvent(new Event('change', { bubbles: true }))
   const authoredText = definition.revealUnits.join('')
@@ -30,12 +32,14 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   if (viewport.getAttribute('data-gpu-timing-supported') !== 'true') {
     throw new Error(`${definition.id} did not expose WebGPU timestamp queries`)
   }
+  console.log('advanced-shaping-performance-settled', definition.id)
   const previousFrameCount = numericAttribute(viewport, 'data-frame-count')
   await Promise.all([
     waitForGreaterNumericAttribute(viewport, 'data-frame-count', previousFrameCount),
     waitForAtLeastNumericAttribute(viewport, 'data-gpu-history-length', STEADY_STATE_REPORT_COUNT),
     waitForAtLeastNumericAttribute(viewport, 'data-fps-history-length', STEADY_STATE_REPORT_COUNT),
   ])
+  console.log('advanced-shaping-performance-sampled', definition.id)
   cases.push({
     id: definition.id,
     fontFixture: definition.fontFixture,

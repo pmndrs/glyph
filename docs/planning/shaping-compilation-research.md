@@ -86,9 +86,9 @@ The authenticated shaping-only GLBs establish the font-data side of the comparis
 | --- | ---: | ---: | ---: |
 | Inter 4.1 | 411,640 B | 172,140 B | 171,056 B |
 | Amiri 1.002 | 431,116 B | 179,048 B | 177,963 B |
-| Noto Sans CJK JP 2.004 | 16,467,736 B | 1,540,460 B | 1,539,372 B |
+| Noto Sans CJK JP 2.004 | 16,467,736 B | 1,540,480 B | 1,539,372 B |
 
-The Noto artifact is 655,920 bytes with gzip and 515,421 bytes with Brotli. An alternative representation cannot claim all GLB bytes as savings: container metadata, metrics, glyph extents, provenance, and renderer inputs may remain even if compiled shaping replaces the retained SFNT rules.
+The Noto artifact is 654,597 bytes with gzip and 515,676 bytes with Brotli. An alternative representation cannot claim all GLB bytes as savings: container metadata, metrics, glyph extents, provenance, and renderer inputs may remain even if compiled shaping replaces the retained SFNT rules.
 
 ## Why everything cannot be baked universally
 

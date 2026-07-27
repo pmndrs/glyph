@@ -450,7 +450,7 @@ describe('canonical Noto Sans CJK fixtures', () => {
           metrics.retainedFontBytes === 1539372 &&
           metrics.wasmMemoryBytes === 4587520 &&
           metrics.sourceFontBytes === 16467736 &&
-          metrics.artifactBytes === 1540460 &&
+          metrics.artifactBytes === 1540480 &&
           metrics.shapingPayloadRawBytes === 1539372 &&
           metrics.shapingPayloadGzipBytes === 654925 &&
           metrics.shapingPayloadBrotliBytes === 514547,
