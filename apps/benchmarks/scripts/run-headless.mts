@@ -23,6 +23,8 @@ const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'bitmap-text-webgl2', scenarioId: 'bitmap-text-frame' },
   { targetId: 'mtsdf-text-webgl2', scenarioId: 'mtsdf-text-scenes' },
   { targetId: 'mtsdf-conformance-webgl2', scenarioId: 'mtsdf-sampling-conformance' },
+  { targetId: 'source-outline-bitmap-webgl2', scenarioId: 'source-outline-fidelity' },
+  { targetId: 'source-outline-mtsdf-webgl2', scenarioId: 'source-outline-fidelity' },
   { targetId: 'react-text-reconciliation', scenarioId: 'react-text-reconciliation' },
   { targetId: 'font-baker', scenarioId: 'cold-load-payload' },
   { targetId: 'font-loader-worker', scenarioId: 'worker-fallback' },

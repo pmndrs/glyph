@@ -23,11 +23,19 @@ import dancingScriptBitmapFontUrl from '../../fixtures/rendering/dancing-script-
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
 import sourceSerifBitmapFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url'
-import { conformanceTextForFont, type BenchmarkFontFixture } from '../benchmark/font-fixtures'
+import {
+  conformanceTextForFont,
+  type BenchmarkFontFixture,
+  type SelectableFontFixture,
+} from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
+import {
+  captureSourceOutlineFidelity,
+  type SourceOutlineFidelityCapture,
+} from './source-outline-reference'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
 
 const WIDTH = 384
@@ -117,6 +125,7 @@ export interface BitmapTextLiveStats {
   readonly fontLoadMs: number
   readonly textReadyMs: number
   readonly firstDrawMs: number
+  readonly uploadFrameGpuMs?: number
   readonly startupMs: number
   readonly gpuTimingSupported: boolean
   readonly gpuFrameMs: number | undefined
@@ -943,6 +952,40 @@ export async function captureBitmapTextConformance(options: {
       inkPixels: quality.inkPixels,
       renderSubmitMs: rendered.renderMs,
     }
+  } finally {
+    disposeBitmapLine(resources.line)
+    resources.font.dispose()
+    resources.target.dispose()
+    await resources.renderer.dispose()
+  }
+}
+
+export async function captureBitmapSourceOutlineFidelity(options: {
+  readonly backend: RendererBackend
+  readonly dpr: number
+  readonly fontFixture: SelectableFontFixture
+  readonly signal?: AbortSignal
+}): Promise<SourceOutlineFidelityCapture> {
+  options.signal?.throwIfAborted()
+  const resources = await createResources(options.backend, options.dpr, options.fontFixture)
+  try {
+    const width = Math.round(WIDTH * options.dpr)
+    const height = Math.round(HEIGHT * options.dpr)
+    const rendered = await renderFrame(resources, width, height)
+    options.signal?.throwIfAborted()
+    return await captureSourceOutlineFidelity({
+      candidate: rendered.bytes,
+      width,
+      height,
+      dpr: options.dpr,
+      fontFixture: options.fontFixture,
+      fontSize: resources.line.cssFontSize,
+      layout: resources.line.layout,
+      originX: resources.line.object.position.x,
+      originY: resources.line.object.position.y,
+      text: conformanceTextForFont(options.fontFixture),
+      renderSubmitMs: rendered.renderMs,
+    })
   } finally {
     disposeBitmapLine(resources.line)
     resources.font.dispose()

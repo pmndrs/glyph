@@ -46,6 +46,26 @@ const samplingMeasurement: BenchmarkMeasurement = {
   },
 }
 
+const sourceOutlineMeasurement: BenchmarkMeasurement = {
+  sample: 0,
+  durationMs: 1,
+  outputBytes: 384 * 128 * 4,
+  hash: 'pinned-source-outline-frame',
+  metrics: {
+    techniqueBitmap: 1,
+    techniqueMtsdf: 0,
+    backendWebGpu: 1,
+    backendWebGl2: 0,
+    dpr: 1,
+    pixelCount: 384 * 128,
+    physicalPpem: 16,
+    meanAbsoluteError: 7.393,
+    maximumError: 255,
+    errorPixels: 5_852,
+    renderMs: 1,
+  },
+}
+
 describe('MTSDF scenario acceptance', () => {
   it('rejects a deterministic substitute for the canonical WebGL2 scene', () => {
     const scenario = scenarioById('mtsdf-text-scenes')
@@ -74,5 +94,31 @@ describe('MTSDF scenario acceptance', () => {
         },
       ]),
     ).toThrow('comparison contract')
+  })
+
+  it('rejects source-outline error outside the reviewed browser envelope', () => {
+    const scenario = scenarioById('source-outline-fidelity')
+    expect(scenario.validate([sourceOutlineMeasurement])).toContain(
+      'source-outline comparisons within reviewed envelopes',
+    )
+    expect(() =>
+      scenario.validate([
+        {
+          ...sourceOutlineMeasurement,
+          metrics: { ...sourceOutlineMeasurement.metrics, meanAbsoluteError: 12.001 },
+        },
+      ]),
+    ).toThrow('reviewed browser coverage envelope')
+    expect(() =>
+      scenario.validate([
+        {
+          ...sourceOutlineMeasurement,
+          metrics: {
+            ...sourceOutlineMeasurement.metrics,
+            errorPixels: Math.floor(384 * 128 * 0.2) + 1,
+          },
+        },
+      ]),
+    ).toThrow('reviewed browser coverage envelope')
   })
 })

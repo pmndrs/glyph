@@ -37,6 +37,7 @@ import {
 } from './shaping-fixture'
 import { createUikitLayoutFixture, YogaMeasureMode } from './uikit-layout-fixture'
 import { cjkUniversalityTarget } from './cjk-universality'
+import { selectableFontFixture } from './font-fixtures'
 
 function stableSyntheticHash(): string {
   let value = 2166136261
@@ -1030,6 +1031,71 @@ function mtsdfConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   }
 }
 
+function sourceOutlineFidelityTarget(
+  technique: 'bitmap' | 'mtsdf',
+  backend: 'webgpu' | 'webgl2',
+): BenchmarkTarget {
+  let configuredInput: BenchmarkInput = {}
+  return {
+    id: `source-outline-${technique}-${backend}`,
+    label: `${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} source-outline fidelity · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
+    detail: 'GPU candidate · pinned source font · browser Canvas2D reference',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    configure: (input) => {
+      configuredInput = input
+    },
+    status: () => 'ready',
+    load: async () => undefined,
+    run: async (input, _sampleIndex, controls) => {
+      const fontFixture = selectableFontFixture(
+        input.fontFixture ?? configuredInput.fontFixture ?? 'inter',
+      )
+      const capture =
+        technique === 'mtsdf'
+          ? await import('../renderer/mtsdf-text').then(({ captureMtsdfSourceOutlineFidelity }) =>
+              captureMtsdfSourceOutlineFidelity({
+                backend,
+                dpr: controls.dpr,
+                fontFixture,
+              }),
+            )
+          : await import('../renderer/bitmap-text').then(({ captureBitmapSourceOutlineFidelity }) =>
+              captureBitmapSourceOutlineFidelity({
+                backend,
+                dpr: controls.dpr,
+                fontFixture,
+              }),
+            )
+      return {
+        bytes: capture.candidate.byteLength,
+        hash: await sha256(capture.candidate),
+        metrics: {
+          techniqueBitmap: technique === 'bitmap' ? 1 : 0,
+          techniqueMtsdf: technique === 'mtsdf' ? 1 : 0,
+          backendWebGpu: backend === 'webgpu' ? 1 : 0,
+          backendWebGl2: backend === 'webgl2' ? 1 : 0,
+          dpr: controls.dpr,
+          pixelCount: capture.width * capture.height,
+          physicalPpem: capture.physicalPpem,
+          meanAbsoluteError: capture.meanAbsoluteError,
+          maximumError: capture.maximumError,
+          errorPixels: capture.errorPixels,
+          renderMs: capture.renderSubmitMs,
+        },
+      }
+    },
+    dispose: async () => undefined,
+  }
+}
+
 export const targets: readonly BenchmarkTarget[] = [
   syntheticTarget,
   tslBaselineTarget('webgl2'),
@@ -1048,6 +1114,10 @@ export const targets: readonly BenchmarkTarget[] = [
   mtsdfTextTarget('webgpu'),
   mtsdfConformanceTarget('webgl2'),
   mtsdfConformanceTarget('webgpu'),
+  sourceOutlineFidelityTarget('bitmap', 'webgl2'),
+  sourceOutlineFidelityTarget('bitmap', 'webgpu'),
+  sourceOutlineFidelityTarget('mtsdf', 'webgl2'),
+  sourceOutlineFidelityTarget('mtsdf', 'webgpu'),
   reactTextTarget(),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),
 ]
