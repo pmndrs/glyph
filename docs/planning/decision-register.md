@@ -40,7 +40,7 @@ Implementation and passing fixtures are evidence, not approval. A proposed row c
 | D-003 | V1 targets horizontal LTR/RTL text and static font instances. | Accepted |
 | D-004 | `@pmndrs/text` is Three.js-first; `@pmndrs/text/react` is a thin optional wrapper. | Accepted |
 | D-005 | React uses one root `<Text>` with nested `<Text>` inline spans and direct props. | Accepted |
-| D-006 | A canonical source-font URL infers its `.font.glb` sibling; `.glb` is baked-only. | Accepted |
+| D-006 | A canonical source-font URL infers its `.font.glb` sibling; `.glb` is baked-only, while `{ source, baked: null }` explicitly suppresses sibling discovery for that request. | Accepted |
 | D-007 | Every package entry point is native ESM; no CommonJS build or `require` export ships. | Accepted |
 | D-008 | Runtime raster and baker modules are typed capability values; core has no closed raster list or mandatory raster package. | Accepted |
 | D-009 | `Text` and paragraph layouts remain non-generic; compile-time precision is concentrated at composition seams. | Accepted |
@@ -101,7 +101,7 @@ Rasters attach only when shaping hash, glyph count, glyph-ID width, raster key, 
 | --- | --- | :---: |
 | D-030 | Node and Worker hosts share one portable bake core. | Accepted |
 | D-031 | The loader is baked-first and dynamically imports Worker fallback. | Accepted |
-| D-032 | V0 has no force-runtime or skip-baked switch. | Accepted |
+| D-032 | Omitted `baked` keeps the baked-first probe; explicit `baked: null` skips discovery and enters the source/runtime path without adding a second boolean policy. | Accepted |
 | D-033 | In-memory deduplication is required; persistent bake caching is later. | Deferred |
 | D-034 | The integration proof generates one grayscale bitmap strike. | Accepted |
 | D-035 | Raster modules and generators are optional imports. | Accepted |

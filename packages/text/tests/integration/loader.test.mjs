@@ -168,6 +168,27 @@ test('every canonical source suffix and extensionless path derives one exact sib
   assert.deepEqual(calls, expected)
 })
 
+test('an explicit baked null request skips sibling discovery and uses runtime baking', async () => {
+  const calls = []
+  let bakes = 0
+  const sourceUrl = 'https://assets.test/fonts/Inter.ttf'
+  const loader = new FontLoader({
+    fetch: fixtureFetch(new Map([[sourceUrl, sourceBytes]]), calls),
+    async runtimeBake(request) {
+      bakes += 1
+      assert.equal(request.sourceUrl, sourceUrl)
+      assert.equal(request.bakedUrl, undefined)
+      return embeddedBytes
+    },
+  })
+
+  const font = await loader.load({ source: sourceUrl, baked: null })
+
+  assert.equal(font.glyphCount, 2937)
+  assert.equal(bakes, 1)
+  assert.deepEqual(calls, [sourceUrl])
+})
+
 test('missing and invalid probes fall back once with deduplicated diagnostics', async () => {
   const calls = []
   const warnings = []

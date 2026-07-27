@@ -197,7 +197,16 @@ export class RasterRuntime {
     }
     const rasterArtifact = rasterArtifacts[0]
     if (rasterArtifact === undefined) throw new Error('unreachable raster artifact state')
-    const registered = await registeredFontRegistry(font).attachRaster(font, rasterArtifact.bytes)
+    const registered = await registeredFontRegistry(font)._attachGeneratedRaster(
+      font,
+      rasterArtifact.bytes,
+      {
+        rasterKey,
+        kind: baked.kind,
+        extension: baked.extension,
+        version: baked.version,
+      },
+    )
     if (registered.kind !== request.module.kind) {
       registered.dispose()
       throw new FontLoadError(

@@ -284,6 +284,43 @@ export class FontRegistry {
     )
   }
 
+  /** @internal Attach a runtime-generated raster against its caller-authenticated identity. */
+  async _attachGeneratedRaster(
+    font: RegisteredFont,
+    bytes: ArrayBufferView,
+    expected: Omit<RasterReference, 'source'>,
+  ): Promise<RegisteredRaster> {
+    const registered = this.#ownedFont(font)
+    this.#checkArtifactSize(bytes.byteLength)
+    const owned = copyView(bytes)
+    const validator = await loadValidator()
+    let parsed: ParsedGlb
+    try {
+      parsed = validator.parseGlb(owned)
+      await validator.validateWithKhronos(owned, parsed.document)
+    } catch (error) {
+      throw validationError('INVALID_RASTER_ASSET', 'raster artifact validation failed', error)
+    }
+    const views = bufferViews(parsed.document, parsed.declaredBinLength)
+    if (views.length > this.#maxBufferViews) {
+      throw new FontLoadError(
+        'FONT_RESOURCE_LIMIT',
+        `raster artifact has ${views.length} buffer views; limit is ${this.#maxBufferViews}`,
+      )
+    }
+    const reference: RasterReference = { ...expected, source: { type: 'external' } }
+    const extensionData = generatedRasterExtension(registered, parsed.document, reference)
+    const binaryBytes = parsed.bin.slice(0, parsed.declaredBinLength)
+    getRegisteredFontData(registered).rasterSources.set(reference.rasterKey, {
+      reference,
+      extensionData,
+      binaryBytes,
+      bufferViews: views,
+      externalCandidates: [],
+    })
+    return registered.registerRaster(reference, extensionData, binaryBytes, views)
+  }
+
   /** @internal */
   _disposeFont(font: RegisteredFontImpl): void {
     if (this.#fontsByKey.get(font.key) !== font) return
@@ -941,6 +978,28 @@ function matchRasterExtension(
   return matches[0]!
 }
 
+function generatedRasterExtension(
+  font: RegisteredFontImpl,
+  document: Readonly<Record<string, unknown>>,
+  reference: RasterReference,
+): JsonValue {
+  const extensions = requireNonArrayObject(document.extensions, 'extensions')
+  const candidate = requireNonArrayObject(extensions[reference.extension], reference.extension)
+  if (
+    candidate.rasterKey !== reference.rasterKey ||
+    candidate.shapingHash !== font.shapingHash ||
+    candidate.glyphCount !== font.glyphCount ||
+    candidate.glyphIdWidth !== 16 ||
+    candidate.version !== reference.version
+  ) {
+    throw new FontLoadError(
+      'RASTER_RECIPROCAL_IDENTITY',
+      'runtime raster artifact does not match its requested font and raster identity',
+    )
+  }
+  return jsonValue(candidate, reference.extension)
+}
+
 function rasterReferences(value: unknown): readonly RasterReference[] {
   if (!Array.isArray(value)) throw new TypeError('PMNDRS_font.rasters must be an array')
   return value.map((entry, index) => {
@@ -1006,6 +1065,7 @@ function resolveFontRequest(input: FontInput, baseUrl: URL | undefined): Resolve
   }
   const source = normalizeUrl(value.source, baseUrl)
   const sourceUrl = new URL(source)
+  if (value.baked === null) return { sourceUrl: source }
   if (value.baked !== undefined) {
     return { sourceUrl: source, bakedUrl: normalizeUrl(value.baked, baseUrl) }
   }
@@ -1018,15 +1078,18 @@ function resolveFontRequest(input: FontInput, baseUrl: URL | undefined): Resolve
   return { sourceUrl: source, bakedUrl: sourceUrl.href }
 }
 
-function normalizeFontInput(input: FontInput): { source?: string | URL; baked?: string | URL } {
+function normalizeFontInput(input: FontInput): {
+  source?: string | URL
+  baked?: string | URL | null
+} {
   if (typeof input === 'string' || input instanceof URL) return { source: input }
   if (typeof input !== 'object' || input === null) {
     throw new FontLoadError('INVALID_FONT_INPUT', 'font input must be a URL or source object')
   }
   const value = input as { source?: unknown; baked?: unknown }
   const source = urlValue(value.source, 'source')
-  const baked = urlValue(value.baked, 'baked')
-  if (source === undefined && baked === undefined) {
+  const baked = value.baked === null ? null : urlValue(value.baked, 'baked')
+  if (source === undefined && (baked === undefined || baked === null)) {
     throw new FontLoadError('INVALID_FONT_INPUT', 'font input must provide source or baked')
   }
   return {

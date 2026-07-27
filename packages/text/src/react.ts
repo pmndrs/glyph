@@ -518,7 +518,7 @@ function isFontToken(value: FontInput | RegisteredFont | AnyFontToken): value is
 function fontInputKey(input: FontInput): string {
   if (typeof input === 'string' || input instanceof URL) return `input:${absoluteUrl(input)}`
   return `source:${input.source === undefined ? '' : absoluteUrl(input.source)}|baked:${
-    input.baked === undefined ? '' : absoluteUrl(input.baked)
+    input.baked === undefined ? 'auto' : input.baked === null ? 'none' : absoluteUrl(input.baked)
   }`
 }
 
