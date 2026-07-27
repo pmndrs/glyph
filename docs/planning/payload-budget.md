@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T05:40:22Z"
+  at: "2026-07-27T01:29:13Z"
 ---
 
 # Font payload budget
@@ -225,7 +225,7 @@ Dense records scale predictably even when page payloads are sparse or independen
 | MSDF | 1,310,700 | 1.25 MiB | `20 × 65,535`; independent of MTSDF atlas residency. |
 | Slug | 2,621,400 | 2.50 MiB | `40 × 65,535`; independent of curve/header/reference page residency. |
 
-These are metadata envelopes, not estimates of CJK texture cost. Item 5.4 reports only the complete pan-CJK shaping source, retained data, Wasm memory, output, and transport sizes; it creates no texture or residency result. Milestone 12 later reports the companion index separately from embedded/external page bytes, first-layout bytes fetched, peak/resident GPU bytes, page churn, and complete-library stress payload. A selected icon subset and complete icon library are always separate results.
+These are metadata envelopes, not estimates of CJK texture cost. Item 5.4 reports only the complete pan-CJK shaping source, retained data, Wasm memory, output, and transport sizes; it creates no texture or residency result. Milestone 13 later reports the companion index separately from embedded/external page bytes, first-layout bytes fetched, peak/resident GPU bytes, page churn, and complete-library stress payload. A selected icon subset and complete icon library are always separate results.
 
 These columns are intentionally not added into a fake single “download size.” Shared raw bytes, compressed transport, and GPU allocations have different lifetimes and compression behavior.
 

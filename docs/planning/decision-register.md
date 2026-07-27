@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:23:09Z"
+  at: "2026-07-27T01:29:13Z"
 ---
 
 # Decision register
@@ -72,6 +72,7 @@ D-004/005 follow the established uikit split: the core owns every feature and Re
 | D-072 | The JavaScript paragraph engine owns UAX #9, #14, #24, and #29 using Unicode data pinned to the core font provenance version. | Accepted |
 | D-085 | Roadmap item 5.4 makes horizontal CJK bake, source/reduced HarfRust equivalence, independent HarfBuzz agreement, and paragraph layout a pre-render gate; raster paging, CJK rendering coverage, fallback, and vertical layout remain separate later work. | Accepted |
 | D-088 | V0 conditionally retains source `BASE`, `VORG`, `vhea`, and `vmtx` tables without fabrication so baking does not destroy vertical-form data; vertical shaping and paragraph layout remain deferred. | Accepted |
+| D-098 | Post-V1 Milestone 11 adds responsive multi-column flow regions and explicit exclusions over the existing universal shaping result, then proves native-strike bitmap, MTSDF, and Slug in one editorial composition. The first implementation keeps rectangular layout as the common path, uses conservative two-dimensional exclusions, and defers a frozen public API, contour-tight wrapping, arbitrary rendered-pixel occlusion, balanced columns, hyphenation, and vertical flow until evidence exists. | Accepted |
 
 The [shaping contract](shaping-data-contract.md), [API contract](api-shapes.md), [uikit integration](uikit-integration.md), and [conformance plan](conformance-plan.md) define the consequences and fixtures.
 

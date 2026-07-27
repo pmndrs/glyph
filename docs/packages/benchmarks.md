@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:48:46Z"
+  at: "2026-07-27T01:29:13Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -66,7 +66,7 @@ The CI-safe advanced-shaping target derives all 68 finite frames from that same 
 
 The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. This run observed 119.7–120.9 FPS, 0.1–0.2 ms median CPU submission, 0.3–0.7 ms CPU P95, 0.050–0.149 ms median GPU time, and 0.752–2.147 ms GPU P95 across one to three draws. Initial public `Text` readiness was 8.6–18.5 ms and total startup 23.4–119.0 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
 
-Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 12 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
+Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the missing Indic lane without weakening the baker's explicit variable-font rejection. A bounded DotGothic16 Japanese fixture makes the CJK line-break case visible before milestone 13 paging; Noto Sans CJK JP remains the authoritative pan-CJK shaping and paragraph oracle. All three added 16 ppem bitmap GLBs regenerate through the public Node host and package-owned bitmap baker and must match their manifest byte-for-byte: Amiri is 1,987,832 bytes, Devanagari is 312,228 bytes, and the bounded Japanese fixture is 3,294,368 bytes. These are benchmark fixtures, not browser-core or runtime-shaper payloads.
 
 The browser product also carries the React 19 subpath proofs. A shared registry target mounts public nested `<Text>` through a real React Three Fiber root backed by `WebGPURenderer`, retains one forwarded core object through width reflow and canonical restoration, matches pinned natural/narrow paragraph oracles, verifies two span paints in one draw, and submits a real renderer frame over three deterministic samples. The live pending-resource probe intercepts the exact composed Inter request behind a manually released promise, observes the Suspense fallback before publication, releases the request without a timer, then proves the registered font key and all 2,937 glyphs before deterministic cleanup. The test renderer remains confined to package integration evidence and does not enter the product registry or application dependencies.
 

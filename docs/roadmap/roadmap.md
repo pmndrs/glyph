@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:23:09Z"
+  at: "2026-07-27T01:29:13Z"
 ---
 
 # Canonical implementation roadmap
@@ -444,7 +444,7 @@ Deliver:
 
 Exit only when the complete horizontal corpus is byte-exact through the source and reduced-font HarfRust paths, the independent HarfBuzz oracle agrees under the documented normalization policy, and Node/Chromium/Vitexec paragraph outputs are deterministic. Any genuine mismatch in the retained SFNT profile, UTF-16 clustering, language selection, variation handling, glyph-width assumptions, or line layout blocks rendering work.
 
-Large-coverage raster paging remains in Milestone 12. Vertical-form source tables must survive baking when present, but vertical shaping/layout remains deferred.
+Large-coverage raster paging remains in Milestone 13. Vertical-form source tables must survive baking when present, but vertical shaping/layout remains deferred.
 
 ### 5.4 closure checklist
 
@@ -617,14 +617,30 @@ The order below preserves lanes without pretending the work is part of V1:
 
 | Order | Workstream                                  | Effort  | Why next                                                                                                                                                    |
 | ----: | ------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    11 | Mixed-font spans and explicit font fallback | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                         |
-|    12 | Large-coverage CJK raster paging and icons  | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
-|    13 | Color emoji                                 | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                              |
-|    14 | Raster effects and expanded recommendations | L       | Extend outlines, colorization, shadows, and projected-size guidance with measurements.                                                                      |
-|    15 | Measured optimization campaigns             | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                        |
-|    16 | Advanced font compiler units                | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                          |
+|    11 | Editorial flow regions and mixed-raster composition | XL      | Add responsive columns and exclusions, then prove bitmap, MTSDF, and Slug over one positioned layout in a live editorial benchmark.                          |
+|    12 | Mixed-font spans and explicit font fallback         | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                         |
+|    13 | Large-coverage CJK raster paging and icons          | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
+|    14 | Color emoji                                         | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                              |
+|    15 | Raster effects and expanded recommendations         | L       | Extend outlines, colorization, shadows, and projected-size guidance with measurements.                                                                      |
+|    16 | Measured optimization campaigns                     | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                        |
+|    17 | Advanced font compiler units                        | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                          |
 
-### Milestone 12 — large-coverage CJK raster paging and icons
+### Milestone 11 — editorial flow regions and mixed-raster composition
+
+This post-V1 milestone adds an ordered flow-region planner without weakening the rectangular paragraph fast path. Each line band resolves one or more usable horizontal slots after explicit drop-cap, image, callout, or known-geometry exclusions are subtracted. Shaped clusters fill those slots using existing safe-break and batched boundary-reshape machinery.
+
+Deliver:
+
+- a conservative two-dimensional exclusion and responsive multi-column model with explicit fragment reading order;
+- deterministic LTR, RTL, mixed-direction, complex-script, and moving-obstacle conformance cases;
+- retained broad shaping with measured invalidation and batched reshaping when regions change;
+- one **Editorial composition** live benchmark using native-strike bitmap body copy, an MTSDF pull quote, and a Slug headline or drop cap over one authoritative positioned layout;
+- viewport, column, obstacle, text-editing, typewriter, strike, and display-transform controls with consumer-facing phase, frame, GPU, allocation, and residency evidence;
+- a reproducible comparison with Pretext that distinguishes approximate browser-compatible line breaking from exact GPU-ready shaping and makes no unmeasured speed claim.
+
+Contour-tight glyph-ink wrapping, arbitrary rendered-pixel occlusion, balanced columns, automatic hyphenation, vertical flow, and a frozen public flow API remain deferred until the initial integration produces evidence. The [editorial flow research concept](../planning/editorial-flow-layout.md) defines the proposed internal model, benchmark composition, comparison rules, and acceptance gates.
+
+### Milestone 13 — large-coverage CJK raster paging and icons
 
 This milestone begins only after the Latin-first V1 renderer gate. Item 5.4 has already proven horizontal CJK shaping and paragraph semantics; this later milestone scales raster coverage, paging, residency, and icon delivery without changing those results. CJK and icons share the page-scale implementation while retaining separate semantic fixtures.
 
