@@ -916,16 +916,32 @@ function TopBar({
         <button
           aria-expanded={workloadPanelOpen}
           aria-label={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
-          aria-pressed={workloadPanelOpen}
-          className={`flex h-7 w-11 shrink-0 items-center justify-center gap-1 rounded-md border font-serif text-lg transition-colors ${workloadPanelOpen ? 'border-accent bg-accent text-white' : 'border-border bg-surface-raised text-foreground hover:border-accent'}`}
+          className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface-raised text-muted transition-colors hover:border-accent hover:text-foreground"
           title={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
           type="button"
           onClick={onMenu}
         >
-          <span>a</span>
-          <span aria-hidden="true" className="font-sans text-[9px]">
-            {workloadPanelOpen ? '◀' : '▶'}
-          </span>
+          <svg aria-hidden="true" className="size-[18px]" viewBox="0 0 24 24">
+            <rect
+              fill="none"
+              height="16"
+              rx="2"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              width="18"
+              x="3"
+              y="4"
+            />
+            <path d="M9 4v16" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path
+              d={workloadPanelOpen ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'}
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.5"
+            />
+          </svg>
         </button>
         <div className="hidden min-w-0 sm:block">
           <div className="text-sm font-semibold leading-none">pmndrs/text</div>
@@ -3248,14 +3264,6 @@ function Controls({
           />
         </div>
       )}
-      <div className="rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">Measurement policy</p>
-        <p className="mt-2 text-[10px] leading-relaxed text-muted">
-          {mode === 'benchmark'
-            ? 'Tracks live frame rate, CPU submission cost, retained bytes, and backend GPU time when timestamp queries are available.'
-            : 'The finite suite includes readback, reference composition, comparison, clipping, and hashing.'}
-        </p>
-      </div>
       <PayloadInspector
         delivery={delivery}
         fontFixture={fontFixture}
@@ -3343,25 +3351,29 @@ function PayloadInspector({
           <p className="eyebrow">Selected payloads</p>
           <span className="font-mono text-[8px] uppercase text-dim">gzip transfer</span>
         </div>
-        <div className="mt-3 grid gap-2 border-b border-border pb-3">
+        <PayloadDisclosure
+          className="mt-3 border-b border-border pb-3"
+          label="Selected runtime · gzip"
+          status="loaded"
+          value={formatBytes(libraryTransferBytes)}
+        >
           <PayloadRow
             label={runtime.label}
             status="loaded"
             value={formatBytes(runtime.gzipBytes)}
           />
           <PayloadRow label={shaper.label} status="loaded" value={formatBytes(shaper.gzipBytes)} />
-          <PayloadRow
-            emphasis
-            label="Selected runtime · gzip"
-            status="loaded"
-            value={formatBytes(libraryTransferBytes)}
-          />
           <p className="text-[9px] leading-relaxed text-dim">
             Includes the pmndrs/text core, selected raster runtime, and shaper. External Three.js
             and React peers are not included; font assets are listed below.
           </p>
-        </div>
-        <div className="grid gap-2 border-b border-border py-3">
+        </PayloadDisclosure>
+        <PayloadDisclosure
+          className="border-b border-border py-3"
+          label="Runtime bake libraries · gzip"
+          status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
+          value={formatBytes(bakerTransferBytes)}
+        >
           <PayloadRow
             label={runtimeBakerHost.label}
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
@@ -3392,13 +3404,7 @@ function PayloadInspector({
             status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
             value={formatBytes(bakerWasm.gzipBytes)}
           />
-          <PayloadRow
-            emphasis
-            label="Runtime bake libraries · gzip"
-            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
-            value={formatBytes(bakerTransferBytes)}
-          />
-        </div>
+        </PayloadDisclosure>
         <div className="grid gap-2 pt-3">
           <PayloadRow
             emphasis
@@ -3495,6 +3501,49 @@ function PayloadRow({
       )}
       <span className="ml-auto whitespace-nowrap font-mono text-dim">{value}</span>
     </div>
+  )
+}
+
+function PayloadDisclosure({
+  children,
+  className,
+  label,
+  status,
+  value,
+}: {
+  readonly children: ReactNode
+  readonly className?: string
+  readonly label: string
+  readonly status: 'loaded' | 'unloaded'
+  readonly value: string
+}) {
+  return (
+    <details className={`group ${className ?? ''}`}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-[10px] font-medium [&::-webkit-details-marker]:hidden">
+        <svg
+          aria-hidden="true"
+          className="size-4 shrink-0 origin-center text-dim transition-transform duration-150 group-open:rotate-90"
+          viewBox="0 0 16 16"
+        >
+          <path
+            d="m6 3 5 5-5 5"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.75"
+          />
+        </svg>
+        <span className="text-foreground">{label}</span>
+        <span
+          className={`inline-flex h-4 items-center font-mono text-[8px] leading-none uppercase ${status === 'loaded' ? 'text-success' : 'text-dim'}`}
+        >
+          {status}
+        </span>
+        <span className="ml-auto whitespace-nowrap font-mono text-dim">{value}</span>
+      </summary>
+      <div className="mt-3 grid gap-2 pl-4">{children}</div>
+    </details>
   )
 }
 
