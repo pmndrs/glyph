@@ -6,6 +6,7 @@ import {
   VK_FORMAT_R8G8B8A8_UNORM,
 } from 'ktx-parse'
 import * as THREE from 'three/webgpu'
+import type { Node } from 'three/webgpu'
 import {
   add,
   attribute as tslAttribute,
@@ -24,8 +25,6 @@ import {
   vec2,
   vec3,
 } from 'three/tsl'
-import type Node from 'three/src/nodes/core/Node.js'
-
 import type { RegisteredFont } from '../font.js'
 import {
   MSDF_EXTENSION,

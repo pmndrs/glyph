@@ -1,5 +1,5 @@
 import { add, float, modelViewProjection, mul } from 'three/tsl'
-import type Node from 'three/src/nodes/core/Node.js'
+import type { Node } from 'three/webgpu'
 
 declare const left: Node<'float'>
 declare const right: Node<'float'>

@@ -221,10 +221,7 @@ export class RasterRuntime {
     })
   }
 
-  #disposeFont(
-    font: RegisteredFont,
-    registry: ReturnType<typeof registeredFontRegistry>,
-  ): void {
+  #disposeFont(font: RegisteredFont, registry: ReturnType<typeof registeredFontRegistry>): void {
     this.#disposeFontResources(font)
     const observed = this.#registries.get(registry)
     if (observed === undefined) return

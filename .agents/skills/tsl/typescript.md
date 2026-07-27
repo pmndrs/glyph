@@ -16,15 +16,13 @@ In this repository's TypeScript 7.0.2 and `@types/three` 0.185.1 check, a single
 
 ```ts
 import * as THREE from 'three/webgpu'
+import type { Node, UniformNode } from 'three/webgpu'
 import { Fn, float, uniform, vec3 } from 'three/tsl'
-
-import type Node from 'three/src/nodes/core/Node.js'
-import type UniformNode from 'three/src/nodes/core/UniformNode.js'
 ```
 
-The pinned Three.js package exports `./src/*`, but the project still needs a bundler-aware module resolution mode. Do not add `customConditions` or a source-path import merely because an older workaround recommended it; first prove the installed package and compiler require it.
+Three 0.185.1 publicly re-exports `Node` and `UniformNode` from `three/webgpu`. Keep project code on the public `three/webgpu` and `three/tsl` barrels; do not add `customConditions` or a source-path import merely because an older workaround recommended it.
 
-Use `import type` for type-only source paths. Prefer the public `three/tsl` and `three/webgpu` barrels for runtime values unless a required class is absent there.
+Use `import type` for type-only imports. A source-path import requires exact-version evidence that no public barrel exports the required type and a compile-only regression that makes its removal explicit.
 
 ## Preserve node types
 

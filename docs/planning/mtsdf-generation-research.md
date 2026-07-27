@@ -33,7 +33,7 @@ sources:
     title: Zappar MSDF generator 1.2.4
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:46:34Z"
+  at: "2026-07-27T11:07:37Z"
 ---
 
 # MTSDF generation research
@@ -111,6 +111,16 @@ The scalar kernel is both the correctness oracle and the selected production imp
 The scalar production boundary satisfies that final ABI gate: the package build emits one optimized zero-import Wasm and its Rust-generated contract, while the TypeScript host validates the complete contract and writes fixed command records directly into one owned request allocation. All seven native-oracle hashes survive the host boundary. The production baker uses an explicit checked transform: outline bounds are expanded onto one global 64-unit-per-em plane grid, the RGBA field uses one full eight-pixel distance range, and four texels of padding surround each glyph. This preserves one texel-to-plane scale across the face and prevents independently rounded glyph rectangles from stretching their fields. The completed scalar/auto/explicit comparison includes exact quality, the complete Inter pass, representative Node and Chromium calls, allocation/memory behavior, and compressed size. Scalar remains the sole production implementation because neither SIMD variant wins the complete comparison.
 
 The fixed baker integrates the selected kernel without publishing a duplicate standalone generator Wasm. A feature-minimal build remains the reproducible 44,109-byte admission measurement; the package resource is the 529,891-byte full baker containing the same scalar core plus Fontations, dense records, atlas packing, hashing, KTX2, GLB, and its second generated ABI surface. Canonical Inter occupies ten near-full 1024-pixel RGBA8 pages: 39,111,736 GPU bytes and 39,177,416 externally serialized bytes. Uncompressed KTX2 contributes only 196 bytes per page, so container removal would not materially change this result. Reversible KTX2 supercompression, lossy GPU block formats, subsetting, lower generation resolution, and paging address different costs and remain separate measured decisions; no lossy format replaces the exact baseline by default.
+
+## WebGPU compute generation
+
+The per-texel distance search is the part of MTSDF generation that plausibly benefits from GPU parallelism. A future hybrid path would keep outline validation, contour topology, edge coloring, atlas placement, and checked size arithmetic on the CPU, upload the compact colored-edge representation once, and dispatch one WebGPU invocation per atlas texel into an RGBA8 storage texture. Runtime-generated atlases could remain GPU-resident; a downloadable GLB still requires texture-to-buffer copy, asynchronous readback, canonical byte ordering, KTX2 framing, hashing, and transfer to the caller.
+
+Three.js 0.185.1 exposes the required storage-buffer, storage-texture, workgroup, and compute surfaces through `three/webgpu` and `three/tsl`. That makes an experiment implementable without raw WGSL or a second renderer. It does not yet make the path preferable: the accepted baker must also run offline and without WebGPU, the present serial Worker keeps generation off the main thread, and no repository measurement proves that pipeline compilation, edge upload, dispatch, synchronization, readback, packaging, and additional bundle bytes beat the scalar Wasm host end to end.
+
+Admission requires byte-identical or independently bounded output against the same native `msdfgen` corpus plus full-font measurements of every phase above, peak CPU/GPU memory, device-loss cleanup, and Worker availability. If that evidence shows a material end-to-end win, ordinary JavaScript must select the WebGPU compute graph before compilation and retain scalar Wasm as the non-WebGPU/offline path. The WGSL build then contains only the compute implementation; the fallback build does not carry a runtime shader branch. Until that threshold is met, adding compute would create a second generation implementation without evidence and is rejected by D-060.
+
+The runtime text renderer has a different boundary. Its hot work is already one instanced TSL draw sampling a resident atlas; a pre-render compute pass would add dispatch and synchronization without removing the fragment samples. No compute branch is proposed for Bitmap or MTSDF rendering.
 
 [^valve-sdf]: Green, *Improved Alpha-Tested Magnification for Vector Textures and Special Effects*, 2007.
 [^chlumsky-thesis]: Chlumský, *Shape Decomposition for Multi-Channel Distance Fields*, 2015.

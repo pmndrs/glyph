@@ -10,6 +10,13 @@
     "react/react-compiler": "error",
     "react/rules-of-hooks": "error",
     "eslint/no-await-in-loop": "off",
+    "eslint/no-restricted-imports": [
+      "error",
+      {
+        "paths": ["three", "@react-three/fiber"],
+        "patterns": ["three/src/*", "three/addons/*", "three/examples/*"]
+      }
+    ],
     "react-you-might-not-need-an-effect/no-derived-state": "error",
     "react-you-might-not-need-an-effect/no-chain-state-updates": "error",
     "react-you-might-not-need-an-effect/no-event-handler": "error",
