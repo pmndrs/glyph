@@ -95,7 +95,7 @@
       "transport": {
         "compression": { "gzipLevel": 9, "brotliQuality": 9 },
         "shapingPayload": { "rawBytes": 1539372, "gzipBytes": 654925, "brotliBytes": 514547 },
-        "artifact": { "rawBytes": 1540460, "gzipBytes": 655920, "brotliBytes": 515421 }
+        "artifact": { "rawBytes": 1540480, "gzipBytes": 654597, "brotliBytes": 515676 }
       }
     }
   },

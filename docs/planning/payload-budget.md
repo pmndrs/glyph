@@ -88,7 +88,7 @@ The Inter and Noto rows measure the canonical V0 SFNT plus font-function views o
 | Font Awesome | 172,729 B | 147,594 B | 11,234 B | 8,017 B |
 | Noto Sans CJK JP 2.004 (gzip 9 / Brotli 9) | 13,629,545 B | 12,365,597 B | 654,925 B | 514,547 B |
 
-The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. Inter and Noto prove their complete checked-in HarfRust corpora are identical between source and reduced SFNT; Noto additionally agrees with HarfBuzz 13 on every field. Every bake report lists directory, per-table, extents, and availability bytes. The complete Noto core GLB is 1,540,460 raw bytes, 655,920 gzip-9 bytes, and 515,421 Brotli-9 bytes.
+The canonical SFNT figures are reconstructed directly from the pinned source table directories using the V0 whitelist. Dense extents and the one-bit-per-glyph availability view are exact contract costs. Inter and Noto prove their complete checked-in HarfRust corpora are identical between source and reduced SFNT; Noto additionally agrees with HarfBuzz 13 on every field. Every bake report lists directory, per-table, extents, and availability bytes. The complete Noto core GLB is 1,540,480 raw bytes, 654,597 gzip-9 bytes, and 515,676 Brotli-9 bytes.
 
 Lucide is not a font and has no shaping payload. Its shared records are icon identity, view box, fill/paint, and shape indexes. The existing artifact spends 237,704 B on GLB JSON, largely for named icon metadata; the pmndrs format should measure a compact binary name/index representation rather than inherit that JSON cost by default.
 

@@ -947,7 +947,7 @@ function Scene({
           paintOpacityPercent={paintOpacityPercent}
           paintStrokePercent={paintStrokePercent}
           workloadAmount={workloadAmount}
-          key={`${location.backend}-${String(dpr)}-${liveFontFixture}`}
+          key={`${location.backend}-${String(dpr)}-${liveFontFixture}-${location.workload}`}
           showcaseFrame={showcaseFrame}
           stats={liveStats}
           technique={location.technique}
