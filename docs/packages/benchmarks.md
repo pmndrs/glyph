@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:993490d5cadb6a3398382aeee7df373615a1f32910773fd45901e2bb22521850"
+source_digest: "sha256:897214849f4b85e10dc4d33ca69c3288a19fc3adf3e7407ce923594c73a3e7ff"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T11:16:04Z"
+  at: "2026-07-27T11:50:17Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -28,7 +28,7 @@ Status: 🟡 Milestone 8 evidence and final Milestone 6/8 review remain active
 
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane; conformance mode is the finite visual correctness inspector. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 
-The responsive shell reserves the three-column rail/main/control layout for viewports at least 1,200 CSS pixels wide; narrower tablet and phone widths use the bottom-navigation flow so the fixed rails never squeeze the scene or create horizontal overflow. Form controls inherit only the design-system font family, leaving their explicit Tailwind size and line-height utilities authoritative. The scene header stacks before its chips on narrow widths, startup costs use two columns before the small breakpoint, and control labels stay at or below 13 CSS pixels without clipping while interactive controls retain at least 28 CSS pixels of height. The product probe owns these invariants at 390, 1,024, and 1,280 CSS pixels; its in-process Vite lifecycle selects an available local port and closes both browser and server after success or failure.
+The responsive shell reserves the three-column rail/main/control layout for viewports at least 1,200 CSS pixels wide; narrower tablet and phone widths use the bottom-navigation flow so the fixed rails never squeeze the scene or create horizontal overflow. Form controls inherit only the design-system font family, leaving their explicit Tailwind size and line-height utilities authoritative. The scene header stacks before its chips on narrow widths, startup costs use two columns before the small breakpoint, and control labels stay at or below 13 CSS pixels without clipping while interactive controls retain at least 28 CSS pixels of height. Shared range controls remove text-field padding and draw their visible rail exactly one half-thumb radius inside each edge, so the minimum and maximum rail endpoints equal the native thumb-center travel. An accent segment fills from the minimum to the controlled value over the remaining neutral rail. Component tests distinguish range and text geometry, normalize and clamp fill progress, and the live product probe verifies zero horizontal padding, the explicit inset, visible fill/rail layers, and both numeric endpoints. The responsive product probe owns the wider layout invariants at 390, 1,024, and 1,280 CSS pixels; its in-process Vite lifecycle selects an available local port and closes both browser and server after success or failure.
 
 This application owns the shared target/scenario runner, responsive Figma-backed interface, URL state, validation/report/export views, deterministic synthetic target, real portable-baker target, real public loader/Worker-fallback target, real HarfRust shaping-conformance target, real paragraph measurement/positioned-layout/policy/CJK targets, the dual-backend TSL shader baseline, the public `Text` bitmap target, and the public React `Text` reconciler target. The runner disposes partial target state when loading fails, and the UI retains typed WebGPU availability through label and tone rendering. The interactive UI, browser headless CLI, Vitest, Vitexec, and Playwright all call the same strict registry execution module. Inter 4.1 remains the default fixture; Amiri 1.002 owns complex-script evidence; Noto Sans CJK JP 2.004 owns the maximum-cardinality universality lane. Each is immutable, licensed, hash-authenticated, and paired with checked HarfRust/HarfBuzz evidence. Chromium 149 runs the bounded conformance suite through forced WebGL2, including exact bitmap readback and deterministic React reconciliation; the maintainer-local lane repeats the bitmap frame on hardware WebGPU. The CJK result fixes thirteen corpus cases, four paragraphs, twelve layouts, eight plans, one direct shape call, four paragraph shape calls, zero reshapes, 10,622 output bytes, and the exact composite hash `a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68`; Vitexec repeats it with WebGPU active.
 

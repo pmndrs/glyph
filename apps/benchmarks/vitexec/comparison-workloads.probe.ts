@@ -14,6 +14,7 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
 
     if (workload.id !== 'text-ladder') {
       const revision = numericAttribute(viewport, 'data-configuration-revision')
+      assertRangeVisualTravel(rangeControl('Rendered size'))
       const renderedSize = setDifferentRange('Rendered size', technique === 'mtsdf' ? 52 : 28)
       viewport = await waitForViewportAttribute(
         technique,
@@ -89,6 +90,30 @@ function rangeControl(label: string): HTMLInputElement {
   )
   if (control === undefined) throw new Error(`${label} range control is unavailable`)
   return control
+}
+
+function assertRangeVisualTravel(control: HTMLInputElement): void {
+  const style = getComputedStyle(control)
+  const shell = control.parentElement
+  if (shell === null || !shell.classList.contains('range-shell')) {
+    throw new Error('Range control is missing its filled-track surface')
+  }
+  if (style.paddingLeft !== '0px' || style.paddingRight !== '0px') {
+    throw new Error('Range control retains padding that creates false endpoint space')
+  }
+  if (style.getPropertyValue('--range-track-inset').trim() !== '7px') {
+    throw new Error('Range control does not align its visible track with the thumb-center travel')
+  }
+  const progress = Number(getComputedStyle(shell).getPropertyValue('--range-progress'))
+  if (!Number.isFinite(progress) || progress < 0 || progress > 1) {
+    throw new Error('Range control fill does not represent its current value')
+  }
+  if (getComputedStyle(shell, '::before').backgroundColor === 'rgba(0, 0, 0, 0)') {
+    throw new Error('Range control has no visible neutral rail')
+  }
+  if (getComputedStyle(shell, '::after').backgroundColor === 'rgba(0, 0, 0, 0)') {
+    throw new Error('Range control has no visible value fill')
+  }
 }
 
 function setRange(label: string, value: number): void {

@@ -1,5 +1,6 @@
 import type {
   ButtonHTMLAttributes,
+  CSSProperties,
   InputHTMLAttributes,
   ReactNode,
   TextareaHTMLAttributes,
@@ -58,15 +59,47 @@ export function Field({
   className,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { readonly label: string }) {
+  const range = props.type === 'range'
+  const input = (
+    <input
+      className={classes(
+        'h-8 min-w-0 text-xs text-foreground outline-none',
+        range
+          ? 'range-control w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed'
+          : 'rounded-md border border-border bg-background px-2.5 file:mr-2 file:border-0 file:bg-transparent file:text-xs file:text-muted focus:border-accent',
+      )}
+      {...props}
+    />
+  )
   return (
     <label className={classes('grid gap-1.5', className)}>
       <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
-      <input
-        className="h-8 min-w-0 rounded-md border border-border bg-background px-2.5 text-xs text-foreground outline-none file:mr-2 file:border-0 file:bg-transparent file:text-xs file:text-muted focus:border-accent"
-        {...props}
-      />
+      {range ? (
+        <span
+          className={classes('range-shell', props.disabled && 'is-disabled')}
+          style={{ '--range-progress': rangeProgress(props) } as CSSProperties}
+        >
+          {input}
+        </span>
+      ) : (
+        input
+      )}
     </label>
   )
+}
+
+function rangeProgress(props: InputHTMLAttributes<HTMLInputElement>): number {
+  const minimum = finiteNumber(props.min, 0)
+  const maximum = finiteNumber(props.max, 100)
+  const fallback = minimum + (maximum - minimum) / 2
+  const value = finiteNumber(props.value ?? props.defaultValue, fallback)
+  if (maximum <= minimum) return 0
+  return Math.min(1, Math.max(0, (value - minimum) / (maximum - minimum)))
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const number = typeof value === 'number' || typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isFinite(number) ? number : fallback
 }
 
 export function SelectField({

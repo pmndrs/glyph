@@ -60,6 +60,81 @@ button {
   cursor: pointer;
 }
 
+.range-shell {
+  --range-thumb-size: 14px;
+  --range-track-inset: 7px;
+  --range-track-size: 2px;
+  --range-progress: 0;
+  position: relative;
+  display: block;
+  min-width: 0;
+  height: 2rem;
+}
+.range-shell::before,
+.range-shell::after {
+  position: absolute;
+  top: 50%;
+  right: var(--range-track-inset);
+  left: var(--range-track-inset);
+  height: var(--range-track-size);
+  border-radius: 999px;
+  content: '';
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.range-shell::before {
+  background: var(--border);
+}
+.range-shell::after {
+  background: var(--accent);
+  transform: translateY(-50%) scaleX(var(--range-progress));
+  transform-origin: left center;
+}
+.range-shell.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.range-control {
+  position: relative;
+  z-index: 1;
+  display: block;
+  height: 100%;
+  appearance: none;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.range-control::-webkit-slider-runnable-track {
+  height: var(--range-track-size);
+  border: 0;
+  background: transparent;
+}
+.range-control::-webkit-slider-thumb {
+  width: var(--range-thumb-size);
+  height: var(--range-thumb-size);
+  margin-top: calc((var(--range-track-size) - var(--range-thumb-size)) / 2);
+  appearance: none;
+  border: 2px solid var(--background);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.range-control::-moz-range-track {
+  height: var(--range-track-size);
+  border: 0;
+  background: transparent;
+}
+.range-control::-moz-range-thumb {
+  box-sizing: border-box;
+  width: var(--range-thumb-size);
+  height: var(--range-thumb-size);
+  border: 2px solid var(--background);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .eyebrow {
   font-family: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
   font-size: 9px;
