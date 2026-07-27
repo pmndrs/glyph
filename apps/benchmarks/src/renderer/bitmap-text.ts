@@ -19,12 +19,15 @@ import * as THREE from 'three/webgpu'
 
 import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url'
 import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16.font.glb?url'
+import dancingScriptBitmapFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16.font.glb?url'
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
-import type { AdvancedShapingFontFixture } from '../benchmark/advanced-shaping'
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
+import sourceSerifBitmapFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url'
+import { conformanceTextForFont, type BenchmarkFontFixture } from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
+import { createLiveFrameTelemetry } from './live-frame-telemetry'
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
 
 const WIDTH = 384
@@ -32,13 +35,14 @@ const HEIGHT = 128
 const CLIPPED_WIDTH = 192
 const CLIPPED_HEIGHT = 64
 const BITMAP_FONT_SIZE = 16
-const HISTORY_CAPACITY = 120
 const bitmapRequest = bitmap({ strikes: [16] as const })
-const bitmapFontUrls: Readonly<Record<AdvancedShapingFontFixture, string>> = {
+const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: bitmapFontUrl,
   amiri: amiriBitmapFontUrl,
   'noto-sans-devanagari': devanagariBitmapFontUrl,
   'dot-gothic-16': dotGothicBitmapFontUrl,
+  'source-serif-4': sourceSerifBitmapFontUrl,
+  'dancing-script': dancingScriptBitmapFontUrl,
 }
 
 interface BitmapTextResources {
@@ -54,6 +58,7 @@ interface BitmapTextResources {
   readonly referencePixels: Uint8Array
   readonly atlasGpuBytes: number
   readonly firstDrawMs: number
+  readonly fontFixture: BenchmarkFontFixture
 }
 
 interface BitmapReferencePage {
@@ -86,6 +91,7 @@ interface BitmapLine {
 }
 
 export interface BitmapTextLiveStats {
+  readonly technique: 'bitmap'
   readonly backend: RendererBackend
   readonly dpr: number
   readonly frameCount: number
@@ -103,6 +109,7 @@ export interface BitmapTextLiveStats {
   readonly renderedPpem: number
   readonly scaleRatio: number
   readonly atlasGpuBytes: number
+  readonly atlasPages: readonly BitmapAtlasPageStats[]
   readonly framebufferGpuBytes: number
   readonly totalGpuBytes: number
   readonly artifactBytes: number
@@ -124,6 +131,14 @@ export interface BitmapTextLiveStats {
   readonly gpuHistory: Float32Array
   readonly gpuHistoryLength: number
   readonly gpuHistoryNextIndex: number
+}
+
+export interface BitmapAtlasPageStats {
+  readonly strikePpem: number
+  readonly pageIndex: number
+  readonly width: number
+  readonly height: number
+  readonly gpuBytes: number
 }
 
 export interface BitmapTextConformanceCapture {
@@ -194,7 +209,7 @@ export interface BitmapTextPreviewOptions {
   readonly height: number
   readonly layoutWidth: number
   readonly expectedGlyphCount?: number
-  readonly fontFixture?: AdvancedShapingFontFixture
+  readonly fontFixture?: BenchmarkFontFixture
   readonly language?: string
   readonly direction?: 'ltr' | 'rtl'
   readonly features?: readonly FontFeature[]
@@ -211,10 +226,11 @@ type BitmapTextState =
 
 export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarget {
   let state: BitmapTextState = { kind: 'empty' }
+  let fontFixture: BenchmarkFontFixture = 'inter'
   return {
     id: `bitmap-text-${backend}`,
     label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL2 fallback',
-    detail: 'Inter GLB · HarfRust layout · R8 KTX2 · instanced TSL',
+    detail: 'Selected font GLB · HarfRust layout · R8 KTX2 · instanced TSL',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
       'deterministic',
@@ -224,10 +240,16 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
       'paragraph',
       'raster',
     ]),
+    configure: (input) => {
+      fontFixture = input.fontFixture ?? 'inter'
+    },
     status: () => 'ready',
     load: async (controls) => {
       if (state.kind === 'ready') return
-      state = { kind: 'ready', resources: await createResources(backend, controls.dpr) }
+      state = {
+        kind: 'ready',
+        resources: await createResources(backend, controls.dpr, fontFixture),
+      }
     },
     run: async () => {
       if (state.kind !== 'ready') throw new Error('bitmap text target was not loaded')
@@ -248,6 +270,7 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
 async function createResources(
   backend: RendererBackend,
   dpr: number,
+  fontFixture: BenchmarkFontFixture = 'inter',
 ): Promise<BitmapTextResources> {
   const canvas = document.createElement('canvas')
   canvas.width = WIDTH
@@ -263,9 +286,9 @@ async function createResources(
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
   try {
-    const loadedFont = await loadBitmapFont()
+    const loadedFont = await loadBitmapFont(undefined, fontFixture)
     font = loadedFont.font
-    line = await createBitmapLine(font, BENCHMARK_IPSUM_CONFORMANCE_TEXT, BITMAP_FONT_SIZE / dpr)
+    line = await createBitmapLine(font, conformanceTextForFont(fontFixture), BITMAP_FONT_SIZE / dpr)
     line.object.position.set(
       quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
       quarterDevicePosition(-Math.max(4, (HEIGHT - line.height) / 2), dpr),
@@ -309,6 +332,7 @@ async function createResources(
       referencePixels,
       atlasGpuBytes,
       firstDrawMs,
+      fontFixture,
     }
   } catch (error) {
     if (line !== undefined) disposeBitmapLine(line)
@@ -319,9 +343,9 @@ async function createResources(
   }
 }
 
-async function loadBitmapFont(
+export async function loadBitmapFont(
   signal?: AbortSignal,
-  fixture: AdvancedShapingFontFixture = 'inter',
+  fixture: BenchmarkFontFixture = 'inter',
 ): Promise<{ readonly artifactBytes: number; readonly font: RegisteredFont }> {
   signal?.throwIfAborted()
   let font: RegisteredFont | undefined
@@ -362,7 +386,8 @@ async function createBitmapLine(
     font,
     raster: bitmapRequest,
     fontSize,
-    lineHeight: 1,
+    lineHeight: LIVE_TEXT_LINE_HEIGHT,
+    color: LIVE_TEXT_COLOR,
     language: shaping.language,
     direction: shaping.direction,
     features: shaping.features,
@@ -380,7 +405,7 @@ async function createBitmapLine(
       0,
     )
     if (missingGlyphCount !== 0) {
-      throw new Error(`benchmark ipsum contains ${missingGlyphCount} glyphs missing from Inter`)
+      throw new Error(`benchmark specimen contains ${missingGlyphCount} missing glyphs`)
     }
     return {
       object,
@@ -430,26 +455,40 @@ async function loadBitmapReferenceSnapshot(
   }
 }
 
-async function registeredBitmapAtlasBytes(font: RegisteredFont): Promise<number> {
+export async function registeredBitmapAtlas(font: RegisteredFont): Promise<{
+  readonly gpuBytes: number
+  readonly pages: readonly BitmapAtlasPageStats[]
+}> {
   const rasterKey = await bitmapRasterKey({ strikes: [16] as const })
-  const raster = font.getRaster(rasterKey)
-  if (raster === undefined) throw new Error('bitmap Text did not retain its registered raster')
+  const raster =
+    font.getRaster(rasterKey) ??
+    (await font.loadRaster({
+      kind: 'bitmap',
+      rasterKey,
+    }))
   const extension = jsonObject(raster.extensionData, 'bitmap extension')
   const strikes = jsonArray(extension.strikes, 'bitmap strikes')
   let bytes = 0
+  const pages: BitmapAtlasPageStats[] = []
   for (const [strikeIndex, strikeValue] of strikes.entries()) {
     const strike = jsonObject(strikeValue, `bitmap strike ${strikeIndex}`)
+    const strikePpem = jsonPositiveInteger(strike.ppemX, `bitmap strike ${strikeIndex} ppemX`)
+    if (strike.ppemY !== strikePpem) {
+      throw new TypeError(`bitmap strike ${strikeIndex} must be square`)
+    }
     for (const [pageIndex, pageValue] of jsonArray(
       strike.pages,
       `bitmap strike ${strikeIndex} pages`,
     ).entries()) {
       const page = jsonObject(pageValue, `bitmap strike ${strikeIndex} page ${pageIndex}`)
-      bytes +=
-        jsonPositiveInteger(page.width, 'bitmap page width') *
-        jsonPositiveInteger(page.height, 'bitmap page height')
+      const width = jsonPositiveInteger(page.width, 'bitmap page width')
+      const height = jsonPositiveInteger(page.height, 'bitmap page height')
+      const gpuBytes = width * height
+      bytes += gpuBytes
+      pages.push({ strikePpem, pageIndex, width, height, gpuBytes })
     }
   }
-  return bytes
+  return { gpuBytes: bytes, pages }
 }
 
 function jsonObject(
@@ -586,31 +625,17 @@ export async function createBitmapTextPreview(
     const startupMs = performance.now() - startupStarted
     const activeFont = font
     const activeLine = line
-    const atlasGpuBytes = await registeredBitmapAtlasBytes(activeFont)
+    const atlas = await registeredBitmapAtlas(activeFont)
     scene.add(activeLine.object)
     const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10)
     camera.position.z = 1
     camera.updateProjectionMatrix()
     renderer.setClearColor(0x000000, 0)
 
-    const submitHistory = new Float32Array(HISTORY_CAPACITY)
-    const submitQuantileScratch = new Float32Array(HISTORY_CAPACITY)
-    const fpsHistory = new Float32Array(HISTORY_CAPACITY)
-    const gpuHistory = new Float32Array(HISTORY_CAPACITY)
-    const gpuQuantileScratch = new Float32Array(HISTORY_CAPACITY)
-    let submitHistoryLength = 0
-    let submitHistoryNextIndex = 0
-    let fpsHistoryLength = 0
-    let fpsHistoryNextIndex = 0
-    let gpuHistoryLength = 0
-    let gpuHistoryNextIndex = 0
-    let gpuFrameMs: number | undefined
+    const telemetry = createLiveFrameTelemetry()
     let gpuTimestampRequest: number | undefined
     let gpuTimestampResolution: Promise<void> | undefined
     const gpuTimingSupported = renderer.hasFeature('timestamp-query')
-    let frameCount = 0
-    let reportedAt = performance.now()
-    let reportedFrame = 0
     let closing = false
     let disposed = false
     let disposal: Promise<void> | undefined
@@ -759,10 +784,7 @@ export async function createBitmapTextPreview(
             if (disposed || duration === undefined || !Number.isFinite(duration) || duration < 0) {
               return
             }
-            gpuFrameMs = duration
-            gpuHistory[gpuHistoryNextIndex] = duration
-            gpuHistoryNextIndex = (gpuHistoryNextIndex + 1) % HISTORY_CAPACITY
-            gpuHistoryLength = Math.min(gpuHistoryLength + 1, HISTORY_CAPACITY)
+            telemetry.recordGpu(duration)
           })
           .catch((error: unknown) => {
             if (!closing && !disposed) onError(error)
@@ -781,40 +803,20 @@ export async function createBitmapTextPreview(
         renderer.render(scene, camera)
         if (closing) return
         const submitMs = performance.now() - started
-        if (frameCount === 0) firstDrawMs = submitMs
-        submitHistory[submitHistoryNextIndex] = submitMs
-        submitHistoryNextIndex = (submitHistoryNextIndex + 1) % HISTORY_CAPACITY
-        submitHistoryLength = Math.min(submitHistoryLength + 1, HISTORY_CAPACITY)
-        frameCount += 1
-        const elapsed = timestamp - reportedAt
-        if (elapsed < 250) return
-        submitQuantileScratch.set(submitHistory)
-        for (let index = submitHistoryLength; index < HISTORY_CAPACITY; index += 1) {
-          submitQuantileScratch[index] = Number.POSITIVE_INFINITY
-        }
-        submitQuantileScratch.sort()
-        gpuQuantileScratch.set(gpuHistory)
-        for (let index = gpuHistoryLength; index < HISTORY_CAPACITY; index += 1) {
-          gpuQuantileScratch[index] = Number.POSITIVE_INFINITY
-        }
-        gpuQuantileScratch.sort()
+        if (firstDrawMs === 0) firstDrawMs = submitMs
+        const telemetrySnapshot = telemetry.recordSubmit(timestamp, submitMs)
+        if (telemetrySnapshot === undefined) return
         const physicalWidth = Math.round(width * dpr)
         const physicalHeight = Math.round(viewportHeight * dpr)
         const framebufferGpuBytes = physicalWidth * physicalHeight * 4
-        const framesPerSecond = elapsed <= 0 ? 0 : ((frameCount - reportedFrame) * 1000) / elapsed
-        fpsHistory[fpsHistoryNextIndex] = framesPerSecond
-        fpsHistoryNextIndex = (fpsHistoryNextIndex + 1) % HISTORY_CAPACITY
-        fpsHistoryLength = Math.min(fpsHistoryLength + 1, HISTORY_CAPACITY)
         scheduleGpuTimestamp()
         const layout = activeLine.object.layout
         if (layout === undefined) throw new Error('live bitmap Text lost its committed layout')
         onStats({
+          technique: 'bitmap',
           backend,
           dpr,
-          frameCount,
-          framesPerSecond,
-          medianSubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.5),
-          p95SubmitMs: quantile(submitQuantileScratch, submitHistoryLength, 0.95),
+          ...telemetrySnapshot,
           glyphCount: countRenderedGlyphs(activeLine.object),
           missingGlyphCount: countMissingGlyphs(layout),
           drawCount: countDraws(activeLine.object),
@@ -825,9 +827,10 @@ export async function createBitmapTextPreview(
           cssFontSize: currentFontSize,
           renderedPpem: currentFontSize * dpr,
           scaleRatio: (currentFontSize * dpr) / activeLine.strikePpem,
-          atlasGpuBytes,
+          atlasGpuBytes: atlas.gpuBytes,
+          atlasPages: atlas.pages,
           framebufferGpuBytes,
-          totalGpuBytes: atlasGpuBytes + framebufferGpuBytes,
+          totalGpuBytes: atlas.gpuBytes + framebufferGpuBytes,
           artifactBytes: loadedFont.artifactBytes,
           rendererInitMs,
           fontLoadMs,
@@ -835,27 +838,7 @@ export async function createBitmapTextPreview(
           firstDrawMs,
           startupMs,
           gpuTimingSupported,
-          gpuFrameMs,
-          medianGpuMs:
-            gpuHistoryLength === 0
-              ? undefined
-              : quantile(gpuQuantileScratch, gpuHistoryLength, 0.5),
-          p95GpuMs:
-            gpuHistoryLength === 0
-              ? undefined
-              : quantile(gpuQuantileScratch, gpuHistoryLength, 0.95),
-          submitHistory,
-          submitHistoryLength,
-          submitHistoryNextIndex,
-          fpsHistory,
-          fpsHistoryLength,
-          fpsHistoryNextIndex,
-          gpuHistory,
-          gpuHistoryLength,
-          gpuHistoryNextIndex,
         })
-        reportedAt = timestamp
-        reportedFrame = frameCount
       } catch (error) {
         onError(error)
       }
@@ -933,10 +916,11 @@ export async function createBitmapTextPreview(
 export async function captureBitmapTextConformance(options: {
   readonly backend: RendererBackend
   readonly dpr: number
+  readonly fontFixture?: BenchmarkFontFixture
   readonly signal?: AbortSignal
 }): Promise<BitmapTextConformanceCapture> {
   options.signal?.throwIfAborted()
-  const resources = await createResources(options.backend, options.dpr)
+  const resources = await createResources(options.backend, options.dpr, options.fontFixture)
   try {
     options.signal?.throwIfAborted()
     const width = Math.round(WIDTH * options.dpr)
@@ -994,12 +978,6 @@ function differenceImage(
 function positiveViewportSize(value: number, name: string): number {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be positive`)
   return value
-}
-
-function quantile(sorted: Float32Array, length: number, fraction: number): number {
-  if (length === 0) return 0
-  const index = Math.min(length - 1, Math.ceil(length * fraction) - 1)
-  return sorted[index] ?? 0
 }
 
 async function renderBitmapText(resources: BitmapTextResources): Promise<TargetRunOutput> {
@@ -1064,6 +1042,7 @@ async function renderBitmapText(resources: BitmapTextResources): Promise<TargetR
     bytes: full.bytes.byteLength,
     hash: await sha256(full.bytes),
     metrics: {
+      fixtureIsInter: resources.fontFixture === 'inter' ? 1 : 0,
       backendWebGpu: resources.backend === 'webgpu' ? 1 : 0,
       backendWebGl2: resources.backend === 'webgl2' ? 1 : 0,
       dpr: resources.dpr,

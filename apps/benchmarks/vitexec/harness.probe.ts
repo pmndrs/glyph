@@ -32,16 +32,53 @@ if (!scene.textContent?.includes('Benchmark ipsum')) {
 }
 
 const captureWindow = await waitForEnabledButton('Capture window')
-const viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
+let viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
+const controls = await waitForElement('[data-testid="controls"]')
+const gpuResourceInspector = await waitForElement('[data-testid="gpu-resource-inspector"]')
+await waitForText(gpuResourceInspector, 'Texture pages · 1')
+if (!gpuResourceInspector.textContent?.includes('16 px · page 1 · 1024×679')) {
+  throw new Error('Bitmap payload inspector did not expose the canonical strike page')
+}
+const controlsText = controls.textContent ?? ''
+if (controlsText.indexOf('Show canvas grid') > controlsText.indexOf('Live workload')) {
+  throw new Error('Global canvas-grid control must precede workload-specific controls')
+}
 await verifyGpuTiming(viewport, 'webgpu')
+const renderedSizeControl = document.querySelector<HTMLInputElement>(
+  'input[type="range"][min="8"][max="96"]',
+)
+if (renderedSizeControl === null) throw new Error('Shared rendered-size control is missing')
+const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+if (setInputValue === undefined) throw new Error('Native input value setter is unavailable')
+setInputValue.call(renderedSizeControl, '96')
+renderedSizeControl.dispatchEvent(new Event('input', { bubbles: true }))
+await waitForAttribute(viewport, 'data-rendered-device-px', '96')
+if (numericAttribute(viewport, 'data-scale-ratio') !== 6) {
+  throw new Error('Bitmap did not expose its 96 px / 16 px strike scaling cost')
+}
+const msdfButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) => candidate.textContent?.trim() === 'MSDF' && !candidate.disabled,
+)
+if (msdfButton === undefined) throw new Error('MSDF technique control is missing')
+msdfButton.click()
+const mtsdfViewport = await waitForElement('[data-testid="mtsdf-live-viewport"]')
+await waitForAttribute(mtsdfViewport, 'data-rendered-device-px', '96')
+if (numericAttribute(mtsdfViewport, 'data-scale-ratio') !== 1.5) {
+  throw new Error('MSDF did not preserve the shared 96 px rendered size')
+}
+const bitmapButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) => candidate.textContent?.trim() === 'bitmap' && !candidate.disabled,
+)
+if (bitmapButton === undefined) throw new Error('Bitmap technique control is missing')
+bitmapButton.click()
+viewport = await waitForElement('[data-testid="bitmap-live-viewport"]')
+await waitForAttribute(viewport, 'data-rendered-device-px', '96')
 const initialLayoutWidth = numericAttribute(viewport, 'data-layout-width')
 const initialLineCount = numericAttribute(viewport, 'data-line-count')
 const layoutWidthControl = document.querySelector<HTMLInputElement>(
   'input[type="range"][min="40"][max="100"]',
 )
 if (layoutWidthControl === null) throw new Error('Live layout width control is missing')
-const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-if (setInputValue === undefined) throw new Error('Native input value setter is unavailable')
 setInputValue.call(layoutWidthControl, '50')
 layoutWidthControl.dispatchEvent(new Event('input', { bubbles: true }))
 const reflowedLayoutWidth = await waitForChangedNumericAttribute(
@@ -52,6 +89,22 @@ const reflowedLayoutWidth = await waitForChangedNumericAttribute(
 const reflowedLineCount = numericAttribute(viewport, 'data-line-count')
 if (reflowedLayoutWidth >= initialLayoutWidth || reflowedLineCount <= initialLineCount) {
   throw new Error('Live layout width control did not commit a narrower paragraph reflow')
+}
+
+for (const fixture of [
+  { label: 'Source Serif 4', artifactBytes: 468_768 },
+  { label: 'Dancing Script', artifactBytes: 291_540 },
+  { label: 'Inter Regular', artifactBytes: 927_148 },
+] as const) {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (candidate) => candidate.textContent?.includes(fixture.label) === true && !candidate.disabled,
+  )
+  if (button === undefined) throw new Error(`${fixture.label} font fixture control is missing`)
+  const previousViewport = viewport
+  button.click()
+  viewport = await waitForReplacement(previousViewport, '[data-testid="bitmap-live-viewport"]')
+  await waitForAttribute(viewport, 'data-artifact-bytes', String(fixture.artifactBytes))
+  await waitForAttribute(viewport, 'data-missing-glyph-count', '0')
 }
 
 captureWindow.click()
@@ -75,6 +128,44 @@ const restoredWebgpuViewport = await waitForReplacement(
   '[data-testid="bitmap-live-viewport"]',
 )
 await verifyGpuTiming(restoredWebgpuViewport, 'webgpu')
+
+const paintEffectsButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) => candidate.textContent?.includes('Paint & effects') === true && !candidate.disabled,
+)
+if (paintEffectsButton === undefined) throw new Error('Paint & Effects workload is missing')
+paintEffectsButton.click()
+let paintViewport = await waitForElement('[data-testid="comparison-live-viewport"]')
+await waitForAttribute(paintViewport, 'data-workload', 'paint-effects')
+await waitForAttribute(paintViewport, 'data-technique', 'bitmap')
+
+const opacityControl = await waitForRangeControl('Opacity')
+setInputValue.call(opacityControl, '65')
+opacityControl.dispatchEvent(new Event('input', { bubbles: true }))
+await waitForAttribute(paintViewport, 'data-paint-opacity', '0.65')
+
+let strokeControl = await waitForRangeControl('Stroke width')
+if (!strokeControl.disabled || strokeControl.value !== '0') {
+  throw new Error('Bitmap Paint & Effects must expose a disabled zero-width stroke control')
+}
+
+msdfButton.click()
+paintViewport = await waitForElementState('[data-testid="comparison-live-viewport"]', {
+  'data-workload': 'paint-effects',
+  'data-technique': 'mtsdf',
+})
+await waitForAttribute(paintViewport, 'data-paint-opacity', '0.65')
+strokeControl = await waitForRangeControl('Stroke width')
+if (strokeControl.disabled) {
+  throw new Error('MSDF Paint & Effects stroke control must be enabled')
+}
+setInputValue.call(strokeControl, '70')
+strokeControl.dispatchEvent(new Event('input', { bubbles: true }))
+await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0.7')
+bitmapButton.click()
+await waitForElementState('[data-testid="comparison-live-viewport"]', {
+  'data-workload': 'paint-effects',
+  'data-technique': 'bitmap',
+})
 
 const advancedShapingPath = '/src/benchmark/advanced-shaping.ts'
 const { ADVANCED_SHAPING_CASES } = await import(/* @vite-ignore */ advancedShapingPath)
@@ -221,6 +312,28 @@ function waitForSelect(label: string): Promise<HTMLSelectElement> {
   })
 }
 
+function waitForRangeControl(label: string): Promise<HTMLInputElement> {
+  const find = (): HTMLInputElement | undefined =>
+    [...document.querySelectorAll<HTMLInputElement>('input[type="range"]')].find(
+      (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
+    )
+  const current = find()
+  if (current !== undefined) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const control = find()
+      if (control === undefined) return
+      observer.disconnect()
+      resolve(control)
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+  })
+}
+
 function waitForLiveViewportState(
   attributes: Readonly<Record<string, string>>,
 ): Promise<HTMLElement> {
@@ -246,6 +359,37 @@ function waitForLiveViewportState(
       if (candidateViewport === undefined) return
       observer.disconnect()
       resolve(candidateViewport)
+    })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
+  })
+}
+
+function waitForElementState(
+  selector: string,
+  attributes: Readonly<Record<string, string>>,
+): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined => {
+    const candidate = document.querySelector<HTMLElement>(selector)
+    if (
+      candidate === null ||
+      Object.entries(attributes).some(([name, value]) => candidate.getAttribute(name) !== value)
+    ) {
+      return undefined
+    }
+    return candidate
+  }
+  const current = find()
+  if (current !== undefined) return Promise.resolve(current)
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const candidate = find()
+      if (candidate === undefined) return
+      observer.disconnect()
+      resolve(candidate)
     })
     observer.observe(document.documentElement, {
       attributes: true,

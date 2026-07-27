@@ -21,7 +21,7 @@ import canonicalFontManifest from '../../fixtures/fonts/inter-v4.1/manifest.json
 import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json'
 import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-v0.json'
 import canonicalShapingOracle from '../../fixtures/shaping/inter-regular/harfrust.json'
-import type { BenchmarkTarget } from './contracts'
+import type { BenchmarkInput, BenchmarkTarget } from './contracts'
 import { exactValue as exactJsonValue } from './exact-value'
 import {
   hashParagraphLayout,
@@ -862,10 +862,11 @@ function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
 
 function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined
+  let configuredInput: BenchmarkInput = {}
   return {
     id: `bitmap-text-${backend}`,
     label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL2 fallback',
-    detail: 'Inter GLB · HarfRust layout · R8 KTX2 · instanced TSL',
+    detail: 'Selected font GLB · HarfRust layout · R8 KTX2 · instanced TSL',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
       'deterministic',
@@ -875,9 +876,14 @@ function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
       'paragraph',
       'raster',
     ]),
+    configure: (input) => {
+      configuredInput = input
+      loaded?.configure?.(input)
+    },
     status: () => 'ready',
     load: async (controls) => {
       loaded ??= (await import('../renderer/bitmap-text')).createBitmapTextTarget(backend)
+      loaded.configure?.(configuredInput)
       await loaded.load(controls)
     },
     run: async (input, sampleIndex, controls) => {
@@ -951,6 +957,79 @@ function reactTextTarget(): BenchmarkTarget {
   }
 }
 
+function mtsdfTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  return {
+    id: `mtsdf-text-${backend}`,
+    label: backend === 'webgpu' ? 'MTSDF text · WebGPU' : 'MTSDF text · WebGL2 fallback',
+    detail: 'Inter GLB · RGBA8 KTX2 · shared TSL graph',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (await import('../renderer/mtsdf-text')).createMtsdfTextTarget(backend)
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('MTSDF text target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
+function mtsdfConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  let configuredInput: BenchmarkInput = {}
+  return {
+    id: `mtsdf-conformance-${backend}`,
+    label:
+      backend === 'webgpu'
+        ? 'MTSDF sampling conformance · WebGPU'
+        : 'MTSDF sampling conformance · WebGL2 fallback',
+    detail: 'GPU TSL candidate · independent scalar CPU reconstruction',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    configure: (input) => {
+      configuredInput = input
+      loaded?.configure?.(input)
+    },
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (await import('../renderer/mtsdf-text')).createMtsdfConformanceTarget(backend)
+      loaded.configure?.(configuredInput)
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('MTSDF conformance target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
 export const targets: readonly BenchmarkTarget[] = [
   syntheticTarget,
   tslBaselineTarget('webgl2'),
@@ -965,8 +1044,11 @@ export const targets: readonly BenchmarkTarget[] = [
   advancedShapingConformanceTarget(),
   bitmapTextTarget('webgl2'),
   bitmapTextTarget('webgpu'),
+  mtsdfTextTarget('webgl2'),
+  mtsdfTextTarget('webgpu'),
+  mtsdfConformanceTarget('webgl2'),
+  mtsdfConformanceTarget('webgpu'),
   reactTextTarget(),
-  unavailableTarget('msdf', 'MSDF atlas', 'capability not landed', 'cyan'),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),
 ]
 

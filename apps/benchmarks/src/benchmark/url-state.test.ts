@@ -7,7 +7,8 @@ describe('harness URL state', () => {
       mode: 'conformance',
       technique: 'bitmap',
       backend: 'webgl2',
-      workload: 'bitmap-frame',
+      fontFixture: 'source-serif-4',
+      workload: 'text-accuracy',
       view: 'report',
     } as const
     expect(readHarnessLocation(writeHarnessLocation(value))).toEqual(value)
@@ -16,12 +17,13 @@ describe('harness URL state', () => {
   it('rejects unknown axes without losing the human-facing workload', () => {
     expect(
       readHarnessLocation(
-        '?mode=unknown&technique=unknown&backend=unknown&workload=text-ladder&view=unknown',
+        '?mode=unknown&technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown',
       ),
     ).toEqual({
       mode: 'benchmark',
       technique: 'bitmap',
       backend: 'webgpu',
+      fontFixture: 'inter',
       workload: 'text-ladder',
       view: 'scene',
     })
@@ -32,7 +34,8 @@ describe('harness URL state', () => {
       mode: 'conformance',
       technique: 'bitmap',
       backend: 'webgl2',
-      workload: 'bitmap-frame',
+      fontFixture: 'inter',
+      workload: 'text-accuracy',
       view: 'scene',
     })
   })

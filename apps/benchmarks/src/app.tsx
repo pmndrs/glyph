@@ -7,13 +7,12 @@ import {
   useState,
   useSyncExternalStore,
   useTransition,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type WheelEvent as ReactWheelEvent,
 } from 'react'
 
-import {
-  BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
-  BENCHMARK_IPSUM_TEXT,
-} from './benchmark/benchmark-ipsum'
+import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum'
 import {
   ADVANCED_SHAPING_CASES,
   advanceAdvancedShaping,
@@ -22,24 +21,34 @@ import {
   updateAdvancedShaping,
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
-  type AdvancedShapingFontFixture,
   type AdvancedShapingState,
 } from './benchmark/advanced-shaping'
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts'
 import { environmentResource } from './benchmark/environment'
 import { runRegisteredBenchmark } from './benchmark/execution'
-import { captureBitmapTextStats, type LiveBenchmarkCapture } from './benchmark/product-result'
+import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result'
+import {
+  BENCHMARK_FONT_LABELS,
+  SELECTABLE_FONT_FIXTURES,
+  benchmarkIpsumForFont,
+  selectableFontFixture,
+  type BenchmarkFontFixture,
+  type SelectableFontFixture,
+} from './benchmark/font-fixtures'
 import {
   readHarnessLocation,
   writeHarnessLocation,
   type GraphicsBackend,
   type HarnessLocation,
   type HarnessMode,
+  type RasterTechnique,
 } from './benchmark/url-state'
 import { ExportPanel } from './components/export-panel'
 import { Report } from './components/report'
 import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
 import packageSizes from './generated/package-sizes.json'
+import bitmapFixtures from '../fixtures/rendering/showcase-raster-fixtures-v0.json'
+import mtsdfFixtures from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
 import type {
   BitmapTextConformanceCapture,
   BitmapTextLiveStats,
@@ -47,17 +56,37 @@ import type {
   BitmapTextPreviewSnapshot,
   BitmapTextPreviewUpdate,
 } from './renderer/bitmap-text'
+import type {
+  MtsdfTextConformanceCapture,
+  MtsdfTextLiveStats,
+  MtsdfTextPreview,
+} from './renderer/mtsdf-text'
+import type {
+  ComparisonWorkloadId,
+  ComparisonWorkloadPreview,
+  ComparisonWorkloadStats,
+} from './renderer/comparison-workload'
+
+type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats
 
 interface WorkloadOption {
   readonly id: string
   readonly label: string
   readonly description: string
-  readonly available: boolean
+  readonly techniques: Readonly<Record<RasterTechnique, WorkloadTechniqueStatus>>
 }
+
+type WorkloadTechniqueStatus =
+  | { readonly kind: 'ready' }
+  | { readonly kind: 'planned'; readonly milestone: 8 | 9 }
+
+const READY: WorkloadTechniqueStatus = { kind: 'ready' }
+const PLANNED_M8: WorkloadTechniqueStatus = { kind: 'planned', milestone: 8 }
+const PLANNED_M9: WorkloadTechniqueStatus = { kind: 'planned', milestone: 9 }
 
 interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
   readonly animatePresentation: boolean
-  readonly fontFixture: AdvancedShapingFontFixture
+  readonly fontFixture: BenchmarkFontFixture
   readonly expectedGlyphCount: number | undefined
   readonly timelineTick: number | undefined
 }
@@ -69,62 +98,192 @@ interface PresentationEvidence {
   readonly targetGlyphs: number
 }
 
+interface ConformanceView {
+  readonly zoom: number
+  readonly panXPercent: number
+  readonly panYPercent: number
+}
+
+const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
+  zoom: 1,
+  panXPercent: 0,
+  panYPercent: 0,
+}
+
 const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = []
 const GLYPH_POSITION_TRANSITION_MS = 110
-const showcaseFontLabels: Readonly<Record<AdvancedShapingFontFixture, string>> = {
-  inter: 'Inter Regular 4.1',
-  amiri: 'Amiri Regular 1.002',
-  'noto-sans-devanagari': 'Noto Sans Devanagari',
-  'dot-gothic-16': 'DotGothic16 Japanese',
+function mtsdfFixtureFor(fontFixture: BenchmarkFontFixture) {
+  const fixture = mtsdfFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture)
+  if (fixture === undefined) {
+    throw new Error(`MTSDF fixture manifest is missing ${fontFixture}`)
+  }
+  return fixture
+}
+
+function bitmapFixtureFor(fontFixture: BenchmarkFontFixture) {
+  const fixture = bitmapFixtures.artifacts.find(
+    (candidate) => candidate.fontFixture === fontFixture,
+  )
+  if (fixture === undefined) {
+    throw new Error(`bitmap fixture manifest is missing ${fontFixture}`)
+  }
+  return fixture
 }
 
 const benchmarkWorkloads: readonly WorkloadOption[] = [
   {
     id: 'benchmark-ipsum',
     label: 'Benchmark ipsum',
-    description: 'Paragraph-scale native-strike text with continuous rendering.',
-    available: true,
+    description: 'Paragraph-scale text with continuous rendering and responsive reflow.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'advanced-shaping',
     label: 'Advanced shaping',
     description: 'Editable deterministic playback across complex shaping and line breaking.',
-    available: true,
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'text-ladder',
     label: 'Text ladder',
     description: 'Native and scaled strike quality across screen-space sizes.',
-    available: false,
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'off-axis-3d',
     label: 'Off-axis / 3D',
     description: 'Perspective transforms and oblique sampling.',
-    available: false,
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'dynamic-layout',
     label: 'Dynamic layout',
     description: 'Continuous container reflow and authoritative reshaping.',
-    available: false,
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
   {
     id: 'paragraph-stress',
     label: 'Paragraph stress',
     description: 'High-volume layout, batching, and memory pressure.',
-    available: false,
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+  },
+  {
+    id: 'paint-effects',
+    label: 'Paint & effects',
+    description: 'Animated per-word color with opacity and technique-appropriate stroke.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
 ]
 
 const conformanceWorkloads: readonly WorkloadOption[] = [
   {
-    id: 'bitmap-frame',
-    label: 'Bitmap frame',
-    description: 'Candidate, CPU reference, exact difference, resize, and clipping checks.',
-    available: true,
+    id: 'text-accuracy',
+    label: 'Pipeline accuracy',
+    description:
+      'Technique-specific renderer output, sampling reference, difference, and error statistics.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+  },
+  {
+    id: 'cross-technique-fidelity',
+    label: 'Cross-technique fidelity',
+    description:
+      'Bitmap and MSDF compared independently with the same outline-derived coverage reference.',
+    techniques: { bitmap: PLANNED_M8, mtsdf: PLANNED_M8, slug: PLANNED_M9 },
   },
 ]
+
+function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefined {
+  switch (workload) {
+    case 'text-ladder':
+    case 'off-axis-3d':
+    case 'dynamic-layout':
+    case 'paragraph-stress':
+    case 'paint-effects':
+      return workload
+    default:
+      return undefined
+  }
+}
+
+function workloadAmountLabel(workload: string, amount: number): string | undefined {
+  switch (workload) {
+    case 'off-axis-3d':
+      return `Perspective intensity · ${amount}%`
+    case 'dynamic-layout':
+      return `Reflow amplitude · ${amount}%`
+    case 'paragraph-stress':
+      return `Text volume · ${amount}%`
+    case 'paint-effects':
+      return `Hue spread · ${amount}%`
+    default:
+      return undefined
+  }
+}
+
+function workloadHasLayoutWidth(workload: string): boolean {
+  switch (workload) {
+    case 'benchmark-ipsum':
+    case 'dynamic-layout':
+    case 'paragraph-stress':
+      return true
+    default:
+      return false
+  }
+}
+
+function defaultFontSizeForWorkload(workload: string): number {
+  switch (workload) {
+    case 'off-axis-3d':
+      return 64
+    case 'paint-effects':
+      return 40
+    case 'dynamic-layout':
+      return 24
+    default:
+      return 16
+  }
+}
+
+function liveWorkloadControlDescription(workload: string): string {
+  switch (workload) {
+    case 'advanced-shaping':
+      return 'The authored timeline changes layout width and commits exact paragraph states.'
+    case 'text-ladder':
+      return 'One left-aligned specimen column spans the complete 8–512 device-pixel range.'
+    case 'off-axis-3d':
+      return 'Perspective intensity controls the receding plane and its animated glancing-angle wobble.'
+    case 'dynamic-layout':
+      return 'Three independently animated left, center, and right paragraphs continuously reshape and reflow.'
+    case 'paragraph-stress':
+      return 'Text volume controls glyph, line, and batching pressure.'
+    case 'paint-effects':
+      return 'Every word moves through a continuous hue wave; opacity applies to both techniques and MSDF adds adjustable stroke.'
+    default:
+      return 'Resizing the scene or changing its layout width commits a new paragraph reflow.'
+  }
+}
+
+function liveWorkloadSceneDescription(
+  workload: string,
+  showcaseFrame: AdvancedShapingFrame,
+): string {
+  switch (workload) {
+    case 'advanced-shaping':
+      return `${showcaseFrame.caseDefinition.label} reshapes at exact timeline states while the live viewport reflows.`
+    case 'text-ladder':
+      return 'One specimen renders from 8 through 512 device pixels for direct technique comparison.'
+    case 'off-axis-3d':
+      return 'The specimen renders through the shared oblique transform while frame costs remain live.'
+    case 'dynamic-layout':
+      return 'Three aligned paragraph regions resize independently and reflow without stretching glyph geometry.'
+    case 'paragraph-stress':
+      return 'A scalable paragraph corpus exposes glyph, line, draw, memory, CPU, and GPU cost.'
+    case 'paint-effects':
+      return 'A paragraph of per-word color shifts continuously with live opacity and technique-aware stroke.'
+    default:
+      return 'Paragraph-scale text renders continuously and reflows with its live viewport.'
+  }
+}
 
 function formatMs(value: number | undefined): string {
   return value === undefined ? '—' : `${value.toFixed(2)} ms`
@@ -175,29 +334,45 @@ function Harness() {
   })
   const [summary, setSummary] = useState<BenchmarkSummary>()
   const [event, setEvent] = useState<RunnerEvent>()
-  const [liveStats, setLiveStats] = useState<BitmapTextLiveStats>()
+  const [liveStats, setLiveStats] = useState<LiveTextStats>()
   const [liveCapture, setLiveCapture] = useState<LiveBenchmarkCapture>()
   const [error, setError] = useState<string>()
   const [dpr, setDpr] = useState<1 | 2>(defaultDeviceDpr)
   const [samples, setSamples] = useState(3)
   const [warmup, setWarmup] = useState(1)
   const [showGrid, setShowGrid] = useState(true)
-  const [fontSize, setFontSize] = useState(16)
+  const [fontSize, setFontSize] = useState(() => defaultFontSizeForWorkload(location.workload))
   const [layoutWidthPercent, setLayoutWidthPercent] = useState(82)
+  const [workloadAmount, setWorkloadAmount] = useState(50)
+  const [animationEnabled, setAnimationEnabled] = useState(true)
+  const [animationSpeed, setAnimationSpeed] = useState(50)
+  const [paintOpacityPercent, setPaintOpacityPercent] = useState(100)
+  const [paintStrokePercent, setPaintStrokePercent] = useState(50)
+  const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW)
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
   const [isPending, startTransition] = useTransition()
 
   const workload = workloadById(location.mode, location.workload)
+  const fontFixture = location.fontFixture
+  const workloadTechnique = workload.techniques[location.technique]
   const showcaseFrame = advancedShapingFrame(showcaseState)
-  const available = location.technique === 'bitmap' && workload.available
+  const activeFontFixture: BenchmarkFontFixture =
+    location.workload === 'advanced-shaping'
+      ? showcaseFrame.caseDefinition.fontFixture
+      : fontFixture
+  const available = location.technique !== 'slug' && workloadTechnique.kind === 'ready'
   const backendAvailable = location.backend !== 'webgpu' || environment.webgpu
 
   function setLocation(next: Partial<HarnessLocation>): void {
     const value = { ...location, ...next }
+    if (next.workload !== undefined && next.workload !== location.workload) {
+      setFontSize(defaultFontSizeForWorkload(next.workload))
+    }
     if (
       next.mode !== undefined ||
       next.technique !== undefined ||
       next.backend !== undefined ||
+      next.fontFixture !== undefined ||
       next.workload !== undefined
     ) {
       setLiveStats(undefined)
@@ -211,8 +386,22 @@ function Harness() {
   function selectMode(mode: HarnessMode): void {
     setLocation({
       mode,
-      workload: mode === 'benchmark' ? 'benchmark-ipsum' : 'bitmap-frame',
+      workload: mode === 'benchmark' ? 'benchmark-ipsum' : 'text-accuracy',
       view: 'scene',
+    })
+  }
+
+  function selectTechnique(technique: RasterTechnique): void {
+    const currentWorkload = workloadById(location.mode, location.workload)
+    const selectedWorkload =
+      currentWorkload.techniques[technique].kind === 'ready'
+        ? currentWorkload.id
+        : location.mode === 'benchmark'
+          ? 'benchmark-ipsum'
+          : 'text-accuracy'
+    setLocation({
+      technique,
+      workload: selectedWorkload,
     })
   }
 
@@ -221,9 +410,13 @@ function Harness() {
     startTransition(async () => {
       try {
         const value = await runRegisteredBenchmark({
-          targetId: `bitmap-text-${location.backend}`,
-          scenarioId: 'bitmap-text-frame',
-          input: {},
+          targetId:
+            location.technique === 'mtsdf'
+              ? `mtsdf-conformance-${location.backend}`
+              : `bitmap-text-${location.backend}`,
+          scenarioId:
+            location.technique === 'mtsdf' ? 'mtsdf-sampling-conformance' : 'bitmap-text-frame',
+          input: { fontFixture: activeFontFixture },
           controls: { dpr, samples, warmup },
           environment,
           onEvent: setEvent,
@@ -245,14 +438,20 @@ function Harness() {
       backend: location.backend,
       workload: location.workload,
       dpr,
+      fontFixture: activeFontFixture,
       environment,
-      stats: captureBitmapTextStats(liveStats),
+      stats: captureLiveTextStats(liveStats),
     })
+  }
+
+  function invalidateLiveMeasurement(): void {
+    setLiveStats(undefined)
+    setLiveCapture(undefined)
   }
 
   function dispatchShowcase(command: AdvancedShapingCommand): void {
     setShowcaseState((state) => updateAdvancedShaping(state, command))
-    setLiveCapture(undefined)
+    invalidateLiveMeasurement()
   }
 
   const advanceShowcase = useEffectEvent(() => {
@@ -277,12 +476,22 @@ function Harness() {
     <Controls
       backend={location.backend}
       dpr={dpr}
+      conformanceView={conformanceView}
+      fontFixture={activeFontFixture}
+      liveStats={liveStats}
       mode={location.mode}
+      technique={location.technique}
       workload={location.workload}
       showcaseFrame={showcaseFrame}
       showcaseState={showcaseState}
       fontSize={fontSize}
       layoutWidthPercent={layoutWidthPercent}
+      workloadAmount={workloadAmount}
+      animationEnabled={animationEnabled}
+      animationSpeed={animationSpeed}
+      paintOpacityPercent={paintOpacityPercent}
+      paintStrokePercent={paintStrokePercent}
+      selectedFontFixture={fontFixture}
       samples={samples}
       showGrid={showGrid}
       warmup={warmup}
@@ -294,13 +503,38 @@ function Harness() {
         setSummary(undefined)
         setLiveCapture(undefined)
       }}
+      onConformanceReset={() => setConformanceView(INITIAL_CONFORMANCE_VIEW)}
+      onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
       onFontSize={(value) => {
         setFontSize(value)
-        setLiveCapture(undefined)
+        invalidateLiveMeasurement()
       }}
       onLayoutWidthPercent={(value) => {
         setLayoutWidthPercent(value)
-        setLiveCapture(undefined)
+        invalidateLiveMeasurement()
+      }}
+      onWorkloadAmount={(value) => {
+        setWorkloadAmount(value)
+        invalidateLiveMeasurement()
+      }}
+      onAnimationEnabled={(value) => {
+        setAnimationEnabled(value)
+        invalidateLiveMeasurement()
+      }}
+      onAnimationSpeed={(value) => {
+        setAnimationSpeed(value)
+        invalidateLiveMeasurement()
+      }}
+      onPaintOpacityPercent={(value) => {
+        setPaintOpacityPercent(value)
+        invalidateLiveMeasurement()
+      }}
+      onPaintStrokePercent={(value) => {
+        setPaintStrokePercent(value)
+        invalidateLiveMeasurement()
+      }}
+      onSelectedFontFixture={(value) => {
+        setLocation({ fontFixture: value })
       }}
       onSamples={setSamples}
       onShowcase={dispatchShowcase}
@@ -325,13 +559,20 @@ function Harness() {
       {desktop ? (
         <div className="grid h-[calc(100vh-52px)] min-h-[680px] grid-cols-[224px_minmax(640px,1fr)_288px]">
           <WorkloadRail
+            fontFixture={fontFixture}
             location={location}
             showcaseFrame={showcaseFrame}
+            onFontFixture={(value) => {
+              setLocation({ fontFixture: value })
+            }}
             onLocation={setLocation}
+            onTechnique={selectTechnique}
           />
           <main className="min-w-0 overflow-auto border-r border-border bg-background p-4">
             <Scene
+              fontFixture={fontFixture}
               dpr={dpr}
+              conformanceView={conformanceView}
               error={error}
               event={event}
               grid={showGrid}
@@ -340,8 +581,21 @@ function Harness() {
               location={location}
               fontSize={fontSize}
               layoutWidthPercent={layoutWidthPercent}
+              workloadAmount={workloadAmount}
+              animationEnabled={animationEnabled}
+              animationSpeed={animationSpeed}
+              paintOpacityPercent={paintOpacityPercent}
+              paintStrokePercent={paintStrokePercent}
               summary={summary}
               showcaseFrame={showcaseFrame}
+              onConformancePan={(deltaXPercent, deltaYPercent) =>
+                setConformanceView((view) => ({
+                  ...view,
+                  panXPercent: view.panXPercent + deltaXPercent,
+                  panYPercent: view.panYPercent + deltaYPercent,
+                }))
+              }
+              onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
               onLiveStats={setLiveStats}
             />
           </main>
@@ -352,7 +606,9 @@ function Harness() {
           <main className="min-h-[calc(100vh-110px)] p-3">
             <div className={location.view === 'scene' ? undefined : 'hidden'}>
               <Scene
+                fontFixture={fontFixture}
                 dpr={dpr}
+                conformanceView={conformanceView}
                 error={error}
                 event={event}
                 grid={showGrid}
@@ -361,8 +617,21 @@ function Harness() {
                 location={location}
                 fontSize={fontSize}
                 layoutWidthPercent={layoutWidthPercent}
+                workloadAmount={workloadAmount}
+                animationEnabled={animationEnabled}
+                animationSpeed={animationSpeed}
+                paintOpacityPercent={paintOpacityPercent}
+                paintStrokePercent={paintStrokePercent}
                 summary={summary}
                 showcaseFrame={showcaseFrame}
+                onConformancePan={(deltaXPercent, deltaYPercent) =>
+                  setConformanceView((view) => ({
+                    ...view,
+                    panXPercent: view.panXPercent + deltaXPercent,
+                    panYPercent: view.panYPercent + deltaYPercent,
+                  }))
+                }
+                onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
                 onLiveStats={setLiveStats}
               />
             </div>
@@ -405,9 +674,21 @@ function defaultDeviceDpr(): 1 | 2 {
   return (globalThis.devicePixelRatio ?? 1) >= 1.5 ? 2 : 1
 }
 
+function workloadsFor(mode: HarnessMode): readonly WorkloadOption[] {
+  if (mode === 'benchmark') return benchmarkWorkloads
+  return conformanceWorkloads
+}
+
 function workloadById(mode: HarnessMode, id: string): WorkloadOption {
-  const workloads = mode === 'benchmark' ? benchmarkWorkloads : conformanceWorkloads
+  const workloads = workloadsFor(mode)
   return workloads.find((workload) => workload.id === id) ?? workloads[0]!
+}
+
+function workloadRailDescription(workload: WorkloadOption, technique: RasterTechnique): string {
+  const status = workload.techniques[technique]
+  return status.kind === 'ready'
+    ? workload.description
+    : `M${status.milestone} · ${workload.description}`
 }
 
 function TopBar({
@@ -478,15 +759,31 @@ function TopBar({
 }
 
 function WorkloadRail({
+  fontFixture,
   location,
   showcaseFrame,
+  onFontFixture,
   onLocation,
+  onTechnique,
 }: {
+  readonly fontFixture: SelectableFontFixture
   readonly location: HarnessLocation
   readonly showcaseFrame: AdvancedShapingFrame
+  readonly onFontFixture: (fontFixture: SelectableFontFixture) => void
   readonly onLocation: (value: Partial<HarnessLocation>) => void
+  readonly onTechnique: (technique: RasterTechnique) => void
 }) {
-  const workloads = location.mode === 'benchmark' ? benchmarkWorkloads : conformanceWorkloads
+  const workloads = workloadsFor(location.mode)
+  const activeFontFixture: BenchmarkFontFixture =
+    location.workload === 'advanced-shaping'
+      ? showcaseFrame.caseDefinition.fontFixture
+      : fontFixture
+  const selectedMtsdfFixture =
+    location.technique === 'mtsdf' ? mtsdfFixtureFor(activeFontFixture) : undefined
+  const rasterDescription =
+    selectedMtsdfFixture === undefined
+      ? '16 px grayscale bitmap strike'
+      : `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
   return (
     <aside className="overflow-auto border-r border-border bg-chrome p-3">
       <p className="eyebrow">Technique</p>
@@ -494,12 +791,12 @@ function WorkloadRail({
         {(['bitmap', 'mtsdf', 'slug'] as const).map((technique) => (
           <button
             className={`rounded-md border px-2 py-2 text-[10px] capitalize ${location.technique === technique ? 'border-accent bg-surface-active' : 'border-border bg-surface text-dim'}`}
-            disabled={technique !== 'bitmap'}
+            disabled={technique === 'slug'}
             key={technique}
             type="button"
-            onClick={() => onLocation({ technique })}
+            onClick={() => onTechnique(technique)}
           >
-            {technique}
+            {technique === 'mtsdf' ? 'MSDF' : technique}
           </button>
         ))}
       </div>
@@ -510,7 +807,7 @@ function WorkloadRail({
         {workloads.map((workload) => (
           <button
             className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
-            disabled={!workload.available}
+            disabled={workload.techniques[location.technique].kind !== 'ready'}
             key={workload.id}
             type="button"
             onClick={() => onLocation({ workload: workload.id })}
@@ -520,54 +817,90 @@ function WorkloadRail({
             />
             <span className="block text-xs">{workload.label}</span>
             <span className="mt-1 block font-mono text-[8px] leading-relaxed text-dim">
-              {workload.available ? workload.description : `PLANNED · ${workload.description}`}
+              {workloadRailDescription(workload, location.technique)}
             </span>
           </button>
         ))}
       </nav>
-      <div className="mt-5 rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">Pinned fixture</p>
-        <p className="mt-2 text-xs">
-          {location.workload === 'advanced-shaping'
-            ? showcaseFontLabels[showcaseFrame.caseDefinition.fontFixture]
-            : 'Inter Regular 4.1'}
-        </p>
-        <p className="mt-1 font-mono text-[9px] text-dim">16 px grayscale bitmap strike</p>
+      <div className="mt-5">
+        <p className="eyebrow mb-2">Font fixture</p>
+        {location.workload === 'advanced-shaping' ? (
+          <div className="rounded-md border border-border bg-surface p-3">
+            <p className="text-xs">{BENCHMARK_FONT_LABELS[activeFontFixture]}</p>
+            <p className="mt-1 font-mono text-[9px] text-dim">Selected by shaping case</p>
+          </div>
+        ) : (
+          <div className="grid gap-1">
+            {SELECTABLE_FONT_FIXTURES.map((fixture) => (
+              <button
+                className={`rounded-md border px-3 py-2 text-left ${fontFixture === fixture.id ? 'border-accent bg-surface-active text-foreground' : 'border-border bg-surface text-muted'}`}
+                key={fixture.id}
+                type="button"
+                onClick={() => onFontFixture(fixture.id)}
+              >
+                <span className="block text-xs">{fixture.label}</span>
+                <span className="mt-1 block font-mono text-[8px] text-dim">{fixture.metadata}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 font-mono text-[9px] text-dim">{rasterDescription}</p>
       </div>
     </aside>
   )
 }
 
 function Scene({
+  animationEnabled,
+  animationSpeed,
+  conformanceView,
   dpr,
   error,
   event,
+  fontFixture,
   fontSize,
   grid,
   layoutWidthPercent,
+  paintOpacityPercent,
+  paintStrokePercent,
+  workloadAmount,
   liveCapture,
   liveStats,
   location,
   showcaseFrame,
   summary,
+  onConformancePan,
+  onConformanceZoom,
   onLiveStats,
 }: {
+  readonly animationEnabled: boolean
+  readonly animationSpeed: number
+  readonly conformanceView: ConformanceView
   readonly dpr: 1 | 2
   readonly error: string | undefined
   readonly event: RunnerEvent | undefined
+  readonly fontFixture: SelectableFontFixture
   readonly fontSize: number
   readonly grid: boolean
   readonly layoutWidthPercent: number
+  readonly paintOpacityPercent: number
+  readonly paintStrokePercent: number
+  readonly workloadAmount: number
   readonly liveCapture: LiveBenchmarkCapture | undefined
-  readonly liveStats: BitmapTextLiveStats | undefined
+  readonly liveStats: LiveTextStats | undefined
   readonly location: HarnessLocation
   readonly showcaseFrame: AdvancedShapingFrame
   readonly summary: BenchmarkSummary | undefined
-  readonly onLiveStats: (stats: BitmapTextLiveStats) => void
+  readonly onConformancePan: (deltaXPercent: number, deltaYPercent: number) => void
+  readonly onConformanceZoom: (zoom: number) => void
+  readonly onLiveStats: (stats: LiveTextStats) => void
 }) {
   const workload = workloadById(location.mode, location.workload)
+  const workloadStatus = workload.techniques[location.technique]
   const liveFontFixture =
-    location.workload === 'advanced-shaping' ? showcaseFrame.caseDefinition.fontFixture : 'inter'
+    location.workload === 'advanced-shaping'
+      ? showcaseFrame.caseDefinition.fontFixture
+      : fontFixture
   return (
     <section
       className="grid min-h-full min-w-0 grid-rows-[auto_minmax(520px,1fr)_auto] gap-3"
@@ -584,31 +917,49 @@ function Scene({
           <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
         </div>
         <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
-          <Chip tone="accent">Bitmap</Chip>
+          <Chip tone="accent">{location.technique === 'mtsdf' ? 'MSDF' : 'Bitmap'}</Chip>
           <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}</Chip>
           <Chip>{dpr}× DPR</Chip>
         </div>
       </header>
-      {location.mode === 'benchmark' ? (
+      {workloadStatus.kind === 'planned' ? (
+        <PlannedWorkloadSurface
+          milestone={workloadStatus.milestone}
+          technique={location.technique}
+          workload={workload}
+        />
+      ) : location.mode === 'benchmark' ? (
         <BenchmarkSurface
+          animationEnabled={animationEnabled}
+          animationSpeed={animationSpeed}
           backend={location.backend}
           dpr={dpr}
           fontSize={fontSize}
+          fontFixture={fontFixture}
           grid={grid}
           layoutWidthPercent={layoutWidthPercent}
+          paintOpacityPercent={paintOpacityPercent}
+          paintStrokePercent={paintStrokePercent}
+          workloadAmount={workloadAmount}
           key={`${location.backend}-${String(dpr)}-${liveFontFixture}`}
           showcaseFrame={showcaseFrame}
           stats={liveStats}
+          technique={location.technique}
           workload={location.workload}
           onStats={onLiveStats}
         />
       ) : (
         <ConformanceSurface
           backend={location.backend}
+          conformanceView={conformanceView}
           dpr={dpr}
           event={event}
-          key={`${location.backend}-${String(dpr)}`}
+          fontFixture={fontFixture}
+          key={`${location.backend}-${String(dpr)}-${fontFixture}`}
           summary={summary}
+          technique={location.technique}
+          onPan={onConformancePan}
+          onZoom={onConformanceZoom}
         />
       )}
       {error !== undefined && (
@@ -627,28 +978,65 @@ function Scene({
   )
 }
 
+function PlannedWorkloadSurface({
+  milestone,
+  technique,
+  workload,
+}: {
+  readonly milestone: 8 | 9
+  readonly technique: RasterTechnique
+  readonly workload: WorkloadOption
+}) {
+  return (
+    <div className="grid min-h-[520px] place-items-center rounded-md border border-border bg-panel p-8 text-center">
+      <div className="max-w-md">
+        <p className="eyebrow">Milestone {milestone}</p>
+        <h2 className="mt-2 text-lg font-semibold">
+          {technique === 'mtsdf' ? 'MSDF' : technique} · {workload.label}
+        </h2>
+        <p className="mt-2 text-xs leading-relaxed text-muted">{workload.description}</p>
+      </div>
+    </div>
+  )
+}
+
 function BenchmarkSurface({
+  animationEnabled,
+  animationSpeed,
   backend,
   dpr,
+  fontFixture,
   fontSize,
   grid,
   layoutWidthPercent,
+  paintOpacityPercent,
+  paintStrokePercent,
+  workloadAmount,
   showcaseFrame,
   stats,
+  technique,
   workload,
   onStats,
 }: {
+  readonly animationEnabled: boolean
+  readonly animationSpeed: number
   readonly backend: GraphicsBackend
   readonly dpr: 1 | 2
+  readonly fontFixture: SelectableFontFixture
   readonly fontSize: number
   readonly grid: boolean
   readonly layoutWidthPercent: number
+  readonly paintOpacityPercent: number
+  readonly paintStrokePercent: number
+  readonly workloadAmount: number
   readonly showcaseFrame: AdvancedShapingFrame
-  readonly stats: BitmapTextLiveStats | undefined
+  readonly stats: LiveTextStats | undefined
+  readonly technique: RasterTechnique
   readonly workload: string
-  readonly onStats: (stats: BitmapTextLiveStats) => void
+  readonly onStats: (stats: LiveTextStats) => void
 }) {
   const advanced = workload === 'advanced-shaping'
+  const comparisonWorkload = comparisonWorkloadId(workload)
   const textConfiguration: LiveTextConfiguration = advanced
     ? {
         direction: showcaseFrame.caseDefinition.direction,
@@ -663,18 +1051,18 @@ function BenchmarkSurface({
       }
     : {
         direction: 'ltr',
-        expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+        expectedGlyphCount: fontFixture === 'inter' ? BENCHMARK_IPSUM_INTER_GLYPH_COUNT : undefined,
         animatePresentation: false,
         features: EMPTY_FONT_FEATURES,
-        fontFixture: 'inter',
+        fontFixture,
         language: 'en',
         layoutWidthRatio: layoutWidthPercent / 100,
-        text: BENCHMARK_IPSUM_TEXT,
+        text: benchmarkIpsumForFont(fontFixture),
         timelineTick: undefined,
       }
   return (
     <div className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3">
-      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
+      <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-5">
         <Metric
           label="Live FPS"
           value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
@@ -736,21 +1124,47 @@ function BenchmarkSurface({
           <div>
             <p className="eyebrow">Realtime scene</p>
             <p className="mt-1 text-xs text-muted">
-              {advanced
-                ? `${showcaseFrame.caseDefinition.label} reshapes at exact timeline states while the live viewport reflows.`
-                : 'Paragraph-scale text renders continuously and reflows with its live viewport.'}
+              {liveWorkloadSceneDescription(workload, showcaseFrame)}
             </p>
           </div>
           <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
         </div>
-        <BitmapTextViewport
-          backend={backend}
-          dpr={dpr}
-          fontSize={fontSize}
-          grid={grid}
-          textConfiguration={textConfiguration}
-          onStats={onStats}
-        />
+        {comparisonWorkload !== undefined ? (
+          <ComparisonWorkloadViewport
+            amount={workloadAmount}
+            animationEnabled={animationEnabled}
+            animationSpeed={animationSpeed}
+            backend={backend}
+            dpr={dpr}
+            fontSize={fontSize}
+            fontFixture={fontFixture}
+            grid={grid}
+            layoutWidthRatio={layoutWidthPercent / 100}
+            paintOpacity={paintOpacityPercent / 100}
+            paintStrokeWidth={paintStrokePercent / 100}
+            technique={technique === 'mtsdf' ? 'mtsdf' : 'bitmap'}
+            workload={comparisonWorkload}
+            onStats={onStats}
+          />
+        ) : technique === 'mtsdf' ? (
+          <MtsdfTextViewport
+            backend={backend}
+            dpr={dpr}
+            fontSize={fontSize}
+            grid={grid}
+            textConfiguration={textConfiguration}
+            onStats={onStats}
+          />
+        ) : (
+          <BitmapTextViewport
+            backend={backend}
+            dpr={dpr}
+            fontSize={fontSize}
+            grid={grid}
+            textConfiguration={textConfiguration}
+            onStats={onStats}
+          />
+        )}
       </div>
     </div>
   )
@@ -758,55 +1172,178 @@ function BenchmarkSurface({
 
 function ConformanceSurface({
   backend,
+  conformanceView,
   dpr,
   event,
+  fontFixture,
   summary,
+  technique,
+  onPan,
+  onZoom,
 }: {
   readonly backend: GraphicsBackend
+  readonly conformanceView: ConformanceView
   readonly dpr: 1 | 2
   readonly event: RunnerEvent | undefined
+  readonly fontFixture: SelectableFontFixture
   readonly summary: BenchmarkSummary | undefined
+  readonly technique: RasterTechnique
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
+  readonly onZoom: (zoom: number) => void
 }) {
-  const [capture, setCapture] = useState<BitmapTextConformanceCapture>()
+  const [capture, setCapture] = useState<
+    | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
+    | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
+  >()
   const [error, setError] = useState<string>()
-  const publishCapture = useEffectEvent((value: BitmapTextConformanceCapture) => {
-    setCapture(value)
-    setError(undefined)
-  })
+  const publishCapture = useEffectEvent(
+    (
+      value:
+        | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
+        | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture },
+    ) => {
+      setCapture(value)
+      setError(undefined)
+    },
+  )
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   useEffect(() => {
     const controller = new AbortController()
-    void import('./renderer/bitmap-text')
-      .then(({ captureBitmapTextConformance }) =>
-        captureBitmapTextConformance({ backend, dpr, signal: controller.signal }),
-      )
-      .then(publishCapture)
-      .catch(publishError)
+    const request =
+      technique === 'mtsdf'
+        ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
+            kind: 'mtsdf' as const,
+            value: await captureMtsdfTextConformance({
+              backend,
+              dpr,
+              fontFixture,
+              signal: controller.signal,
+            }),
+          }))
+        : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
+            kind: 'bitmap' as const,
+            value: await captureBitmapTextConformance({
+              backend,
+              dpr,
+              fontFixture,
+              signal: controller.signal,
+            }),
+          }))
+    void request.then(publishCapture).catch(publishError)
     return () => controller.abort()
-  }, [backend, dpr])
+  }, [backend, dpr, fontFixture, technique])
+
+  const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined
+  const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined
 
   return (
     <div className="grid min-h-0 grid-rows-[auto_minmax(360px,1fr)_auto] gap-3">
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
         <Metric
-          label="Reference mismatch"
-          value={capture === undefined ? '—' : String(capture.mismatchBytes)}
+          label={technique === 'mtsdf' ? 'Mean error · 0–255' : 'Reference mismatch'}
+          value={
+            technique === 'mtsdf'
+              ? mtsdfCapture === undefined
+                ? '—'
+                : `${mtsdfCapture.meanAbsoluteError.toFixed(3)} · ${((mtsdfCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
+              : bitmapCapture === undefined
+                ? '—'
+                : String(bitmapCapture.mismatchBytes)
+          }
         />
         <Metric
-          label="Half-coverage ink"
-          value={capture === undefined ? '—' : String(capture.inkPixels)}
+          label={technique === 'mtsdf' ? 'Pixels > 2 / 255' : 'Half-coverage ink'}
+          value={
+            technique === 'mtsdf'
+              ? mtsdfCapture === undefined
+                ? '—'
+                : `${mtsdfCapture.errorPixels} · ${((mtsdfCapture.errorPixels / (mtsdfCapture.width * mtsdfCapture.height)) * 100).toFixed(2)}%`
+              : bitmapCapture === undefined
+                ? '—'
+                : String(bitmapCapture.inkPixels)
+          }
         />
-        <Metric label="Render submit (diagnostic)" value={formatMs(capture?.renderSubmitMs)} />
+        <Metric
+          label={technique === 'mtsdf' ? 'Maximum error · 0–255' : 'Lit pixels'}
+          value={
+            technique === 'mtsdf'
+              ? mtsdfCapture === undefined
+                ? '—'
+                : `${mtsdfCapture.maximumError} / 255`
+              : bitmapCapture === undefined
+                ? '—'
+                : String(bitmapCapture.litPixels)
+          }
+        />
+        <Metric
+          label="Render submit (diagnostic)"
+          value={formatMs(capture?.value.renderSubmitMs)}
+        />
         <Metric label="Suite duration" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
       </div>
-      <div className="grid min-h-0 gap-3 xl:grid-cols-3">
-        <PixelPanel capture={capture} kind="candidate" label="Candidate" />
-        <PixelPanel capture={capture} kind="reference" label="CPU reference" />
-        <PixelPanel capture={capture} kind="difference" label="Difference ×1" />
-      </div>
+      {technique === 'mtsdf' ? (
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+          <PixelBytesPanel
+            bytes={mtsdfCapture?.candidate}
+            conformanceView={conformanceView}
+            height={mtsdfCapture?.height}
+            label="Candidate"
+            width={mtsdfCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelBytesPanel
+            bytes={mtsdfCapture?.reference}
+            conformanceView={conformanceView}
+            height={mtsdfCapture?.height}
+            label="CPU sampling reference"
+            width={mtsdfCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelBytesPanel
+            bytes={mtsdfCapture?.difference}
+            className="md:col-span-2"
+            conformanceView={conformanceView}
+            height={mtsdfCapture?.height}
+            label="Difference heatmap ×8"
+            width={mtsdfCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+        </div>
+      ) : (
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+          <PixelPanel
+            capture={bitmapCapture}
+            conformanceView={conformanceView}
+            kind="candidate"
+            label="Candidate"
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelPanel
+            capture={bitmapCapture}
+            conformanceView={conformanceView}
+            kind="reference"
+            label="CPU reference"
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelPanel
+            capture={bitmapCapture}
+            className="md:col-span-2"
+            conformanceView={conformanceView}
+            kind="difference"
+            label="Difference ×1"
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+        </div>
+      )}
       <div className="rounded-md border border-border bg-surface p-3">
         <div className="flex items-center gap-2 text-xs">
           <span
@@ -814,12 +1351,16 @@ function ConformanceSurface({
           />
           <span className="font-medium">Finite conformance suite</span>
           <span className="ml-auto font-mono text-[10px] text-muted">
-            {summary?.validation ?? 'Run conformance to test full-frame and clipped output.'}
+            {summary?.validation ??
+              (technique === 'mtsdf'
+                ? 'Run conformance to validate GPU sampling against the independent CPU sampling reference.'
+                : 'Run conformance to test full-frame and clipped output.')}
           </span>
         </div>
         <p className="mt-2 text-[10px] text-dim">
-          End-to-end suite duration includes readback, CPU composition, comparison, clipping, and
-          hashing. It is test cost, not renderer performance.
+          {technique === 'mtsdf'
+            ? 'Heatmap: black agrees, red is extra GPU coverage, and cyan is extra CPU-reference coverage. Intensity is amplified 8×.'
+            : 'End-to-end suite duration includes readback, CPU composition, comparison, clipping, and hashing. It is test cost, not renderer performance.'}
         </p>
       </div>
       {error !== undefined && <p className="text-xs text-danger">{error}</p>}
@@ -827,43 +1368,110 @@ function ConformanceSurface({
   )
 }
 
-function PixelPanel({
-  capture,
-  kind,
+function PixelBytesPanel({
+  bytes,
+  className = '',
+  conformanceView,
+  height,
   label,
+  width,
+  onPan,
+  onZoom,
 }: {
-  readonly capture: BitmapTextConformanceCapture | undefined
-  readonly kind: 'candidate' | 'reference' | 'difference'
+  readonly bytes: Uint8Array | undefined
+  readonly className?: string
+  readonly conformanceView: ConformanceView
+  readonly height: number | undefined
   readonly label: string
+  readonly width: number | undefined
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
+  readonly onZoom: (zoom: number) => void
 }) {
   function drawCapture(canvas: HTMLCanvasElement | null): void {
-    if (canvas === null || capture === undefined) return
-    canvas.width = capture.width
-    canvas.height = capture.height
+    if (canvas === null || bytes === undefined || width === undefined || height === undefined)
+      return
+    canvas.width = width
+    canvas.height = height
     const context = canvas.getContext('2d')
     if (context === null) throw new Error('Unable to create conformance inspection canvas')
-    context.putImageData(
-      new ImageData(new Uint8ClampedArray(capture[kind]), capture.width, capture.height),
-      0,
-      0,
-    )
+    context.putImageData(new ImageData(new Uint8ClampedArray(bytes), width, height), 0, 0)
+  }
+  function moveView(event: ReactPointerEvent<HTMLButtonElement>): void {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    onPan((event.movementX / bounds.width) * 100, (event.movementY / bounds.height) * 100)
+  }
+  function zoomView(event: ReactWheelEvent<HTMLButtonElement>): void {
+    event.preventDefault()
+    const direction = event.deltaY < 0 ? 0.25 : -0.25
+    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)))
   }
   return (
-    <figure className="flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel">
+    <figure
+      className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel ${className}`}
+    >
       <figcaption className="border-b border-border px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-muted">
         {label}
       </figcaption>
-      <div className="grid min-h-[240px] flex-1 place-items-center overflow-hidden p-3">
-        {capture === undefined ? (
+      <button
+        type="button"
+        aria-label={`Pan and zoom ${label}`}
+        className={`grid min-h-[240px] flex-1 place-items-center overflow-hidden p-3 ${conformanceView.zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
+        data-pan-x={conformanceView.panXPercent}
+        data-pan-y={conformanceView.panYPercent}
+        data-zoom={conformanceView.zoom}
+        style={{ touchAction: 'none' }}
+        onDoubleClick={() => onZoom(conformanceView.zoom === 1 ? 2 : 1)}
+        onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+        onPointerMove={moveView}
+        onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+        onWheel={zoomView}
+      >
+        {bytes === undefined ? (
           <span className="font-mono text-[9px] text-dim">GENERATING</span>
         ) : (
           <canvas
-            className="h-auto max-h-full w-full [image-rendering:pixelated]"
+            className="h-auto max-h-full w-full select-none [image-rendering:pixelated]"
             ref={drawCapture}
+            style={{
+              transform: `translate3d(${conformanceView.panXPercent}%, ${conformanceView.panYPercent}%, 0) scale(${conformanceView.zoom})`,
+              transformOrigin: 'center',
+            }}
           />
         )}
-      </div>
+      </button>
     </figure>
+  )
+}
+
+function PixelPanel({
+  capture,
+  className,
+  conformanceView,
+  kind,
+  label,
+  onPan,
+  onZoom,
+}: {
+  readonly capture: BitmapTextConformanceCapture | undefined
+  readonly className?: string
+  readonly conformanceView: ConformanceView
+  readonly kind: 'candidate' | 'reference' | 'difference'
+  readonly label: string
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
+  readonly onZoom: (zoom: number) => void
+}) {
+  return (
+    <PixelBytesPanel
+      bytes={capture?.[kind]}
+      {...(className === undefined ? {} : { className })}
+      conformanceView={conformanceView}
+      height={capture?.height}
+      label={label}
+      width={capture?.width}
+      onPan={onPan}
+      onZoom={onZoom}
+    />
   )
 }
 
@@ -1097,6 +1705,8 @@ function BitmapTextViewport({
       data-missing-glyph-count={stats?.missingGlyphCount}
       data-draw-count={stats?.drawCount}
       data-renderer-init-ms={stats?.rendererInitMs}
+      data-rendered-device-px={stats?.renderedPpem}
+      data-scale-ratio={stats?.scaleRatio}
       data-font-load-ms={stats?.fontLoadMs}
       data-text-ready-ms={stats?.textReadyMs}
       data-first-draw-ms={stats?.firstDrawMs}
@@ -1133,6 +1743,414 @@ function BitmapTextViewport({
       {stats === undefined && error === undefined && (
         <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
           INITIALIZING {backend.toUpperCase()}
+        </div>
+      )}
+      {error !== undefined && (
+        <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MtsdfTextViewport({
+  backend,
+  dpr,
+  fontSize,
+  grid,
+  textConfiguration,
+  onStats,
+}: {
+  readonly backend: GraphicsBackend
+  readonly dpr: 1 | 2
+  readonly fontSize: number
+  readonly grid: boolean
+  readonly textConfiguration: LiveTextConfiguration
+  readonly onStats: (stats: LiveTextStats) => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<MtsdfTextPreview>(undefined)
+  const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
+  const [stats, setStats] = useState<MtsdfTextLiveStats>()
+  const [error, setError] = useState<string>()
+  const { direction, features, fontFixture, language, layoutWidthRatio, text } = textConfiguration
+  const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
+    setStats(next)
+    onStats(next)
+    setError(undefined)
+  })
+  const publishError = useEffectEvent((caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === 'AbortError') return
+    setError(caught instanceof Error ? caught.message : String(caught))
+  })
+  const previewConfiguration = useEffectEvent(() => ({
+    direction,
+    features,
+    fontSize: fontSize / dpr,
+    language,
+    layoutWidthRatio,
+    text,
+  }))
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (canvas === null || container === null) return
+    const controller = new AbortController()
+    const configuration = previewConfiguration()
+    let preview: MtsdfTextPreview | undefined
+    let cancelled = false
+    const resize = (): void => {
+      if (preview === undefined) return
+      const bounds = container.getBoundingClientRect()
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
+    }
+    const observer = new ResizeObserver(resize)
+    observer.observe(container)
+    const initialization = previewLifecycleRef.current.then(async () => {
+      const { createMtsdfTextPreview } = await import('./renderer/mtsdf-text')
+      if (cancelled) return
+      const bounds = container.getBoundingClientRect()
+      const created = await createMtsdfTextPreview({
+        backend,
+        canvas,
+        dpr,
+        fontSize: configuration.fontSize,
+        fontFixture,
+        height: Math.max(1, bounds.height),
+        layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+        text: configuration.text,
+        language: configuration.language,
+        direction: configuration.direction,
+        features: configuration.features,
+        width: Math.max(1, bounds.width),
+        signal: controller.signal,
+        onError: publishError,
+        onStats: publishStats,
+      })
+      if (cancelled) {
+        await created.dispose()
+        return
+      }
+      preview = created
+      previewRef.current = created
+      resize()
+    })
+    void initialization.catch(publishError)
+    return () => {
+      cancelled = true
+      controller.abort()
+      observer.disconnect()
+      previewLifecycleRef.current = initialization.then(
+        async () => {
+          if (preview === undefined) return
+          const current = preview
+          preview = undefined
+          if (previewRef.current === current) previewRef.current = undefined
+          await current.dispose()
+        },
+        () => undefined,
+      )
+    }
+  }, [backend, dpr, fontFixture])
+
+  useEffect(() => {
+    const preview = previewRef.current
+    if (preview === undefined) return
+    void preview
+      .update({
+        direction,
+        features,
+        fontSize: fontSize / dpr,
+        language,
+        layoutWidthRatio,
+        text,
+      })
+      .catch(publishError)
+  }, [direction, dpr, features, fontSize, language, layoutWidthRatio, text])
+
+  return (
+    <div
+      className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      data-artifact-bytes={stats?.artifactBytes}
+      data-atlas-gpu-bytes={stats?.atlasGpuBytes}
+      data-backend={stats?.backend}
+      data-dpr={stats?.dpr}
+      data-draw-count={stats?.drawCount}
+      data-fps-history-length={stats?.fpsHistoryLength}
+      data-frame-count={stats?.frameCount}
+      data-frames-per-second={stats?.framesPerSecond}
+      data-glyph-count={stats?.glyphCount}
+      data-gpu-history-length={stats?.gpuHistoryLength}
+      data-gpu-timing-supported={stats?.gpuTimingSupported}
+      data-layout-width={stats?.layoutWidth}
+      data-line-count={stats?.lineCount}
+      data-median-gpu-ms={stats?.medianGpuMs}
+      data-median-submit-ms={stats?.medianSubmitMs}
+      data-missing-glyph-count={stats?.missingGlyphCount}
+      data-rendered-device-px={fontSize}
+      data-scale-ratio={fontSize / 64}
+      data-startup-ms={stats?.startupMs}
+      data-submit-history-length={stats?.submitHistoryLength}
+      data-testid="mtsdf-live-viewport"
+      ref={containerRef}
+    >
+      <canvas
+        aria-label={`Live MSDF benchmark using ${backend}`}
+        className="absolute inset-0 size-full"
+        ref={canvasRef}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+        <span>
+          MTSDF 64 PX/EM · RENDERED {fontSize} DEVICE PX · {(fontSize / 64).toFixed(2)}×
+        </span>
+        <span>{dpr}× DPR</span>
+      </div>
+      {stats === undefined && error === undefined && (
+        <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
+          LOADING MSDF {backend.toUpperCase()}
+        </div>
+      )}
+      {error !== undefined && (
+        <div className="absolute inset-0 grid place-items-center p-3 text-center text-[10px] text-danger">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ComparisonWorkloadViewport({
+  amount,
+  animationEnabled,
+  animationSpeed,
+  backend,
+  dpr,
+  fontFixture,
+  fontSize,
+  grid,
+  layoutWidthRatio,
+  paintOpacity,
+  paintStrokeWidth,
+  technique,
+  workload,
+  onStats,
+}: {
+  readonly amount: number
+  readonly animationEnabled: boolean
+  readonly animationSpeed: number
+  readonly backend: GraphicsBackend
+  readonly dpr: 1 | 2
+  readonly fontFixture: SelectableFontFixture
+  readonly fontSize: number
+  readonly grid: boolean
+  readonly layoutWidthRatio: number
+  readonly paintOpacity: number
+  readonly paintStrokeWidth: number
+  readonly technique: 'bitmap' | 'mtsdf'
+  readonly workload: ComparisonWorkloadId
+  readonly onStats: (stats: LiveTextStats) => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<ComparisonWorkloadPreview>(undefined)
+  const previewLifecycleRef = useRef<Promise<void>>(Promise.resolve())
+  const panGestureRef = useRef<
+    { readonly pointerId: number; readonly x: number; readonly y: number } | undefined
+  >(undefined)
+  const surfaceKey = `${backend}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
+  const [publishedStats, setPublishedStats] = useState<
+    Readonly<{ key: string; value: ComparisonWorkloadStats }>
+  >()
+  const stats = publishedStats?.key === surfaceKey ? publishedStats.value : undefined
+  const [error, setError] = useState<string>()
+  const publishStats = useEffectEvent((key: string, next: ComparisonWorkloadStats) => {
+    if (key !== surfaceKey) return
+    setPublishedStats({ key, value: next })
+    onStats(next)
+    setError(undefined)
+  })
+  const publishError = useEffectEvent((caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === 'AbortError') return
+    setError(caught instanceof Error ? caught.message : String(caught))
+  })
+  const currentConfiguration = useEffectEvent(() => ({
+    amount,
+    animationEnabled,
+    animationSpeed,
+    fontFixture,
+    fontSize: fontSize / dpr,
+    layoutWidthRatio,
+    paintOpacity,
+    paintStrokeWidth,
+    workload,
+  }))
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (canvas === null || container === null) return
+    const controller = new AbortController()
+    const effectSurfaceKey = surfaceKey
+    let preview: ComparisonWorkloadPreview | undefined
+    let cancelled = false
+    const resize = (): void => {
+      if (preview === undefined) return
+      const bounds = container.getBoundingClientRect()
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
+    }
+    const observer = new ResizeObserver(resize)
+    observer.observe(container)
+    const initialization = previewLifecycleRef.current.then(async () => {
+      const { createComparisonWorkloadPreview } = await import('./renderer/comparison-workload')
+      if (cancelled) return
+      const bounds = container.getBoundingClientRect()
+      const configuration = currentConfiguration()
+      const created = await createComparisonWorkloadPreview({
+        ...configuration,
+        backend,
+        canvas,
+        dpr,
+        height: Math.max(1, bounds.height),
+        signal: controller.signal,
+        technique,
+        width: Math.max(1, bounds.width),
+        onError: publishError,
+        onStats: (next) => publishStats(effectSurfaceKey, next),
+      })
+      if (cancelled) {
+        await created.dispose()
+        return
+      }
+      preview = created
+      previewRef.current = created
+      resize()
+    })
+    void initialization.catch(publishError)
+    return () => {
+      cancelled = true
+      controller.abort()
+      observer.disconnect()
+      previewLifecycleRef.current = initialization.then(
+        async () => {
+          if (preview === undefined) return
+          const current = preview
+          preview = undefined
+          if (previewRef.current === current) previewRef.current = undefined
+          await current.dispose()
+        },
+        () => undefined,
+      )
+    }
+  }, [backend, dpr, fontFixture, surfaceKey, technique, workload])
+
+  useEffect(() => {
+    const preview = previewRef.current
+    if (preview === undefined) return
+    void preview.update(currentConfiguration()).catch(publishError)
+  }, [
+    amount,
+    animationEnabled,
+    animationSpeed,
+    dpr,
+    fontFixture,
+    fontSize,
+    layoutWidthRatio,
+    paintOpacity,
+    paintStrokeWidth,
+    workload,
+  ])
+
+  const rangeLabel =
+    workload === 'text-ladder' ? '8–512 DEVICE PX' : `RENDERED ${fontSize} DEVICE PX`
+  function beginPan(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (workload !== 'text-ladder' || event.button !== 0) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    panGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+  }
+  function continuePan(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const gesture = panGestureRef.current
+    if (gesture?.pointerId !== event.pointerId) return
+    previewRef.current?.panBy(event.clientX - gesture.x, event.clientY - gesture.y)
+    panGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+  }
+  function endPan(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (panGestureRef.current?.pointerId !== event.pointerId) return
+    panGestureRef.current = undefined
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+  return (
+    <div
+      className={`benchmark-grid relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-panel ${grid ? 'is-visible' : ''}`}
+      data-artifact-bytes={stats?.artifactBytes}
+      data-atlas-gpu-bytes={stats?.atlasGpuBytes}
+      data-backend={stats?.backend}
+      data-dpr={stats?.dpr}
+      data-draw-count={stats?.drawCount}
+      data-glyph-count={stats?.glyphCount}
+      data-gpu-history-length={stats?.gpuHistoryLength}
+      data-gpu-timing-supported={stats?.gpuTimingSupported}
+      data-layout-width={stats?.layoutWidth}
+      data-line-count={stats?.lineCount}
+      data-median-gpu-ms={stats?.medianGpuMs}
+      data-median-submit-ms={stats?.medianSubmitMs}
+      data-missing-glyph-count={stats?.missingGlyphCount}
+      data-configuration-revision={stats?.configurationRevision}
+      data-paint-opacity={
+        stats?.workload === 'paint-effects' ? stats.appliedPaintOpacity : undefined
+      }
+      data-paint-stroke-width={
+        stats?.workload === 'paint-effects' ? stats.appliedPaintStrokeWidth : undefined
+      }
+      data-reflow-count={stats?.reflowCount}
+      data-reflow-ms={stats?.lastReflowMs}
+      data-rendered-device-px={stats === undefined ? undefined : stats.appliedFontSize * dpr}
+      data-startup-ms={stats?.startupMs}
+      data-submit-history-length={stats?.submitHistoryLength}
+      data-technique={technique}
+      data-testid="comparison-live-viewport"
+      data-workload={stats?.workload}
+      data-workload-amount={
+        stats === undefined ||
+        workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
+          ? undefined
+          : stats.appliedAmount
+      }
+      data-animation-enabled={
+        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects'
+          ? String(stats.appliedAnimationEnabled)
+          : undefined
+      }
+      data-animation-speed={
+        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects'
+          ? stats.appliedAnimationSpeed
+          : undefined
+      }
+      ref={containerRef}
+    >
+      <canvas
+        aria-label={`Live ${technique === 'mtsdf' ? 'MSDF' : 'bitmap'} ${workload} benchmark using ${backend}`}
+        className={`absolute inset-0 size-full ${workload === 'text-ladder' ? 'cursor-grab touch-none active:cursor-grabbing' : ''}`}
+        ref={canvasRef}
+        onDoubleClick={() => previewRef.current?.resetView()}
+        onPointerCancel={endPan}
+        onPointerDown={beginPan}
+        onPointerMove={continuePan}
+        onPointerUp={endPan}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+        <span>
+          {technique === 'mtsdf' ? 'MTSDF 64 PX/EM' : 'BITMAP 16 PX STRIKE'} · {rangeLabel}
+        </span>
+        <span>{workload === 'text-ladder' ? `DRAG TO PAN · ${dpr}× DPR` : `${dpr}× DPR`}</span>
+      </div>
+      {stats === undefined && error === undefined && (
+        <div className="absolute inset-0 grid place-items-center font-mono text-[9px] text-dim">
+          LOADING {technique === 'mtsdf' ? 'MSDF' : 'BITMAP'} {workload.toUpperCase()}
         </div>
       )}
       {error !== undefined && (
@@ -1212,11 +2230,21 @@ function Sparkline({
 }
 
 function Controls({
+  animationEnabled,
+  animationSpeed,
   backend,
+  conformanceView,
   dpr,
+  fontFixture,
+  liveStats,
   fontSize,
   layoutWidthPercent,
+  paintOpacityPercent,
+  paintStrokePercent,
+  selectedFontFixture,
+  workloadAmount,
   mode,
+  technique,
   workload,
   samples,
   showcaseFrame,
@@ -1225,19 +2253,37 @@ function Controls({
   warmup,
   webgpu,
   onBackend,
+  onAnimationEnabled,
+  onAnimationSpeed,
+  onConformanceReset,
+  onConformanceZoom,
   onDpr,
   onFontSize,
   onLayoutWidthPercent,
+  onPaintOpacityPercent,
+  onPaintStrokePercent,
+  onSelectedFontFixture,
+  onWorkloadAmount,
   onSamples,
   onShowcase,
   onShowGrid,
   onWarmup,
 }: {
+  readonly animationEnabled: boolean
+  readonly animationSpeed: number
   readonly backend: GraphicsBackend
+  readonly conformanceView: ConformanceView
   readonly dpr: 1 | 2
+  readonly fontFixture: BenchmarkFontFixture
+  readonly liveStats: LiveTextStats | undefined
   readonly fontSize: number
   readonly layoutWidthPercent: number
+  readonly paintOpacityPercent: number
+  readonly paintStrokePercent: number
+  readonly selectedFontFixture: SelectableFontFixture
+  readonly workloadAmount: number
   readonly mode: HarnessMode
+  readonly technique: RasterTechnique
   readonly workload: string
   readonly samples: number
   readonly showcaseFrame: AdvancedShapingFrame
@@ -1246,9 +2292,17 @@ function Controls({
   readonly warmup: number
   readonly webgpu: boolean
   readonly onBackend: (backend: GraphicsBackend) => void
+  readonly onAnimationEnabled: (value: boolean) => void
+  readonly onAnimationSpeed: (value: number) => void
+  readonly onConformanceReset: () => void
+  readonly onConformanceZoom: (zoom: number) => void
   readonly onDpr: (dpr: 1 | 2) => void
   readonly onFontSize: (value: number) => void
   readonly onLayoutWidthPercent: (value: number) => void
+  readonly onPaintOpacityPercent: (value: number) => void
+  readonly onPaintStrokePercent: (value: number) => void
+  readonly onSelectedFontFixture: (value: SelectableFontFixture) => void
+  readonly onWorkloadAmount: (value: number) => void
   readonly onSamples: (value: number) => void
   readonly onShowcase: (command: AdvancedShapingCommand) => void
   readonly onShowGrid: (value: boolean) => void
@@ -1260,6 +2314,21 @@ function Controls({
         <p className="eyebrow">Inspection controls</p>
         <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
       </div>
+      {workload !== 'advanced-shaping' && (
+        <div className="min-[1200px]:hidden">
+          <SelectField
+            label="Font fixture"
+            value={selectedFontFixture}
+            onChange={(value) => onSelectedFontFixture(selectableFontFixture(value))}
+          >
+            {SELECTABLE_FONT_FIXTURES.map((fixture) => (
+              <option key={fixture.id} value={fixture.id}>
+                {fixture.label} · {fixture.metadata}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+      )}
       <div>
         <p className="mb-2 font-mono text-[9px] uppercase text-dim">Backend</p>
         <div className="grid grid-cols-2 gap-2">
@@ -1289,19 +2358,44 @@ function Controls({
           </Button>
         </div>
       </div>
+      <div className="border-y border-border py-2">
+        <Toggle checked={showGrid} label="Show canvas grid" onChange={onShowGrid} />
+      </div>
+      {mode === 'conformance' && (
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-md border border-border bg-surface p-3">
+          <Field
+            label={`Zoom · ${conformanceView.zoom.toFixed(2)}×`}
+            max={8}
+            min={1}
+            step={0.25}
+            type="range"
+            value={conformanceView.zoom}
+            onChange={(event) => onConformanceZoom(event.currentTarget.valueAsNumber)}
+          />
+          <Button variant="secondary" onClick={onConformanceReset}>
+            Reset zoom
+          </Button>
+        </div>
+      )}
       {mode === 'benchmark' && (
         <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
           <p className="eyebrow">Live workload</p>
-          <Field
-            label={`Rendered size · ${fontSize} device px`}
-            max={24}
-            min={12}
-            step={1}
-            type="range"
-            value={fontSize}
-            onChange={(event) => onFontSize(event.currentTarget.valueAsNumber)}
-          />
-          {workload !== 'advanced-shaping' && (
+          {workload === 'text-ladder' ? (
+            <p className="font-mono text-[9px] uppercase text-muted">
+              Rendered range · 8–512 device px
+            </p>
+          ) : (
+            <Field
+              label={`Rendered size · ${fontSize} device px`}
+              max={96}
+              min={8}
+              step={1}
+              type="range"
+              value={fontSize}
+              onChange={(event) => onFontSize(event.currentTarget.valueAsNumber)}
+            />
+          )}
+          {workloadHasLayoutWidth(workload) && (
             <Field
               label={`Layout width · ${layoutWidthPercent}%`}
               max={100}
@@ -1312,10 +2406,60 @@ function Controls({
               onChange={(event) => onLayoutWidthPercent(event.currentTarget.valueAsNumber)}
             />
           )}
+          {workloadAmountLabel(workload, workloadAmount) !== undefined && (
+            <Field
+              label={workloadAmountLabel(workload, workloadAmount)!}
+              max={100}
+              min={0}
+              step={1}
+              type="range"
+              value={workloadAmount}
+              onChange={(event) => onWorkloadAmount(event.currentTarget.valueAsNumber)}
+            />
+          )}
+          {(workload === 'dynamic-layout' || workload === 'paint-effects') && (
+            <>
+              <Toggle checked={animationEnabled} label="Animate" onChange={onAnimationEnabled} />
+              <Field
+                label={`Animation speed · ${animationSpeed}%`}
+                max={100}
+                min={0}
+                step={1}
+                type="range"
+                value={animationSpeed}
+                onChange={(event) => onAnimationSpeed(event.currentTarget.valueAsNumber)}
+              />
+            </>
+          )}
+          {workload === 'paint-effects' && (
+            <>
+              <Field
+                label={`Opacity · ${paintOpacityPercent}%`}
+                max={100}
+                min={0}
+                step={1}
+                type="range"
+                value={paintOpacityPercent}
+                onChange={(event) => onPaintOpacityPercent(event.currentTarget.valueAsNumber)}
+              />
+              <Field
+                disabled={technique !== 'mtsdf'}
+                label={
+                  technique === 'mtsdf'
+                    ? `Stroke width · ${paintStrokePercent}%`
+                    : 'Stroke width · unavailable for bitmap'
+                }
+                max={100}
+                min={0}
+                step={1}
+                type="range"
+                value={technique === 'mtsdf' ? paintStrokePercent : 0}
+                onChange={(event) => onPaintStrokePercent(event.currentTarget.valueAsNumber)}
+              />
+            </>
+          )}
           <p className="text-[10px] leading-relaxed text-muted">
-            {workload === 'advanced-shaping'
-              ? 'The authored timeline changes layout width and commits exact paragraph states.'
-              : 'Resizing the scene or changing its layout width commits a new paragraph reflow.'}
+            {liveWorkloadControlDescription(workload)}
           </p>
         </div>
       )}
@@ -1390,9 +2534,6 @@ function Controls({
           />
         </div>
       )}
-      <div className="border-y border-border py-2">
-        <Toggle checked={showGrid} label="Show canvas grid" onChange={onShowGrid} />
-      </div>
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Measurement policy</p>
         <p className="mt-2 text-[10px] leading-relaxed text-muted">
@@ -1401,23 +2542,204 @@ function Controls({
             : 'The finite suite includes readback, reference composition, comparison, clipping, and hashing.'}
         </p>
       </div>
-      <div className="rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">Selected payloads</p>
-        <div className="mt-2 grid gap-2">
-          {packageSizes.entries
-            .filter((entry) =>
-              ['browser-core', 'text-shaper-wasm', 'font-baker-wasm'].includes(entry.id),
-            )
-            .map((entry) => (
-              <div className="flex items-center gap-2 text-[10px]" key={entry.id}>
-                <span className="truncate text-muted">{entry.label}</span>
-                <span className="ml-auto font-mono text-dim">{formatBytes(entry.rawBytes)}</span>
-              </div>
-            ))}
-        </div>
-      </div>
+      <PayloadInspector fontFixture={fontFixture} liveStats={liveStats} technique={technique} />
+      <a
+        className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
+        href="/font-notices.txt"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Font licenses &amp; notices
+      </a>
     </section>
   )
+}
+
+function PayloadInspector({
+  fontFixture,
+  liveStats,
+  technique,
+}: {
+  readonly fontFixture: BenchmarkFontFixture
+  readonly liveStats: LiveTextStats | undefined
+  readonly technique: RasterTechnique
+}) {
+  if (technique === 'slug') {
+    return (
+      <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">Selected payloads</p>
+        <p className="mt-2 text-[10px] text-dim">Slug payload evidence begins in Milestone 9.</p>
+      </div>
+    )
+  }
+  const runtime = measuredPackageSize(`${technique}-runtime-js`)
+  const shaper = measuredPackageSize('text-shaper-wasm')
+  const bakerHost = measuredPackageSize(`${technique}-baker-js`)
+  const bakerWasm = measuredPackageSize(`${technique}-baker-wasm`)
+  const libraryTransferBytes = runtime.gzipBytes + shaper.gzipBytes
+  const bakerTransferBytes = bakerHost.gzipBytes + bakerWasm.gzipBytes
+  const bitmapStats = liveStats?.technique === 'bitmap' ? liveStats : undefined
+  const mtsdfFixture = technique === 'mtsdf' ? mtsdfFixtureFor(fontFixture) : undefined
+  const bitmapFixture = technique === 'bitmap' ? bitmapFixtureFor(fontFixture) : undefined
+  const fontTransferBytes =
+    technique === 'mtsdf' ? mtsdfFixture?.compressed.bytes : bitmapFixture?.bytes
+  const textureGpuBytes =
+    technique === 'mtsdf'
+      ? mtsdfFixture?.raster.runtimeTextureArray.mipmappedBytes
+      : (bitmapStats?.atlasGpuBytes ?? bitmapFixture?.raster.decodedGpuBytes)
+  const pages =
+    technique === 'mtsdf'
+      ? (mtsdfFixture?.raster.pages ?? []).map((page) => ({
+          key: String(page.index),
+          label: `Page ${page.index + 1} · ${page.width}×${page.height}`,
+          embeddedBytes: page.encodedBytes,
+          gpuBytes: page.decodedGpuBytes,
+        }))
+      : (bitmapStats?.atlasPages ?? bitmapFixture?.raster.pages ?? []).map((page) => ({
+          key: `16-${'pageIndex' in page ? page.pageIndex : page.index}`,
+          label: `16 px · page ${('pageIndex' in page ? page.pageIndex : page.index) + 1} · ${page.width}×${page.height}`,
+          embeddedBytes: 'encodedBytes' in page ? page.encodedBytes : undefined,
+          gpuBytes: 'gpuBytes' in page ? page.gpuBytes : page.decodedGpuBytes,
+        }))
+
+  return (
+    <>
+      <div
+        className="rounded-md border border-border bg-surface p-3"
+        data-testid="payload-inspector"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="eyebrow">Selected payloads</p>
+          <span className="font-mono text-[8px] uppercase text-dim">download</span>
+        </div>
+        <div className="mt-3 grid gap-2 border-b border-border pb-3">
+          <PayloadRow
+            label={runtime.label}
+            status="loaded"
+            value={formatBytes(runtime.gzipBytes)}
+          />
+          <PayloadRow label={shaper.label} status="loaded" value={formatBytes(shaper.gzipBytes)} />
+          <PayloadRow
+            emphasis
+            label="Loaded library total"
+            status="loaded"
+            value={formatBytes(libraryTransferBytes)}
+          />
+        </div>
+        <div className="grid gap-2 border-b border-border py-3">
+          <PayloadRow
+            label={bakerHost.label}
+            status="unloaded"
+            value={formatBytes(bakerHost.gzipBytes)}
+          />
+          <PayloadRow
+            label={bakerWasm.label}
+            status="unloaded"
+            value={formatBytes(bakerWasm.gzipBytes)}
+          />
+          <PayloadRow
+            emphasis
+            label="Optional baker total"
+            status="unloaded"
+            value={formatBytes(bakerTransferBytes)}
+          />
+        </div>
+        <div className="grid gap-2 pt-3">
+          <PayloadRow
+            emphasis
+            label="Font assets · download"
+            value={formatBytes(fontTransferBytes)}
+          />
+          {technique === 'mtsdf' && (
+            <PayloadRow
+              label="Decoded font artifact · CPU"
+              value={formatBytes(mtsdfFixture?.uncompressed.bytes)}
+            />
+          )}
+        </div>
+      </div>
+      <div
+        className="rounded-md border border-border bg-surface p-3"
+        data-testid="gpu-resource-inspector"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="eyebrow">GPU resources</p>
+          <span className="font-mono text-[8px] uppercase text-dim">GPU memory</span>
+        </div>
+        <div className="mt-3 grid gap-2 pb-3">
+          <PayloadRow
+            emphasis
+            label="Atlas texture memory · GPU"
+            value={formatBytes(textureGpuBytes)}
+          />
+          {technique === 'mtsdf' && (
+            <PayloadRow
+              label="MTSDF"
+              value={`${mtsdfFixture?.configuration.emSize ?? 64} px/em · ${mtsdfFixture?.configuration.pixelRange ?? 8} px range`}
+            />
+          )}
+        </div>
+        <div className="border-t border-border pt-3">
+          <p className="font-mono text-[9px] uppercase text-muted">
+            Texture pages · {pages.length}
+          </p>
+          <div className="mt-2 grid max-h-56 gap-2 overflow-auto pr-1">
+            {pages.length === 0 ? (
+              <p className="text-[9px] text-dim">Page dimensions appear after the font loads.</p>
+            ) : (
+              pages.map((page) => (
+                <PayloadRow
+                  key={page.key}
+                  label={page.label}
+                  value={`${page.embeddedBytes === undefined ? '' : `${formatBytes(page.embeddedBytes)} embedded KTX2 · `}${formatBytes(page.gpuBytes)} GPU memory`}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function PayloadRow({
+  emphasis = false,
+  label,
+  status,
+  value,
+}: {
+  readonly emphasis?: boolean
+  readonly label: string
+  readonly status?: 'loaded' | 'unloaded'
+  readonly value: string
+}) {
+  return (
+    <div className={`flex items-center gap-2 text-[10px] ${emphasis ? 'font-medium' : ''}`}>
+      {status !== undefined && (
+        <span
+          className={`size-1.5 shrink-0 rounded-full ${status === 'loaded' ? 'bg-success' : 'bg-dim'}`}
+        />
+      )}
+      <span className={emphasis ? 'text-foreground' : 'text-muted'}>{label}</span>
+      {status !== undefined && (
+        <span className="font-mono text-[8px] uppercase text-dim">{status}</span>
+      )}
+      <span className="ml-auto whitespace-nowrap font-mono text-dim">{value}</span>
+    </div>
+  )
+}
+
+interface MeasuredPackageSize {
+  readonly id: string
+  readonly label: string
+  readonly status: string
+  readonly gzipBytes: number
+}
+
+function measuredPackageSize(id: string): MeasuredPackageSize {
+  const entry = packageSizes.entries.find((candidate) => candidate.id === id)
+  if (entry?.status !== 'measured') throw new Error(`Missing measured package size: ${id}`)
+  return entry
 }
 
 function MobileSheet({

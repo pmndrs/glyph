@@ -21,6 +21,8 @@ const conformanceCases: readonly BenchmarkCase[] = [
   { targetId: 'synthetic', scenarioId: 'overview' },
   { targetId: 'tsl-webgl2-baseline', scenarioId: 'tsl-shader-baseline' },
   { targetId: 'bitmap-text-webgl2', scenarioId: 'bitmap-text-frame' },
+  { targetId: 'mtsdf-text-webgl2', scenarioId: 'mtsdf-text-scenes' },
+  { targetId: 'mtsdf-conformance-webgl2', scenarioId: 'mtsdf-sampling-conformance' },
   { targetId: 'react-text-reconciliation', scenarioId: 'react-text-reconciliation' },
   { targetId: 'font-baker', scenarioId: 'cold-load-payload' },
   { targetId: 'font-loader-worker', scenarioId: 'worker-fallback' },

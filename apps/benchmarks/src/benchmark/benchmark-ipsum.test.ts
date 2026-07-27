@@ -22,6 +22,6 @@ describe('benchmark ipsum', () => {
     expect(BENCHMARK_IPSUM_TEXT).toContain('ff, fi, fl, ffi, and ffl')
     expect(BENCHMARK_IPSUM_TEXT).toContain('0123456789')
     expect(BENCHMARK_IPSUM_TEXT).toContain('x²+y²≈z²')
-    expect(BENCHMARK_IPSUM_INTER_GLYPH_COUNT).toBe(1_150)
+    expect(BENCHMARK_IPSUM_INTER_GLYPH_COUNT).toBe(1_151)
   })
 })

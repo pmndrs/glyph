@@ -25,6 +25,7 @@ export interface BenchmarkControls {
 
 export interface BenchmarkInput {
   readonly fontBytes?: Uint8Array
+  readonly fontFixture?: BenchmarkFontFixture
 }
 
 export interface BenchmarkMeasurement {
@@ -65,6 +66,7 @@ export interface BenchmarkTarget {
   readonly detail: string
   readonly color: 'violet' | 'green' | 'cyan' | 'amber'
   readonly capabilities: ReadonlySet<Capability>
+  configure?(input: BenchmarkInput): void
   status(input: BenchmarkInput): TargetStatus
   load(controls: BenchmarkControls): Promise<void>
   run(
@@ -91,3 +93,4 @@ export interface RunnerEvent {
   readonly medianMs?: number
   readonly p95Ms?: number
 }
+import type { BenchmarkFontFixture } from './font-fixtures'

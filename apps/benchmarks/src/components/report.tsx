@@ -122,7 +122,8 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Selection</p>
         <p className="mt-2 text-xs text-muted">
-          {capture.technique} · {capture.backend} · {capture.workload} · {capture.dpr}× DPR
+          {capture.technique} · {capture.backend} · {capture.workload} · {capture.fontFixture} ·{' '}
+          {capture.dpr}× DPR
         </p>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
