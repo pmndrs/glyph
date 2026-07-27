@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:46:34Z"
+  at: "2026-07-27T11:22:26Z"
 ---
 
 # Canonical implementation roadmap
@@ -619,7 +619,8 @@ Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGP
 - [x] Keep runtime rendering independent of baker Wasm; optional Bitmap and MTSDF bakers execute only through one serial lazy module Worker.
 - [x] Exercise deterministic WebGL2 headless conformance and maintainer-local GPU WebGPU product probes without sleeps, retries, or timer cushions.
 - [x] Add the cross-technique source-outline fidelity corpus at the end of the conformance list and record reviewed acceptance envelopes.
-- [ ] Record and review committed upload, first-draw, steady CPU-frame, GPU-frame, and bundle-isolation baselines for the accepted corpus, then complete the final adversarial Milestone 6/8 closure review.
+- [x] Record and review committed upload, first-draw, steady CPU-frame, GPU-frame, and bundle-isolation baselines for the accepted corpus.
+- [ ] Complete the final adversarial Milestone 6/8 closure review with no unresolved actionable findings.
 
 ## Milestone 9 — Slug release renderer
 
