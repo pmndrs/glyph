@@ -3,6 +3,7 @@ import {
   FontRegistry,
   defineRaster,
   type RasterBakeArtifact,
+  type BakeProgressListener,
   type RegisteredFont,
   type RuntimeFontBakeRequest,
   type RuntimeRasterBakerModule,
@@ -61,6 +62,7 @@ export async function loadRuntimeFont(
   fixture: BenchmarkFontFixture,
   metrics: FontDeliveryMetrics,
   signal?: AbortSignal,
+  onProgress?: BakeProgressListener,
 ): Promise<RuntimeLoadedFont> {
   const registry = new FontRegistry()
   const loader = new FontLoader({
@@ -69,7 +71,10 @@ export async function loadRuntimeFont(
       metrics.sourceFontBytes = request.source.byteLength
       const started = performance.now()
       const { bakeFontInWorker } = await import('@pmndrs/text/runtime-bake')
-      const artifact = await bakeFontInWorker(request)
+      const artifact = await bakeFontInWorker({
+        ...request,
+        ...(onProgress === undefined ? {} : { onProgress }),
+      })
       metrics.coreBakeMs = performance.now() - started
       metrics.coreArtifactBytes = artifact.byteLength
       return artifact
@@ -84,9 +89,14 @@ export async function loadRuntimeFont(
   }
 }
 
-export function measuredBitmapRaster(metrics: FontDeliveryMetrics) {
-  const base = bitmap({ strikes: [16] as const })
-  const runtimeBaker = measuredRuntimeBaker(base.module.runtimeBaker, metrics)
+export function measuredBitmapRaster(
+  metrics: FontDeliveryMetrics,
+  density: 'conformance' | 'live' = 'conformance',
+  onProgress?: BakeProgressListener,
+) {
+  const base =
+    density === 'live' ? bitmap({ strikes: [16, 32] as const }) : bitmap({ strikes: [16] as const })
+  const runtimeBaker = measuredRuntimeBaker(base.module.runtimeBaker, metrics, onProgress)
   const module: BitmapModule = defineRaster({
     ...base.module,
     ...(runtimeBaker === undefined ? {} : { runtimeBaker }),
@@ -94,8 +104,11 @@ export function measuredBitmapRaster(metrics: FontDeliveryMetrics) {
   return { module, options: base.options }
 }
 
-export function measuredMsdfRaster(metrics: FontDeliveryMetrics): MsdfModule {
-  const runtimeBaker = measuredRuntimeBaker(msdf.runtimeBaker, metrics)
+export function measuredMsdfRaster(
+  metrics: FontDeliveryMetrics,
+  onProgress?: BakeProgressListener,
+): MsdfModule {
+  const runtimeBaker = measuredRuntimeBaker(msdf.runtimeBaker, metrics, onProgress)
   return defineRaster({
     ...msdf,
     ...(runtimeBaker === undefined ? {} : { runtimeBaker }),
@@ -110,6 +123,7 @@ function measuredRuntimeBaker<Kind extends string, Options>(
       >)
     | undefined,
   metrics: FontDeliveryMetrics,
+  onProgress?: BakeProgressListener,
 ) {
   if (load === undefined) return undefined
   return async (): Promise<RuntimeRasterBakerModule<Kind, Options>> => {
@@ -119,7 +133,10 @@ function measuredRuntimeBaker<Kind extends string, Options>(
     return {
       kind: baker.kind,
       async bake(request) {
-        const artifact = await baker.bake(request)
+        const artifact = await baker.bake({
+          ...request,
+          ...(onProgress === undefined ? {} : { onProgress }),
+        })
         metrics.rasterBakeMs = performance.now() - started
         metrics.rasterArtifactBytes = rasterArtifactBytes(artifact)
         metrics.rasterGpuBytes = artifact.report.gpuBytes

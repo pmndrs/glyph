@@ -10,7 +10,7 @@ const paragraphPolicyHash = [
   ...Object.values(paragraphBidiContract.policies.cases).map(({ layout }) => layout.hash),
   paragraphBidiContract.uikit.resolved.layout.hash,
 ].join(':')
-const ADVANCED_SHAPING_HASH = '314418c3'
+const ADVANCED_SHAPING_HASH = '51ba1d14'
 const INTER_MTSDF_WEBGL2_SCENE_HASH =
   '57e86b4b1e299a4574354a6eb46a13be150ac5a627c0dc0042739bd904e5a1e7'
 const INTER_MTSDF_WEBGL2_CONFORMANCE_HASH =
@@ -125,8 +125,8 @@ function mtsdfTextValidation(
       metrics.changedPixels < 500 ||
       typeof metrics.distinctRgbColors !== 'number' ||
       metrics.distinctRgbColors < 4 ||
-      metrics.artifactBytes !== 39_347_692 ||
-      metrics.compressedArtifactBytes !== 6_979_347 ||
+      metrics.artifactBytes !== 39_347_712 ||
+      metrics.compressedArtifactBytes !== 6_979_370 ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       !finiteNonnegative(metrics.fontLoadMs) ||
       !finiteNonnegative(metrics.firstDrawMs) ||

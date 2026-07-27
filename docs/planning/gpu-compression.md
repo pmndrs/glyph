@@ -31,10 +31,28 @@ sources:
   - id: "citation-6"
     resource: "payload-budget.md"
     title: "Font payload budget"
+  - id: "gltf-rs"
+    resource: "https://docs.rs/gltf/1.4.1/gltf/"
+    title: "gltf-rs 1.4.1 API"
+  - id: "gltf-json"
+    resource: "https://docs.rs/crate/gltf-json/1.4.1/source/Cargo.toml.orig"
+    title: "gltf-json 1.4.1 package manifest"
+  - id: "ktx2-rs"
+    resource: "https://docs.rs/ktx2/0.5.0/ktx2/"
+    title: "ktx2 0.5.0 API"
+  - id: "ktx-developer-guide"
+    resource: "https://github.com/KhronosGroup/3D-Formats-Guidelines/blob/main/KTXDeveloperGuide.md"
+    title: "Khronos KTX developer guide"
+  - id: "ktx-software"
+    resource: "https://github.com/KhronosGroup/KTX-Software"
+    title: "Khronos KTX-Software"
+  - id: "ktx2-writer"
+    resource: "https://docs.rs/ktx2_writer/0.2.1/ktx2_writer/"
+    title: "ktx2_writer 0.2.1 API"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-27T19:47:03Z"
 ---
 
 # GPU compression and compact Slug storage
@@ -60,6 +78,31 @@ The primary Slug optimization should therefore combine:
 2. exact structural packing for band data;
 3. optional GPU-native block compression for curves only when it passes the project’s visual gates;
 4. an uncompressed high-fidelity fallback.
+
+## Rust container-library evaluation
+
+The project should continue to use maintained implementations for parsing, data-format descriptors, and independent validation, while retaining its restricted GLB and KTX2 serializers. The serializers own package policy rather than attempting to model either complete specification.
+
+### Decision summary
+
+- **GLB:** own only the checked 12-byte header, JSON/BIN chunk framing, and four-byte padding around already-serialized package JSON plus one binary payload. Do not import a general scene/document model into the baker.
+- **KTX2:** own only one lossless linear 2D level in `R8_UNORM` or `R8G8B8A8_UNORM`. Continue deriving the data-format descriptor from `ktx2` and parsing completed output with that maintained crate.
+- **Validation:** keep the serializer and its oracle independent. Rust parser checks, pinned JSON Schemas, Khronos tooling, golden identities, and malformed-input tests must agree before bytes are admitted.
+- **Expansion trigger:** move compression, transcoding, mip generation, arrays, cubemaps, or general glTF composition into a maintained library or separately lazy tool when one of those capabilities becomes a real requirement. Do not grow the thin writer into an informal full implementation.
+
+This division is deliberate: generation encodes the package's small canonical subset, while independent implementations prove that the emitted bytes satisfy the wider standards. A general library is not automatically safer if most of its surface is unused and the project-specific extension, resource limits, identities, and ownership rules still require local code.
+
+| Candidate | Useful coverage | Fit for the runtime baker | Decision |
+| --- | --- | --- | --- |
+| `gltf` 1.4.1 | Mature glTF/GLB loader; `Glb` can split and write the binary container | Its typed scene graph, `gltf-json`, macros, and general extension surface are much broader than a package-owned JSON extension plus one BIN chunk; the normal crate is `std`-oriented | Keep as reference/host tooling candidate, not a Wasm baker dependency |
+| `gltf-json` 1.4.1 | Typed core glTF JSON with Serde serialization; MIT OR Apache-2.0 | Adds the entire core document model and derive graph while custom PMNDRS extensions still require package-owned values; it does not remove our four-byte framing policy | Do not add to the baker unless a future general glTF composition feature demonstrates a measured correctness or maintenance win |
+| `ktx2` 0.5.0 | Apache-2.0, `no_std` parser/validator, Vulkan format model, and canonical DFD generation | Excellent match for authoritative DFD construction and independent host validation, but it intentionally exposes no general KTX2 writer | Retain the existing dependency exactly where used |
+| `ktx2_writer` 0.2.1 | Writes BC6H, Zstd-supercompressed cubemaps | Its one public encoding path is unrelated to linear R8/RGBA8 one-level font atlas pages | Reject for this use case |
+| Khronos KTX-Software | Official full read/write/validate/transcode implementation and tools, including Wasm builds | Comprehensive native/Wasm codec surface is disproportionate for uncompressed one-level pages and would duplicate a large optional module inside the runtime baker | Keep as external validation/advanced compression tooling; reconsider only when Basis, Zstd, mip, array, or native block encoding becomes a production requirement |
+
+This matches Khronos guidance that KTX2 is a relatively simple binary container that may be written directly from the specification.[^ktx-developer-guide] Our KTX2 writer is intentionally limited to linear `R8_UNORM` and `R8G8B8A8_UNORM`, one 2D image, one level, no key/value data, no arrays or cubemaps, and no supercompression. Its DFD bytes come from `ktx2`, and `std` builds parse the completed artifact through that maintained implementation.[^ktx2-rs] The GLB writer similarly accepts already-serialized package JSON and one binary payload, then owns only checked lengths, required four-byte padding, and the two standard chunks. The general `gltf` ecosystem remains available for host tools, but its published dependency graph includes the complete `gltf-json` model and `serde_json` rather than a smaller framing primitive.[^gltf-rs][^gltf-json]
+
+The admission rule is therefore capability-based rather than line-count-based: replace either serializer when a maintained Rust crate supports the exact required write subset, preserves `no_std + alloc`, keeps fallible allocation and typed errors, and produces an equal or smaller optimized Wasm graph. Before the subset expands, validate every emitted artifact through the maintained parser, pinned schemas, Khronos validator, golden identity tests, malformed-container tests, and the official KTX tooling where available. Advanced texture encoding belongs in an offline tool or separately lazy baker module until measured evidence justifies its cost.[^ktx-software]
 
 ## Three different meanings of compression
 

@@ -5,6 +5,7 @@ import { createGunzip } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 
 import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json'
+import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
 import mtsdfManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
 import { exactMipmappedTextureArrayBytes } from './texture-memory'
 
@@ -32,11 +33,14 @@ const fixtureIdentities = {
 type FixtureId = keyof typeof fixtureIdentities
 
 describe('checked raster fixture manifests', () => {
-  it('authenticates every complete bitmap font artifact and page total', async () => {
-    expect(bitmapManifest.artifacts.map(({ fontFixture }) => fontFixture)).toEqual(
+  it.each([
+    ['single-density', bitmapManifest],
+    ['1x/2x density', bitmapDensityManifest],
+  ] as const)('authenticates every %s bitmap artifact and page total', async (_name, manifest) => {
+    expect(manifest.artifacts.map(({ fontFixture }) => fontFixture)).toEqual(
       Object.keys(fixtureIdentities),
     )
-    for (const artifact of bitmapManifest.artifacts) {
+    for (const artifact of manifest.artifacts) {
       const fixtureId = checkedFixtureId(artifact.fontFixture)
       const identity = fixtureIdentities[fixtureId]
       const bytes = await readFile(new URL(`rendering/${artifact.file}`, fixtureRoot))
@@ -51,13 +55,27 @@ describe('checked raster fixture manifests', () => {
       )
       expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount)
       const strikes = arrayProperty(raster, 'strikes', artifact.file)
-      expect(strikes).toHaveLength(1)
-      const strike = objectValue(strikes[0], `${artifact.file} bitmap strike`)
-      expect(integerProperty(strike, 'ppemX', artifact.file)).toBe(bitmapManifest.strikePpem)
-      expect(integerProperty(strike, 'ppemY', artifact.file)).toBe(bitmapManifest.strikePpem)
-      expect(arrayProperty(strike, 'pages', artifact.file)).toHaveLength(
-        artifact.raster.pages.length,
-      )
+      expect(strikes).toHaveLength(manifest.strikePpems.length)
+      expect(
+        strikes.map((value, index) => {
+          const strike = objectValue(value, `${artifact.file} bitmap strike ${index}`)
+          const ppemX = integerProperty(strike, 'ppemX', artifact.file)
+          expect(integerProperty(strike, 'ppemY', artifact.file)).toBe(ppemX)
+          return ppemX
+        }),
+      ).toEqual(manifest.strikePpems)
+      expect(
+        sum(
+          strikes.map(
+            (value, index) =>
+              arrayProperty(
+                objectValue(value, `${artifact.file} bitmap strike ${index}`),
+                'pages',
+                artifact.file,
+              ).length,
+          ),
+        ),
+      ).toBe(artifact.raster.pages.length)
       expect(sum(artifact.raster.pages.map(({ decodedGpuBytes }) => decodedGpuBytes))).toBe(
         artifact.raster.decodedGpuBytes,
       )
@@ -121,6 +139,7 @@ async function expectCompleteFont(
   const provenance = objectProperty(font, 'provenance', fixtureId)
   expect(integerProperty(metrics, 'glyphCount', fixtureId)).toBe(identity.glyphCount)
   expect(stringProperty(provenance, 'sourceHash', fixtureId)).toBe(sourceManifest.source.fontSha256)
+  expect(integerProperty(provenance, 'fontFaceIndex', fixtureId)).toBe(0)
 }
 
 async function authenticateGzipGlb(

@@ -495,7 +495,8 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 - [x] The benchmark-ipsum concept documents the diagnostic specimen and paragraph-scale workload separately.
 - [x] Live telemetry uses fixed-capacity preallocated histories, presents CPU/FPS/GPU graphs without inventing unavailable GPU data, and snapshots histories only on explicit capture.
 - [x] Benchmark controls expose logical CSS size, physical device size, selected strike, and proportional paragraph width; DPR changes preserve layout geometry while viewport changes exercise retained paragraph reflow.
-- [ ] Publish representative 16/32 ppem bitmap fixtures and prove automatic nearest-strike selection, transfer/residency reporting, and stable 16 CSS px layout at 1×/2×.
+- [x] Publish representative 16/32 ppem bitmap fixtures and prove automatic nearest-strike selection, transfer/residency reporting, and stable 16 CSS px layout at 1×/2×.
+- [x] Runtime font and raster bakers expose bounded typed progress from the Worker-hosted synchronous Wasm pass; the app presents determinate progress and coalesced development-console evidence without polling or render-loop instrumentation.
 - [x] Deterministic unit, headless, and maintainer-local live probes cover the corrected product surface without sleeps or retries.
 - [x] The maintainer-local live probe produces real timestamp-query samples and cleanly replaces the renderer across WebGPU → forced WebGL2 → WebGPU.
 - [x] The responsive shell keeps control typography, label fit, whitespace flow, and horizontal overflow within explicit 390 px, 1,024 px, and 1,280 px product gates; compact widths retain the live scene beneath a wordmark workload drawer, shared technique switcher, and scrollable 60%-height controls panel.
@@ -580,7 +581,7 @@ Exit only when MSDF is credible as the general-purpose recommendation across the
 - [x] Add deterministic unit, structured integration, malformed-input, and coverage-guided fuzz evidence for the owned core.
 - [x] Record raw/optimized/gzip/Brotli candidate-core Wasm size through a reproducible freshness-checked package script.
 - [x] Record cold/warm full-font generation cost after the owned generator and Fontations provider are integrated; Inter produces 2,915 glyphs with an identical checksum and a current scalar observation of roughly 44.77 seconds.
-- [x] Ship the Binaryen-optimized zero-import generator and generated ABI as package resources, validate the complete nested contract in TypeScript, copy borrowed RGBA8 before request release, and pass all seven native-oracle identities plus forged ownership, malformed host input, stale allocation, and cleanup cases through that host.
+- [x] Ship the Binaryen-optimized generator and generated ABI as package resources, with a zero-import admission kernel and one generated progress callback on the full artifact baker; validate the complete nested contract in TypeScript, copy borrowed RGBA8 before request release, and pass all seven native-oracle identities plus forged ownership, malformed host input, stale allocation, and cleanup cases through that host.
 - [x] Measure the generator host and Wasm independently under reviewed size ceilings, and provide a host-labeled cold/warm seven-case benchmark command whose hashes must pass before timings publish.
 - [x] Compare scalar, auto-vectorized, and explicit `simd128` kernels over exact quality hashes, the complete Inter pass, representative browser calls, allocation counts, and raw/optimized/gzip/Brotli size; retain one default implementation and no public toggle. Scalar remains the sole production kernel because SIMD regressed representative Node and browser calls by about 5–6% while its complete-Inter improvement stayed below 0.5%.
 
@@ -588,7 +589,7 @@ The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) record
 
 ### 8.2 fixed-baker checklist
 
-- [x] Compose the admitted scalar kernel with the shared Fontations provider, fallible atlas/record writer, GLB framing, content hashing, and generated direct-memory ABI in one published zero-import Wasm.
+- [x] Compose the admitted scalar kernel with the shared Fontations provider, fallible atlas/record writer, GLB framing, content hashing, and generated direct-memory ABI in one published Wasm with one declared synchronous progress import for Worker-hosted long bakes.
 - [x] Fix one descriptor and one lossless linear RGBA8 MTSDF representation with exact page, padding, range, and plane-unit constants.
 - [x] Prove canonical Inter record/page identities, embedded/external byte parity, native/Wasm parity, deterministic output, and isolated baker/host size.
 - [x] Keep baker Wasm and generation dependencies outside shaping and rendering module graphs.

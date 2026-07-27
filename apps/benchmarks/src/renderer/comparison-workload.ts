@@ -6,6 +6,7 @@ import {
   type TextSpan,
 } from '@pmndrs/text'
 import * as THREE from 'three/webgpu'
+import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap'
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
 import { benchmarkIpsumText } from '../benchmark/font-fixtures'
@@ -16,8 +17,17 @@ import { createLiveFrameTelemetry } from './live-frame-telemetry'
 import { createTextUpdateTelemetry } from './text-update-telemetry'
 import type { FontDeliveryMetrics } from './font-delivery'
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
-import { loadMtsdfFont, type MtsdfTextLiveStats } from './mtsdf-text'
-import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  loadMtsdfFont,
+  registeredMtsdfConfiguration,
+  type MtsdfRasterConfiguration,
+  type MtsdfTextLiveStats,
+} from './mtsdf-text'
+import {
+  createConfiguredRenderer,
+  readRendererViewportState,
+  type RendererBackend,
+} from './webgpu-renderer'
 
 export type ComparisonWorkloadId =
   | 'text-ladder'
@@ -75,6 +85,7 @@ interface WorkloadEntry {
   readonly text: Text
   readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>
   readonly role: 'primary' | 'secondary'
+  disposed?: boolean
   readonly alignment?: 'start' | 'center' | 'end'
   readonly animationPhase?: number
   lastPaintFrame?: number
@@ -91,13 +102,16 @@ interface LoadedTechniqueFont {
   readonly artifactBytes: number
   readonly atlasGpuBytes: number
   readonly atlasPages: BitmapTextLiveStats['atlasPages']
+  readonly bitmapStrikes: readonly { readonly ppem: number }[]
   readonly font: RegisteredFont
   readonly metrics: FontDeliveryMetrics
+  readonly mtsdfConfiguration?: MtsdfRasterConfiguration
   readonly raster: AnyRasterInput
 }
 
 interface PendingConfigurationUpdate {
   configuration: ComparisonWorkloadConfiguration
+  viewportChanged: boolean
   readonly waiters: Array<{
     readonly resolve: () => void
     readonly reject: (reason: unknown) => void
@@ -145,6 +159,7 @@ export async function createComparisonWorkloadPreview(options: {
   readonly workload: ComparisonWorkloadId
   readonly onError: (error: unknown) => void
   readonly onStats: (stats: ComparisonWorkloadStats) => void
+  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener
 }): Promise<ComparisonWorkloadPreview> {
   const { backend, canvas, dpr, onError, onStats, signal, technique } = options
   signal?.throwIfAborted()
@@ -161,6 +176,7 @@ export async function createComparisonWorkloadPreview(options: {
     trackGpuTimestamps: true,
     width,
   })
+  let rendererViewport = readRendererViewportState(renderer)
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid)
   const rendererInitMs = performance.now() - rendererStarted
   let font: LoadedTechniqueFont | undefined
@@ -185,7 +201,13 @@ export async function createComparisonWorkloadPreview(options: {
 
   try {
     const fontStarted = performance.now()
-    font = await loadTechniqueFont(technique, configuration.fontFixture, options.delivery, signal)
+    font = await loadTechniqueFont(
+      technique,
+      configuration.fontFixture,
+      options.delivery,
+      signal,
+      options.onBakeProgress,
+    )
     const fontLoadMs = performance.now() - fontStarted
     const activeFont = font
 
@@ -197,7 +219,7 @@ export async function createComparisonWorkloadPreview(options: {
         activeFont.raster,
         technique,
         next,
-        dpr,
+        rendererViewport.pixelRatio,
         width,
         height,
       )
@@ -235,9 +257,12 @@ export async function createComparisonWorkloadPreview(options: {
     let pendingUpdate: PendingConfigurationUpdate | undefined
     let updateDrain: Promise<void> | undefined
 
-    async function applyConfiguration(next: ComparisonWorkloadConfiguration): Promise<void> {
+    async function applyConfiguration(
+      next: ComparisonWorkloadConfiguration,
+      viewportChanged: boolean,
+    ): Promise<void> {
       canvasSurface.setGridVisible(next.showGrid)
-      if (comparisonWorkloadUpdateKind(configuration, next) === 'rebuild') {
+      if (comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild') {
         configuration = next
         await commit(configuration)
         return
@@ -255,7 +280,7 @@ export async function createComparisonWorkloadPreview(options: {
           const current = pendingUpdate
           pendingUpdate = undefined
           try {
-            await applyConfiguration(current.configuration)
+            await applyConfiguration(current.configuration, current.viewportChanged)
             for (const waiter of current.waiters) waiter.resolve()
           } catch (error) {
             for (const waiter of current.waiters) waiter.reject(error)
@@ -267,15 +292,19 @@ export async function createComparisonWorkloadPreview(options: {
       })
     }
 
-    function enqueueUpdate(next: ComparisonWorkloadConfiguration): Promise<void> {
+    function enqueueUpdate(
+      next: ComparisonWorkloadConfiguration,
+      viewportChanged = false,
+    ): Promise<void> {
       if (closing || disposed) {
         return Promise.reject(new DOMException('The comparison preview is disposed', 'AbortError'))
       }
       return new Promise<void>((resolve, reject) => {
         if (pendingUpdate === undefined) {
-          pendingUpdate = { configuration: next, waiters: [{ resolve, reject }] }
+          pendingUpdate = { configuration: next, viewportChanged, waiters: [{ resolve, reject }] }
         } else {
           pendingUpdate.configuration = next
+          pendingUpdate.viewportChanged ||= viewportChanged
           pendingUpdate.waiters.push({ resolve, reject })
         }
         startUpdateDrain()
@@ -319,24 +348,29 @@ export async function createComparisonWorkloadPreview(options: {
     }
 
     const renderFrame = (timestamp: number): void => {
-      if (closing || disposed) return
+      if (disposed) return
       try {
+        if (!closing) {
+          animateEntries(entries, configuration, timestamp, width, height, onError, (duration) => {
+            reflowCount += 1
+            lastReflowMs = duration
+          })
+        }
         const started = performance.now()
-        animateEntries(entries, configuration, timestamp, width, height, onError, (duration) => {
-          reflowCount += 1
-          lastReflowMs = duration
-        })
         canvasSurface.render(scene, camera)
         const submitMs = performance.now() - started
+        if (closing) return
         if (firstDrawMs === 0) firstDrawMs = submitMs
         const snapshot = telemetry.recordSubmit(timestamp, submitMs)
         if (snapshot === undefined) return
         scheduleGpuTimestamp()
         const layouts = entries.map(({ text }) => committedLayout(text))
-        const framebufferGpuBytes = Math.round(width * dpr) * Math.round(height * dpr) * 4
+        const framebufferGpuBytes =
+          rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
         const common = {
           backend,
-          dpr,
+          dpr: rendererViewport.pixelRatio,
+          showGrid: configuration.showGrid,
           ...snapshot,
           glyphCount: entries.reduce((total, { text }) => total + renderedGlyphCount(text), 0),
           missingGlyphCount: layouts.reduce(
@@ -390,17 +424,34 @@ export async function createComparisonWorkloadPreview(options: {
           sourceTextLength: entries.reduce((total, entry) => total + entry.sourceText.length, 0),
         }
         if (technique === 'bitmap') {
+          const strikePpem = selectBitmapStrikePpem(
+            activeFont.bitmapStrikes,
+            configuration.fontSize,
+            rendererViewport.pixelRatio,
+          )
           onStats({
             technique,
             ...common,
-            strikePpem: 16,
+            strikePpem,
             cssFontSize: configuration.fontSize,
-            renderedPpem: configuration.fontSize * dpr,
-            scaleRatio: (configuration.fontSize * dpr) / 16,
+            renderedPpem: configuration.fontSize * rendererViewport.pixelRatio,
+            scaleRatio: (configuration.fontSize * rendererViewport.pixelRatio) / strikePpem,
             atlasPages: activeFont.atlasPages,
           })
         } else {
-          onStats({ technique, ...common })
+          const mtsdfConfiguration = activeFont.mtsdfConfiguration
+          if (mtsdfConfiguration === undefined) {
+            throw new Error('MTSDF workload is missing its registered raster configuration')
+          }
+          const renderedPpem = configuration.fontSize * rendererViewport.pixelRatio
+          onStats({
+            technique,
+            ...common,
+            rasterEmSize: mtsdfConfiguration.emSize,
+            rasterPixelRange: mtsdfConfiguration.pixelRange,
+            renderedPpem,
+            scaleRatio: renderedPpem / mtsdfConfiguration.emSize,
+          })
         }
       } catch (error) {
         onError(error)
@@ -411,12 +462,16 @@ export async function createComparisonWorkloadPreview(options: {
     return {
       resize(nextWidth, nextHeight) {
         if (closing || disposed) return
-        width = positive(nextWidth, 'comparison workload width')
-        height = positive(nextHeight, 'comparison workload height')
+        const validatedWidth = positive(nextWidth, 'comparison workload width')
+        const validatedHeight = positive(nextHeight, 'comparison workload height')
+        if (validatedWidth === width && validatedHeight === height) return
+        width = validatedWidth
+        height = validatedHeight
         renderer.setSize(width, height, false)
+        rendererViewport = readRendererViewportState(renderer)
         canvasSurface.resize(width, height)
         resizeWorkloadCamera(camera, width, height)
-        void enqueueUpdate(configuration).catch(onError)
+        void enqueueUpdate(configuration, true).catch(onError)
       },
       panBy(deltaX, deltaY) {
         if (closing || disposed) return
@@ -725,8 +780,11 @@ function applyRetainedConfiguration(
 export function comparisonWorkloadUpdateKind(
   previous: ComparisonWorkloadConfiguration,
   next: ComparisonWorkloadConfiguration,
+  viewportChanged = false,
 ): 'rebuild' | 'retained' {
-  return previous.fontSize !== next.fontSize || previous.layoutWidthRatio !== next.layoutWidthRatio
+  return viewportChanged ||
+    previous.fontSize !== next.fontSize ||
+    previous.layoutWidthRatio !== next.layoutWidthRatio
     ? 'rebuild'
     : 'retained'
 }
@@ -767,11 +825,13 @@ function animateDynamicLayout(
   }
   void Promise.all(entries.map(({ text }) => text.ready)).then(
     () => {
+      if (entries.some(({ disposed }) => disposed === true)) return
       for (const entry of entries) entry.reflowPending = false
       layoutDynamicEntries(entries, viewportWidth, viewportHeight)
       onReflow(performance.now() - reflowStarted)
     },
     (error: unknown) => {
+      if (entries.some(({ disposed }) => disposed === true)) return
       for (const entry of entries) entry.reflowPending = false
       onError(error)
     },
@@ -930,26 +990,31 @@ async function loadTechniqueFont(
   fontFixture: BenchmarkFontFixture,
   delivery: FontDelivery,
   signal?: AbortSignal,
+  onBakeProgress?: import('@pmndrs/text').BakeProgressListener,
 ): Promise<LoadedTechniqueFont> {
   if (technique === 'bitmap') {
-    const loaded = await loadBitmapFont(signal, fontFixture, delivery)
-    const atlas = await registeredBitmapAtlas(loaded.font)
+    const loaded = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress)
+    const atlas = await registeredBitmapAtlas(loaded.font, 'live')
     return {
       artifactBytes: loaded.artifactBytes,
       atlasGpuBytes: atlas.gpuBytes,
       atlasPages: atlas.pages,
+      bitmapStrikes: atlas.strikes,
       font: loaded.font,
       metrics: loaded.metrics,
       raster: loaded.raster,
     }
   }
-  const loaded = await loadMtsdfFont(signal, fontFixture, delivery)
+  const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress)
+  const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.font, signal)
   return {
     artifactBytes: loaded.compressedBytes,
     atlasGpuBytes: loaded.atlasGpuBytes,
     atlasPages: [],
+    bitmapStrikes: [],
     font: loaded.font,
     metrics: loaded.metrics,
+    mtsdfConfiguration,
     raster: loaded.raster,
   }
 }
@@ -1012,10 +1077,11 @@ function committedLayout(text: Text): ParagraphLayout {
 }
 
 function disposeEntries(entries: readonly WorkloadEntry[]): void {
-  for (const { bounds, text } of entries) {
-    text.dispose()
-    bounds?.geometry.dispose()
-    bounds?.material.dispose()
+  for (const entry of entries) {
+    entry.disposed = true
+    entry.text.dispose()
+    entry.bounds?.geometry.dispose()
+    entry.bounds?.material.dispose()
   }
 }
 

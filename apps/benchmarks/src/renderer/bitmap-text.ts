@@ -11,6 +11,7 @@ import {
   bitmapRasterKey,
   captureBitmapGlyphPositions,
   createBitmapGlyphPositionTransition,
+  selectBitmapStrikePpem,
   type BitmapGlyphPositionSnapshot,
   type BitmapGlyphPositionTransition,
   type BitmapResource,
@@ -18,12 +19,19 @@ import {
 import * as THREE from 'three/webgpu'
 
 import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url'
+import amiriBitmapDensityFontUrl from '../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url'
 import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16.font.glb?url'
+import dotGothicBitmapDensityFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb?url'
 import dancingScriptBitmapFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16.font.glb?url'
+import dancingScriptBitmapDensityFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16-32.font.glb?url'
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
+import bitmapDensityFontUrl from '../../fixtures/rendering/inter-bitmap-16-32.font.glb?url'
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
+import devanagariBitmapDensityFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16-32.font.glb?url'
 import notoCjkShowcaseBitmapFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb?url'
+import notoCjkShowcaseBitmapDensityFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16-32.font.glb?url'
 import sourceSerifBitmapFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url'
+import sourceSerifBitmapDensityFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16-32.font.glb?url'
 import {
   conformanceText,
   type BenchmarkFontFixture,
@@ -46,7 +54,11 @@ import {
   captureSourceOutlineFidelity,
   type SourceOutlineFidelityCapture,
 } from './source-outline-reference'
-import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  createConfiguredRenderer,
+  readRendererViewportState,
+  type RendererBackend,
+} from './webgpu-renderer'
 import {
   createFontDeliveryMetrics,
   loadRuntimeFont,
@@ -59,7 +71,11 @@ const HEIGHT = 128
 const CLIPPED_WIDTH = 192
 const CLIPPED_HEIGHT = 64
 const BITMAP_FONT_SIZE = 16
-const bitmapRequest = bitmap({ strikes: [16] as const })
+const CONFORMANCE_BITMAP_STRIKES = [16] as const
+const LIVE_BITMAP_STRIKES = [16, 32] as const
+const bitmapRequest = bitmap({ strikes: CONFORMANCE_BITMAP_STRIKES })
+const liveBitmapRequest = bitmap({ strikes: LIVE_BITMAP_STRIKES })
+export type BitmapFixtureDensity = 'conformance' | 'live'
 const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: bitmapFontUrl,
   amiri: amiriBitmapFontUrl,
@@ -68,6 +84,15 @@ const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'dot-gothic-16': dotGothicBitmapFontUrl,
   'source-serif-4': sourceSerifBitmapFontUrl,
   'dancing-script': dancingScriptBitmapFontUrl,
+}
+const bitmapDensityFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
+  inter: bitmapDensityFontUrl,
+  amiri: amiriBitmapDensityFontUrl,
+  'noto-sans-devanagari': devanagariBitmapDensityFontUrl,
+  'noto-sans-cjk-showcase': notoCjkShowcaseBitmapDensityFontUrl,
+  'dot-gothic-16': dotGothicBitmapDensityFontUrl,
+  'source-serif-4': sourceSerifBitmapDensityFontUrl,
+  'dancing-script': dancingScriptBitmapDensityFontUrl,
 }
 
 interface BitmapTextResources {
@@ -121,6 +146,7 @@ export interface BitmapTextLiveStats {
   readonly technique: 'bitmap'
   readonly backend: RendererBackend
   readonly dpr: number
+  readonly showGrid: boolean
   readonly frameCount: number
   readonly framesPerSecond: number
   readonly medianSubmitMs: number
@@ -272,6 +298,7 @@ export interface BitmapTextPreviewOptions {
   readonly signal?: AbortSignal
   readonly onError: (error: unknown) => void
   readonly onStats: (stats: BitmapTextLiveStats) => void
+  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener
 }
 
 type BitmapTextState =
@@ -337,6 +364,7 @@ async function createResources(
     backend,
     dpr,
   })
+  let rendererViewport = readRendererViewportState(renderer)
   let target: THREE.RenderTarget | undefined
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
@@ -348,7 +376,7 @@ async function createResources(
       loadedFont.raster,
       conformanceText(),
       BITMAP_FONT_SIZE / dpr,
-      dpr,
+      rendererViewport.pixelRatio,
     )
     line.object.position.set(
       quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
@@ -408,6 +436,8 @@ export async function loadBitmapFont(
   signal?: AbortSignal,
   fixture: BenchmarkFontFixture = 'inter',
   delivery: FontDelivery = 'baked',
+  density: BitmapFixtureDensity = 'conformance',
+  onProgress?: import('@pmndrs/text').BakeProgressListener,
 ): Promise<{
   readonly artifactBytes: number
   readonly font: RegisteredFont
@@ -416,19 +446,20 @@ export async function loadBitmapFont(
 }> {
   signal?.throwIfAborted()
   const metrics = createFontDeliveryMetrics(delivery)
+  const raster = density === 'live' ? liveBitmapRequest : bitmapRequest
   if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal)
+    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress)
     return {
       artifactBytes: metrics.coreArtifactBytes,
       font: loaded.font,
       metrics,
-      raster: measuredBitmapRaster(metrics),
+      raster: measuredBitmapRaster(metrics, density, onProgress),
     }
   }
   let font: RegisteredFont | undefined
   try {
     const fontResponse = await fetch(
-      bitmapFontUrls[fixture],
+      (density === 'live' ? bitmapDensityFontUrls : bitmapFontUrls)[fixture],
       signal === undefined ? undefined : { signal },
     )
     if (!fontResponse.ok)
@@ -438,7 +469,7 @@ export async function loadBitmapFont(
     const registry = new FontRegistry()
     font = await registry.registerAsset(new Uint8Array(fontBytes))
     signal?.throwIfAborted()
-    return { artifactBytes: fontBytes.byteLength, font, metrics, raster: bitmapRequest }
+    return { artifactBytes: fontBytes.byteLength, font, metrics, raster }
   } catch (error) {
     font?.dispose()
     throw error
@@ -502,7 +533,11 @@ async function createBitmapLine(
       glyphCount: countRenderedGlyphs(object),
       missingGlyphCount,
       drawCount: countDraws(object),
-      strikePpem: BITMAP_FONT_SIZE,
+      strikePpem: selectBitmapStrikePpem(
+        raster.options.strikes.map((ppem) => ({ ppem })),
+        fontSize,
+        rasterPixelRatio,
+      ),
       scheduleMs: scheduledAt - startedAt,
       readyMs: readyAt - scheduledAt,
     }
@@ -543,11 +578,18 @@ async function loadBitmapReferenceSnapshot(
   }
 }
 
-export async function registeredBitmapAtlas(font: RegisteredFont): Promise<{
+export async function registeredBitmapAtlas(
+  font: RegisteredFont,
+  density: BitmapFixtureDensity = 'conformance',
+): Promise<{
   readonly gpuBytes: number
   readonly pages: readonly BitmapAtlasPageStats[]
+  readonly strikes: readonly { readonly ppem: number }[]
 }> {
-  const rasterKey = await bitmapRasterKey({ strikes: [16] as const })
+  const rasterKey =
+    density === 'live'
+      ? await bitmapRasterKey({ strikes: LIVE_BITMAP_STRIKES })
+      : await bitmapRasterKey({ strikes: CONFORMANCE_BITMAP_STRIKES })
   const raster =
     font.getRaster(rasterKey) ??
     (await font.loadRaster({
@@ -558,12 +600,14 @@ export async function registeredBitmapAtlas(font: RegisteredFont): Promise<{
   const strikes = jsonArray(extension.strikes, 'bitmap strikes')
   let bytes = 0
   const pages: BitmapAtlasPageStats[] = []
+  const registeredStrikes: Array<{ readonly ppem: number }> = []
   for (const [strikeIndex, strikeValue] of strikes.entries()) {
     const strike = jsonObject(strikeValue, `bitmap strike ${strikeIndex}`)
     const strikePpem = jsonPositiveInteger(strike.ppemX, `bitmap strike ${strikeIndex} ppemX`)
     if (strike.ppemY !== strikePpem) {
       throw new TypeError(`bitmap strike ${strikeIndex} must be square`)
     }
+    registeredStrikes.push({ ppem: strikePpem })
     for (const [pageIndex, pageValue] of jsonArray(
       strike.pages,
       `bitmap strike ${strikeIndex} pages`,
@@ -576,7 +620,7 @@ export async function registeredBitmapAtlas(font: RegisteredFont): Promise<{
       pages.push({ strikePpem, pageIndex, width, height, gpuBytes })
     }
   }
-  return { gpuBytes: bytes, pages }
+  return { gpuBytes: bytes, pages, strikes: registeredStrikes }
 }
 
 function jsonObject(
@@ -674,6 +718,7 @@ export async function createBitmapTextPreview(
     textAlign = 'start',
     onError,
     onStats,
+    onBakeProgress,
   } = options
   const startupStarted = performance.now()
   let width = positiveViewportSize(options.width, 'bitmap preview width')
@@ -689,14 +734,16 @@ export async function createBitmapTextPreview(
     trackGpuTimestamps: true,
     width,
   })
+  let rendererViewport = readRendererViewportState(renderer)
   const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, options.showGrid)
+  let gridVisible = options.showGrid
   const textUpdateTelemetry = createTextUpdateTelemetry()
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
   try {
     const fontStarted = performance.now()
-    const loadedFont = await loadBitmapFont(signal, fontFixture, delivery)
+    const loadedFont = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress)
     font = loadedFont.font
     const fontLoadMs = performance.now() - fontStarted
     signal?.throwIfAborted()
@@ -727,7 +774,7 @@ export async function createBitmapTextPreview(
     const startupMs = performance.now() - startupStarted
     const activeFont = font
     const activeLine = line
-    const atlas = await registeredBitmapAtlas(activeFont)
+    const atlas = await registeredBitmapAtlas(activeFont, 'live')
     const sceneStartedAt = performance.now()
     scene.add(activeLine.object)
     const sceneMs = performance.now() - sceneStartedAt
@@ -926,16 +973,16 @@ export async function createBitmapTextPreview(
         if (firstDrawMs === 0) firstDrawMs = submitMs
         const telemetrySnapshot = telemetry.recordSubmit(timestamp, submitMs)
         if (telemetrySnapshot === undefined) return
-        const physicalWidth = Math.round(width * dpr)
-        const physicalHeight = Math.round(viewportHeight * dpr)
-        const framebufferGpuBytes = physicalWidth * physicalHeight * 4
+        const framebufferGpuBytes =
+          rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
         scheduleGpuTimestamp()
         const layout = activeLine.object.layout
         if (layout === undefined) throw new Error('live bitmap Text lost its committed layout')
         onStats({
           technique: 'bitmap',
           backend,
-          dpr,
+          dpr: rendererViewport.pixelRatio,
+          showGrid: gridVisible,
           ...telemetrySnapshot,
           glyphCount: countRenderedGlyphs(activeLine.object),
           missingGlyphCount: countMissingGlyphs(layout),
@@ -943,10 +990,16 @@ export async function createBitmapTextPreview(
           layoutWidth: layout.width,
           layoutHeight: layout.height,
           lineCount: layout.lineGlyphCounts.length,
-          strikePpem: activeLine.strikePpem,
+          strikePpem: selectBitmapStrikePpem(
+            atlas.strikes,
+            currentFontSize,
+            rendererViewport.pixelRatio,
+          ),
           cssFontSize: currentFontSize,
-          renderedPpem: currentFontSize * dpr,
-          scaleRatio: (currentFontSize * dpr) / activeLine.strikePpem,
+          renderedPpem: currentFontSize * rendererViewport.pixelRatio,
+          scaleRatio:
+            (currentFontSize * rendererViewport.pixelRatio) /
+            selectBitmapStrikePpem(atlas.strikes, currentFontSize, rendererViewport.pixelRatio),
           atlasGpuBytes: atlas.gpuBytes,
           atlasPages: atlas.pages,
           framebufferGpuBytes,
@@ -977,6 +1030,7 @@ export async function createBitmapTextPreview(
         width = positiveViewportSize(nextWidth, 'bitmap preview width')
         viewportHeight = positiveViewportSize(nextHeight, 'bitmap preview height')
         renderer.setSize(width, viewportHeight, false)
+        rendererViewport = readRendererViewportState(renderer)
         canvasSurface.resize(width, viewportHeight)
         camera.right = width
         camera.bottom = -viewportHeight
@@ -1002,6 +1056,7 @@ export async function createBitmapTextPreview(
         scene.position.set(0, 0, 0)
       },
       setGridVisible(visible) {
+        gridVisible = visible
         canvasSurface.setGridVisible(visible)
       },
       update(next) {

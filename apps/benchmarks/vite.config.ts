@@ -5,6 +5,9 @@ import { defineConfig } from 'vite'
 
 import { fontNotices } from './scripts/font-notices.mts'
 
+const FONT_NOTICES_MODULE = 'virtual:font-notices'
+const RESOLVED_FONT_NOTICES_MODULE = `\0${FONT_NOTICES_MODULE}`
+
 export default defineConfig({
   plugins: [
     react(),
@@ -12,6 +15,13 @@ export default defineConfig({
     tailwindcss(),
     {
       name: 'font-notices',
+      resolveId(id) {
+        return id === FONT_NOTICES_MODULE ? RESOLVED_FONT_NOTICES_MODULE : undefined
+      },
+      async load(id) {
+        if (id !== RESOLVED_FONT_NOTICES_MODULE) return undefined
+        return `export default ${JSON.stringify(await fontNotices())}`
+      },
       async generateBundle() {
         this.emitFile({ type: 'asset', fileName: 'font-notices.txt', source: await fontNotices() })
       },

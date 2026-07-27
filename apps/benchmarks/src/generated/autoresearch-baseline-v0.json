@@ -14,8 +14,8 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "001d3d9191e76e00991c49e0ba041e0f5152fe86a294a36afceb038089c738ff",
-      "bytes": 4395
+      "sha256": "2e4e0ffa70dde0b39c3bb60ceebdb744edec779d2d3ad9135020cdab8b96df09",
+      "bytes": 4396
     },
     {
       "id": "harness-admission",
@@ -56,7 +56,7 @@
     {
       "id": "advanced-shaping-conformance",
       "path": "apps/benchmarks/fixtures/results/advanced-shaping-conformance-chromium149.json",
-      "sha256": "b0735babeddd13365ee7e9cedb93cb518c4288b954a8e17e6ff2f75f0d924f30",
+      "sha256": "163145863253285c62a7e7e9ab1fe90bfe8e2a9853aa197328b2d112d0ac0241",
       "bytes": 1899
     },
     {
