@@ -29,11 +29,13 @@ import {
   type BenchmarkFontFixture,
   type SelectableFontFixture,
 } from '../benchmark/font-fixtures'
+import type { FontDelivery } from '../benchmark/url-state'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createCanvasSurface } from './canvas-surface'
 import { finiteCanvasDelta } from './canvas-view'
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
+import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry'
 import {
   LIVE_TEXT_COLOR,
   LIVE_TEXT_LINE_HEIGHT,
@@ -45,6 +47,12 @@ import {
   type SourceOutlineFidelityCapture,
 } from './source-outline-reference'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  createFontDeliveryMetrics,
+  loadRuntimeFont,
+  measuredBitmapRaster,
+  type FontDeliveryMetrics,
+} from './font-delivery'
 
 const WIDTH = 384
 const HEIGHT = 128
@@ -105,6 +113,8 @@ interface BitmapLine {
   readonly missingGlyphCount: number
   readonly drawCount: number
   readonly strikePpem: number
+  readonly scheduleMs: number
+  readonly readyMs: number
 }
 
 export interface BitmapTextLiveStats {
@@ -134,6 +144,12 @@ export interface BitmapTextLiveStats {
   readonly framebufferGpuBytes: number
   readonly totalGpuBytes: number
   readonly artifactBytes: number
+  readonly delivery: FontDelivery
+  readonly sourceFontBytes: number
+  readonly coreArtifactBytes: number
+  readonly coreBakeMs: number
+  readonly rasterArtifactBytes: number
+  readonly rasterBakeMs: number
   readonly rendererInitMs: number
   readonly fontLoadMs: number
   readonly textReadyMs: number
@@ -147,6 +163,7 @@ export interface BitmapTextLiveStats {
   readonly p95GpuMs: number | undefined
   readonly minimumGpuMs: number | undefined
   readonly maximumGpuMs: number | undefined
+  readonly textUpdateTimings: TextUpdateTimingSummary
   readonly submitHistory: Float32Array
   readonly submitHistoryLength: number
   readonly submitHistoryNextIndex: number
@@ -245,6 +262,7 @@ export interface BitmapTextPreviewOptions {
   readonly layoutWidth: number
   readonly expectedGlyphCount?: number
   readonly fontFixture?: BenchmarkFontFixture
+  readonly delivery?: FontDelivery
   readonly language?: string
   readonly direction?: 'ltr' | 'rtl'
   readonly features?: readonly FontFeature[]
@@ -307,6 +325,7 @@ async function createResources(
   backend: RendererBackend,
   dpr: number,
   fontFixture: BenchmarkFontFixture = 'inter',
+  delivery: FontDelivery = 'baked',
 ): Promise<BitmapTextResources> {
   const canvas = document.createElement('canvas')
   canvas.width = WIDTH
@@ -322,9 +341,15 @@ async function createResources(
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
   try {
-    const loadedFont = await loadBitmapFont(undefined, fontFixture)
+    const loadedFont = await loadBitmapFont(undefined, fontFixture, delivery)
     font = loadedFont.font
-    line = await createBitmapLine(font, conformanceText(), BITMAP_FONT_SIZE / dpr, dpr)
+    line = await createBitmapLine(
+      font,
+      loadedFont.raster,
+      conformanceText(),
+      BITMAP_FONT_SIZE / dpr,
+      dpr,
+    )
     line.object.position.set(
       quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
       quarterDevicePosition(-Math.max(4, (HEIGHT - line.height) / 2), dpr),
@@ -382,8 +407,24 @@ async function createResources(
 export async function loadBitmapFont(
   signal?: AbortSignal,
   fixture: BenchmarkFontFixture = 'inter',
-): Promise<{ readonly artifactBytes: number; readonly font: RegisteredFont }> {
+  delivery: FontDelivery = 'baked',
+): Promise<{
+  readonly artifactBytes: number
+  readonly font: RegisteredFont
+  readonly metrics: FontDeliveryMetrics
+  readonly raster: ReturnType<typeof bitmap>
+}> {
   signal?.throwIfAborted()
+  const metrics = createFontDeliveryMetrics(delivery)
+  if (delivery === 'runtime') {
+    const loaded = await loadRuntimeFont(fixture, metrics, signal)
+    return {
+      artifactBytes: metrics.coreArtifactBytes,
+      font: loaded.font,
+      metrics,
+      raster: measuredBitmapRaster(metrics),
+    }
+  }
   let font: RegisteredFont | undefined
   try {
     const fontResponse = await fetch(
@@ -397,7 +438,7 @@ export async function loadBitmapFont(
     const registry = new FontRegistry()
     font = await registry.registerAsset(new Uint8Array(fontBytes))
     signal?.throwIfAborted()
-    return { artifactBytes: fontBytes.byteLength, font }
+    return { artifactBytes: fontBytes.byteLength, font, metrics, raster: bitmapRequest }
   } catch (error) {
     font?.dispose()
     throw error
@@ -406,6 +447,7 @@ export async function loadBitmapFont(
 
 async function createBitmapLine(
   font: RegisteredFont,
+  raster: ReturnType<typeof bitmap>,
   text: string,
   fontSize: number,
   rasterPixelRatio: number,
@@ -420,10 +462,11 @@ async function createBitmapLine(
   } = { language: 'en', direction: 'ltr', features: [], textAlign: 'start' },
 ): Promise<BitmapLine> {
   signal?.throwIfAborted()
+  const startedAt = performance.now()
   const object = new Text({
     text,
     font,
-    raster: bitmapRequest,
+    raster,
     fontSize,
     rasterPixelRatio,
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
@@ -436,8 +479,10 @@ async function createBitmapLine(
       ? {}
       : { width: layoutWidth, wrap: 'word' as const, overflow: 'visible' as const }),
   })
+  const scheduledAt = performance.now()
   try {
     await object.ready
+    const readyAt = performance.now()
     signal?.throwIfAborted()
     const layout = object.layout
     if (layout === undefined) throw new Error('public Text did not commit a bitmap layout')
@@ -458,6 +503,8 @@ async function createBitmapLine(
       missingGlyphCount,
       drawCount: countDraws(object),
       strikePpem: BITMAP_FONT_SIZE,
+      scheduleMs: scheduledAt - startedAt,
+      readyMs: readyAt - scheduledAt,
     }
   } catch (error) {
     object.dispose()
@@ -614,6 +661,7 @@ export async function createBitmapTextPreview(
     canvas,
     dpr,
     expectedGlyphCount,
+    delivery = 'baked',
     fontFixture = 'inter',
     fontSize,
     height,
@@ -642,24 +690,34 @@ export async function createBitmapTextPreview(
     width,
   })
   const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, options.showGrid)
+  const textUpdateTelemetry = createTextUpdateTelemetry()
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
   try {
     const fontStarted = performance.now()
-    const loadedFont = await loadBitmapFont(signal, fontFixture)
+    const loadedFont = await loadBitmapFont(signal, fontFixture, delivery)
     font = loadedFont.font
     const fontLoadMs = performance.now() - fontStarted
     signal?.throwIfAborted()
     const scene = new THREE.Scene()
     const textStarted = performance.now()
-    line = await createBitmapLine(font, text, fontSize, dpr, signal, layoutWidth, {
-      language,
-      direction,
-      features,
-      textAlign,
-      rejectMissingGlyphs: expectedGlyphCount !== undefined,
-    })
+    line = await createBitmapLine(
+      font,
+      loadedFont.raster,
+      text,
+      fontSize,
+      dpr,
+      signal,
+      layoutWidth,
+      {
+        language,
+        direction,
+        features,
+        textAlign,
+        rejectMissingGlyphs: expectedGlyphCount !== undefined,
+      },
+    )
     if (expectedGlyphCount !== undefined && line.glyphCount !== expectedGlyphCount) {
       throw new Error(
         `live workload rendered ${line.glyphCount} glyphs; expected ${expectedGlyphCount}`,
@@ -670,7 +728,15 @@ export async function createBitmapTextPreview(
     const activeFont = font
     const activeLine = line
     const atlas = await registeredBitmapAtlas(activeFont)
+    const sceneStartedAt = performance.now()
     scene.add(activeLine.object)
+    const sceneMs = performance.now() - sceneStartedAt
+    textUpdateTelemetry.record({
+      scheduleMs: activeLine.scheduleMs,
+      readyMs: activeLine.readyMs,
+      sceneMs,
+      totalMs: performance.now() - textStarted,
+    })
     const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10)
     camera.position.z = 1
     camera.updateProjectionMatrix()
@@ -759,6 +825,7 @@ export async function createBitmapTextPreview(
         'text' | 'language' | 'direction' | 'features' | 'textAlign'
       >,
     ): Promise<BitmapTextPreviewSnapshot> => {
+      const updateStartedAt = performance.now()
       const revision = ++layoutRevision
       const previousSnapshots: readonly BitmapGlyphPositionSnapshot[] =
         activeLine.object.children.map((object) => captureBitmapGlyphPositions(object))
@@ -771,12 +838,14 @@ export async function createBitmapTextPreview(
       }
       if (update === undefined) activeLine.object.setProperties(dimensions)
       else activeLine.object.setProperties({ ...dimensions, ...update })
+      const scheduledAt = performance.now()
       return activeLine.object.ready.then(() => {
         if (closing || disposed || revision !== layoutRevision) {
           throw new DOMException('The bitmap preview update was superseded', 'AbortError')
         }
         const layout = activeLine.object.layout
         if (layout === undefined) throw new Error('bitmap preview update did not commit a layout')
+        const reflowSceneStartedAt = performance.now()
         const targetPosition = targetLinePosition()
         const controllers: BitmapGlyphPositionTransition[] = []
         for (
@@ -808,6 +877,13 @@ export async function createBitmapTextPreview(
           targetGlyphs: countRenderedGlyphs(activeLine.object),
           progress: 0,
         }
+        const finishedAt = performance.now()
+        textUpdateTelemetry.record({
+          scheduleMs: scheduledAt - updateStartedAt,
+          readyMs: reflowSceneStartedAt - scheduledAt,
+          sceneMs: finishedAt - reflowSceneStartedAt,
+          totalMs: finishedAt - updateStartedAt,
+        })
         return presentationSnapshot()
       })
     }
@@ -876,12 +952,19 @@ export async function createBitmapTextPreview(
           framebufferGpuBytes,
           totalGpuBytes: atlas.gpuBytes + framebufferGpuBytes,
           artifactBytes: loadedFont.artifactBytes,
+          delivery,
+          sourceFontBytes: loadedFont.metrics.sourceFontBytes,
+          coreArtifactBytes: loadedFont.metrics.coreArtifactBytes,
+          coreBakeMs: loadedFont.metrics.coreBakeMs,
+          rasterArtifactBytes: loadedFont.metrics.rasterArtifactBytes,
+          rasterBakeMs: loadedFont.metrics.rasterBakeMs,
           rendererInitMs,
           fontLoadMs,
           textReadyMs,
           firstDrawMs,
           startupMs,
           gpuTimingSupported,
+          textUpdateTimings: textUpdateTelemetry.summary(),
         })
       } catch (error) {
         onError(error)
@@ -975,12 +1058,18 @@ export async function createBitmapTextPreview(
 
 export async function captureBitmapTextConformance(options: {
   readonly backend: RendererBackend
+  readonly delivery?: FontDelivery
   readonly dpr: number
   readonly fontFixture?: BenchmarkFontFixture
   readonly signal?: AbortSignal
 }): Promise<BitmapTextConformanceCapture> {
   options.signal?.throwIfAborted()
-  const resources = await createResources(options.backend, options.dpr, options.fontFixture)
+  const resources = await createResources(
+    options.backend,
+    options.dpr,
+    options.fontFixture,
+    options.delivery,
+  )
   try {
     options.signal?.throwIfAborted()
     const width = Math.round(WIDTH * options.dpr)

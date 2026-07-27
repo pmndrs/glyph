@@ -1096,6 +1096,56 @@ function sourceOutlineFidelityTarget(
   }
 }
 
+function runtimeFallbackTarget(
+  technique: 'bitmap' | 'mtsdf',
+  backend: 'webgpu' | 'webgl2',
+): BenchmarkTarget {
+  let configuredInput: BenchmarkInput = {}
+  return {
+    id: `runtime-fallback-${technique}-${backend}`,
+    label: `${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} runtime fallback · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
+    detail: 'checked-in baked frame · source-font Worker bake · exact comparison',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    configure: (input) => {
+      configuredInput = input
+    },
+    status: () => 'ready',
+    load: async () => undefined,
+    run: async (input, _sampleIndex, controls) => {
+      const fontFixture = selectableFontFixture(
+        input.fontFixture ?? configuredInput.fontFixture ?? 'inter',
+      )
+      const { captureRuntimeFallbackConformance } =
+        await import('../renderer/runtime-fallback-conformance')
+      const capture = await captureRuntimeFallbackConformance({
+        backend,
+        dpr: controls.dpr,
+        fontFixture,
+        technique,
+      })
+      return {
+        bytes: capture.runtime.byteLength,
+        hash: await sha256(capture.runtime),
+        metrics: {
+          mismatchBytes: capture.mismatchBytes,
+          changedPixels: capture.changedPixels,
+          maximumError: capture.maximumError,
+          renderMs: capture.renderSubmitMs,
+        },
+      }
+    },
+    dispose: async () => undefined,
+  }
+}
+
 export const targets: readonly BenchmarkTarget[] = [
   syntheticTarget,
   tslBaselineTarget('webgl2'),
@@ -1118,6 +1168,10 @@ export const targets: readonly BenchmarkTarget[] = [
   sourceOutlineFidelityTarget('bitmap', 'webgpu'),
   sourceOutlineFidelityTarget('mtsdf', 'webgl2'),
   sourceOutlineFidelityTarget('mtsdf', 'webgpu'),
+  runtimeFallbackTarget('bitmap', 'webgl2'),
+  runtimeFallbackTarget('bitmap', 'webgpu'),
+  runtimeFallbackTarget('mtsdf', 'webgl2'),
+  runtimeFallbackTarget('mtsdf', 'webgpu'),
   reactTextTarget(),
   unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),
 ]

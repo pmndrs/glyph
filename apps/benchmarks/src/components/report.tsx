@@ -127,6 +127,43 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
         </p>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
+        <p className="eyebrow">CPU system samples</p>
+        <p className="mt-1 text-xs text-muted">
+          {stats.textUpdateTimings.sampleCount} committed text updates ·{' '}
+          {stats.submitHistory.length} rendered frames
+        </p>
+        <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 text-xs">
+          <span className="font-mono text-[9px] uppercase text-dim">System</span>
+          <span className="font-mono text-[9px] uppercase text-dim">Median</span>
+          <span className="font-mono text-[9px] uppercase text-dim">P95</span>
+          <TimingRow
+            label="Schedule text update"
+            median={stats.textUpdateTimings.medianScheduleMs}
+            p95={stats.textUpdateTimings.p95ScheduleMs}
+          />
+          <TimingRow
+            label="Text ready · shape + layout + batches"
+            median={stats.textUpdateTimings.medianReadyMs}
+            p95={stats.textUpdateTimings.p95ReadyMs}
+          />
+          <TimingRow
+            label="Update benchmark scene"
+            median={stats.textUpdateTimings.medianSceneMs}
+            p95={stats.textUpdateTimings.p95SceneMs}
+          />
+          <TimingRow
+            label="Total text update"
+            median={stats.textUpdateTimings.medianTotalMs}
+            p95={stats.textUpdateTimings.p95TotalMs}
+          />
+          <TimingRow
+            label="Frame submission"
+            median={stats.medianSubmitMs}
+            p95={stats.p95SubmitMs}
+          />
+        </div>
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Startup</p>
         <dl className="mt-2 grid grid-cols-[1fr_auto] gap-y-2 text-xs">
           <dt className="text-dim">Renderer init</dt>
@@ -157,5 +194,15 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
         </dl>
       </div>
     </section>
+  )
+}
+
+function TimingRow({ label, median, p95 }: { label: string; median: number; p95: number }) {
+  return (
+    <>
+      <span className="text-dim">{label}</span>
+      <span className="text-right font-mono text-[10px] text-muted">{ms(median)}</span>
+      <span className="text-right font-mono text-[10px] text-muted">{ms(p95)}</span>
+    </>
   )
 }
