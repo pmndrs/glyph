@@ -50,6 +50,7 @@ import {
   bitmapDescriptor,
   type BitmapOptions,
 } from '../internal/bitmap-contract.js'
+import { nearestBitmapStrikeIndex } from '../internal/bitmap-strike.js'
 
 export {
   BITMAP_EXTENSION,
@@ -168,8 +169,8 @@ const bitmapModule: RasterModule<
   async prepare(_layout, _resource, _fontSlot, signal) {
     signal?.throwIfAborted()
   },
-  buildBatches(layout, resource, fontSlot, paint) {
-    return buildBitmapBatches(layout, resource, fontSlot, paint)
+  buildBatches(layout, resource, fontSlot, paint, rasterPixelRatio) {
+    return buildBitmapBatches(layout, resource, fontSlot, paint, rasterPixelRatio)
   },
   validatePaint: assertBitmapPaint,
   updatePaint(batch, paint) {
@@ -507,9 +508,10 @@ function buildBitmapBatches(
   resource: BitmapResource,
   fontSlot: number,
   paint: GlyphPaint,
+  rasterPixelRatio: number,
 ): BitmapDrawBatch {
   assertParallelRasterLayout(layout, paint)
-  const strike = selectBitmapStrike(resource.strikes, layout, fontSlot)
+  const strike = selectBitmapStrike(resource.strikes, layout, fontSlot, rasterPixelRatio)
   const records = new DataView(
     strike.records.buffer,
     strike.records.byteOffset,
@@ -583,6 +585,7 @@ function selectBitmapStrike(
   strikes: readonly BitmapStrikeResource[],
   layout: ParagraphLayout,
   fontSlot: number,
+  rasterPixelRatio: number,
 ): BitmapStrikeResource {
   let maximumFontSize = 0
   for (let index = 0; index < layout.glyphFontSizes.length; index += 1) {
@@ -590,14 +593,7 @@ function selectBitmapStrike(
       maximumFontSize = Math.max(maximumFontSize, layout.glyphFontSizes[index] ?? 0)
     }
   }
-  let selected = strikes[0]
-  if (selected === undefined) throw new TypeError('bitmap resource has no strikes')
-  for (const strike of strikes) {
-    if (Math.abs(strike.ppem - maximumFontSize) < Math.abs(selected.ppem - maximumFontSize)) {
-      selected = strike
-    }
-  }
-  return selected
+  return strikes[nearestBitmapStrikeIndex(strikes, maximumFontSize, rasterPixelRatio)]!
 }
 
 function createBitmapRun(

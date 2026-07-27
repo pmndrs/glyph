@@ -75,6 +75,11 @@ export interface TextPaintProperties {
   }
 }
 
+export interface TextRasterProperties {
+  /** Physical device pixels represented by one paragraph-local CSS pixel. */
+  readonly rasterPixelRatio?: number
+}
+
 export interface TextSpan extends TextShapingProperties, TextPaintProperties {
   readonly start: number
   readonly end: number
@@ -108,6 +113,7 @@ export type TextContentProperties =
 export type TextProperties = TextLayoutProperties &
   TextShapingProperties &
   TextPaintProperties &
+  TextRasterProperties &
   TextFontProperties &
   TextContentProperties & {
     readonly onLayout?: (layout: ParagraphLayout) => void
@@ -311,6 +317,7 @@ export class Text extends THREE.Group {
           fontRaster.raster.resource,
           slot,
           paint,
+          state.rasterPixelRatio,
         )
         assertRasterBatch(batch)
         batches.push({ module: fontRaster.raster.module, batch, fontSlot: slot })

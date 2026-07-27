@@ -41,6 +41,7 @@ export interface TextState {
   readonly opacity: number | undefined
   readonly outline: TextPaintProperties['outline']
   readonly shadow: TextPaintProperties['shadow']
+  readonly rasterPixelRatio: number
   readonly onLayout: ((layout: import('../layout.js').ParagraphLayout) => void) | undefined
 }
 
@@ -72,6 +73,7 @@ export const EMPTY_TEXT_STATE: TextState = Object.freeze({
   opacity: undefined,
   outline: undefined,
   shadow: undefined,
+  rasterPixelRatio: 1,
   onLayout: undefined,
 })
 
@@ -129,6 +131,7 @@ export function normalizeTextState(
         : current.outline,
     shadow:
       initial || Object.hasOwn(value, 'shadow') ? normalizeShadow(merged.shadow) : current.shadow,
+    rasterPixelRatio: optionalPositive(merged.rasterPixelRatio, 'rasterPixelRatio') ?? 1,
     onLayout: optionalFunction(merged.onLayout, 'onLayout'),
   })
 }
@@ -453,6 +456,7 @@ function sameRaster(
 export function sameLayoutInput(left: TextState, right: TextState): boolean {
   return (
     sameParagraphInput(left, right) &&
+    left.rasterPixelRatio === right.rasterPixelRatio &&
     left.width === right.width &&
     left.height === right.height &&
     left.maxLines === right.maxLines &&

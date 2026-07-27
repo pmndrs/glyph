@@ -547,6 +547,7 @@ const CORE_PROPERTY_KEYS = [
   'opacity',
   'outline',
   'shadow',
+  'rasterPixelRatio',
   'onLayout',
 ] as const satisfies readonly (keyof TextProperties)[]
 

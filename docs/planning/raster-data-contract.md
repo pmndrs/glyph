@@ -203,6 +203,8 @@ interface BitmapStrikeV0 {
 
 For bitmap V0, `planeUnitsPerEm` equals the strike ppem and the four plane values are the rasterizer's integer mask placement converted from its upper-left pixel coordinates into the shared baseline-relative Y-up convention. Consequently, a glyph rendered at its native physical ppem has plane width/height exactly equal to its atlas rectangle width/height. Analytic outline bounds are not valid substitutes because they would rescale already rasterized coverage. Projected quad edges are snapped to physical framebuffer pixels before sampling.
 
+Runtime selection keeps paragraph geometry in logical CSS units. The rendering integration supplies a positive `rasterPixelRatio`; for each font slot the bitmap module computes `targetPpem = maximum CSS font size × rasterPixelRatio` and selects the nearest declared strike, with the lower canonical strike winning an exact tie. This selection rebuilds raster batches while reusing the paragraph. Density strikes remain independent grayscale record/texture sets; they are not packed into RGB(A) channels. The [language and strike bundle plan](language-and-strike-bundles.md) owns external density delivery and display-change residency.
+
 Grayscale strikes use a lossless `r8unorm` KTX2 variant. Optional BC4/EAC/native ASTC variants may reduce GPU residency; the lossless R8 variant remains the correctness baseline. Embedded color emoji uses a separate bitmap raster or strike with `rgba8unorm`, `colorSpace: 'srgb'`, and its own dense records; it is not mixed into a grayscale page.
 
 Hinted grayscale strikes and optional four-phase coverage packing are bounded by the [bitmap hinting research note](bitmap-hinting-research.md). LCD/ClearType subpixel rendering is outside the format's scope.

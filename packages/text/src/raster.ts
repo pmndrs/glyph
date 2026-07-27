@@ -127,6 +127,7 @@ export interface RasterModule<
     resource: Resource,
     fontSlot: FontSlot,
     paint: GlyphPaint,
+    rasterPixelRatio: number,
   ): DrawBatch
   validatePaint?(paint: GlyphPaint): void
   updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void
