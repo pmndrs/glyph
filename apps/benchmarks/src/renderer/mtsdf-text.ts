@@ -15,12 +15,20 @@ import interCompressedFontUrl from '../../fixtures/rendering/inter-mtsdf.font.gl
 import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz?url'
 import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-4-mtsdf.font.glb.gz?url'
 import showcaseManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
-import { conformanceTextForFont, type BenchmarkFontFixture } from '../benchmark/font-fixtures'
+import {
+  conformanceTextForFont,
+  type BenchmarkFontFixture,
+  type SelectableFontFixture,
+} from '../benchmark/font-fixtures'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style'
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference'
+import {
+  captureSourceOutlineFidelity,
+  type SourceOutlineFidelityCapture,
+} from './source-outline-reference'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
 
@@ -86,6 +94,7 @@ export interface MtsdfTextLiveStats {
   readonly fontLoadMs: number
   readonly textReadyMs: number
   readonly firstDrawMs: number
+  readonly uploadFrameGpuMs?: number
   readonly startupMs: number
   readonly gpuTimingSupported: boolean
   readonly gpuFrameMs: number | undefined
@@ -730,6 +739,40 @@ export async function captureMtsdfTextConformance(options: {
     const capture = await captureFlatMtsdfConformance(resources)
     options.signal?.throwIfAborted()
     return capture
+  } finally {
+    await disposeFlatMtsdfConformanceResources(resources)
+  }
+}
+
+export async function captureMtsdfSourceOutlineFidelity(options: {
+  readonly backend: RendererBackend
+  readonly dpr: number
+  readonly fontFixture: SelectableFontFixture
+  readonly signal?: AbortSignal
+}): Promise<SourceOutlineFidelityCapture> {
+  options.signal?.throwIfAborted()
+  const resources = await createFlatMtsdfConformanceResources(
+    options.backend,
+    options.dpr,
+    options.fontFixture,
+    options.signal,
+  )
+  try {
+    const capture = await captureFlatMtsdfConformance(resources)
+    options.signal?.throwIfAborted()
+    return await captureSourceOutlineFidelity({
+      candidate: capture.candidate,
+      width: capture.width,
+      height: capture.height,
+      dpr: options.dpr,
+      fontFixture: options.fontFixture,
+      fontSize: 64 / options.dpr,
+      layout: committedLayout(resources.line),
+      originX: resources.line.position.x,
+      originY: resources.line.position.y,
+      text: conformanceTextForFont(options.fontFixture),
+      renderSubmitMs: capture.renderSubmitMs,
+    })
   } finally {
     await disposeFlatMtsdfConformanceResources(resources)
   }

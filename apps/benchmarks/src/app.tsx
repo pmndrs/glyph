@@ -66,6 +66,7 @@ import type {
   ComparisonWorkloadPreview,
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload'
+import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference'
 
 type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats
 
@@ -81,7 +82,6 @@ type WorkloadTechniqueStatus =
   | { readonly kind: 'planned'; readonly milestone: 8 | 9 }
 
 const READY: WorkloadTechniqueStatus = { kind: 'ready' }
-const PLANNED_M8: WorkloadTechniqueStatus = { kind: 'planned', milestone: 8 }
 const PLANNED_M9: WorkloadTechniqueStatus = { kind: 'planned', milestone: 9 }
 
 interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
@@ -188,7 +188,7 @@ const conformanceWorkloads: readonly WorkloadOption[] = [
     label: 'Cross-technique fidelity',
     description:
       'Bitmap and MSDF compared independently with the same outline-derived coverage reference.',
-    techniques: { bitmap: PLANNED_M8, mtsdf: PLANNED_M8, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
   },
 ]
 
@@ -411,11 +411,17 @@ function Harness() {
       try {
         const value = await runRegisteredBenchmark({
           targetId:
-            location.technique === 'mtsdf'
-              ? `mtsdf-conformance-${location.backend}`
-              : `bitmap-text-${location.backend}`,
+            location.workload === 'cross-technique-fidelity'
+              ? `source-outline-${location.technique}-${location.backend}`
+              : location.technique === 'mtsdf'
+                ? `mtsdf-conformance-${location.backend}`
+                : `bitmap-text-${location.backend}`,
           scenarioId:
-            location.technique === 'mtsdf' ? 'mtsdf-sampling-conformance' : 'bitmap-text-frame',
+            location.workload === 'cross-technique-fidelity'
+              ? 'source-outline-fidelity'
+              : location.technique === 'mtsdf'
+                ? 'mtsdf-sampling-conformance'
+                : 'bitmap-text-frame',
           input: { fontFixture: activeFontFixture },
           controls: { dpr, samples, warmup },
           environment,
@@ -958,6 +964,7 @@ function Scene({
           key={`${location.backend}-${String(dpr)}-${fontFixture}`}
           summary={summary}
           technique={location.technique}
+          workload={location.workload}
           onPan={onConformancePan}
           onZoom={onConformanceZoom}
         />
@@ -1089,6 +1096,7 @@ function BenchmarkSurface({
           <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
           <LiveCost label="Text ready" value={formatMs(stats?.textReadyMs)} />
           <LiveCost label="First draw submit" value={formatMs(stats?.firstDrawMs)} />
+          <LiveCost label="Upload + first GPU frame" value={formatMs(stats?.uploadFrameGpuMs)} />
           <LiveCost label="Total startup" value={formatMs(stats?.startupMs)} />
           <LiveCost
             label="Artifact / GPU"
@@ -1178,6 +1186,7 @@ function ConformanceSurface({
   fontFixture,
   summary,
   technique,
+  workload,
   onPan,
   onZoom,
 }: {
@@ -1188,19 +1197,22 @@ function ConformanceSurface({
   readonly fontFixture: SelectableFontFixture
   readonly summary: BenchmarkSummary | undefined
   readonly technique: RasterTechnique
+  readonly workload: string
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
   readonly onZoom: (zoom: number) => void
 }) {
   const [capture, setCapture] = useState<
     | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
     | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
+    | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
   >()
   const [error, setError] = useState<string>()
   const publishCapture = useEffectEvent(
     (
       value:
         | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
-        | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture },
+        | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
+        | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture },
     ) => {
       setCapture(value)
       setError(undefined)
@@ -1213,69 +1225,109 @@ function ConformanceSurface({
   useEffect(() => {
     const controller = new AbortController()
     const request =
-      technique === 'mtsdf'
-        ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
-            kind: 'mtsdf' as const,
-            value: await captureMtsdfTextConformance({
-              backend,
-              dpr,
-              fontFixture,
-              signal: controller.signal,
-            }),
-          }))
-        : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
-            kind: 'bitmap' as const,
-            value: await captureBitmapTextConformance({
-              backend,
-              dpr,
-              fontFixture,
-              signal: controller.signal,
-            }),
-          }))
+      workload === 'cross-technique-fidelity'
+        ? technique === 'mtsdf'
+          ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfSourceOutlineFidelity }) => ({
+              kind: 'source-outline' as const,
+              value: await captureMtsdfSourceOutlineFidelity({
+                backend,
+                dpr,
+                fontFixture,
+                signal: controller.signal,
+              }),
+            }))
+          : import('./renderer/bitmap-text').then(
+              async ({ captureBitmapSourceOutlineFidelity }) => ({
+                kind: 'source-outline' as const,
+                value: await captureBitmapSourceOutlineFidelity({
+                  backend,
+                  dpr,
+                  fontFixture,
+                  signal: controller.signal,
+                }),
+              }),
+            )
+        : technique === 'mtsdf'
+          ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
+              kind: 'mtsdf' as const,
+              value: await captureMtsdfTextConformance({
+                backend,
+                dpr,
+                fontFixture,
+                signal: controller.signal,
+              }),
+            }))
+          : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
+              kind: 'bitmap' as const,
+              value: await captureBitmapTextConformance({
+                backend,
+                dpr,
+                fontFixture,
+                signal: controller.signal,
+              }),
+            }))
     void request.then(publishCapture).catch(publishError)
     return () => controller.abort()
-  }, [backend, dpr, fontFixture, technique])
+  }, [backend, dpr, fontFixture, technique, workload])
 
   const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined
   const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined
+  const sourceOutlineCapture = capture?.kind === 'source-outline' ? capture.value : undefined
+  const isSourceOutline = workload === 'cross-technique-fidelity'
 
   return (
     <div className="grid min-h-0 grid-rows-[auto_minmax(360px,1fr)_auto] gap-3">
       <div className="grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-4">
         <Metric
-          label={technique === 'mtsdf' ? 'Mean error · 0–255' : 'Reference mismatch'}
+          label={
+            isSourceOutline || technique === 'mtsdf' ? 'Mean error · 0–255' : 'Reference mismatch'
+          }
           value={
-            technique === 'mtsdf'
-              ? mtsdfCapture === undefined
+            isSourceOutline
+              ? sourceOutlineCapture === undefined
                 ? '—'
-                : `${mtsdfCapture.meanAbsoluteError.toFixed(3)} · ${((mtsdfCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
-              : bitmapCapture === undefined
-                ? '—'
-                : String(bitmapCapture.mismatchBytes)
+                : `${sourceOutlineCapture.meanAbsoluteError.toFixed(3)} · ${((sourceOutlineCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
+              : technique === 'mtsdf'
+                ? mtsdfCapture === undefined
+                  ? '—'
+                  : `${mtsdfCapture.meanAbsoluteError.toFixed(3)} · ${((mtsdfCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
+                : bitmapCapture === undefined
+                  ? '—'
+                  : String(bitmapCapture.mismatchBytes)
           }
         />
         <Metric
-          label={technique === 'mtsdf' ? 'Pixels > 2 / 255' : 'Half-coverage ink'}
+          label={
+            isSourceOutline || technique === 'mtsdf' ? 'Pixels > 2 / 255' : 'Half-coverage ink'
+          }
           value={
-            technique === 'mtsdf'
-              ? mtsdfCapture === undefined
+            isSourceOutline
+              ? sourceOutlineCapture === undefined
                 ? '—'
-                : `${mtsdfCapture.errorPixels} · ${((mtsdfCapture.errorPixels / (mtsdfCapture.width * mtsdfCapture.height)) * 100).toFixed(2)}%`
-              : bitmapCapture === undefined
-                ? '—'
-                : String(bitmapCapture.inkPixels)
+                : `${sourceOutlineCapture.errorPixels} · ${((sourceOutlineCapture.errorPixels / (sourceOutlineCapture.width * sourceOutlineCapture.height)) * 100).toFixed(2)}%`
+              : technique === 'mtsdf'
+                ? mtsdfCapture === undefined
+                  ? '—'
+                  : `${mtsdfCapture.errorPixels} · ${((mtsdfCapture.errorPixels / (mtsdfCapture.width * mtsdfCapture.height)) * 100).toFixed(2)}%`
+                : bitmapCapture === undefined
+                  ? '—'
+                  : String(bitmapCapture.inkPixels)
           }
         />
         <Metric
-          label={technique === 'mtsdf' ? 'Maximum error · 0–255' : 'Lit pixels'}
+          label={isSourceOutline || technique === 'mtsdf' ? 'Maximum error · 0–255' : 'Lit pixels'}
           value={
-            technique === 'mtsdf'
-              ? mtsdfCapture === undefined
+            isSourceOutline
+              ? sourceOutlineCapture === undefined
                 ? '—'
-                : `${mtsdfCapture.maximumError} / 255`
-              : bitmapCapture === undefined
-                ? '—'
-                : String(bitmapCapture.litPixels)
+                : `${sourceOutlineCapture.maximumError} / 255`
+              : technique === 'mtsdf'
+                ? mtsdfCapture === undefined
+                  ? '—'
+                  : `${mtsdfCapture.maximumError} / 255`
+                : bitmapCapture === undefined
+                  ? '—'
+                  : String(bitmapCapture.litPixels)
           }
         />
         <Metric
@@ -1284,7 +1336,38 @@ function ConformanceSurface({
         />
         <Metric label="Suite duration" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
       </div>
-      {technique === 'mtsdf' ? (
+      {isSourceOutline ? (
+        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+          <PixelBytesPanel
+            bytes={sourceOutlineCapture?.candidate}
+            conformanceView={conformanceView}
+            height={sourceOutlineCapture?.height}
+            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
+            width={sourceOutlineCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelBytesPanel
+            bytes={sourceOutlineCapture?.reference}
+            conformanceView={conformanceView}
+            height={sourceOutlineCapture?.height}
+            label="Browser Canvas2D · pinned source font"
+            width={sourceOutlineCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+          <PixelBytesPanel
+            bytes={sourceOutlineCapture?.difference}
+            className="md:col-span-2"
+            conformanceView={conformanceView}
+            height={sourceOutlineCapture?.height}
+            label="Source-outline difference heatmap ×8"
+            width={sourceOutlineCapture?.width}
+            onPan={onPan}
+            onZoom={onZoom}
+          />
+        </div>
+      ) : technique === 'mtsdf' ? (
         <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
           <PixelBytesPanel
             bytes={mtsdfCapture?.candidate}
@@ -1352,15 +1435,19 @@ function ConformanceSurface({
           <span className="font-medium">Finite conformance suite</span>
           <span className="ml-auto font-mono text-[10px] text-muted">
             {summary?.validation ??
-              (technique === 'mtsdf'
-                ? 'Run conformance to validate GPU sampling against the independent CPU sampling reference.'
-                : 'Run conformance to test full-frame and clipped output.')}
+              (isSourceOutline
+                ? 'Run conformance to validate the selected renderer against the pinned source font in browser Canvas2D.'
+                : technique === 'mtsdf'
+                  ? 'Run conformance to validate GPU sampling against the independent CPU sampling reference.'
+                  : 'Run conformance to test full-frame and clipped output.')}
           </span>
         </div>
         <p className="mt-2 text-[10px] text-dim">
-          {technique === 'mtsdf'
-            ? 'Heatmap: black agrees, red is extra GPU coverage, and cyan is extra CPU-reference coverage. Intensity is amplified 8×.'
-            : 'End-to-end suite duration includes readback, CPU composition, comparison, clipping, and hashing. It is test cost, not renderer performance.'}
+          {isSourceOutline
+            ? 'Both techniques are compared independently with browser Canvas2D using the same pinned source font, authored lines, physical size, and paragraph baselines.'
+            : technique === 'mtsdf'
+              ? 'Heatmap: black agrees, red is extra GPU coverage, and cyan is extra CPU-reference coverage. Intensity is amplified 8×.'
+              : 'End-to-end suite duration includes readback, CPU composition, comparison, clipping, and hashing. It is test cost, not renderer performance.'}
         </p>
       </div>
       {error !== undefined && <p className="text-xs text-danger">{error}</p>}
@@ -1710,6 +1797,7 @@ function BitmapTextViewport({
       data-font-load-ms={stats?.fontLoadMs}
       data-text-ready-ms={stats?.textReadyMs}
       data-first-draw-ms={stats?.firstDrawMs}
+      data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-startup-ms={stats?.startupMs}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
@@ -1893,6 +1981,7 @@ function MtsdfTextViewport({
       data-rendered-device-px={fontSize}
       data-scale-ratio={fontSize / 64}
       data-startup-ms={stats?.startupMs}
+      data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-submit-history-length={stats?.submitHistoryLength}
       data-testid="mtsdf-live-viewport"
       ref={containerRef}
@@ -2091,6 +2180,9 @@ function ComparisonWorkloadViewport({
       data-backend={stats?.backend}
       data-dpr={stats?.dpr}
       data-draw-count={stats?.drawCount}
+      data-first-draw-ms={stats?.firstDrawMs}
+      data-font-load-ms={stats?.fontLoadMs}
+      data-frames-per-second={stats?.framesPerSecond}
       data-glyph-count={stats?.glyphCount}
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
@@ -2099,6 +2191,9 @@ function ComparisonWorkloadViewport({
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
       data-missing-glyph-count={stats?.missingGlyphCount}
+      data-p95-gpu-ms={stats?.p95GpuMs}
+      data-p95-submit-ms={stats?.p95SubmitMs}
+      data-renderer-init-ms={stats?.rendererInitMs}
       data-configuration-revision={stats?.configurationRevision}
       data-paint-opacity={
         stats?.workload === 'paint-effects' ? stats.appliedPaintOpacity : undefined
@@ -2111,8 +2206,11 @@ function ComparisonWorkloadViewport({
       data-rendered-device-px={stats === undefined ? undefined : stats.appliedFontSize * dpr}
       data-startup-ms={stats?.startupMs}
       data-submit-history-length={stats?.submitHistoryLength}
+      data-text-ready-ms={stats?.textReadyMs}
       data-technique={technique}
       data-testid="comparison-live-viewport"
+      data-total-gpu-bytes={stats?.totalGpuBytes}
+      data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-workload={stats?.workload}
       data-workload-amount={
         stats === undefined ||

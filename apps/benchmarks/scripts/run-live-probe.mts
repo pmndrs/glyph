@@ -39,6 +39,7 @@ await runProbe('./vitexec/advanced-shaping-performance.probe.ts', true)
 for (const probe of [
   './vitexec/tsl-renderer.probe.ts',
   './vitexec/mtsdf-text.probe.ts',
+  './vitexec/source-outline-fidelity.probe.ts',
   './vitexec/bitmap-text.probe.ts',
   './vitexec/core-text-frame.probe.ts',
   './vitexec/react-font-suspense.probe.ts',

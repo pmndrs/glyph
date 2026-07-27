@@ -9,6 +9,7 @@
     "capture:browser-reference": "node ./scripts/capture-browser-reference.mts",
     "capture:bake-host-baseline": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/capture-bake-host-baseline.mts",
     "capture:advanced-shaping-performance": "node ./scripts/capture-advanced-shaping-performance.mts",
+    "capture:raster-performance": "node ./scripts/capture-raster-performance.mts",
     "capture:mtsdf-simd": "node ./scripts/capture-mtsdf-simd.mts",
     "check:autoresearch-baseline": "node ./scripts/generate-autoresearch-baseline.mts --check",
     "check:size": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/measure-package-sizes.mts --check",

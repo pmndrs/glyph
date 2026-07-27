@@ -183,6 +183,36 @@ function mtsdfSamplingValidation(
   return `${values.length}/${values.length} deterministic GPU frames with CPU MTSDF comparison`
 }
 
+function sourceOutlineFidelityValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    const pixelCount = metrics?.pixelCount
+    const isBitmap = metrics?.techniqueBitmap === 1
+    const isMtsdf = metrics?.techniqueMtsdf === 1
+    if (
+      typeof pixelCount !== 'number' ||
+      pixelCount <= 0 ||
+      value.outputBytes !== pixelCount * 4 ||
+      Number(isBitmap) + Number(isMtsdf) !== 1 ||
+      metrics?.physicalPpem !== (isBitmap ? 16 : 64) ||
+      !finiteNonnegative(metrics.meanAbsoluteError) ||
+      metrics.meanAbsoluteError > 12 ||
+      !finiteNonnegative(metrics.maximumError) ||
+      metrics.maximumError > 255 ||
+      !finiteNonnegative(metrics.errorPixels) ||
+      metrics.errorPixels > pixelCount * 0.2 ||
+      !finiteNonnegative(metrics.renderMs) ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error('Source-outline fidelity exceeded the reviewed browser coverage envelope')
+    }
+  }
+  return `${values.length}/${values.length} deterministic source-outline comparisons within reviewed envelopes`
+}
+
 function reactTextValidation(
   values: readonly import('./contracts').BenchmarkMeasurement[],
 ): string {
@@ -397,6 +427,14 @@ export const scenarios: readonly BenchmarkScenario[] = [
       'Inter at its native 16 px bitmap strike, with shaping, layout, R8 upload, instanced TSL draw, and exact readback.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
     validate: bitmapTextValidation,
+  },
+  {
+    id: 'source-outline-fidelity',
+    label: 'Cross-technique source-outline fidelity',
+    description:
+      'Bitmap and MSDF candidates compared independently with browser Canvas2D using the same pinned source font.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: sourceOutlineFidelityValidation,
   },
   {
     id: 'tsl-shader-baseline',

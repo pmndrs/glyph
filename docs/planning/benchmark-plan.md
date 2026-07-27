@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5.6"
-  at: "2026-07-27T01:29:13Z"
+  at: "2026-07-27T10:26:00Z"
 ---
 
 # Benchmark plan
@@ -173,6 +173,8 @@ Unsupported target/scenario pairs remain visible with their missing capabilities
 
 Every rendering scenario captures an HTML/CSS reference in the same browser, using the same font bytes, text, language, direction, OpenType features, font size, constraints, DPR, foreground/background colors, and viewport. Browser output is the primary authority for visual shaping and rendering deltas. The harness retains the browser image, candidate image, perceptual score, and raw difference image.
 
+The cross-technique source-outline workload fixes the authored lines and paragraph baselines from the candidate layout, then gives Canvas2D the original pinned font bytes and the same physical ppem. Bitmap is inspected at its native 16-device-pixel strike and MTSDF at its 64-device-pixel base level; these are two independently reviewed fidelity envelopes against one source family, not a claim that the two raster techniques should produce identical pixels or be compared at mismatched intended scales.
+
 Structured shaping correctness remains a separate comparison against pinned HarfRust and HarfBuzz output: glyph IDs, clusters, advances, offsets, and flags cannot be recovered reliably from a browser screenshot. A candidate must pass both the structured shaping gate and the browser visual gate.
 
 Current Three Flatland Slug may be included as a historical performance or payload target when an equivalent workload can be constructed. It is never the visual or shaping oracle and is not required in every benchmark run.
@@ -191,6 +193,8 @@ The browser UI must provide:
 - environment details and downloadable raw JSON.
 
 Frame rate alone is not an accepted metric. CPU phase timings, GPU timings where supported, first-frame latency, memory, and quality remain separate. WebGPU targets use timestamp queries only when the adapter exposes the `timestamp-query` feature; WebGL2 targets use `EXT_disjoint_timer_query_webgl2` and discard samples from a disjoint interval. Unsupported GPU timing is displayed as unavailable and is never replaced with CPU submission time. The live render loop records frame cost independently from conformance capture: GPU readback, byte comparison, image scanning, hashing, and test-only resize probes remain correctness costs and do not contribute to the user-facing render-technique median.
+
+For raster workloads, one preflight draw records CPU submit and resolves the first GPU timestamp before the steady loop begins. This first GPU frame is labeled as the upload frame because it is the first consumption of the newly decoded atlas; it remains distinct from texture decode, `Text.ready`, total startup, and the steady GPU median. The timestamp is omitted when the backend cannot supply it rather than replaced with a CPU proxy.
 
 ### Automation and publication
 

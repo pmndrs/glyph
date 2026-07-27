@@ -618,7 +618,7 @@ Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGP
 - [x] Surface loaded/unloaded library and baker totals, font download/decoded bytes, texture-array memory, and every atlas page in the human benchmark inspector.
 - [x] Keep runtime rendering independent of baker Wasm; optional Bitmap and MTSDF bakers execute only through one serial lazy module Worker.
 - [x] Exercise deterministic WebGL2 headless conformance and maintainer-local GPU WebGPU product probes without sleeps, retries, or timer cushions.
-- [ ] Add the cross-technique source-outline fidelity corpus at the end of the conformance list and record reviewed acceptance envelopes.
+- [x] Add the cross-technique source-outline fidelity corpus at the end of the conformance list and record reviewed acceptance envelopes.
 - [ ] Record and review committed upload, first-draw, steady CPU-frame, GPU-frame, and bundle-isolation baselines for the accepted corpus, then complete the final adversarial Milestone 6/8 closure review.
 
 ## Milestone 9 — Slug release renderer

@@ -129,6 +129,7 @@ export async function createComparisonWorkloadPreview(options: {
   let disposed = false
   let closing = false
   let firstDrawMs = 0
+  let uploadFrameGpuMs: number | undefined
   let textReadyMs = 0
   let gpuTimestampRequest: number | undefined
   let gpuTimestampResolution: Promise<void> | undefined
@@ -172,6 +173,14 @@ export async function createComparisonWorkloadPreview(options: {
 
     await commit(configuration)
     signal?.throwIfAborted()
+    const firstDrawStarted = performance.now()
+    renderer.setRenderTarget(null)
+    renderer.clear()
+    renderer.render(scene, camera)
+    firstDrawMs = performance.now() - firstDrawStarted
+    if (gpuTimingSupported) {
+      uploadFrameGpuMs = await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
+    }
     const startupMs = performance.now() - startupStarted
 
     const scheduleGpuTimestamp = (): void => {
@@ -241,6 +250,7 @@ export async function createComparisonWorkloadPreview(options: {
           fontLoadMs,
           textReadyMs,
           firstDrawMs,
+          ...(uploadFrameGpuMs === undefined ? {} : { uploadFrameGpuMs }),
           startupMs,
           gpuTimingSupported,
           configurationRevision: revision,

@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 0,
+  "kind": "raster-performance-observation",
+  "capturedAt": "2026-07-27T10:25:41.945Z",
+  "backend": "webgpu",
+  "dpr": 1,
+  "workload": "paint-effects",
+  "steadyStateReportCount": 12,
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  },
+  "gpuAdapter": {},
+  "observations": [
+    {
+      "technique": "bitmap",
+      "rendererInitMs": 5.0999999940395355,
+      "fontLoadMs": 88.70000000298023,
+      "textReadyMs": 1.7000000029802322,
+      "firstDrawSubmitMs": 14.400000005960464,
+      "uploadFrameGpuMs": 0.01929,
+      "startupMs": 130.90000000596046,
+      "framesPerSecond": 120.01548586914474,
+      "medianSubmitMs": 0.30000001192092896,
+      "p95SubmitMs": 0.6000000238418579,
+      "medianGpuMs": 0.0861629992723465,
+      "p95GpuMs": 0.6105309724807739,
+      "glyphCount": 91,
+      "drawCount": 1,
+      "artifactBytes": 927164,
+      "atlasGpuBytes": 695296,
+      "totalGpuBytes": 1716256
+    },
+    {
+      "technique": "mtsdf",
+      "rendererInitMs": 1.7999999970197678,
+      "fontLoadMs": 134.20000000298023,
+      "textReadyMs": 1.5999999940395355,
+      "firstDrawSubmitMs": 29.900000005960464,
+      "uploadFrameGpuMs": 0.029747,
+      "startupMs": 217.09999999403954,
+      "framesPerSecond": 120,
+      "medianSubmitMs": 0.3999999761581421,
+      "p95SubmitMs": 0.699999988079071,
+      "medianGpuMs": 0.06133300065994263,
+      "p95GpuMs": 1.1202330589294434,
+      "glyphCount": 91,
+      "drawCount": 1,
+      "artifactBytes": 6979347,
+      "atlasGpuBytes": 55924040,
+      "totalGpuBytes": 56945000
+    }
+  ],
+  "bundleIsolation": [
+    {
+      "id": "browser-core",
+      "rawBytes": 314058,
+      "gzipBytes": 70448,
+      "brotliBytes": 53998
+    },
+    {
+      "id": "text-shaper-wasm",
+      "rawBytes": 692114,
+      "gzipBytes": 257986,
+      "brotliBytes": 202523
+    },
+    {
+      "id": "bitmap-runtime-js",
+      "rawBytes": 345559,
+      "gzipBytes": 76214,
+      "brotliBytes": 58923
+    },
+    {
+      "id": "mtsdf-runtime-js",
+      "rawBytes": 352505,
+      "gzipBytes": 77441,
+      "brotliBytes": 60060
+    },
+    {
+      "id": "bitmap-baker-wasm",
+      "rawBytes": 621141,
+      "gzipBytes": 231175,
+      "brotliBytes": 177611
+    },
+    {
+      "id": "mtsdf-baker-wasm",
+      "rawBytes": 533095,
+      "gzipBytes": 205801,
+      "brotliBytes": 161438
+    }
+  ]
+}
