@@ -2,6 +2,7 @@
 
 ## 2026-07-27
 
+- **Range controls** — Replaced text-input padding and browser-default slider chrome with one shared range geometry: the visible rail begins and ends at the 14 px thumb's actual center travel, while an accent segment fills from the minimum through the controlled value. Added component coverage plus a live GPU product assertion for zero padding, explicit 7 px inset, visible fill/rail layers, and exact endpoint values.
 - **Closure verification** — Passed the full package build/type/Rust/oracle/SIMD/integration/fuzz suite, all 88 benchmark units, all 16 isolated Chromium conformance scenarios, the packed consumer, lint, formatting, and OKF validation. The roadmap now records the committed raster performance baseline separately from the still-open final adversarial review.
 - **Evidence index** — Refreshed the authenticated autoresearch index to the already-committed CJK universality result identity; the source evidence itself is unchanged, and the benchmark-wide stale-index gate now covers its current bytes.
 - **MTSDF compute research** — Documented a measured-admission WebGPU compute generator follow-up: CPU topology and packing remain authoritative, scalar Wasm remains the offline fallback, and no second implementation ships without a material end-to-end win against the native oracle.
