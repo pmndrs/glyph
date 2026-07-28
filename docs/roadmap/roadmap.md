@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T23:45:47Z"
+  at: "2026-07-28T03:47:10Z"
 ---
 
 # Canonical implementation roadmap
@@ -633,7 +633,7 @@ Runtime baking is a supported delivery path, not merely a missing-asset recovery
 - [ ] Add one typed runtime-bake options contract shared by explicit runtime delivery and automatic fallback. It must carry the selected raster descriptor plus bounded coverage seeds, reject duplicates/out-of-range values deterministically, and report missing raster coverage explicitly.
 - [ ] Define Unicode-range, authored-text, and exact glyph-ID selection semantics. Unicode/text inputs must resolve through the selected face; exact glyph IDs remain an expert path. None may claim transitive GSUB/GPOS closure, source-font subsetting, or glyph-ID remapping.
 - [ ] Flow the normalized options through Node and the serial module Worker into Bitmap and MTSDF bakers without adding either baker to baked-hit or unselected-raster graphs. Prove identical bytes for equal normalized requests and deterministic cancellation/progress for bounded and complete passes.
-- [ ] Replace hand-maintained ABI size/offset mirrors with fixed-width `#[repr(C)]` layout types. Generate JSON sizes, alignments, and offsets with `size_of`, `align_of`, and `offset_of!`; add compile-time assertions for the intended stable layout and tests that TypeScript consumes those exact compiler facts.
+- [x] Replace hand-maintained ABI size/offset mirrors with fixed-width `#[repr(C)]` layout types. Build-only Rust generators derive JSON sizes, alignments, and offsets with `size_of`, `align_of`, and `offset_of!`, then generate exact typed `as const` TypeScript modules consumed by production hosts. Tests require generated JSON/TypeScript identity and prove production Wasm carries no duplicate ABI contract exports.
 - [ ] Keep Wasm direct-memory values little-endian because WebAssembly linear memory is normatively little-endian, while retaining explicit format-mandated byte order in GLB, KTX2, SFNT, and other portable serialized artifacts.
 - [ ] Regenerate every affected ABI JSON file, optimized Wasm resource, baked fixture, identity, size record, and package digest; run the complete Rust, TypeScript, Node/Worker parity, artifact-validation, renderer, conformance, and live-product regression sweep before accepting the new boundary.
 - [ ] Instrument the baker by phase and publish small, medium, and complete-face results for glyph selection, outline extraction, MTSDF texel generation, packing, mip generation, container serialization, Wasm-to-Worker copying, peak memory, and output bytes. Reports must include glyphs, generated texels, edges visited, and throughput rather than one opaque wall-clock duration.

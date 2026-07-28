@@ -4,6 +4,7 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 mod abi_contract;
+mod abi_layout;
 
 #[cfg(feature = "artifact-baker")]
 mod artifact;

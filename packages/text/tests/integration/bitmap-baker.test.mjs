@@ -45,14 +45,18 @@ async function bake(core, source, pages) {
   })
 }
 
-test('ships one generated progress import with its generated ABI', async () => {
+test('ships one generated progress import and bundles its generated ABI in TypeScript', async () => {
   const { module, instance } = await setup()
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ])
-  const embedded = readBitmapBakerAbi(instance)
-  assert.deepEqual(embedded, publishedAbi)
-  assert.deepEqual(embedded.versions, {
+  const generated = readBitmapBakerAbi(instance)
+  assert.deepEqual(generated, publishedAbi)
+  assert.equal(
+    WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
+    false,
+  )
+  assert.deepEqual(generated.versions, {
     bitmapFormat: 0,
     generator: '0.0.0',
     ktx2: '0.5.0',
@@ -223,28 +227,11 @@ test('the direct-memory shim releases an allocation whose memory copy fails', ()
   )
 })
 
-test('the bitmap ABI reader rejects malformed nested function contracts', () => {
-  const malformed = structuredClone(publishedAbi)
-  malformed.functions.bake.parameters = ['wrong']
-  assert.throws(
-    () => readBitmapBakerAbi(fakeBitmapBakerInstance({ abi: malformed })),
-    /unsupported bitmap baker ABI/,
-  )
-})
-
-function fakeBitmapBakerInstance({
-  abi = publishedAbi,
-  allocate = () => 0,
-  deallocate = () => undefined,
-} = {}) {
+function fakeBitmapBakerInstance({ allocate = () => 0, deallocate = () => undefined } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 })
-  const abiBytes = new TextEncoder().encode(JSON.stringify(abi))
-  new Uint8Array(memory.buffer, 0, abiBytes.byteLength).set(abiBytes)
   return {
     exports: {
       memory,
-      pmndrs_bitmap_baker_abi_ptr: () => 0,
-      pmndrs_bitmap_baker_abi_len: () => abiBytes.byteLength,
       pmndrs_bitmap_baker_alloc: allocate,
       pmndrs_bitmap_baker_dealloc: deallocate,
       pmndrs_bitmap_baker_bake: () => 0,

@@ -9,6 +9,17 @@ use pmndrs_text_mtsdf_core::{AtlasRegion, Bounds, MtsdfGenerator, OutlineSink, O
 #[cfg(feature = "artifact-baker")]
 use serde::Serialize;
 
+use crate::abi_layout::{
+    COMMAND_OPCODE, COMMAND_SIZE, COMMAND_X0, COMMAND_X1, COMMAND_X2, COMMAND_Y0, COMMAND_Y1,
+    COMMAND_Y2, REQUEST_BYTE_LENGTH, REQUEST_COMMAND_COUNT, REQUEST_COMMANDS_OFFSET,
+    REQUEST_HEADER_SIZE, REQUEST_INNER_HEIGHT, REQUEST_INNER_WIDTH, REQUEST_MAX_X, REQUEST_MAX_Y,
+    REQUEST_MIN_X, REQUEST_MIN_Y, REQUEST_PADDING_X, REQUEST_PADDING_Y, REQUEST_UNITS_PER_EM,
+};
+#[cfg(feature = "artifact-baker")]
+use crate::abi_layout::{
+    RESPONSE_ARTIFACT_LENGTH_OFFSET, RESPONSE_HEADER_SIZE, RESPONSE_MAGIC_OFFSET,
+    RESPONSE_METADATA_LENGTH_OFFSET, RESPONSE_STATUS_OFFSET,
+};
 #[cfg(feature = "artifact-baker")]
 use crate::{MtsdfBakeArtifactV0, MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mtsdf};
 
@@ -56,29 +67,16 @@ const MAX_REQUEST_BYTES: u32 = 64 * 1024 * 1024;
 const MAX_SINGLE_RESPONSE_BYTES: usize = MAX_REQUEST_BYTES as usize;
 #[cfg(feature = "artifact-baker")]
 const RESPONSE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
-const REQUEST_HEADER_SIZE: usize = 48;
-const COMMAND_SIZE: usize = 28;
 const STATUS_OK: u32 = 0;
 const STATUS_INVALID_REQUEST: u32 = 1;
 const STATUS_INVALID_OUTLINE: u32 = 2;
 const STATUS_GENERATION_FAILED: u32 = 3;
 
 static STATE: AtomicUsize = AtomicUsize::new(0);
-static ABI: &str = env!("PMNDRS_TEXT_MTSDF_ABI");
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
     core::arch::wasm32::unreachable()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_text_mtsdf_abi_ptr() -> u32 {
-    u32::try_from(ABI.as_ptr() as usize).unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_text_mtsdf_abi_len() -> u32 {
-    u32::try_from(ABI.len()).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -414,7 +412,7 @@ struct PreparedArtifactResponse {
 #[cfg(feature = "artifact-baker")]
 impl PreparedArtifactResponse {
     fn encoded_byte_length(&self) -> usize {
-        16_usize
+        RESPONSE_HEADER_SIZE
             .checked_add(self.metadata.len())
             .and_then(|value| value.checked_add(self.artifact_bytes_length))
             .unwrap_or(usize::MAX)
@@ -501,7 +499,6 @@ fn prepared_error_response(error: crate::MtsdfBakeError) -> PreparedArtifactResp
 fn encode_artifact_response(
     prepared: PreparedArtifactResponse,
 ) -> Result<Vec<u8>, PreparedArtifactResponse> {
-    const HEADER_LENGTH: usize = 16;
     let metadata_length = prepared.metadata.len() as u32;
     let artifact_length = prepared.artifact_bytes_length as u32;
     let total_length = prepared.encoded_byte_length();
@@ -509,11 +506,20 @@ fn encode_artifact_response(
     if response.try_reserve_exact(total_length).is_err() {
         return Err(prepared);
     }
-    response.resize(HEADER_LENGTH, 0);
-    response[..4].copy_from_slice(b"PMMS");
-    response[4..8].copy_from_slice(&prepared.status.to_le_bytes());
-    response[8..12].copy_from_slice(&metadata_length.to_le_bytes());
-    response[12..16].copy_from_slice(&artifact_length.to_le_bytes());
+    response.resize(RESPONSE_HEADER_SIZE, 0);
+    let magic_offset = RESPONSE_MAGIC_OFFSET as usize;
+    response[magic_offset..magic_offset + 4].copy_from_slice(b"PMMS");
+    write_u32(&mut response, RESPONSE_STATUS_OFFSET, prepared.status);
+    write_u32(
+        &mut response,
+        RESPONSE_METADATA_LENGTH_OFFSET,
+        metadata_length,
+    );
+    write_u32(
+        &mut response,
+        RESPONSE_ARTIFACT_LENGTH_OFFSET,
+        artifact_length,
+    );
     response.extend_from_slice(&prepared.metadata);
     for artifact in prepared.artifacts {
         response.extend_from_slice(&artifact.bytes);
@@ -578,11 +584,13 @@ struct WireRequest<'a> {
 
 impl<'a> WireRequest<'a> {
     fn parse(bytes: &'a [u8]) -> Option<Self> {
-        if bytes.len() < REQUEST_HEADER_SIZE || read_u32(bytes, 0)? as usize != bytes.len() {
+        if bytes.len() < REQUEST_HEADER_SIZE
+            || read_u32(bytes, REQUEST_BYTE_LENGTH)? as usize != bytes.len()
+        {
             return None;
         }
-        let commands_offset = read_u32(bytes, 4)? as usize;
-        let command_count = read_u32(bytes, 8)? as usize;
+        let commands_offset = read_u32(bytes, REQUEST_COMMANDS_OFFSET)? as usize;
+        let command_count = read_u32(bytes, REQUEST_COMMAND_COUNT)? as usize;
         let commands_length = command_count.checked_mul(COMMAND_SIZE)?;
         if commands_offset < REQUEST_HEADER_SIZE
             || commands_offset.checked_add(commands_length)? != bytes.len()
@@ -593,18 +601,18 @@ impl<'a> WireRequest<'a> {
             bytes,
             commands_offset,
             command_count,
-            units_per_em: read_f32(bytes, 12)?,
+            units_per_em: read_f32(bytes, REQUEST_UNITS_PER_EM)?,
             bounds: Bounds::new(
-                read_f32(bytes, 16)?,
-                read_f32(bytes, 20)?,
-                read_f32(bytes, 24)?,
-                read_f32(bytes, 28)?,
+                read_f32(bytes, REQUEST_MIN_X)?,
+                read_f32(bytes, REQUEST_MIN_Y)?,
+                read_f32(bytes, REQUEST_MAX_X)?,
+                read_f32(bytes, REQUEST_MAX_Y)?,
             ),
             region: AtlasRegion {
-                inner_width: read_u32(bytes, 32)? as usize,
-                inner_height: read_u32(bytes, 36)? as usize,
-                padding_x: read_u32(bytes, 40)? as usize,
-                padding_y: read_u32(bytes, 44)? as usize,
+                inner_width: read_u32(bytes, REQUEST_INNER_WIDTH)? as usize,
+                inner_height: read_u32(bytes, REQUEST_INNER_HEIGHT)? as usize,
+                padding_x: read_u32(bytes, REQUEST_PADDING_X)? as usize,
+                padding_y: read_u32(bytes, REQUEST_PADDING_Y)? as usize,
             },
         })
     }
@@ -624,19 +632,24 @@ impl OutlineSource for WireRequest<'_> {
     fn emit(&self, sink: &mut OutlineSink<'_>) -> Result<(), Self::Error> {
         for index in 0..self.command_count {
             let offset = self.commands_offset + index * COMMAND_SIZE;
-            let opcode = read_u32(self.bytes, offset).ok_or(())?;
+            let opcode = read_u32(self.bytes, offset + COMMAND_OPCODE).ok_or(())?;
             let value = |field| read_f32(self.bytes, offset + field).ok_or(());
             match opcode {
-                0 => sink.move_to(value(4)?, value(8)?),
-                1 => sink.line_to(value(4)?, value(8)?),
-                2 => sink.quad_to(value(4)?, value(8)?, value(12)?, value(16)?),
+                0 => sink.move_to(value(COMMAND_X0)?, value(COMMAND_Y0)?),
+                1 => sink.line_to(value(COMMAND_X0)?, value(COMMAND_Y0)?),
+                2 => sink.quad_to(
+                    value(COMMAND_X0)?,
+                    value(COMMAND_Y0)?,
+                    value(COMMAND_X1)?,
+                    value(COMMAND_Y1)?,
+                ),
                 3 => sink.cubic_to(
-                    value(4)?,
-                    value(8)?,
-                    value(12)?,
-                    value(16)?,
-                    value(20)?,
-                    value(24)?,
+                    value(COMMAND_X0)?,
+                    value(COMMAND_Y0)?,
+                    value(COMMAND_X1)?,
+                    value(COMMAND_Y1)?,
+                    value(COMMAND_X2)?,
+                    value(COMMAND_Y2)?,
                 ),
                 4 => sink.close(),
                 _ => return Err(()),
@@ -654,6 +667,12 @@ fn read_u32(bytes: &[u8], offset: usize) -> Option<u32> {
 
 fn read_f32(bytes: &[u8], offset: usize) -> Option<f32> {
     Some(f32::from_bits(read_u32(bytes, offset)?))
+}
+
+#[cfg(feature = "artifact-baker")]
+fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
+    let encoded = value.to_le_bytes();
+    bytes[offset..offset + encoded.len()].copy_from_slice(&encoded);
 }
 
 fn with_state<Result>(operation: impl FnOnce(&mut WasmState) -> Result) -> Result {

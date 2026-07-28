@@ -3,6 +3,7 @@ import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs'
+import { writeGeneratedTypescriptAbi } from '../../font-baker/scripts/generated-typescript-abi.mjs'
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url))
@@ -30,6 +31,56 @@ const mtsdfWasm = fileURLToPath(
   ),
 )
 const distributedMtsdfWasm = fileURLToPath(new URL('../dist/mtsdf_baker.wasm', import.meta.url))
+
+const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson] = await Promise.all([
+  runCapture('cargo', [
+    'run',
+    '--manifest-path',
+    'rust/bitmap-baker/Cargo.toml',
+    '--bin',
+    'generate-bitmap-abi',
+    '--locked',
+    '--quiet',
+  ]),
+  runCapture('cargo', [
+    'run',
+    '--manifest-path',
+    'rust/shaper/Cargo.toml',
+    '--bin',
+    'generate-shaper-abi',
+    '--locked',
+    '--quiet',
+  ]),
+  runCapture('cargo', [
+    'run',
+    '--manifest-path',
+    'rust/mtsdf-baker/Cargo.toml',
+    '--bin',
+    'generate-mtsdf-abi',
+    '--locked',
+    '--quiet',
+  ]),
+])
+await Promise.all([
+  writeGeneratedTypescriptAbi(
+    new URL('../src/generated/bitmap-baker-abi.ts', import.meta.url),
+    'bitmapBakerAbi',
+    bitmapAbiJson,
+    { check: process.env.CI === 'true' },
+  ),
+  writeGeneratedTypescriptAbi(
+    new URL('../src/generated/text-shaper-abi.ts', import.meta.url),
+    'textShaperAbi',
+    shaperAbiJson,
+    { check: process.env.CI === 'true' },
+  ),
+  writeGeneratedTypescriptAbi(
+    new URL('../src/generated/mtsdf-baker-abi.ts', import.meta.url),
+    'mtsdfBakerAbi',
+    mtsdfAbiJson,
+    { check: process.env.CI === 'true' },
+  ),
+])
 
 await run(
   'cargo',
@@ -103,42 +154,9 @@ await run(wasmOpt, [
   '-o',
   distributedMtsdfWasm,
 ])
-await writeFile(
-  new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url),
-  await runCapture('cargo', [
-    'run',
-    '--manifest-path',
-    'rust/bitmap-baker/Cargo.toml',
-    '--bin',
-    'generate-bitmap-abi',
-    '--locked',
-    '--quiet',
-  ]),
-)
-await writeFile(
-  new URL('../dist/text-shaper-abi-v0.json', import.meta.url),
-  await runCapture('cargo', [
-    'run',
-    '--manifest-path',
-    'rust/shaper/Cargo.toml',
-    '--bin',
-    'generate-shaper-abi',
-    '--locked',
-    '--quiet',
-  ]),
-)
-await writeFile(
-  new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url),
-  await runCapture('cargo', [
-    'run',
-    '--manifest-path',
-    'rust/mtsdf-baker/Cargo.toml',
-    '--bin',
-    'generate-mtsdf-abi',
-    '--locked',
-    '--quiet',
-  ]),
-)
+await writeFile(new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url), bitmapAbiJson)
+await writeFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), shaperAbiJson)
+await writeFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), mtsdfAbiJson)
 if (process.platform !== 'win32') {
   await chmod(new URL('../dist/node/cli.js', import.meta.url), 0o755)
 }

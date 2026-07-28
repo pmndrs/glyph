@@ -4,9 +4,25 @@ use crate::{
     FeatureRecord, ReshapeRange, RunRequest, STATUS_INVALID_REQUEST, STATUS_RESULT_TOO_LARGE,
     ShapeBatchOutput, ShapeBatchRequest,
     abi_contract::{
-        BIDI_REQUEST_HEADER_SIZE, BIDI_RESULT_HEADER_SIZE, FEATURE_RECORD_SIZE,
-        RESHAPE_RANGE_RECORD_SIZE, RESHAPE_REQUEST_HEADER_SIZE, RESULT_HEADER_SIZE,
-        RUN_RECORD_SIZE, SHAPE_REQUEST_HEADER_SIZE,
+        BIDI_DIRECTION, BIDI_REQUEST_HEADER_SIZE, BIDI_RESULT_BYTE_LENGTH,
+        BIDI_RESULT_CLASSES_OFFSET, BIDI_RESULT_HEADER_SIZE, BIDI_RESULT_LEVELS_OFFSET,
+        BIDI_RESULT_PARAGRAPH_COUNT, BIDI_RESULT_PARAGRAPH_ENDS_OFFSET,
+        BIDI_RESULT_PARAGRAPH_LEVELS_OFFSET, BIDI_RESULT_PARAGRAPH_STARTS_OFFSET,
+        BIDI_RESULT_TEXT_LENGTH, BIDI_TEXT_LENGTH, BIDI_TEXT_OFFSET, FEATURE_END,
+        FEATURE_RECORD_SIZE, FEATURE_START, FEATURE_TAG, FEATURE_VALUE, RANGE_CONTEXT_END,
+        RANGE_CONTEXT_START, RANGE_FLAGS, RANGE_ITEM_END, RANGE_ITEM_START, RANGE_RUN,
+        RESHAPE_RANGE_COUNT, RESHAPE_RANGE_RECORD_SIZE, RESHAPE_RANGES_OFFSET,
+        RESHAPE_REQUEST_HEADER_SIZE, RESULT_BYTE_LENGTH, RESULT_CLUSTERS_OFFSET,
+        RESULT_FONT_HANDLE_COUNT, RESULT_FONT_HANDLES_OFFSET, RESULT_GLYPH_COUNT,
+        RESULT_GLYPH_FLAGS_OFFSET, RESULT_GLYPH_IDS_OFFSET, RESULT_HEADER_SIZE, RESULT_RUN_COUNT,
+        RESULT_RUN_FONT_SLOTS_OFFSET, RESULT_RUN_GLYPH_COUNTS_OFFSET,
+        RESULT_RUN_GLYPH_STARTS_OFFSET, RESULT_X_ADVANCES_OFFSET, RESULT_X_OFFSETS_OFFSET,
+        RESULT_Y_ADVANCES_OFFSET, RESULT_Y_OFFSETS_OFFSET, RUN_CLUSTER_LEVEL, RUN_DIRECTION,
+        RUN_FEATURE_COUNT, RUN_FEATURE_START, RUN_FLAGS, RUN_FONT_HANDLE, RUN_LANGUAGE_OFFSET,
+        RUN_RECORD_SIZE, RUN_SCRIPT, RUN_TEXT_END, RUN_TEXT_START, SHAPE_FEATURE_COUNT,
+        SHAPE_FEATURES_OFFSET, SHAPE_LANGUAGES_LENGTH, SHAPE_LANGUAGES_OFFSET,
+        SHAPE_REQUEST_HEADER_SIZE, SHAPE_RUN_COUNT, SHAPE_RUNS_OFFSET, SHAPE_TEXT_LENGTH,
+        SHAPE_TEXT_OFFSET,
     },
     bidi::BidiAnalysis,
 };
@@ -17,10 +33,10 @@ pub fn parse_bidi_request(bytes: &[u8]) -> Result<(Vec<u16>, u8), u32> {
     if bytes.len() < BIDI_REQUEST_HEADER_SIZE as usize {
         return Err(STATUS_INVALID_REQUEST);
     }
-    let text_offset = read_u32(bytes, 0)?;
-    let text_length = read_u32(bytes, 4)?;
-    let direction = *bytes.get(8).ok_or(STATUS_INVALID_REQUEST)?;
-    if bytes.get(9..12) != Some(&[0, 0, 0]) {
+    let text_offset = read_u32(bytes, BIDI_TEXT_OFFSET)?;
+    let text_length = read_u32(bytes, BIDI_TEXT_LENGTH)?;
+    let direction = *bytes.get(BIDI_DIRECTION).ok_or(STATUS_INVALID_REQUEST)?;
+    if bytes.get(BIDI_DIRECTION + 1..BIDI_REQUEST_HEADER_SIZE as usize) != Some(&[0, 0, 0]) {
         return Err(STATUS_INVALID_REQUEST);
     }
     let text_bytes = array(bytes, text_offset, text_length, 2, 2)?;
@@ -53,14 +69,14 @@ fn parse_request(
     if bytes.len() < header_size {
         return Err(STATUS_INVALID_REQUEST);
     }
-    let text_offset = read_u32(bytes, 0)?;
-    let text_length = read_u32(bytes, 4)?;
-    let runs_offset = read_u32(bytes, 8)?;
-    let run_count = read_u32(bytes, 12)?;
-    let features_offset = read_u32(bytes, 16)?;
-    let feature_count = read_u32(bytes, 20)?;
-    let languages_offset = read_u32(bytes, 24)?;
-    let languages_length = read_u32(bytes, 28)?;
+    let text_offset = read_u32(bytes, SHAPE_TEXT_OFFSET)?;
+    let text_length = read_u32(bytes, SHAPE_TEXT_LENGTH)?;
+    let runs_offset = read_u32(bytes, SHAPE_RUNS_OFFSET)?;
+    let run_count = read_u32(bytes, SHAPE_RUN_COUNT)?;
+    let features_offset = read_u32(bytes, SHAPE_FEATURES_OFFSET)?;
+    let feature_count = read_u32(bytes, SHAPE_FEATURE_COUNT)?;
+    let languages_offset = read_u32(bytes, SHAPE_LANGUAGES_OFFSET)?;
+    let languages_length = read_u32(bytes, SHAPE_LANGUAGES_LENGTH)?;
 
     let text_bytes = array(bytes, text_offset, text_length, 2, 2)?;
     let mut text =
@@ -80,10 +96,10 @@ fn parse_request(
         Vec::with_capacity(usize::try_from(feature_count).map_err(|_| STATUS_INVALID_REQUEST)?);
     for record in feature_bytes.chunks_exact(FEATURE_RECORD_SIZE as usize) {
         features.push(FeatureRecord {
-            tag: read_u32(record, 0)?,
-            value: read_u32(record, 4)?,
-            start: read_u32(record, 8)?,
-            end: read_u32(record, 12)?,
+            tag: read_u32(record, FEATURE_TAG)?,
+            value: read_u32(record, FEATURE_VALUE)?,
+            start: read_u32(record, FEATURE_START)?,
+            end: read_u32(record, FEATURE_END)?,
         });
     }
 
@@ -92,9 +108,9 @@ fn parse_request(
     let mut runs =
         Vec::with_capacity(usize::try_from(run_count).map_err(|_| STATUS_INVALID_REQUEST)?);
     for record in run_bytes.chunks_exact(RUN_RECORD_SIZE as usize) {
-        let feature_start =
-            usize::try_from(read_u32(record, 20)?).map_err(|_| STATUS_INVALID_REQUEST)?;
-        let feature_count = usize::from(read_u16(record, 24)?);
+        let feature_start = usize::try_from(read_u32(record, RUN_FEATURE_START)?)
+            .map_err(|_| STATUS_INVALID_REQUEST)?;
+        let feature_count = usize::from(read_u16(record, RUN_FEATURE_COUNT)?);
         let feature_end = feature_start
             .checked_add(feature_count)
             .ok_or(STATUS_INVALID_REQUEST)?;
@@ -102,7 +118,7 @@ fn parse_request(
             .get(feature_start..feature_end)
             .ok_or(STATUS_INVALID_REQUEST)?
             .to_vec();
-        let language_offset = read_u32(record, 16)?;
+        let language_offset = read_u32(record, RUN_LANGUAGE_OFFSET)?;
         let language = if language_offset == NO_LANGUAGE {
             None
         } else {
@@ -118,21 +134,23 @@ fn parse_request(
             )
         };
         runs.push(RunRequest {
-            font_handle: read_u32(record, 0)?,
-            text_start: read_u32(record, 4)?,
-            text_end: read_u32(record, 8)?,
-            script: read_u32(record, 12)?,
+            font_handle: read_u32(record, RUN_FONT_HANDLE)?,
+            text_start: read_u32(record, RUN_TEXT_START)?,
+            text_end: read_u32(record, RUN_TEXT_END)?,
+            script: read_u32(record, RUN_SCRIPT)?,
             language,
             features: selected_features,
-            direction: *record.get(26).ok_or(STATUS_INVALID_REQUEST)?,
-            cluster_level: *record.get(27).ok_or(STATUS_INVALID_REQUEST)?,
-            flags: read_u32(record, 28)?,
+            direction: *record.get(RUN_DIRECTION).ok_or(STATUS_INVALID_REQUEST)?,
+            cluster_level: *record
+                .get(RUN_CLUSTER_LEVEL)
+                .ok_or(STATUS_INVALID_REQUEST)?,
+            flags: read_u32(record, RUN_FLAGS)?,
         });
     }
 
     let ranges = if reshape {
-        let ranges_offset = read_u32(bytes, 32)?;
-        let range_count = read_u32(bytes, 36)?;
+        let ranges_offset = read_u32(bytes, RESHAPE_RANGES_OFFSET)?;
+        let range_count = read_u32(bytes, RESHAPE_RANGE_COUNT)?;
         let range_bytes = array(
             bytes,
             ranges_offset,
@@ -144,12 +162,12 @@ fn parse_request(
             Vec::with_capacity(usize::try_from(range_count).map_err(|_| STATUS_INVALID_REQUEST)?);
         for record in range_bytes.chunks_exact(RESHAPE_RANGE_RECORD_SIZE as usize) {
             ranges.push(ReshapeRange {
-                run: read_u32(record, 0)?,
-                item_start: read_u32(record, 4)?,
-                item_end: read_u32(record, 8)?,
-                context_start: read_u32(record, 12)?,
-                context_end: read_u32(record, 16)?,
-                flags: read_u32(record, 20)?,
+                run: read_u32(record, RANGE_RUN)?,
+                item_start: read_u32(record, RANGE_ITEM_START)?,
+                item_end: read_u32(record, RANGE_ITEM_END)?,
+                context_start: read_u32(record, RANGE_CONTEXT_START)?,
+                context_end: read_u32(record, RANGE_CONTEXT_END)?,
+                flags: read_u32(record, RANGE_FLAGS)?,
             });
         }
         Some(ranges)
@@ -202,31 +220,43 @@ pub fn pack_result(output: &ShapeBatchOutput) -> Result<Vec<u8>, u32> {
     let glyph_flags_offset = append_u16(&mut bytes, &output.glyph_flags)?;
     let byte_length = u32::try_from(bytes.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
 
-    write_u32(&mut bytes, 0, byte_length);
-    write_u32(&mut bytes, 4, font_handles_offset);
+    write_u32(&mut bytes, RESULT_BYTE_LENGTH, byte_length);
+    write_u32(&mut bytes, RESULT_FONT_HANDLES_OFFSET, font_handles_offset);
     write_u32(
         &mut bytes,
-        8,
+        RESULT_FONT_HANDLE_COUNT,
         u32::try_from(output.font_handles.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
     );
-    write_u32(&mut bytes, 12, run_font_slots_offset);
-    write_u32(&mut bytes, 16, run_glyph_starts_offset);
-    write_u32(&mut bytes, 20, run_glyph_counts_offset);
     write_u32(
         &mut bytes,
-        24,
+        RESULT_RUN_FONT_SLOTS_OFFSET,
+        run_font_slots_offset,
+    );
+    write_u32(
+        &mut bytes,
+        RESULT_RUN_GLYPH_STARTS_OFFSET,
+        run_glyph_starts_offset,
+    );
+    write_u32(
+        &mut bytes,
+        RESULT_RUN_GLYPH_COUNTS_OFFSET,
+        run_glyph_counts_offset,
+    );
+    write_u32(
+        &mut bytes,
+        RESULT_RUN_COUNT,
         u32::try_from(run_count).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
     );
-    write_u32(&mut bytes, 28, glyph_ids_offset);
-    write_u32(&mut bytes, 32, clusters_offset);
-    write_u32(&mut bytes, 36, x_advances_offset);
-    write_u32(&mut bytes, 40, y_advances_offset);
-    write_u32(&mut bytes, 44, x_offsets_offset);
-    write_u32(&mut bytes, 48, y_offsets_offset);
-    write_u32(&mut bytes, 52, glyph_flags_offset);
+    write_u32(&mut bytes, RESULT_GLYPH_IDS_OFFSET, glyph_ids_offset);
+    write_u32(&mut bytes, RESULT_CLUSTERS_OFFSET, clusters_offset);
+    write_u32(&mut bytes, RESULT_X_ADVANCES_OFFSET, x_advances_offset);
+    write_u32(&mut bytes, RESULT_Y_ADVANCES_OFFSET, y_advances_offset);
+    write_u32(&mut bytes, RESULT_X_OFFSETS_OFFSET, x_offsets_offset);
+    write_u32(&mut bytes, RESULT_Y_OFFSETS_OFFSET, y_offsets_offset);
+    write_u32(&mut bytes, RESULT_GLYPH_FLAGS_OFFSET, glyph_flags_offset);
     write_u32(
         &mut bytes,
-        56,
+        RESULT_GLYPH_COUNT,
         u32::try_from(glyph_count).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
     );
     Ok(bytes)
@@ -258,20 +288,32 @@ pub fn pack_bidi_result(output: &BidiAnalysis) -> Result<Vec<u8>, u32> {
     let paragraph_ends_offset = append_u32(&mut bytes, &output.paragraph_ends)?;
     let paragraph_levels_offset = append_u8(&mut bytes, &output.paragraph_levels)?;
     let byte_length = u32::try_from(bytes.len()).map_err(|_| STATUS_RESULT_TOO_LARGE)?;
-    write_u32(&mut bytes, 0, byte_length);
-    write_u32(&mut bytes, 4, levels_offset);
-    write_u32(&mut bytes, 8, classes_offset);
+    write_u32(&mut bytes, BIDI_RESULT_BYTE_LENGTH, byte_length);
+    write_u32(&mut bytes, BIDI_RESULT_LEVELS_OFFSET, levels_offset);
+    write_u32(&mut bytes, BIDI_RESULT_CLASSES_OFFSET, classes_offset);
     write_u32(
         &mut bytes,
-        12,
+        BIDI_RESULT_TEXT_LENGTH,
         u32::try_from(text_length).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
     );
-    write_u32(&mut bytes, 16, paragraph_starts_offset);
-    write_u32(&mut bytes, 20, paragraph_ends_offset);
-    write_u32(&mut bytes, 24, paragraph_levels_offset);
     write_u32(
         &mut bytes,
-        28,
+        BIDI_RESULT_PARAGRAPH_STARTS_OFFSET,
+        paragraph_starts_offset,
+    );
+    write_u32(
+        &mut bytes,
+        BIDI_RESULT_PARAGRAPH_ENDS_OFFSET,
+        paragraph_ends_offset,
+    );
+    write_u32(
+        &mut bytes,
+        BIDI_RESULT_PARAGRAPH_LEVELS_OFFSET,
+        paragraph_levels_offset,
+    );
+    write_u32(
+        &mut bytes,
+        BIDI_RESULT_PARAGRAPH_COUNT,
         u32::try_from(paragraph_count).map_err(|_| STATUS_RESULT_TOO_LARGE)?,
     );
     Ok(bytes)
@@ -387,8 +429,8 @@ mod tests {
             Err(STATUS_INVALID_REQUEST)
         ));
         let mut bytes = vec![0; SHAPE_REQUEST_HEADER_SIZE as usize];
-        write_u32(&mut bytes, 0, u32::MAX);
-        write_u32(&mut bytes, 4, 1);
+        write_u32(&mut bytes, SHAPE_TEXT_OFFSET, u32::MAX);
+        write_u32(&mut bytes, SHAPE_TEXT_LENGTH, 1);
         assert!(matches!(
             parse_shape_request(&bytes),
             Err(STATUS_INVALID_REQUEST)
@@ -419,11 +461,14 @@ mod tests {
             glyph_flags: vec![3],
         };
         let bytes = pack_result(&output).unwrap();
-        assert_eq!(read_u32(&bytes, 0).unwrap() as usize, bytes.len());
-        assert_eq!(read_u32(&bytes, 8).unwrap(), 1);
-        assert_eq!(read_u32(&bytes, 24).unwrap(), 1);
-        assert_eq!(read_u32(&bytes, 56).unwrap(), 1);
-        let glyph_offset = read_u32(&bytes, 28).unwrap() as usize;
+        assert_eq!(
+            read_u32(&bytes, RESULT_BYTE_LENGTH).unwrap() as usize,
+            bytes.len()
+        );
+        assert_eq!(read_u32(&bytes, RESULT_FONT_HANDLE_COUNT).unwrap(), 1);
+        assert_eq!(read_u32(&bytes, RESULT_RUN_COUNT).unwrap(), 1);
+        assert_eq!(read_u32(&bytes, RESULT_GLYPH_COUNT).unwrap(), 1);
+        let glyph_offset = read_u32(&bytes, RESULT_GLYPH_IDS_OFFSET).unwrap() as usize;
         assert_eq!(read_u16(&bytes, glyph_offset).unwrap(), 42);
     }
 }

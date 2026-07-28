@@ -23,7 +23,9 @@ export interface DirectRasterBakerAbi {
   }
   readonly response: {
     readonly headerByteLength: number
+    readonly headerAlignment: number
     readonly magic: string
+    readonly magicOffset: number
     readonly statusOffset: number
     readonly metadataByteLengthOffset: number
     readonly artifactByteLengthOffset: number
@@ -104,21 +106,6 @@ export async function instantiateWasm(
 ): Promise<WebAssembly.Instance> {
   const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source)
   return WebAssembly.instantiate(module, imports)
-}
-
-export function readEmbeddedJsonAbi(
-  instance: WebAssembly.Instance,
-  pointerExport: string,
-  lengthExport: string,
-  label: string,
-): unknown {
-  const pointer = u32(readBootstrap(instance.exports, pointerExport, label)())
-  const length = u32(readBootstrap(instance.exports, lengthExport, label)())
-  const memory = instance.exports.memory
-  if (!(memory instanceof WebAssembly.Memory)) {
-    throw new TypeError(`${label} ABI bootstrap is missing linear memory`)
-  }
-  return JSON.parse(textDecoder.decode(memoryRange(memory, pointer, length, label)))
 }
 
 export function createDirectRasterBakerFromInstance<Request, Kind extends string>(
@@ -323,7 +310,11 @@ function decodeResponse<Kind extends string>(
   if (response.byteLength < contract.headerByteLength) {
     throw new TypeError(`${spec.label} response is shorter than its ABI header`)
   }
-  if (textDecoder.decode(response.subarray(0, contract.magic.length)) !== contract.magic) {
+  if (
+    textDecoder.decode(
+      response.subarray(contract.magicOffset, contract.magicOffset + contract.magic.length),
+    ) !== contract.magic
+  ) {
     throw new TypeError(`${spec.label} response magic does not match its ABI`)
   }
   const view = new DataView(response.buffer, response.byteOffset, response.byteLength)
@@ -454,16 +445,6 @@ function parseError(value: unknown, label: string): SerializedBakeError {
   }
 }
 
-function readBootstrap(
-  wasmExports: WebAssembly.Exports,
-  name: string,
-  label: string,
-): () => number {
-  const value = wasmExports[name]
-  if (typeof value !== 'function') throw new TypeError(`${label} ABI is missing ${name}`)
-  return value as () => number
-}
-
 function u32(value: number): number {
   return value >>> 0
 }
@@ -512,21 +493,6 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isHash(value: unknown): value is Sha256Hex {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
-}
-
-export function matchesAbiFunction(
-  value: unknown,
-  parameters: readonly string[],
-  result?: string,
-): value is AbiFunction {
-  return (
-    isNonArrayObject(value) &&
-    typeof value.export === 'string' &&
-    Array.isArray(value.parameters) &&
-    value.parameters.length === parameters.length &&
-    value.parameters.every((parameter, index) => parameter === parameters[index]) &&
-    value.result === result
-  )
 }
 
 export function isNonArrayObject(value: unknown): value is Record<string, unknown> {

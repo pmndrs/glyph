@@ -44,14 +44,18 @@ async function setup() {
   }
 }
 
-test('ships one generated progress import and artifact baker contract', async () => {
+test('ships one generated progress import and bundles its artifact contract in TypeScript', async () => {
   const { module, instance } = await setup()
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ])
-  const embedded = readMtsdfBakerAbi(instance)
-  assert.deepEqual(embedded, publishedAbi)
-  assert.deepEqual(embedded.artifactBaker.versions, {
+  const generated = readMtsdfBakerAbi(instance)
+  assert.deepEqual(generated, publishedAbi)
+  assert.equal(
+    WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
+    false,
+  )
+  assert.deepEqual(generated.artifactBaker.versions, {
     generator: '0.0.0',
     ktx2: '0.5.0',
     msdfFormat: 0,
@@ -137,15 +141,6 @@ test('keeps the packaged MTSDF schema byte-identical to its canonical source', a
         import.meta.url,
       ),
     ),
-  )
-})
-
-test('rejects a malformed nested artifact contract', () => {
-  const malformed = structuredClone(publishedAbi)
-  malformed.artifactBaker.functions.bake.parameters = ['wrong']
-  assert.throws(
-    () => readMtsdfBakerAbi(fakeMtsdfBakerInstance({ abi: malformed })),
-    /unsupported MTSDF baker ABI/,
   )
 })
 
@@ -611,19 +606,14 @@ function firstPresentGlyph(records) {
 }
 
 function fakeMtsdfBakerInstance({
-  abi = publishedAbi,
   allocate = () => 0,
   deallocate = () => undefined,
   segmented = {},
 } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 })
-  const abiBytes = new TextEncoder().encode(JSON.stringify(abi))
-  new Uint8Array(memory.buffer, 0, abiBytes.byteLength).set(abiBytes)
   return {
     exports: {
       memory,
-      pmndrs_text_mtsdf_abi_ptr: () => 0,
-      pmndrs_text_mtsdf_abi_len: () => abiBytes.byteLength,
       pmndrs_text_mtsdf_alloc: allocate,
       pmndrs_text_mtsdf_dealloc: deallocate,
       pmndrs_text_mtsdf_bake: () => 0,

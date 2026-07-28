@@ -42,75 +42,7 @@ export interface MtsdfGenerator {
   generate(request: MtsdfGlyphRequest): MtsdfGlyph
 }
 
-export interface MtsdfGeneratorAbiV1 {
-  readonly name: 'pmndrs-text-mtsdf-baker'
-  readonly version: 1
-  readonly endianness: 'little'
-  readonly pointerWidth: 32
-  readonly memory: 'memory'
-  readonly imports?: {
-    readonly progress: {
-      readonly module: 'env'
-      readonly name: 'pmndrs_text_bake_progress'
-      readonly parameters: readonly ['completed', 'total']
-    }
-  }
-  readonly functions: {
-    readonly allocate: 'pmndrs_text_mtsdf_alloc'
-    readonly deallocate: 'pmndrs_text_mtsdf_dealloc'
-    readonly generate: 'pmndrs_text_mtsdf_generate'
-    readonly resultPointer: 'pmndrs_text_mtsdf_result_ptr'
-    readonly resultLength: 'pmndrs_text_mtsdf_result_len'
-    readonly abiPointer: 'pmndrs_text_mtsdf_abi_ptr'
-    readonly abiLength: 'pmndrs_text_mtsdf_abi_len'
-  }
-  readonly layouts: {
-    readonly request: {
-      readonly size: 48
-      readonly byteLength: 0
-      readonly commandsOffset: 4
-      readonly commandCount: 8
-      readonly unitsPerEm: 12
-      readonly minX: 16
-      readonly minY: 20
-      readonly maxX: 24
-      readonly maxY: 28
-      readonly innerWidth: 32
-      readonly innerHeight: 36
-      readonly paddingX: 40
-      readonly paddingY: 44
-    }
-    readonly command: {
-      readonly size: 28
-      readonly opcode: 0
-      readonly x0: 4
-      readonly y0: 8
-      readonly x1: 12
-      readonly y1: 16
-      readonly x2: 20
-      readonly y2: 24
-    }
-  }
-  readonly commands: {
-    readonly move: 0
-    readonly line: 1
-    readonly quadratic: 2
-    readonly cubic: 3
-    readonly close: 4
-  }
-  readonly output: {
-    readonly format: 'rgba8'
-    readonly order: 'row-major-top-down'
-    readonly ownership: 'borrowed-until-next-generate'
-  }
-  readonly status: {
-    readonly ok: 0
-    readonly invalidRequest: 1
-    readonly invalidOutline: 2
-    readonly generationFailed: 3
-  }
-  readonly artifactBaker?: unknown
-}
+export type MtsdfGeneratorAbiV1 = MtsdfBakerAbi
 
 export type MtsdfGenerationErrorCode = 'INVALID_REQUEST' | 'INVALID_OUTLINE' | 'GENERATION_FAILED'
 
@@ -140,7 +72,6 @@ interface MtsdfGeneratorExports {
 }
 
 const MAX_REQUEST_BYTES = 64 * 1024 * 1024
-const textDecoder = new TextDecoder('utf-8', { fatal: true })
 
 export async function createMtsdfGenerator(
   source: MtsdfGeneratorWasmSource,
@@ -191,15 +122,8 @@ export function createMtsdfGeneratorFromInstance(instance: WebAssembly.Instance)
 }
 
 export function readMtsdfGeneratorAbi(instance: WebAssembly.Instance): MtsdfGeneratorAbiV1 {
-  const pointer = readBootstrap(instance.exports, 'pmndrs_text_mtsdf_abi_ptr')()
-  const length = readBootstrap(instance.exports, 'pmndrs_text_mtsdf_abi_len')()
-  const memory = instance.exports.memory
-  if (!(memory instanceof WebAssembly.Memory)) {
-    throw new TypeError('MTSDF generator ABI bootstrap is missing linear memory')
-  }
-  const value: unknown = JSON.parse(textDecoder.decode(memoryRange(memory, pointer, length)))
-  assertMtsdfGeneratorAbi(value)
-  return value
+  readExports(instance.exports, mtsdfBakerAbi)
+  return mtsdfBakerAbi
 }
 
 function encodeRequest(request: MtsdfGlyphRequest, abi: MtsdfGeneratorAbiV1): Uint8Array {
@@ -362,12 +286,6 @@ function memoryRange(memory: WebAssembly.Memory, pointer: number, length: number
   return new Uint8Array(memory.buffer, pointer, length)
 }
 
-function readBootstrap(wasmExports: WebAssembly.Exports, name: string): () => number {
-  const value = wasmExports[name]
-  if (typeof value !== 'function') throw new TypeError(`MTSDF generator ABI is missing ${name}`)
-  return value as () => number
-}
-
 function checkedProduct(...values: number[]): number {
   const product = values.reduce((result, value) => result * value, 1)
   if (!Number.isSafeInteger(product) || product < 0) {
@@ -384,93 +302,4 @@ function checkedSum(...values: number[]): number {
   return sum
 }
 
-function assertMtsdfGeneratorAbi(value: unknown): asserts value is MtsdfGeneratorAbiV1 {
-  if (!isNonArrayObject(value)) throw new TypeError('unsupported MTSDF generator ABI')
-  const { functions, layouts, commands, output, status } = value
-  if (
-    value.name !== 'pmndrs-text-mtsdf-baker' ||
-    value.version !== 1 ||
-    value.endianness !== 'little' ||
-    value.pointerWidth !== 32 ||
-    value.memory !== 'memory' ||
-    !matchesExactObject(functions, {
-      allocate: 'pmndrs_text_mtsdf_alloc',
-      deallocate: 'pmndrs_text_mtsdf_dealloc',
-      generate: 'pmndrs_text_mtsdf_generate',
-      resultPointer: 'pmndrs_text_mtsdf_result_ptr',
-      resultLength: 'pmndrs_text_mtsdf_result_len',
-      abiPointer: 'pmndrs_text_mtsdf_abi_ptr',
-      abiLength: 'pmndrs_text_mtsdf_abi_len',
-    }) ||
-    !isNonArrayObject(layouts) ||
-    !matchesExactObject(layouts.request, {
-      size: 48,
-      byteLength: 0,
-      commandsOffset: 4,
-      commandCount: 8,
-      unitsPerEm: 12,
-      minX: 16,
-      minY: 20,
-      maxX: 24,
-      maxY: 28,
-      innerWidth: 32,
-      innerHeight: 36,
-      paddingX: 40,
-      paddingY: 44,
-    }) ||
-    !matchesExactObject(layouts.command, {
-      size: 28,
-      opcode: 0,
-      x0: 4,
-      y0: 8,
-      x1: 12,
-      y1: 16,
-      x2: 20,
-      y2: 24,
-    }) ||
-    !matchesExactObject(commands, { move: 0, line: 1, quadratic: 2, cubic: 3, close: 4 }) ||
-    !matchesExactObject(output, {
-      format: 'rgba8',
-      order: 'row-major-top-down',
-      ownership: 'borrowed-until-next-generate',
-    }) ||
-    !matchesExactObject(status, {
-      ok: 0,
-      invalidRequest: 1,
-      invalidOutline: 2,
-      generationFailed: 3,
-    }) ||
-    (value.imports !== undefined && !matchesProgressImport(value.imports)) ||
-    (value.artifactBaker !== undefined && !isNonArrayObject(value.artifactBaker))
-  ) {
-    throw new TypeError('unsupported MTSDF generator ABI')
-  }
-}
-
-function matchesProgressImport(value: unknown): boolean {
-  if (!isNonArrayObject(value) || !isNonArrayObject(value.progress)) return false
-  return (
-    value.progress.module === 'env' &&
-    value.progress.name === 'pmndrs_text_bake_progress' &&
-    Array.isArray(value.progress.parameters) &&
-    value.progress.parameters.length === 2 &&
-    value.progress.parameters[0] === 'completed' &&
-    value.progress.parameters[1] === 'total'
-  )
-}
-
-function matchesExactObject(
-  value: unknown,
-  expected: Readonly<Record<string, string | number>>,
-): boolean {
-  if (!isNonArrayObject(value)) return false
-  const keys = Object.keys(value)
-  return (
-    keys.length === Object.keys(expected).length &&
-    keys.every((key) => Object.hasOwn(expected, key) && value[key] === expected[key])
-  )
-}
-
-function isNonArrayObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+import { mtsdfBakerAbi, type MtsdfBakerAbi } from '../generated/mtsdf-baker-abi.js'

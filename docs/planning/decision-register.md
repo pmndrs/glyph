@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T23:45:47Z"
+  at: "2026-07-28T03:47:10Z"
 ---
 
 # Decision register
@@ -145,7 +145,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-101 | Bitmap density strikes remain independent grayscale record/texture sets rather than RGB(A)-channel packing. A combined artifact may carry several strikes, while Milestone 13 adds independently fetched and evictable strike pages. | Accepted |
 | D-102 | Language delivery is exact-coverage-first and locale-aware. A family directory may route grapheme-safe runs to font-local units, but language labels alone never prove coverage and units never split contextual shaping runs. Compiler-produced shaping closure/remapping remains Milestone 17. | Accepted |
 | D-103 | Explicit and fallback runtime raster baking accept normalized bounded coverage and raster options through the same Worker-only path. Coverage may be seeded by Unicode ranges, authored text, or exact font-local glyph IDs, but it reduces atlas generation only: it does not subset the shaping font, remap glyph IDs, or claim transitive shaping closure. | Accepted |
-| D-104 | Every direct-memory Wasm ABI layout is represented by fixed-width `#[repr(C)]` Rust types. Published JSON derives size, alignment, and field offsets from `size_of`, `align_of`, and `offset_of!`, while compile-time assertions pin the intended stable layout. WebAssembly direct memory uses its guaranteed little-endian order; portable GLB, KTX2, SFNT, and extension encodings retain their format-defined byte order. | Accepted |
+| D-104 | Every direct-memory Wasm ABI layout is represented by fixed-width `#[repr(C)]` Rust types. Build-only Rust generators derive published JSON and exact `as const` TypeScript contracts from `size_of`, `align_of`, and `offset_of!`; production hosts import those generated facts, and production Wasm embeds no duplicate contract or ABI-pointer bootstrap. WebAssembly direct memory uses its guaranteed little-endian order; portable GLB, KTX2, SFNT, and extension encodings retain their format-defined byte order. | Accepted |
 | D-105 | V1 retains the current Three.js/TSL integration through Slug so its real shader, resource, batching, and lifetime requirements define the abstraction. After Slug lands, Milestone 10 extracts one renderer-neutral direct integration beneath Bitmap, MSDF, and Slug; Three.js becomes a supported adapter over it, while raw WebGPU and a possible TypeGPU adapter remain independently selectable integrations. Optional TypeGPU compute-baker research may proceed earlier but cannot force the renderer refactor or enter unrelated runtime graphs. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
