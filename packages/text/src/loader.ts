@@ -11,12 +11,15 @@ import {
   getRegisteredFontData,
   setRegisteredFontData,
   type RegisteredBufferView,
+  type RegisteredRasterResourceCandidate,
   type RegisteredRasterSourceData,
 } from './internal/registered-font.js'
 import type {
   JsonValue,
   RasterLoadOptions,
   RasterReference,
+  RasterResourceResolver,
+  RasterResourceSource,
   RasterSelection,
   RegisteredRaster,
 } from './raster.js'
@@ -67,6 +70,12 @@ export interface FontRegistryOptions {
   readonly maxArtifactBytes?: number
   readonly maxBufferViews?: number
   readonly maxRasters?: number
+}
+
+export interface RasterAttachOptions {
+  readonly baseUrl?: string | URL
+  readonly fetch?: typeof fetch
+  readonly resolveResource?: RasterResourceResolver
 }
 
 interface FontAssetContext {
@@ -246,7 +255,36 @@ export class FontRegistry {
     return font
   }
 
-  async attachRaster(font: RegisteredFont, bytes: ArrayBufferView): Promise<RegisteredRaster> {
+  async attachRaster(
+    font: RegisteredFont,
+    bytes: ArrayBufferView,
+    options: RasterAttachOptions = {},
+  ): Promise<RegisteredRaster> {
+    let artifactUrl: string | undefined
+    if (options.baseUrl !== undefined) {
+      try {
+        artifactUrl = new URL(options.baseUrl).href
+      } catch (error) {
+        throw new FontLoadError('INVALID_RASTER_BASE_URL', 'raster base URL is invalid', {
+          cause: error,
+        })
+      }
+    }
+    return this._attachRaster(font, bytes, {
+      ...(artifactUrl === undefined ? {} : { artifactUrl }),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      ...(options.resolveResource === undefined
+        ? {}
+        : { resolveResource: options.resolveResource }),
+    })
+  }
+
+  /** @internal */
+  async _attachRaster(
+    font: RegisteredFont,
+    bytes: ArrayBufferView,
+    context: RegisteredRasterResourceCandidate = {},
+  ): Promise<RegisteredRaster> {
     const registered = this.#ownedFont(font)
     this.#checkArtifactSize(bytes.byteLength)
     const owned = copyView(bytes)
@@ -283,6 +321,7 @@ export class FontRegistry {
       match.extensionData,
       parsed.bin.slice(0, parsed.declaredBinLength),
       views,
+      [context],
     )
   }
 
@@ -319,8 +358,9 @@ export class FontRegistry {
       binaryBytes,
       bufferViews: views,
       externalCandidates: [],
+      resourceCandidates: [],
     })
-    return registered.registerRaster(reference, extensionData, binaryBytes, views)
+    return registered.registerRaster(reference, extensionData, binaryBytes, views, [])
   }
 
   /** @internal */
@@ -656,7 +696,10 @@ class RegisteredFontImpl implements RegisteredFont {
     this.assertActive()
     options.signal?.throwIfAborted()
     const existing = this.#rasters.get(selection.rasterKey)
-    if (existing !== undefined) return existing
+    if (existing !== undefined) {
+      existing.addResourceCandidates(withResourceResolver([], options.resolveResource))
+      return existing
+    }
     const source = getRegisteredFontData(this).rasterSources.get(selection.rasterKey)
     if (
       source === undefined ||
@@ -674,6 +717,7 @@ class RegisteredFontImpl implements RegisteredFont {
         source.extensionData,
         source.binaryBytes,
         source.bufferViews,
+        withResourceResolver(source.resourceCandidates, options.resolveResource),
       )
     }
     const resolved = await options.resolve?.({
@@ -682,7 +726,13 @@ class RegisteredFontImpl implements RegisteredFont {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
     options.signal?.throwIfAborted()
-    if (resolved !== undefined) return this.registry.attachRaster(this, resolved)
+    if (resolved !== undefined) {
+      return this.registry._attachRaster(this, resolved, {
+        ...(options.resolveResource === undefined
+          ? {}
+          : { resolveResource: options.resolveResource }),
+      })
+    }
     if (source.externalCandidates.length === 0) {
       throw new FontLoadError('RASTER_NOT_FOUND', 'raster reference has no resolvable artifact')
     }
@@ -723,7 +773,7 @@ class RegisteredFontImpl implements RegisteredFont {
             { url },
           )
         }
-        return this.registry.attachRaster(
+        return this.registry._attachRaster(
           this,
           await readResponseBytes(
             response,
@@ -731,6 +781,13 @@ class RegisteredFontImpl implements RegisteredFont {
             'RASTER_RESOURCE_LIMIT',
             url,
           ),
+          {
+            artifactUrl: url,
+            fetch: fetcher,
+            ...(options.resolveResource === undefined
+              ? {}
+              : { resolveResource: options.resolveResource }),
+          },
         )
       } catch (error) {
         options.signal?.throwIfAborted()
@@ -748,16 +805,21 @@ class RegisteredFontImpl implements RegisteredFont {
     extensionData: JsonValue,
     binaryBytes: Uint8Array,
     views: readonly RegisteredBufferView[],
+    resourceCandidates: readonly RegisteredRasterResourceCandidate[],
   ): RegisteredRaster {
     this.assertActive()
     const existing = this.#rasters.get(reference.rasterKey)
-    if (existing !== undefined) return existing
+    if (existing !== undefined) {
+      existing.addResourceCandidates(resourceCandidates)
+      return existing
+    }
     const raster = new RegisteredRasterImpl({
       owner: this,
       reference,
       extensionData,
       binaryBytes,
       views,
+      resourceCandidates,
       handle: nextRasterHandle++ as RasterHandle,
     })
     this.#rasters.set(reference.rasterKey, raster)
@@ -801,6 +863,7 @@ interface RegisteredRasterInit {
   readonly extensionData: JsonValue
   readonly binaryBytes: Uint8Array
   readonly views: readonly RegisteredBufferView[]
+  readonly resourceCandidates: readonly RegisteredRasterResourceCandidate[]
   readonly handle: RasterHandle
 }
 
@@ -808,6 +871,8 @@ class RegisteredRasterImpl implements RegisteredRaster {
   readonly #owner: RegisteredFontImpl
   readonly #binaryBytes: Uint8Array
   readonly #views: readonly RegisteredBufferView[]
+  readonly #reference: RasterReference
+  readonly #resourceCandidates: RegisteredRasterResourceCandidate[]
   readonly rasterKey: RasterKey
   readonly handle: RasterHandle
   readonly font: FontHandle
@@ -821,6 +886,8 @@ class RegisteredRasterImpl implements RegisteredRaster {
     this.#owner = init.owner
     this.#binaryBytes = init.binaryBytes
     this.#views = init.views
+    this.#reference = freezeReference(init.reference)
+    this.#resourceCandidates = mergeResourceCandidates([], init.resourceCandidates)
     this.rasterKey = init.reference.rasterKey
     this.handle = init.handle
     this.font = init.owner.handle
@@ -835,6 +902,97 @@ class RegisteredRasterImpl implements RegisteredRaster {
     const view = this.#views[bufferView]
     if (view === undefined) throw new RangeError(`bufferView ${bufferView} is out of range`)
     return this.#binaryBytes.slice(view.byteOffset, view.byteOffset + view.byteLength)
+  }
+
+  async resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array> {
+    this.#assertActive()
+    signal?.throwIfAborted()
+    if (source.type === 'bufferView') return this.view(source.bufferView)
+    assertExternalResourceSource(source)
+    if (source.byteLength > this.#owner.registry._artifactByteLimit()) {
+      throw new FontLoadError(
+        'RASTER_RESOURCE_LIMIT',
+        'external raster resource exceeds the configured resource limit',
+      )
+    }
+
+    const failures: unknown[] = []
+    for (const candidate of this.#resourceCandidates) {
+      if (candidate.resolveResource !== undefined) {
+        try {
+          const resolved = await candidate.resolveResource({
+            font: this.#owner,
+            reference: this.#reference,
+            source,
+            ...(signal === undefined ? {} : { signal }),
+          })
+          signal?.throwIfAborted()
+          if (resolved !== undefined) {
+            if (resolved.byteLength > this.#owner.registry._artifactByteLimit()) {
+              throw new FontLoadError(
+                'RASTER_RESOURCE_LIMIT',
+                'resolved raster resource exceeds the configured resource limit',
+              )
+            }
+            return authenticateRasterResource(copyView(resolved), source)
+          }
+        } catch (error) {
+          signal?.throwIfAborted()
+          if (error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_LIMIT') throw error
+          failures.push(error)
+        }
+      }
+
+      let url: string
+      try {
+        url =
+          candidate.artifactUrl === undefined
+            ? new URL(source.uri).href
+            : new URL(source.uri, candidate.artifactUrl).href
+      } catch (error) {
+        failures.push(error)
+        continue
+      }
+      const fetcher = candidate.fetch ?? globalThis.fetch
+      if (typeof fetcher !== 'function') {
+        failures.push(new TypeError('no fetch implementation is available'))
+        continue
+      }
+      try {
+        const response = await fetcher(url, signal === undefined ? undefined : { signal })
+        if (!response.ok) {
+          throw new FontLoadError(
+            'RASTER_RESOURCE_FETCH',
+            `raster resource request failed with HTTP ${response.status}`,
+            { url },
+          )
+        }
+        const bytes = await readResponseBytes(
+          response,
+          this.#owner.registry._artifactByteLimit(),
+          'RASTER_RESOURCE_LIMIT',
+          url,
+          signal,
+        )
+        return authenticateRasterResource(bytes, source, url)
+      } catch (error) {
+        signal?.throwIfAborted()
+        if (error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_LIMIT') throw error
+        failures.push(error)
+      }
+    }
+    throw new FontLoadError('RASTER_RESOURCE_FETCH', 'external raster resource is unavailable', {
+      cause: new AggregateError(failures),
+    })
+  }
+
+  addResourceCandidates(candidates: readonly RegisteredRasterResourceCandidate[]): void {
+    this.#assertActive()
+    this.#resourceCandidates.splice(
+      0,
+      this.#resourceCandidates.length,
+      ...mergeResourceCandidates(this.#resourceCandidates, candidates),
+    )
   }
 
   dispose(): void {
@@ -870,6 +1028,13 @@ function mergeRasterSources(
       reference.source.type === 'embedded'
         ? jsonValue(extensions[reference.extension], `extensions.${reference.extension}`)
         : undefined
+    const resourceCandidate =
+      extensionData === undefined
+        ? undefined
+        : {
+            ...(artifactUrl === undefined ? {} : { artifactUrl }),
+            ...(fetcher === undefined ? {} : { fetch: fetcher }),
+          }
     const externalCandidate =
       reference.source.type === 'external'
         ? {
@@ -906,7 +1071,21 @@ function mergeRasterSources(
           binaryBytes,
           bufferViews: views,
           externalCandidates: current.externalCandidates,
+          resourceCandidates: mergeResourceCandidates(
+            current.resourceCandidates,
+            resourceCandidate === undefined ? [] : [resourceCandidate],
+          ),
         })
+      } else if (resourceCandidate !== undefined) {
+        current.resourceCandidates.splice(
+          0,
+          current.resourceCandidates.length,
+          ...mergeResourceCandidates(current.resourceCandidates, [resourceCandidate]),
+        )
+        const registered = font.getRaster(reference.rasterKey)
+        if (registered instanceof RegisteredRasterImpl) {
+          registered.addResourceCandidates([resourceCandidate])
+        }
       }
       continue
     }
@@ -915,6 +1094,7 @@ function mergeRasterSources(
       ...(extensionData === undefined ? {} : { extensionData }),
       ...(extensionData === undefined ? {} : { binaryBytes, bufferViews: views }),
       externalCandidates: externalCandidate === undefined ? [] : [externalCandidate],
+      resourceCandidates: resourceCandidate === undefined ? [] : [resourceCandidate],
     })
   }
 }
@@ -1339,6 +1519,71 @@ function sameExternalSource(
   right: Extract<RasterReference['source'], { readonly type: 'external' }>,
 ): boolean {
   return left.uri === right.uri && left.artifactHash === right.artifactHash
+}
+
+function withResourceResolver(
+  candidates: readonly RegisteredRasterResourceCandidate[],
+  resolveResource: RasterResourceResolver | undefined,
+): RegisteredRasterResourceCandidate[] {
+  return mergeResourceCandidates(
+    candidates,
+    resolveResource === undefined ? [] : [{ resolveResource }],
+  )
+}
+
+function mergeResourceCandidates(
+  left: readonly RegisteredRasterResourceCandidate[],
+  right: readonly RegisteredRasterResourceCandidate[],
+): RegisteredRasterResourceCandidate[] {
+  const result = [...left]
+  for (const candidate of right) {
+    if (
+      !result.some(
+        (current) =>
+          current.artifactUrl === candidate.artifactUrl &&
+          current.fetch === candidate.fetch &&
+          current.resolveResource === candidate.resolveResource,
+      )
+    ) {
+      result.push(candidate)
+    }
+  }
+  return result
+}
+
+function assertExternalResourceSource(
+  source: Extract<RasterResourceSource, { readonly type: 'external' }>,
+): void {
+  if (
+    source.uri.length === 0 ||
+    !Number.isSafeInteger(source.byteLength) ||
+    source.byteLength <= 0 ||
+    !/^[0-9a-f]{64}$/.test(source.artifactHash)
+  ) {
+    throw new TypeError('external raster resource has invalid URI, length, or SHA-256 identity')
+  }
+}
+
+async function authenticateRasterResource(
+  bytes: Uint8Array,
+  source: Extract<RasterResourceSource, { readonly type: 'external' }>,
+  url?: string,
+): Promise<Uint8Array> {
+  if (bytes.byteLength !== source.byteLength) {
+    throw new FontLoadError(
+      'RASTER_RESOURCE_LENGTH',
+      'external raster resource byte length does not match its directory entry',
+      { ...(url === undefined ? {} : { url }) },
+    )
+  }
+  if ((await sha256(bytes)) !== source.artifactHash) {
+    throw new FontLoadError(
+      'RASTER_RESOURCE_HASH',
+      'external raster resource hash does not match its directory entry',
+      { ...(url === undefined ? {} : { url }) },
+    )
+  }
+  return bytes
 }
 
 async function authenticatedFontFaceIndex(

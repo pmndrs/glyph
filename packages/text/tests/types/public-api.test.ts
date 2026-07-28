@@ -21,11 +21,13 @@ import {
   type RasterKindOf,
   type RasterOptionsOf,
   type RasterResourceOf,
+  type RasterResourceSource,
   type RasterRuntime,
   type RasterSource,
   type RegisteredFont,
   type RegisteredRaster,
   type RuntimeShaper,
+  type Sha256Hex,
   type ShapeBatchRequest,
   type ShapedBatchViews,
   type Paragraph,
@@ -51,6 +53,14 @@ void resolverRasterSource
 // @ts-expect-error URI-addressed raster artifacts require an authenticated hash.
 const unauthenticatedRasterSource: RasterSource = { type: 'external', uri: 'bitmap.glb' }
 void unauthenticatedRasterSource
+declare const pageHash: Sha256Hex
+const externalRasterResource: RasterResourceSource = {
+  type: 'external',
+  uri: 'page.ktx2',
+  byteLength: 1024,
+  artifactHash: pageHash,
+}
+void externalRasterResource
 
 const fontRegistry = new FontRegistry({ maxArtifactBytes: 64 * 1024 * 1024 })
 const fontLoader = new FontLoader({
@@ -369,6 +379,16 @@ defineFont({ baked: '/fonts/Inter.font.glb', source: undefined }, msdf)
 
 declare const rasterKey: RasterKey
 void font.loadRaster({ rasterKey, kind: 'msdf' })
+void font.loadRaster(
+  { rasterKey, kind: 'msdf' },
+  {
+    async resolveResource({ source }) {
+      return source.uri === 'page.ktx2' ? new Uint8Array(source.byteLength) : undefined
+    },
+  },
+)
+declare const registeredRaster: RegisteredRaster
+void registeredRaster.resource(externalRasterResource)
 
 // @ts-expect-error A kind is not a stable raster selection when options can differ.
 font.loadRaster({ kind: 'msdf' })

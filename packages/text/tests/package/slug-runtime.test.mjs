@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import test from 'node:test'
 
 import * as THREE from 'three/webgpu'
@@ -42,6 +43,10 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
       const value = views[index]
       if (value === undefined) throw new RangeError('missing test view')
       return value
+    },
+    async resource(source) {
+      if (source.type !== 'bufferView') throw new TypeError('unexpected external resource')
+      return this.view(source.bufferView)
     },
   }
   const resource = await slug.decode(font, raster)
@@ -135,8 +140,13 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   assert.equal(errors.mock.callCount(), 0, 'Three emitted no TSL errors')
 })
 
-test('Slug rejects external page payloads until residency is available', async () => {
+test('Slug resolves authenticated external page payloads through raster residency', async () => {
   const records = makeRecords([0])
+  const curve = makeRgba16fKtx2(2, 1, new Uint8Array(16))
+  const headers = bytesOf(Uint32Array.of(1 << 16))
+  const references = bytesOf(Uint16Array.of(0))
+  const views = [records, headers, references]
+  const resolved = []
   const font = { handle: 3, shapingHash, glyphCount: 1 }
   const raster = {
     font: 3,
@@ -155,7 +165,7 @@ test('Slug rejects external page payloads until residency is available', async (
       recordStride: 40,
       pages: [
         {
-          ...page(1, 2, 3),
+          ...page(0, 1, 2),
           curve: {
             width: 2,
             height: 1,
@@ -166,7 +176,12 @@ test('Slug rejects external page payloads until residency is available', async (
                 container: 'ktx2',
                 gpuFormat: 'rgba16float',
                 quality: 'lossless',
-                source: { type: 'external', uri: 'curves.ktx2' },
+                source: {
+                  type: 'external',
+                  uri: 'curves.ktx2',
+                  byteLength: curve.byteLength,
+                  artifactHash: hash(curve),
+                },
               },
             ],
           },
@@ -174,11 +189,22 @@ test('Slug rejects external page payloads until residency is available', async (
       ],
     },
     view(index) {
-      if (index !== 0) throw new RangeError('unexpected view')
-      return records
+      const value = views[index]
+      if (value === undefined) throw new RangeError('unexpected view')
+      return value
+    },
+    async resource(source) {
+      resolved.push(source)
+      return source.type === 'external' ? curve.slice() : this.view(source.bufferView)
     },
   }
-  await assert.rejects(slug.decode(font, raster), /lazy Slug page residency is not available/)
+  const resource = await slug.decode(font, raster)
+  assert.deepEqual(
+    resolved.map(({ type }) => type),
+    ['external', 'bufferView', 'bufferView'],
+  )
+  assert.equal(resource.gpuBytes, 22)
+  slug.dispose(resource)
 })
 
 function page(curveView, headerView, referenceView) {
@@ -229,6 +255,10 @@ function makeRecords(pages) {
 
 function bytesOf(values) {
   return new Uint8Array(values.buffer.slice(0))
+}
+
+function hash(bytes) {
+  return createHash('sha256').update(bytes).digest('hex')
 }
 
 function makeRgba16fKtx2(width, height, texels) {
