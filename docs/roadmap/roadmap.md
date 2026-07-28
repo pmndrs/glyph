@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T03:47:10Z"
+  at: "2026-07-28T19:34:13Z"
 ---
 
 # Canonical implementation roadmap
@@ -662,6 +662,14 @@ Deliver:
 - one paragraph rendered through bitmap, MSDF, and Slug without reshaping or remeasurement;
 - explicit raster-selection API and failure behavior;
 - documented technique recommendations backed by the benchmark corpus;
+- a controlled MTSDF minification campaign after Slug lands: compare no mipmaps,
+  current upload-generated linear mipmaps, and distance-aware authored mipmaps
+  across a 6/8/10/12/16/24-pixel size ladder plus rotated and perspective text;
+  report source-outline error, neighboring-cell bleed, upload cost, GPU time,
+  transport bytes, and exact padded-array residency, then implement only the
+  measured winner;
+- validator and baker-report GPU accounting that matches the runtime's padded
+  texture-array allocation before any MTSDF mip result is accepted;
 - interactive comparison scenarios for bitmap, MSDF, and Slug with correctness/visual gates and downloadable raw results;
 - second-font registration and raster-binding smoke fixtures;
 - release-level conformance, browser, GPU, memory, package-size, and malformed-input suites;
