@@ -46,6 +46,16 @@ const samplingMeasurement: BenchmarkMeasurement = {
   },
 }
 
+const slugSamplingMeasurement: BenchmarkMeasurement = {
+  ...samplingMeasurement,
+  metrics: {
+    ...samplingMeasurement.metrics,
+    evaluatedCurves: 1_000,
+    fixtureIsDotGothic: 0,
+    severeErrorPixels: 0,
+  },
+}
+
 const sourceOutlineMeasurement: BenchmarkMeasurement = {
   sample: 0,
   durationMs: 1,
@@ -116,6 +126,34 @@ describe('MTSDF scenario acceptance', () => {
     ).toThrow('comparison contract')
   })
 
+  it('contains the grid-aligned DotGothic exception with a severe-pixel count', () => {
+    const scenario = scenarioById('slug-sampling-conformance')
+    expect(scenario.validate([slugSamplingMeasurement])).toContain('CPU Slug comparison')
+    expect(() =>
+      scenario.validate([
+        {
+          ...slugSamplingMeasurement,
+          metrics: { ...slugSamplingMeasurement.metrics, maximumError: 129 },
+        },
+      ]),
+    ).toThrow('comparison contract')
+    const dotGothic = {
+      ...slugSamplingMeasurement,
+      metrics: {
+        ...slugSamplingMeasurement.metrics,
+        fixtureIsDotGothic: 1,
+        maximumError: 255,
+        severeErrorPixels: 64,
+      },
+    }
+    expect(scenario.validate([dotGothic])).toContain('CPU Slug comparison')
+    expect(() =>
+      scenario.validate([
+        { ...dotGothic, metrics: { ...dotGothic.metrics, severeErrorPixels: 65 } },
+      ]),
+    ).toThrow('comparison contract')
+  })
+
   it('rejects source-outline error outside the reviewed browser envelope', () => {
     const scenario = scenarioById('source-outline-fidelity')
     expect(scenario.validate([sourceOutlineMeasurement])).toContain(
@@ -138,6 +176,27 @@ describe('MTSDF scenario acceptance', () => {
             errorPixels: Math.floor(384 * 128 * 0.2) + 1,
           },
         },
+      ]),
+    ).toThrow('reviewed browser coverage envelope')
+  })
+
+  it('keeps the pixel-style Canvas envelope separate from ordinary outlines', () => {
+    const scenario = scenarioById('source-outline-fidelity')
+    const dotGothic = {
+      ...sourceOutlineMeasurement,
+      metrics: {
+        ...sourceOutlineMeasurement.metrics,
+        techniqueBitmap: 0,
+        techniqueSlug: 1,
+        fixtureIsDotGothic: 1,
+        physicalPpem: 64,
+        meanAbsoluteError: 24,
+      },
+    }
+    expect(scenario.validate([dotGothic])).toContain('source-outline comparisons')
+    expect(() =>
+      scenario.validate([
+        { ...dotGothic, metrics: { ...dotGothic.metrics, meanAbsoluteError: 24.001 } },
       ]),
     ).toThrow('reviewed browser coverage envelope')
   })

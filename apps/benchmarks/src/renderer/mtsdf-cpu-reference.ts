@@ -26,6 +26,7 @@ export interface Rgba8CoverageDifference {
   readonly meanAbsoluteError: number
   readonly maximumError: number
   readonly errorPixels: number
+  readonly severeErrorPixels: number
 }
 
 /**
@@ -45,6 +46,7 @@ export function compareRgba8Coverage(
   let absoluteError = 0
   let maximumError = 0
   let errorPixels = 0
+  let severeErrorPixels = 0
   for (let offset = 0; offset < candidate.byteLength; offset += 4) {
     let pixelError = 0
     let signedCoverageError = 0
@@ -65,6 +67,7 @@ export function compareRgba8Coverage(
     heatmap[offset + 3] = 255
     maximumError = Math.max(maximumError, pixelError)
     if (pixelError > 2) errorPixels += 1
+    if (pixelError > 128) severeErrorPixels += 1
   }
   return {
     heatmap,
@@ -72,6 +75,7 @@ export function compareRgba8Coverage(
       candidate.byteLength === 0 ? 0 : absoluteError / ((candidate.byteLength / 4) * 3),
     maximumError,
     errorPixels,
+    severeErrorPixels,
   }
 }
 

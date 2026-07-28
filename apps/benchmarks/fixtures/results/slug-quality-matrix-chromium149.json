@@ -1,0 +1,1329 @@
+{
+  "schemaVersion": 0,
+  "kind": "slug-quality-matrix-observation",
+  "capturedAt": "2026-07-28T20:04:51.454Z",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  },
+  "observations": [
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "inter",
+      "sampling": {
+        "hash": "f879dd9a45c14689f5008a8a355a164eab04c140d57edc9e5132a7339a2b4ecf",
+        "outputBytes": 1048576,
+        "durationMs": 106.30000000074506,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "evaluatedCurves": 470202,
+          "meanAbsoluteError": 0.07775115966796875,
+          "maximumError": 128,
+          "errorPixels": 449,
+          "severeErrorPixels": 0,
+          "renderMs": 21
+        }
+      },
+      "sourceOutline": {
+        "hash": "f879dd9a45c14689f5008a8a355a164eab04c140d57edc9e5132a7339a2b4ecf",
+        "outputBytes": 1048576,
+        "durationMs": 1008.0999999977648,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.7650909423828125,
+          "maximumError": 255,
+          "errorPixels": 18507,
+          "renderMs": 7.799999997019768
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "source-serif-4",
+      "sampling": {
+        "hash": "c0d1d9d8e3e7785f5d3f961c40e3601df86b350d6aac2ba144b42e0155570f10",
+        "outputBytes": 1048576,
+        "durationMs": 64,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 70,
+          "evaluatedCurves": 427917,
+          "meanAbsoluteError": 0.037242889404296875,
+          "maximumError": 68,
+          "errorPixels": 254,
+          "severeErrorPixels": 0,
+          "renderMs": 6
+        }
+      },
+      "sourceOutline": {
+        "hash": "c0d1d9d8e3e7785f5d3f961c40e3601df86b350d6aac2ba144b42e0155570f10",
+        "outputBytes": 1048576,
+        "durationMs": 89.39999999850988,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.138999938964844,
+          "maximumError": 255,
+          "errorPixels": 16758,
+          "renderMs": 5.199999999254942
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "dancing-script",
+      "sampling": {
+        "hash": "211e7a89a67549417ea1d011b9ac8f77393efa9f57171535253b2469994b8265",
+        "outputBytes": 1048576,
+        "durationMs": 71.39999999850988,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 61,
+          "evaluatedCurves": 519389,
+          "meanAbsoluteError": 0.015399932861328125,
+          "maximumError": 56,
+          "errorPixels": 62,
+          "severeErrorPixels": 0,
+          "renderMs": 5.099999997764826
+        }
+      },
+      "sourceOutline": {
+        "hash": "211e7a89a67549417ea1d011b9ac8f77393efa9f57171535253b2469994b8265",
+        "outputBytes": 1048576,
+        "durationMs": 95.59999999776483,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.072681427001953,
+          "maximumError": 255,
+          "errorPixels": 16357,
+          "renderMs": 4.900000002235174
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "amiri",
+      "sampling": {
+        "hash": "4b581b371afb593eebe2903ec343faa7b9ca1ae5e0f27826cf0def984c94fcb0",
+        "outputBytes": 1048576,
+        "durationMs": 59.100000001490116,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 62,
+          "evaluatedCurves": 300896,
+          "meanAbsoluteError": 0.00936126708984375,
+          "maximumError": 84,
+          "errorPixels": 65,
+          "severeErrorPixels": 0,
+          "renderMs": 10.599999997764826
+        }
+      },
+      "sourceOutline": {
+        "hash": "4b581b371afb593eebe2903ec343faa7b9ca1ae5e0f27826cf0def984c94fcb0",
+        "outputBytes": 1048576,
+        "durationMs": 115.10000000149012,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.0064849853515625,
+          "maximumError": 255,
+          "errorPixels": 12274,
+          "renderMs": 9.300000000745058
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "noto-sans-devanagari",
+      "sampling": {
+        "hash": "b3c3d684fd736d105f0a11d063ae836a35814c47322a28301d18851faae534d0",
+        "outputBytes": 1048576,
+        "durationMs": 68.30000000074506,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 62,
+          "evaluatedCurves": 532275,
+          "meanAbsoluteError": 0.037235260009765625,
+          "maximumError": 94,
+          "errorPixels": 423,
+          "severeErrorPixels": 0,
+          "renderMs": 4.800000000745058
+        }
+      },
+      "sourceOutline": {
+        "hash": "b3c3d684fd736d105f0a11d063ae836a35814c47322a28301d18851faae534d0",
+        "outputBytes": 1048576,
+        "durationMs": 92.39999999850988,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.136192321777344,
+          "maximumError": 255,
+          "errorPixels": 16765,
+          "renderMs": 4.399999998509884
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "noto-sans-cjk-showcase",
+      "sampling": {
+        "hash": "46b03419abcbe582e607f375a6387c262ca0e039793795efc49ba5823d2a1918",
+        "outputBytes": 1048576,
+        "durationMs": 98.69999999925494,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 41,
+          "evaluatedCurves": 734244,
+          "meanAbsoluteError": 0.026493072509765625,
+          "maximumError": 102,
+          "errorPixels": 168,
+          "severeErrorPixels": 0,
+          "renderMs": 4.899999998509884
+        }
+      },
+      "sourceOutline": {
+        "hash": "46b03419abcbe582e607f375a6387c262ca0e039793795efc49ba5823d2a1918",
+        "outputBytes": 1048576,
+        "durationMs": 114.89999999850988,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 7.518115997314453,
+          "maximumError": 255,
+          "errorPixels": 20226,
+          "renderMs": 5.300000000745058
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "fontFixture": "dot-gothic-16",
+      "sampling": {
+        "hash": "4d0ce1b0ce4dda81fb8201d2f7c1d2657114c5a178799a644ca6197c355c4d49",
+        "outputBytes": 1048576,
+        "durationMs": 98,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 1,
+          "pixelCount": 262144,
+          "glyphCount": 41,
+          "evaluatedCurves": 634072,
+          "meanAbsoluteError": 0.08383560180664062,
+          "maximumError": 255,
+          "errorPixels": 1061,
+          "severeErrorPixels": 27,
+          "renderMs": 14.399999998509884
+        }
+      },
+      "sourceOutline": {
+        "hash": "4d0ce1b0ce4dda81fb8201d2f7c1d2657114c5a178799a644ca6197c355c4d49",
+        "outputBytes": 1048576,
+        "durationMs": 188,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 1,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 23.08962631225586,
+          "maximumError": 255,
+          "errorPixels": 37319,
+          "renderMs": 12
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "inter",
+      "sampling": {
+        "hash": "33a98fb93616001ab32095cdf9fae119ef4996ac1502fe962bb58b1002e1c699",
+        "outputBytes": 4194304,
+        "durationMs": 109.60000000149012,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 120,
+          "evaluatedCurves": 692465,
+          "meanAbsoluteError": 0.0254974365234375,
+          "maximumError": 120,
+          "errorPixels": 739,
+          "severeErrorPixels": 0,
+          "renderMs": 4.300000000745058
+        }
+      },
+      "sourceOutline": {
+        "hash": "33a98fb93616001ab32095cdf9fae119ef4996ac1502fe962bb58b1002e1c699",
+        "outputBytes": 4194304,
+        "durationMs": 146.5,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.718914031982422,
+          "maximumError": 255,
+          "errorPixels": 28743,
+          "renderMs": 5.5
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "source-serif-4",
+      "sampling": {
+        "hash": "f32db48f081af9112a259fda292269eb183ed6591566d6eaa846501fe4a0a1eb",
+        "outputBytes": 4194304,
+        "durationMs": 105.89999999850988,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 113,
+          "evaluatedCurves": 730512,
+          "meanAbsoluteError": 0.0172271728515625,
+          "maximumError": 72,
+          "errorPixels": 698,
+          "severeErrorPixels": 0,
+          "renderMs": 4.5
+        }
+      },
+      "sourceOutline": {
+        "hash": "f32db48f081af9112a259fda292269eb183ed6591566d6eaa846501fe4a0a1eb",
+        "outputBytes": 4194304,
+        "durationMs": 138.69999999925494,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.536346435546875,
+          "maximumError": 255,
+          "errorPixels": 27552,
+          "renderMs": 4.200000002980232
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "dancing-script",
+      "sampling": {
+        "hash": "5dddfa5b2c6fc679246e990f168b79d35fc92f7dcafbf4244ff81e88b36a5d0c",
+        "outputBytes": 4194304,
+        "durationMs": 75.10000000149012,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 61,
+          "evaluatedCurves": 515562,
+          "meanAbsoluteError": 0.0031652450561523438,
+          "maximumError": 54,
+          "errorPixels": 40,
+          "severeErrorPixels": 0,
+          "renderMs": 4.199999999254942
+        }
+      },
+      "sourceOutline": {
+        "hash": "5dddfa5b2c6fc679246e990f168b79d35fc92f7dcafbf4244ff81e88b36a5d0c",
+        "outputBytes": 4194304,
+        "durationMs": 107.39999999850988,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 1.4708070755004883,
+          "maximumError": 251,
+          "errorPixels": 16001,
+          "renderMs": 4.400000002235174
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "amiri",
+      "sampling": {
+        "hash": "a87110f8e9da7f3d2af0a6bbacc6020ad6216890784c6911949189a21944c101",
+        "outputBytes": 4194304,
+        "durationMs": 65.5,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 64,
+          "evaluatedCurves": 334092,
+          "meanAbsoluteError": 0.0034360885620117188,
+          "maximumError": 73,
+          "errorPixels": 87,
+          "severeErrorPixels": 0,
+          "renderMs": 9.099999997764826
+        }
+      },
+      "sourceOutline": {
+        "hash": "a87110f8e9da7f3d2af0a6bbacc6020ad6216890784c6911949189a21944c101",
+        "outputBytes": 4194304,
+        "durationMs": 133,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.5819692611694336,
+          "maximumError": 255,
+          "errorPixels": 17269,
+          "renderMs": 7.800000000745058
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "noto-sans-devanagari",
+      "sampling": {
+        "hash": "7e07053a353e828f3b7b76929207fe5a53058dd77c78c52f0d6204416139a763",
+        "outputBytes": 4194304,
+        "durationMs": 77,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 62,
+          "evaluatedCurves": 530165,
+          "meanAbsoluteError": 0.009059906005859375,
+          "maximumError": 68,
+          "errorPixels": 680,
+          "severeErrorPixels": 0,
+          "renderMs": 4.299999997019768
+        }
+      },
+      "sourceOutline": {
+        "hash": "7e07053a353e828f3b7b76929207fe5a53058dd77c78c52f0d6204416139a763",
+        "outputBytes": 4194304,
+        "durationMs": 107,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 1.573664665222168,
+          "maximumError": 255,
+          "errorPixels": 17333,
+          "renderMs": 4.299999997019768
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "noto-sans-cjk-showcase",
+      "sampling": {
+        "hash": "fe65b197c2853de4d660e0aaba77abfe3c9e7378f71738b7ad9a535e1ef183ff",
+        "outputBytes": 4194304,
+        "durationMs": 122.60000000149012,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 45,
+          "evaluatedCurves": 970430,
+          "meanAbsoluteError": 0.003909111022949219,
+          "maximumError": 106,
+          "errorPixels": 65,
+          "severeErrorPixels": 0,
+          "renderMs": 4.199999999254942
+        }
+      },
+      "sourceOutline": {
+        "hash": "fe65b197c2853de4d660e0aaba77abfe3c9e7378f71738b7ad9a535e1ef183ff",
+        "outputBytes": 4194304,
+        "durationMs": 148,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.3130111694335938,
+          "maximumError": 255,
+          "errorPixels": 25082,
+          "renderMs": 4.5
+        }
+      }
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "fontFixture": "dot-gothic-16",
+      "sampling": {
+        "hash": "14e3f5b75f74de1294bd80ff57a84d183d4a48d9114f84417ea5d1247decd0c9",
+        "outputBytes": 4194304,
+        "durationMs": 128.69999999925494,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 1,
+          "pixelCount": 1048576,
+          "glyphCount": 45,
+          "evaluatedCurves": 826821,
+          "meanAbsoluteError": 0.03060436248779297,
+          "maximumError": 255,
+          "errorPixels": 1330,
+          "severeErrorPixels": 54,
+          "renderMs": 14.100000001490116
+        }
+      },
+      "sourceOutline": {
+        "hash": "14e3f5b75f74de1294bd80ff57a84d183d4a48d9114f84417ea5d1247decd0c9",
+        "outputBytes": 4194304,
+        "durationMs": 229.19999999925494,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 1,
+          "backendWebGpu": 1,
+          "backendWebGl2": 0,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 7.073580741882324,
+          "maximumError": 255,
+          "errorPixels": 46200,
+          "renderMs": 10.800000000745058
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "inter",
+      "sampling": {
+        "hash": "b34a6866035a801f4fc767199215d9aa809515f32b0f8961d6e04b3ffc79bed0",
+        "outputBytes": 1048576,
+        "durationMs": 90.19999999925494,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 84,
+          "evaluatedCurves": 470202,
+          "meanAbsoluteError": 0.07756805419921875,
+          "maximumError": 128,
+          "errorPixels": 449,
+          "severeErrorPixels": 0,
+          "renderMs": 28.300000000745058
+        }
+      },
+      "sourceOutline": {
+        "hash": "b34a6866035a801f4fc767199215d9aa809515f32b0f8961d6e04b3ffc79bed0",
+        "outputBytes": 1048576,
+        "durationMs": 108.80000000074506,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.764900207519531,
+          "maximumError": 255,
+          "errorPixels": 18507,
+          "renderMs": 13.399999998509884
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "source-serif-4",
+      "sampling": {
+        "hash": "b2100498bea263e54fe773905c1cc1638ac35e17c3ffcd2087fd7c248f480f39",
+        "outputBytes": 1048576,
+        "durationMs": 71.19999999925494,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 70,
+          "evaluatedCurves": 427917,
+          "meanAbsoluteError": 0.03723907470703125,
+          "maximumError": 68,
+          "errorPixels": 254,
+          "severeErrorPixels": 0,
+          "renderMs": 12.399999998509884
+        }
+      },
+      "sourceOutline": {
+        "hash": "b2100498bea263e54fe773905c1cc1638ac35e17c3ffcd2087fd7c248f480f39",
+        "outputBytes": 1048576,
+        "durationMs": 101.60000000149012,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.139003753662109,
+          "maximumError": 255,
+          "errorPixels": 16758,
+          "renderMs": 12.399999998509884
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "dancing-script",
+      "sampling": {
+        "hash": "dc45848ef136be399e9b89ed196dc1f91e5e01dc1834b763bea32bf7fbce5646",
+        "outputBytes": 1048576,
+        "durationMs": 88.30000000074506,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 61,
+          "evaluatedCurves": 519389,
+          "meanAbsoluteError": 0.0157623291015625,
+          "maximumError": 56,
+          "errorPixels": 65,
+          "severeErrorPixels": 0,
+          "renderMs": 11.899999998509884
+        }
+      },
+      "sourceOutline": {
+        "hash": "dc45848ef136be399e9b89ed196dc1f91e5e01dc1834b763bea32bf7fbce5646",
+        "outputBytes": 1048576,
+        "durationMs": 121,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.072944641113281,
+          "maximumError": 255,
+          "errorPixels": 16357,
+          "renderMs": 16
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "amiri",
+      "sampling": {
+        "hash": "4b155cc8725833a77f2b7535083599dc3923e15d3a1b3c4f724d8eeb66780981",
+        "outputBytes": 1048576,
+        "durationMs": 60.899999998509884,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 62,
+          "evaluatedCurves": 300896,
+          "meanAbsoluteError": 0.009357452392578125,
+          "maximumError": 84,
+          "errorPixels": 65,
+          "severeErrorPixels": 0,
+          "renderMs": 15.099999997764826
+        }
+      },
+      "sourceOutline": {
+        "hash": "4b155cc8725833a77f2b7535083599dc3923e15d3a1b3c4f724d8eeb66780981",
+        "outputBytes": 1048576,
+        "durationMs": 127.19999999925494,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.006481170654297,
+          "maximumError": 255,
+          "errorPixels": 12274,
+          "renderMs": 14.899999998509884
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "noto-sans-devanagari",
+      "sampling": {
+        "hash": "b02ec90c2cf47117fd02ca2b0fba5b480ce673191f82a498a39fb9615b13d49d",
+        "outputBytes": 1048576,
+        "durationMs": 82.59999999776483,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 62,
+          "evaluatedCurves": 532275,
+          "meanAbsoluteError": 0.03722381591796875,
+          "maximumError": 94,
+          "errorPixels": 423,
+          "severeErrorPixels": 0,
+          "renderMs": 11.200000002980232
+        }
+      },
+      "sourceOutline": {
+        "hash": "b02ec90c2cf47117fd02ca2b0fba5b480ce673191f82a498a39fb9615b13d49d",
+        "outputBytes": 1048576,
+        "durationMs": 108,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 6.135944366455078,
+          "maximumError": 255,
+          "errorPixels": 16763,
+          "renderMs": 11.5
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "noto-sans-cjk-showcase",
+      "sampling": {
+        "hash": "0ea820594874eb10ed5178939267f19ac139274d66e7faa39c842b696a62c259",
+        "outputBytes": 1048576,
+        "durationMs": 104.19999999925494,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 262144,
+          "glyphCount": 41,
+          "evaluatedCurves": 734244,
+          "meanAbsoluteError": 0.027416229248046875,
+          "maximumError": 102,
+          "errorPixels": 174,
+          "severeErrorPixels": 0,
+          "renderMs": 10.800000000745058
+        }
+      },
+      "sourceOutline": {
+        "hash": "0ea820594874eb10ed5178939267f19ac139274d66e7faa39c842b696a62c259",
+        "outputBytes": 1048576,
+        "durationMs": 126.19999999925494,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 7.519519805908203,
+          "maximumError": 255,
+          "errorPixels": 20227,
+          "renderMs": 10.899999998509884
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "fontFixture": "dot-gothic-16",
+      "sampling": {
+        "hash": "4d0ce1b0ce4dda81fb8201d2f7c1d2657114c5a178799a644ca6197c355c4d49",
+        "outputBytes": 1048576,
+        "durationMs": 110.5,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 1,
+          "pixelCount": 262144,
+          "glyphCount": 41,
+          "evaluatedCurves": 634072,
+          "meanAbsoluteError": 0.08383560180664062,
+          "maximumError": 255,
+          "errorPixels": 1061,
+          "severeErrorPixels": 27,
+          "renderMs": 21.600000001490116
+        }
+      },
+      "sourceOutline": {
+        "hash": "4d0ce1b0ce4dda81fb8201d2f7c1d2657114c5a178799a644ca6197c355c4d49",
+        "outputBytes": 1048576,
+        "durationMs": 195.80000000074506,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 1,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 1,
+          "pixelCount": 262144,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 23.08962631225586,
+          "maximumError": 255,
+          "errorPixels": 37319,
+          "renderMs": 16.699999999254942
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "inter",
+      "sampling": {
+        "hash": "57fa8c402ea6618509457af8eb66a77ff5acd6c88c7be98b93d4f01b43fbe77f",
+        "outputBytes": 4194304,
+        "durationMs": 112.5,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 1,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 120,
+          "evaluatedCurves": 692465,
+          "meanAbsoluteError": 0.02549266815185547,
+          "maximumError": 120,
+          "errorPixels": 739,
+          "severeErrorPixels": 0,
+          "renderMs": 11.899999998509884
+        }
+      },
+      "sourceOutline": {
+        "hash": "57fa8c402ea6618509457af8eb66a77ff5acd6c88c7be98b93d4f01b43fbe77f",
+        "outputBytes": 4194304,
+        "durationMs": 153.5,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.71884822845459,
+          "maximumError": 255,
+          "errorPixels": 28743,
+          "renderMs": 11.699999999254942
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "source-serif-4",
+      "sampling": {
+        "hash": "99ae015bac205add8561379f9becc445c6ef36ba1d9b3035ba599cf4fca10b6d",
+        "outputBytes": 4194304,
+        "durationMs": 117.39999999850988,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 113,
+          "evaluatedCurves": 730512,
+          "meanAbsoluteError": 0.017278671264648438,
+          "maximumError": 72,
+          "errorPixels": 700,
+          "severeErrorPixels": 0,
+          "renderMs": 13.5
+        }
+      },
+      "sourceOutline": {
+        "hash": "99ae015bac205add8561379f9becc445c6ef36ba1d9b3035ba599cf4fca10b6d",
+        "outputBytes": 4194304,
+        "durationMs": 151.89999999850988,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.5363006591796875,
+          "maximumError": 255,
+          "errorPixels": 27552,
+          "renderMs": 11.399999998509884
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "dancing-script",
+      "sampling": {
+        "hash": "ad6ad19a08432bd8afc71c303f5a8a00f40fb7602f312d40babf15fa3fed01e0",
+        "outputBytes": 4194304,
+        "durationMs": 89.5,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 61,
+          "evaluatedCurves": 515562,
+          "meanAbsoluteError": 0.0032720565795898438,
+          "maximumError": 54,
+          "errorPixels": 44,
+          "severeErrorPixels": 0,
+          "renderMs": 10.600000001490116
+        }
+      },
+      "sourceOutline": {
+        "hash": "ad6ad19a08432bd8afc71c303f5a8a00f40fb7602f312d40babf15fa3fed01e0",
+        "outputBytes": 4194304,
+        "durationMs": 126.30000000074506,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 1.4708948135375977,
+          "maximumError": 251,
+          "errorPixels": 16001,
+          "renderMs": 11.400000002235174
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "amiri",
+      "sampling": {
+        "hash": "2c3be9628fc8603ea04abb4605b8e557e3ae7dd30762057f01c028f9b9271086",
+        "outputBytes": 4194304,
+        "durationMs": 72.39999999850988,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 64,
+          "evaluatedCurves": 334092,
+          "meanAbsoluteError": 0.0034074783325195312,
+          "maximumError": 73,
+          "errorPixels": 87,
+          "severeErrorPixels": 0,
+          "renderMs": 14.300000000745058
+        }
+      },
+      "sourceOutline": {
+        "hash": "2c3be9628fc8603ea04abb4605b8e557e3ae7dd30762057f01c028f9b9271086",
+        "outputBytes": 4194304,
+        "durationMs": 149.5,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.58188533782959,
+          "maximumError": 255,
+          "errorPixels": 17268,
+          "renderMs": 15.300000000745058
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "noto-sans-devanagari",
+      "sampling": {
+        "hash": "5c80344b6a68c8f110fff62eea336fc41f0eee0e526d7fffcbd1f1c2861b8048",
+        "outputBytes": 4194304,
+        "durationMs": 86,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 62,
+          "evaluatedCurves": 530165,
+          "meanAbsoluteError": 0.009054183959960938,
+          "maximumError": 68,
+          "errorPixels": 680,
+          "severeErrorPixels": 0,
+          "renderMs": 11.900000002235174
+        }
+      },
+      "sourceOutline": {
+        "hash": "5c80344b6a68c8f110fff62eea336fc41f0eee0e526d7fffcbd1f1c2861b8048",
+        "outputBytes": 4194304,
+        "durationMs": 125.60000000149012,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 1.5736055374145508,
+          "maximumError": 255,
+          "errorPixels": 17331,
+          "renderMs": 10.799999997019768
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "noto-sans-cjk-showcase",
+      "sampling": {
+        "hash": "b39aed10587dbad576dca61ba1a5ed7733956cce1f9ebe0e4b13c1f89137f23e",
+        "outputBytes": 4194304,
+        "durationMs": 136.39999999850988,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 0,
+          "pixelCount": 1048576,
+          "glyphCount": 45,
+          "evaluatedCurves": 970430,
+          "meanAbsoluteError": 0.005780220031738281,
+          "maximumError": 106,
+          "errorPixels": 115,
+          "severeErrorPixels": 0,
+          "renderMs": 11.199999999254942
+        }
+      },
+      "sourceOutline": {
+        "hash": "b39aed10587dbad576dca61ba1a5ed7733956cce1f9ebe0e4b13c1f89137f23e",
+        "outputBytes": 4194304,
+        "durationMs": 166.40000000223517,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 0,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 2.3148136138916016,
+          "maximumError": 255,
+          "errorPixels": 25082,
+          "renderMs": 10.300000000745058
+        }
+      }
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "fontFixture": "dot-gothic-16",
+      "sampling": {
+        "hash": "8b6fdfb3d114c5bfbd4dd09996ef622bfc3a594361c8bd558d5d73df7923c05d",
+        "outputBytes": 4194304,
+        "durationMs": 132.10000000149012,
+        "validation": "1/1 deterministic GPU frames with CPU Slug comparison",
+        "metrics": {
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "fixtureIsInter": 0,
+          "fixtureIsDotGothic": 1,
+          "pixelCount": 1048576,
+          "glyphCount": 45,
+          "evaluatedCurves": 826821,
+          "meanAbsoluteError": 0.03065013885498047,
+          "maximumError": 255,
+          "errorPixels": 1330,
+          "severeErrorPixels": 54,
+          "renderMs": 19.300000000745058
+        }
+      },
+      "sourceOutline": {
+        "hash": "8b6fdfb3d114c5bfbd4dd09996ef622bfc3a594361c8bd558d5d73df7923c05d",
+        "outputBytes": 4194304,
+        "durationMs": 230.19999999925494,
+        "validation": "1/1 deterministic source-outline comparisons within reviewed envelopes",
+        "metrics": {
+          "techniqueBitmap": 0,
+          "techniqueMtsdf": 0,
+          "techniqueSlug": 1,
+          "fixtureIsDotGothic": 1,
+          "backendWebGpu": 0,
+          "backendWebGl2": 1,
+          "dpr": 2,
+          "pixelCount": 1048576,
+          "physicalPpem": 64,
+          "meanAbsoluteError": 7.073533058166504,
+          "maximumError": 255,
+          "errorPixels": 46200,
+          "renderMs": 17.899999998509884
+        }
+      }
+    }
+  ]
+}

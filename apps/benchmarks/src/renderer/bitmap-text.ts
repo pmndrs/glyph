@@ -1175,6 +1175,7 @@ export async function captureBitmapSourceOutlineFidelity(options: {
       dpr: options.dpr,
       fontFixture: options.fontFixture,
       fontSize: resources.line.cssFontSize,
+      direction: 'ltr',
       layout: resources.line.layout,
       originX: resources.line.object.position.x,
       originY: resources.line.object.position.y,

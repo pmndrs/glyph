@@ -18,6 +18,7 @@ describe('RGBA8 coverage comparison', () => {
       meanAbsoluteError: 20 / 3,
       maximumError: 10,
       errorPixels: 2,
+      severeErrorPixels: 0,
     })
   })
 })

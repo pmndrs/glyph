@@ -958,6 +958,7 @@ export async function captureMtsdfSourceOutlineFidelity(options: {
       dpr: options.dpr,
       fontFixture: options.fontFixture,
       fontSize: 64 / options.dpr,
+      direction: 'ltr',
       layout: committedLayout(resources.line),
       originX: resources.line.position.x,
       originY: resources.line.position.y,
