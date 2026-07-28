@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:94c0031eea42f525f96accf6bb32fd8365b03a699e6bb98a5c8fda4f0d7be7e8"
+source_digest: "sha256:3ba5a74199731531baf8838f1d4d2645775f6e50dd70fb4478305bdcde4a72c3"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T20:55:23Z"
+  at: "2026-07-28T21:05:26Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
