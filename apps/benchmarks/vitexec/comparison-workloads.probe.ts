@@ -6,10 +6,12 @@ const WORKLOADS = [
   { label: 'Paint & effects', id: 'paint-effects', amountLabel: 'Hue spread' },
 ] as const
 
-await clickButton('1× DPR', true)
+type RasterTechnique = 'bitmap' | 'mtsdf' | 'slug'
 
-for (const technique of ['bitmap', 'mtsdf'] as const) {
-  await clickButton(technique === 'mtsdf' ? 'MSDF' : 'bitmap', true)
+await clickButton('1×', true)
+
+for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
+  await clickButton(techniqueLabel(technique), true)
   for (const workload of WORKLOADS) {
     await clickButton(workload.label, false)
     let viewport = await waitForReadyViewport(technique, workload.id)
@@ -17,16 +19,16 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
 
     if (technique === 'bitmap' && workload.id === 'text-ladder') {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true')
-      setCheckbox('Show canvas grid', false)
+      setPressedButton('Show canvas grid', false)
       await waitForAttribute(viewport, 'data-canvas-grid', 'false')
-      setCheckbox('Show canvas grid', true)
+      setPressedButton('Show canvas grid', true)
       await waitForAttribute(viewport, 'data-canvas-grid', 'true')
     }
 
     if (workload.id !== 'text-ladder') {
       const revision = numericAttribute(viewport, 'data-configuration-revision')
       assertRangeVisualTravel(rangeControl('Rendered size'))
-      const renderedSize = setDifferentRange('Rendered size', technique === 'mtsdf' ? 52 : 28)
+      const renderedSize = setDifferentRange('Rendered size', technique === 'bitmap' ? 28 : 52)
       viewport = await waitForViewportAttribute(
         technique,
         workload.id,
@@ -75,16 +77,14 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
       const opacity = setDifferentRange('Opacity', 68)
       await waitForAttribute(viewport, 'data-paint-opacity', String(opacity / 100))
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', revision)
-      const stroke = rangeControl('Stroke width')
-      const shadow = checkboxControl(
-        technique === 'mtsdf' ? 'Shadow' : 'Shadow · unavailable for bitmap',
-      )
-      if (technique === 'bitmap') {
+      const stroke = rangeControl(effectControlLabel('Stroke width', technique))
+      const shadow = checkboxControl(effectControlLabel('Shadow', technique))
+      if (technique !== 'mtsdf') {
         if (!stroke.disabled || stroke.value !== '0') {
-          throw new Error('Bitmap Paint & Effects exposed an active stroke control')
+          throw new Error(`${techniqueLabel(technique)} Paint & Effects exposed an active stroke`)
         }
         if (!shadow.disabled || shadow.checked) {
-          throw new Error('Bitmap Paint & Effects exposed an active shadow control')
+          throw new Error(`${techniqueLabel(technique)} Paint & Effects exposed an active shadow`)
         }
       } else {
         if (stroke.disabled) throw new Error('MSDF Paint & Effects disabled its stroke control')
@@ -144,6 +144,7 @@ function verifyCanvasNavigation(viewport: HTMLElement, zoomEnabled: boolean): vo
   }
 }
 
+await clickButton('MSDF', true)
 await clickButton('Paragraph stress', false)
 await waitForReadyViewport('mtsdf', 'paragraph-stress')
 const fontSwitchContinuity = monitorLivePresentationContinuity()
@@ -187,7 +188,7 @@ if (getComputedStyle(benchmarkActivity).display === 'none') {
 }
 console.log('activity-lifecycle-ready')
 
-console.log('comparison-workloads-ready', JSON.stringify({ techniques: 2, workloads: 5 }))
+console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 5 }))
 
 function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   const surface = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"]')
@@ -241,6 +242,15 @@ function liveMetricValue(label: string): string | undefined {
     (candidate) => candidate.textContent?.trim() === label,
   )
   return labelNode?.nextElementSibling?.textContent?.trim()
+}
+
+function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
+  return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'
+}
+
+function effectControlLabel(effect: 'Shadow' | 'Stroke width', technique: RasterTechnique): string {
+  if (technique === 'mtsdf') return effect
+  return `${effect} · unavailable for ${technique === 'slug' ? 'Slug V0' : 'bitmap'}`
 }
 
 async function clickButton(label: string, exact: boolean): Promise<void> {
@@ -307,6 +317,12 @@ function setCheckbox(label: string, checked: boolean): void {
   if (control.checked !== checked) control.click()
 }
 
+function setPressedButton(label: string, pressed: boolean): void {
+  const control = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+  if (control === null) throw new Error(`${label} button is unavailable`)
+  if ((control.getAttribute('aria-pressed') === 'true') !== pressed) control.click()
+}
+
 function checkboxControl(label: string): HTMLInputElement {
   const control = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(
     (candidate) => candidate.getAttribute('aria-label') === label,
@@ -334,7 +350,7 @@ function waitForConformanceCapture(): Promise<HTMLElement> {
   return current === undefined ? observeDocument(find) : Promise.resolve(current)
 }
 
-function readyViewport(technique: 'bitmap' | 'mtsdf', workload: string): HTMLElement | undefined {
+function readyViewport(technique: RasterTechnique, workload: string): HTMLElement | undefined {
   const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]')
   if (
     viewport === null ||
@@ -352,17 +368,14 @@ function readyViewport(technique: 'bitmap' | 'mtsdf', workload: string): HTMLEle
   return viewport
 }
 
-function waitForReadyViewport(
-  technique: 'bitmap' | 'mtsdf',
-  workload: string,
-): Promise<HTMLElement> {
+function waitForReadyViewport(technique: RasterTechnique, workload: string): Promise<HTMLElement> {
   const current = readyViewport(technique, workload)
   if (current !== undefined) return Promise.resolve(current)
   return observeDocument(() => readyViewport(technique, workload))
 }
 
 function waitForRenderedFixture(
-  technique: 'bitmap' | 'mtsdf',
+  technique: RasterTechnique,
   workload: string,
   fontFixture: string,
 ): Promise<HTMLElement> {
@@ -386,7 +399,7 @@ function waitForRenderedFixture(
 }
 
 function waitForViewportAttribute(
-  technique: 'bitmap' | 'mtsdf',
+  technique: RasterTechnique,
   workload: string,
   name: string,
   value: string,

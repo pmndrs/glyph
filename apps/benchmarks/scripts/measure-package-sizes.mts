@@ -65,18 +65,21 @@ async function bundle(
                 'font_baker.wasm',
                 'text_shaper.wasm',
                 'mtsdf_baker.wasm',
+                'slug_baker.wasm',
               ]
               let transformed = code
               let changed = false
               for (const asset of wasmAssets) {
-                for (const quote of ['"', "'"]) {
-                  const expression = `new URL(${quote}./${asset}${quote}, import.meta.url)`
-                  if (!transformed.includes(expression)) continue
-                  transformed = transformed.replaceAll(
-                    expression,
-                    `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`,
-                  )
-                  changed = true
+                for (const relative of ['./', '../']) {
+                  for (const quote of ['"', "'"]) {
+                    const expression = `new URL(${quote}${relative}${asset}${quote}, import.meta.url)`
+                    if (!transformed.includes(expression)) continue
+                    transformed = transformed.replaceAll(
+                      expression,
+                      `new URL(${quote}${asset}${quote}, ${quote}https://size.invalid/${quote})`,
+                    )
+                    changed = true
+                  }
                 }
               }
               if (
@@ -307,6 +310,7 @@ const entries: SizeEntry[] = [
         '/packages/text/dist/react.js',
         '/packages/text/dist/raster/bitmap.js',
         '/packages/text/dist/raster/msdf.js',
+        '/packages/text/dist/raster/slug.js',
         '/packages/text/dist/bakers/msdf.js',
         '/packages/text/dist/node/',
         '/packages/font-baker/dist/index.js',
@@ -351,11 +355,37 @@ const entries: SizeEntry[] = [
     false,
     true,
     true,
+    {
+      expectedDynamic: [],
+      excludedInitial: [
+        '/packages/text/dist/raster/slug.js',
+        '/packages/text/dist/internal/slug-shaders/',
+        '/packages/text/dist/bakers/slug.js',
+        '/packages/text/dist/runtime-bakers/slug',
+      ],
+    },
   ),
   await measureJavaScript(
     'mtsdf-runtime-js',
     'MTSDF runtime JS graph',
     new URL('../size-entries/mtsdf-runtime.ts', import.meta.url),
+    false,
+    true,
+    true,
+    {
+      expectedDynamic: [],
+      excludedInitial: [
+        '/packages/text/dist/raster/slug.js',
+        '/packages/text/dist/internal/slug-shaders/',
+        '/packages/text/dist/bakers/slug.js',
+        '/packages/text/dist/runtime-bakers/slug',
+      ],
+    },
+  ),
+  await measureJavaScript(
+    'slug-runtime-js',
+    'Slug runtime JS graph',
+    new URL('../size-entries/slug-runtime.ts', import.meta.url),
     false,
     true,
     true,
@@ -387,6 +417,18 @@ const entries: SizeEntry[] = [
     'mtsdf-baker-js',
     'MTSDF fixed baker host JS',
     new URL('../size-entries/mtsdf-baker.ts', import.meta.url),
+    false,
+    true,
+  ),
+  await measureWasm(
+    'slug-baker-wasm',
+    'Slug fixed baker Wasm',
+    new URL('../../../packages/text/dist/slug_baker.wasm', import.meta.url),
+  ),
+  await measureJavaScript(
+    'slug-baker-js',
+    'Slug fixed baker host JS',
+    new URL('../size-entries/slug-baker.ts', import.meta.url),
     false,
     true,
   ),

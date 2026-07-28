@@ -14,8 +14,8 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "e8f07a803277a1a21253a440f58229e580f606c9560868e5d4b9a8a51e7ef102",
-      "bytes": 4396
+      "sha256": "aad7aed7fe8a93b47794e709803fe9ec08bd73b07028bc7f2ac2df7bdc4e781b",
+      "bytes": 5145
     },
     {
       "id": "harness-admission",
@@ -64,6 +64,12 @@
       "path": "apps/benchmarks/fixtures/results/advanced-shaping-performance-chromium149.json",
       "sha256": "2d19dd573f8628cbb5e01b03a28288da45b6b653a925d5a5e3de8d3be377380d",
       "bytes": 3597
+    },
+    {
+      "id": "raster-performance",
+      "path": "apps/benchmarks/fixtures/results/raster-performance-chromium149.json",
+      "sha256": "a88953ecf9222c56d43b387895595add0bc2d797312e1022f4eaf3ed634ea4bf",
+      "bytes": 3668
     }
   ]
 }

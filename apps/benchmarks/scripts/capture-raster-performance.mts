@@ -50,9 +50,9 @@ function assertObservation(candidate: unknown): asserts candidate is Record<stri
     record.workload !== 'paint-effects' ||
     record.steadyStateReportCount !== 12 ||
     !Array.isArray(record.observations) ||
-    record.observations.length !== 2 ||
+    record.observations.length !== 3 ||
     !Array.isArray(record.bundleIsolation) ||
-    record.bundleIsolation.length !== 6
+    record.bundleIsolation.length !== 8
   ) {
     throw new TypeError('Raster performance observation has an invalid envelope')
   }

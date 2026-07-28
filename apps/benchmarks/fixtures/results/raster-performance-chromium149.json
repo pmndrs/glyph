@@ -1,7 +1,7 @@
 {
   "schemaVersion": 0,
   "kind": "raster-performance-observation",
-  "capturedAt": "2026-07-27T10:37:49.631Z",
+  "capturedAt": "2026-07-28T19:45:59.723Z",
   "backend": "webgpu",
   "dpr": 1,
   "workload": "paint-effects",
@@ -16,81 +16,116 @@
   "observations": [
     {
       "technique": "bitmap",
-      "rendererInitMs": 4.5999999940395355,
-      "fontLoadMs": 84.70000000298023,
-      "textReadyMs": 2,
-      "firstDrawSubmitMs": 15.200000002980232,
-      "uploadFrameCompleteMs": 29.100000008940697,
-      "uploadFrameGpuMs": 0.260348,
-      "startupMs": 139.20000000298023,
-      "framesPerSecond": 120.01548586914433,
+      "rendererInitMs": 7.100000001490116,
+      "fontLoadMs": 91.10000000149012,
+      "textReadyMs": 22.099999997764826,
+      "firstDrawSubmitMs": 24,
+      "uploadFrameCompleteMs": 27.600000001490116,
+      "uploadFrameGpuMs": 0.065368,
+      "startupMs": 148.10000000149012,
+      "framesPerSecond": 120.4819277108433,
       "medianSubmitMs": 0.30000001192092896,
-      "p95SubmitMs": 0.800000011920929,
-      "medianGpuMs": 0.0630820021033287,
-      "p95GpuMs": 0.5632830262184143,
-      "glyphCount": 91,
-      "drawCount": 1,
-      "artifactBytes": 927164,
-      "atlasGpuBytes": 695296,
-      "totalGpuBytes": 1716256
+      "p95SubmitMs": 0.4000000059604645,
+      "medianGpuMs": 0.34436899423599243,
+      "p95GpuMs": 1.5991829633712769,
+      "glyphCount": 268,
+      "drawCount": 18,
+      "artifactBytes": 3149648,
+      "atlasGpuBytes": 2857709,
+      "totalGpuBytes": 3878669
     },
     {
       "technique": "mtsdf",
-      "rendererInitMs": 1,
-      "fontLoadMs": 138.5,
-      "textReadyMs": 1.5,
-      "firstDrawSubmitMs": 29.200000002980232,
-      "uploadFrameCompleteMs": 52.900000005960464,
-      "uploadFrameGpuMs": 0.039163,
-      "startupMs": 226.5,
-      "framesPerSecond": 120.01548586914474,
-      "medianSubmitMs": 0.3999999761581421,
-      "p95SubmitMs": 0.800000011920929,
-      "medianGpuMs": 0.06562399864196777,
-      "p95GpuMs": 1.134840965270996,
-      "glyphCount": 91,
+      "rendererInitMs": 7.699999999254942,
+      "fontLoadMs": 160.30000000074506,
+      "textReadyMs": 37.5,
+      "firstDrawSubmitMs": 28.299999997019768,
+      "uploadFrameCompleteMs": 46.29999999701977,
+      "uploadFrameGpuMs": 0.062661,
+      "startupMs": 251.79999999701977,
+      "framesPerSecond": 120.06196746707944,
+      "medianSubmitMs": 0.20000000298023224,
+      "p95SubmitMs": 0.30000001192092896,
+      "medianGpuMs": 0.1582469940185547,
+      "p95GpuMs": 0.4102430045604706,
+      "glyphCount": 268,
       "drawCount": 1,
-      "artifactBytes": 6979347,
+      "artifactBytes": 6979370,
       "atlasGpuBytes": 55924040,
       "totalGpuBytes": 56945000
+    },
+    {
+      "technique": "slug",
+      "rendererInitMs": 4.900000002235174,
+      "fontLoadMs": 117.89999999850988,
+      "textReadyMs": 12.5,
+      "firstDrawSubmitMs": 11.400000002235174,
+      "uploadFrameCompleteMs": 18.100000001490116,
+      "uploadFrameGpuMs": 0.241933,
+      "startupMs": 153.40000000223517,
+      "framesPerSecond": 119.76047904191617,
+      "medianSubmitMs": 0.20000000298023224,
+      "p95SubmitMs": 0.4000000059604645,
+      "medianGpuMs": 0.3333689868450165,
+      "p95GpuMs": 0.4847019910812378,
+      "glyphCount": 268,
+      "drawCount": 1,
+      "artifactBytes": 618487,
+      "atlasGpuBytes": 3162112,
+      "totalGpuBytes": 4183072,
+      "slugCurveGpuBytes": 2097152,
+      "slugHeaderGpuBytes": 376832,
+      "slugReferenceGpuBytes": 688128
     }
   ],
   "bundleIsolation": [
     {
       "id": "browser-core",
-      "rawBytes": 314058,
-      "gzipBytes": 70448,
-      "brotliBytes": 53998
+      "rawBytes": 322444,
+      "gzipBytes": 71778,
+      "brotliBytes": 55012
     },
     {
       "id": "text-shaper-wasm",
-      "rawBytes": 692114,
-      "gzipBytes": 257986,
-      "brotliBytes": 202523
+      "rawBytes": 680312,
+      "gzipBytes": 253568,
+      "brotliBytes": 199365
     },
     {
       "id": "bitmap-runtime-js",
-      "rawBytes": 345559,
-      "gzipBytes": 76214,
-      "brotliBytes": 58923
+      "rawBytes": 355863,
+      "gzipBytes": 77736,
+      "brotliBytes": 60134
     },
     {
       "id": "mtsdf-runtime-js",
-      "rawBytes": 352505,
-      "gzipBytes": 77441,
-      "brotliBytes": 60060
+      "rawBytes": 361894,
+      "gzipBytes": 78879,
+      "brotliBytes": 61120
+    },
+    {
+      "id": "slug-runtime-js",
+      "rawBytes": 376572,
+      "gzipBytes": 80963,
+      "brotliBytes": 62879
     },
     {
       "id": "bitmap-baker-wasm",
-      "rawBytes": 621141,
-      "gzipBytes": 231175,
-      "brotliBytes": 177611
+      "rawBytes": 607003,
+      "gzipBytes": 226695,
+      "brotliBytes": 173793
     },
     {
       "id": "mtsdf-baker-wasm",
-      "rawBytes": 533095,
-      "gzipBytes": 205801,
-      "brotliBytes": 161438
+      "rawBytes": 516720,
+      "gzipBytes": 201090,
+      "brotliBytes": 157059
+    },
+    {
+      "id": "slug-baker-wasm",
+      "rawBytes": 465377,
+      "gzipBytes": 186725,
+      "brotliBytes": 146689
     }
   ]
 }
