@@ -25,7 +25,11 @@ use crate::{MtsdfBakeArtifactV0, MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mts
 
 #[cfg(not(feature = "allocation-evidence"))]
 #[global_allocator]
-static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
+static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
+
+#[cfg(feature = "allocation-evidence")]
+static BACKING_ALLOCATOR: talc::wasm::WasmDynamicTalc =
+    talc::wasm::new_wasm_dynamic_allocator();
 
 #[cfg(feature = "allocation-evidence")]
 static ALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -46,19 +50,19 @@ unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
         // SAFETY: this wrapper forwards the allocator contract and exact layout unchanged.
-        unsafe { GlobalAlloc::alloc(&dlmalloc::GlobalDlmalloc, layout) }
+        unsafe { GlobalAlloc::alloc(&BACKING_ALLOCATOR, layout) }
     }
 
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
         DEALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: the pointer and layout came from this wrapper's dlmalloc allocation domain.
-        unsafe { GlobalAlloc::dealloc(&dlmalloc::GlobalDlmalloc, pointer, layout) };
+        // SAFETY: the pointer and layout came from this wrapper's Talc allocation domain.
+        unsafe { GlobalAlloc::dealloc(&BACKING_ALLOCATOR, pointer, layout) };
     }
 
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         REALLOCATION_CALLS.fetch_add(1, Ordering::Relaxed);
         // SAFETY: the pointer and layout came from this wrapper and new_size is forwarded unchanged.
-        unsafe { GlobalAlloc::realloc(&dlmalloc::GlobalDlmalloc, pointer, layout, new_size) }
+        unsafe { GlobalAlloc::realloc(&BACKING_ALLOCATOR, pointer, layout, new_size) }
     }
 }
 
