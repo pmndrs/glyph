@@ -19,4 +19,6 @@ Update affected canonical documentation in the same change as source. Package so
 
 Use the exact root toolchain pins through mise. The dated nightly under `packages/font-baker/fuzz` is isolated to cargo-fuzz. Verify narrowly first, then run the relevant package and repository checks. Keep tests deterministic; do not use sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms.
 
+Never invoke `tsc`, `tsgo`, `node_modules/.bin/tsc`, or a script that reaches them without the repository guard. Before the first TypeScript check in a worktree, run `node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --self-test`; then pass compiler arguments through that script. Start with the narrowest project or fixture and stop on exit 86, 124, or 125. The guard must execute the native compiler directly and finish with no surviving compiler process.
+
 Create small Conventional Commits that each preserve one coherent invariant. Finish completed work with a clean worktree.

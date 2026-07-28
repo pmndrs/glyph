@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:deaf3b346e4b6e1e8882d25e6cbf176270cb552c209c234c66919e6922a9c99c"
+source_digest: "sha256:031bd6db241d99e63232899b1878d37d65b77a0a96dee643a732fb1c2355572f"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T16:32:39Z"
+  at: "2026-07-28T19:01:30Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -41,6 +41,8 @@ This application owns the shared target/scenario runner, responsive Figma-backed
 Milestone 9 now adds deterministic package-owned Slug GLB fixtures for all seven visual families and one copied-and-adapted Three.js/TSL benchmark adapter. The fixtures compose the shared core artifact with embedded analytic curve, exact header, and exact reference resources, authenticate raw and gzip identities, and publish bake plus decoded-GPU totals in one checked manifest. The adapter supports baked and serial runtime delivery, reports curve/header/reference allocations separately from the framebuffer, and exercises the public Slug raster through the same retained `Text`, dual-backend renderer, frame readback, and live telemetry boundaries as the established raster targets. Slug is now a genuine third technique across all seven live comparison workloads, the independent CPU sampling comparison, source-outline fidelity, and baked/runtime parity surfaces. Its imports remain dynamic so selecting Bitmap or MTSDF does not load Slug. Deterministic WebGL2 product, sampling, source-outline, and runtime-fallback probes pass; the post-interleaving WebGPU rerun and performance evidence remain active handoff work.
 
 Roadmap item 6.0 uses only `WebGPURenderer` and the public `three/webgpu` plus `three/tsl` exports for runtime values and types. App lint rejects the legacy root, internal source paths, addons/examples paths, and bare R3F entry so this boundary cannot silently drift. Direct calls to installed public scalar TSL operators keep clean TypeScript 7.0.2 checks below one second; vector/scalar overloads and method chains remain measured recursive-expansion hazards. A repository-owned `@types/three` patch gives `modelViewProjection` its runtime `Node<'vec4'>` type, with a compile-only regression until the correction is upstream. The same graph produces the exact SHA-256 `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77` through an asserted WebGPU backend and forced WebGL2 fallback, three measured runs each after one warmup. The oracle rejects any non-red pixel, carries an intentional wrong-pixel negative control, and compacts the 256-byte row alignment retained by Three.js's WebGPU readback before comparing it with WebGL2's compact bytes. This is a real dual-backend shader workload, but the synthetic plane is intentionally not mislabeled as the first rendered font frame; item 6.1 owns that claim.
+
+The application's browser and script TypeScript projects use the same native-PID bounded runner as the packages. A synthetic allocator must prove the runner in each worktree before compilation; new TSL work starts with a narrow graph fixture instead of using the complete application as a diagnostic probe.
 
 Every measured call receives its actual zero-based sample index; warmups remain outside the reported sample sequence. Controls reject invalid sample/warmup counts and non-finite, non-positive, or greater-than-4 DPR before target loading. The existing 1×/2× scene buttons now select the actual renderer density, initialize from the user's display class, and invalidate stale results. Automated probes and the headless CLI always pass DPR explicitly. Successful summaries include the V0 schema marker and exact controls, so timings, framebuffer bytes, and pixels cannot be compared without their density. The deterministic headless lane runs its cases sequentially through one Chromium/Vite session while opening an isolated page for each case; explicit readiness, launch, navigation, and execution deadlines identify a stalled lifecycle without using time as a readiness signal.
 

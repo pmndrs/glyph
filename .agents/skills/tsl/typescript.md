@@ -12,6 +12,15 @@ Measure three isolated fixtures with the repository compiler before committing t
 
 In this repository's TypeScript 7.0.2 and `@types/three` 0.185.1 check, a single `positionLocal.x.mul(4)` method-chain expression did not complete within 60 seconds. Assigning the overloaded `mul` value to a narrower local function type also forces an expensive structural comparison of the augmented `Node` surface. The public free-function form `mul(positionLocal.x, 4)` preserves exact node types and completes a clean package-plus-graph check in 0.18 seconds (about 167 MB); the benchmark application completes in 0.17 seconds (about 196 MB). Prefer that form for this pinned pair and keep `tests/types/tsl-scalar-operations.test.ts` as the upgrade regression. This is a declaration-performance finding, not evidence that the runtime API is invalid or that an upstream patch is currently required.
 
+Do not invoke `tsc`, `tsgo`, a package-manager typecheck script, or the `node_modules/.bin/tsc` shim directly. TypeScript 7 delegates to a native executable; a wrapper that supervises only the shim can exit while the compiler survives as an orphan. Run the repository guard's synthetic test once per worktree, then pass only compiler arguments after `--`:
+
+```sh
+node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --self-test
+node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --cwd packages/text -- -p tsconfig.json --noEmit
+```
+
+The guard resolves and executes the installed native compiler directly, caps aggregate tracked RSS at 2 GiB by default, hard-kills on the limit or timeout, and does not report completion until tracked processes are gone. Exit 86 identifies the memory ceiling, 124 the timeout, and 125 a probe or containment failure.
+
 ## Imports
 
 ```ts
@@ -46,6 +55,8 @@ const x: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x))
 
 Do not assign `add` or `mul` to a custom function type. That assignment asks TypeScript to compare every inherited overload and the complete augmented `Node` interface even though the eventual call is scalar.
 
+Treat all operator-like method chains on augmented nodes—including arithmetic, comparison, bitwise, and shift methods—as the same risk class. Copying a graph from another repository does not waive this constraint: preserve its runtime structure while adapting those calls to the installed public free functions before a whole-project check.
+
 Uniform properties may name both the shader value type and JavaScript value type when inference cannot cross a class boundary:
 
 ```ts
@@ -70,6 +81,7 @@ Do not scatter `@ts-expect-error` through graph code. If one is unavoidable, mak
 ## Type verification
 
 - Compile positive fixtures that exercise the real imports and graph attachment points.
+- Compile the narrowest TSL fixture before a package or repository project. A whole-project check is not a diagnostic probe for one new graph.
 - Bound and record compiler time for a representative graph; type correctness that makes ordinary editing impractical is not an acceptable integration.
 - Add negative fixtures only for public generic constraints worth preserving.
 - Run the repository's actual TypeScript version; do not validate with a global compiler.

@@ -7,6 +7,9 @@ import { writeGeneratedTypescriptAbi } from "./generated-typescript-abi.mjs";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const tscGuard = fileURLToPath(
+  new URL("../../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs", import.meta.url),
+);
 const rustEnvironment = reproducibleRustEnvironment(workspaceRoot);
 const wasmOpt = fileURLToPath(
   new URL(
@@ -53,7 +56,7 @@ await run(
   ],
   rustEnvironment,
 );
-await run("tsc", ["-p", "tsconfig.build.json"]);
+await run(process.execPath, [tscGuard, "--", "-p", "tsconfig.build.json"]);
 await mkdir(new URL("../dist/", import.meta.url), { recursive: true });
 await copyFile(
   new URL("../src/schemas/KHRONOS-SPEC-LICENSE.txt", import.meta.url),
