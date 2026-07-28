@@ -36,6 +36,9 @@ artifact-baker = [
   "dep:thiserror",
 ]
 allocation-evidence = []
+# Non-shipping A/B challenger for the Milestone 9 autoresearch harness. The
+# production Wasm build never enables this feature.
+autoresearch-fixed32-bands = []
 
 [dependencies]
 core_maths = "0.1.1"

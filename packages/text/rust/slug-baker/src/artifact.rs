@@ -20,6 +20,12 @@ use crate::{
     },
 };
 
+const SELECTED_BAND_COUNT: u16 = if cfg!(feature = "autoresearch-fixed32-bands") {
+    32
+} else {
+    DEFAULT_BAND_COUNT
+};
+
 /// Bake one deterministic analytic Slug resource from the exact shaping font source.
 pub fn bake_slug(
     source: &[u8],
@@ -141,7 +147,7 @@ fn rasterize_font(
         let geometry = font_glyph_geometry(
             &font,
             GlyphId::new(u32::from(raw_glyph_id)),
-            DEFAULT_BAND_COUNT,
+            SELECTED_BAND_COUNT,
         )
         .map_err(|error| outline_error(raw_glyph_id, error))?;
         geometries.push(match geometry {
@@ -181,8 +187,9 @@ fn prepare_geometry(
             );
         }
     }
-    let mut geometry = build_glyph_geometry(curves, geometry.contour_starts, DEFAULT_BAND_COUNT)
-        .map_err(|error| outline_error(glyph_id, FontOutlineError::Geometry(error)))?;
+    let mut geometry =
+        build_glyph_geometry(curves, geometry.contour_starts, SELECTED_BAND_COUNT)
+            .map_err(|error| outline_error(glyph_id, FontOutlineError::Geometry(error)))?;
     let plane_bounds = quantize_plane_bounds(geometry.bounds, glyph_id)?;
     let band_bounds = Bounds {
         min_x: f32::from(plane_bounds[0]) / f32::from(SLUG_PLANE_UNITS_PER_EM),
@@ -191,7 +198,7 @@ fn prepare_geometry(
         max_y: f32::from(plane_bounds[3]) / f32::from(SLUG_PLANE_UNITS_PER_EM),
     };
     geometry.bounds = band_bounds;
-    geometry.bands = build_bands(&geometry.curves, band_bounds, DEFAULT_BAND_COUNT)
+    geometry.bands = build_bands(&geometry.curves, band_bounds, SELECTED_BAND_COUNT)
         .map_err(|error| outline_error(glyph_id, FontOutlineError::Geometry(error)))?;
     Ok((geometry, plane_bounds))
 }
