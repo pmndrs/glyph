@@ -1,0 +1,29 @@
+id: slug-adaptive32-bands-001
+owner: milestone-9
+baseCommit: 8bffa038e365e746d2367fa133d23e068e1137af
+target: raster/slug
+hypothesis: Selecting 32 bands only when fixed 16 exceeds six mean references per band retains dense-glyph curve-work gains without the rejected policy's 64-band storage escalation.
+changedVariables:
+  - per-glyph band selection policy capped at 32
+primaryWorkloads:
+  - noto-sans-cjk-showcase text ladder at DPR 2
+  - dot-gothic-16 text ladder at DPR 2
+guardWorkloads:
+  - inter text ladder at DPR 2
+  - source-serif-4 text ladder at DPR 2
+  - dancing-script text ladder at DPR 2
+  - amiri text ladder at DPR 2
+  - noto-sans-devanagari text ladder at DPR 2
+  - seven-source conformance matrix at DPR 1 and 2
+backends:
+  - webgpu
+  - webgl2
+qualityPolicy: exact retained baseline pixels
+metrics:
+  - gpu_ms
+  - cpu_submit_ms
+  - evaluated_curves
+  - gzip_bytes
+  - gpu_memory_bytes
+  - bake_ms
+status: staged

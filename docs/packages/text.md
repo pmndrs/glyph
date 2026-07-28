@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:9801e36a1ac215d307e4f35b13eaf2fc032ca31a7014e0a6b6cf173b98aaea29"
+source_digest: "sha256:1df84b19b1f99ef0271e37a1e27bb6ffb5c9464b535aaf6e457b675d884fe35d"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -124,7 +124,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T20:43:32Z"
+  at: "2026-07-28T20:48:32Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -139,7 +139,7 @@ The package-owned Slug baker now composes the ported outline conversion and exac
 
 The fixed Slug renderer copies and adapts the reviewed Three Flatland TSL implementation to the package's exact V0 resources rather than recreating the analytic coverage graph.[^slug-runtime][^slug-shaders] It uploads lossless RGBA16F curves and R32UI headers directly; the Three.js adapter pair-packs exact R16UI glyph-local references into R32UI texels because Three 0.185.1's WebGL TSL backend otherwise declares a float sampler for `UnsignedShortType`. The adapter retains two bytes per reference plus at most one terminal padding value, while the authenticated artifact remains unchanged. Integer instanced addresses, consecutive page runs, hostile per-band work caps, the stable q-form solver, and loop-invariant derivative and reciprocal hoists remain intact. TypeScript 7.0.2 pathologically expands selected non-leading Three 0.185.1 overloads; one private exact-version adapter preserves the public runtime functions and concrete node signatures while the bounded Slug graph compiles in 196 milliseconds at a measured 5 MiB peak. Shader construction stays inside `Fn` boundaries; assignment nodes append through the active TSL stack, axis-specific declaration names produce clean diagnostics, and package tests prove that ordinary core, Bitmap, and MTSDF entry graphs do not eagerly include Slug. The shared registered-raster resource seam resolves embedded views or independently packaged resources through a caller resolver or the companion artifact's retained URL/fetch context, then enforces declared length, SHA-256 identity, cancellation, and the registry resource ceiling before Slug creates any GPU object. Embedded and external baker outputs prove byte-identical records and curve/header/reference resources; retained WebGPU and forced-WebGL2 captures now cover exact pixels plus the seven-source visual and performance corpus.
 
-The non-shipping `autoresearch-fixed32-bands` baker feature proves that V0's per-glyph band counts are an executable optimization seam without becoming a JavaScript option or alternate distribution. It produces separately retained candidate artifacts; the ordinary Wasm build remains fixed 16. Exact dual-backend quality and interleaved product evidence reject universal fixed 32 as the production policy because its curve-work reduction comes with double-digit payload and residency growth. The separately gated `autoresearch-adaptive-bands` feature selects only among 16, 32, and 64 at bake time and never enters the production Wasm build. Its first six-reference target is rejected at the artifact gate because 64-band escalation grows every source; any revised policy requires a new precommitted manifest rather than rewriting this result.
+The non-shipping `autoresearch-fixed32-bands` baker feature proves that V0's per-glyph band counts are an executable optimization seam without becoming a JavaScript option or alternate distribution. It produces separately retained candidate artifacts; the ordinary Wasm build remains fixed 16. Exact dual-backend quality and interleaved product evidence reject universal fixed 32 as the production policy because its curve-work reduction comes with double-digit payload and residency growth. The separately gated `autoresearch-adaptive-bands` feature selects only among 16, 32, and 64 at bake time and never enters the production Wasm build. Its first six-reference target is rejected at the artifact gate because 64-band escalation grows every source. The distinct `autoresearch-adaptive32-bands` feature caps the same trigger at 32 under a new precommitted manifest; neither experiment changes production output or rewrites the retained rejection.
 
 Every package TypeScript entry now reaches the pinned native TypeScript 7 compiler through the repository's bounded runner rather than a shell or Node shim. The runner proves its hard-kill and reaping path with a synthetic allocator, supervises the native PID and descendants directly, caps aggregate RSS at 2 GiB, and reports memory, timeout, or containment failures distinctly. This is a process-safety boundary, not a substitute for keeping TSL node expressions within the measured free-function typing strategy.
 
