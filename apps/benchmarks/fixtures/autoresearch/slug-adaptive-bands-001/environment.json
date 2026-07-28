@@ -1,0 +1,7 @@
+{
+  "capturedAt": "2026-07-28T20:38:25Z",
+  "hardwareConcurrency": 10,
+  "node": "v24.18.0",
+  "pnpm": "11.15.1",
+  "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+}

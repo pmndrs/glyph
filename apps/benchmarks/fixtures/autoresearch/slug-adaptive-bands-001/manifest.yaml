@@ -26,4 +26,4 @@ metrics:
   - gzip_bytes
   - gpu_memory_bytes
   - bake_ms
-status: staged
+status: rejected
