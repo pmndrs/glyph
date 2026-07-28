@@ -69,6 +69,12 @@ interface ExperimentArtifact {
       readonly decodedGpuBytes: number
     }[]
   }
+  readonly glyphBandCounts?: {
+    readonly missing: number
+    readonly fixed16: number
+    readonly fixed32: number
+    readonly fixed64: number
+  }
 }
 
 const fixtures = [
@@ -187,6 +193,7 @@ try {
           decodedGpuBytes: page.mipBytes,
         })),
       },
+      ...(experimentName === 'adaptive' ? { glyphBandCounts: countGlyphBands(baked) } : {}),
     })
     const checkedInOutput = resolve(outputDirectory, fixture.output)
     if (check) {
@@ -245,4 +252,42 @@ function run(command: string, args: readonly string[]): Promise<void> {
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex')
+}
+
+function countGlyphBands(bytes: Uint8Array): NonNullable<ExperimentArtifact['glyphBandCounts']> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const jsonLength = view.getUint32(12, true)
+  const json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)).trim()) as {
+    readonly bufferViews: readonly { readonly byteOffset?: number }[]
+    readonly extensions: {
+      readonly PMNDRS_font_slug: {
+        readonly glyphCount: number
+        readonly recordBufferView: number
+        readonly recordStride: number
+      }
+    }
+  }
+  const extension = json.extensions.PMNDRS_font_slug
+  const recordView = json.bufferViews[extension.recordBufferView]
+  if (recordView === undefined || extension.recordStride !== 40) {
+    throw new TypeError('adaptive Slug artifact omitted its canonical record view')
+  }
+  const recordsStart = 28 + jsonLength + (recordView.byteOffset ?? 0)
+  const counts = { missing: 0, fixed16: 0, fixed32: 0, fixed64: 0 }
+  for (let glyph = 0; glyph < extension.glyphCount; glyph += 1) {
+    const record = recordsStart + glyph * extension.recordStride
+    const page = view.getUint16(record + 8, true)
+    if (page === 0xffff) {
+      counts.missing += 1
+      continue
+    }
+    const horizontal = view.getUint16(record + 10, true)
+    const vertical = view.getUint16(record + 12, true)
+    if (horizontal !== vertical) throw new TypeError('adaptive Slug axes selected different counts')
+    if (horizontal === 16) counts.fixed16 += 1
+    else if (horizontal === 32) counts.fixed32 += 1
+    else if (horizontal === 64) counts.fixed64 += 1
+    else throw new TypeError(`adaptive Slug selected unsupported band count ${horizontal}`)
+  }
+  return counts
 }
