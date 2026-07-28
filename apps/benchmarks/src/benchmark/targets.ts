@@ -813,29 +813,6 @@ async function sha256(bytes: ArrayBufferView): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')
 }
 
-function unavailableTarget(
-  id: string,
-  label: string,
-  detail: string,
-  color: BenchmarkTarget['color'],
-): BenchmarkTarget {
-  return {
-    id,
-    label,
-    detail,
-    color,
-    capabilities: new Set(['raster']),
-    status: () => 'unavailable',
-    load: async () => {
-      throw new Error(`${label} is not implemented yet`)
-    },
-    run: async () => {
-      throw new Error(`${label} is not implemented yet`)
-    },
-    dispose: async () => undefined,
-  }
-}
-
 function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined
   return {
@@ -1031,14 +1008,87 @@ function mtsdfConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   }
 }
 
+function slugTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  return {
+    id: `slug-text-${backend}`,
+    label: backend === 'webgpu' ? 'Slug text · WebGPU' : 'Slug text · WebGL2 fallback',
+    detail: 'Inter GLB · analytic curves · shared TSL graph',
+    color: backend === 'webgpu' ? 'green' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (await import('../renderer/slug-text')).createSlugTextTarget(backend)
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('Slug text target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
+function slugConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined
+  let configuredInput: BenchmarkInput = {}
+  return {
+    id: `slug-conformance-${backend}`,
+    label:
+      backend === 'webgpu'
+        ? 'Slug sampling conformance · WebGPU'
+        : 'Slug sampling conformance · WebGL2 fallback',
+    detail: 'GPU TSL candidate · independent scalar CPU reconstruction',
+    color: backend === 'webgpu' ? 'green' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    configure: (input) => {
+      configuredInput = input
+      loaded?.configure?.(input)
+    },
+    status: () => 'ready',
+    load: async (controls) => {
+      loaded ??= (await import('../renderer/slug-text')).createSlugConformanceTarget(backend)
+      loaded.configure?.(configuredInput)
+      await loaded.load(controls)
+    },
+    run: async (input, sampleIndex, controls) => {
+      if (loaded === undefined) throw new Error('Slug conformance target was not loaded')
+      return loaded.run(input, sampleIndex, controls)
+    },
+    dispose: async () => {
+      const target = loaded
+      loaded = undefined
+      if (target !== undefined) await target.dispose()
+    },
+  }
+}
+
 function sourceOutlineFidelityTarget(
-  technique: 'bitmap' | 'mtsdf',
+  technique: 'bitmap' | 'mtsdf' | 'slug',
   backend: 'webgpu' | 'webgl2',
 ): BenchmarkTarget {
   let configuredInput: BenchmarkInput = {}
   return {
     id: `source-outline-${technique}-${backend}`,
-    label: `${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} source-outline fidelity · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
+    label: `${technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'} source-outline fidelity · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
     detail: 'GPU candidate · pinned source font · browser Canvas2D reference',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -1059,27 +1109,37 @@ function sourceOutlineFidelityTarget(
         input.fontFixture ?? configuredInput.fontFixture ?? 'inter',
       )
       const capture =
-        technique === 'mtsdf'
-          ? await import('../renderer/mtsdf-text').then(({ captureMtsdfSourceOutlineFidelity }) =>
-              captureMtsdfSourceOutlineFidelity({
+        technique === 'slug'
+          ? await import('../renderer/slug-text').then(({ captureSlugSourceOutlineFidelity }) =>
+              captureSlugSourceOutlineFidelity({
                 backend,
                 dpr: controls.dpr,
                 fontFixture,
               }),
             )
-          : await import('../renderer/bitmap-text').then(({ captureBitmapSourceOutlineFidelity }) =>
-              captureBitmapSourceOutlineFidelity({
-                backend,
-                dpr: controls.dpr,
-                fontFixture,
-              }),
-            )
+          : technique === 'mtsdf'
+            ? await import('../renderer/mtsdf-text').then(({ captureMtsdfSourceOutlineFidelity }) =>
+                captureMtsdfSourceOutlineFidelity({
+                  backend,
+                  dpr: controls.dpr,
+                  fontFixture,
+                }),
+              )
+            : await import('../renderer/bitmap-text').then(
+                ({ captureBitmapSourceOutlineFidelity }) =>
+                  captureBitmapSourceOutlineFidelity({
+                    backend,
+                    dpr: controls.dpr,
+                    fontFixture,
+                  }),
+              )
       return {
         bytes: capture.candidate.byteLength,
         hash: await sha256(capture.candidate),
         metrics: {
           techniqueBitmap: technique === 'bitmap' ? 1 : 0,
           techniqueMtsdf: technique === 'mtsdf' ? 1 : 0,
+          techniqueSlug: technique === 'slug' ? 1 : 0,
           backendWebGpu: backend === 'webgpu' ? 1 : 0,
           backendWebGl2: backend === 'webgl2' ? 1 : 0,
           dpr: controls.dpr,
@@ -1097,13 +1157,13 @@ function sourceOutlineFidelityTarget(
 }
 
 function runtimeFallbackTarget(
-  technique: 'bitmap' | 'mtsdf',
+  technique: 'bitmap' | 'mtsdf' | 'slug',
   backend: 'webgpu' | 'webgl2',
 ): BenchmarkTarget {
   let configuredInput: BenchmarkInput = {}
   return {
     id: `runtime-fallback-${technique}-${backend}`,
-    label: `${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} runtime fallback · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
+    label: `${technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'} runtime fallback · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
     detail: 'checked-in baked frame · source-font Worker bake · exact comparison',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -1164,16 +1224,23 @@ export const targets: readonly BenchmarkTarget[] = [
   mtsdfTextTarget('webgpu'),
   mtsdfConformanceTarget('webgl2'),
   mtsdfConformanceTarget('webgpu'),
+  slugTextTarget('webgl2'),
+  slugTextTarget('webgpu'),
+  slugConformanceTarget('webgl2'),
+  slugConformanceTarget('webgpu'),
   sourceOutlineFidelityTarget('bitmap', 'webgl2'),
   sourceOutlineFidelityTarget('bitmap', 'webgpu'),
   sourceOutlineFidelityTarget('mtsdf', 'webgl2'),
   sourceOutlineFidelityTarget('mtsdf', 'webgpu'),
+  sourceOutlineFidelityTarget('slug', 'webgl2'),
+  sourceOutlineFidelityTarget('slug', 'webgpu'),
   runtimeFallbackTarget('bitmap', 'webgl2'),
   runtimeFallbackTarget('bitmap', 'webgpu'),
   runtimeFallbackTarget('mtsdf', 'webgl2'),
   runtimeFallbackTarget('mtsdf', 'webgpu'),
+  runtimeFallbackTarget('slug', 'webgl2'),
+  runtimeFallbackTarget('slug', 'webgpu'),
   reactTextTarget(),
-  unavailableTarget('slug', 'Three Flatland Slug', 'adapter not landed', 'green'),
 ]
 
 export function targetById(id: string): BenchmarkTarget {

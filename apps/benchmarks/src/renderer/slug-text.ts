@@ -27,7 +27,11 @@ import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-
 import showcaseManifest from '../../fixtures/rendering/showcase-slug-fixtures-v0.json'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
+import {
+  conformanceText,
+  type BenchmarkFontFixture,
+  type SelectableFontFixture,
+} from '../benchmark/font-fixtures'
 import type { FontDelivery } from '../benchmark/url-state'
 import { createCanvasSurface } from './canvas-surface'
 import { finiteCanvasDelta } from './canvas-view'
@@ -44,6 +48,12 @@ import {
   type LiveTextAnchor,
 } from './live-text-style'
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry'
+import { compareRgba8Coverage } from './mtsdf-cpu-reference'
+import { renderFlatSlugCpuReference } from './slug-cpu-reference'
+import {
+  captureSourceOutlineFidelity,
+  type SourceOutlineFidelityCapture,
+} from './source-outline-reference'
 import { compactRgba8Readback } from './tsl-baseline'
 import {
   createConfiguredRenderer,
@@ -53,6 +63,7 @@ import {
 
 const WIDTH = 512
 const HEIGHT = 320
+const FLAT_CONFORMANCE_HEIGHT = 512
 
 interface SlugFixtureManifest {
   readonly fontFixture: BenchmarkFontFixture
@@ -104,6 +115,33 @@ interface SlugTextResources {
   readonly firstDrawMs: number
 }
 
+export interface SlugTextConformanceCapture {
+  readonly width: number
+  readonly height: number
+  readonly candidate: Uint8Array
+  readonly reference: Uint8Array
+  readonly difference: Uint8Array
+  readonly meanAbsoluteError: number
+  readonly maximumError: number
+  readonly errorPixels: number
+  readonly glyphCount: number
+  readonly evaluatedCurves: number
+  readonly renderSubmitMs: number
+}
+
+interface FlatSlugConformanceResources {
+  readonly backend: RendererBackend
+  readonly dpr: number
+  readonly fontFixture: BenchmarkFontFixture
+  readonly renderer: THREE.WebGPURenderer
+  readonly target: THREE.RenderTarget
+  readonly scene: THREE.Scene
+  readonly camera: THREE.OrthographicCamera
+  readonly font: RegisteredFont
+  readonly line: Text
+  readonly resource: SlugResource
+}
+
 export interface SlugTextLiveStats {
   readonly technique: 'slug'
   readonly backend: RendererBackend
@@ -132,6 +170,7 @@ export interface SlugTextLiveStats {
   readonly slugReferenceCount: number
   readonly slugReferenceGpuBytes: number
   readonly slugGpuBytes: number
+  readonly atlasGpuBytes: number
   readonly framebufferGpuBytes: number
   readonly totalGpuBytes: number
   readonly artifactBytes: number
@@ -225,6 +264,61 @@ export function createSlugTextTarget(backend: RendererBackend): BenchmarkTarget 
       resources.font.dispose()
       resources.target.dispose()
       await resources.renderer.dispose()
+    },
+  }
+}
+
+export function createSlugConformanceTarget(backend: RendererBackend): BenchmarkTarget {
+  let resources: FlatSlugConformanceResources | undefined
+  let fontFixture: BenchmarkFontFixture = 'inter'
+  return {
+    id: `slug-conformance-${backend}`,
+    label:
+      backend === 'webgpu'
+        ? 'Slug sampling conformance · WebGPU'
+        : 'Slug sampling conformance · WebGL2 fallback',
+    detail: 'GPU TSL candidate · independent scalar CPU reconstruction · visual difference',
+    color: backend === 'webgpu' ? 'green' : 'amber',
+    capabilities: new Set([
+      'deterministic',
+      'font-bytes',
+      'wasm',
+      'shaping',
+      'paragraph',
+      'raster',
+    ]),
+    configure: (input) => {
+      fontFixture = input.fontFixture ?? 'inter'
+    },
+    status: () => 'ready',
+    load: async (controls) => {
+      resources ??= await createFlatSlugConformanceResources(backend, controls.dpr, fontFixture)
+    },
+    run: async () => {
+      if (resources === undefined) throw new Error('Slug conformance target was not loaded')
+      const capture = await captureFlatSlugConformance(resources)
+      return {
+        bytes: capture.candidate.byteLength,
+        hash: await sha256(capture.candidate),
+        metrics: {
+          backendWebGpu: backend === 'webgpu' ? 1 : 0,
+          backendWebGl2: backend === 'webgl2' ? 1 : 0,
+          dpr: resources.dpr,
+          fixtureIsInter: fontFixture === 'inter' ? 1 : 0,
+          pixelCount: capture.width * capture.height,
+          glyphCount: capture.glyphCount,
+          evaluatedCurves: capture.evaluatedCurves,
+          meanAbsoluteError: capture.meanAbsoluteError,
+          maximumError: capture.maximumError,
+          errorPixels: capture.errorPixels,
+          renderMs: capture.renderSubmitMs,
+        },
+      }
+    },
+    dispose: async () => {
+      const current = resources
+      resources = undefined
+      if (current !== undefined) await disposeFlatSlugConformanceResources(current)
     },
   }
 }
@@ -413,6 +507,7 @@ export async function createSlugTextPreview(options: {
           slugReferenceCount: rasterConfiguration.referenceCount,
           slugReferenceGpuBytes: rasterConfiguration.referenceGpuBytes,
           slugGpuBytes: rasterConfiguration.gpuBytes,
+          atlasGpuBytes: rasterConfiguration.gpuBytes,
           framebufferGpuBytes,
           totalGpuBytes: rasterConfiguration.gpuBytes + framebufferGpuBytes,
           artifactBytes: loaded.compressedBytes,
@@ -661,6 +756,201 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   }
 }
 
+export async function captureSlugTextConformance(options: {
+  readonly backend: RendererBackend
+  readonly delivery?: FontDelivery
+  readonly dpr: number
+  readonly fontFixture?: BenchmarkFontFixture
+  readonly signal?: AbortSignal
+}): Promise<SlugTextConformanceCapture> {
+  options.signal?.throwIfAborted()
+  const resources = await createFlatSlugConformanceResources(
+    options.backend,
+    options.dpr,
+    options.fontFixture,
+    options.signal,
+    options.delivery,
+  )
+  try {
+    options.signal?.throwIfAborted()
+    const capture = await captureFlatSlugConformance(resources)
+    options.signal?.throwIfAborted()
+    return capture
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+export async function captureSlugSourceOutlineFidelity(options: {
+  readonly backend: RendererBackend
+  readonly dpr: number
+  readonly fontFixture: SelectableFontFixture
+  readonly signal?: AbortSignal
+}): Promise<SourceOutlineFidelityCapture> {
+  options.signal?.throwIfAborted()
+  const resources = await createFlatSlugConformanceResources(
+    options.backend,
+    options.dpr,
+    options.fontFixture,
+    options.signal,
+  )
+  try {
+    const capture = await captureFlatSlugConformance(resources)
+    options.signal?.throwIfAborted()
+    return await captureSourceOutlineFidelity({
+      candidate: capture.candidate,
+      width: capture.width,
+      height: capture.height,
+      dpr: options.dpr,
+      fontFixture: options.fontFixture,
+      fontSize: 64 / options.dpr,
+      layout: committedLayout(resources.line),
+      originX: resources.line.position.x,
+      originY: resources.line.position.y,
+      text: conformanceText(),
+      renderSubmitMs: capture.renderSubmitMs,
+    })
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+async function createFlatSlugConformanceResources(
+  backend: RendererBackend,
+  dpr: number,
+  fontFixture: BenchmarkFontFixture = 'inter',
+  signal?: AbortSignal,
+  delivery: FontDelivery = 'baked',
+): Promise<FlatSlugConformanceResources> {
+  signal?.throwIfAborted()
+  const canvas = document.createElement('canvas')
+  const renderer = await createConfiguredRenderer({
+    canvas,
+    width: WIDTH,
+    height: FLAT_CONFORMANCE_HEIGHT,
+    backend,
+    dpr,
+  })
+  let target: THREE.RenderTarget | undefined
+  let font: RegisteredFont | undefined
+  let line: Text | undefined
+  let resource: SlugResource | undefined
+  try {
+    const loaded = await loadSlugFont(signal, fontFixture, delivery)
+    font = loaded.font
+    const rasterKey = await slugDescriptorRasterKey()
+    line = new Text({
+      text: conformanceText(),
+      font,
+      raster: loaded.raster,
+      fontSize: 64 / dpr,
+      rasterPixelRatio: dpr,
+      lineHeight: 1.2,
+      width: 476,
+      wrap: 'word',
+      color: 0xffffff,
+    })
+    await line.ready
+    const raster = await font.loadRaster(
+      { rasterKey, kind: slug.kind },
+      signal === undefined ? undefined : { signal },
+    )
+    resource = await loaded.raster.decode(font, raster, signal)
+    signal?.throwIfAborted()
+    line.position.set(18, -18, 0)
+    const scene = new THREE.Scene()
+    scene.add(line)
+    const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -FLAT_CONFORMANCE_HEIGHT, 0.1, 1_000)
+    camera.position.z = 500
+    camera.updateProjectionMatrix()
+    target = new THREE.RenderTarget(
+      Math.round(WIDTH * dpr),
+      Math.round(FLAT_CONFORMANCE_HEIGHT * dpr),
+      {
+        depthBuffer: false,
+        stencilBuffer: false,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        type: THREE.UnsignedByteType,
+        format: THREE.RGBAFormat,
+      },
+    )
+    target.texture.colorSpace = THREE.NoColorSpace
+    target.texture.generateMipmaps = false
+    return { backend, dpr, fontFixture, renderer, target, scene, camera, font, line, resource }
+  } catch (error) {
+    line?.dispose()
+    if (resource !== undefined) slug.dispose(resource)
+    font?.dispose()
+    target?.dispose()
+    await renderer.dispose()
+    throw error
+  }
+}
+
+async function captureFlatSlugConformance(
+  resources: FlatSlugConformanceResources,
+): Promise<SlugTextConformanceCapture> {
+  const width = Math.round(WIDTH * resources.dpr)
+  const height = Math.round(FLAT_CONFORMANCE_HEIGHT * resources.dpr)
+  resources.renderer.setRenderTarget(resources.target)
+  resources.renderer.setClearColor(0x000000, 1)
+  resources.renderer.clear()
+  const started = performance.now()
+  resources.renderer.render(resources.scene, resources.camera)
+  const renderSubmitMs = performance.now() - started
+  const readback = await resources.renderer.readRenderTargetPixelsAsync(
+    resources.target,
+    0,
+    0,
+    width,
+    height,
+  )
+  resources.renderer.setRenderTarget(null)
+  const candidate = compactRgba8Readback(
+    new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
+    width,
+    height,
+    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+  )
+  const referenceResult = renderFlatSlugCpuReference(
+    resources.resource,
+    committedLayout(resources.line),
+    {
+      width,
+      height,
+      dpr: resources.dpr,
+      originX: resources.line.position.x,
+      originY: resources.line.position.y,
+    },
+  )
+  const reference = referenceResult.pixels
+  const comparison = compareRgba8Coverage(candidate, reference)
+  return {
+    width,
+    height,
+    candidate,
+    reference,
+    difference: comparison.heatmap,
+    meanAbsoluteError: comparison.meanAbsoluteError,
+    maximumError: comparison.maximumError,
+    errorPixels: comparison.errorPixels,
+    glyphCount: referenceResult.glyphCount,
+    evaluatedCurves: referenceResult.evaluatedCurves,
+    renderSubmitMs,
+  }
+}
+
+async function disposeFlatSlugConformanceResources(
+  resources: FlatSlugConformanceResources,
+): Promise<void> {
+  resources.line.dispose()
+  slug.dispose(resources.resource)
+  resources.font.dispose()
+  resources.target.dispose()
+  await resources.renderer.dispose()
+}
+
 export async function loadSlugFont(
   signal?: AbortSignal,
   fixture: BenchmarkFontFixture = 'inter',
@@ -737,7 +1027,7 @@ function slugResourceConfiguration(resource: SlugResource): SlugRasterConfigurat
   for (const page of resource.pages) {
     const curveAllocation = page.curveWidth * page.curveHeight * 8
     const headerAllocation = page.headerWidth * page.headerHeight * 4
-    const referenceAllocation = page.referenceWidth * page.referenceHeight * 2
+    const referenceAllocation = page.referenceWidth * page.referenceHeight * 4
     curveTexelCount += page.curveWidth * page.curveHeight
     curveGpuBytes += curveAllocation
     headerCount += page.headerCount

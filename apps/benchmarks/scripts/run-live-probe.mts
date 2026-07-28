@@ -39,6 +39,7 @@ await runProbe('./vitexec/comparison-workloads.probe.ts', true)
 for (const probe of [
   './vitexec/tsl-renderer.probe.ts',
   './vitexec/mtsdf-text.probe.ts',
+  './vitexec/slug-text.probe.ts',
   './vitexec/source-outline-fidelity.probe.ts',
   './vitexec/runtime-fallback.probe.ts',
   './vitexec/bitmap-text.probe.ts',

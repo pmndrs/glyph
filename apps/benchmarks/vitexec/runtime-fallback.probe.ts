@@ -10,7 +10,7 @@ const environment = await environmentResource()
 
 for (const backend of ['webgpu', 'webgl2'] as const) {
   if (backend === 'webgpu' && !environment.webgpu) continue
-  for (const technique of ['bitmap', 'mtsdf'] as const) {
+  for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     const summary = await runRegisteredBenchmark({
       targetId: `runtime-fallback-${technique}-${backend}`,
       scenarioId: 'runtime-fallback-parity',
