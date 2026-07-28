@@ -8,9 +8,11 @@ const [{ environmentResource }, { default: packageSizes }] = await Promise.all([
 ])
 
 const observations: Array<Record<string, number | string | boolean>> = []
-for (const technique of ['bitmap', 'mtsdf'] as const) {
+for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   console.log('raster-performance-selecting', technique)
-  if (technique === 'mtsdf') (await enabledButton('MSDF')).click()
+  if (technique !== 'bitmap') {
+    ;(await enabledButton(technique === 'mtsdf' ? 'MSDF' : 'Slug')).click()
+  }
   const viewport = await observeUntil(document.documentElement, () => {
     const candidate = document.querySelector<HTMLElement>(
       '[data-testid="comparison-live-viewport"]',
@@ -41,6 +43,13 @@ for (const technique of ['bitmap', 'mtsdf'] as const) {
     artifactBytes: numberAttribute(viewport, 'data-artifact-bytes'),
     atlasGpuBytes: numberAttribute(viewport, 'data-atlas-gpu-bytes'),
     totalGpuBytes: numberAttribute(viewport, 'data-total-gpu-bytes'),
+    ...(technique === 'slug'
+      ? {
+          slugCurveGpuBytes: numberAttribute(viewport, 'data-slug-curve-gpu-bytes'),
+          slugHeaderGpuBytes: numberAttribute(viewport, 'data-slug-header-gpu-bytes'),
+          slugReferenceGpuBytes: numberAttribute(viewport, 'data-slug-reference-gpu-bytes'),
+        }
+      : {}),
   })
   console.log('raster-performance-observed', technique)
 }
@@ -66,8 +75,10 @@ console.log(
           'text-shaper-wasm',
           'bitmap-runtime-js',
           'mtsdf-runtime-js',
+          'slug-runtime-js',
           'bitmap-baker-wasm',
           'mtsdf-baker-wasm',
+          'slug-baker-wasm',
         ].includes(id),
       )
       .map(

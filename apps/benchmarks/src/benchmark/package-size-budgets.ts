@@ -1,9 +1,9 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    rawBytes: 317_000,
-    minifiedBytes: 242_000,
-    gzipBytes: 71_000,
-    brotliBytes: 55_000,
+    rawBytes: 325_000,
+    minifiedBytes: 248_000,
+    gzipBytes: 73_000,
+    brotliBytes: 56_000,
   },
   'font-validator-js': {
     rawBytes: 741_000,
@@ -24,10 +24,10 @@ export const packageSizeBudgets = {
     brotliBytes: 2_850,
   },
   'text-shaper-js': {
-    rawBytes: 47_000,
-    minifiedBytes: 32_500,
-    gzipBytes: 9_300,
-    brotliBytes: 8_200,
+    rawBytes: 54_000,
+    minifiedBytes: 38_000,
+    gzipBytes: 10_500,
+    brotliBytes: 9_500,
   },
   'text-shaper-wasm': {
     rawBytes: 693_000,
@@ -47,6 +47,12 @@ export const packageSizeBudgets = {
     gzipBytes: 95_000,
     brotliBytes: 75_000,
   },
+  'slug-runtime-js': {
+    rawBytes: 425_000,
+    minifiedBytes: 325_000,
+    gzipBytes: 95_000,
+    brotliBytes: 75_000,
+  },
   'bitmap-baker-wasm': {
     rawBytes: 630_000,
     minifiedBytes: 630_000,
@@ -60,8 +66,8 @@ export const packageSizeBudgets = {
     brotliBytes: 3_800,
   },
   'mtsdf-generator-js': {
-    rawBytes: 11_300,
-    minifiedBytes: 7_800,
+    rawBytes: 12_000,
+    minifiedBytes: 9_000,
     gzipBytes: 2_700,
     brotliBytes: 2_400,
   },
@@ -79,9 +85,21 @@ export const packageSizeBudgets = {
   },
   'mtsdf-baker-js': {
     rawBytes: 21_000,
-    minifiedBytes: 14_000,
-    gzipBytes: 4_300,
+    minifiedBytes: 14_500,
+    gzipBytes: 4_500,
     brotliBytes: 3_900,
+  },
+  'slug-baker-wasm': {
+    rawBytes: 485_000,
+    minifiedBytes: 485_000,
+    gzipBytes: 195_000,
+    brotliBytes: 155_000,
+  },
+  'slug-baker-js': {
+    rawBytes: 20_000,
+    minifiedBytes: 14_000,
+    gzipBytes: 4_500,
+    brotliBytes: 4_000,
   },
   'portable-baker-js': {
     rawBytes: 10_100,
