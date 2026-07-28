@@ -160,9 +160,10 @@ async function supervise(executable, args, options) {
       killTrackedProcesses(rows, tracked, rootProcessGroup)
     }
 
-    if (childExit !== undefined && liveRows.length === 0) break
-    if (childExit !== undefined && terminationReason === undefined && liveRows.length > 0) {
-      terminationReason = `native compiler exited while ${liveRows.length} descendant process(es) remained`
+    const liveDescendants = liveRows.filter((row) => row.pid !== rootPid)
+    if (childExit !== undefined && liveDescendants.length === 0) break
+    if (childExit !== undefined && terminationReason === undefined && liveDescendants.length > 0) {
+      terminationReason = `native compiler exited while ${liveDescendants.length} descendant process(es) remained`
       exitOverride = 125
       killTrackedProcesses(rows, tracked, rootProcessGroup)
     }

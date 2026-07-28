@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:2288fd940ee82b014ff83a9b9ef8e212f9f3c4229a8980e794de64513adadf5b"
+source_digest: "sha256:9e3610d18ff9883fade95c926d62b9de2faddb3ec67a9172915e762fe93e5c6a"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -124,7 +124,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T19:01:30Z"
+  at: "2026-07-28T19:26:06Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -137,7 +137,7 @@ Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-valida
 
 The package-owned Slug baker now composes the ported outline conversion and exact packing crates into deterministic embedded or independently authenticated external-page artifacts.[^slug-baker] Its Rust-generated V0 ABI drives the same shared direct/segmented host mechanics used by the existing raster bakers, including bounded artifact windows, synchronous progress forwarding, owned-copy-before-release behavior, structured errors, and transactional allocation cleanup.[^slug-baker-host] The serial module-Worker entry remains lazy; neither the baker host nor Wasm enters the initial renderer graph.
 
-The fixed Slug renderer copies and adapts the reviewed Three Flatland TSL implementation to the package's exact V0 resources rather than recreating the analytic coverage graph.[^slug-runtime][^slug-shaders] It uploads lossless RGBA16F curves and R32UI headers directly; the Three.js adapter pair-packs exact R16UI glyph-local references into R32UI texels because Three 0.185.1's WebGL TSL backend otherwise declares a float sampler for `UnsignedShortType`. The adapter retains two bytes per reference plus at most one terminal padding value, while the authenticated artifact remains unchanged. Integer instanced addresses, consecutive page runs, hostile per-band work caps, the stable q-form solver, and loop-invariant derivative and reciprocal hoists remain intact. Shader construction stays inside `Fn` boundaries; assignment nodes append through the active TSL stack, axis-specific declaration names produce clean diagnostics, and package tests prove that ordinary core, Bitmap, and MTSDF entry graphs do not eagerly include Slug. The shared registered-raster resource seam resolves embedded views or independently packaged resources through a caller resolver or the companion artifact's retained URL/fetch context, then enforces declared length, SHA-256 identity, cancellation, and the registry resource ceiling before Slug creates any GPU object. Embedded and external baker outputs already prove byte-identical records and curve/header/reference resources; browser/backend pixel parity and the complete visual/performance corpus remain required before the milestone can close.
+The fixed Slug renderer copies and adapts the reviewed Three Flatland TSL implementation to the package's exact V0 resources rather than recreating the analytic coverage graph.[^slug-runtime][^slug-shaders] It uploads lossless RGBA16F curves and R32UI headers directly; the Three.js adapter pair-packs exact R16UI glyph-local references into R32UI texels because Three 0.185.1's WebGL TSL backend otherwise declares a float sampler for `UnsignedShortType`. The adapter retains two bytes per reference plus at most one terminal padding value, while the authenticated artifact remains unchanged. Integer instanced addresses, consecutive page runs, hostile per-band work caps, the stable q-form solver, and loop-invariant derivative and reciprocal hoists remain intact. TypeScript 7.0.2 pathologically expands selected non-leading Three 0.185.1 overloads; one private exact-version adapter preserves the public runtime functions and concrete node signatures while the bounded Slug graph compiles in 196 milliseconds at a measured 5 MiB peak. Shader construction stays inside `Fn` boundaries; assignment nodes append through the active TSL stack, axis-specific declaration names produce clean diagnostics, and package tests prove that ordinary core, Bitmap, and MTSDF entry graphs do not eagerly include Slug. The shared registered-raster resource seam resolves embedded views or independently packaged resources through a caller resolver or the companion artifact's retained URL/fetch context, then enforces declared length, SHA-256 identity, cancellation, and the registry resource ceiling before Slug creates any GPU object. Embedded and external baker outputs already prove byte-identical records and curve/header/reference resources; browser/backend pixel parity and the complete visual/performance corpus remain required before the milestone can close.
 
 Every package TypeScript entry now reaches the pinned native TypeScript 7 compiler through the repository's bounded runner rather than a shell or Node shim. The runner proves its hard-kill and reaping path with a synthetic allocator, supervises the native PID and descendants directly, caps aggregate RSS at 2 GiB, and reports memory, timeout, or containment failures distinctly. This is a process-safety boundary, not a substitute for keeping TSL node expressions within the measured free-function typing strategy.
 

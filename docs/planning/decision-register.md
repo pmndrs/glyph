@@ -13,7 +13,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T19:01:30Z"
+  at: "2026-07-28T19:26:06Z"
 ---
 
 # Decision register
@@ -148,7 +148,7 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-104 | Every direct-memory Wasm ABI layout is represented by fixed-width `#[repr(C)]` Rust types. Build-only Rust generators derive published JSON and exact `as const` TypeScript contracts from `size_of`, `align_of`, and `offset_of!`; production hosts import those generated facts, and production Wasm embeds no duplicate contract or ABI-pointer bootstrap. WebAssembly direct memory uses its guaranteed little-endian order; portable GLB, KTX2, SFNT, and extension encodings retain their format-defined byte order. | Accepted |
 | D-105 | V1 retains the current Three.js/TSL integration through Slug so its real shader, resource, batching, and lifetime requirements define the abstraction. After Slug lands, Milestone 10 extracts one renderer-neutral direct integration beneath Bitmap, MSDF, and Slug; Three.js becomes a supported adapter over it, while raw WebGPU and a possible TypeGPU adapter remain independently selectable integrations. Optional TypeGPU compute-baker research may proceed earlier but cannot force the renderer refactor or enter unrelated runtime graphs. | Accepted |
 | D-106 | Slug V0 artifacts retain exact R16UI reference grids. The Three.js 0.185.1 adapter may pair-pack those values into R32UI texels at decode time because its WebGL TSL backend does not declare an unsigned sampler for `UnsignedShortType`; this preserves reference identity and two-byte density plus at most one terminal padding value. Other adapters remain free to upload R16UI directly, and the exception does not redefine the portable artifact. | Accepted |
-| D-107 | Repository TypeScript commands execute the installed native compiler through one bounded runner that first proves its kill/reap path with a synthetic allocator, supervises the native PID rather than a shell or Node shim, caps aggregate tracked RSS, enforces a wall-time limit, and reports no success while a compiler survives. TSL changes compile a narrow free-function graph fixture before package or application projects. | Accepted |
+| D-107 | Repository TypeScript commands execute the installed native compiler through one bounded runner that first proves its kill/reap path with a synthetic allocator, supervises the native PID rather than a shell or Node shim, caps aggregate tracked RSS, enforces a wall-time limit, and reports no success while a compiler survives. TSL changes compile reduced operation fixtures and a narrow graph before package or application projects; free functions remain the first mitigation but exact-version pathological overloads use one proven concrete compatibility boundary. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 

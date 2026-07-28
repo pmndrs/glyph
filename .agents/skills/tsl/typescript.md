@@ -10,7 +10,9 @@ Measure three isolated fixtures with the repository compiler before committing t
 2. a typed constant node attached to the intended material or pass;
 3. one representative TSL operation from the production graph.
 
-In this repository's TypeScript 7.0.2 and `@types/three` 0.185.1 check, a single `positionLocal.x.mul(4)` method-chain expression did not complete within 60 seconds. Assigning the overloaded `mul` value to a narrower local function type also forces an expensive structural comparison of the augmented `Node` surface. The public free-function form `mul(positionLocal.x, 4)` preserves exact node types and completes a clean package-plus-graph check in 0.18 seconds (about 167 MB); the benchmark application completes in 0.17 seconds (about 196 MB). Prefer that form for this pinned pair and keep `tests/types/tsl-scalar-operations.test.ts` as the upgrade regression. This is a declaration-performance finding, not evidence that the runtime API is invalid or that an upstream patch is currently required.
+In this repository's TypeScript 7.0.2 and `@types/three` 0.185.1 check, a single `positionLocal.x.mul(4)` method-chain expression did not complete within 60 seconds. Assigning the overloaded `mul` value to a narrower local function type also forces an expensive structural comparison of the augmented `Node` surface. The public free-function form `mul(positionLocal.x, 4)` preserves exact node types and completes in about 0.19 seconds for a scalar float fixture, so prefer that form first.
+
+Free functions are not sufficient for every overload in this pinned pair. Reduced Slug fixtures showed `shiftLeft(Node<'uint'>, ...)`, integer `div`/`mod`, uint `add`/`mul`, vector `fwidth`, and object-form `Loop` each crossing a 512 MiB guard in roughly three seconds; an unsigned `textureLoad` result annotation has the same failure. Imports-only and adjacent scalar operations complete around 0.18–0.20 seconds at 4–5 MiB. Treat those results as exact-version compiler/declaration bugs, not permission to erase graph types broadly. Keep the runtime function, isolate the smallest concrete typed adapter, and prove the adapter with a bounded fixture before using it.
 
 Do not invoke `tsc`, `tsgo`, a package-manager typecheck script, or the `node_modules/.bin/tsc` shim directly. TypeScript 7 delegates to a native executable; a wrapper that supervises only the shim can exit while the compiler survives as an orphan. Run the repository guard's synthetic test once per worktree, then pass only compiler arguments after `--`:
 
@@ -53,7 +55,7 @@ import { add, mul } from 'three/tsl'
 const x: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x))
 ```
 
-Do not assign `add` or `mul` to a custom function type. That assignment asks TypeScript to compare every inherited overload and the complete augmented `Node` interface even though the eventual call is scalar.
+Do not assign `add` or `mul` to a narrower custom function type. That assignment asks TypeScript to compare every inherited overload and the complete augmented `Node` interface even though the eventual call is scalar. If a reduced fixture proves one exact overload remains pathological, a private compatibility module may deliberately erase only the runtime callable to `Function`, invoke it through `Reflect.apply`, and expose one exact node signature. Name the affected TypeScript and Three versions in that module; never scatter this workaround through graph code.
 
 Treat all operator-like method chains on augmented nodes—including arithmetic, comparison, bitwise, and shift methods—as the same risk class. Copying a graph from another repository does not waive this constraint: preserve its runtime structure while adapting those calls to the installed public free functions before a whole-project check.
 
