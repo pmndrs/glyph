@@ -36,6 +36,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false)
   assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v0.json'), false)
   assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v1.json'), true)
+  assert.equal(packedFiles.includes('dist/slug-baker-abi-v1.json'), false)
+  assert.equal(packedFiles.includes('dist/slug-baker-abi-v0.json'), true)
   assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
     'dist',
     'package.json',
@@ -58,6 +60,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     './bitmap-abi.json',
     './mtsdf-baker.wasm',
     './mtsdf-abi.json',
+    './slug-baker.wasm',
+    './slug-abi.json',
   ]) {
     const specifier = `@pmndrs/text${subpath.slice(1)}`
     const resolved = import.meta.resolve(specifier, consumerEntry)

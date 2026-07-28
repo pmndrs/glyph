@@ -1,0 +1,264 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import * as THREE from 'three/webgpu'
+
+import { slug } from '../../dist/raster/slug.js'
+
+const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09'
+const rasterKey = '4c443186198f07fa3e1c5722e21fc24947627315e6115d1ea0fa6ed041d11975'
+
+test('Slug uploads exact integer resources and preserves consecutive page runs', async (context) => {
+  const warnings = context.mock.method(console, 'warn', () => {})
+  const errors = context.mock.method(console, 'error', () => {})
+  const records = makeRecords([0, 1, 0, 0xffff])
+  const curve = makeRgba16fKtx2(2, 1, new Uint8Array(16))
+  const headers = bytesOf(Uint32Array.of(1 << 16))
+  const references = bytesOf(Uint16Array.of(0))
+  const views = [records, curve, headers, references, curve, headers, references]
+  const font = {
+    handle: 7,
+    shapingHash,
+    glyphCount: 4,
+  }
+  const raster = {
+    font: 7,
+    kind: 'slug',
+    extension: 'PMNDRS_font_slug',
+    version: 0,
+    rasterKey,
+    extensionData: {
+      version: 0,
+      rasterKey,
+      shapingHash,
+      glyphCount: 4,
+      glyphIdWidth: 16,
+      planeUnitsPerEm: 2048,
+      recordBufferView: 0,
+      recordStride: 40,
+      pages: [page(1, 2, 3), page(4, 5, 6)],
+    },
+    view(index) {
+      const value = views[index]
+      if (value === undefined) throw new RangeError('missing test view')
+      return value
+    },
+  }
+  const resource = await slug.decode(font, raster)
+  assert.equal(resource.gpuBytes, 44)
+  assert.equal(resource.pages.length, 2)
+  assert.ok(resource.pages[0].curveTexture.image.data instanceof Uint16Array)
+  assert.ok(resource.pages[0].headerTexture.image.data instanceof Uint32Array)
+  assert.ok(resource.pages[0].referenceTexture.image.data instanceof Uint16Array)
+  assert.equal(resource.pages[0].curveTexture.type, THREE.HalfFloatType)
+  assert.equal(resource.pages[0].headerTexture.format, THREE.RedIntegerFormat)
+  assert.equal(resource.pages[0].headerTexture.type, THREE.UnsignedIntType)
+  assert.equal(resource.pages[0].referenceTexture.type, THREE.UnsignedShortType)
+
+  const layout = {
+    glyphIds: Uint16Array.of(0, 1, 2, 3),
+    glyphFontSlots: Uint16Array.of(0, 0, 0, 0),
+    glyphFontSizes: Float32Array.of(16, 16, 16, 16),
+    x: Float32Array.of(1, 2, 3, 4),
+    y: Float32Array.of(5, 6, 7, 8),
+  }
+  const paint = {
+    paintIndices: Uint16Array.of(0, 0, 0, 0),
+    palette: [{ color: [0.25, 0.5, 0.75, 1] }],
+  }
+  const batch = slug.buildBatches(layout, resource, 0, paint, 1)
+  assert.equal(batch.glyphCount, 3)
+  assert.equal(batch.drawCount, 3)
+  assert.deepEqual(
+    batch.object.children.map((child) => child.renderOrder),
+    [0, 1, 2],
+  )
+  for (const child of batch.object.children) {
+    assert.equal(child.geometry.getAttribute('slugCurveBase').gpuType, THREE.IntType)
+    assert.ok(child.geometry.getAttribute('slugCurveBase').array instanceof Uint32Array)
+    assert.ok(child.geometry.getAttribute('slugHorizontalBandCount').array instanceof Uint16Array)
+    assert.equal(child.frustumCulled, false)
+  }
+
+  batch.object.position.set(12, -4, 0)
+  batch.object.updateMatrixWorld(true)
+  const firstMesh = batch.object.children[0]
+  const viewport = new THREE.Vector2()
+  let queriedDrawingBuffer = false
+  firstMesh.onBeforeRender(
+    {
+      getDrawingBufferSize(target) {
+        queriedDrawingBuffer = true
+        return target.set(1600, 900)
+      },
+    },
+    {},
+    new THREE.OrthographicCamera(-1, 1, 1, -1),
+  )
+  assert.equal(queriedDrawingBuffer, true)
+  assert.deepEqual(viewport.toArray(), [0, 0], 'render hook does not retain caller-owned state')
+
+  batch.updatePaint({
+    paintIndices: Uint16Array.of(0, 0, 0, 0),
+    palette: [{ color: [1, 0, 0, 0.5] }],
+  })
+  assert.deepEqual(Array.from(firstMesh.geometry.getAttribute('slugColor').array), [1, 0, 0, 0.5])
+  assert.throws(
+    () =>
+      batch.updatePaint({
+        paintIndices: Uint16Array.of(0, 0, 0, 0),
+        palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 1 } }],
+      }),
+    /fill paint only/,
+  )
+
+  batch.dispose()
+  batch.dispose()
+  assert.equal(batch.object.children.length, 0)
+  assert.throws(() => batch.updatePaint(paint), /disposed/)
+
+  let disposedTextures = 0
+  for (const pageResource of resource.pages) {
+    for (const texture of [
+      pageResource.curveTexture,
+      pageResource.headerTexture,
+      pageResource.referenceTexture,
+    ]) {
+      texture.addEventListener('dispose', () => {
+        disposedTextures += 1
+      })
+    }
+  }
+  slug.dispose(resource)
+  assert.equal(disposedTextures, 6)
+  assert.equal(warnings.mock.callCount(), 0, 'Three emitted no TSL warnings')
+  assert.equal(errors.mock.callCount(), 0, 'Three emitted no TSL errors')
+})
+
+test('Slug rejects external page payloads until residency is available', async () => {
+  const records = makeRecords([0])
+  const font = { handle: 3, shapingHash, glyphCount: 1 }
+  const raster = {
+    font: 3,
+    kind: 'slug',
+    extension: 'PMNDRS_font_slug',
+    version: 0,
+    rasterKey,
+    extensionData: {
+      version: 0,
+      rasterKey,
+      shapingHash,
+      glyphCount: 1,
+      glyphIdWidth: 16,
+      planeUnitsPerEm: 2048,
+      recordBufferView: 0,
+      recordStride: 40,
+      pages: [
+        {
+          ...page(1, 2, 3),
+          curve: {
+            width: 2,
+            height: 1,
+            mipLevelCount: 1,
+            colorSpace: 'linear',
+            variants: [
+              {
+                container: 'ktx2',
+                gpuFormat: 'rgba16float',
+                quality: 'lossless',
+                source: { type: 'external', uri: 'curves.ktx2' },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    view(index) {
+      if (index !== 0) throw new RangeError('unexpected view')
+      return records
+    },
+  }
+  await assert.rejects(slug.decode(font, raster), /lazy Slug page residency is not available/)
+})
+
+function page(curveView, headerView, referenceView) {
+  return {
+    curve: {
+      width: 2,
+      height: 1,
+      mipLevelCount: 1,
+      colorSpace: 'linear',
+      variants: [
+        {
+          container: 'ktx2',
+          gpuFormat: 'rgba16float',
+          quality: 'lossless',
+          source: { type: 'bufferView', bufferView: curveView },
+        },
+      ],
+    },
+    headerCount: 1,
+    headerWidth: 1,
+    headerHeight: 1,
+    headerResource: { source: { type: 'bufferView', bufferView: headerView } },
+    referenceCount: 1,
+    referenceWidth: 1,
+    referenceHeight: 1,
+    referenceResource: { source: { type: 'bufferView', bufferView: referenceView } },
+  }
+}
+
+function makeRecords(pages) {
+  const records = new Uint8Array(pages.length * 40)
+  const view = new DataView(records.buffer)
+  pages.forEach((pageIndex, glyphId) => {
+    const offset = glyphId * 40
+    view.setUint16(offset + 8, pageIndex, true)
+    if (pageIndex === 0xffff) return
+    view.setInt16(offset, 0, true)
+    view.setInt16(offset + 2, 0, true)
+    view.setInt16(offset + 4, 2048, true)
+    view.setInt16(offset + 6, 2048, true)
+    view.setUint16(offset + 10, 1, true)
+    view.setUint16(offset + 12, 1, true)
+    view.setUint32(offset + 20, 2, true)
+    view.setUint32(offset + 36, 1, true)
+  })
+  return records
+}
+
+function bytesOf(values) {
+  return new Uint8Array(values.buffer.slice(0))
+}
+
+function makeRgba16fKtx2(width, height, texels) {
+  const dfd = Uint8Array.from([
+    0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x58, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0xc0, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0xbf, 0x00, 0x00, 0x80, 0x3f, 0x10, 0x00, 0x0f, 0xc1, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0xbf, 0x00, 0x00, 0x80, 0x3f, 0x20, 0x00, 0x0f, 0xc2, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0xbf, 0x00, 0x00, 0x80, 0x3f, 0x30, 0x00, 0x0f, 0xcf, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0xbf, 0x00, 0x00, 0x80, 0x3f,
+  ])
+  const dfdOffset = 104
+  const dfdLength = dfd.byteLength + 4
+  const levelOffset = (dfdOffset + dfdLength + 3) & ~3
+  const output = new Uint8Array(levelOffset + texels.byteLength)
+  output.set([0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a])
+  const view = new DataView(output.buffer)
+  view.setUint32(12, 97, true)
+  view.setUint32(16, 2, true)
+  view.setUint32(20, width, true)
+  view.setUint32(24, height, true)
+  view.setUint32(36, 1, true)
+  view.setUint32(40, 1, true)
+  view.setUint32(48, dfdOffset, true)
+  view.setUint32(52, dfdLength, true)
+  view.setBigUint64(80, BigInt(levelOffset), true)
+  view.setBigUint64(88, BigInt(texels.byteLength), true)
+  view.setBigUint64(96, BigInt(texels.byteLength), true)
+  view.setUint32(dfdOffset, dfdLength, true)
+  output.set(dfd, dfdOffset + 4)
+  output.set(texels, levelOffset)
+  return output
+}

@@ -14,7 +14,7 @@ test('the published contract is ESM-only', async () => {
   assert.equal(manifest.module, undefined)
   assert.deepEqual(manifest.bin, { 'pmndrs-text-bake': './dist/node/cli.js' })
   assert.deepEqual(manifest.pmndrs, {
-    text: { bitmap: './bakers/bitmap', msdf: './bakers/msdf' },
+    text: { bitmap: './bakers/bitmap', msdf: './bakers/msdf', slug: './bakers/slug' },
   })
 
   for (const [subpath, target] of Object.entries(manifest.exports)) {
@@ -26,6 +26,8 @@ test('the published contract is ESM-only', async () => {
           './bitmap-abi.json',
           './mtsdf-baker.wasm',
           './mtsdf-abi.json',
+          './slug-baker.wasm',
+          './slug-abi.json',
           './text-shaper.wasm',
           './shaper-abi.json',
         ].includes(subpath),
@@ -59,6 +61,7 @@ test('the public loader graph exposes registration without eager baker or Node h
     /(?:from\s+["']\.\/runtime-bake|new Worker|font_baker\.wasm|node:)/,
   )
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/)
+  assert.doesNotMatch(initialGraph, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/)
   assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/)
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/)
   assert.match(serialWorkerHost, /type:\s*["']module["']/)

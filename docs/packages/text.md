@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:ef8ef461eee97dcedb6b73c12d95f6968002dce78e233a68be8314ad0cf9c3e3"
+source_digest: "sha256:006d460bf1967ca0368e65c9c82b58c3a1f6c0108e926e7bf26e1f33f1223e0d"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -59,6 +59,12 @@ sources:
   - id: slug-baker-host
     resource: ../../packages/text/src/bakers/slug.ts
     title: Direct-memory Slug baker host
+  - id: slug-runtime
+    resource: ../../packages/text/src/raster/slug.ts
+    title: Fixed analytic Slug runtime module
+  - id: slug-shaders
+    resource: ../../packages/text/src/internal/slug-shaders
+    title: Three.js TSL Slug shader implementation
   - id: raster-wasm-host
     resource: ../../packages/text/src/internal/raster-baker-wasm.ts
     title: Shared direct-memory raster baker host
@@ -118,7 +124,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T12:37:41Z"
+  at: "2026-07-28T16:15:00Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -130,6 +136,8 @@ This package owns the accepted public core and React contract types. Its fixture
 Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-validation boundary.[^slug-contract][^slug-validator] The validator layers the pinned Khronos and byte-identical extension schemas over exact 40-byte dense records, exclusive buffer-view ownership, lossless native RGBA16F KTX2 curve pages, R32UI header grids, R16UI reference grids, checked page-relative addressing, authenticated external resources, and bounded GPU residency. Malformed identity, record, address, padding, KTX2 descriptor, integer-grid tail, external hash, and residency cases are named negative controls. Rendering and public package integration remain active work rather than implied by this validation checkpoint.
 
 The package-owned Slug baker now composes the ported outline conversion and exact packing crates into deterministic embedded or independently authenticated external-page artifacts.[^slug-baker] Its Rust-generated V0 ABI drives the same shared direct/segmented host mechanics used by the existing raster bakers, including bounded artifact windows, synchronous progress forwarding, owned-copy-before-release behavior, structured errors, and transactional allocation cleanup.[^slug-baker-host] The serial module-Worker entry remains lazy; neither the baker host nor Wasm enters the initial renderer graph.
+
+The fixed Slug renderer copies and adapts the reviewed Three Flatland TSL implementation to the package's exact V0 resources rather than recreating the analytic coverage graph.[^slug-runtime][^slug-shaders] It uploads lossless RGBA16F curves, R32UI headers, and R16UI glyph-local references as exact Three.js data textures; uses integer instanced addresses; preserves consecutive page runs; caps hostile per-band fragment work; and retains the stable q-form quadratic solver plus loop-invariant derivative and reciprocal hoists. Shader construction remains inside `Fn` boundaries, while package tests reject Three.js/TSL diagnostics and prove that ordinary core, Bitmap, and MTSDF entry graphs do not eagerly include Slug. Embedded pages decode through this runtime today. Independently packaged pages remain authenticated by the validator and baker parity fixtures but are rejected by the renderer until Milestone 9 connects shared external-resource residency; browser/backend pixels and the complete visual/performance corpus remain required before the milestone can close.
 
 Milestone 8.1 adds a repository-owned `no_std + alloc` Rust MTSDF core and a non-shipping admission harness beside the package's existing bakers. Typed AoS outline construction lowers once into kind-segregated SoA spans with contour identity; reusable scratch keeps per-pixel traversal allocation-free and now retains corner-coloring storage between glyphs. True signed curve distances, contour-aware overlap combination, nonzero-fill sign correction, and deterministic edge coloring produce zero coverage mismatches against pinned native `msdfgen` 1.13.0 across ordinary, acute, overlapping, self-intersecting, quadratic, cubic, and counter fixtures. Mean alpha error stays between 0.472 and 0.549 bytes. The optimized `wasm32-unknown-unknown` admission module imports nothing and its compiled graph contains no font parser, WGPU, native binding, or WASI dependency. A bounded cargo-fuzz lane covers malformed outline streams. The oracle and explicit SIMD implementation remain test-only; scalar is the single production kernel.
 
@@ -241,3 +249,9 @@ The [API contract](../planning/api-shapes.md) remains authoritative for public b
 [^bitmap-baker]: Artifact generation, validation, and generic composition are complete; GPU resource creation is deliberately deferred to the renderer milestone.
 [^node-host]: The Node host trusts selected installed baker code but authenticates every returned artifact; hostile baked assets are independently revalidated at the loader boundary.
 [^loader]: Raster-package schema and payload semantics remain in each module's `decode`; the generic registry validates only package-neutral container and reciprocal identity invariants.
+[^slug-contract]: Slug V0 identity is fixed independently from the optional baker and renderer modules.
+[^slug-validator]: Standalone validation authenticates embedded and external resource forms before runtime ownership begins.
+[^slug-baker]: The Rust baker owns outline conversion, exact curve/band packing, and deterministic package construction.
+[^slug-baker-host]: The TypeScript host owns direct-memory transfer, progress, errors, and cleanup without entering the renderer graph.
+[^slug-runtime]: The public runtime subpath owns resource upload, batching, paint admission, and lifetime.
+[^slug-shaders]: The internal shader directory preserves the copied analytic algorithm while adapting its storage and node graph to the package contract and installed Three.js release.
