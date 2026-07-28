@@ -9,8 +9,36 @@ import { gzipSync } from 'node:zlib'
 import { bakeFont } from '@pmndrs/text/bake'
 import { createSlugBaker, slugBakerFromCore } from '@pmndrs/text/bakers/slug'
 
-const experimentId = 'slug-fixed32-bands-001'
-const baseCommit = '24976c6c2f67a3fc1879cd6f672fca332e297fec'
+const experimentName =
+  process.argv
+    .find((argument) => argument.startsWith('--experiment='))
+    ?.slice('--experiment='.length) ?? 'fixed32'
+const experiments = {
+  fixed32: {
+    experimentId: 'slug-fixed32-bands-001',
+    baseCommit: '24976c6c2f67a3fc1879cd6f672fca332e297fec',
+    changedVariable: 'fixed per-glyph band count',
+    cargoFeature: 'autoresearch-fixed32-bands',
+    fileLabel: 'fixed32',
+    manifestFields: { bandCount: 32 },
+  },
+  adaptive: {
+    experimentId: 'slug-adaptive-bands-001',
+    baseCommit: '76d03f7ebd85d9b31b365ef5313adc89c2567ff2',
+    changedVariable: 'adaptive per-glyph band count',
+    cargoFeature: 'autoresearch-adaptive-bands',
+    fileLabel: 'adaptive',
+    manifestFields: {
+      bandCounts: [16, 32, 64],
+      maximumMeanReferencesPerBand: 6,
+    },
+  },
+} as const
+if (experimentName !== 'fixed32' && experimentName !== 'adaptive') {
+  throw new TypeError(`Unknown Slug band experiment: ${experimentName}`)
+}
+const experiment = experiments[experimentName]
+const { baseCommit, experimentId } = experiment
 const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
 const outputDirectory = resolve('fixtures/autoresearch', experimentId)
 const manifestOutput = resolve(outputDirectory, 'artifacts-v0.json')
@@ -18,7 +46,9 @@ const check = process.argv.includes('--check')
 const requestedFixture = process.argv
   .find((argument) => argument.startsWith('--fixture='))
   ?.slice('--fixture='.length)
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-slug-fixed32-'))
+const temporaryDirectory = await mkdtemp(
+  join(tmpdir(), `pmndrs-text-slug-${experiment.fileLabel}-`),
+)
 const cargoTarget = resolve(temporaryDirectory, 'cargo-target')
 
 interface ExperimentArtifact {
@@ -45,37 +75,37 @@ const fixtures = [
   {
     fontFixture: 'inter',
     input: resolve('fixtures/fonts/inter-v4.1/Inter-Regular.ttf'),
-    output: 'inter-slug-fixed32.font.glb.gz',
+    output: `inter-slug-${experiment.fileLabel}.font.glb.gz`,
   },
   {
     fontFixture: 'amiri',
     input: resolve('fixtures/fonts/amiri-1.002/Amiri-Regular.ttf'),
-    output: 'amiri-slug-fixed32.font.glb.gz',
+    output: `amiri-slug-${experiment.fileLabel}.font.glb.gz`,
   },
   {
     fontFixture: 'noto-sans-devanagari',
     input: resolve('fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf'),
-    output: 'noto-sans-devanagari-slug-fixed32.font.glb.gz',
+    output: `noto-sans-devanagari-slug-${experiment.fileLabel}.font.glb.gz`,
   },
   {
     fontFixture: 'dot-gothic-16',
     input: resolve('fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf'),
-    output: 'dot-gothic-16-slug-fixed32.font.glb.gz',
+    output: `dot-gothic-16-slug-${experiment.fileLabel}.font.glb.gz`,
   },
   {
     fontFixture: 'noto-sans-cjk-showcase',
     input: resolve('fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf'),
-    output: 'noto-sans-cjk-showcase-slug-fixed32.font.glb.gz',
+    output: `noto-sans-cjk-showcase-slug-${experiment.fileLabel}.font.glb.gz`,
   },
   {
     fontFixture: 'source-serif-4',
     input: resolve('fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf'),
-    output: 'source-serif-4-slug-fixed32.font.glb.gz',
+    output: `source-serif-4-slug-${experiment.fileLabel}.font.glb.gz`,
   },
   {
     fontFixture: 'dancing-script',
     input: resolve('fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf'),
-    output: 'dancing-script-slug-fixed32.font.glb.gz',
+    output: `dancing-script-slug-${experiment.fileLabel}.font.glb.gz`,
   },
 ] as const
 
@@ -87,7 +117,7 @@ if (selectedFixtures.length === 0) {
   throw new TypeError(`Unknown Slug fixture: ${String(requestedFixture)}`)
 }
 if (check && requestedFixture !== undefined) {
-  throw new TypeError('--fixture cannot weaken the complete fixed-32 experiment check')
+  throw new TypeError('--fixture cannot weaken the complete Slug band experiment check')
 }
 
 try {
@@ -104,7 +134,7 @@ try {
     '--locked',
     '--no-default-features',
     '--features',
-    'artifact-baker,autoresearch-fixed32-bands',
+    `artifact-baker,${experiment.cargoFeature}`,
     '--target-dir',
     cargoTarget,
   ])
@@ -162,7 +192,7 @@ try {
     if (check) {
       const checkedIn = await readFile(checkedInOutput)
       if (!compressed.equals(checkedIn)) {
-        throw new Error(`${fixture.output} is not byte-identical to a fresh fixed-32 bake`)
+        throw new Error(`${fixture.output} is not byte-identical to a fresh experiment bake`)
       }
     } else {
       await writeFile(resolve(temporaryDirectory, fixture.output), compressed)
@@ -178,15 +208,15 @@ try {
     schemaVersion: 0,
     experimentId,
     baseCommit,
-    changedVariable: 'fixed per-glyph band count',
-    bandCount: 32,
-    cargoFeature: 'autoresearch-fixed32-bands',
+    changedVariable: experiment.changedVariable,
+    ...experiment.manifestFields,
+    cargoFeature: experiment.cargoFeature,
     artifacts,
   }
   if (check) {
     const expected = JSON.parse(await readFile(manifestOutput, 'utf8'))
     if (JSON.stringify(manifest) !== JSON.stringify(expected)) {
-      throw new Error('fresh fixed-32 Slug manifest does not match checked-in evidence')
+      throw new Error('fresh Slug band experiment manifest does not match checked-in evidence')
     }
   } else {
     await mkdir(outputDirectory, { recursive: true })
