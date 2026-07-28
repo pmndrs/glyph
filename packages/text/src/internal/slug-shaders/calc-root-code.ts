@@ -3,7 +3,8 @@
  * See RESEARCH.md for repository provenance.
  */
 import type { Node } from 'three/webgpu'
-import { uint } from 'three/tsl'
+import { lessThan, uint } from 'three/tsl'
+import { uintBitAnd, uintBitOr, uintShiftLeft, uintShiftRight } from './tsl-compat.js'
 
 /**
  * Calculate root eligibility from the signs of three control-point coordinates.
@@ -14,17 +15,17 @@ export function calcRootCode(
   y2: Node<'float'>,
   y3: Node<'float'>,
 ): Node<'uint'> {
-  const negative1: Node<'bool'> = y1.lessThan(0)
-  const negative2: Node<'bool'> = y2.lessThan(0)
-  const negative3: Node<'bool'> = y3.lessThan(0)
+  const negative1: Node<'bool'> = lessThan(y1, 0)
+  const negative2: Node<'bool'> = lessThan(y2, 0)
+  const negative3: Node<'bool'> = lessThan(y3, 0)
   const s1: Node<'uint'> = uint(negative1)
   const s2: Node<'uint'> = uint(negative2)
   const s3: Node<'uint'> = uint(negative3)
-  const shifted2: Node<'uint'> = s2.shiftLeft(uint(1))
-  const shifted3: Node<'uint'> = s3.shiftLeft(uint(2))
-  const lowSigns: Node<'uint'> = s1.bitOr(shifted2)
-  const shift: Node<'uint'> = lowSigns.bitOr(shifted3)
-  const tableBits: Node<'uint'> = uint(0x2e74).shiftRight(shift)
+  const shifted2: Node<'uint'> = uintShiftLeft(s2, uint(1))
+  const shifted3: Node<'uint'> = uintShiftLeft(s3, uint(2))
+  const lowSigns: Node<'uint'> = uintBitOr(s1, shifted2)
+  const shift: Node<'uint'> = uintBitOr(lowSigns, shifted3)
+  const tableBits: Node<'uint'> = uintShiftRight(uint(0x2e74), shift)
 
-  return tableBits.bitAnd(uint(0x0101))
+  return uintBitAnd(tableBits, uint(0x0101))
 }

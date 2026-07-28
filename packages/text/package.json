@@ -101,6 +101,7 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
     "typecheck": "node ../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs -- -p tsconfig.json --noEmit",
+    "typecheck:slug-tsl": "node ../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs -- -p tsconfig.slug-tsl.json --noEmit",
     "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
     "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-admission/Cargo.toml --lib --locked && cargo test --manifest-path rust/slug-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/slug-fontations/Cargo.toml --lib --locked && cargo test --manifest-path rust/slug-baker/Cargo.toml --lib --locked && pnpm test:mtsdf-core-wasm && pnpm check:mtsdf-admission && pnpm check:mtsdf-simd && pnpm check:mtsdf-oracle",
     "test:integration": "pnpm check:unicode-tests && cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && cargo test --manifest-path rust/shaper/Cargo.toml --tests --locked && cargo test --manifest-path rust/slug-baker/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
