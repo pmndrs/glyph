@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:7986db4e0c3b57fe38fa04b71cf5c3cf746cb09216e75eb43c40a1ea0d4e6db2"
+source_digest: "sha256:94c0031eea42f525f96accf6bb32fd8365b03a699e6bb98a5c8fda4f0d7be7e8"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -19,7 +19,7 @@ sources:
     title: Canonical benchmark ipsum corpus
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T20:49:42Z"
+  at: "2026-07-28T20:55:23Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -64,7 +64,7 @@ The committed raster performance observation uses the live Paint & Effects workl
 
 The Slug-specific 1,500×950 Text Ladder matrix retains twelve raw causal CPU/FPS/GPU reports for all 28 backend/DPR/source combinations. Every authored specimen renders zero missing glyphs, 810–2,160 analytic glyph instances, and eighteen draws. Across this Apple/Chromium observation, median CPU submit spans `0.4–0.8 ms`; median GPU time spans `0.310–3.194 ms`; startup spans `46.5–263.0 ms`; compressed artifacts span `96,145–3,639,781 B`; and analytic curve/header/reference residency spans `376,832–21,970,944 B`. WebGPU's DPR-1 median GPU range is `0.310–1.120 ms` and DPR-2 is `0.755–2.972 ms`; forced WebGL2's corresponding ranges are `0.507–1.209 ms` and `1.042–3.194 ms`. Different specimens and source payloads make this a guard matrix, not a claim that font families are interchangeable microbenchmarks. The raw histories and exact resource components establish the immutable baseline for interleaved prior-art optimization challengers.
 
-The first retained challenger doubles every glyph from 16 to 32 bands without changing the format or shader. All 28 quality cells remain byte-identical and scalar traversal falls by 12.0–19.4%, while five-round DPR-2 A/B observations show median GPU changes from −5.3% to −10.4% across Inter and the Japanese showcase on both backends. Fixed 32 is calibration rather than a production policy: gzip grows 14.4–21.6%, Slug GPU residency grows 13.0–20.3%, and Japanese WebGPU pairs cross zero. The retained artifact generator, raw runs, exact hashes, and result note make adaptive per-glyph bands the next bounded challenger instead of silently accepting a universal memory trade. A precommitted `{16, 32, 64}` policy targeting at most six mean references per band is rejected before GPU measurement: it escalates too many glyphs to 64, grows gzip by 9.7–30.2%, and grows residency by 8.6–25.0%. Its exact artifacts and glyph-count distributions prevent the failed threshold from being rediscovered. A separate precommitted `{16, 32}` policy now tests the same trigger without 64-band escalation; it remains staged until its artifact, quality, and performance gates run.
+The first retained challenger doubles every glyph from 16 to 32 bands without changing the format or shader. All 28 quality cells remain byte-identical and scalar traversal falls by 12.0–19.4%, while five-round DPR-2 A/B observations show median GPU changes from −5.3% to −10.4% across Inter and the Japanese showcase on both backends. Fixed 32 is calibration rather than a production policy: gzip grows 14.4–21.6%, Slug GPU residency grows 13.0–20.3%, and Japanese WebGPU pairs cross zero. The retained artifact generator, raw runs, exact hashes, and result note make adaptive per-glyph bands the next bounded challenger instead of silently accepting a universal memory trade. A precommitted `{16, 32, 64}` policy targeting at most six mean references per band is rejected before GPU measurement: it escalates too many glyphs to 64, grows gzip by 9.7–30.2%, and grows residency by 8.6–25.0%. Its exact artifacts and glyph-count distributions prevent the failed threshold from being rediscovered. A separate precommitted `{16, 32}` policy now tests the same trigger without 64-band escalation; its copied-and-adapted capture lane requires exact 28-cell pixels and alternating DPR-2 timing for all seven sources on both backends before classifying the result.
 
 Six authenticated full-font fixtures cover sans, serif, script, Arabic, Devanagari, and Japanese stress. A seventh deterministic Noto Sans CJK JP subset covers only the authored Advanced Shaping Japanese corpus so the visual default uses a conventional sans rather than DotGothic16's intentional pixel style. Its source is `38,092 B`; its Bitmap GLB is `65,996 B` on one page; and its MTSDF artifact is `1,044,110 B` gzip / `3,172,756 B` raw / one page / `4,215,804 B` exact mipmapped GPU memory. The full Noto CJK font remains the shaping oracle and Milestone 13 paging target. DotGothic16 remains an explicit full-face raster stress fixture, not the representative CJK visual default. A streaming test authenticates all fourteen artifacts, embedded source hashes, complete fixture-local glyph counts, page totals, and exact floor-halved mip chains without rebaking them. The production build emits and links one exact font-notices artifact containing every redistributed license.
 
