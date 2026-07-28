@@ -6,6 +6,8 @@ Before writing or reviewing Rust, TypeScript, React, Wasm boundaries, or tests, 
 
 Use the repository-local `tsl` skill before implementing or reviewing Three.js Shading Language materials, compute work, post-processing, or GLSL-to-TSL migrations. Verify examples against the repository's installed Three.js version rather than relying on remembered APIs.
 
+Consult the repository-local `evidence-first` skill as the default style guidance for human-facing engineering communication, including chat updates and final answers, reports, reviews, handoffs, PR and issue prose, READMEs, and technical documentation. It offers situational cues rather than a fixed template. Domain skills still determine the work and valid evidence, `open-knowledge-format` governs bundle structure and provenance, and `diataxis-docs` governs the purpose and top-level structure of reader-facing documentation.
+
 Use these canonical sources instead of creating shadow plans or duplicate status prose:
 
 - `docs/roadmap/roadmap.md` for milestone order and checkbox status;

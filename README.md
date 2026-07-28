@@ -167,6 +167,8 @@ Supporting evidence is intentionally outside that path: [RESEARCH.md](RESEARCH.m
 
 The knowledge corpus under [`docs`](docs/index.md) is an [Open Knowledge Format v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) bundle: reserved indexes provide progressive disclosure, while frontmatter provenance and links make product documentation, plans, decisions, specifications, and package references portable to agents. Diátaxis informs reader-facing documentation without forcing internal project artifacts into a four-part template.
 
+Repository agents consult the local `evidence-first` skill as default style guidance across chat, reviews, handoffs, PRs, READMEs, and technical docs. It provides situational cues rather than a fixed template, operating inside Open Knowledge Format's bundle and provenance rules and Diátaxis's document purposes.
+
 ## Work locally
 
 ```sh
