@@ -8,7 +8,7 @@ import {
 import * as THREE from 'three/webgpu'
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap'
 
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
+import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures'
 import { benchmarkIpsumText } from '../benchmark/font-fixtures'
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state'
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text'
@@ -161,6 +161,7 @@ export async function createComparisonWorkloadPreview(options: {
   readonly showLayoutBounds: boolean
   readonly signal?: AbortSignal
   readonly technique: RasterTechnique
+  readonly textLadderSpecimen?: RasterConformanceSpecimen
   readonly width: number
   readonly workload: ComparisonWorkloadId
   readonly onError: (error: unknown) => void
@@ -230,6 +231,7 @@ export async function createComparisonWorkloadPreview(options: {
         width,
         height,
         performance.now() - animationEpoch,
+        options.textLadderSpecimen,
       )
       const scheduledAt = performance.now()
       try {
@@ -568,6 +570,7 @@ function createEntries(
   viewportWidth: number,
   viewportHeight: number,
   animationElapsedMs: number,
+  textLadderSpecimen?: RasterConformanceSpecimen,
 ): readonly WorkloadEntry[] {
   const base = {
     font,
@@ -576,12 +579,20 @@ function createEntries(
     lineHeight: LIVE_TEXT_LINE_HEIGHT,
   }
   if (configuration.workload === 'text-ladder') {
+    const specimen = textLadderSpecimen ?? {
+      text: LADDER_SENTENCE,
+      language: 'en',
+      direction: 'ltr',
+    }
     return ladderCssSizes(viewportHeight).map((cssSize) => {
-      const content = `${cssSize} px  ${LADDER_SENTENCE}`
+      const content =
+        textLadderSpecimen === undefined ? `${cssSize} px  ${specimen.text}` : specimen.text
       const text = new Text({
         ...base,
         text: content,
         fontSize: cssSize,
+        language: specimen.language,
+        direction: specimen.direction,
         color: LIVE_TEXT_COLOR,
       })
       return textEntry('primary', text, content)

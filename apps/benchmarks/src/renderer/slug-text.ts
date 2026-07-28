@@ -27,11 +27,7 @@ import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-
 import showcaseManifest from '../../fixtures/rendering/showcase-slug-fixtures-v0.json'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
-import {
-  conformanceText,
-  type BenchmarkFontFixture,
-  type SelectableFontFixture,
-} from '../benchmark/font-fixtures'
+import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../benchmark/font-fixtures'
 import type { FontDelivery } from '../benchmark/url-state'
 import { createCanvasSurface } from './canvas-surface'
 import { finiteCanvasDelta } from './canvas-view'
@@ -124,6 +120,7 @@ export interface SlugTextConformanceCapture {
   readonly meanAbsoluteError: number
   readonly maximumError: number
   readonly errorPixels: number
+  readonly severeErrorPixels: number
   readonly glyphCount: number
   readonly evaluatedCurves: number
   readonly renderSubmitMs: number
@@ -305,12 +302,14 @@ export function createSlugConformanceTarget(backend: RendererBackend): Benchmark
           backendWebGl2: backend === 'webgl2' ? 1 : 0,
           dpr: resources.dpr,
           fixtureIsInter: fontFixture === 'inter' ? 1 : 0,
+          fixtureIsDotGothic: fontFixture === 'dot-gothic-16' ? 1 : 0,
           pixelCount: capture.width * capture.height,
           glyphCount: capture.glyphCount,
           evaluatedCurves: capture.evaluatedCurves,
           meanAbsoluteError: capture.meanAbsoluteError,
           maximumError: capture.maximumError,
           errorPixels: capture.errorPixels,
+          severeErrorPixels: capture.severeErrorPixels,
           renderMs: capture.renderSubmitMs,
         },
       }
@@ -784,7 +783,7 @@ export async function captureSlugTextConformance(options: {
 export async function captureSlugSourceOutlineFidelity(options: {
   readonly backend: RendererBackend
   readonly dpr: number
-  readonly fontFixture: SelectableFontFixture
+  readonly fontFixture: BenchmarkFontFixture
   readonly signal?: AbortSignal
 }): Promise<SourceOutlineFidelityCapture> {
   options.signal?.throwIfAborted()
@@ -796,6 +795,7 @@ export async function captureSlugSourceOutlineFidelity(options: {
   )
   try {
     const capture = await captureFlatSlugConformance(resources)
+    const specimen = rasterConformanceSpecimen(options.fontFixture)
     options.signal?.throwIfAborted()
     return await captureSourceOutlineFidelity({
       candidate: capture.candidate,
@@ -804,10 +804,11 @@ export async function captureSlugSourceOutlineFidelity(options: {
       dpr: options.dpr,
       fontFixture: options.fontFixture,
       fontSize: 64 / options.dpr,
+      direction: specimen.direction,
       layout: committedLayout(resources.line),
       originX: resources.line.position.x,
       originY: resources.line.position.y,
-      text: conformanceText(),
+      text: specimen.text,
       renderSubmitMs: capture.renderSubmitMs,
     })
   } finally {
@@ -839,8 +840,9 @@ async function createFlatSlugConformanceResources(
     const loaded = await loadSlugFont(signal, fontFixture, delivery)
     font = loaded.font
     const rasterKey = await slugDescriptorRasterKey()
+    const specimen = rasterConformanceSpecimen(fontFixture)
     line = new Text({
-      text: conformanceText(),
+      text: specimen.text,
       font,
       raster: loaded.raster,
       fontSize: 64 / dpr,
@@ -849,8 +851,20 @@ async function createFlatSlugConformanceResources(
       width: 476,
       wrap: 'word',
       color: 0xffffff,
+      language: specimen.language,
+      direction: specimen.direction,
+      textAlign: 'start',
     })
     await line.ready
+    const conformanceMissingGlyphCount = committedLayout(line).glyphIds.reduce(
+      (count, glyphId) => count + (glyphId === 0 ? 1 : 0),
+      0,
+    )
+    if (conformanceMissingGlyphCount !== 0) {
+      throw new Error(
+        `${fontFixture} Slug conformance specimen contains ${String(conformanceMissingGlyphCount)} missing glyphs`,
+      )
+    }
     const raster = await font.loadRaster(
       { rasterKey, kind: slug.kind },
       signal === undefined ? undefined : { signal },
@@ -935,6 +949,7 @@ async function captureFlatSlugConformance(
     meanAbsoluteError: comparison.meanAbsoluteError,
     maximumError: comparison.maximumError,
     errorPixels: comparison.errorPixels,
+    severeErrorPixels: comparison.severeErrorPixels,
     glyphCount: referenceResult.glyphCount,
     evaluatedCurves: referenceResult.evaluatedCurves,
     renderSubmitMs,

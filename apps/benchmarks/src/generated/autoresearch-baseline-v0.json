@@ -70,6 +70,18 @@
       "path": "apps/benchmarks/fixtures/results/raster-performance-chromium149.json",
       "sha256": "a88953ecf9222c56d43b387895595add0bc2d797312e1022f4eaf3ed634ea4bf",
       "bytes": 3668
+    },
+    {
+      "id": "slug-quality-matrix",
+      "path": "apps/benchmarks/fixtures/results/slug-quality-matrix-chromium149.json",
+      "sha256": "42ff78d8444fd1b18be3a5fdb83ff89f61d84a06759c5031bb23f742678987a1",
+      "bytes": 43813
+    },
+    {
+      "id": "slug-performance-matrix",
+      "path": "apps/benchmarks/fixtures/results/slug-performance-matrix-chromium149.json",
+      "sha256": "a13ee31561a4841bd3885028ca590024f7f5151ad42177495070616bd499f57a",
+      "bytes": 174729
     }
   ]
 }

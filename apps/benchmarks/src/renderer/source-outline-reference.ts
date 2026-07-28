@@ -1,15 +1,23 @@
 import type { ParagraphLayout } from '@pmndrs/text'
 
+import amiriSourceUrl from '../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url'
 import dancingScriptSourceUrl from '../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url'
+import dotGothicSourceUrl from '../../fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf?url'
 import interSourceUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url'
+import notoCjkSourceUrl from '../../fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf?url'
+import devanagariSourceUrl from '../../fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf?url'
 import sourceSerifSourceUrl from '../../fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf?url'
-import type { SelectableFontFixture } from '../benchmark/font-fixtures'
+import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
 import { compareRgba8Coverage } from './mtsdf-cpu-reference'
 
-const sourceFontUrls: Readonly<Record<SelectableFontFixture, string>> = {
+const sourceFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interSourceUrl,
   'source-serif-4': sourceSerifSourceUrl,
   'dancing-script': dancingScriptSourceUrl,
+  amiri: amiriSourceUrl,
+  'noto-sans-devanagari': devanagariSourceUrl,
+  'noto-sans-cjk-showcase': notoCjkSourceUrl,
+  'dot-gothic-16': dotGothicSourceUrl,
 }
 
 export interface SourceOutlineFidelityCapture {
@@ -30,8 +38,9 @@ export interface SourceOutlineReferenceOptions {
   readonly width: number
   readonly height: number
   readonly dpr: number
-  readonly fontFixture: SelectableFontFixture
+  readonly fontFixture: BenchmarkFontFixture
   readonly fontSize: number
+  readonly direction: 'ltr' | 'rtl'
   readonly layout: ParagraphLayout
   readonly originX: number
   readonly originY: number
@@ -66,7 +75,8 @@ export async function captureSourceOutlineFidelity(
     context.fillRect(0, 0, options.width, options.height)
     context.fillStyle = '#fff'
     context.font = `${options.fontSize * options.dpr}px "${family}"`
-    context.textAlign = 'left'
+    context.direction = options.direction
+    context.textAlign = 'start'
     context.textBaseline = 'alphabetic'
     context.fontKerning = 'normal'
     for (let line = 0; line < options.layout.lineBaselines.length; line += 1) {
@@ -78,7 +88,7 @@ export async function captureSourceOutlineFidelity(
       }
       context.fillText(
         options.text.slice(start, end),
-        options.originX * options.dpr,
+        (options.originX + (options.direction === 'rtl' ? options.layout.width : 0)) * options.dpr,
         (-options.originY + baseline) * options.dpr,
       )
     }

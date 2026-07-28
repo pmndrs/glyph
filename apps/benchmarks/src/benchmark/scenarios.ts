@@ -231,6 +231,7 @@ function slugSamplingValidation(
     const dpr = metrics?.dpr
     const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
     const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    const dotGothic = metrics?.fixtureIsDotGothic === 1
     if (
       dpr === undefined ||
       value.outputBytes !== width * height * 4 ||
@@ -241,8 +242,10 @@ function slugSamplingValidation(
       !finiteNonnegative(metrics.errorPixels) ||
       metrics.pixelCount !== width * height ||
       metrics.meanAbsoluteError > 0.25 ||
-      metrics.maximumError > 128 ||
+      metrics.maximumError > (dotGothic ? 255 : 128) ||
       metrics.errorPixels > metrics.pixelCount * 0.03 ||
+      !finiteNonnegative(metrics.severeErrorPixels) ||
+      metrics.severeErrorPixels > (dotGothic ? 64 : 0) ||
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
@@ -262,6 +265,7 @@ function sourceOutlineFidelityValidation(
     const isBitmap = metrics?.techniqueBitmap === 1
     const isMtsdf = metrics?.techniqueMtsdf === 1
     const isSlug = metrics?.techniqueSlug === 1
+    const dotGothic = metrics?.fixtureIsDotGothic === 1
     if (
       typeof pixelCount !== 'number' ||
       pixelCount <= 0 ||
@@ -269,7 +273,7 @@ function sourceOutlineFidelityValidation(
       Number(isBitmap) + Number(isMtsdf) + Number(isSlug) !== 1 ||
       metrics?.physicalPpem !== (isBitmap ? 16 : 64) ||
       !finiteNonnegative(metrics.meanAbsoluteError) ||
-      metrics.meanAbsoluteError > 12 ||
+      metrics.meanAbsoluteError > (dotGothic ? 24 : 12) ||
       !finiteNonnegative(metrics.maximumError) ||
       metrics.maximumError > 255 ||
       !finiteNonnegative(metrics.errorPixels) ||

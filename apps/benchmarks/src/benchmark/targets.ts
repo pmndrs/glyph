@@ -1105,9 +1105,7 @@ function sourceOutlineFidelityTarget(
     status: () => 'ready',
     load: async () => undefined,
     run: async (input, _sampleIndex, controls) => {
-      const fontFixture = selectableFontFixture(
-        input.fontFixture ?? configuredInput.fontFixture ?? 'inter',
-      )
+      const fontFixture = input.fontFixture ?? configuredInput.fontFixture ?? 'inter'
       const capture =
         technique === 'slug'
           ? await import('../renderer/slug-text').then(({ captureSlugSourceOutlineFidelity }) =>
@@ -1122,7 +1120,7 @@ function sourceOutlineFidelityTarget(
                 captureMtsdfSourceOutlineFidelity({
                   backend,
                   dpr: controls.dpr,
-                  fontFixture,
+                  fontFixture: selectableFontFixture(fontFixture),
                 }),
               )
             : await import('../renderer/bitmap-text').then(
@@ -1130,7 +1128,7 @@ function sourceOutlineFidelityTarget(
                   captureBitmapSourceOutlineFidelity({
                     backend,
                     dpr: controls.dpr,
-                    fontFixture,
+                    fontFixture: selectableFontFixture(fontFixture),
                   }),
               )
       return {
@@ -1140,6 +1138,7 @@ function sourceOutlineFidelityTarget(
           techniqueBitmap: technique === 'bitmap' ? 1 : 0,
           techniqueMtsdf: technique === 'mtsdf' ? 1 : 0,
           techniqueSlug: technique === 'slug' ? 1 : 0,
+          fixtureIsDotGothic: fontFixture === 'dot-gothic-16' ? 1 : 0,
           backendWebGpu: backend === 'webgpu' ? 1 : 0,
           backendWebGl2: backend === 'webgl2' ? 1 : 0,
           dpr: controls.dpr,

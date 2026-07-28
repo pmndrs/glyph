@@ -21,6 +21,12 @@ export interface AdvancedFontFixtureDefinition {
   readonly metadata: string
 }
 
+export interface RasterConformanceSpecimen {
+  readonly text: string
+  readonly language: string
+  readonly direction: 'ltr' | 'rtl'
+}
+
 export const SELECTABLE_FONT_FIXTURES: readonly BenchmarkFontFixtureDefinition[] = [
   { id: 'inter', label: 'Inter Regular', metadata: 'Sans · 4.1 · TrueType' },
   {
@@ -78,4 +84,48 @@ export function benchmarkIpsumText(): string {
 
 export function conformanceText(): string {
   return BENCHMARK_IPSUM_CONFORMANCE_TEXT
+}
+
+const LATIN_RASTER_CONFORMANCE_SPECIMEN: RasterConformanceSpecimen = {
+  text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
+  language: 'en',
+  direction: 'ltr',
+}
+
+const rasterConformanceSpecimens: Readonly<
+  Record<BenchmarkFontFixture, RasterConformanceSpecimen>
+> = {
+  inter: LATIN_RASTER_CONFORMANCE_SPECIMEN,
+  'source-serif-4': LATIN_RASTER_CONFORMANCE_SPECIMEN,
+  'dancing-script': {
+    text: 'The quick brown fox jumps over the lazy dog. AVATAR office affine forms flow.',
+    language: 'en',
+    direction: 'ltr',
+  },
+  amiri: {
+    text: 'النص العربي يتدفق بوضوح، وتتصل الحروف وتتغير أشكالها مع التشكيل والالتفاف.',
+    language: 'ar',
+    direction: 'rtl',
+  },
+  'noto-sans-devanagari': {
+    text: 'कर्म क्षेत्र में प्रगति निरंतर चलती है। मात्राएँ सही स्थान पर आती हैं और संयुक्त रूप बदलते हैं।',
+    language: 'hi',
+    direction: 'ltr',
+  },
+  'noto-sans-cjk-showcase': {
+    text: '文字組版では、空白なしでも自然に改行します。句読点の位置を保ちながら段落が伸びていきます。',
+    language: 'ja',
+    direction: 'ltr',
+  },
+  'dot-gothic-16': {
+    text: '文字組版では、空白なしでも自然に改行します。句読点の位置を保ちながら段落が伸びていきます。',
+    language: 'ja',
+    direction: 'ltr',
+  },
+}
+
+export function rasterConformanceSpecimen(
+  fontFixture: BenchmarkFontFixture,
+): RasterConformanceSpecimen {
+  return rasterConformanceSpecimens[fontFixture]
 }
