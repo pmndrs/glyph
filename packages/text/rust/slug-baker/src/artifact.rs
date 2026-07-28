@@ -21,14 +21,25 @@ use crate::{
     },
 };
 
-#[cfg(all(
-    feature = "autoresearch-fixed32-bands",
-    feature = "autoresearch-adaptive-bands"
+#[cfg(any(
+    all(
+        feature = "autoresearch-fixed32-bands",
+        feature = "autoresearch-adaptive-bands"
+    ),
+    all(
+        feature = "autoresearch-fixed32-bands",
+        feature = "autoresearch-adaptive32-bands"
+    ),
+    all(
+        feature = "autoresearch-adaptive-bands",
+        feature = "autoresearch-adaptive32-bands"
+    )
 ))]
 compile_error!("select exactly one Slug band autoresearch feature");
 
 const ADAPTIVE_MEAN_REFERENCE_TARGET: usize = 6;
 const ADAPTIVE_BAND_COUNTS: [u16; 3] = [16, 32, 64];
+const ADAPTIVE32_BAND_COUNTS: [u16; 2] = [16, 32];
 
 /// Bake one deterministic analytic Slug resource from the exact shaping font source.
 pub fn bake_slug(
@@ -210,11 +221,15 @@ fn select_bands(curves: &[Quadratic], bounds: Bounds) -> Result<GlyphBands, Buil
     if cfg!(feature = "autoresearch-fixed32-bands") {
         return build_bands(curves, bounds, 32);
     }
-    if !cfg!(feature = "autoresearch-adaptive-bands") {
+    let adaptive_band_counts: &[u16] = if cfg!(feature = "autoresearch-adaptive-bands") {
+        &ADAPTIVE_BAND_COUNTS
+    } else if cfg!(feature = "autoresearch-adaptive32-bands") {
+        &ADAPTIVE32_BAND_COUNTS
+    } else {
         return build_bands(curves, bounds, DEFAULT_BAND_COUNT);
-    }
+    };
     let mut selected = None;
-    for band_count in ADAPTIVE_BAND_COUNTS {
+    for &band_count in adaptive_band_counts {
         let bands = build_bands(curves, bounds, band_count)?;
         let reference_count = bands
             .horizontal
@@ -319,7 +334,10 @@ mod tests {
         assert_eq!(first.report.metadata_bytes, 2937 * 40);
     }
 
-    #[cfg(feature = "autoresearch-adaptive-bands")]
+    #[cfg(any(
+        feature = "autoresearch-adaptive-bands",
+        feature = "autoresearch-adaptive32-bands"
+    ))]
     #[test]
     fn adaptive_policy_keeps_sparse_glyphs_and_expands_dense_glyphs() {
         let bounds = Bounds {
@@ -337,7 +355,12 @@ mod tests {
         assert_eq!(sparse.horizontal.len(), 16);
         assert_eq!(sparse.vertical.len(), 16);
         let dense = select_bands(&[diagonal; 7], bounds).unwrap();
-        assert_eq!(dense.horizontal.len(), 64);
-        assert_eq!(dense.vertical.len(), 64);
+        let expected_dense_count = if cfg!(feature = "autoresearch-adaptive-bands") {
+            64
+        } else {
+            32
+        };
+        assert_eq!(dense.horizontal.len(), expected_dense_count);
+        assert_eq!(dense.vertical.len(), expected_dense_count);
     }
 }

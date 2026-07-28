@@ -33,8 +33,23 @@ const experiments = {
       maximumMeanReferencesPerBand: 6,
     },
   },
+  adaptive32: {
+    experimentId: 'slug-adaptive32-bands-001',
+    baseCommit: '8bffa038e365e746d2367fa133d23e068e1137af',
+    changedVariable: 'adaptive per-glyph band count capped at 32',
+    cargoFeature: 'autoresearch-adaptive32-bands',
+    fileLabel: 'adaptive32',
+    manifestFields: {
+      bandCounts: [16, 32],
+      maximumMeanReferencesPerBand: 6,
+    },
+  },
 } as const
-if (experimentName !== 'fixed32' && experimentName !== 'adaptive') {
+if (
+  experimentName !== 'fixed32' &&
+  experimentName !== 'adaptive' &&
+  experimentName !== 'adaptive32'
+) {
   throw new TypeError(`Unknown Slug band experiment: ${experimentName}`)
 }
 const experiment = experiments[experimentName]
@@ -193,7 +208,7 @@ try {
           decodedGpuBytes: page.mipBytes,
         })),
       },
-      ...(experimentName === 'adaptive' ? { glyphBandCounts: countGlyphBands(baked) } : {}),
+      ...(experimentName === 'fixed32' ? {} : { glyphBandCounts: countGlyphBands(baked) }),
     })
     const checkedInOutput = resolve(outputDirectory, fixture.output)
     if (check) {
