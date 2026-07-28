@@ -5,7 +5,7 @@ its Wasm boundary, TypeScript wrapper, build support, and tests together under
 the monorepo package tree.
 
 It ships one `wasm32-unknown-unknown` module built with `no_std + alloc` and an
-ABI-private `dlmalloc`. There are no platform-native binaries, WASI imports,
+ABI-private dynamic Talc allocator. There are no platform-native binaries, WASI imports,
 Embind bindings, or generated binding runtime. Rust generates the versioned ABI
 JSON at compile time from `src/abi_contract.rs`; the Wasm embeds those exact
 bytes, and the `generate-abi` program emits the compiled contract for the package

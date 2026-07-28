@@ -74,8 +74,8 @@ The current complete runtime shaper is shared by every font. Its generated size 
 
 | Component | Raw/minified | Gzip | Brotli |
 | --- | ---: | ---: | ---: |
-| HarfRust shaper Wasm | 692,114 B | 257,986 B | 202,523 B |
-| TypeScript direct-memory bridge | 30,630 B minified | 8,794 B | 7,826 B |
+| HarfRust shaper Wasm | 680,312 B | 253,568 B | 199,365 B |
+| TypeScript direct-memory bridge | 32,778 B minified | 9,288 B | 8,257 B |
 | **Shared runtime total** | — | **266,274 B** | **209,728 B** |
 
 The V0 shaped result costs exactly 24 bytes per produced glyph plus 10 bytes per run before arena alignment. The current Chromium conformance fixture broad-shapes 97 Inter glyphs with one Wasm call in approximately 0.1–0.3 ms warm; paragraph measurement then reuses paragraph-owned arrays without repeating broad shaping.[^shaping-contract]

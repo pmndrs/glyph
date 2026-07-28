@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-07-28
+
+- **Dynamic Talc allocator** — Replaced ABI-private `dlmalloc` with pinned `talc` 5.0.4 in the portable font baker, Bitmap baker, MTSDF baker, and HarfRust shaper. The same optimized four-module corpus saves 46,610 raw, 15,121 gzip, and 12,121 Brotli bytes while retaining artifact, ownership, cancellation, reused-Worker, and malformed-input coverage. A representative 128 MiB global arena saved no meaningful transfer bytes and raised initial Wasm memory to about 129 MiB, so global arena allocation is rejected; a request-local scratch arena remains profiling-led future work with an explicit lifetime proof.
+
 ## 2026-07-27
 
 - **Renderer integration sequencing** — Kept Three.js/TSL as the V1 implementation through Slug, then scheduled the renderer-neutral direct integration extraction for Milestone 10 when all three rasters have executable resource, batching, composition, and lifetime requirements. Three.js remains a supported adapter; raw WebGPU and a possible TypeGPU adapter sit above the same boundary rather than entering shaping or layout.

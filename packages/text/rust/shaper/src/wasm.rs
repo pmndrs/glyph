@@ -11,7 +11,7 @@ use crate::{
 
 #[cfg(target_arch = "wasm32")]
 #[global_allocator]
-static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
+static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
 const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
 
