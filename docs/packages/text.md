@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:d9a73ab3d1a5e4674001c57bf2f38319278f6e4e4c95bbb92ee8b4f5d2fdb07f"
+source_digest: "sha256:8e2a8b5e5dd42135c08155d8acf15f25af1e11c99d3f582c16c97c1b09bf680f"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -124,7 +124,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T16:15:00Z"
+  at: "2026-07-28T16:32:39Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -137,7 +137,7 @@ Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-valida
 
 The package-owned Slug baker now composes the ported outline conversion and exact packing crates into deterministic embedded or independently authenticated external-page artifacts.[^slug-baker] Its Rust-generated V0 ABI drives the same shared direct/segmented host mechanics used by the existing raster bakers, including bounded artifact windows, synchronous progress forwarding, owned-copy-before-release behavior, structured errors, and transactional allocation cleanup.[^slug-baker-host] The serial module-Worker entry remains lazy; neither the baker host nor Wasm enters the initial renderer graph.
 
-The fixed Slug renderer copies and adapts the reviewed Three Flatland TSL implementation to the package's exact V0 resources rather than recreating the analytic coverage graph.[^slug-runtime][^slug-shaders] It uploads lossless RGBA16F curves, R32UI headers, and R16UI glyph-local references as exact Three.js data textures; uses integer instanced addresses; preserves consecutive page runs; caps hostile per-band fragment work; and retains the stable q-form quadratic solver plus loop-invariant derivative and reciprocal hoists. Shader construction remains inside `Fn` boundaries, while package tests reject Three.js/TSL diagnostics and prove that ordinary core, Bitmap, and MTSDF entry graphs do not eagerly include Slug. The shared registered-raster resource seam resolves embedded views or independently packaged resources through a caller resolver or the companion artifact's retained URL/fetch context, then enforces declared length, SHA-256 identity, cancellation, and the registry resource ceiling before Slug creates any GPU object. Embedded and external baker outputs already prove byte-identical records and curve/header/reference resources; browser/backend pixel parity and the complete visual/performance corpus remain required before the milestone can close.
+The fixed Slug renderer copies and adapts the reviewed Three Flatland TSL implementation to the package's exact V0 resources rather than recreating the analytic coverage graph.[^slug-runtime][^slug-shaders] It uploads lossless RGBA16F curves and R32UI headers directly; the Three.js adapter pair-packs exact R16UI glyph-local references into R32UI texels because Three 0.185.1's WebGL TSL backend otherwise declares a float sampler for `UnsignedShortType`. The adapter retains two bytes per reference plus at most one terminal padding value, while the authenticated artifact remains unchanged. Integer instanced addresses, consecutive page runs, hostile per-band work caps, the stable q-form solver, and loop-invariant derivative and reciprocal hoists remain intact. Shader construction stays inside `Fn` boundaries; assignment nodes append through the active TSL stack, axis-specific declaration names produce clean diagnostics, and package tests prove that ordinary core, Bitmap, and MTSDF entry graphs do not eagerly include Slug. The shared registered-raster resource seam resolves embedded views or independently packaged resources through a caller resolver or the companion artifact's retained URL/fetch context, then enforces declared length, SHA-256 identity, cancellation, and the registry resource ceiling before Slug creates any GPU object. Embedded and external baker outputs already prove byte-identical records and curve/header/reference resources; browser/backend pixel parity and the complete visual/performance corpus remain required before the milestone can close.
 
 Milestone 8.1 adds a repository-owned `no_std + alloc` Rust MTSDF core and a non-shipping admission harness beside the package's existing bakers. Typed AoS outline construction lowers once into kind-segregated SoA spans with contour identity; reusable scratch keeps per-pixel traversal allocation-free and now retains corner-coloring storage between glyphs. True signed curve distances, contour-aware overlap combination, nonzero-fill sign correction, and deterministic edge coloring produce zero coverage mismatches against pinned native `msdfgen` 1.13.0 across ordinary, acute, overlapping, self-intersecting, quadratic, cubic, and counter fixtures. Mean alpha error stays between 0.472 and 0.549 bytes. The optimized `wasm32-unknown-unknown` admission module imports nothing and its compiled graph contains no font parser, WGPU, native binding, or WASI dependency. A bounded cargo-fuzz lane covers malformed outline streams. The oracle and explicit SIMD implementation remain test-only; scalar is the single production kernel.
 

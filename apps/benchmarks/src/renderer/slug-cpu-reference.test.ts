@@ -88,7 +88,7 @@ function squareResource(): SlugResource {
     ...curve(0, 1, 0, 0.5, 0, 0),
   ])
   const headers = Uint32Array.from([(4 << 16) | 0, (4 << 16) | 4])
-  const references = Uint16Array.from([2, 0, 4, 6, 2, 4, 6, 0])
+  const references = Uint32Array.from([2 | (0 << 16), 4 | (6 << 16), 2 | (4 << 16), 6 | (0 << 16)])
   const curveTexture = new THREE.DataTexture(curves, 8, 1, THREE.RGBAFormat, THREE.HalfFloatType)
   const headerTexture = new THREE.DataTexture(
     headers,
@@ -99,10 +99,10 @@ function squareResource(): SlugResource {
   )
   const referenceTexture = new THREE.DataTexture(
     references,
-    8,
+    4,
     1,
     THREE.RedIntegerFormat,
-    THREE.UnsignedShortType,
+    THREE.UnsignedIntType,
   )
   return {
     planeUnitsPerEm: 2048,
@@ -117,7 +117,7 @@ function squareResource(): SlugResource {
         headerHeight: 1,
         headerCount: 2,
         referenceTexture,
-        referenceWidth: 8,
+        referenceWidth: 4,
         referenceHeight: 1,
         referenceCount: 8,
         gpuBytes: curves.byteLength + headers.byteLength + references.byteLength,

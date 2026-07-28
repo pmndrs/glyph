@@ -10,7 +10,6 @@ import {
   Loop,
   abs,
   add,
-  assign,
   clamp,
   div,
   float,
@@ -87,20 +86,35 @@ function gridCoordinate(index: Node<'uint'>, width: number): Node<'ivec2'> {
   return ivec2(column, row)
 }
 
-function loadHeader(page: SlugShaderPage, index: Node<'uint'>): Node<'uint'> {
+function loadHeader(
+  page: SlugShaderPage,
+  index: Node<'uint'>,
+  axis: 'horizontal' | 'vertical',
+): Node<'uint'> {
   const texel: Node<'vec4'> = loadTextureTexel(
     page.headerTexture,
     gridCoordinate(index, page.headerWidth),
   )
-  return namedUint(uint(texel.x), 'slugHeader')
+  return namedUint(
+    uint(texel.x),
+    axis === 'horizontal' ? 'slugHorizontalHeader' : 'slugVerticalHeader',
+  )
 }
 
-function loadReference(page: SlugShaderPage, index: Node<'uint'>): Node<'uint'> {
-  const texel: Node<'vec4'> = loadTextureTexel(
+function loadReference(
+  page: SlugShaderPage,
+  index: Node<'uint'>,
+  axis: 'horizontal' | 'vertical',
+): Node<'uint'> {
+  const texel: Node<'uvec4'> = loadUnsignedTextureTexel(
     page.referenceTexture,
-    gridCoordinate(index, page.referenceWidth),
+    gridCoordinate(index.shiftRight(uint(1)), page.referenceWidth),
   )
-  return namedUint(uint(texel.x), 'slugReference')
+  const bitOffset = index.bitAnd(uint(1)).mul(uint(16))
+  return namedUint(
+    texel.x.shiftRight(bitOffset).bitAnd(uint(HEADER_REFERENCE_MASK)),
+    axis === 'horizontal' ? 'slugHorizontalReference' : 'slugVerticalReference',
+  )
 }
 
 function namedBool(node: Node<'bool'>, name: string): Node<'bool'> {
@@ -120,6 +134,10 @@ function namedVec2(node: Node<'vec2'>, name: string): Node<'vec2'> {
 }
 
 function loadTextureTexel(texture: DataTexture, coordinate: Node<'ivec2'>): Node<'vec4'> {
+  return textureLoad(texture, coordinate)
+}
+
+function loadUnsignedTextureTexel(texture: DataTexture, coordinate: Node<'ivec2'>): Node<'uvec4'> {
   return textureLoad(texture, coordinate)
 }
 
@@ -194,14 +212,14 @@ function accumulateCurveRoots(
       axis === 'horizontal'
         ? sub(firstContribution, secondContribution)
         : sub(secondContribution, firstContribution)
-    assign(coverage, add(coverage, coverageDelta))
+    coverage.addAssign(coverageDelta)
     const firstWeight: Node<'float'> = saturate(sub(1, mul(abs(firstRoot), 2)))
     const secondWeight: Node<'float'> = saturate(sub(1, mul(abs(secondRoot), 2)))
     const curveWeight: Node<'float'> = max(
       select(hasFirstRoot, firstWeight, 0),
       select(hasSecondRoot, secondWeight, 0),
     )
-    assign(weight, max(weight, curveWeight))
+    weight.assign(max(weight, curveWeight))
   })
 }
 
@@ -220,7 +238,7 @@ function evaluateBandCurve(
   const referenceIndex: Node<'uint'> = glyph.referenceBase
     .add(localReferenceOffset)
     .add(uint(index))
-  const curveReference: Node<'uint'> = loadReference(page, referenceIndex)
+  const curveReference: Node<'uint'> = loadReference(page, referenceIndex, axis)
   const curveTexel: Node<'uint'> = glyph.curveBaseTexel.add(curveReference)
   const curve = loadCurve(page, curveTexel)
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical'
@@ -257,7 +275,7 @@ function evaluateBand(
   const maximumBandIndex: Node<'float'> = sub(float(declaredBandCount), 1)
   const clampedBandIndex: Node<'float'> = clamp(transformedCoordinate, 0, maximumBandIndex)
   const bandIndex: Node<'uint'> = uint(clampedBandIndex)
-  const header: Node<'uint'> = loadHeader(page, headerBase.add(bandIndex))
+  const header: Node<'uint'> = loadHeader(page, headerBase.add(bandIndex), axis)
   const localReferenceOffset: Node<'uint'> = namedUint(
     bandReferenceOffset(header),
     axis === 'horizontal' ? 'slugHorizontalReferenceOffset' : 'slugVerticalReferenceOffset',

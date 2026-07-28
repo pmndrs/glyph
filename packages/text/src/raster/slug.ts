@@ -71,6 +71,25 @@ export {
 const ABSENT_PAGE = 0xffff
 const MAX_TEXTURE_DIMENSION = 16_384
 const MAX_RUNTIME_GPU_BYTES = 256 * 1024 * 1024
+const SLUG_FLOAT_INSTANCE_STRIDE = 17
+const SLUG_FLOAT_INSTANCE_OFFSETS = {
+  origin: 0,
+  size: 2,
+  emOrigin: 4,
+  emSize: 6,
+  inverseScale: 8,
+  bandTransform: 9,
+  color: 13,
+} as const
+const SLUG_UINT_INSTANCE_STRIDE = 6
+const SLUG_UINT_INSTANCE_OFFSETS = {
+  curveBase: 0,
+  horizontalHeaderBase: 1,
+  verticalHeaderBase: 2,
+  referenceBase: 3,
+  horizontalBandCount: 4,
+  verticalBandCount: 5,
+} as const
 const drawingBufferSize = new THREE.Vector2()
 const modelViewProjectionMatrix = new THREE.Matrix4()
 
@@ -88,7 +107,7 @@ export interface SlugPageResource extends SlugShaderPage {
   readonly headerHeight: number
   readonly referenceCount: number
   readonly referenceHeight: number
-  /** Exact uploaded bytes: RGBA16F curves + R32UI headers + R16UI references. */
+  /** Exact uploaded bytes: RGBA16F curves + R32UI headers + packed reference pairs in R32UI. */
   readonly gpuBytes: number
 }
 
@@ -101,7 +120,8 @@ export interface SlugResource {
 
 interface SlugBatchRun {
   readonly glyphIndices: Uint32Array
-  readonly colorAttribute: THREE.InstancedBufferAttribute
+  readonly floatData: THREE.InstancedInterleavedBuffer
+  readonly colorAttribute: THREE.InterleavedBufferAttribute
   readonly geometry: THREE.InstancedBufferGeometry
   readonly mesh: THREE.Mesh
 }
@@ -301,12 +321,13 @@ async function decodeSlugPage(
     THREE.RedIntegerFormat,
     THREE.UnsignedIntType,
   )
+  const packedReferences = packReferencePairs(ownedUint16(referenceBytes), referenceWidth)
   const referenceTexture = dataTexture(
-    ownedUint16(referenceBytes),
-    referenceWidth,
-    referenceHeight,
+    packedReferences.data,
+    packedReferences.width,
+    packedReferences.height,
     THREE.RedIntegerFormat,
-    THREE.UnsignedShortType,
+    THREE.UnsignedIntType,
   )
   return {
     curveWidth,
@@ -317,12 +338,12 @@ async function decodeSlugPage(
     headerHeight,
     headerTexture,
     referenceCount,
-    referenceWidth,
-    referenceHeight,
+    referenceWidth: packedReferences.width,
+    referenceHeight: packedReferences.height,
     referenceTexture,
     gpuBytes: checkedGpuBytes(
       checkedProduct(curveWidth, curveHeight, `${path} curve dimensions`) * 8,
-      headerCapacity * 4 + referenceCapacity * 2,
+      headerCapacity * 4 + packedReferences.data.byteLength,
     ),
   }
 }
@@ -381,6 +402,20 @@ function dataTexture(
   texture.magFilter = THREE.NearestFilter
   texture.needsUpdate = true
   return texture
+}
+
+function packReferencePairs(
+  references: Uint16Array,
+  preferredWidth: number,
+): { readonly data: Uint32Array; readonly width: number; readonly height: number } {
+  const texelCount = Math.ceil(references.length / 2)
+  const width = Math.min(preferredWidth, texelCount)
+  const height = Math.ceil(texelCount / width)
+  const data = new Uint32Array(width * height)
+  for (let index = 0; index < references.length; index += 1) {
+    data[index >>> 1] = data[index >>> 1]! | (references[index]! << ((index & 1) * 16))
+  }
+  return { data, width, height }
 }
 
 function validateSlugRecordTable(
@@ -536,19 +571,16 @@ function createSlugRun(
   const count = glyphIndices.length
   const geometry = unitRasterQuadGeometry()
   geometry.instanceCount = count
-  const origin = new Float32Array(count * 2)
-  const size = new Float32Array(count * 2)
-  const emOrigin = new Float32Array(count * 2)
-  const emSize = new Float32Array(count * 2)
-  const inverseScale = new Float32Array(count)
-  const bandTransform = new Float32Array(count * 4)
-  const curveBase = new Uint32Array(count)
-  const horizontalHeaderBase = new Uint32Array(count)
-  const verticalHeaderBase = new Uint32Array(count)
-  const referenceBase = new Uint32Array(count)
-  const horizontalBandCount = new Uint16Array(count)
-  const verticalBandCount = new Uint16Array(count)
-  const colors = new Float32Array(count * 4)
+  const floatData = new THREE.InstancedInterleavedBuffer(
+    new Float32Array(count * SLUG_FLOAT_INSTANCE_STRIDE),
+    SLUG_FLOAT_INSTANCE_STRIDE,
+    1,
+  )
+  const uintData = new THREE.InstancedInterleavedBuffer(
+    new Uint32Array(count * SLUG_UINT_INSTANCE_STRIDE),
+    SLUG_UINT_INSTANCE_STRIDE,
+    1,
+  )
   const records = recordView(resource)
 
   for (let instance = 0; instance < count; instance += 1) {
@@ -570,43 +602,118 @@ function createSlugRun(
     const normalizedBottom = bottom / resource.planeUnitsPerEm
     const normalizedWidth = (right - left) / resource.planeUnitsPerEm
     const normalizedHeight = (top - bottom) / resource.planeUnitsPerEm
-    origin.set(
-      [layout.x[glyphIndex]! + left * scale, -layout.y[glyphIndex]! + bottom * scale],
-      instance * 2,
-    )
-    size.set([(right - left) * scale, (top - bottom) * scale], instance * 2)
-    emOrigin.set([normalizedLeft, normalizedBottom], instance * 2)
-    emSize.set([normalizedWidth, normalizedHeight], instance * 2)
-    inverseScale[instance] = 1 / fontSize
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.origin, [
+      layout.x[glyphIndex]! + left * scale,
+      -layout.y[glyphIndex]! + bottom * scale,
+    ])
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.size, [
+      (right - left) * scale,
+      (top - bottom) * scale,
+    ])
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.emOrigin, [
+      normalizedLeft,
+      normalizedBottom,
+    ])
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.emSize, [
+      normalizedWidth,
+      normalizedHeight,
+    ])
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.inverseScale, [1 / fontSize])
     const bandScaleX = verticalBands / normalizedWidth
     const bandScaleY = horizontalBands / normalizedHeight
-    bandTransform.set(
-      [bandScaleX, bandScaleY, -normalizedLeft * bandScaleX, -normalizedBottom * bandScaleY],
-      instance * 4,
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.bandTransform, [
+      bandScaleX,
+      bandScaleY,
+      -normalizedLeft * bandScaleX,
+      -normalizedBottom * bandScaleY,
+    ])
+    setInstanceValues(
+      floatData,
+      instance,
+      SLUG_FLOAT_INSTANCE_OFFSETS.color,
+      resolvedGlyphColor(paint, glyphIndex),
     )
-    curveBase[instance] = records.getUint32(record + 16, true)
-    horizontalHeaderBase[instance] = records.getUint32(record + 24, true)
-    verticalHeaderBase[instance] = records.getUint32(record + 28, true)
-    referenceBase[instance] = records.getUint32(record + 32, true)
-    horizontalBandCount[instance] = horizontalBands
-    verticalBandCount[instance] = verticalBands
-    colors.set(resolvedGlyphColor(paint, glyphIndex), instance * 4)
+    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.curveBase, [
+      records.getUint32(record + 16, true),
+    ])
+    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.horizontalHeaderBase, [
+      records.getUint32(record + 24, true),
+    ])
+    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.verticalHeaderBase, [
+      records.getUint32(record + 28, true),
+    ])
+    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.referenceBase, [
+      records.getUint32(record + 32, true),
+    ])
+    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.horizontalBandCount, [
+      horizontalBands,
+    ])
+    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.verticalBandCount, [
+      verticalBands,
+    ])
   }
 
-  geometry.setAttribute('slugOrigin', new THREE.InstancedBufferAttribute(origin, 2))
-  geometry.setAttribute('slugSize', new THREE.InstancedBufferAttribute(size, 2))
-  geometry.setAttribute('slugEmOrigin', new THREE.InstancedBufferAttribute(emOrigin, 2))
-  geometry.setAttribute('slugEmSize', new THREE.InstancedBufferAttribute(emSize, 2))
-  geometry.setAttribute('slugInverseScale', new THREE.InstancedBufferAttribute(inverseScale, 1))
-  geometry.setAttribute('slugBandTransform', new THREE.InstancedBufferAttribute(bandTransform, 4))
-  setIntegerAttribute(geometry, 'slugCurveBase', curveBase)
-  setIntegerAttribute(geometry, 'slugHorizontalHeaderBase', horizontalHeaderBase)
-  setIntegerAttribute(geometry, 'slugVerticalHeaderBase', verticalHeaderBase)
-  setIntegerAttribute(geometry, 'slugReferenceBase', referenceBase)
-  setIntegerAttribute(geometry, 'slugHorizontalBandCount', horizontalBandCount)
-  setIntegerAttribute(geometry, 'slugVerticalBandCount', verticalBandCount)
-  const colorAttribute = new THREE.InstancedBufferAttribute(colors, 4)
-  geometry.setAttribute('slugColor', colorAttribute)
+  instanceAttribute(geometry, floatData, 'slugOrigin', 2, SLUG_FLOAT_INSTANCE_OFFSETS.origin)
+  instanceAttribute(geometry, floatData, 'slugSize', 2, SLUG_FLOAT_INSTANCE_OFFSETS.size)
+  instanceAttribute(geometry, floatData, 'slugEmOrigin', 2, SLUG_FLOAT_INSTANCE_OFFSETS.emOrigin)
+  instanceAttribute(geometry, floatData, 'slugEmSize', 2, SLUG_FLOAT_INSTANCE_OFFSETS.emSize)
+  instanceAttribute(
+    geometry,
+    floatData,
+    'slugInverseScale',
+    1,
+    SLUG_FLOAT_INSTANCE_OFFSETS.inverseScale,
+  )
+  instanceAttribute(
+    geometry,
+    floatData,
+    'slugBandTransform',
+    4,
+    SLUG_FLOAT_INSTANCE_OFFSETS.bandTransform,
+  )
+  instanceAttribute(geometry, uintData, 'slugCurveBase', 1, SLUG_UINT_INSTANCE_OFFSETS.curveBase)
+  instanceAttribute(
+    geometry,
+    uintData,
+    'slugHorizontalHeaderBase',
+    1,
+    SLUG_UINT_INSTANCE_OFFSETS.horizontalHeaderBase,
+  )
+  instanceAttribute(
+    geometry,
+    uintData,
+    'slugVerticalHeaderBase',
+    1,
+    SLUG_UINT_INSTANCE_OFFSETS.verticalHeaderBase,
+  )
+  instanceAttribute(
+    geometry,
+    uintData,
+    'slugReferenceBase',
+    1,
+    SLUG_UINT_INSTANCE_OFFSETS.referenceBase,
+  )
+  instanceAttribute(
+    geometry,
+    uintData,
+    'slugHorizontalBandCount',
+    1,
+    SLUG_UINT_INSTANCE_OFFSETS.horizontalBandCount,
+  )
+  instanceAttribute(
+    geometry,
+    uintData,
+    'slugVerticalBandCount',
+    1,
+    SLUG_UINT_INSTANCE_OFFSETS.verticalBandCount,
+  )
+  const colorAttribute = instanceAttribute(
+    geometry,
+    floatData,
+    'slugColor',
+    4,
+    SLUG_FLOAT_INSTANCE_OFFSETS.color,
+  )
 
   const page = resource.pages[pageIndex]!
   const state = slugMaterialState(page)
@@ -620,20 +727,32 @@ function createSlugRun(
   }
   return {
     glyphIndices: Uint32Array.from(glyphIndices),
+    floatData,
     colorAttribute,
     geometry,
     mesh,
   }
 }
 
-function setIntegerAttribute(
+function instanceAttribute(
   geometry: THREE.InstancedBufferGeometry,
+  data: THREE.InstancedInterleavedBuffer,
   name: string,
-  values: Uint16Array | Uint32Array,
+  itemSize: number,
+  offset: number,
+): THREE.InterleavedBufferAttribute {
+  const bufferAttribute = new THREE.InterleavedBufferAttribute(data, itemSize, offset, false)
+  geometry.setAttribute(name, bufferAttribute)
+  return bufferAttribute
+}
+
+function setInstanceValues(
+  data: THREE.InstancedInterleavedBuffer,
+  instance: number,
+  offset: number,
+  values: readonly number[],
 ): void {
-  const value = new THREE.InstancedBufferAttribute(values, 1)
-  value.gpuType = THREE.IntType
-  geometry.setAttribute(name, value)
+  ;(data.array as Float32Array | Uint32Array).set(values, instance * data.stride + offset)
 }
 
 function slugMaterialState(page: SlugPageResource): SlugMaterialState {
@@ -729,11 +848,15 @@ function updateMvpUniforms(
 }
 
 function updateRunPaint(run: SlugBatchRun, paint: GlyphPaint): void {
-  const colors = run.colorAttribute.array as Float32Array
   for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    colors.set(resolvedGlyphColor(paint, run.glyphIndices[instance]!), instance * 4)
+    setInstanceValues(
+      run.floatData,
+      instance,
+      run.colorAttribute.offset,
+      resolvedGlyphColor(paint, run.glyphIndices[instance]!),
+    )
   }
-  run.colorAttribute.needsUpdate = true
+  run.floatData.needsUpdate = true
 }
 
 function assertSlugPaint(paint: GlyphPaint): void {

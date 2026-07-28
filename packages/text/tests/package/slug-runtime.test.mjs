@@ -50,15 +50,16 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
     },
   }
   const resource = await slug.decode(font, raster)
-  assert.equal(resource.gpuBytes, 44)
+  assert.equal(resource.gpuBytes, 48)
   assert.equal(resource.pages.length, 2)
   assert.ok(resource.pages[0].curveTexture.image.data instanceof Uint16Array)
   assert.ok(resource.pages[0].headerTexture.image.data instanceof Uint32Array)
-  assert.ok(resource.pages[0].referenceTexture.image.data instanceof Uint16Array)
+  assert.ok(resource.pages[0].referenceTexture.image.data instanceof Uint32Array)
+  assert.deepEqual(Array.from(resource.pages[0].referenceTexture.image.data), [0])
   assert.equal(resource.pages[0].curveTexture.type, THREE.HalfFloatType)
   assert.equal(resource.pages[0].headerTexture.format, THREE.RedIntegerFormat)
   assert.equal(resource.pages[0].headerTexture.type, THREE.UnsignedIntType)
-  assert.equal(resource.pages[0].referenceTexture.type, THREE.UnsignedShortType)
+  assert.equal(resource.pages[0].referenceTexture.type, THREE.UnsignedIntType)
 
   const layout = {
     glyphIds: Uint16Array.of(0, 1, 2, 3),
@@ -79,9 +80,10 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
     [0, 1, 2],
   )
   for (const child of batch.object.children) {
-    assert.equal(child.geometry.getAttribute('slugCurveBase').gpuType, THREE.IntType)
-    assert.ok(child.geometry.getAttribute('slugCurveBase').array instanceof Uint32Array)
-    assert.ok(child.geometry.getAttribute('slugHorizontalBandCount').array instanceof Uint16Array)
+    const curveBase = child.geometry.getAttribute('slugCurveBase')
+    const horizontalBandCount = child.geometry.getAttribute('slugHorizontalBandCount')
+    assert.ok(curveBase.data.array instanceof Uint32Array)
+    assert.equal(horizontalBandCount.data, curveBase.data)
     assert.equal(child.frustumCulled, false)
   }
 
@@ -107,7 +109,11 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
     paintIndices: Uint16Array.of(0, 0, 0, 0),
     palette: [{ color: [1, 0, 0, 0.5] }],
   })
-  assert.deepEqual(Array.from(firstMesh.geometry.getAttribute('slugColor').array), [1, 0, 0, 0.5])
+  const firstColor = firstMesh.geometry.getAttribute('slugColor')
+  assert.deepEqual(
+    [firstColor.getX(0), firstColor.getY(0), firstColor.getZ(0), firstColor.getW(0)],
+    [1, 0, 0, 0.5],
+  )
   assert.throws(
     () =>
       batch.updatePaint({
@@ -203,7 +209,7 @@ test('Slug resolves authenticated external page payloads through raster residenc
     resolved.map(({ type }) => type),
     ['external', 'bufferView', 'bufferView'],
   )
-  assert.equal(resource.gpuBytes, 22)
+  assert.equal(resource.gpuBytes, 24)
   slug.dispose(resource)
 })
 

@@ -189,7 +189,9 @@ function evaluateBand(page: SlugPageResource, options: BandOptions): BandResult 
     if (referenceIndex >= page.referenceCount) {
       throw new TypeError('Slug band reference exceeds its page')
     }
-    const curveTexel = options.curveBase + references[referenceIndex]!
+    const packedReference = references[referenceIndex >>> 1]!
+    const curveTexel =
+      options.curveBase + ((packedReference >>> ((referenceIndex & 1) * 16)) & 0xffff)
     const curve = decodeCurve(curves, page.curveWidth, page.curveHeight, curveTexel)
     const p0x = curve.p0x - options.renderX
     const p0y = curve.p0y - options.renderY
@@ -309,10 +311,10 @@ function headerTexels(page: SlugPageResource): Uint32Array {
   return data
 }
 
-function referenceTexels(page: SlugPageResource): Uint16Array {
+function referenceTexels(page: SlugPageResource): Uint32Array {
   const data: unknown = page.referenceTexture.image.data
-  if (!(data instanceof Uint16Array)) {
-    throw new TypeError('Slug CPU reference requires unsigned 16-bit references')
+  if (!(data instanceof Uint32Array)) {
+    throw new TypeError('Slug CPU reference requires packed unsigned 32-bit reference texels')
   }
   return data
 }
