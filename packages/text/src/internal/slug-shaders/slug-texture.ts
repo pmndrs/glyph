@@ -8,7 +8,6 @@ import {
   uintBitAnd,
   uintMul,
   uintShiftRight,
-  unpackHalf2x16,
 } from './tsl-compat.js'
 
 const HEADER_REFERENCE_MASK = 0xffff
@@ -24,20 +23,12 @@ export interface SlugShaderPage {
   readonly headerWidth: number
   readonly referenceTexture: DataTexture
   readonly referenceWidth: number
-  /** Build-time shader variant; the public V0 artifact always uses `plain-r16ui`. */
-  readonly referenceFormat: 'plain-r16ui' | 'packed-hull-r32ui'
 }
 
 export interface SlugShaderCurve {
   readonly p0: Node<'vec2'>
   readonly p1: Node<'vec2'>
   readonly p2: Node<'vec2'>
-}
-
-export interface SlugShaderReference {
-  readonly curve: Node<'uint'>
-  /** Exact binary16 axis hull for the non-shipping packed-hull experiment. */
-  readonly hull?: Node<'float'>
 }
 
 function gridCoordinate(index: Node<'uint'>, width: number): Node<'ivec2'> {
@@ -69,33 +60,16 @@ export function loadReference(
   page: SlugShaderPage,
   index: Node<'uint'>,
   axis: 'horizontal' | 'vertical',
-): SlugShaderReference {
-  if (page.referenceFormat === 'packed-hull-r32ui') {
-    const packed = namedUint(
-      loadUvec4(page.referenceTexture, gridCoordinate(index, page.referenceWidth)).x,
-      axis === 'horizontal' ? 'slugHorizontalPackedReference' : 'slugVerticalPackedReference',
-    )
-    return {
-      curve: namedUint(
-        uintBitAnd(packed, uint(HEADER_REFERENCE_MASK)),
-        axis === 'horizontal' ? 'slugHorizontalReference' : 'slugVerticalReference',
-      ),
-      hull: unpackHalf2x16(packed).y.toVar(
-        axis === 'horizontal' ? 'slugHorizontalHull' : 'slugVerticalHull',
-      ),
-    }
-  }
+): Node<'uint'> {
   const texel = loadUvec4(
     page.referenceTexture,
     gridCoordinate(uintShiftRight(index, uint(1)), page.referenceWidth),
   )
   const bitOffset = uintMul(uintBitAnd(index, uint(1)), uint(16))
-  return {
-    curve: namedUint(
-      uintBitAnd(uintShiftRight(texel.x, bitOffset), uint(HEADER_REFERENCE_MASK)),
-      axis === 'horizontal' ? 'slugHorizontalReference' : 'slugVerticalReference',
-    ),
-  }
+  return namedUint(
+    uintBitAnd(uintShiftRight(texel.x, bitOffset), uint(HEADER_REFERENCE_MASK)),
+    axis === 'horizontal' ? 'slugHorizontalReference' : 'slugVerticalReference',
+  )
 }
 
 export function loadCurve(page: SlugShaderPage, texelIndex: Node<'uint'>): SlugShaderCurve {

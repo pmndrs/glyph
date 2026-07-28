@@ -107,7 +107,7 @@ export interface SlugPageResource extends SlugShaderPage {
   readonly headerHeight: number
   readonly referenceCount: number
   readonly referenceHeight: number
-  /** Exact uploaded bytes, including the selected reference-layout allocation. */
+  /** Exact uploaded bytes: RGBA16F curves + R32UI headers + packed reference pairs in R32UI. */
   readonly gpuBytes: number
 }
 
@@ -305,16 +305,7 @@ async function decodeSlugPage(
     `${path} reference source`,
     signal,
   )
-  const referenceFormat =
-    page.referenceFormat === undefined
-      ? 'plain-r16ui'
-      : page.referenceFormat === 'packed-hull-r32ui'
-        ? page.referenceFormat
-        : (() => {
-            throw new TypeError(`${path} has an unknown reference format`)
-          })()
-  const referenceStride = referenceFormat === 'plain-r16ui' ? 2 : 4
-  assertGridLength(referenceBytes, referenceCapacity, referenceStride, `${path} reference`)
+  assertGridLength(referenceBytes, referenceCapacity, 2, `${path} reference`)
 
   const curveTexture = dataTexture(
     ownedUint16(curveLevel.levelData),
@@ -330,14 +321,7 @@ async function decodeSlugPage(
     THREE.RedIntegerFormat,
     THREE.UnsignedIntType,
   )
-  const packedReferences =
-    referenceFormat === 'plain-r16ui'
-      ? packReferencePairs(ownedUint16(referenceBytes), referenceWidth)
-      : {
-          data: ownedUint32(referenceBytes),
-          width: referenceWidth,
-          height: referenceHeight,
-        }
+  const packedReferences = packReferencePairs(ownedUint16(referenceBytes), referenceWidth)
   const referenceTexture = dataTexture(
     packedReferences.data,
     packedReferences.width,
@@ -357,7 +341,6 @@ async function decodeSlugPage(
     referenceWidth: packedReferences.width,
     referenceHeight: packedReferences.height,
     referenceTexture,
-    referenceFormat,
     gpuBytes: checkedGpuBytes(
       checkedProduct(curveWidth, curveHeight, `${path} curve dimensions`) * 8,
       headerCapacity * 4 + packedReferences.data.byteLength,

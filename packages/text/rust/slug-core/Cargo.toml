@@ -11,10 +11,6 @@ publish = false
 [features]
 default = ["std"]
 std = []
-# Non-shipping reference-grid format used only by the Slug autoresearch
-# challenger. Keeping it in the core crate lets the baker serialize the
-# experimental layout without changing the production V0 path.
-autoresearch-hull-bands = []
 
 [dependencies]
 core_maths = "0.1.1"

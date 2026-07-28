@@ -85,11 +85,11 @@ pub(crate) fn build_slug_glb(
             &mut binary,
             &mut buffer_views,
             &mut resources,
-            reference_resource_id(&stem),
+            format!("{stem}-references.r16ui.bin"),
             page.reference_bytes.clone(),
             page_packaging,
         )?;
-        let page_json = json!({
+        pages.push(json!({
             "curve": {
                 "width": metadata.curve_width,
                 "height": metadata.curve_height,
@@ -110,8 +110,7 @@ pub(crate) fn build_slug_glb(
             "referenceWidth": metadata.reference_width,
             "referenceHeight": metadata.reference_height,
             "referenceResource": { "source": reference_source },
-        });
-        pages.push(with_reference_format(page_json));
+        }));
 
         let curve_gpu_bytes = usize::from(metadata.curve_width)
             .checked_mul(usize::from(metadata.curve_height))
@@ -164,27 +163,6 @@ pub(crate) fn build_slug_glb(
     })
 }
 
-#[cfg(feature = "autoresearch-hull-bands")]
-fn reference_resource_id(stem: &str) -> String {
-    format!("{stem}-references.r32ui.bin")
-}
-
-#[cfg(not(feature = "autoresearch-hull-bands"))]
-fn reference_resource_id(stem: &str) -> String {
-    format!("{stem}-references.r16ui.bin")
-}
-
-#[cfg(feature = "autoresearch-hull-bands")]
-fn with_reference_format(mut page: Value) -> Value {
-    page["referenceFormat"] = Value::String("packed-hull-r32ui".into());
-    page
-}
-
-#[cfg(not(feature = "autoresearch-hull-bands"))]
-fn with_reference_format(page: Value) -> Value {
-    page
-}
-
 fn append_resource(
     binary: &mut Vec<u8>,
     buffer_views: &mut Vec<Value>,
@@ -213,31 +191,4 @@ fn append_resource(
         embedded: packaging == PagePackaging::Embedded,
     });
     Ok(source)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[cfg(feature = "autoresearch-hull-bands")]
-    #[test]
-    fn hull_experiment_labels_its_page_and_reference_resource() {
-        let page = with_reference_format(json!({ "referenceCount": 1 }));
-        assert_eq!(page["referenceFormat"], "packed-hull-r32ui");
-        assert_eq!(
-            reference_resource_id("slug-test"),
-            "slug-test-references.r32ui.bin"
-        );
-    }
-
-    #[cfg(not(feature = "autoresearch-hull-bands"))]
-    #[test]
-    fn v0_page_json_and_reference_resource_remain_unchanged() {
-        let page = with_reference_format(json!({ "referenceCount": 1 }));
-        assert!(page.get("referenceFormat").is_none());
-        assert_eq!(
-            reference_resource_id("slug-test"),
-            "slug-test-references.r16ui.bin"
-        );
-    }
 }

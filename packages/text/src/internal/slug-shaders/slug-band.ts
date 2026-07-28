@@ -138,25 +138,18 @@ function evaluateBandCurve(
     uintAdd(glyph.referenceBase, localReferenceOffset),
     uint(index),
   )
-  const reference = loadReference(page, referenceIndex, axis)
-  const renderAxis: Node<'float'> = axis === 'horizontal' ? renderCoordinate.x : renderCoordinate.y
-  if (reference.hull !== undefined) {
-    const maximum: Node<'float'> = mul(sub(reference.hull, renderAxis), pixelsPerEm)
-    If(lessThan(maximum, -0.5), () => Break())
-  }
-  const curveTexel: Node<'uint'> = uintAdd(glyph.curveBaseTexel, reference.curve)
+  const curveReference: Node<'uint'> = loadReference(page, referenceIndex, axis)
+  const curveTexel: Node<'uint'> = uintAdd(glyph.curveBaseTexel, curveReference)
   const curve = loadCurve(page, curveTexel)
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical'
   const p0: Node<'vec2'> = namedVec2(vec2Sub(curve.p0, renderCoordinate), `${namePrefix}P0`)
   const p1: Node<'vec2'> = namedVec2(vec2Sub(curve.p1, renderCoordinate), `${namePrefix}P1`)
   const p2: Node<'vec2'> = namedVec2(vec2Sub(curve.p2, renderCoordinate), `${namePrefix}P2`)
-  if (reference.hull === undefined) {
-    const maximum0: Node<'float'> = axis === 'horizontal' ? p0.x : p0.y
-    const maximum1: Node<'float'> = axis === 'horizontal' ? p1.x : p1.y
-    const maximum2: Node<'float'> = axis === 'horizontal' ? p2.x : p2.y
-    const maximum: Node<'float'> = mul(max(max(maximum0, maximum1), maximum2), pixelsPerEm)
-    If(lessThan(maximum, -0.5), () => Break())
-  }
+  const maximum0: Node<'float'> = axis === 'horizontal' ? p0.x : p0.y
+  const maximum1: Node<'float'> = axis === 'horizontal' ? p1.x : p1.y
+  const maximum2: Node<'float'> = axis === 'horizontal' ? p2.x : p2.y
+  const maximum: Node<'float'> = mul(max(max(maximum0, maximum1), maximum2), pixelsPerEm)
+  If(lessThan(maximum, -0.5), () => Break())
   accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight)
 }
 

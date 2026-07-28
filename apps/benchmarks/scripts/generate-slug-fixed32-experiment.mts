@@ -44,25 +44,11 @@ const experiments = {
       maximumMeanReferencesPerBand: 6,
     },
   },
-  hull: {
-    experimentId: 'slug-hull-bands-001',
-    baseCommit: '4d39a4052747b24c582d835e496706f2e063b103',
-    changedVariable: 'axis-specific binary16 hull before curve loads',
-    cargoFeature: 'autoresearch-hull-bands',
-    fileLabel: 'hull',
-    manifestFields: {
-      bandCount: 16,
-      referenceFormat: 'packed-hull-r32ui',
-      legacyImplementationCommit: '185442c3ced65c5293c3c5f24d897a6010bca15a',
-      legacyRevertCommit: '9f668952',
-    },
-  },
 } as const
 if (
   experimentName !== 'fixed32' &&
   experimentName !== 'adaptive' &&
-  experimentName !== 'adaptive32' &&
-  experimentName !== 'hull'
+  experimentName !== 'adaptive32'
 ) {
   throw new TypeError(`Unknown Slug band experiment: ${experimentName}`)
 }
@@ -222,9 +208,7 @@ try {
           decodedGpuBytes: page.mipBytes,
         })),
       },
-      ...(experimentName === 'adaptive' || experimentName === 'adaptive32'
-        ? { glyphBandCounts: countGlyphBands(baked) }
-        : {}),
+      ...(experimentName === 'fixed32' ? {} : { glyphBandCounts: countGlyphBands(baked) }),
     })
     const checkedInOutput = resolve(outputDirectory, fixture.output)
     if (check) {

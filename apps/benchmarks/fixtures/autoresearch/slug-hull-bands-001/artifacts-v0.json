@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 0,
+  "experimentId": "slug-hull-bands-001",
+  "baseCommit": "4d39a4052747b24c582d835e496706f2e063b103",
+  "changedVariable": "axis-specific binary16 hull before curve loads",
+  "bandCount": 16,
+  "referenceFormat": "packed-hull-r32ui",
+  "legacyImplementationCommit": "185442c3ced65c5293c3c5f24d897a6010bca15a",
+  "legacyRevertCommit": "9f668952",
+  "cargoFeature": "autoresearch-hull-bands",
+  "artifacts": [
+    {
+      "fontFixture": "inter",
+      "file": "inter-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 4124892,
+        "sha256": "eebb6385610426752b711c4639b9627f9109012638f9aa9a4b44f4579e283d13"
+      },
+      "compressed": {
+        "bytes": 797997,
+        "sha256": "bf152b724e2a98acbdf60c32ac98b72e168c4a982ce38cde617b82e6a1437f69"
+      },
+      "raster": {
+        "metadataBytes": 117480,
+        "serializedBytes": 3952788,
+        "decodedGpuBytes": 3833856,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 64,
+            "format": "rgba16float",
+            "encodedBytes": 3834052,
+            "decodedGpuBytes": 3833856
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "amiri",
+      "file": "amiri-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 14473572,
+        "sha256": "e4309d099fad5d25ebcd460adb330979ea1ccbeb90bfe74577fd8ab54c6bf2f8"
+      },
+      "compressed": {
+        "bytes": 2819448,
+        "sha256": "13d09ff4cba35a4a88b4b31344577584a58466926d29a9c5dac1ca8d53aad271"
+      },
+      "raster": {
+        "metadataBytes": 268400,
+        "serializedBytes": 14294564,
+        "decodedGpuBytes": 14024704,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 256,
+            "format": "rgba16float",
+            "encodedBytes": 14024900,
+            "decodedGpuBytes": 14024704
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "noto-sans-devanagari",
+      "file": "noto-sans-devanagari-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 1949672,
+        "sha256": "7b44e86b3d940ac0527298d57d37bde097e336940c8dcb64393dbbc5aae7d971"
+      },
+      "compressed": {
+        "bytes": 414432,
+        "sha256": "315be4bad4256b1f9654f34bb2c315a3f7c8905e4cab930554a6e326760dff2d"
+      },
+      "raster": {
+        "metadataBytes": 38160,
+        "serializedBytes": 1891000,
+        "decodedGpuBytes": 1851392,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 32,
+            "format": "rgba16float",
+            "encodedBytes": 1851588,
+            "decodedGpuBytes": 1851392
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dot-gothic-16",
+      "file": "dot-gothic-16-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 26624692,
+        "sha256": "f00d0b6c3744a0a52f70b35211dac27f9fb4ca1506d26743d8ee31a0bc303c29"
+      },
+      "compressed": {
+        "bytes": 4982008,
+        "sha256": "0b3d7a2f52070baa4c8ef524fe7a46394549a5a29d719bffac322a79864ea042"
+      },
+      "raster": {
+        "metadataBytes": 374480,
+        "serializedBytes": 26328200,
+        "decodedGpuBytes": 25952256,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 512,
+            "format": "rgba16float",
+            "encodedBytes": 25952452,
+            "decodedGpuBytes": 25952256
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "noto-sans-cjk-showcase",
+      "file": "noto-sans-cjk-showcase-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 456440,
+        "sha256": "35774c944625d198112ddd36f55a677feae7e82a0b033c6c512a0b9c3566f137"
+      },
+      "compressed": {
+        "bytes": 128446,
+        "sha256": "096441f500c5bc1266932c425dd88bc8617c9735c5c82b5fafae61636c1540c8"
+      },
+      "raster": {
+        "metadataBytes": 6200,
+        "serializedBytes": 450004,
+        "decodedGpuBytes": 442368,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 8,
+            "format": "rgba16float",
+            "encodedBytes": 442564,
+            "decodedGpuBytes": 442368
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "source-serif-4",
+      "file": "source-serif-4-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 2309944,
+        "sha256": "790f7b70e30bdaf98be0685362148905bb736b615c7c5ef83e03554636c5ab5e"
+      },
+      "compressed": {
+        "bytes": 547625,
+        "sha256": "eaaefafa73c1d4cd2a2a19d7569b00b89dd7f0ee1447b156e401ec579c46c601"
+      },
+      "raster": {
+        "metadataBytes": 58560,
+        "serializedBytes": 2173548,
+        "decodedGpuBytes": 2113536,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 32,
+            "format": "rgba16float",
+            "encodedBytes": 2113732,
+            "decodedGpuBytes": 2113536
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dancing-script",
+      "file": "dancing-script-slug-hull.font.glb.gz",
+      "uncompressed": {
+        "bytes": 2052096,
+        "sha256": "55e5d2d0d22f872e143dcef4deeed7fb4561272c698c202338cd61390430f8ad"
+      },
+      "compressed": {
+        "bytes": 394357,
+        "sha256": "a2ee93bc69047153497faf2c93cc21b6f92ee17d406c8ad112adf6caf9e4c0fd"
+      },
+      "raster": {
+        "metadataBytes": 40680,
+        "serializedBytes": 2008208,
+        "decodedGpuBytes": 1966080,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 32,
+            "format": "rgba16float",
+            "encodedBytes": 1966276,
+            "decodedGpuBytes": 1966080
+          }
+        ]
+      }
+    }
+  ]
+}

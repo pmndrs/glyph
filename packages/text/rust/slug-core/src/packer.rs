@@ -126,8 +126,7 @@ pub struct SlugPage {
     pub curve_bytes: Vec<u8>,
     /// R32UI texels in little-endian order, including zero grid padding.
     pub header_bytes: Vec<u8>,
-    /// R16UI V0 or experimental packed-hull R32UI texels in little-endian
-    /// order, including zero grid padding.
+    /// R16UI texels in little-endian order, including zero grid padding.
     pub reference_bytes: Vec<u8>,
 }
 
@@ -324,9 +323,6 @@ fn pack_page(
     let (reference_width, reference_height, reference_capacity) =
         grid(reference_count, config.reference_width)?;
     let mut headers = zeroed_u32(header_capacity)?;
-    #[cfg(feature = "autoresearch-hull-bands")]
-    let mut references = zeroed_u32(reference_capacity)?;
-    #[cfg(not(feature = "autoresearch-hull-bands"))]
     let mut references = zeroed_u16(reference_capacity)?;
     let mut curve_cursor = 0_usize;
     let mut header_cursor = 0_usize;
@@ -378,20 +374,7 @@ fn pack_page(
                     .get(usize::from(*curve_index))
                     .copied()
                     .ok_or(PackError::InvalidCurveReference)?;
-                #[cfg(feature = "autoresearch-hull-bands")]
-                {
-                    let axis = band_axis(geometry, band_index);
-                    references[reference_cursor] = pack_hull_reference(
-                        local,
-                        curve_base,
-                        axis,
-                        &curve_bytes,
-                    )?;
-                }
-                #[cfg(not(feature = "autoresearch-hull-bands"))]
-                {
-                    references[reference_cursor] = local;
-                }
+                references[reference_cursor] = local;
                 reference_cursor += 1;
             }
         }
@@ -433,9 +416,6 @@ fn pack_page(
         },
         curve_bytes,
         header_bytes: u32_bytes(&headers)?,
-        #[cfg(feature = "autoresearch-hull-bands")]
-        reference_bytes: u32_bytes(&references)?,
-        #[cfg(not(feature = "autoresearch-hull-bands"))]
         reference_bytes: u16_bytes(&references)?,
     })
 }
@@ -465,12 +445,6 @@ fn plan_bands(glyph: &GlyphGeometry) -> Result<BandPlan, PackError> {
         if band.curve_indices.len() > usize::from(u16::MAX) {
             return Err(PackError::U16Overflow);
         }
-        #[cfg(feature = "autoresearch-hull-bands")]
-        let shared = (0..band_index).find(|prior| {
-            flattened_band(glyph, *prior).curve_indices == band.curve_indices
-                && band_axis(glyph, *prior) == band_axis(glyph, band_index)
-        });
-        #[cfg(not(feature = "autoresearch-hull-bands"))]
         let shared = (0..band_index)
             .find(|prior| flattened_band(glyph, *prior).curve_indices == band.curve_indices);
         if let Some(prior) = shared {
@@ -490,86 +464,6 @@ fn plan_bands(glyph: &GlyphGeometry) -> Result<BandPlan, PackError> {
         emit,
         reference_count: cursor,
     })
-}
-
-#[cfg(feature = "autoresearch-hull-bands")]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum BandAxis {
-    Horizontal,
-    Vertical,
-}
-
-#[cfg(feature = "autoresearch-hull-bands")]
-fn band_axis(glyph: &GlyphGeometry, index: usize) -> BandAxis {
-    if index < glyph.bands.horizontal.len() {
-        BandAxis::Horizontal
-    } else {
-        BandAxis::Vertical
-    }
-}
-
-/// Pack one experimental R32UI reference from curve texels already written in
-/// RGBA16F form. Its lower half is the glyph-local curve texel; its upper half
-/// is the axis maximum after decoding precisely those binary16 coordinates.
-#[cfg(feature = "autoresearch-hull-bands")]
-fn pack_hull_reference(
-    local_curve_texel: u16,
-    glyph_curve_base: usize,
-    axis: BandAxis,
-    curve_bytes: &[u8],
-) -> Result<u32, PackError> {
-    let first_texel = glyph_curve_base
-        .checked_add(usize::from(local_curve_texel))
-        .ok_or(PackError::ArithmeticOverflow)?;
-    let channels = match axis {
-        BandAxis::Horizontal => [0, 2, 0],
-        BandAxis::Vertical => [1, 3, 1],
-    };
-    let first = half_channel_bits(curve_bytes, first_texel, channels[0])?;
-    let control = half_channel_bits(curve_bytes, first_texel, channels[1])?;
-    let end_texel = first_texel
-        .checked_add(1)
-        .ok_or(PackError::ArithmeticOverflow)?;
-    let end = half_channel_bits(curve_bytes, end_texel, channels[2])?;
-    let hull = half_max_bits(first, control, end);
-    Ok((u32::from(hull) << 16) | u32::from(local_curve_texel))
-}
-
-#[cfg(feature = "autoresearch-hull-bands")]
-fn half_channel_bits(curve_bytes: &[u8], texel: usize, channel: usize) -> Result<u16, PackError> {
-    let texel_offset = texel.checked_mul(8).ok_or(PackError::ArithmeticOverflow)?;
-    let channel_offset = channel.checked_mul(2).ok_or(PackError::ArithmeticOverflow)?;
-    let offset = texel_offset
-        .checked_add(channel_offset)
-        .ok_or(PackError::ArithmeticOverflow)?;
-    let bytes = curve_bytes
-        .get(offset..offset + 2)
-        .ok_or(PackError::ArithmeticOverflow)?;
-    Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
-}
-
-#[cfg(feature = "autoresearch-hull-bands")]
-fn half_max_bits(first: u16, control: u16, end: u16) -> u16 {
-    half_max_pair(half_max_pair(first, control), end)
-}
-
-#[cfg(feature = "autoresearch-hull-bands")]
-fn half_max_pair(left: u16, right: u16) -> u16 {
-    let left_value = f16_bits_to_f32(left);
-    let right_value = f16_bits_to_f32(right);
-    if right_value > left_value {
-        return right;
-    }
-    if left_value > right_value {
-        return left;
-    }
-    // A binary16 coordinate has one representation for every finite non-zero
-    // value. Preserve that exact payload; for zero, match maximumNumber's
-    // outward-facing +0 result when either input is +0.
-    if left_value == 0.0 && (left == 0 || right == 0) {
-        return 0;
-    }
-    left
 }
 
 fn flattened_band(glyph: &GlyphGeometry, index: usize) -> &Band {
@@ -749,7 +643,6 @@ fn zeroed_bytes(length: usize) -> Result<Vec<u8>, PackError> {
     Ok(output)
 }
 
-#[cfg(not(feature = "autoresearch-hull-bands"))]
 fn zeroed_u16(length: usize) -> Result<Vec<u16>, PackError> {
     let mut output = Vec::new();
     output
@@ -768,7 +661,6 @@ fn zeroed_u32(length: usize) -> Result<Vec<u32>, PackError> {
     Ok(output)
 }
 
-#[cfg(not(feature = "autoresearch-hull-bands"))]
 fn u16_bytes(values: &[u16]) -> Result<Vec<u8>, PackError> {
     let length = values
         .len()
@@ -908,23 +800,12 @@ mod tests {
         let record = packed.records[0];
         assert_eq!(record.curve_span_texels, 6);
         let refs = &packed.pages[0].reference_bytes;
-        #[cfg(not(feature = "autoresearch-hull-bands"))]
         assert_eq!(
             [
                 u16_at(refs, 0),
                 u16_at(refs, 2),
                 u16_at(refs, 4),
                 u16_at(refs, 6),
-            ],
-            [0, 1, 2, 4]
-        );
-        #[cfg(feature = "autoresearch-hull-bands")]
-        assert_eq!(
-            [
-                u32_at(refs, 0) & 0xffff,
-                u32_at(refs, 4) & 0xffff,
-                u32_at(refs, 8) & 0xffff,
-                u32_at(refs, 12) & 0xffff,
             ],
             [0, 1, 2, 4]
         );
@@ -935,9 +816,8 @@ mod tests {
         );
     }
 
-    #[cfg(not(feature = "autoresearch-hull-bands"))]
     #[test]
-    fn v0_deduplicates_equal_lists_across_horizontal_and_vertical_bands() {
+    fn deduplicates_equal_lists_across_horizontal_and_vertical_bands() {
         let repeated = Band {
             curve_indices: vec![1, 0],
         };
@@ -971,99 +851,6 @@ mod tests {
         assert_eq!(u32_at(&page.header_bytes, 0), (2_u32 << 16));
         assert_eq!(u32_at(&page.header_bytes, 4), (1_u32 << 16) | 2);
         assert_eq!(u32_at(&page.header_bytes, 8), (2_u32 << 16));
-    }
-
-    #[cfg(not(feature = "autoresearch-hull-bands"))]
-    #[test]
-    fn v0_reference_grid_bytes_remain_exact() {
-        let glyph = geometry(
-            vec![curve(0.0), curve(0.5)],
-            vec![0],
-            vec![Band {
-                curve_indices: vec![0, 1],
-            }],
-            vec![Band {
-                curve_indices: vec![1],
-            }],
-        );
-        let packed = pack_glyphs(
-            &[GlyphForPacking::Present {
-                plane_bounds: [0; 4],
-                geometry: &glyph,
-            }],
-            PackerConfig {
-                curve_width: 8,
-                page_curve_rows: 4,
-                header_width: 8,
-                reference_width: 8,
-            },
-        )
-        .unwrap();
-        let page = &packed.pages[0];
-        assert_eq!(page.metadata.reference_count, 3);
-        assert_eq!(page.reference_bytes, [0, 0, 1, 0, 1, 0]);
-    }
-
-    #[cfg(feature = "autoresearch-hull-bands")]
-    #[test]
-    fn hull_references_use_written_half_texels_and_only_share_within_an_axis() {
-        let glyph = geometry(
-            vec![Quadratic {
-                p0: Point::new(0.125, 0.25),
-                p1: Point::new(0.75, 0.375),
-                p2: Point::new(0.5, 0.625),
-            }],
-            vec![0],
-            vec![
-                Band {
-                    curve_indices: vec![0],
-                },
-                Band {
-                    curve_indices: vec![0],
-                },
-            ],
-            vec![Band {
-                curve_indices: vec![0],
-            }],
-        );
-        let packed = pack_glyphs(
-            &[GlyphForPacking::Present {
-                plane_bounds: [0; 4],
-                geometry: &glyph,
-            }],
-            PackerConfig {
-                curve_width: 4,
-                page_curve_rows: 4,
-                header_width: 4,
-                reference_width: 4,
-            },
-        )
-        .unwrap();
-        let page = &packed.pages[0];
-        assert_eq!(page.metadata.reference_count, 2);
-        assert_eq!(page.reference_bytes.len(), 8);
-
-        // The second horizontal band reuses offset zero; the vertical band must
-        // use offset one because its stored max-Y hull differs from max-X.
-        assert_eq!(u32_at(&page.header_bytes, 0), 1_u32 << 16);
-        assert_eq!(u32_at(&page.header_bytes, 4), 1_u32 << 16);
-        assert_eq!(u32_at(&page.header_bytes, 8), (1_u32 << 16) | 1);
-
-        let horizontal = u32_at(&page.reference_bytes, 0);
-        let vertical = u32_at(&page.reference_bytes, 4);
-        assert_eq!(horizontal & 0xffff, 0);
-        assert_eq!(vertical & 0xffff, 0);
-
-        // Both maxima are copied from the binary16 coordinates already stored
-        // in curve texels: x=max(0.125, 0.75, 0.5), y=max(0.25, 0.375, 0.625).
-        assert_eq!(u16_at(&page.curve_bytes, 0), 0x3000);
-        assert_eq!(u16_at(&page.curve_bytes, 4), 0x3a00);
-        assert_eq!(u16_at(&page.curve_bytes, 8), 0x3800);
-        assert_eq!(u16_at(&page.curve_bytes, 2), 0x3400);
-        assert_eq!(u16_at(&page.curve_bytes, 6), 0x3600);
-        assert_eq!(u16_at(&page.curve_bytes, 10), 0x3900);
-        assert_eq!(horizontal >> 16, 0x3a00);
-        assert_eq!(vertical >> 16, 0x3900);
     }
 
     #[test]

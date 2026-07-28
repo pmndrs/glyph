@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-07-28T21:43:22.980Z",
+  "qualityCapturedAt": "2026-07-28T21:35:02.670Z",
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+  "hardwareConcurrency": 10,
+  "node": "v24.18.0",
+  "pnpm": "11.15.1",
+  "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+  "gpuAdapter": {
+    "architecture": "metal-3",
+    "vendor": "apple"
+  },
+  "baseCommit": "4d39a4052747b24c582d835e496706f2e063b103",
+  "productCandidateCommit": "4631599d676feb1c02f12b0e6fc3cdb1c2719ed6",
+  "captureCommit": "4631599d676feb1c02f12b0e6fc3cdb1c2719ed6"
+}
