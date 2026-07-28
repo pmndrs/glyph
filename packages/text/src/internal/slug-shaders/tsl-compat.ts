@@ -12,6 +12,7 @@ import {
   shiftRight as shiftRightOperator,
   sub as subOperator,
   textureLoad as textureLoadOperator,
+  unpackHalf2x16 as unpackHalf2x16Operator,
 } from 'three/tsl'
 
 /**
@@ -32,6 +33,7 @@ const shiftLeftRuntime: Function = shiftLeftOperator
 const shiftRightRuntime: Function = shiftRightOperator
 const subRuntime: Function = subOperator
 const textureLoadRuntime: Function = textureLoadOperator
+const unpackHalf2x16Runtime: Function = unpackHalf2x16Operator
 
 function callIntBinary(operator: Function, left: Node<'int'>, right: Node<'int'>): Node<'int'> {
   return Reflect.apply(operator, undefined, [left, right]) as Node<'int'>
@@ -86,6 +88,10 @@ export function uintShiftLeft(left: Node<'uint'>, right: Node<'uint'>): Node<'ui
 
 export function uintShiftRight(left: Node<'uint'>, right: Node<'uint'>): Node<'uint'> {
   return callUintBinary(shiftRightRuntime, left, right)
+}
+
+export function unpackHalf2x16(value: Node<'uint'>): Node<'vec2'> {
+  return Reflect.apply(unpackHalf2x16Runtime, undefined, [value]) as Node<'vec2'>
 }
 
 export function vec2Fwidth(value: Node<'vec2'>): Node<'vec2'> {

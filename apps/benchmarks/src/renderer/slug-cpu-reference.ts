@@ -189,9 +189,20 @@ function evaluateBand(page: SlugPageResource, options: BandOptions): BandResult 
     if (referenceIndex >= page.referenceCount) {
       throw new TypeError('Slug band reference exceeds its page')
     }
-    const packedReference = references[referenceIndex >>> 1]!
-    const curveTexel =
-      options.curveBase + ((packedReference >>> ((referenceIndex & 1) * 16)) & 0xffff)
+    const packedReference =
+      page.referenceFormat === 'packed-hull-r32ui'
+        ? references[referenceIndex]!
+        : references[referenceIndex >>> 1]!
+    const localCurve =
+      page.referenceFormat === 'packed-hull-r32ui'
+        ? packedReference & 0xffff
+        : (packedReference >>> ((referenceIndex & 1) * 16)) & 0xffff
+    if (page.referenceFormat === 'packed-hull-r32ui') {
+      const hull = halfToFloat(packedReference >>> 16)
+      const renderAxis = options.axis === 'horizontal' ? options.renderX : options.renderY
+      if ((hull - renderAxis) * options.pixelsPerEm < -0.5) break
+    }
+    const curveTexel = options.curveBase + localCurve
     const curve = decodeCurve(curves, page.curveWidth, page.curveHeight, curveTexel)
     const p0x = curve.p0x - options.renderX
     const p0y = curve.p0y - options.renderY
@@ -199,10 +210,12 @@ function evaluateBand(page: SlugPageResource, options: BandOptions): BandResult 
     const p1y = curve.p1y - options.renderY
     const p2x = curve.p2x - options.renderX
     const p2y = curve.p2y - options.renderY
-    const maximum =
-      (options.axis === 'horizontal' ? Math.max(p0x, p1x, p2x) : Math.max(p0y, p1y, p2y)) *
-      options.pixelsPerEm
-    if (maximum < -0.5) break
+    if (page.referenceFormat === 'plain-r16ui') {
+      const maximum =
+        (options.axis === 'horizontal' ? Math.max(p0x, p1x, p2x) : Math.max(p0y, p1y, p2y)) *
+        options.pixelsPerEm
+      if (maximum < -0.5) break
+    }
     evaluatedCurves += 1
 
     const polynomial0 = options.axis === 'horizontal' ? p0y : p0x

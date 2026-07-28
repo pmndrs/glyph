@@ -213,6 +213,75 @@ test('Slug resolves authenticated external page payloads through raster residenc
   slug.dispose(resource)
 })
 
+test('Slug hull experiment uploads one packed R32UI word per reference', async (context) => {
+  const warnings = context.mock.method(console, 'warn', () => {})
+  const errors = context.mock.method(console, 'error', () => {})
+  const records = makeRecords([0])
+  const curve = makeRgba16fKtx2(2, 1, new Uint8Array(16))
+  const headers = bytesOf(Uint32Array.of(1 << 16))
+  const packedReference = 0x3c00_0000 // local curve 0, binary16 hull 1.0
+  const references = bytesOf(Uint32Array.of(packedReference))
+  const views = [records, curve, headers, references]
+  const candidatePage = {
+    ...page(1, 2, 3),
+    referenceFormat: 'packed-hull-r32ui',
+  }
+  const font = { handle: 9, shapingHash, glyphCount: 1 }
+  const raster = {
+    font: 9,
+    kind: 'slug',
+    extension: 'PMNDRS_font_slug',
+    version: 0,
+    rasterKey,
+    extensionData: {
+      version: 0,
+      rasterKey,
+      shapingHash,
+      glyphCount: 1,
+      glyphIdWidth: 16,
+      planeUnitsPerEm: 2048,
+      recordBufferView: 0,
+      recordStride: 40,
+      pages: [candidatePage],
+    },
+    view(index) {
+      const value = views[index]
+      if (value === undefined) throw new RangeError('missing candidate view')
+      return value
+    },
+    async resource(source) {
+      if (source.type !== 'bufferView') throw new TypeError('unexpected external resource')
+      return this.view(source.bufferView)
+    },
+  }
+
+  const resource = await slug.decode(font, raster)
+  assert.equal(resource.pages[0].referenceFormat, 'packed-hull-r32ui')
+  assert.equal(resource.pages[0].referenceWidth, 1)
+  assert.equal(resource.pages[0].referenceHeight, 1)
+  assert.deepEqual(Array.from(resource.pages[0].referenceTexture.image.data), [packedReference])
+  assert.equal(resource.gpuBytes, 24)
+
+  const batch = slug.buildBatches(
+    {
+      glyphIds: Uint16Array.of(0),
+      glyphFontSlots: Uint16Array.of(0),
+      glyphFontSizes: Float32Array.of(16),
+      x: Float32Array.of(0),
+      y: Float32Array.of(0),
+    },
+    resource,
+    0,
+    { paintIndices: Uint16Array.of(0), palette: [{ color: [1, 1, 1, 1] }] },
+    1,
+  )
+  assert.equal(batch.drawCount, 1)
+  assert.equal(warnings.mock.callCount(), 0)
+  assert.equal(errors.mock.callCount(), 0)
+  batch.dispose()
+  slug.dispose(resource)
+})
+
 function page(curveView, headerView, referenceView) {
   return {
     curve: {
