@@ -67,13 +67,14 @@ Keep these invariants visible in local code:
 
 ## Implementation workflow
 
-1. Compile an import-only fixture, a typed constant attachment, and one representative node operation with the repository compiler. Record their elapsed times; stop if graph typing expands pathologically.
-2. Express the smallest graph that preserves the existing behavior.
-3. Prefer shipped TSL helpers and add-on nodes over custom render passes.
-4. Keep node types intact. Do not cast to a broad `Node` or `unknown` merely to silence the compiler.
-5. If declarations disagree with runtime source, isolate the narrowest compatibility adapter and link it to the exact installed-version evidence.
-6. Dispose render targets, textures, buffers, passes, and materials according to their owner. Restore renderer state around custom passes.
-7. Validate correctness before collecting timings. Use fixed inputs and semantic or visual output evidence, not frame delays.
+1. Before the first compiler invocation in a worktree, run `node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --self-test`. Stop if the synthetic memory-limit test fails.
+2. Invoke TypeScript only through that runner. Start with an import-only fixture, a typed constant attachment, and one representative node operation; record elapsed time and peak RSS. Stop if graph typing expands pathologically.
+3. Express the smallest graph that preserves the existing behavior.
+4. Prefer shipped TSL helpers and add-on nodes over custom render passes.
+5. Keep node types intact. Do not cast to a broad `Node` or `unknown` merely to silence the compiler.
+6. If declarations disagree with runtime source, isolate the narrowest compatibility adapter and link it to the exact installed-version evidence.
+7. Dispose render targets, textures, buffers, passes, and materials according to their owner. Restore renderer state around custom passes.
+8. Validate correctness before collecting timings. Use fixed inputs and semantic or visual output evidence, not frame delays.
 
 ## Completion gate
 
