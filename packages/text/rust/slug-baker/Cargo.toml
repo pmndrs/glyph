@@ -1,0 +1,65 @@
+[package]
+name = "pmndrs-text-slug-baker"
+description = "Portable analytic Slug font baker for pmndrs/text"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "MIT"
+repository = "https://github.com/pmndrs/text"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "generate-slug-abi"
+path = "src/bin/generate-slug-abi.rs"
+required-features = ["std"]
+
+[features]
+default = ["std", "artifact-baker"]
+std = [
+  "dep:serde_json",
+  "serde_json/std",
+  "pmndrs-text-slug-core/std",
+  "pmndrs-text-slug-fontations?/std",
+  "pmndrs-text-raster-artifact?/std",
+  "serde?/std",
+  "skrifa?/std",
+]
+artifact-baker = [
+  "dep:pmndrs-text-slug-fontations",
+  "dep:pmndrs-text-raster-artifact",
+  "dep:serde",
+  "dep:serde_json",
+  "dep:skrifa",
+  "dep:thiserror",
+]
+allocation-evidence = []
+
+[dependencies]
+core_maths = "0.1.1"
+pmndrs-text-slug-core = { path = "../slug-core", default-features = false }
+pmndrs-text-slug-fontations = { path = "../slug-fontations", default-features = false, optional = true }
+pmndrs-text-raster-artifact = { path = "../raster-artifact", default-features = false, optional = true }
+serde = { version = "1.0.229", default-features = false, features = [
+  "alloc",
+  "derive",
+], optional = true }
+serde_json = { version = "1.0.145", default-features = false, features = [
+  "alloc",
+], optional = true }
+skrifa = { version = "=0.45.1", default-features = false, features = ["libm"], optional = true }
+thiserror = { version = "2.0.19", default-features = false, optional = true }
+
+[build-dependencies]
+serde_json = "1.0.145"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+talc = "=5.0.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
