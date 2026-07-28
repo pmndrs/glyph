@@ -33,21 +33,9 @@ use crate::{
     all(
         feature = "autoresearch-adaptive-bands",
         feature = "autoresearch-adaptive32-bands"
-    ),
-    all(
-        feature = "autoresearch-fixed32-bands",
-        feature = "autoresearch-hull-bands"
-    ),
-    all(
-        feature = "autoresearch-adaptive-bands",
-        feature = "autoresearch-hull-bands"
-    ),
-    all(
-        feature = "autoresearch-adaptive32-bands",
-        feature = "autoresearch-hull-bands"
     )
 ))]
-compile_error!("select exactly one Slug autoresearch feature");
+compile_error!("select exactly one Slug band autoresearch feature");
 
 const ADAPTIVE_MEAN_REFERENCE_TARGET: usize = 6;
 const ADAPTIVE_BAND_COUNTS: [u16; 3] = [16, 32, 64];

@@ -47,21 +47,6 @@ describe('flat Slug CPU reference', () => {
     ])
   })
 
-  it('matches V0 pixels when the hull variant exits before curve decoding', () => {
-    const baseline = renderFlatSlugCpuReference(squareResource(), specimenLayout(), {
-      width: 4,
-      height: 4,
-    })
-    const candidate = renderFlatSlugCpuReference(hullSquareResource(), specimenLayout(), {
-      width: 4,
-      height: 4,
-    })
-
-    expect(candidate.pixels).toEqual(baseline.pixels)
-    expect(candidate.bounds).toEqual(baseline.bounds)
-    expect(candidate.evaluatedCurves).toBe(baseline.evaluatedCurves)
-  })
-
   it('skips canonical absent records and rejects malformed texture storage', () => {
     const absent = squareResource()
     new DataView(absent.records.buffer).setUint16(8, 0xffff, true)
@@ -135,40 +120,10 @@ function squareResource(): SlugResource {
         referenceWidth: 4,
         referenceHeight: 1,
         referenceCount: 8,
-        referenceFormat: 'plain-r16ui',
         gpuBytes: curves.byteLength + headers.byteLength + references.byteLength,
       },
     ],
     gpuBytes: curves.byteLength + headers.byteLength + references.byteLength,
-  }
-}
-
-function hullSquareResource(): SlugResource {
-  const resource = squareResource()
-  const page = resource.pages[0]!
-  const references = Uint32Array.from([
-    0x3c00_0002, 0x3c00_0000, 0x3c00_0004, 0x0000_0006, 0x3c00_0002, 0x3c00_0004, 0x3c00_0006,
-    0x0000_0000,
-  ])
-  const referenceTexture = new THREE.DataTexture(
-    references,
-    8,
-    1,
-    THREE.RedIntegerFormat,
-    THREE.UnsignedIntType,
-  )
-  const candidatePage = {
-    ...page,
-    referenceTexture,
-    referenceWidth: 8,
-    referenceFormat: 'packed-hull-r32ui' as const,
-    gpuBytes:
-      page.gpuBytes - page.referenceWidth * page.referenceHeight * 4 + references.byteLength,
-  }
-  return {
-    ...resource,
-    pages: [candidatePage],
-    gpuBytes: candidatePage.gpuBytes,
   }
 }
 
