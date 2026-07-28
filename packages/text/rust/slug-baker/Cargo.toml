@@ -41,6 +41,7 @@ allocation-evidence = []
 autoresearch-fixed32-bands = []
 autoresearch-adaptive-bands = []
 autoresearch-adaptive32-bands = []
+autoresearch-hull-bands = ["pmndrs-text-slug-core/autoresearch-hull-bands"]
 
 [dependencies]
 core_maths = "0.1.1"
