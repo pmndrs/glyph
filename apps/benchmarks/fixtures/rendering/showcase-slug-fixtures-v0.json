@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 0,
+  "artifacts": [
+    {
+      "fontFixture": "inter",
+      "file": "inter-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 3444916,
+        "sha256": "63ede4cf02b53643d219e87594663bddb29f495d3b7de79a4c938a97f443f855"
+      },
+      "compressed": {
+        "bytes": 618487,
+        "sha256": "1c3f8fea27d1f404f77e47c4dd4929c122e12091a3d91cd92c30a6b9d6ece094"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 117480,
+        "serializedBytes": 3272816,
+        "decodedGpuBytes": 3153920,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 64,
+            "format": "rgba16float",
+            "encodedBytes": 3154116,
+            "decodedGpuBytes": 3153920
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "amiri",
+      "file": "amiri-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 12081468,
+        "sha256": "4b44fb7a430ba0dfbe3e58dfc9b099c72763dba2ea83b8b50687bfec18994559"
+      },
+      "compressed": {
+        "bytes": 1955083,
+        "sha256": "2d73dfed9154769aed29494d20b823006f4873de422b77b10cd209cc910ef458"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 268400,
+        "serializedBytes": 11902460,
+        "decodedGpuBytes": 11632640,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 256,
+            "format": "rgba16float",
+            "encodedBytes": 11632836,
+            "decodedGpuBytes": 11632640
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "noto-sans-devanagari",
+      "file": "noto-sans-devanagari-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 1613760,
+        "sha256": "608506b1dc9425b2d3e5d58effd8ce2b7dc1be78c1776525ac7bebcc7e6d63b7"
+      },
+      "compressed": {
+        "bytes": 296695,
+        "sha256": "296a7c0e3b9cfb7ee83f6e150db51e410b653a3481708b0e5927165e81ebef33"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 38160,
+        "serializedBytes": 1555092,
+        "decodedGpuBytes": 1515520,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 32,
+            "format": "rgba16float",
+            "encodedBytes": 1515716,
+            "decodedGpuBytes": 1515520
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dot-gothic-16",
+      "file": "dot-gothic-16-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 22643344,
+        "sha256": "45946b557a4b59da4c379510b9a40eb9f27a587f489a6879b93e0bf28a96d7ae"
+      },
+      "compressed": {
+        "bytes": 3639781,
+        "sha256": "7e2da76aded42f49ccebee45db1593e9047ab9e95b4038590ba9a268d96d86fd"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 374480,
+        "serializedBytes": 22346848,
+        "decodedGpuBytes": 21970944,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 512,
+            "format": "rgba16float",
+            "encodedBytes": 21971140,
+            "decodedGpuBytes": 21970944
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "noto-sans-cjk-showcase",
+      "file": "noto-sans-cjk-showcase-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 382672,
+        "sha256": "bad4a8e26e500d79e4dabfb8aba9c326e6500b7f56564701a81a394d0bb10fdd"
+      },
+      "compressed": {
+        "bytes": 96145,
+        "sha256": "a32a57e8d93a052e92aa47d197781e08850f82881d9218cc7a72da2b798f4e16"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 6200,
+        "serializedBytes": 376240,
+        "decodedGpuBytes": 368640,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 8,
+            "format": "rgba16float",
+            "encodedBytes": 368836,
+            "decodedGpuBytes": 368640
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "source-serif-4",
+      "file": "source-serif-4-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 1875732,
+        "sha256": "734e7fd9b7b2afc7e92a96a0fb1e5a37563d1a3a826a4b478bfd5855acd76dc0"
+      },
+      "compressed": {
+        "bytes": 407594,
+        "sha256": "1d5b8fccd884e51586e47cc5ae83ed9fe3552b49dcd622f9fd84bfc31b12cb2a"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 58560,
+        "serializedBytes": 1739332,
+        "decodedGpuBytes": 1679360,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 32,
+            "format": "rgba16float",
+            "encodedBytes": 1679556,
+            "decodedGpuBytes": 1679360
+          }
+        ]
+      }
+    },
+    {
+      "fontFixture": "dancing-script",
+      "file": "dancing-script-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 1658844,
+        "sha256": "0bb1b33531f20790ea597244428e9ee3b4859de42048492e80fc51d79ef893d4"
+      },
+      "compressed": {
+        "bytes": 288255,
+        "sha256": "4331ead9f990bc50127352c26e1f8e63d2d38c03d01c22ec3eda4c350dfb2e41"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 40680,
+        "serializedBytes": 1614956,
+        "decodedGpuBytes": 1572864,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 32,
+            "format": "rgba16float",
+            "encodedBytes": 1573060,
+            "decodedGpuBytes": 1572864
+          }
+        ]
+      }
+    }
+  ]
+}
