@@ -1,0 +1,23 @@
+id: slug-fixed32-bands-001
+owner: milestone-9
+baseCommit: 24976c6c2f67a3fc1879cd6f672fca332e297fec
+target: raster/slug
+hypothesis: A fixed 32 bands per axis reduces curve visits enough to improve dense-source GPU time without changing pixels.
+changedVariables:
+  - fixed per-glyph band count from 16 to 32
+primaryWorkloads:
+  - noto-sans-cjk-showcase text ladder at DPR 2
+guardWorkloads:
+  - inter text ladder at DPR 2
+  - seven-source conformance matrix at DPR 1 and 2
+backends:
+  - webgpu
+  - webgl2
+qualityPolicy: exact retained baseline pixels
+metrics:
+  - gpu_ms
+  - cpu_submit_ms
+  - evaluated_curves
+  - gzip_bytes
+  - gpu_memory_bytes
+status: calibration-only

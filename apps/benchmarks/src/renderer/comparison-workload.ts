@@ -160,6 +160,7 @@ export async function createComparisonWorkloadPreview(options: {
   readonly showGrid: boolean
   readonly showLayoutBounds: boolean
   readonly signal?: AbortSignal
+  readonly slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource
   readonly technique: RasterTechnique
   readonly textLadderSpecimen?: RasterConformanceSpecimen
   readonly width: number
@@ -170,6 +171,12 @@ export async function createComparisonWorkloadPreview(options: {
 }): Promise<ComparisonWorkloadPreview> {
   const { backend, canvas, dpr, onError, onStats, signal, technique } = options
   signal?.throwIfAborted()
+  if (options.slugBakedArtifact !== undefined && technique !== 'slug') {
+    throw new TypeError('a Slug candidate artifact requires the Slug technique')
+  }
+  if (options.slugBakedArtifact !== undefined && options.delivery !== 'baked') {
+    throw new TypeError('a retained Slug candidate artifact requires baked delivery')
+  }
   let width = positive(options.width, 'comparison workload width')
   let height = positive(options.height, 'comparison workload height')
   let configuration = validateConfiguration(options)
@@ -215,6 +222,7 @@ export async function createComparisonWorkloadPreview(options: {
       options.delivery,
       signal,
       options.onBakeProgress,
+      options.slugBakedArtifact,
     )
     const fontLoadMs = performance.now() - fontStarted
     const activeFont = font
@@ -1056,6 +1064,7 @@ async function loadTechniqueFont(
   delivery: FontDelivery,
   signal?: AbortSignal,
   onBakeProgress?: import('@pmndrs/text').BakeProgressListener,
+  slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource,
 ): Promise<LoadedTechniqueFont> {
   if (technique === 'bitmap') {
     const loaded = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress)
@@ -1084,8 +1093,12 @@ async function loadTechniqueFont(
       raster: loaded.raster,
     }
   }
-  const { loadSlugFont, registeredSlugConfiguration } = await import('./slug-text')
-  const loaded = await loadSlugFont(signal, fontFixture, delivery, onBakeProgress)
+  const { loadSlugBakedArtifact, loadSlugFont, registeredSlugConfiguration } =
+    await import('./slug-text')
+  const loaded =
+    slugBakedArtifact === undefined
+      ? await loadSlugFont(signal, fontFixture, delivery, onBakeProgress)
+      : await loadSlugBakedArtifact(slugBakedArtifact, signal)
   const slugConfiguration = await registeredSlugConfiguration(loaded.font, signal)
   return {
     artifactBytes: loaded.compressedBytes,

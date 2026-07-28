@@ -67,6 +67,12 @@ interface SlugFixtureManifest {
   readonly uncompressed: { readonly bytes: number; readonly sha256: string }
 }
 
+export interface SlugBakedArtifactSource {
+  readonly url: string
+  readonly compressed: { readonly bytes: number; readonly sha256: string }
+  readonly uncompressed: { readonly bytes: number; readonly sha256: string }
+}
+
 const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interCompressedFontUrl,
   amiri: amiriCompressedFontUrl,
@@ -757,6 +763,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
 
 export async function captureSlugTextConformance(options: {
   readonly backend: RendererBackend
+  readonly bakedArtifact?: SlugBakedArtifactSource
   readonly delivery?: FontDelivery
   readonly dpr: number
   readonly fontFixture?: BenchmarkFontFixture
@@ -769,6 +776,7 @@ export async function captureSlugTextConformance(options: {
     options.fontFixture,
     options.signal,
     options.delivery,
+    options.bakedArtifact,
   )
   try {
     options.signal?.throwIfAborted()
@@ -782,6 +790,7 @@ export async function captureSlugTextConformance(options: {
 
 export async function captureSlugSourceOutlineFidelity(options: {
   readonly backend: RendererBackend
+  readonly bakedArtifact?: SlugBakedArtifactSource
   readonly dpr: number
   readonly fontFixture: BenchmarkFontFixture
   readonly signal?: AbortSignal
@@ -792,6 +801,8 @@ export async function captureSlugSourceOutlineFidelity(options: {
     options.dpr,
     options.fontFixture,
     options.signal,
+    'baked',
+    options.bakedArtifact,
   )
   try {
     const capture = await captureFlatSlugConformance(resources)
@@ -822,6 +833,7 @@ async function createFlatSlugConformanceResources(
   fontFixture: BenchmarkFontFixture = 'inter',
   signal?: AbortSignal,
   delivery: FontDelivery = 'baked',
+  bakedArtifact?: SlugBakedArtifactSource,
 ): Promise<FlatSlugConformanceResources> {
   signal?.throwIfAborted()
   const canvas = document.createElement('canvas')
@@ -837,7 +849,10 @@ async function createFlatSlugConformanceResources(
   let line: Text | undefined
   let resource: SlugResource | undefined
   try {
-    const loaded = await loadSlugFont(signal, fontFixture, delivery)
+    const loaded =
+      bakedArtifact === undefined
+        ? await loadSlugFont(signal, fontFixture, delivery)
+        : await loadSlugBakedArtifact(bakedArtifact, signal)
     font = loaded.font
     const rasterKey = await slugDescriptorRasterKey()
     const specimen = rasterConformanceSpecimen(fontFixture)
@@ -996,6 +1011,37 @@ export async function loadSlugFont(
     compressedFontUrls[fixture],
     signal === undefined ? undefined : { signal },
   )
+  return loadSlugFontResponse(response, manifest, metrics, signal)
+}
+
+/** Load a retained non-production Slug candidate through the ordinary registry boundary. */
+export async function loadSlugBakedArtifact(
+  source: SlugBakedArtifactSource,
+  signal?: AbortSignal,
+): Promise<{
+  readonly artifactBytes: number
+  readonly compressedBytes: number
+  readonly font: RegisteredFont
+  readonly metrics: FontDeliveryMetrics
+  readonly raster: SlugModule
+}> {
+  signal?.throwIfAborted()
+  const response = await fetch(source.url, signal === undefined ? undefined : { signal })
+  return loadSlugFontResponse(response, source, createFontDeliveryMetrics('baked'), signal)
+}
+
+async function loadSlugFontResponse(
+  response: Response,
+  manifest: Pick<SlugBakedArtifactSource, 'compressed' | 'uncompressed'>,
+  metrics: FontDeliveryMetrics,
+  signal?: AbortSignal,
+): Promise<{
+  readonly artifactBytes: number
+  readonly compressedBytes: number
+  readonly font: RegisteredFont
+  readonly metrics: FontDeliveryMetrics
+  readonly raster: SlugModule
+}> {
   if (!response.ok) throw new Error(`Unable to load Slug font fixture (${response.status})`)
   const received = new Uint8Array(await response.arrayBuffer())
   signal?.throwIfAborted()
@@ -1156,7 +1202,7 @@ function assertLayoutWidthRatio(value: number): void {
 
 async function decompressFixture(
   compressed: Uint8Array<ArrayBuffer>,
-  manifest: SlugFixtureManifest,
+  manifest: Pick<SlugBakedArtifactSource, 'compressed'>,
 ): Promise<Uint8Array<ArrayBuffer>> {
   await assertFixtureBytes(compressed, manifest.compressed, 'compressed')
   return decompressGzip(compressed)

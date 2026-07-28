@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-07-28T20:28:08.918Z",
+  "browser": "Chromium 149.0.0.0",
+  "gpu": {
+    "vendor": "apple",
+    "architecture": "metal-3"
+  },
+  "hardwareConcurrency": 10,
+  "node": "v24.18.0",
+  "pnpm": "11.15.1",
+  "rust": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+}
