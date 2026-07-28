@@ -198,6 +198,8 @@ metadata bytes   = glyphRecordStride × representedGlyphCount + page directory
 
 Mipmaps approach one third of the base texture size for large power-of-two dimensions, but reports use exact floor-halved level sums. The harness presents download bytes, decoded artifact bytes, and exact GPU texture memory separately.
 
+Milestone 10 must not treat that storage cost as proof of quality. Immediately after Slug, one controlled campaign compares no mipmaps, current upload-generated linear mipmaps, and distance-aware authored mipmaps at 6, 8, 10, 12, 16, and 24 device pixels plus rotated and perspective cases. It records source-outline error, neighboring-cell bleed, upload and GPU time, transport, and the runtime's exact padded-array residency. Standalone validation and baker reports must use the same padded-array accounting before the winning representation is selected. Independently repacked size tiers remain strike atlases or texture-array layers because conventional mip levels must preserve spatial correspondence.
+
 ## Planning totals
 
 For the non-subsetted 2,937-glyph Inter V0 face, the shared cost is fixed and the bitmap generator now supplies its first exact measurement:
