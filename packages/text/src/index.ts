@@ -51,6 +51,7 @@ export type {
   FontLoadOptions,
   FontLoaderOptions,
   FontRegistryOptions,
+  RasterAttachOptions,
   RuntimeFontBake,
   RuntimeFontBakeRequest,
 } from './loader.js'
@@ -85,6 +86,9 @@ export type {
   RasterRequest,
   RasterResolver,
   RasterResolverContext,
+  RasterResourceResolver,
+  RasterResourceResolverContext,
+  RasterResourceSource,
   RasterResourceOf,
   RasterOptionsOf,
   RasterOptionsArgument,

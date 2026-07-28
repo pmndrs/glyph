@@ -41,6 +41,15 @@ export interface RasterReference<Kind extends string = string> {
   readonly source: RasterSource
 }
 
+export type RasterResourceSource =
+  | { readonly type: 'bufferView'; readonly bufferView: number }
+  | {
+      readonly type: 'external'
+      readonly uri: string
+      readonly byteLength: number
+      readonly artifactHash: Sha256Hex
+    }
+
 export interface RasterSelection<Kind extends string = string> {
   readonly rasterKey: RasterKey | string
   readonly kind?: Kind
@@ -57,11 +66,14 @@ export interface RegisteredRaster<Kind extends string = string> {
   readonly extensionData: JsonValue
   /** Return a bounds-checked immutable view of an artifact bufferView. */
   view(bufferView: number): Uint8Array
+  /** Resolve an embedded or authenticated external extension resource. */
+  resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>
   dispose(): void
 }
 
 export interface RasterLoadOptions {
   readonly resolve?: RasterResolver
+  readonly resolveResource?: RasterResourceResolver
   readonly signal?: AbortSignal
 }
 
@@ -73,6 +85,17 @@ export interface RasterResolverContext {
 
 export type RasterResolver = (
   context: RasterResolverContext,
+) => Promise<ArrayBufferView | undefined>
+
+export interface RasterResourceResolverContext {
+  readonly font: RegisteredFont
+  readonly reference: RasterReference
+  readonly source: Extract<RasterResourceSource, { readonly type: 'external' }>
+  readonly signal?: AbortSignal
+}
+
+export type RasterResourceResolver = (
+  context: RasterResourceResolverContext,
 ) => Promise<ArrayBufferView | undefined>
 
 interface RuntimeRasterBakeRequestBase {

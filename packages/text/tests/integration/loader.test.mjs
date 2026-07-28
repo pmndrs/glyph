@@ -366,11 +366,15 @@ test('external raster loading resolves relative to the baked core and authentica
   const calls = []
   const coreUrl = 'https://assets.test/generated/Inter.font.glb'
   const rasterUrl = `https://assets.test/generated/${externalRasterId}`
+  const pageUrl = 'https://assets.test/generated/page.bin'
+  const pageBytes = Uint8Array.of(3, 1, 4, 1, 5, 9)
+  const pageHash = createHash('sha256').update(pageBytes).digest('hex')
   const loader = new FontLoader({
     fetch: fixtureFetch(
       new Map([
         [coreUrl, externalCoreBytes],
         [rasterUrl, externalRasterBytes],
+        [pageUrl, pageBytes],
       ]),
       calls,
     ),
@@ -381,7 +385,40 @@ test('external raster loading resolves relative to the baked core and authentica
 
   assert.equal(raster.kind, 'bitmap')
   assert.equal(font.getRaster(reference.rasterKey), raster)
-  assert.deepEqual(calls, [coreUrl, rasterUrl])
+  const resolvedPage = await raster.resource({
+    type: 'external',
+    uri: 'page.bin',
+    byteLength: pageBytes.byteLength,
+    artifactHash: pageHash,
+  })
+  assert.deepEqual(resolvedPage, pageBytes)
+  resolvedPage.fill(0)
+  assert.deepEqual(pageBytes, Uint8Array.of(3, 1, 4, 1, 5, 9))
+
+  await assert.rejects(
+    raster.resource({
+      type: 'external',
+      uri: 'page.bin',
+      byteLength: pageBytes.byteLength,
+      artifactHash: '0'.repeat(64),
+    }),
+    (error) => error instanceof FontLoadError && error.code === 'RASTER_RESOURCE_HASH',
+  )
+  const controller = new AbortController()
+  controller.abort(new Error('page cancelled'))
+  await assert.rejects(
+    raster.resource(
+      {
+        type: 'external',
+        uri: 'page.bin',
+        byteLength: pageBytes.byteLength,
+        artifactHash: pageHash,
+      },
+      controller.signal,
+    ),
+    /page cancelled/,
+  )
+  assert.deepEqual(calls, [coreUrl, rasterUrl, pageUrl, pageUrl])
 
   const otherRegistry = new FontRegistry()
   const otherFont = await otherRegistry.registerAsset(externalCoreBytes)

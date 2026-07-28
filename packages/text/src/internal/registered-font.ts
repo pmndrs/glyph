@@ -1,5 +1,5 @@
 import type { RegisteredFont } from '../font.js'
-import type { JsonValue, RasterReference } from '../raster.js'
+import type { JsonValue, RasterReference, RasterResourceResolver } from '../raster.js'
 
 export interface RegisteredBufferView {
   readonly byteOffset: number
@@ -12,12 +12,19 @@ export interface RegisteredRasterSourceData {
   readonly binaryBytes?: Uint8Array
   readonly bufferViews?: readonly RegisteredBufferView[]
   readonly externalCandidates: RegisteredRasterExternalCandidate[]
+  readonly resourceCandidates: RegisteredRasterResourceCandidate[]
 }
 
 export interface RegisteredRasterExternalCandidate {
   readonly source: Extract<RasterReference['source'], { readonly type: 'external' }>
   readonly artifactUrl?: string
   readonly fetch?: typeof fetch
+}
+
+export interface RegisteredRasterResourceCandidate {
+  readonly artifactUrl?: string
+  readonly fetch?: typeof fetch
+  readonly resolveResource?: RasterResourceResolver
 }
 
 export interface RegisteredFontData {

@@ -22,6 +22,7 @@ import {
 } from 'three/tsl'
 
 import type { RegisteredFont } from '../font.js'
+import type { Sha256Hex } from '../identity.js'
 import {
   assertParallelRasterLayout,
   assertParallelRasterPaint,
@@ -50,6 +51,7 @@ import {
   defineRaster,
   type JsonValue,
   type RasterModule,
+  type RasterResourceSource,
   type RegisteredRaster,
 } from '../raster.js'
 
@@ -122,7 +124,7 @@ const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = 
   descriptor: slugDescriptor,
   async decode(font, raster, signal) {
     signal?.throwIfAborted()
-    const resource = decodeSlugResource(font, raster)
+    const resource = await decodeSlugResource(font, raster, signal)
     signal?.throwIfAborted()
     return resource
   },
@@ -146,7 +148,11 @@ export type SlugModule = typeof slugModule
 /** Fixed analytic Slug raster module for `defineFont(source, slug)`. */
 export const slug: SlugModule = slugModule
 
-function decodeSlugResource(font: RegisteredFont, raster: RegisteredRaster): SlugResource {
+async function decodeSlugResource(
+  font: RegisteredFont,
+  raster: RegisteredRaster,
+  signal?: AbortSignal,
+): Promise<SlugResource> {
   if (
     raster.font !== font.handle ||
     raster.kind !== SLUG_KIND ||
@@ -182,7 +188,7 @@ function decodeSlugResource(font: RegisteredFont, raster: RegisteredRaster): Slu
   try {
     let gpuBytes = 0
     for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
-      const page = decodeSlugPage(raster, pageValues[pageIndex]!, pageIndex)
+      const page = await decodeSlugPage(raster, pageValues[pageIndex]!, pageIndex, signal)
       pages.push(page)
       gpuBytes = checkedGpuBytes(gpuBytes, page.gpuBytes)
     }
@@ -199,11 +205,12 @@ function decodeSlugResource(font: RegisteredFont, raster: RegisteredRaster): Slu
   }
 }
 
-function decodeSlugPage(
+async function decodeSlugPage(
   raster: RegisteredRaster,
   value: JsonValue,
   pageIndex: number,
-): SlugPageResource {
+  signal?: AbortSignal,
+): Promise<SlugPageResource> {
   const path = `Slug page ${pageIndex}`
   const page = jsonObject(value, path)
   const curve = jsonObject(page.curve, `${path} curve`)
@@ -224,7 +231,12 @@ function decodeSlugPage(
     throw new TypeError(`${path} curve does not match the lossless RGBA16F baseline`)
   }
 
-  const curveBytes = embeddedResourceBytes(raster, variant.source, `${path} curve source`)
+  const curveBytes = await rasterResourceBytes(
+    raster,
+    variant.source,
+    `${path} curve source`,
+    signal,
+  )
   const curveContainer = validateNativeKtx2(curveBytes, curveWidth, curveHeight, {
     vkFormat: VK_FORMAT_R16G16B16A16_SFLOAT,
     typeSize: 2,
@@ -246,7 +258,12 @@ function decodeSlugPage(
   const headerCapacity = checkedProduct(headerWidth, headerHeight, `${path} header dimensions`)
   const headerCount = boundedCount(page.headerCount, headerCapacity, `${path} header count`)
   const headerResource = jsonObject(page.headerResource, `${path} header resource`)
-  const headerBytes = embeddedResourceBytes(raster, headerResource.source, `${path} header source`)
+  const headerBytes = await rasterResourceBytes(
+    raster,
+    headerResource.source,
+    `${path} header source`,
+    signal,
+  )
   assertGridLength(headerBytes, headerCapacity, 4, `${path} header`)
 
   const referenceWidth = textureDimension(page.referenceWidth, `${path} reference width`)
@@ -262,10 +279,11 @@ function decodeSlugPage(
     `${path} reference count`,
   )
   const referenceResource = jsonObject(page.referenceResource, `${path} reference resource`)
-  const referenceBytes = embeddedResourceBytes(
+  const referenceBytes = await rasterResourceBytes(
     raster,
     referenceResource.source,
     `${path} reference source`,
+    signal,
   )
   assertGridLength(referenceBytes, referenceCapacity, 2, `${path} reference`)
 
@@ -309,16 +327,43 @@ function decodeSlugPage(
   }
 }
 
-function embeddedResourceBytes(
+async function rasterResourceBytes(
   raster: RegisteredRaster,
   value: JsonValue | undefined,
   path: string,
-): Uint8Array {
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
   const source = jsonObject(value, path)
-  if (source.type !== 'bufferView') {
-    throw new TypeError(`${path} is external; lazy Slug page residency is not available yet`)
+  let resource: RasterResourceSource
+  if (source.type === 'bufferView') {
+    resource = {
+      type: 'bufferView',
+      bufferView: nonnegativeSafeInteger(source.bufferView, `${path} bufferView`),
+    }
+  } else if (source.type === 'external') {
+    resource = {
+      type: 'external',
+      uri: nonemptyString(source.uri, `${path} uri`),
+      byteLength: positiveSafeInteger(source.byteLength, `${path} byteLength`),
+      artifactHash: sha256Hex(source.artifactHash, `${path} artifactHash`),
+    }
+  } else {
+    throw new TypeError(`${path} must be a bufferView or authenticated external resource`)
   }
-  return raster.view(nonnegativeSafeInteger(source.bufferView, `${path} bufferView`))
+  return raster.resource(resource, signal)
+}
+
+function nonemptyString(value: JsonValue | undefined, path: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`${path} must be a nonempty string`)
+  }
+  return value
+}
+
+function sha256Hex(value: JsonValue | undefined, path: string): Sha256Hex {
+  const text = nonemptyString(value, path)
+  if (!/^[0-9a-f]{64}$/.test(text)) throw new TypeError(`${path} must be lowercase SHA-256`)
+  return text as Sha256Hex
 }
 
 function dataTexture(
