@@ -12,6 +12,7 @@ const LEVEL_INDEX_LENGTH: usize = 24;
 pub enum KtxFormat {
     R8Unorm,
     Rgba8Unorm,
+    Rgba16Sfloat,
 }
 
 impl KtxFormat {
@@ -19,6 +20,7 @@ impl KtxFormat {
         match self {
             Self::R8Unorm => 9,
             Self::Rgba8Unorm => 37,
+            Self::Rgba16Sfloat => 97,
         }
     }
 
@@ -26,6 +28,7 @@ impl KtxFormat {
         match self {
             Self::R8Unorm => 1,
             Self::Rgba8Unorm => 4,
+            Self::Rgba16Sfloat => 8,
         }
     }
 
@@ -33,6 +36,14 @@ impl KtxFormat {
         match self {
             Self::R8Unorm => include_bytes!(concat!(env!("OUT_DIR"), "/r8-dfd.bin")),
             Self::Rgba8Unorm => include_bytes!(concat!(env!("OUT_DIR"), "/rgba8-dfd.bin")),
+            Self::Rgba16Sfloat => include_bytes!(concat!(env!("OUT_DIR"), "/rgba16f-dfd.bin")),
+        }
+    }
+
+    fn type_size(self) -> u32 {
+        match self {
+            Self::R8Unorm | Self::Rgba8Unorm => 1,
+            Self::Rgba16Sfloat => 2,
         }
     }
 }
@@ -70,7 +81,7 @@ pub fn encode_ktx2(
 
     bytes[..MAGIC.len()].copy_from_slice(&MAGIC);
     write_u32(&mut bytes, 12, format.vk_format());
-    write_u32(&mut bytes, 16, 1);
+    write_u32(&mut bytes, 16, format.type_size());
     write_u32(&mut bytes, 20, u32::from(width));
     write_u32(&mut bytes, 24, u32::from(height));
     write_u32(&mut bytes, 36, 1);
@@ -125,9 +136,10 @@ fn validate(
     let expected_format = match format {
         KtxFormat::R8Unorm => ktx2::Format::R8_UNORM,
         KtxFormat::Rgba8Unorm => ktx2::Format::R8G8B8A8_UNORM,
+        KtxFormat::Rgba16Sfloat => ktx2::Format::R16G16B16A16_SFLOAT,
     };
     if header.format != Some(expected_format)
-        || header.type_size != 1
+        || header.type_size != format.type_size()
         || header.pixel_width != u32::from(expected_width)
         || header.pixel_height != u32::from(expected_height)
         || header.pixel_depth != 0
@@ -170,11 +182,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn emits_lossless_r8_and_rgba8() {
+    fn emits_lossless_native_formats() {
         let r8 = encode_ktx2(KtxFormat::R8Unorm, 2, 1, &[1, 2]).expect("R8");
         let rgba =
             encode_ktx2(KtxFormat::Rgba8Unorm, 2, 1, &[1, 2, 3, 4, 5, 6, 7, 8]).expect("RGBA8");
+        let rgba16 = encode_ktx2(KtxFormat::Rgba16Sfloat, 1, 1, &[0; 8]).expect("RGBA16F");
         assert_eq!(u32::from_le_bytes(r8[12..16].try_into().unwrap()), 9);
         assert_eq!(u32::from_le_bytes(rgba[12..16].try_into().unwrap()), 37);
+        assert_eq!(u32::from_le_bytes(rgba16[12..16].try_into().unwrap()), 97);
+        assert_eq!(u32::from_le_bytes(rgba16[16..20].try_into().unwrap()), 2);
     }
 }
