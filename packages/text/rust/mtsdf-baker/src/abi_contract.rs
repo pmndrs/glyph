@@ -1,9 +1,9 @@
 use alloc::string::{String, ToString};
 use serde_json::json;
 
+pub use crate::abi_layout::*;
+
 pub const ABI_VERSION: u32 = 1;
-pub const REQUEST_HEADER_SIZE: u32 = 48;
-pub const COMMAND_SIZE: u32 = 28;
 
 pub fn json(include_artifact_baker: bool) -> String {
     let mut contract = json!({
@@ -17,35 +17,35 @@ pub fn json(include_artifact_baker: bool) -> String {
             "deallocate": "pmndrs_text_mtsdf_dealloc",
             "generate": "pmndrs_text_mtsdf_generate",
             "resultPointer": "pmndrs_text_mtsdf_result_ptr",
-            "resultLength": "pmndrs_text_mtsdf_result_len",
-            "abiPointer": "pmndrs_text_mtsdf_abi_ptr",
-            "abiLength": "pmndrs_text_mtsdf_abi_len"
+            "resultLength": "pmndrs_text_mtsdf_result_len"
         },
         "layouts": {
             "request": {
                 "size": REQUEST_HEADER_SIZE,
-                "byteLength": 0,
-                "commandsOffset": 4,
-                "commandCount": 8,
-                "unitsPerEm": 12,
-                "minX": 16,
-                "minY": 20,
-                "maxX": 24,
-                "maxY": 28,
-                "innerWidth": 32,
-                "innerHeight": 36,
-                "paddingX": 40,
-                "paddingY": 44
+                "alignment": REQUEST_HEADER_ALIGNMENT,
+                "byteLength": REQUEST_BYTE_LENGTH,
+                "commandsOffset": REQUEST_COMMANDS_OFFSET,
+                "commandCount": REQUEST_COMMAND_COUNT,
+                "unitsPerEm": REQUEST_UNITS_PER_EM,
+                "minX": REQUEST_MIN_X,
+                "minY": REQUEST_MIN_Y,
+                "maxX": REQUEST_MAX_X,
+                "maxY": REQUEST_MAX_Y,
+                "innerWidth": REQUEST_INNER_WIDTH,
+                "innerHeight": REQUEST_INNER_HEIGHT,
+                "paddingX": REQUEST_PADDING_X,
+                "paddingY": REQUEST_PADDING_Y
             },
             "command": {
                 "size": COMMAND_SIZE,
-                "opcode": 0,
-                "x0": 4,
-                "y0": 8,
-                "x1": 12,
-                "y1": 16,
-                "x2": 20,
-                "y2": 24
+                "alignment": COMMAND_ALIGNMENT,
+                "opcode": COMMAND_OPCODE,
+                "x0": COMMAND_X0,
+                "y0": COMMAND_Y0,
+                "x1": COMMAND_X1,
+                "y1": COMMAND_Y1,
+                "x2": COMMAND_X2,
+                "y2": COMMAND_Y2
             }
         },
         "commands": { "move": 0, "line": 1, "quadratic": 2, "cubic": 3, "close": 4 },
@@ -120,12 +120,14 @@ pub fn json(include_artifact_baker: bool) -> String {
                 },
             },
             "response": {
-                "headerByteLength": 16,
+                "headerByteLength": RESPONSE_HEADER_SIZE,
+                "headerAlignment": RESPONSE_HEADER_ALIGNMENT,
                 "magic": "PMMS",
-                "statusOffset": 4,
-                "metadataByteLengthOffset": 8,
-                "artifactByteLengthOffset": 12,
-                "payloadOffset": 16,
+                "magicOffset": RESPONSE_MAGIC_OFFSET,
+                "statusOffset": RESPONSE_STATUS_OFFSET,
+                "metadataByteLengthOffset": RESPONSE_METADATA_LENGTH_OFFSET,
+                "artifactByteLengthOffset": RESPONSE_ARTIFACT_LENGTH_OFFSET,
+                "payloadOffset": RESPONSE_HEADER_SIZE,
                 "successStatus": 0,
                 "segmented": {
                     "chunkByteLength": 8388608,

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { reproducibleRustEnvironment } from "./reproducible-rust-env.mjs";
+import { writeGeneratedTypescriptAbi } from "./generated-typescript-abi.mjs";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const workspaceRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -23,6 +24,21 @@ const rustWasm = fileURLToPath(
 );
 const distributedWasm = fileURLToPath(new URL("../dist/font_baker.wasm", import.meta.url));
 
+const abiJson = await runCapture("cargo", [
+  "run",
+  "--manifest-path",
+  "rust/Cargo.toml",
+  "--bin",
+  "generate-abi",
+  "--locked",
+  "--quiet",
+]);
+await writeGeneratedTypescriptAbi(
+  new URL("../src/generated/font-baker-abi.ts", import.meta.url),
+  "fontBakerAbi",
+  abiJson,
+  { check: process.env.CI === "true" },
+);
 await run(
   "cargo",
   [
@@ -57,15 +73,7 @@ await run(wasmOpt, [
 ]);
 await writeFile(
   new URL("../dist/font-baker-abi-v0.json", import.meta.url),
-  await runCapture("cargo", [
-    "run",
-    "--manifest-path",
-    "rust/Cargo.toml",
-    "--bin",
-    "generate-abi",
-    "--locked",
-    "--quiet",
-  ]),
+  abiJson,
 );
 
 function run(command, args, environment = process.env) {

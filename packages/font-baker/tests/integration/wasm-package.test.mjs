@@ -32,29 +32,14 @@ test("the distributed module is the pinned size-optimized zero-import release mo
   assert.deepEqual(WebAssembly.Module.imports(rustRelease), []);
 });
 
-test("the published and embedded ABI contracts are identical", async () => {
+test("the published and generated TypeScript ABI contracts are identical", async () => {
   const module = await WebAssembly.compile(wasm);
   assert.deepEqual(WebAssembly.Module.imports(module), []);
   const instance = await WebAssembly.instantiate(module, {});
-  const embedded = readFontBakerAbi(instance);
-  assert.equal(embedded.versions.binaryen, "129.0.0");
-  assert.deepEqual(embedded, publishedAbi);
-});
-
-test("the direct-memory shim rejects incompatible version pins", async () => {
-  const module = await WebAssembly.compile(wasm);
-  const instance = await WebAssembly.instantiate(module, {});
-  const pointer = instance.exports.pmndrs_font_baker_abi_ptr();
-  const length = instance.exports.pmndrs_font_baker_abi_len();
-  const bytes = new Uint8Array(instance.exports.memory.buffer, pointer, length);
-  const text = new TextDecoder().decode(bytes);
-  const incompatible = new TextEncoder().encode(
-    text.replace('"harfrust": "0.12.0"', '"harfrust": "0.11.0"'),
-  );
-  assert.equal(incompatible.byteLength, bytes.byteLength);
-  bytes.set(incompatible);
-
-  assert.throws(() => readFontBakerAbi(instance), /unsupported font baker ABI/);
+  const generated = readFontBakerAbi(instance);
+  assert.equal(generated.versions.binaryen, "129.0.0");
+  assert.deepEqual(generated, publishedAbi);
+  assert.equal(WebAssembly.Module.exports(module).some(({ name }) => name.includes("abi_")), false);
 });
 
 test("the TypeScript wrapper returns structured Rust errors", async () => {
@@ -108,15 +93,6 @@ test("the direct-memory shim releases an allocation whose memory copy fails", ()
   assert.deepEqual(
     released.map(([pointer]) => pointer),
     [65_535, 4096],
-  );
-});
-
-test("the ABI reader rejects malformed nested function contracts", () => {
-  const malformed = structuredClone(publishedAbi);
-  malformed.functions.allocate.parameters = ["wrong"];
-  assert.throws(
-    () => readFontBakerAbi(fakeFontBakerInstance({ abi: malformed })),
-    /unsupported font baker ABI/,
   );
 });
 
@@ -186,14 +162,11 @@ test("direct-memory allocations reject forged releases and recover after invalid
 });
 
 function fakeFontBakerInstance({
-  abi = publishedAbi,
   allocate = () => 0,
   deallocate = () => undefined,
   response,
 } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 });
-  const abiBytes = new TextEncoder().encode(JSON.stringify(abi));
-  new Uint8Array(memory.buffer, 0, abiBytes.byteLength).set(abiBytes);
   const responsePointer = 16_384;
   if (response !== undefined) {
     new Uint8Array(memory.buffer, responsePointer, response.byteLength).set(response);
@@ -201,8 +174,6 @@ function fakeFontBakerInstance({
   return {
     exports: {
       memory,
-      pmndrs_font_baker_abi_ptr: () => 0,
-      pmndrs_font_baker_abi_len: () => abiBytes.byteLength,
       pmndrs_font_baker_alloc: allocate,
       pmndrs_font_baker_dealloc: deallocate,
       pmndrs_font_baker_bake: () => (response === undefined ? 0 : responsePointer),

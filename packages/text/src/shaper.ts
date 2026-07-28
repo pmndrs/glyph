@@ -1,4 +1,5 @@
 import type { RegisteredFont } from './font.js'
+import { textShaperAbi } from './generated/text-shaper-abi.js'
 import type { FontHandle } from './identity.js'
 import { getRegisteredFontData } from './internal/registered-font.js'
 import { FontRegistry } from './loader.js'
@@ -88,6 +89,7 @@ export interface RuntimeShaper {
 
 interface LayoutBase {
   readonly size: number
+  readonly alignment: number
   readonly [field: string]: number
 }
 
@@ -182,41 +184,6 @@ interface ShaperAbiLayouts {
   readonly bidiResult: BidiResultLayout
 }
 
-interface ShaperAbiV0 {
-  readonly name: 'pmndrs-text-shaper'
-  readonly version: 0
-  readonly endianness: 'little'
-  readonly pointerWidth: 32
-  readonly memory: 'memory'
-  readonly versions: {
-    readonly shaper: '0.0.0'
-    readonly harfrust: '0.12.0'
-    readonly harfrustCommit: '60b28ea22b5261710018d69c168a762bcb28794c'
-    readonly unicode: '17.0.0'
-    readonly fontFormat: 0
-  }
-  readonly functions: {
-    readonly allocate: string
-    readonly deallocate: string
-    readonly registerFont: string
-    readonly disposeFont: string
-    readonly fontCount: string
-    readonly retainedFontBytes: string
-    readonly planCount: string
-    readonly shapeBatch: string
-    readonly reshapeRanges: string
-    readonly analyzeBidi: string
-    readonly resultPointer: string
-    readonly resultLength: string
-  }
-  readonly layouts: ShaperAbiLayouts
-  readonly bidi: {
-    readonly directions: { readonly auto: 0; readonly ltr: 1; readonly rtl: 2 }
-    readonly classes: Readonly<Record<string, number>>
-  }
-  readonly status: { readonly ok: 0 }
-}
-
 interface ShaperExports {
   readonly memory: WebAssembly.Memory
   readonly allocate: (length: number) => number
@@ -246,7 +213,6 @@ interface ShaperModule {
   readonly layouts: ShaperAbiLayouts
 }
 
-const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 const noLanguage = 0xffff_ffff
 const bufferFlagsMask = 0xff
@@ -404,34 +370,7 @@ async function fetchDefaultWasm(): Promise<ArrayBuffer> {
 function readModule(instance: WebAssembly.Instance): ShaperModule {
   const memory = instance.exports.memory
   if (!(memory instanceof WebAssembly.Memory)) throw new TypeError('text shaper is missing memory')
-  const abiPointer = exportedFunction(instance, 'pmndrs_text_shaper_abi_ptr')()
-  const abiLength = exportedFunction(instance, 'pmndrs_text_shaper_abi_len')()
-  const abi = JSON.parse(
-    decoder.decode(checkedMemoryView(memory, abiPointer, abiLength)),
-  ) as Partial<ShaperAbiV0>
-  if (
-    abi.name !== 'pmndrs-text-shaper' ||
-    abi.version !== 0 ||
-    abi.endianness !== 'little' ||
-    abi.pointerWidth !== 32 ||
-    abi.memory !== 'memory' ||
-    abi.versions?.shaper !== '0.0.0' ||
-    abi.versions.harfrust !== '0.12.0' ||
-    abi.versions.harfrustCommit !== '60b28ea22b5261710018d69c168a762bcb28794c' ||
-    abi.versions.unicode !== '17.0.0' ||
-    abi.versions.fontFormat !== 0 ||
-    abi.functions === undefined ||
-    abi.layouts === undefined ||
-    abi.bidi?.directions.auto !== 0 ||
-    abi.bidi.directions.ltr !== 1 ||
-    abi.bidi.directions.rtl !== 2 ||
-    !validBidiClasses(abi.bidi.classes) ||
-    abi.status?.ok !== 0
-  ) {
-    throw new TypeError('unsupported text shaper ABI')
-  }
-  validateLayouts(abi.layouts)
-  const functions = abi.functions
+  const functions = textShaperAbi.functions
   return {
     exports: {
       memory,
@@ -448,83 +387,7 @@ function readModule(instance: WebAssembly.Instance): ShaperModule {
       resultPointer: exportedFunction(instance, functions.resultPointer),
       resultLength: exportedFunction(instance, functions.resultLength),
     },
-    layouts: abi.layouts,
-  }
-}
-
-function validateLayouts(layouts: ShaperAbiLayouts): void {
-  const expected: Readonly<Record<keyof ShaperAbiLayouts, Readonly<Record<string, number>>>> = {
-    shapeRequest: {
-      size: 32,
-      textOffset: 0,
-      textLength: 4,
-      runsOffset: 8,
-      runCount: 12,
-      featuresOffset: 16,
-      featureCount: 20,
-      languagesOffset: 24,
-      languagesLength: 28,
-    },
-    reshapeRequest: { size: 40, rangesOffset: 32, rangeCount: 36 },
-    bidiRequest: { size: 12, textOffset: 0, textLength: 4, direction: 8 },
-    feature: { size: 16, tag: 0, value: 4, start: 8, end: 12 },
-    run: {
-      size: 32,
-      fontHandle: 0,
-      textStart: 4,
-      textEnd: 8,
-      script: 12,
-      languageOffset: 16,
-      featureStart: 20,
-      featureCount: 24,
-      direction: 26,
-      clusterLevel: 27,
-      flags: 28,
-    },
-    reshapeRange: {
-      size: 24,
-      run: 0,
-      itemStart: 4,
-      itemEnd: 8,
-      contextStart: 12,
-      contextEnd: 16,
-      flags: 20,
-    },
-    result: {
-      size: 60,
-      byteLength: 0,
-      fontHandlesOffset: 4,
-      fontHandleCount: 8,
-      runFontSlotsOffset: 12,
-      runGlyphStartsOffset: 16,
-      runGlyphCountsOffset: 20,
-      runCount: 24,
-      glyphIdsOffset: 28,
-      clustersOffset: 32,
-      xAdvancesOffset: 36,
-      yAdvancesOffset: 40,
-      xOffsetsOffset: 44,
-      yOffsetsOffset: 48,
-      glyphFlagsOffset: 52,
-      glyphCount: 56,
-    },
-    bidiResult: {
-      size: 32,
-      byteLength: 0,
-      levelsOffset: 4,
-      classesOffset: 8,
-      textLength: 12,
-      paragraphStartsOffset: 16,
-      paragraphEndsOffset: 20,
-      paragraphLevelsOffset: 24,
-      paragraphCount: 28,
-    },
-  }
-  for (const name of Object.keys(expected) as (keyof ShaperAbiLayouts)[]) {
-    const layout = layouts[name]
-    for (const [field, value] of Object.entries(expected[name])) {
-      if (layout[field] !== value) throw new TypeError(`unsupported ${name}.${field} layout`)
-    }
+    layouts: textShaperAbi.layouts,
   }
 }
 
@@ -830,35 +693,6 @@ function resultArray<ArrayType extends Uint8Array | Uint16Array | Uint32Array | 
     throw new TypeError('text shaper returned an invalid result-array range')
   }
   return new Constructor(result.buffer, result.byteOffset + offset, count)
-}
-
-function validBidiClasses(classes: Readonly<Record<string, number>> | undefined): boolean {
-  const expected = [
-    'L',
-    'R',
-    'AL',
-    'EN',
-    'ES',
-    'ET',
-    'AN',
-    'CS',
-    'NSM',
-    'BN',
-    'B',
-    'S',
-    'WS',
-    'ON',
-    'LRE',
-    'LRO',
-    'RLE',
-    'RLO',
-    'PDF',
-    'LRI',
-    'RLI',
-    'FSI',
-    'PDI',
-  ]
-  return classes !== undefined && expected.every((name, index) => classes[name] === index)
 }
 
 function exportedFunction(

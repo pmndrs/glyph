@@ -55,7 +55,9 @@ fn main() {
         },
         "response": {
             "headerByteLength": abi_contract::RESPONSE_HEADER_BYTES,
+            "headerAlignment": abi_contract::RESPONSE_HEADER_ALIGNMENT,
             "magic": abi_contract::RESPONSE_MAGIC,
+            "magicOffset": abi_contract::RESPONSE_MAGIC_OFFSET,
             "statusOffset": abi_contract::RESPONSE_STATUS_OFFSET,
             "metadataByteLengthOffset": abi_contract::RESPONSE_METADATA_LEN_OFFSET,
             "artifactByteLengthOffset": abi_contract::RESPONSE_ARTIFACT_LEN_OFFSET,

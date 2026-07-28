@@ -16,21 +16,10 @@ static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
 
 static STATE: AtomicUsize = AtomicUsize::new(0);
-static ABI: &str = env!("PMNDRS_TEXT_SHAPER_ABI");
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
     core::arch::wasm32::unreachable()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_text_shaper_abi_ptr() -> u32 {
-    u32::try_from(ABI.as_ptr() as usize).unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_text_shaper_abi_len() -> u32 {
-    u32::try_from(ABI.len()).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]

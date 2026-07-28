@@ -9,7 +9,6 @@ const MAX_REQUEST_ALLOCATION_BYTES: u32 = 64 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = MAX_REQUEST_ALLOCATION_BYTES as usize;
 
 static STATE: AtomicUsize = AtomicUsize::new(0);
-static ABI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/bitmap-baker-abi-v0.json"));
 
 #[global_allocator]
 static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
@@ -85,16 +84,6 @@ pub unsafe extern "C" fn pmndrs_bitmap_baker_bake(
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_bitmap_baker_result_len() -> u32 {
     with_state(|state| state.result_len)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_bitmap_baker_abi_ptr() -> u32 {
-    u32::try_from(ABI_JSON.as_ptr() as usize).unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn pmndrs_bitmap_baker_abi_len() -> u32 {
-    u32::try_from(ABI_JSON.len()).unwrap_or(0)
 }
 
 fn encode_response(result: Result<BitmapBakeResultV0, crate::BitmapBakeError>) -> Vec<u8> {
@@ -181,7 +170,8 @@ fn encode_response(result: Result<BitmapBakeResultV0, crate::BitmapBakeError>) -
         return Vec::new();
     }
     response.resize(header_length, 0);
-    response[..crate::abi_contract::RESPONSE_MAGIC.len()]
+    let magic_offset = crate::abi_contract::RESPONSE_MAGIC_OFFSET as usize;
+    response[magic_offset..magic_offset + crate::abi_contract::RESPONSE_MAGIC.len()]
         .copy_from_slice(crate::abi_contract::RESPONSE_MAGIC.as_bytes());
     write_header_u32(
         &mut response,

@@ -2,8 +2,13 @@ use std::{env, fs, path::PathBuf};
 
 use serde_json::json;
 
+mod abi_contract {
+    include!("src/abi_contract.rs");
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/abi_contract.rs");
     let contract = json!({
         "name": "pmndrs-text-bitmap-baker",
         "version": 0,
@@ -47,13 +52,15 @@ fn main() {
             },
         },
         "response": {
-            "headerByteLength": 16,
-            "magic": "PMBM",
-            "statusOffset": 4,
-            "metadataByteLengthOffset": 8,
-            "artifactByteLengthOffset": 12,
-            "payloadOffset": 16,
-            "successStatus": 0,
+            "headerByteLength": abi_contract::RESPONSE_HEADER_BYTES,
+            "headerAlignment": abi_contract::RESPONSE_HEADER_ALIGNMENT,
+            "magic": abi_contract::RESPONSE_MAGIC,
+            "magicOffset": abi_contract::RESPONSE_MAGIC_OFFSET,
+            "statusOffset": abi_contract::RESPONSE_STATUS_OFFSET,
+            "metadataByteLengthOffset": abi_contract::RESPONSE_METADATA_LEN_OFFSET,
+            "artifactByteLengthOffset": abi_contract::RESPONSE_ARTIFACT_LEN_OFFSET,
+            "payloadOffset": abi_contract::RESPONSE_PAYLOAD_OFFSET,
+            "successStatus": abi_contract::RESPONSE_SUCCESS_STATUS,
         },
     });
     let output_directory = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set"));

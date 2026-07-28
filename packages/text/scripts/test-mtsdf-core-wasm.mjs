@@ -31,14 +31,15 @@ assert.deepEqual(WebAssembly.Module.imports(module), [])
 const { exports } = await WebAssembly.instantiate(module, {})
 const memory = exports.memory
 assert.ok(memory instanceof WebAssembly.Memory)
-
-const abiPointer = exports.pmndrs_text_mtsdf_abi_ptr()
-const abiLength = exports.pmndrs_text_mtsdf_abi_len()
 const abi = JSON.parse(
-  new TextDecoder().decode(new Uint8Array(memory.buffer, abiPointer, abiLength)),
+  await readFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), 'utf8'),
 )
 assert.equal(abi.name, 'pmndrs-text-mtsdf-baker')
-assert.equal(abi.artifactBaker, undefined)
+assert.ok(abi.artifactBaker)
+const exportNames = new Set(WebAssembly.Module.exports(module).map(({ name }) => name))
+for (const definition of Object.values(abi.artifactBaker.functions)) {
+  assert.equal(exportNames.has(definition.export), false)
+}
 assert.equal(abi.layouts.request.size, 48)
 assert.equal(abi.layouts.command.size, 28)
 
@@ -49,18 +50,18 @@ assert.notEqual(requestPointer, 0)
 const request = new DataView(memory.buffer, requestPointer, requestLength)
 const u32 = (offset, value) => request.setUint32(offset, value, true)
 const f32 = (offset, value) => request.setFloat32(offset, value, true)
-u32(0, requestLength)
-u32(4, abi.layouts.request.size)
-u32(8, commands.length)
-f32(12, 1000)
-f32(16, 100)
-f32(20, 100)
-f32(24, 900)
-f32(28, 900)
-u32(32, 32)
-u32(36, 32)
-u32(40, 4)
-u32(44, 4)
+u32(abi.layouts.request.byteLength, requestLength)
+u32(abi.layouts.request.commandsOffset, abi.layouts.request.size)
+u32(abi.layouts.request.commandCount, commands.length)
+f32(abi.layouts.request.unitsPerEm, 1000)
+f32(abi.layouts.request.minX, 100)
+f32(abi.layouts.request.minY, 100)
+f32(abi.layouts.request.maxX, 900)
+f32(abi.layouts.request.maxY, 900)
+u32(abi.layouts.request.innerWidth, 32)
+u32(abi.layouts.request.innerHeight, 32)
+u32(abi.layouts.request.paddingX, 4)
+u32(abi.layouts.request.paddingY, 4)
 for (const [index, command] of commands.entries()) {
   const offset = abi.layouts.request.size + index * abi.layouts.command.size
   u32(offset, command[0])

@@ -8,16 +8,12 @@ import type {
 import {
   createDirectRasterBakerFromInstance,
   instantiateWasm,
-  isNonArrayObject,
-  matchesAbiFunction,
-  readEmbeddedJsonAbi,
-  type AbiFunction,
 } from '../internal/raster-baker-wasm.js'
+import { bitmapBakerAbi, type BitmapBakerAbi } from '../generated/bitmap-baker-abi.js'
 import { cacheSuccessfulPromise } from '../internal/successful-promise-cache.js'
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
-  BITMAP_GENERATOR_VERSION,
   BITMAP_KIND,
   bitmapDescriptor,
   type BitmapDescriptorV0,
@@ -51,43 +47,7 @@ export interface BitmapBakerCore {
 
 export type BitmapBakerWasmSource = BufferSource | WebAssembly.Module
 
-export interface BitmapBakerAbiV0 {
-  readonly name: 'pmndrs-text-bitmap-baker'
-  readonly version: 0
-  readonly endianness: 'little'
-  readonly pointerWidth: 32
-  readonly memory: 'memory'
-  readonly imports: {
-    readonly progress: {
-      readonly module: 'env'
-      readonly name: 'pmndrs_text_bake_progress'
-      readonly parameters: readonly ['completed', 'total']
-    }
-  }
-  readonly versions: {
-    readonly generator: '0.0.0'
-    readonly bitmapFormat: 0
-    readonly skrifa: '0.45.1'
-    readonly readFonts: '0.42.1'
-    readonly zeno: '0.3.3'
-    readonly ktx2: '0.5.0'
-  }
-  readonly functions: {
-    readonly allocate: AbiFunction
-    readonly deallocate: AbiFunction
-    readonly bake: AbiFunction
-    readonly responseByteLength: AbiFunction
-  }
-  readonly response: {
-    readonly headerByteLength: 16
-    readonly magic: 'PMBM'
-    readonly statusOffset: 4
-    readonly metadataByteLengthOffset: 8
-    readonly artifactByteLengthOffset: 12
-    readonly payloadOffset: 16
-    readonly successStatus: 0
-  }
-}
+export type BitmapBakerAbiV0 = BitmapBakerAbi
 
 export class BitmapBakeError extends Error {
   readonly code: string
@@ -136,66 +96,8 @@ export function createBitmapBakerFromInstance(instance: WebAssembly.Instance): B
 }
 
 export function readBitmapBakerAbi(instance: WebAssembly.Instance): BitmapBakerAbiV0 {
-  const value = readEmbeddedJsonAbi(
-    instance,
-    'pmndrs_bitmap_baker_abi_ptr',
-    'pmndrs_bitmap_baker_abi_len',
-    'bitmap baker',
-  )
-  assertBitmapBakerAbi(value)
-  return value
-}
-
-function assertBitmapBakerAbi(value: unknown): asserts value is BitmapBakerAbiV0 {
-  if (!isNonArrayObject(value)) throw new TypeError('unsupported bitmap baker ABI')
-  const { imports, versions, functions, response } = value
-  if (
-    value.name !== 'pmndrs-text-bitmap-baker' ||
-    value.version !== 0 ||
-    value.endianness !== 'little' ||
-    value.pointerWidth !== 32 ||
-    value.memory !== 'memory' ||
-    !matchesProgressImport(imports) ||
-    !isNonArrayObject(versions) ||
-    versions.generator !== BITMAP_GENERATOR_VERSION ||
-    versions.bitmapFormat !== BITMAP_FORMAT_VERSION ||
-    versions.skrifa !== '0.45.1' ||
-    versions.readFonts !== '0.42.1' ||
-    versions.zeno !== '0.3.3' ||
-    versions.ktx2 !== '0.5.0' ||
-    !isNonArrayObject(functions) ||
-    !matchesAbiFunction(functions.allocate, ['byteLength'], 'pointer') ||
-    !matchesAbiFunction(functions.deallocate, ['pointer', 'byteLength']) ||
-    !matchesAbiFunction(
-      functions.bake,
-      ['sourcePointer', 'sourceByteLength', 'requestPointer', 'requestByteLength'],
-      'responsePointer',
-    ) ||
-    !matchesAbiFunction(functions.responseByteLength, [], 'byteLength') ||
-    !isNonArrayObject(response) ||
-    response.headerByteLength !== 16 ||
-    response.magic !== 'PMBM' ||
-    response.statusOffset !== 4 ||
-    response.metadataByteLengthOffset !== 8 ||
-    response.artifactByteLengthOffset !== 12 ||
-    response.payloadOffset !== 16 ||
-    response.successStatus !== 0
-  ) {
-    throw new TypeError('unsupported bitmap baker ABI')
-  }
-}
-
-function matchesProgressImport(value: unknown): boolean {
-  if (!isNonArrayObject(value) || !isNonArrayObject(value.progress)) return false
-  const { module, name, parameters } = value.progress
-  return (
-    module === 'env' &&
-    name === 'pmndrs_text_bake_progress' &&
-    Array.isArray(parameters) &&
-    parameters.length === 2 &&
-    parameters[0] === 'completed' &&
-    parameters[1] === 'total'
-  )
+  void instance
+  return bitmapBakerAbi
 }
 
 export function bitmapBakerFromCore(

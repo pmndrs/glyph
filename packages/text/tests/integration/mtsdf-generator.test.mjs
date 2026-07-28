@@ -23,12 +23,16 @@ async function setup() {
   return { module, instance, generator: await createMtsdfGenerator(module) }
 }
 
-test('ships an optimized module with the exact generated progress import and ABI', async () => {
+test('ships an optimized module with the exact progress import and TypeScript ABI', async () => {
   const { module, instance } = await setup()
   assert.deepEqual(WebAssembly.Module.imports(module), [
     { module: 'env', name: 'pmndrs_text_bake_progress', kind: 'function' },
   ])
   assert.deepEqual(readMtsdfGeneratorAbi(instance), publishedAbi)
+  assert.equal(
+    WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
+    false,
+  )
 })
 
 test('matches every native-msdfgen admission case through the TypeScript host', async () => {
@@ -102,14 +106,7 @@ test('rejects forged allocation ownership and recovers after invalid wire bytes'
   )
 })
 
-test('rejects malformed nested ABI fields and releases a request after output validation fails', () => {
-  const malformed = structuredClone(publishedAbi)
-  malformed.layouts.command.size = 24
-  assert.throws(
-    () => readMtsdfGeneratorAbi(fakeInstance({ abi: malformed })),
-    /unsupported MTSDF generator ABI/,
-  )
-
+test('releases a request after output validation fails', () => {
   const releases = []
   const generator = createMtsdfGeneratorFromInstance(
     fakeInstance({
@@ -127,20 +124,15 @@ test('rejects malformed nested ABI fields and releases a request after output va
 })
 
 function fakeInstance({
-  abi = publishedAbi,
   allocate = () => 0,
   deallocate = () => undefined,
   resultPointer = () => 0,
   resultLength = () => 0,
 } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 })
-  const abiBytes = new TextEncoder().encode(JSON.stringify(abi))
-  new Uint8Array(memory.buffer, 0, abiBytes.byteLength).set(abiBytes)
   return {
     exports: {
       memory,
-      pmndrs_text_mtsdf_abi_ptr: () => 0,
-      pmndrs_text_mtsdf_abi_len: () => abiBytes.byteLength,
       pmndrs_text_mtsdf_alloc: allocate,
       pmndrs_text_mtsdf_dealloc: deallocate,
       pmndrs_text_mtsdf_generate: () => publishedAbi.status.ok,
