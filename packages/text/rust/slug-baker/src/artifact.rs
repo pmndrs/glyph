@@ -4,8 +4,9 @@ use alloc::{format, string::String, vec::Vec};
 use core_maths::CoreFloat;
 
 use pmndrs_text_slug_core::{
-    Bounds, DEFAULT_BAND_COUNT, GlyphForPacking, GlyphGeometry, PackError, PackedSlug,
-    PackerConfig, Point, build_bands, build_glyph_geometry, pack_glyphs, quantize_f16,
+    Bounds, BuildError, DEFAULT_BAND_COUNT, GlyphBands, GlyphForPacking, GlyphGeometry, PackError,
+    PackedSlug, PackerConfig, Point, Quadratic, build_bands, build_glyph_geometry, pack_glyphs,
+    quantize_f16,
 };
 use pmndrs_text_slug_fontations::{FontOutlineError, font_glyph_geometry, glyph_count};
 use skrifa::{FontRef, GlyphId};
@@ -20,11 +21,14 @@ use crate::{
     },
 };
 
-const SELECTED_BAND_COUNT: u16 = if cfg!(feature = "autoresearch-fixed32-bands") {
-    32
-} else {
-    DEFAULT_BAND_COUNT
-};
+#[cfg(all(
+    feature = "autoresearch-fixed32-bands",
+    feature = "autoresearch-adaptive-bands"
+))]
+compile_error!("select exactly one Slug band autoresearch feature");
+
+const ADAPTIVE_MEAN_REFERENCE_TARGET: usize = 6;
+const ADAPTIVE_BAND_COUNTS: [u16; 3] = [16, 32, 64];
 
 /// Bake one deterministic analytic Slug resource from the exact shaping font source.
 pub fn bake_slug(
@@ -147,7 +151,7 @@ fn rasterize_font(
         let geometry = font_glyph_geometry(
             &font,
             GlyphId::new(u32::from(raw_glyph_id)),
-            SELECTED_BAND_COUNT,
+            DEFAULT_BAND_COUNT,
         )
         .map_err(|error| outline_error(raw_glyph_id, error))?;
         geometries.push(match geometry {
@@ -187,9 +191,8 @@ fn prepare_geometry(
             );
         }
     }
-    let mut geometry =
-        build_glyph_geometry(curves, geometry.contour_starts, SELECTED_BAND_COUNT)
-            .map_err(|error| outline_error(glyph_id, FontOutlineError::Geometry(error)))?;
+    let mut geometry = build_glyph_geometry(curves, geometry.contour_starts, DEFAULT_BAND_COUNT)
+        .map_err(|error| outline_error(glyph_id, FontOutlineError::Geometry(error)))?;
     let plane_bounds = quantize_plane_bounds(geometry.bounds, glyph_id)?;
     let band_bounds = Bounds {
         min_x: f32::from(plane_bounds[0]) / f32::from(SLUG_PLANE_UNITS_PER_EM),
@@ -198,9 +201,34 @@ fn prepare_geometry(
         max_y: f32::from(plane_bounds[3]) / f32::from(SLUG_PLANE_UNITS_PER_EM),
     };
     geometry.bounds = band_bounds;
-    geometry.bands = build_bands(&geometry.curves, band_bounds, SELECTED_BAND_COUNT)
+    geometry.bands = select_bands(&geometry.curves, band_bounds)
         .map_err(|error| outline_error(glyph_id, FontOutlineError::Geometry(error)))?;
     Ok((geometry, plane_bounds))
+}
+
+fn select_bands(curves: &[Quadratic], bounds: Bounds) -> Result<GlyphBands, BuildError> {
+    if cfg!(feature = "autoresearch-fixed32-bands") {
+        return build_bands(curves, bounds, 32);
+    }
+    if !cfg!(feature = "autoresearch-adaptive-bands") {
+        return build_bands(curves, bounds, DEFAULT_BAND_COUNT);
+    }
+    let mut selected = None;
+    for band_count in ADAPTIVE_BAND_COUNTS {
+        let bands = build_bands(curves, bounds, band_count)?;
+        let reference_count = bands
+            .horizontal
+            .iter()
+            .chain(&bands.vertical)
+            .map(|band| band.curve_indices.len())
+            .sum::<usize>();
+        let target = usize::from(band_count) * 2 * ADAPTIVE_MEAN_REFERENCE_TARGET;
+        selected = Some(bands);
+        if reference_count <= target {
+            break;
+        }
+    }
+    selected.ok_or(BuildError::InvalidBandCount)
 }
 
 fn quantize_plane_bounds(bounds: Bounds, glyph_id: u16) -> Result<[i16; 4], SlugBakeError> {
@@ -289,5 +317,27 @@ mod tests {
         let second = bake_slug(INTER, request()).unwrap();
         assert_eq!(first.artifacts[0].sha256, second.artifacts[0].sha256);
         assert_eq!(first.report.metadata_bytes, 2937 * 40);
+    }
+
+    #[cfg(feature = "autoresearch-adaptive-bands")]
+    #[test]
+    fn adaptive_policy_keeps_sparse_glyphs_and_expands_dense_glyphs() {
+        let bounds = Bounds {
+            min_x: 0.0,
+            min_y: 0.0,
+            max_x: 1.0,
+            max_y: 1.0,
+        };
+        let diagonal = Quadratic {
+            p0: Point::new(0.0, 0.0),
+            p1: Point::new(0.5, 0.5),
+            p2: Point::new(1.0, 1.0),
+        };
+        let sparse = select_bands(&[diagonal; 2], bounds).unwrap();
+        assert_eq!(sparse.horizontal.len(), 16);
+        assert_eq!(sparse.vertical.len(), 16);
+        let dense = select_bands(&[diagonal; 7], bounds).unwrap();
+        assert_eq!(dense.horizontal.len(), 64);
+        assert_eq!(dense.vertical.len(), 64);
     }
 }
