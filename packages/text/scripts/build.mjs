@@ -31,8 +31,15 @@ const mtsdfWasm = fileURLToPath(
   ),
 )
 const distributedMtsdfWasm = fileURLToPath(new URL('../dist/mtsdf_baker.wasm', import.meta.url))
+const slugWasm = fileURLToPath(
+  new URL(
+    '../rust/slug-baker/target/wasm32-unknown-unknown/release/pmndrs_text_slug_baker.wasm',
+    import.meta.url,
+  ),
+)
+const distributedSlugWasm = fileURLToPath(new URL('../dist/slug_baker.wasm', import.meta.url))
 
-const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson] = await Promise.all([
+const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson, slugAbiJson] = await Promise.all([
   runCapture('cargo', [
     'run',
     '--manifest-path',
@@ -60,6 +67,15 @@ const [bitmapAbiJson, shaperAbiJson, mtsdfAbiJson] = await Promise.all([
     '--locked',
     '--quiet',
   ]),
+  runCapture('cargo', [
+    'run',
+    '--manifest-path',
+    'rust/slug-baker/Cargo.toml',
+    '--bin',
+    'generate-slug-abi',
+    '--locked',
+    '--quiet',
+  ]),
 ])
 await Promise.all([
   writeGeneratedTypescriptAbi(
@@ -80,6 +96,12 @@ await Promise.all([
     mtsdfAbiJson,
     { check: process.env.CI === 'true' },
   ),
+  writeGeneratedTypescriptAbi(
+    new URL('../src/generated/slug-baker-abi.ts', import.meta.url),
+    'slugBakerAbi',
+    slugAbiJson,
+    { check: process.env.CI === 'true' },
+  ),
 ])
 
 await run(
@@ -93,6 +115,22 @@ await run(
     '--release',
     '--locked',
     '--no-default-features',
+  ],
+  rustEnvironment,
+)
+await run(
+  'cargo',
+  [
+    'build',
+    '--manifest-path',
+    'rust/slug-baker/Cargo.toml',
+    '--target',
+    'wasm32-unknown-unknown',
+    '--release',
+    '--locked',
+    '--no-default-features',
+    '--features',
+    'artifact-baker',
   ],
   rustEnvironment,
 )
@@ -130,6 +168,7 @@ await run('tsc', ['-p', 'tsconfig.build.json'])
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true })
 await rm(new URL('../dist/font_baker.wasm', import.meta.url), { force: true })
 await rm(new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url), { force: true })
+await rm(new URL('../dist/slug-baker-abi-v1.json', import.meta.url), { force: true })
 await run(wasmOpt, [
   '--enable-bulk-memory',
   '--enable-nontrapping-float-to-int',
@@ -154,9 +193,18 @@ await run(wasmOpt, [
   '-o',
   distributedMtsdfWasm,
 ])
+await run(wasmOpt, [
+  '--enable-bulk-memory',
+  '--enable-nontrapping-float-to-int',
+  '-Oz',
+  slugWasm,
+  '-o',
+  distributedSlugWasm,
+])
 await writeFile(new URL('../dist/bitmap-baker-abi-v0.json', import.meta.url), bitmapAbiJson)
 await writeFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), shaperAbiJson)
 await writeFile(new URL('../dist/mtsdf-baker-abi-v1.json', import.meta.url), mtsdfAbiJson)
+await writeFile(new URL('../dist/slug-baker-abi-v0.json', import.meta.url), slugAbiJson)
 if (process.platform !== 'win32') {
   await chmod(new URL('../dist/node/cli.js', import.meta.url), 0o755)
 }

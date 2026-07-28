@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:6e06dbb1d523599a571918d2e3da63142f22065d444577d119e1cadb5782429b"
+source_digest: "sha256:ef8ef461eee97dcedb6b73c12d95f6968002dce78e233a68be8314ad0cf9c3e3"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -53,6 +53,12 @@ sources:
   - id: slug-validator
     resource: ../../packages/text/src/bakers/slug-validator.ts
     title: Layered Slug artifact validator
+  - id: slug-baker
+    resource: ../../packages/text/rust/slug-baker
+    title: Portable Slug artifact baker
+  - id: slug-baker-host
+    resource: ../../packages/text/src/bakers/slug.ts
+    title: Direct-memory Slug baker host
   - id: raster-wasm-host
     resource: ../../packages/text/src/internal/raster-baker-wasm.ts
     title: Shared direct-memory raster baker host
@@ -112,7 +118,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T12:31:23Z"
+  at: "2026-07-28T12:37:41Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -122,6 +128,8 @@ Status: 🟡 Milestone 9 Slug integration is active
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing runtime values and types resolve through the public `three/webgpu` and `three/tsl` subpaths rather than the legacy root or internal source exports, matching the renderer boundary used by first-party raster work; package lint rejects those forbidden imports. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
 Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-validation boundary.[^slug-contract][^slug-validator] The validator layers the pinned Khronos and byte-identical extension schemas over exact 40-byte dense records, exclusive buffer-view ownership, lossless native RGBA16F KTX2 curve pages, R32UI header grids, R16UI reference grids, checked page-relative addressing, authenticated external resources, and bounded GPU residency. Malformed identity, record, address, padding, KTX2 descriptor, integer-grid tail, external hash, and residency cases are named negative controls. Rendering and public package integration remain active work rather than implied by this validation checkpoint.
+
+The package-owned Slug baker now composes the ported outline conversion and exact packing crates into deterministic embedded or independently authenticated external-page artifacts.[^slug-baker] Its Rust-generated V0 ABI drives the same shared direct/segmented host mechanics used by the existing raster bakers, including bounded artifact windows, synchronous progress forwarding, owned-copy-before-release behavior, structured errors, and transactional allocation cleanup.[^slug-baker-host] The serial module-Worker entry remains lazy; neither the baker host nor Wasm enters the initial renderer graph.
 
 Milestone 8.1 adds a repository-owned `no_std + alloc` Rust MTSDF core and a non-shipping admission harness beside the package's existing bakers. Typed AoS outline construction lowers once into kind-segregated SoA spans with contour identity; reusable scratch keeps per-pixel traversal allocation-free and now retains corner-coloring storage between glyphs. True signed curve distances, contour-aware overlap combination, nonzero-fill sign correction, and deterministic edge coloring produce zero coverage mismatches against pinned native `msdfgen` 1.13.0 across ordinary, acute, overlapping, self-intersecting, quadratic, cubic, and counter fixtures. Mean alpha error stays between 0.472 and 0.549 bytes. The optimized `wasm32-unknown-unknown` admission module imports nothing and its compiled graph contains no font parser, WGPU, native binding, or WASI dependency. A bounded cargo-fuzz lane covers malformed outline streams. The oracle and explicit SIMD implementation remain test-only; scalar is the single production kernel.
 
