@@ -2,6 +2,7 @@
 
 ## 2026-07-28
 
+- **Slug artifact validation** — Added the fixed Slug V0 identity and strict standalone validation boundary over canonical extension schemas, exact 40-byte records, exclusive buffer-view ownership, native RGBA16F KTX2 curves, integer header/reference grids, checked addresses, authenticated external resources, and bounded GPU residency. Focused negative controls cover malformed identity, record, range, padding, KTX2 descriptor, grid tail, hash, and budget cases; rendering remains active work.
 - **Dynamic Talc allocator** — Replaced ABI-private `dlmalloc` with pinned `talc` 5.0.4 in the portable font baker, Bitmap baker, MTSDF baker, and HarfRust shaper. The same optimized four-module corpus saves 46,610 raw, 15,121 gzip, and 12,121 Brotli bytes while retaining artifact, ownership, cancellation, reused-Worker, and malformed-input coverage. A representative 128 MiB global arena saved no meaningful transfer bytes and raised initial Wasm memory to about 129 MiB, so global arena allocation is rejected; a request-local scratch arena remains profiling-led future work with an explicit lifetime proof.
 
 ## 2026-07-27

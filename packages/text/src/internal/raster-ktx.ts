@@ -2,6 +2,8 @@ import {
   KHR_DF_KHR_DESCRIPTORTYPE_BASICFORMAT,
   KHR_DF_MODEL_RGBSDA,
   KHR_DF_PRIMARIES_BT709,
+  KHR_DF_SAMPLE_DATATYPE_FLOAT,
+  KHR_DF_SAMPLE_DATATYPE_SIGNED,
   KHR_DF_TRANSFER_LINEAR,
   KHR_DF_VENDORID_KHRONOS,
   KHR_DF_VERSION,
@@ -29,10 +31,12 @@ export class RasterKtxValidationError extends Error {
 
 export interface NativeKtx2Format {
   readonly vkFormat: number
+  readonly typeSize?: number
   readonly blockWidth: number
   readonly blockHeight: number
   readonly bytesPerBlock: number
   readonly uncompressedChannelTypes?: readonly number[]
+  readonly float16ChannelTypes?: readonly number[]
 }
 
 export function validateNativeKtx2(
@@ -59,7 +63,7 @@ export function validateNativeKtx2(
   }
   if (
     container.vkFormat !== format.vkFormat ||
-    container.typeSize !== 1 ||
+    container.typeSize !== (format.typeSize ?? 1) ||
     container.pixelWidth !== width ||
     container.pixelHeight !== height ||
     container.pixelDepth !== 0 ||
@@ -89,6 +93,15 @@ export function validateNativeKtx2(
       'KTX2 data format descriptor does not match its linear UNORM channels',
     )
   }
+  if (
+    format.float16ChannelTypes !== undefined &&
+    !isLinearFloat16Descriptor(container.dataFormatDescriptor, format.float16ChannelTypes)
+  ) {
+    throw new RasterKtxValidationError(
+      'KTX2_DFD',
+      'KTX2 data format descriptor does not match its linear signed float16 channels',
+    )
+  }
   if (Object.keys(container.keyValue).length !== 0 || container.globalData !== null) {
     throw new RasterKtxValidationError(
       'KTX2_METADATA',
@@ -96,6 +109,38 @@ export function validateNativeKtx2(
     )
   }
   return container
+}
+
+function isLinearFloat16Descriptor(
+  descriptors: readonly KTX2DataFormatDescriptorBasicFormat[],
+  channelTypes: readonly number[],
+): boolean {
+  const descriptor = descriptors.length === 1 ? descriptors[0] : undefined
+  if (
+    descriptor === undefined ||
+    descriptor.vendorId !== KHR_DF_VENDORID_KHRONOS ||
+    descriptor.descriptorType !== KHR_DF_KHR_DESCRIPTORTYPE_BASICFORMAT ||
+    descriptor.versionNumber !== KHR_DF_VERSION ||
+    descriptor.colorModel !== KHR_DF_MODEL_RGBSDA ||
+    descriptor.colorPrimaries !== KHR_DF_PRIMARIES_BT709 ||
+    descriptor.transferFunction !== KHR_DF_TRANSFER_LINEAR ||
+    descriptor.flags !== 0 ||
+    !equalNumbers(descriptor.texelBlockDimension, [0, 0, 0, 0]) ||
+    !equalNumbers(descriptor.bytesPlane, [8, 0, 0, 0, 0, 0, 0, 0]) ||
+    descriptor.samples.length !== channelTypes.length
+  ) {
+    return false
+  }
+  const qualifiers = KHR_DF_SAMPLE_DATATYPE_SIGNED | KHR_DF_SAMPLE_DATATYPE_FLOAT
+  return descriptor.samples.every(
+    (sample, index) =>
+      sample.bitOffset === index * 16 &&
+      sample.bitLength === 15 &&
+      sample.channelType === (channelTypes[index]! | qualifiers) &&
+      equalNumbers(sample.samplePosition, [0, 0, 0, 0]) &&
+      sample.sampleLower === -1_082_130_432 &&
+      sample.sampleUpper === 0x3f80_0000,
+  )
 }
 
 function isLinearUnormDescriptor(
