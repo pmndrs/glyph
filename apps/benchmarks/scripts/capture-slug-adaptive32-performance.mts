@@ -2,6 +2,17 @@ import { spawn } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
+const FONT_FIXTURES = [
+  'inter',
+  'amiri',
+  'noto-sans-devanagari',
+  'dot-gothic-16',
+  'noto-sans-cjk-showcase',
+  'source-serif-4',
+  'dancing-script',
+] as const
+type FontFixture = (typeof FONT_FIXTURES)[number]
+
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url))
 const cwd = fileURLToPath(new URL('..', import.meta.url))
 const output = new URL(
@@ -44,17 +55,6 @@ interface CapturedRun {
   readonly variant: 'fixed16' | 'adaptive32'
   readonly stats: Record<string, unknown>
 }
-
-const FONT_FIXTURES = [
-  'inter',
-  'amiri',
-  'noto-sans-devanagari',
-  'dot-gothic-16',
-  'noto-sans-cjk-showcase',
-  'source-serif-4',
-  'dancing-script',
-] as const
-type FontFixture = (typeof FONT_FIXTURES)[number]
 
 function assertObservation(candidate: unknown): Record<string, unknown> & {
   readonly runs: readonly CapturedRun[]
