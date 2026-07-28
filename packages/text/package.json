@@ -24,6 +24,10 @@
       "types": "./dist/raster/msdf.d.ts",
       "import": "./dist/raster/msdf.js"
     },
+    "./raster/slug": {
+      "types": "./dist/raster/slug.d.ts",
+      "import": "./dist/raster/slug.js"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
@@ -44,6 +48,14 @@
       "types": "./dist/bakers/msdf-validator.d.ts",
       "import": "./dist/bakers/msdf-validator.js"
     },
+    "./bakers/slug": {
+      "types": "./dist/bakers/slug.d.ts",
+      "import": "./dist/bakers/slug.js"
+    },
+    "./bakers/slug/validate": {
+      "types": "./dist/bakers/slug-validator.d.ts",
+      "import": "./dist/bakers/slug-validator.js"
+    },
     "./bake": {
       "types": "./dist/node/bake.d.ts",
       "import": "./dist/node/bake.js"
@@ -58,6 +70,8 @@
     "./bitmap-abi.json": "./dist/bitmap-baker-abi-v0.json",
     "./mtsdf-baker.wasm": "./dist/mtsdf_baker.wasm",
     "./mtsdf-abi.json": "./dist/mtsdf-baker-abi-v1.json",
+    "./slug-baker.wasm": "./dist/slug_baker.wasm",
+    "./slug-abi.json": "./dist/slug-baker-abi-v0.json",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -65,8 +79,10 @@
     "build:typescript": "tsc -p tsconfig.build.json",
     "build:bitmap-rust": "cargo build --manifest-path rust/bitmap-baker/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
     "build:mtsdf-rust": "cargo build --manifest-path rust/mtsdf-baker/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features --features artifact-baker",
+    "build:slug-rust": "cargo build --manifest-path rust/slug-baker/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features --features artifact-baker",
     "build:mtsdf-admission": "cargo build --manifest-path rust/mtsdf-admission/Cargo.toml --target wasm32-unknown-unknown --release --locked",
     "generate:mtsdf-abi": "cargo run --manifest-path rust/mtsdf-baker/Cargo.toml --bin generate-mtsdf-abi --locked --quiet",
+    "generate:slug-abi": "cargo run --manifest-path rust/slug-baker/Cargo.toml --bin generate-slug-abi --locked --quiet",
     "test:mtsdf-core-wasm": "node ./scripts/test-mtsdf-core-wasm.mjs",
     "generate:bitmap-abi": "cargo run --manifest-path rust/bitmap-baker/Cargo.toml --bin generate-bitmap-abi --locked --quiet",
     "measure:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs",
@@ -86,8 +102,8 @@
     "lint": "oxlint --deny-warnings .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:types && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke",
-    "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-admission/Cargo.toml --lib --locked && pnpm test:mtsdf-core-wasm && pnpm check:mtsdf-admission && pnpm check:mtsdf-simd && pnpm check:mtsdf-oracle",
-    "test:integration": "pnpm check:unicode-tests && cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && cargo test --manifest-path rust/shaper/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
+    "test:unit": "cargo test --manifest-path rust/bitmap-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/shaper/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-baker/Cargo.toml --lib --locked && cargo test --manifest-path rust/mtsdf-admission/Cargo.toml --lib --locked && cargo test --manifest-path rust/slug-core/Cargo.toml --lib --locked && cargo test --manifest-path rust/slug-fontations/Cargo.toml --lib --locked && cargo test --manifest-path rust/slug-baker/Cargo.toml --lib --locked && pnpm test:mtsdf-core-wasm && pnpm check:mtsdf-admission && pnpm check:mtsdf-simd && pnpm check:mtsdf-oracle",
+    "test:integration": "pnpm check:unicode-tests && cargo test --manifest-path rust/bitmap-baker/Cargo.toml --tests --locked && cargo test --manifest-path rust/shaper/Cargo.toml --tests --locked && cargo test --manifest-path rust/slug-baker/Cargo.toml --tests --locked && node --test tests/package/*.test.mjs tests/integration/*.test.mjs",
     "test:fuzz-smoke": "node --test tests/fuzz/*.test.mjs",
     "test:types": "tsc -p tsconfig.types.json"
   },
@@ -129,7 +145,8 @@
   "pmndrs": {
     "text": {
       "bitmap": "./bakers/bitmap",
-      "msdf": "./bakers/msdf"
+      "msdf": "./bakers/msdf",
+      "slug": "./bakers/slug"
     }
   }
 }

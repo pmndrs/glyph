@@ -7,3 +7,44 @@ index 13d6f72..6a72b7d 100644
 
 -export const modelViewProjection: Node;
 +export const modelViewProjection: Node<"vec4">;
+diff --git a/src/nodes/utils/LoopNode.d.ts b/src/nodes/utils/LoopNode.d.ts
+--- a/src/nodes/utils/LoopNode.d.ts
++++ b/src/nodes/utils/LoopNode.d.ts
+@@ -27,12 +27,30 @@
+ interface Loop {
+     (i: number, func: (inputs: { readonly i: Node<"int"> }) => void): LoopNode;
+-    <TNodeType extends LoopNodeType>(
+-        i: LoopNodeObjectParameter<TNodeType>,
+-        func: (inputs: { readonly i: Node<TNodeType> }) => void,
++    (
++        i: LoopNodeObjectParameter<"int">,
++        func: (inputs: { readonly i: Node<"int"> }) => void,
+     ): LoopNode;
+-    <TNodeType extends LoopNodeType>(
+-        i: LoopNodeObjectParameter<TNodeType>,
+-        j: LoopNodeObjectParameter<TNodeType>,
+-        func: (inputs: { readonly i: Node<TNodeType>; readonly j: Node<TNodeType> }) => void,
++    (
++        i: LoopNodeObjectParameter<"uint">,
++        func: (inputs: { readonly i: Node<"uint"> }) => void,
++    ): LoopNode;
++    (
++        i: LoopNodeObjectParameter<"float">,
++        func: (inputs: { readonly i: Node<"float"> }) => void,
++    ): LoopNode;
++    (
++        i: LoopNodeObjectParameter<"int">,
++        j: LoopNodeObjectParameter<"int">,
++        func: (inputs: { readonly i: Node<"int">; readonly j: Node<"int"> }) => void,
++    ): LoopNode;
++    (
++        i: LoopNodeObjectParameter<"uint">,
++        j: LoopNodeObjectParameter<"uint">,
++        func: (inputs: { readonly i: Node<"uint">; readonly j: Node<"uint"> }) => void,
++    ): LoopNode;
++    (
++        i: LoopNodeObjectParameter<"float">,
++        j: LoopNodeObjectParameter<"float">,
++        func: (inputs: { readonly i: Node<"float">; readonly j: Node<"float"> }) => void,
+     ): LoopNode;
+ }
