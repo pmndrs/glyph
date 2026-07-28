@@ -1,5 +1,6 @@
 import type { BitmapTextLiveStats } from '../renderer/bitmap-text'
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text'
+import type { SlugTextLiveStats } from '../renderer/slug-text'
 import type { BenchmarkEnvironment } from './contracts'
 import type { BenchmarkFontFixture } from './font-fixtures'
 import type { GraphicsBackend, RasterTechnique } from './url-state'
@@ -44,7 +45,30 @@ export type CapturedMtsdfTextLiveStats = Omit<
   readonly gpuHistory: readonly number[]
 }
 
-export type CapturedLiveTextStats = CapturedBitmapTextLiveStats | CapturedMtsdfTextLiveStats
+export type CapturedSlugTextLiveStats = Omit<
+  SlugTextLiveStats,
+  | 'submitHistory'
+  | 'submitHistoryLength'
+  | 'submitHistoryNextIndex'
+  | 'submitHistoryCursor'
+  | 'fpsHistory'
+  | 'fpsHistoryLength'
+  | 'fpsHistoryNextIndex'
+  | 'fpsHistoryCursor'
+  | 'gpuHistory'
+  | 'gpuHistoryLength'
+  | 'gpuHistoryNextIndex'
+  | 'gpuHistoryCursor'
+> & {
+  readonly submitHistory: readonly number[]
+  readonly fpsHistory: readonly number[]
+  readonly gpuHistory: readonly number[]
+}
+
+export type CapturedLiveTextStats =
+  | CapturedBitmapTextLiveStats
+  | CapturedMtsdfTextLiveStats
+  | CapturedSlugTextLiveStats
 
 export interface LiveBenchmarkCapture {
   readonly kind: 'live-benchmark'
@@ -65,11 +89,12 @@ export function captureBitmapTextStats(stats: BitmapTextLiveStats): CapturedBitm
 
 export function captureLiveTextStats(stats: BitmapTextLiveStats): CapturedBitmapTextLiveStats
 export function captureLiveTextStats(stats: MtsdfTextLiveStats): CapturedMtsdfTextLiveStats
+export function captureLiveTextStats(stats: SlugTextLiveStats): CapturedSlugTextLiveStats
 export function captureLiveTextStats(
-  stats: BitmapTextLiveStats | MtsdfTextLiveStats,
+  stats: BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats,
 ): CapturedLiveTextStats
 export function captureLiveTextStats(
-  stats: BitmapTextLiveStats | MtsdfTextLiveStats,
+  stats: BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats,
 ): CapturedLiveTextStats {
   const {
     submitHistory,

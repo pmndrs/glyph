@@ -23,6 +23,7 @@ import {
   type MtsdfRasterConfiguration,
   type MtsdfTextLiveStats,
 } from './mtsdf-text'
+import type { SlugRasterConfiguration, SlugTextLiveStats } from './slug-text'
 import {
   createConfiguredRenderer,
   readRendererViewportState,
@@ -36,7 +37,11 @@ export type ComparisonWorkloadId =
   | 'paragraph-stress'
   | 'paint-effects'
 
-export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats) & {
+export type ComparisonWorkloadStats = (
+  | BitmapTextLiveStats
+  | MtsdfTextLiveStats
+  | SlugTextLiveStats
+) & {
   readonly configurationRevision: number
   readonly workload: ComparisonWorkloadId
   readonly appliedAmount: number
@@ -106,6 +111,7 @@ interface LoadedTechniqueFont {
   readonly font: RegisteredFont
   readonly metrics: FontDeliveryMetrics
   readonly mtsdfConfiguration?: MtsdfRasterConfiguration
+  readonly slugConfiguration?: SlugRasterConfiguration
   readonly raster: AnyRasterInput
 }
 
@@ -154,7 +160,7 @@ export async function createComparisonWorkloadPreview(options: {
   readonly showGrid: boolean
   readonly showLayoutBounds: boolean
   readonly signal?: AbortSignal
-  readonly technique: Exclude<RasterTechnique, 'slug'>
+  readonly technique: RasterTechnique
   readonly width: number
   readonly workload: ComparisonWorkloadId
   readonly onError: (error: unknown) => void
@@ -448,7 +454,7 @@ export async function createComparisonWorkloadPreview(options: {
             scaleRatio: (configuration.fontSize * rendererViewport.pixelRatio) / strikePpem,
             atlasPages: activeFont.atlasPages,
           })
-        } else {
+        } else if (technique === 'mtsdf') {
           const mtsdfConfiguration = activeFont.mtsdfConfiguration
           if (mtsdfConfiguration === undefined) {
             throw new Error('MTSDF workload is missing its registered raster configuration')
@@ -461,6 +467,25 @@ export async function createComparisonWorkloadPreview(options: {
             rasterPixelRange: mtsdfConfiguration.pixelRange,
             renderedPpem,
             scaleRatio: renderedPpem / mtsdfConfiguration.emSize,
+          })
+        } else {
+          const slugConfiguration = activeFont.slugConfiguration
+          if (slugConfiguration === undefined) {
+            throw new Error('Slug workload is missing its registered raster configuration')
+          }
+          const renderedPpem = configuration.fontSize * rendererViewport.pixelRatio
+          onStats({
+            technique,
+            ...common,
+            renderedPpem,
+            slugPageCount: slugConfiguration.pageCount,
+            slugCurveTexelCount: slugConfiguration.curveTexelCount,
+            slugCurveGpuBytes: slugConfiguration.curveGpuBytes,
+            slugHeaderCount: slugConfiguration.headerCount,
+            slugHeaderGpuBytes: slugConfiguration.headerGpuBytes,
+            slugReferenceCount: slugConfiguration.referenceCount,
+            slugReferenceGpuBytes: slugConfiguration.referenceGpuBytes,
+            slugGpuBytes: slugConfiguration.gpuBytes,
           })
         }
       } catch (error) {
@@ -537,7 +562,7 @@ export async function createComparisonWorkloadPreview(options: {
 function createEntries(
   font: RegisteredFont,
   raster: AnyRasterInput,
-  technique: 'bitmap' | 'mtsdf',
+  technique: RasterTechnique,
   configuration: ComparisonWorkloadConfiguration,
   dpr: number,
   viewportWidth: number,
@@ -755,7 +780,7 @@ function animatePaint(
 
 function applyRetainedConfiguration(
   entries: readonly WorkloadEntry[],
-  technique: 'bitmap' | 'mtsdf',
+  technique: RasterTechnique,
   configuration: ComparisonWorkloadConfiguration,
 ): void {
   for (const entry of entries) {
@@ -1015,7 +1040,7 @@ export function ladderCssSizes(viewportHeight: number): readonly number[] {
 }
 
 async function loadTechniqueFont(
-  technique: 'bitmap' | 'mtsdf',
+  technique: RasterTechnique,
   fontFixture: BenchmarkFontFixture,
   delivery: FontDelivery,
   signal?: AbortSignal,
@@ -1034,16 +1059,31 @@ async function loadTechniqueFont(
       raster: loaded.raster,
     }
   }
-  const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress)
-  const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.font, signal)
+  if (technique === 'mtsdf') {
+    const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress)
+    const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.font, signal)
+    return {
+      artifactBytes: loaded.compressedBytes,
+      atlasGpuBytes: loaded.atlasGpuBytes,
+      atlasPages: [],
+      bitmapStrikes: [],
+      font: loaded.font,
+      metrics: loaded.metrics,
+      mtsdfConfiguration,
+      raster: loaded.raster,
+    }
+  }
+  const { loadSlugFont, registeredSlugConfiguration } = await import('./slug-text')
+  const loaded = await loadSlugFont(signal, fontFixture, delivery, onBakeProgress)
+  const slugConfiguration = await registeredSlugConfiguration(loaded.font, signal)
   return {
     artifactBytes: loaded.compressedBytes,
-    atlasGpuBytes: loaded.atlasGpuBytes,
+    atlasGpuBytes: slugConfiguration.gpuBytes,
     atlasPages: [],
     bitmapStrikes: [],
     font: loaded.font,
     metrics: loaded.metrics,
-    mtsdfConfiguration,
+    slugConfiguration,
     raster: loaded.raster,
   }
 }

@@ -56,6 +56,7 @@ import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from 
 import packageSizes from './generated/package-sizes.json'
 import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
 import mtsdfFixtures from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
+import slugFixtures from '../fixtures/rendering/showcase-slug-fixtures-v0.json'
 import type {
   BitmapTextConformanceCapture,
   BitmapTextLiveStats,
@@ -69,6 +70,11 @@ import type {
   MtsdfTextPreview,
 } from './renderer/mtsdf-text'
 import type {
+  SlugTextConformanceCapture,
+  SlugTextLiveStats,
+  SlugTextPreview,
+} from './renderer/slug-text'
+import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPreview,
   ComparisonWorkloadStats,
@@ -79,7 +85,7 @@ import type { SourceOutlineFidelityCapture } from './renderer/source-outline-ref
 import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance'
 import type { BakeProgress } from '@pmndrs/text'
 
-type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats
+type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats
 
 interface WorkloadOption {
   readonly id: string
@@ -93,7 +99,6 @@ type WorkloadTechniqueStatus =
   | { readonly kind: 'planned'; readonly milestone: 8 | 9 }
 
 const READY: WorkloadTechniqueStatus = { kind: 'ready' }
-const PLANNED_M9: WorkloadTechniqueStatus = { kind: 'planned', milestone: 9 }
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined
 
@@ -178,48 +183,60 @@ function bitmapFixtureFor(fontFixture: BenchmarkFontFixture) {
   return fixture
 }
 
+function slugFixtureFor(fontFixture: BenchmarkFontFixture) {
+  const fixture = slugFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture)
+  if (fixture === undefined) {
+    throw new Error(`Slug fixture manifest is missing ${fontFixture}`)
+  }
+  return fixture
+}
+
+function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
+  return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'
+}
+
 const benchmarkWorkloads: readonly WorkloadOption[] = [
   {
     id: 'benchmark-ipsum',
     label: 'Benchmark ipsum',
     description: 'Tests the everyday cost of rendering and reflowing a full paragraph.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'advanced-shaping',
     label: 'Advanced shaping',
     description: 'Tests whether complex text stays correct as it types and wraps.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'text-ladder',
     label: 'Text ladder',
     description: 'Tests how text quality holds up from 8 to 512 pixels.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'off-axis-3d',
     label: 'Off-axis / 3D',
     description: 'Tests text quality and cost at steep, moving viewing angles.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'dynamic-layout',
     label: 'Dynamic layout',
     description: 'Tests whether animated containers reflow text smoothly and correctly.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'paragraph-stress',
     label: 'Paragraph stress',
     description: 'Tests rendering cost as paragraphs, glyphs, and atlas pressure grow.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'paint-effects',
     label: 'Paint & effects',
     description: 'Tests the live cost and visual quality of animated text effects.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
 ]
 
@@ -228,21 +245,21 @@ const conformanceWorkloads: readonly WorkloadOption[] = [
     id: 'runtime-fallback',
     label: 'Runtime fallback parity',
     description: 'Tests whether source-font runtime baking reproduces the checked-in baked render.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'text-accuracy',
     label: 'Pipeline accuracy',
     description:
       'Technique-specific renderer output, sampling reference, difference, and error statistics.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'cross-technique-fidelity',
     label: 'Cross-technique fidelity',
     description:
-      'Bitmap and MSDF compared independently with the same outline-derived coverage reference.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: PLANNED_M9 },
+      'Bitmap, MSDF, and Slug compared independently with the same outline-derived coverage reference.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
 ]
 
@@ -304,7 +321,9 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
     case 'advanced-shaping':
       return technique === 'bitmap'
         ? 'Bitmap text looks best at its baked 16 px strike; scaling exposes the need for additional strikes.'
-        : 'MSDF text uses one 64 px/em atlas to stay crisp across the rendered-size range.'
+        : technique === 'mtsdf'
+          ? 'MSDF text uses one 64 px/em atlas to stay crisp across the rendered-size range.'
+          : 'Slug evaluates the source outlines analytically across the rendered-size range.'
     case 'text-ladder':
       return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.'
     case 'off-axis-3d':
@@ -314,7 +333,9 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
     case 'paragraph-stress':
       return 'Increase text volume to inspect layout, draw, memory, CPU, and GPU cost.'
     case 'paint-effects':
-      return 'Adjust color, opacity, stroke, and shadow while watching their live rendering cost.'
+      return technique === 'slug'
+        ? 'Adjust color and opacity while watching their live analytic rendering cost; Slug V0 intentionally omits stroke and shadow.'
+        : 'Adjust color, opacity, stroke, and shadow while watching their live rendering cost.'
     default:
       return 'Change the paragraph width to inspect live reflow quality and cost.'
   }
@@ -323,6 +344,7 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
 function liveWorkloadSceneDescription(
   workload: string,
   showcaseFrame: AdvancedShapingFrame,
+  technique: RasterTechnique,
 ): string {
   switch (workload) {
     case 'advanced-shaping':
@@ -336,7 +358,9 @@ function liveWorkloadSceneDescription(
     case 'paragraph-stress':
       return 'Tests glyph, line, draw, memory, CPU, and GPU cost under paragraph pressure.'
     case 'paint-effects':
-      return 'Tests the live cost and quality of animated color, opacity, stroke, and shadow.'
+      return technique === 'slug'
+        ? 'Tests the live cost and quality of Slug V0 animated fill color and opacity.'
+        : 'Tests the live cost and quality of animated color, opacity, stroke, and shadow.'
     default:
       return 'Tests paragraph rendering cost while the viewport reflows the text.'
   }
@@ -429,7 +453,7 @@ function Harness() {
   const showcaseFrame = advancedShapingFrame(showcaseState)
   const activeFontFixture: BenchmarkFontFixture =
     location.workload === 'advanced-shaping' ? advancedFontFixture : fontFixture
-  const available = location.technique !== 'slug' && workloadTechnique.kind === 'ready'
+  const available = workloadTechnique.kind === 'ready'
   const backendAvailable = location.backend !== 'webgpu' || environment.webgpu
 
   function setLocation(next: Partial<HarnessLocation>): void {
@@ -488,17 +512,21 @@ function Harness() {
               ? `runtime-fallback-${location.technique}-${location.backend}`
               : location.workload === 'cross-technique-fidelity'
                 ? `source-outline-${location.technique}-${location.backend}`
-                : location.technique === 'mtsdf'
-                  ? `mtsdf-conformance-${location.backend}`
-                  : `bitmap-text-${location.backend}`,
+                : location.technique === 'slug'
+                  ? `slug-conformance-${location.backend}`
+                  : location.technique === 'mtsdf'
+                    ? `mtsdf-conformance-${location.backend}`
+                    : `bitmap-text-${location.backend}`,
           scenarioId:
             location.workload === 'runtime-fallback'
               ? 'runtime-fallback-parity'
               : location.workload === 'cross-technique-fidelity'
                 ? 'source-outline-fidelity'
-                : location.technique === 'mtsdf'
-                  ? 'mtsdf-sampling-conformance'
-                  : 'bitmap-text-frame',
+                : location.technique === 'slug'
+                  ? 'slug-sampling-conformance'
+                  : location.technique === 'mtsdf'
+                    ? 'mtsdf-sampling-conformance'
+                    : 'bitmap-text-frame',
           input: { fontFixture: activeFontFixture },
           controls: { dpr, samples, warmup },
           environment,
@@ -1052,10 +1080,14 @@ function WorkloadRail({
   const workloads = workloadsFor(location.mode)
   const selectedMtsdfFixture =
     location.technique === 'mtsdf' ? mtsdfFixtureFor(activeFontFixture) : undefined
+  const selectedSlugFixture =
+    location.technique === 'slug' ? slugFixtureFor(activeFontFixture) : undefined
   const rasterDescription =
-    selectedMtsdfFixture === undefined
-      ? '16 px grayscale bitmap strike'
-      : `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
+    selectedSlugFixture !== undefined
+      ? `Analytic Slug · ${selectedSlugFixture.raster.pages.length} page${selectedSlugFixture.raster.pages.length === 1 ? '' : 's'} · ${formatBytes(selectedSlugFixture.raster.decodedGpuBytes)} GPU`
+      : selectedMtsdfFixture !== undefined
+        ? `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
+        : '16 px grayscale bitmap strike'
   return (
     <aside className={`overflow-auto border-r border-border bg-chrome p-3 ${className}`}>
       {showTechnique && (
@@ -1154,12 +1186,11 @@ function TechniqueSwitcher({
         <button
           aria-pressed={technique === value}
           className={`min-h-7 rounded px-2 text-[10px] font-medium capitalize transition-colors ${technique === value ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'} disabled:cursor-not-allowed disabled:opacity-45`}
-          disabled={value === 'slug'}
           key={value}
           type="button"
           onClick={() => onTechnique(value)}
         >
-          {value === 'mtsdf' ? 'MSDF' : value}
+          {techniqueLabel(value)}
         </button>
       ))}
     </div>
@@ -1240,7 +1271,7 @@ function Scene({
           <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
         </div>
         <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
-          <Chip tone="accent">{location.technique === 'mtsdf' ? 'MSDF' : 'Bitmap'}</Chip>
+          <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
           <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}</Chip>
           <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
           <Chip>{dpr}× DPR</Chip>
@@ -1335,7 +1366,7 @@ function PlannedWorkloadSurface({
       <div className="max-w-md">
         <p className="eyebrow">Milestone {milestone}</p>
         <h2 className="mt-2 text-lg font-semibold">
-          {technique === 'mtsdf' ? 'MSDF' : technique} · {workload.label}
+          {techniqueLabel(technique)} · {workload.label}
         </h2>
         <p className="mt-2 text-xs leading-relaxed text-muted">{workload.description}</p>
       </div>
@@ -1506,7 +1537,7 @@ function BenchmarkSurface({
           <div>
             <p className="eyebrow">Realtime scene</p>
             <p className="mt-1 text-xs text-muted">
-              {liveWorkloadSceneDescription(workload, showcaseFrame)}
+              {liveWorkloadSceneDescription(workload, showcaseFrame, technique)}
             </p>
           </div>
           <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
@@ -1527,9 +1558,20 @@ function BenchmarkSurface({
             paintShadowEnabled={paintShadowEnabled}
             paintStrokeWidth={paintStrokePercent / 100}
             showLayoutBounds={showLayoutBounds}
-            technique={technique === 'mtsdf' ? 'mtsdf' : 'bitmap'}
+            technique={technique}
             workload={comparisonWorkload}
             key={`${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${comparisonWorkload}`}
+            onStats={onStats}
+          />
+        ) : technique === 'slug' ? (
+          <SlugTextViewport
+            backend={backend}
+            delivery={delivery}
+            dpr={dpr}
+            fontSize={fontSize}
+            grid={grid}
+            key={textConfiguration.fontFixture}
+            textConfiguration={textConfiguration}
             onStats={onStats}
           />
         ) : technique === 'mtsdf' ? (
@@ -1586,6 +1628,7 @@ function ConformanceSurface({
   const [capture, setCapture] = useState<
     | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
     | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
+    | { readonly kind: 'slug'; readonly value: SlugTextConformanceCapture }
     | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
     | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture }
   >()
@@ -1595,6 +1638,7 @@ function ConformanceSurface({
       value:
         | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
         | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
+        | { readonly kind: 'slug'; readonly value: SlugTextConformanceCapture }
         | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
         | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture },
     ) => {
@@ -1618,59 +1662,81 @@ function ConformanceSurface({
                 dpr,
                 fontFixture,
                 signal: controller.signal,
-                technique: technique === 'mtsdf' ? 'mtsdf' : 'bitmap',
+                technique,
               }),
             }),
           )
         : workload === 'cross-technique-fidelity'
-          ? technique === 'mtsdf'
-            ? import('./renderer/mtsdf-text').then(
-                async ({ captureMtsdfSourceOutlineFidelity }) => ({
-                  kind: 'source-outline' as const,
-                  value: await captureMtsdfSourceOutlineFidelity({
-                    backend,
-                    dpr,
-                    fontFixture,
-                    signal: controller.signal,
-                  }),
-                }),
-              )
-            : import('./renderer/bitmap-text').then(
-                async ({ captureBitmapSourceOutlineFidelity }) => ({
-                  kind: 'source-outline' as const,
-                  value: await captureBitmapSourceOutlineFidelity({
-                    backend,
-                    dpr,
-                    fontFixture,
-                    signal: controller.signal,
-                  }),
-                }),
-              )
-          : technique === 'mtsdf'
-            ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
-                kind: 'mtsdf' as const,
-                value: await captureMtsdfTextConformance({
+          ? technique === 'slug'
+            ? import('./renderer/slug-text').then(async ({ captureSlugSourceOutlineFidelity }) => ({
+                kind: 'source-outline' as const,
+                value: await captureSlugSourceOutlineFidelity({
                   backend,
                   dpr,
                   fontFixture,
                   signal: controller.signal,
                 }),
               }))
-            : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
-                kind: 'bitmap' as const,
-                value: await captureBitmapTextConformance({
+            : technique === 'mtsdf'
+              ? import('./renderer/mtsdf-text').then(
+                  async ({ captureMtsdfSourceOutlineFidelity }) => ({
+                    kind: 'source-outline' as const,
+                    value: await captureMtsdfSourceOutlineFidelity({
+                      backend,
+                      dpr,
+                      fontFixture,
+                      signal: controller.signal,
+                    }),
+                  }),
+                )
+              : import('./renderer/bitmap-text').then(
+                  async ({ captureBitmapSourceOutlineFidelity }) => ({
+                    kind: 'source-outline' as const,
+                    value: await captureBitmapSourceOutlineFidelity({
+                      backend,
+                      dpr,
+                      fontFixture,
+                      signal: controller.signal,
+                    }),
+                  }),
+                )
+          : technique === 'slug'
+            ? import('./renderer/slug-text').then(async ({ captureSlugTextConformance }) => ({
+                kind: 'slug' as const,
+                value: await captureSlugTextConformance({
                   backend,
                   dpr,
                   fontFixture,
                   signal: controller.signal,
                 }),
               }))
+            : technique === 'mtsdf'
+              ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
+                  kind: 'mtsdf' as const,
+                  value: await captureMtsdfTextConformance({
+                    backend,
+                    dpr,
+                    fontFixture,
+                    signal: controller.signal,
+                  }),
+                }))
+              : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
+                  kind: 'bitmap' as const,
+                  value: await captureBitmapTextConformance({
+                    backend,
+                    dpr,
+                    fontFixture,
+                    signal: controller.signal,
+                  }),
+                }))
     void request.then(publishCapture).catch(publishError)
     return () => controller.abort()
   }, [backend, dpr, fontFixture, technique, workload])
 
   const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined
   const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined
+  const slugCapture = capture?.kind === 'slug' ? capture.value : undefined
+  const analyticCapture = technique === 'slug' ? slugCapture : mtsdfCapture
   const sourceOutlineCapture = capture?.kind === 'source-outline' ? capture.value : undefined
   const runtimeFallbackCapture = capture?.kind === 'runtime-fallback' ? capture.value : undefined
   const isSourceOutline = workload === 'cross-technique-fidelity'
@@ -1690,7 +1756,7 @@ function ConformanceSurface({
           label={
             isRuntimeFallback
               ? 'Mismatched bytes'
-              : isSourceOutline || technique === 'mtsdf'
+              : isSourceOutline || technique !== 'bitmap'
                 ? 'Mean error · 0–255'
                 : 'Reference mismatch'
           }
@@ -1701,10 +1767,10 @@ function ConformanceSurface({
                 ? sourceOutlineCapture === undefined
                   ? '—'
                   : `${sourceOutlineCapture.meanAbsoluteError.toFixed(3)} · ${((sourceOutlineCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
-                : technique === 'mtsdf'
-                  ? mtsdfCapture === undefined
+                : technique !== 'bitmap'
+                  ? analyticCapture === undefined
                     ? '—'
-                    : `${mtsdfCapture.meanAbsoluteError.toFixed(3)} · ${((mtsdfCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
+                    : `${analyticCapture.meanAbsoluteError.toFixed(3)} · ${((analyticCapture.meanAbsoluteError / 255) * 100).toFixed(3)}%`
                   : bitmapCapture === undefined
                     ? '—'
                     : String(bitmapCapture.mismatchBytes)
@@ -1714,7 +1780,7 @@ function ConformanceSurface({
           label={
             isRuntimeFallback
               ? 'Changed pixels'
-              : isSourceOutline || technique === 'mtsdf'
+              : isSourceOutline || technique !== 'bitmap'
                 ? 'Pixels > 2 / 255'
                 : 'Half-coverage ink'
           }
@@ -1725,10 +1791,10 @@ function ConformanceSurface({
                 ? sourceOutlineCapture === undefined
                   ? '—'
                   : `${sourceOutlineCapture.errorPixels} · ${((sourceOutlineCapture.errorPixels / (sourceOutlineCapture.width * sourceOutlineCapture.height)) * 100).toFixed(2)}%`
-                : technique === 'mtsdf'
-                  ? mtsdfCapture === undefined
+                : technique !== 'bitmap'
+                  ? analyticCapture === undefined
                     ? '—'
-                    : `${mtsdfCapture.errorPixels} · ${((mtsdfCapture.errorPixels / (mtsdfCapture.width * mtsdfCapture.height)) * 100).toFixed(2)}%`
+                    : `${analyticCapture.errorPixels} · ${((analyticCapture.errorPixels / (analyticCapture.width * analyticCapture.height)) * 100).toFixed(2)}%`
                   : bitmapCapture === undefined
                     ? '—'
                     : String(bitmapCapture.inkPixels)
@@ -1738,7 +1804,7 @@ function ConformanceSurface({
           label={
             isRuntimeFallback
               ? 'Maximum error · 0–255'
-              : isSourceOutline || technique === 'mtsdf'
+              : isSourceOutline || technique !== 'bitmap'
                 ? 'Maximum error · 0–255'
                 : 'Lit pixels'
           }
@@ -1749,10 +1815,10 @@ function ConformanceSurface({
                 ? sourceOutlineCapture === undefined
                   ? '—'
                   : `${sourceOutlineCapture.maximumError} / 255`
-                : technique === 'mtsdf'
-                  ? mtsdfCapture === undefined
+                : technique !== 'bitmap'
+                  ? analyticCapture === undefined
                     ? '—'
-                    : `${mtsdfCapture.maximumError} / 255`
+                    : `${analyticCapture.maximumError} / 255`
                   : bitmapCapture === undefined
                     ? '—'
                     : String(bitmapCapture.litPixels)
@@ -1801,7 +1867,7 @@ function ConformanceSurface({
             bytes={sourceOutlineCapture?.candidate}
             conformanceView={conformanceView}
             height={sourceOutlineCapture?.height}
-            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
+            label={`${techniqueLabel(technique)} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
             width={sourceOutlineCapture?.width}
             onPan={onPan}
             onZoom={onZoom}
@@ -1826,33 +1892,33 @@ function ConformanceSurface({
             onZoom={onZoom}
           />
         </div>
-      ) : technique === 'mtsdf' ? (
+      ) : technique !== 'bitmap' ? (
         <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
           <PixelBytesPanel
-            bytes={mtsdfCapture?.candidate}
+            bytes={analyticCapture?.candidate}
             conformanceView={conformanceView}
-            height={mtsdfCapture?.height}
-            label="Candidate"
-            width={mtsdfCapture?.width}
+            height={analyticCapture?.height}
+            label={`${techniqueLabel(technique)} candidate`}
+            width={analyticCapture?.width}
             onPan={onPan}
             onZoom={onZoom}
           />
           <PixelBytesPanel
-            bytes={mtsdfCapture?.reference}
+            bytes={analyticCapture?.reference}
             conformanceView={conformanceView}
-            height={mtsdfCapture?.height}
+            height={analyticCapture?.height}
             label="CPU sampling reference"
-            width={mtsdfCapture?.width}
+            width={analyticCapture?.width}
             onPan={onPan}
             onZoom={onZoom}
           />
           <PixelBytesPanel
-            bytes={mtsdfCapture?.difference}
+            bytes={analyticCapture?.difference}
             className="md:col-span-2"
             conformanceView={conformanceView}
-            height={mtsdfCapture?.height}
+            height={analyticCapture?.height}
             label="Difference heatmap ×8"
-            width={mtsdfCapture?.width}
+            width={analyticCapture?.width}
             onPan={onPan}
             onZoom={onZoom}
           />
@@ -1896,15 +1962,15 @@ function ConformanceSurface({
             {summary?.validation ??
               (isSourceOutline
                 ? 'Run conformance to validate the selected renderer against the pinned source font in browser Canvas2D.'
-                : technique === 'mtsdf'
-                  ? 'Run conformance to validate GPU sampling against the independent CPU sampling reference.'
+                : technique !== 'bitmap'
+                  ? `Run conformance to validate ${techniqueLabel(technique)} GPU sampling against the independent CPU sampling reference.`
                   : 'Run conformance to test full-frame and clipped output.')}
           </span>
         </div>
         <p className="mt-2 text-[10px] text-dim">
           {isSourceOutline
-            ? 'Both techniques are compared independently with browser Canvas2D using the same pinned source font, authored lines, physical size, and paragraph baselines.'
-            : technique === 'mtsdf'
+            ? 'All techniques are compared independently with browser Canvas2D using the same pinned source font, authored lines, physical size, and paragraph baselines.'
+            : technique !== 'bitmap'
               ? 'Heatmap: black agrees, red is extra GPU coverage, and cyan is extra CPU-reference coverage. Intensity is amplified 8×.'
               : 'End-to-end suite duration includes readback, CPU composition, comparison, clipping, and hashing. It is test cost, not renderer performance.'}
         </p>
@@ -2612,6 +2678,234 @@ function MtsdfTextViewport({
   )
 }
 
+function SlugTextViewport({
+  backend,
+  delivery,
+  dpr,
+  fontSize,
+  grid,
+  textConfiguration,
+  onStats,
+}: {
+  readonly backend: GraphicsBackend
+  readonly delivery: FontDelivery
+  readonly dpr: 1 | 2
+  readonly fontSize: number
+  readonly grid: boolean
+  readonly textConfiguration: LiveTextConfiguration
+  readonly onStats: (stats: LiveTextStats) => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<SlugTextPreview>(undefined)
+  const [stats, setStats] = useState<SlugTextLiveStats>()
+  const [error, setError] = useState<string>()
+  const {
+    active: bakeProgressActive,
+    finish: finishBakeProgress,
+    publish: publishBakeProgress,
+    reset: resetBakeProgress,
+    value: bakeProgressValue,
+  } = useBakeProgress('Slug')
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } =
+    textConfiguration
+  const publishStats = useEffectEvent((next: SlugTextLiveStats) => {
+    finishBakeProgress()
+    setStats(next)
+    onStats(next)
+    setError(undefined)
+  })
+  const publishError = useEffectEvent((caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === 'AbortError') return
+    finishBakeProgress()
+    setError(caught instanceof Error ? caught.message : String(caught))
+  })
+  const previewConfiguration = useEffectEvent(() => ({
+    anchor,
+    direction,
+    features,
+    fontSize,
+    language,
+    layoutWidthRatio,
+    showGrid: grid,
+    text,
+    textAlign,
+  }))
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (canvas === null || container === null) return
+    const controller = new AbortController()
+    resetBakeProgress()
+    const configuration = previewConfiguration()
+    let preview: SlugTextPreview | undefined
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
+    let cancelled = false
+    const resize = (): void => {
+      if (preview === undefined) return
+      const bounds = container.getBoundingClientRect()
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
+    }
+    const observer = new ResizeObserver(resize)
+    observer.observe(container)
+    const initialization = (async () => {
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      try {
+        if (cancelled) return
+        const { createSlugTextPreview } = await import('./renderer/slug-text')
+        if (cancelled) return
+        const bounds = container.getBoundingClientRect()
+        const created = await createSlugTextPreview({
+          anchor: configuration.anchor,
+          backend,
+          canvas,
+          delivery,
+          dpr,
+          fontSize: configuration.fontSize,
+          fontFixture,
+          height: Math.max(1, bounds.height),
+          showGrid: configuration.showGrid,
+          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+          text: configuration.text,
+          textAlign: configuration.textAlign,
+          language: configuration.language,
+          direction: configuration.direction,
+          features: configuration.features,
+          width: Math.max(1, bounds.width),
+          signal: controller.signal,
+          onError: publishError,
+          onStats: publishStats,
+          onBakeProgress: publishBakeProgress,
+        })
+        if (cancelled) {
+          await created.dispose()
+          return
+        }
+        preview = created
+        previewRef.current = created
+        resize()
+      } catch (caught) {
+        lifecycleLease.release()
+        lifecycleLease = undefined
+        throw caught
+      }
+    })()
+    void initialization.catch(publishError)
+    return () => {
+      cancelled = true
+      controller.abort()
+      observer.disconnect()
+      void initialization.then(
+        async () => {
+          try {
+            if (preview === undefined) return
+            const current = preview
+            preview = undefined
+            if (previewRef.current === current) previewRef.current = undefined
+            await current.dispose()
+          } finally {
+            lifecycleLease?.release()
+            lifecycleLease = undefined
+          }
+        },
+        () => {
+          lifecycleLease?.release()
+          lifecycleLease = undefined
+        },
+      )
+    }
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress])
+
+  useEffect(() => {
+    previewRef.current?.setGridVisible(grid)
+  }, [grid])
+
+  useEffect(() => {
+    const preview = previewRef.current
+    if (preview === undefined) return
+    void preview
+      .update({
+        anchor,
+        direction,
+        features,
+        fontSize,
+        language,
+        layoutWidthRatio,
+        text,
+        textAlign,
+      })
+      .catch(publishError)
+  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text, textAlign])
+
+  return (
+    <div
+      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      data-canvas-grid={String(grid)}
+      data-anchor={anchor}
+      data-artifact-bytes={stats?.artifactBytes}
+      data-backend={stats?.backend}
+      data-dpr={stats?.dpr}
+      data-font-delivery={stats?.delivery}
+      data-core-bake-ms={stats?.coreBakeMs}
+      data-raster-bake-ms={stats?.rasterBakeMs}
+      data-source-font-bytes={stats?.sourceFontBytes}
+      data-core-artifact-bytes={stats?.coreArtifactBytes}
+      data-raster-artifact-bytes={stats?.rasterArtifactBytes}
+      data-draw-count={stats?.drawCount}
+      data-font-fixture={fontFixture}
+      data-frame-count={stats?.frameCount}
+      data-frames-per-second={stats?.framesPerSecond}
+      data-glyph-count={stats?.glyphCount}
+      data-gpu-history-length={stats?.gpuHistoryLength}
+      data-gpu-timing-supported={stats?.gpuTimingSupported}
+      data-layout-width={stats?.layoutWidth}
+      data-layout-width-ratio={layoutWidthRatio}
+      data-line-count={stats?.lineCount}
+      data-median-gpu-ms={stats?.medianGpuMs}
+      data-median-submit-ms={stats?.medianSubmitMs}
+      data-missing-glyph-count={stats?.missingGlyphCount}
+      data-rendered-device-px={stats?.renderedPpem}
+      data-slug-curve-gpu-bytes={stats?.slugCurveGpuBytes}
+      data-slug-header-gpu-bytes={stats?.slugHeaderGpuBytes}
+      data-slug-page-count={stats?.slugPageCount}
+      data-slug-reference-gpu-bytes={stats?.slugReferenceGpuBytes}
+      data-slug-gpu-bytes={stats?.slugGpuBytes}
+      data-startup-ms={stats?.startupMs}
+      data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
+      data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
+      data-submit-history-length={stats?.submitHistoryLength}
+      data-source-text-length={text.length}
+      data-text-align={textAlign}
+      data-timeline-tick={textConfiguration.timelineTick}
+      data-testid="slug-live-viewport"
+      ref={containerRef}
+    >
+      <InteractiveCanvas
+        label={`Live Slug benchmark using ${backend}`}
+        canvasRef={canvasRef}
+        controllerRef={previewRef}
+      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+        <span>
+          SLUG ANALYTIC · {stats?.slugPageCount ?? '—'} PAGE
+          {stats?.slugPageCount === 1 ? '' : 'S'} · {fontSize} CSS PX / {stats?.renderedPpem ?? '—'}{' '}
+          DEVICE PX
+        </span>
+        <span>{dpr}× DPR</span>
+      </div>
+      {(stats === undefined || bakeProgressActive) && error === undefined && (
+        <BakeProgressOverlay backend={backend} progress={bakeProgressValue} technique="SLUG" />
+      )}
+      {error !== undefined && (
+        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ComparisonWorkloadViewport({
   amount,
   animationEnabled,
@@ -2645,7 +2939,7 @@ function ComparisonWorkloadViewport({
   readonly paintShadowEnabled: boolean
   readonly paintStrokeWidth: number
   readonly showLayoutBounds: boolean
-  readonly technique: 'bitmap' | 'mtsdf'
+  readonly technique: RasterTechnique
   readonly workload: ComparisonWorkloadId
   readonly onStats: (stats: LiveTextStats) => void
 }) {
@@ -2668,7 +2962,7 @@ function ComparisonWorkloadViewport({
     publish: publishBakeProgress,
     reset: resetBakeProgress,
     value: bakeProgressValue,
-  } = useBakeProgress(technique === 'mtsdf' ? 'MSDF' : 'bitmap')
+  } = useBakeProgress(techniqueLabel(technique))
   const publishStats = useEffectEvent((key: string, next: ComparisonWorkloadStats) => {
     if (key !== surfaceKey) return
     finishBakeProgress()
@@ -2858,7 +3152,16 @@ function ComparisonWorkloadViewport({
       data-rendered-device-px={stats?.renderedPpem}
       data-raster-em-size={stats?.technique === 'mtsdf' ? stats.rasterEmSize : undefined}
       data-raster-pixel-range={stats?.technique === 'mtsdf' ? stats.rasterPixelRange : undefined}
-      data-scale-ratio={stats?.scaleRatio}
+      data-scale-ratio={stats?.technique === 'slug' ? undefined : stats?.scaleRatio}
+      data-slug-curve-gpu-bytes={stats?.technique === 'slug' ? stats.slugCurveGpuBytes : undefined}
+      data-slug-header-gpu-bytes={
+        stats?.technique === 'slug' ? stats.slugHeaderGpuBytes : undefined
+      }
+      data-slug-page-count={stats?.technique === 'slug' ? stats.slugPageCount : undefined}
+      data-slug-reference-gpu-bytes={
+        stats?.technique === 'slug' ? stats.slugReferenceGpuBytes : undefined
+      }
+      data-slug-gpu-bytes={stats?.technique === 'slug' ? stats.slugGpuBytes : undefined}
       data-startup-ms={stats?.startupMs}
       data-source-text-length={stats?.sourceTextLength}
       data-submit-history-length={stats?.submitHistoryLength}
@@ -2888,7 +3191,7 @@ function ComparisonWorkloadViewport({
       ref={containerRef}
     >
       <InteractiveCanvas
-        label={`Live ${technique === 'mtsdf' ? 'MSDF' : 'bitmap'} ${workload} benchmark using ${backend}`}
+        label={`Live ${techniqueLabel(technique)} ${workload} benchmark using ${backend}`}
         canvasRef={canvasRef}
         controllerRef={previewRef}
         zoom={workload === 'off-axis-3d'}
@@ -2897,11 +3200,15 @@ function ComparisonWorkloadViewport({
         <span>
           {stats?.technique === 'mtsdf'
             ? `MTSDF ${String(stats.rasterEmSize)} PX/EM`
-            : stats?.technique === 'bitmap'
-              ? `BITMAP ${String(stats.strikePpem)} PX STRIKE`
-              : technique === 'mtsdf'
-                ? 'MTSDF — PX/EM'
-                : 'BITMAP — PX STRIKE'}{' '}
+            : stats?.technique === 'slug'
+              ? `SLUG ANALYTIC · ${String(stats.slugPageCount)} PAGE${stats.slugPageCount === 1 ? '' : 'S'}`
+              : stats?.technique === 'bitmap'
+                ? `BITMAP ${String(stats.strikePpem)} PX STRIKE`
+                : technique === 'mtsdf'
+                  ? 'MTSDF — PX/EM'
+                  : technique === 'slug'
+                    ? 'SLUG ANALYTIC · — PAGES'
+                    : 'BITMAP — PX STRIKE'}{' '}
           · {rangeLabel}
         </span>
         <span>
@@ -2912,7 +3219,7 @@ function ComparisonWorkloadViewport({
         <BakeProgressOverlay
           backend={backend}
           progress={bakeProgressValue}
-          technique={technique === 'mtsdf' ? 'MSDF' : 'BITMAP'}
+          technique={technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'SLUG' : 'BITMAP'}
         />
       )}
       {error !== undefined && (
@@ -2966,7 +3273,7 @@ function BakeProgressOverlay({
 }: {
   readonly backend: GraphicsBackend
   readonly progress: BakeProgress | undefined
-  readonly technique: 'BITMAP' | 'MSDF'
+  readonly technique: 'BITMAP' | 'MSDF' | 'SLUG'
 }) {
   const percentage = bakeProgressPercentage(progress)
   const label =
@@ -3422,7 +3729,9 @@ function Controls({
                 label={
                   technique === 'mtsdf'
                     ? `Stroke width · ${paintStrokePercent}%`
-                    : 'Stroke width · unavailable for bitmap'
+                    : technique === 'slug'
+                      ? 'Stroke width · unavailable for Slug V0'
+                      : 'Stroke width · unavailable for bitmap'
                 }
                 max={100}
                 min={0}
@@ -3434,7 +3743,13 @@ function Controls({
               <Toggle
                 checked={technique === 'mtsdf' && paintShadowEnabled}
                 disabled={technique !== 'mtsdf'}
-                label={technique === 'mtsdf' ? 'Shadow' : 'Shadow · unavailable for bitmap'}
+                label={
+                  technique === 'mtsdf'
+                    ? 'Shadow'
+                    : technique === 'slug'
+                      ? 'Shadow · unavailable for Slug V0'
+                      : 'Shadow · unavailable for bitmap'
+                }
                 onChange={onPaintShadowEnabled}
               />
             </>
@@ -3541,39 +3856,42 @@ function PayloadInspector({
   readonly liveStats: LiveTextStats | undefined
   readonly technique: RasterTechnique
 }) {
-  if (technique === 'slug') {
-    return (
-      <div className="rounded-md border border-border bg-surface p-3">
-        <p className="eyebrow">Selected payloads</p>
-        <p className="mt-2 text-[10px] text-dim">Slug payload evidence begins in Milestone 9.</p>
-      </div>
-    )
-  }
-  const runtime = measuredPackageSize(`${technique}-runtime-js`)
+  const runtime = measuredPackageSizeIfAvailable(`${technique}-runtime-js`)
   const shaper = measuredPackageSize('text-shaper-wasm')
-  const bakerHost = measuredPackageSize(`${technique}-baker-js`)
-  const bakerWasm = measuredPackageSize(`${technique}-baker-wasm`)
+  const bakerHost = measuredPackageSizeIfAvailable(`${technique}-baker-js`)
+  const bakerWasm = measuredPackageSizeIfAvailable(`${technique}-baker-wasm`)
   const runtimeBakerHost = measuredPackageSize('runtime-baker-host-js')
   const runtimeBakerWorker = measuredPackageSize('runtime-baker-worker-js')
   const coreBakerHost = measuredPackageSize('portable-baker-js')
   const coreBakerWasm = measuredPackageSize('portable-baker-wasm')
-  const libraryTransferBytes = runtime.gzipBytes + shaper.gzipBytes
+  const libraryTransferBytes =
+    runtime === undefined ? undefined : runtime.gzipBytes + shaper.gzipBytes
   const bakerTransferBytes =
-    runtimeBakerHost.gzipBytes +
-    runtimeBakerWorker.gzipBytes +
-    coreBakerHost.gzipBytes +
-    coreBakerWasm.gzipBytes +
-    bakerHost.gzipBytes +
-    bakerWasm.gzipBytes
+    bakerHost === undefined || bakerWasm === undefined
+      ? undefined
+      : runtimeBakerHost.gzipBytes +
+        runtimeBakerWorker.gzipBytes +
+        coreBakerHost.gzipBytes +
+        coreBakerWasm.gzipBytes +
+        bakerHost.gzipBytes +
+        bakerWasm.gzipBytes
   const bitmapStats = liveStats?.technique === 'bitmap' ? liveStats : undefined
+  const slugStats = liveStats?.technique === 'slug' ? liveStats : undefined
   const mtsdfFixture = technique === 'mtsdf' ? mtsdfFixtureFor(fontFixture) : undefined
+  const slugFixture = technique === 'slug' ? slugFixtureFor(fontFixture) : undefined
   const bitmapFixture = technique === 'bitmap' ? bitmapFixtureFor(fontFixture) : undefined
   const fontTransferBytes =
-    technique === 'mtsdf' ? mtsdfFixture?.compressed.bytes : bitmapFixture?.bytes
+    technique === 'mtsdf'
+      ? mtsdfFixture?.compressed.bytes
+      : technique === 'slug'
+        ? slugFixture?.compressed.bytes
+        : bitmapFixture?.bytes
   const textureGpuBytes =
     technique === 'mtsdf'
       ? mtsdfFixture?.raster.runtimeTextureArray.mipmappedBytes
-      : (bitmapStats?.atlasGpuBytes ?? bitmapFixture?.raster.decodedGpuBytes)
+      : technique === 'slug'
+        ? (slugStats?.slugGpuBytes ?? slugFixture?.raster.decodedGpuBytes)
+        : (bitmapStats?.atlasGpuBytes ?? bitmapFixture?.raster.decodedGpuBytes)
   const pages =
     technique === 'mtsdf'
       ? (mtsdfFixture?.raster.pages ?? []).map((page) => ({
@@ -3582,19 +3900,53 @@ function PayloadInspector({
           embeddedBytes: page.encodedBytes,
           gpuBytes: page.decodedGpuBytes,
         }))
-      : (bitmapStats?.atlasPages ?? bitmapFixture?.raster.pages ?? []).map((page) => ({
-          key:
-            'strikePpem' in page ? `${page.strikePpem}-${page.pageIndex}` : `fixture-${page.index}`,
-          label:
-            'strikePpem' in page
-              ? `${page.strikePpem} px · page ${page.pageIndex + 1} · ${page.width}×${page.height}`
-              : `Page ${page.index + 1} · ${page.width}×${page.height}`,
-          embeddedBytes: 'encodedBytes' in page ? page.encodedBytes : undefined,
-          gpuBytes: 'gpuBytes' in page ? page.gpuBytes : page.decodedGpuBytes,
-        }))
+      : technique === 'slug'
+        ? slugStats === undefined
+          ? (slugFixture?.raster.pages ?? []).map((page) => ({
+              key: `slug-page-${page.index}`,
+              label: `Page ${page.index + 1} analytic resources · ${page.width}×${page.height}`,
+              embeddedBytes: page.encodedBytes,
+              gpuBytes: page.decodedGpuBytes,
+            }))
+          : [
+              {
+                key: 'slug-curves',
+                label: `RGBA16F curves · ${slugStats.slugCurveTexelCount} texels`,
+                embeddedBytes: undefined,
+                gpuBytes: slugStats.slugCurveGpuBytes,
+              },
+              {
+                key: 'slug-headers',
+                label: `R32UI headers · ${slugStats.slugHeaderCount} used`,
+                embeddedBytes: undefined,
+                gpuBytes: slugStats.slugHeaderGpuBytes,
+              },
+              {
+                key: 'slug-references',
+                label: `R16UI references · ${slugStats.slugReferenceCount} used`,
+                embeddedBytes: undefined,
+                gpuBytes: slugStats.slugReferenceGpuBytes,
+              },
+            ]
+        : (bitmapStats?.atlasPages ?? bitmapFixture?.raster.pages ?? []).map((page) => ({
+            key:
+              'strikePpem' in page
+                ? `${page.strikePpem}-${page.pageIndex}`
+                : `fixture-${page.index}`,
+            label:
+              'strikePpem' in page
+                ? `${page.strikePpem} px · page ${page.pageIndex + 1} · ${page.width}×${page.height}`
+                : `Page ${page.index + 1} · ${page.width}×${page.height}`,
+            embeddedBytes: 'encodedBytes' in page ? page.encodedBytes : undefined,
+            gpuBytes: 'gpuBytes' in page ? page.gpuBytes : page.decodedGpuBytes,
+          }))
   const pageGpuBytes = pages.reduce((total, page) => total + page.gpuBytes, 0)
   const textureBaseBytes =
-    technique === 'mtsdf' ? mtsdfFixture?.raster.runtimeTextureArray.baseBytes : textureGpuBytes
+    technique === 'mtsdf'
+      ? mtsdfFixture?.raster.runtimeTextureArray.baseBytes
+      : technique === 'slug'
+        ? undefined
+        : textureGpuBytes
   const textureMipBytes =
     textureGpuBytes === undefined || textureBaseBytes === undefined
       ? undefined
@@ -3614,13 +3966,13 @@ function PayloadInspector({
         <InspectorDisclosure
           className="mt-3 border-b border-border pb-3"
           label="Runtime"
-          status="loaded"
+          status={runtime === undefined ? 'unloaded' : 'loaded'}
           value={formatBytes(libraryTransferBytes)}
         >
           <PayloadRow
-            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} runtime`}
-            status="loaded"
-            value={formatBytes(runtime.gzipBytes)}
+            label={`${techniqueLabel(technique)} runtime`}
+            status={runtime === undefined ? 'unloaded' : 'loaded'}
+            value={formatBytes(runtime?.gzipBytes)}
           />
           <PayloadRow label={shaper.label} status="loaded" value={formatBytes(shaper.gzipBytes)} />
           <p className="text-[9px] leading-relaxed text-dim">
@@ -3655,21 +4007,21 @@ function PayloadInspector({
             value={formatBytes(coreBakerWasm.gzipBytes)}
           />
           <PayloadRow
-            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} baker host`}
-            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
-            value={formatBytes(bakerHost.gzipBytes)}
+            label={`${techniqueLabel(technique)} baker host`}
+            status={delivery === 'runtime' && bakerHost !== undefined ? 'loaded' : 'unloaded'}
+            value={formatBytes(bakerHost?.gzipBytes)}
           />
           <PayloadRow
-            label={`${technique === 'mtsdf' ? 'MSDF' : 'Bitmap'} baker Wasm`}
-            status={delivery === 'runtime' ? 'loaded' : 'unloaded'}
-            value={formatBytes(bakerWasm.gzipBytes)}
+            label={`${techniqueLabel(technique)} baker Wasm`}
+            status={delivery === 'runtime' && bakerWasm !== undefined ? 'loaded' : 'unloaded'}
+            value={formatBytes(bakerWasm?.gzipBytes)}
           />
         </InspectorDisclosure>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
         <InspectorTableHeader
           label="Asset"
-          valueLabel={delivery === 'baked' && technique === 'mtsdf' ? 'Gzip' : 'Bytes'}
+          valueLabel={delivery === 'baked' && technique !== 'bitmap' ? 'Gzip' : 'Bytes'}
         />
         <div className="mt-3 pl-6">
           <PayloadRow
@@ -3686,7 +4038,7 @@ function PayloadInspector({
         <InspectorTableHeader label="Resource" valueLabel="GPU" />
         <InspectorDisclosure
           className="mt-3"
-          label="Atlas textures"
+          label={technique === 'slug' ? 'Analytic textures' : 'Atlas textures'}
           status={textureGpuBytes === undefined ? 'unloaded' : 'loaded'}
           value={formatBytes(textureGpuBytes)}
         >
@@ -3694,6 +4046,13 @@ function PayloadInspector({
             <p className="text-[9px] leading-relaxed text-dim">
               MSDF · {mtsdfFixture?.configuration.emSize ?? 64} px/em ·{' '}
               {mtsdfFixture?.configuration.pixelRange ?? 8} px range
+            </p>
+          )}
+          {technique === 'slug' && (
+            <p className="text-[9px] leading-relaxed text-dim">
+              Slug · exact RGBA16F curves, R32UI band headers, and R16UI references ·{' '}
+              {slugStats?.slugPageCount ?? slugFixture?.raster.pages.length ?? '—'} page
+              {(slugStats?.slugPageCount ?? slugFixture?.raster.pages.length) === 1 ? '' : 's'}
             </p>
           )}
           {pages.length === 0 ? (
@@ -3837,9 +4196,14 @@ interface MeasuredPackageSize {
 }
 
 function measuredPackageSize(id: string): MeasuredPackageSize {
-  const entry = packageSizes.entries.find((candidate) => candidate.id === id)
-  if (entry?.status !== 'measured') throw new Error(`Missing measured package size: ${id}`)
+  const entry = measuredPackageSizeIfAvailable(id)
+  if (entry === undefined) throw new Error(`Missing measured package size: ${id}`)
   return entry
+}
+
+function measuredPackageSizeIfAvailable(id: string): MeasuredPackageSize | undefined {
+  const entry = packageSizes.entries.find((candidate) => candidate.id === id)
+  return entry?.status === 'measured' ? entry : undefined
 }
 
 function CompactSheet({

@@ -183,6 +183,75 @@ function mtsdfSamplingValidation(
   return `${values.length}/${values.length} deterministic GPU frames with CPU MTSDF comparison`
 }
 
+function slugTextValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    const dpr = metrics?.dpr
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    const height = typeof dpr === 'number' ? Math.round(320 * dpr) : 0
+    if (
+      dpr === undefined ||
+      value.outputBytes !== width * height * 4 ||
+      metrics?.sceneCount !== 4 ||
+      metrics.textObjectCount !== 4 ||
+      typeof metrics.glyphCount !== 'number' ||
+      metrics.glyphCount < 40 ||
+      typeof metrics.drawCount !== 'number' ||
+      metrics.drawCount < 4 ||
+      typeof metrics.changedPixels !== 'number' ||
+      metrics.changedPixels < 500 ||
+      typeof metrics.distinctRgbColors !== 'number' ||
+      metrics.distinctRgbColors < 4 ||
+      metrics.artifactBytes !== 3_444_916 ||
+      metrics.compressedArtifactBytes !== 618_487 ||
+      !finitePositive(metrics.slugCurveGpuBytes) ||
+      !finitePositive(metrics.slugHeaderGpuBytes) ||
+      !finitePositive(metrics.slugReferenceGpuBytes) ||
+      metrics.slugGpuBytes !==
+        metrics.slugCurveGpuBytes + metrics.slugHeaderGpuBytes + metrics.slugReferenceGpuBytes ||
+      metrics.renderTargetGpuBytes !== value.outputBytes ||
+      !finiteNonnegative(metrics.fontLoadMs) ||
+      !finiteNonnegative(metrics.firstDrawMs) ||
+      !finiteNonnegative(metrics.renderMs) ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error('Slug text did not preserve its analytic scene and GPU-memory contract')
+    }
+  }
+  return `${values.length}/${values.length} deterministic Slug resize + transform frames`
+}
+
+function slugSamplingValidation(
+  values: readonly import('./contracts').BenchmarkMeasurement[],
+): string {
+  deterministicValidation(values.map((value) => value.hash))
+  for (const value of values) {
+    const metrics = value.metrics
+    const dpr = metrics?.dpr
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    if (
+      dpr === undefined ||
+      value.outputBytes !== width * height * 4 ||
+      !finitePositive(metrics?.glyphCount) ||
+      !finitePositive(metrics.evaluatedCurves) ||
+      !finiteNonnegative(metrics.meanAbsoluteError) ||
+      !finiteNonnegative(metrics.maximumError) ||
+      !finiteNonnegative(metrics.errorPixels) ||
+      metrics.pixelCount !== width * height ||
+      metrics.meanAbsoluteError > 0.25 ||
+      metrics.maximumError > 128 ||
+      metrics.errorPixels > metrics.pixelCount * 0.03 ||
+      !finiteNonnegative(metrics.renderMs) ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error('Slug sampling did not preserve its GPU/CPU comparison contract')
+    }
+  }
+  return `${values.length}/${values.length} deterministic GPU frames with CPU Slug comparison`
+}
+
 function sourceOutlineFidelityValidation(
   values: readonly import('./contracts').BenchmarkMeasurement[],
 ): string {
@@ -192,11 +261,12 @@ function sourceOutlineFidelityValidation(
     const pixelCount = metrics?.pixelCount
     const isBitmap = metrics?.techniqueBitmap === 1
     const isMtsdf = metrics?.techniqueMtsdf === 1
+    const isSlug = metrics?.techniqueSlug === 1
     if (
       typeof pixelCount !== 'number' ||
       pixelCount <= 0 ||
       value.outputBytes !== pixelCount * 4 ||
-      Number(isBitmap) + Number(isMtsdf) !== 1 ||
+      Number(isBitmap) + Number(isMtsdf) + Number(isSlug) !== 1 ||
       metrics?.physicalPpem !== (isBitmap ? 16 : 64) ||
       !finiteNonnegative(metrics.meanAbsoluteError) ||
       metrics.meanAbsoluteError > 12 ||
@@ -405,7 +475,26 @@ function finiteNonnegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
+function finitePositive(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
 export const scenarios: readonly BenchmarkScenario[] = [
+  {
+    id: 'slug-sampling-conformance',
+    label: 'Slug text accuracy',
+    description:
+      'GPU analytic coverage compared visually with an independent scalar CPU reconstruction.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: slugSamplingValidation,
+  },
+  {
+    id: 'slug-text-scenes',
+    label: 'Slug rendering scenes',
+    description: 'Resize, transformed text, fill, and opacity through copied-and-adapted TSL.',
+    requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
+    validate: slugTextValidation,
+  },
   {
     id: 'mtsdf-sampling-conformance',
     label: 'MTSDF text accuracy',
@@ -449,7 +538,7 @@ export const scenarios: readonly BenchmarkScenario[] = [
     id: 'source-outline-fidelity',
     label: 'Cross-technique source-outline fidelity',
     description:
-      'Bitmap and MSDF candidates compared independently with browser Canvas2D using the same pinned source font.',
+      'Bitmap, MTSDF, and Slug candidates compared independently with browser Canvas2D using the same pinned source font.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
     validate: sourceOutlineFidelityValidation,
   },

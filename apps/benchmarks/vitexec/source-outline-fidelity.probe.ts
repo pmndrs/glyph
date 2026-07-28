@@ -8,7 +8,7 @@ const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all(
 ])
 
 for (const dpr of [1, 2] as const) {
-  for (const technique of ['bitmap', 'mtsdf'] as const) {
+  for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     const summary = await runRegisteredBenchmark({
       targetId: `source-outline-${technique}-webgpu`,
       scenarioId: 'source-outline-fidelity',

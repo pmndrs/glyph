@@ -21,9 +21,14 @@ export async function captureRuntimeFallbackConformance(options: {
   readonly dpr: number
   readonly fontFixture: BenchmarkFontFixture
   readonly signal?: AbortSignal
-  readonly technique: Exclude<RasterTechnique, 'slug'>
+  readonly technique: RasterTechnique
 }): Promise<RuntimeFallbackCapture> {
-  const capture = options.technique === 'bitmap' ? captureBitmap : captureMtsdf
+  const capture =
+    options.technique === 'bitmap'
+      ? captureBitmap
+      : options.technique === 'mtsdf'
+        ? captureMtsdf
+        : captureSlug
   const baked = await capture({ ...options, delivery: 'baked' })
   options.signal?.throwIfAborted()
   const runtime = await capture({ ...options, delivery: 'runtime' })
@@ -63,6 +68,17 @@ async function captureMtsdf(options: {
   readonly signal?: AbortSignal
 }) {
   return captureMtsdfTextConformance(options)
+}
+
+async function captureSlug(options: {
+  readonly backend: RendererBackend
+  readonly delivery: 'baked' | 'runtime'
+  readonly dpr: number
+  readonly fontFixture: BenchmarkFontFixture
+  readonly signal?: AbortSignal
+}) {
+  const { captureSlugTextConformance } = await import('./slug-text')
+  return captureSlugTextConformance(options)
 }
 
 function comparePixels(left: Uint8Array, right: Uint8Array) {
