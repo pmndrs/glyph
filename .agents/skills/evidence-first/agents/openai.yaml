@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence First"
+  short_description: "Evidence-first human-facing engineering output"
+  default_prompt: "Use $evidence-first to present this engineering work with clear claims, measured support, and explicit gaps."
