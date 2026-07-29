@@ -46,29 +46,9 @@
           "referenceHeight": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "referenceResource": { "$ref": "../../schema/binaryResource.PMNDRS_font.schema.json" }
         },
-        "required": [
-          "curve",
-          "headerCount",
-          "headerWidth",
-          "headerHeight",
-          "headerResource",
-          "referenceCount",
-          "referenceWidth",
-          "referenceHeight",
-          "referenceResource"
-        ]
+        "required": ["curve", "headerCount", "headerWidth", "headerHeight", "headerResource", "referenceCount", "referenceWidth", "referenceHeight", "referenceResource"]
       }
     }
   },
-  "required": [
-    "version",
-    "rasterKey",
-    "shapingHash",
-    "glyphCount",
-    "glyphIdWidth",
-    "planeUnitsPerEm",
-    "recordBufferView",
-    "recordStride",
-    "pages"
-  ]
+  "required": ["version", "rasterKey", "shapingHash", "glyphCount", "glyphIdWidth", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
 }

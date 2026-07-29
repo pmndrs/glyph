@@ -19,7 +19,11 @@
             "glyphExtentsStride": { "type": "integer", "enum": [8] },
             "glyphExtentsAvailabilityBufferView": { "type": "integer", "minimum": 0 }
           },
-          "required": ["glyphExtentsBufferView", "glyphExtentsStride", "glyphExtentsAvailabilityBufferView"]
+          "required": [
+            "glyphExtentsBufferView",
+            "glyphExtentsStride",
+            "glyphExtentsAvailabilityBufferView"
+          ]
         }
       },
       "required": ["format", "bufferView", "hash", "fontFunctions"]
