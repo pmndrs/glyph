@@ -1,5 +1,6 @@
 const WORKLOADS = [
   { label: 'Text ladder', id: 'text-ladder' },
+  { label: 'Zoom text', id: 'zoom-text' },
   { label: 'Icon grid', id: 'icon-grid' },
   { label: 'Off-axis / 3D', id: 'off-axis-3d', amountLabel: 'Perspective intensity' },
   { label: 'Dynamic layout', id: 'dynamic-layout', amountLabel: 'Reflow amplitude' },
@@ -16,7 +17,12 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   for (const workload of WORKLOADS) {
     await clickButton(workload.label, false);
     let viewport = await waitForReadyViewport(technique, workload.id);
-    verifyCanvasNavigation(viewport, workload.id === 'off-axis-3d', workload.id === 'icon-grid');
+    verifyCanvasNavigation(
+      viewport,
+      workload.id !== 'zoom-text',
+      workload.id === 'off-axis-3d',
+      workload.id === 'icon-grid',
+    );
 
     if (technique === 'bitmap' && workload.id === 'text-ladder') {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true');
@@ -26,7 +32,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true');
     }
 
-    if (workload.id !== 'text-ladder') {
+    if (workload.id !== 'text-ladder' && workload.id !== 'zoom-text') {
       const revision = numericAttribute(viewport, 'data-configuration-revision');
       const sizeLabel = workload.id === 'icon-grid' ? 'Icon size' : 'Rendered size';
       assertRangeVisualTravel(rangeControl(sizeLabel));
@@ -38,6 +44,35 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
         String(renderedSize),
       );
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', revision);
+    }
+
+    if (workload.id === 'zoom-text') {
+      const displayedFixtures = [...document.querySelectorAll<HTMLElement>('[data-zoom-font-fixture]')];
+      if (
+        displayedFixtures.length === 0 ||
+        displayedFixtures.some((element) => element.dataset.zoomFontFixture !== 'inter') ||
+        viewport.dataset.fontFixture !== 'inter'
+      ) {
+        throw new Error(`${techniqueLabel(technique)} Zoom text exposed a font outside its authenticated Inter corpus`);
+      }
+      if (Math.abs(numericAttribute(viewport, 'data-zoom-base-css-px') - 8 * (96 / 72)) > 0.000_001) {
+        throw new Error(`${techniqueLabel(technique)} Zoom text did not preserve its 8 pt floor`);
+      }
+      if (numericAttribute(viewport, 'data-missing-glyph-count') !== 0) {
+        throw new Error(`${techniqueLabel(technique)} Zoom text published a missing glyph`);
+      }
+      const updateSamples = numericAttribute(viewport, 'data-text-update-sample-count');
+      const reflowCount = numericAttribute(viewport, 'data-reflow-count');
+      const phraseRevision = numericAttribute(viewport, 'data-zoom-phrase-revision');
+      const speed = setDifferentRange('Animation speed', 100);
+      await waitForAttribute(viewport, 'data-animation-speed', String(speed));
+      await waitForGreaterAttribute(viewport, 'data-zoom-phrase-revision', phraseRevision);
+      if (
+        numericAttribute(viewport, 'data-text-update-sample-count') !== updateSamples ||
+        numericAttribute(viewport, 'data-reflow-count') !== reflowCount
+      ) {
+        throw new Error(`${techniqueLabel(technique)} Zoom text reshaped or reflowed during retained scaling`);
+      }
     }
 
     if (workload.id === 'icon-grid') {
@@ -165,16 +200,28 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   }
 }
 
-function verifyCanvasNavigation(viewport: HTMLElement, zoomEnabled: boolean, clampedAtOrigin: boolean): void {
-  const canvas = viewport.querySelector<HTMLCanvasElement>('canvas[data-pan-enabled="true"]');
-  if (canvas === null || canvas.dataset.touchPan !== 'two-finger') {
-    throw new Error('Live workload canvas did not expose shared mouse and touch panning');
+function verifyCanvasNavigation(
+  viewport: HTMLElement,
+  panEnabled: boolean,
+  zoomEnabled: boolean,
+  clampedAtOrigin: boolean,
+): void {
+  const canvas = viewport.querySelector<HTMLCanvasElement>('canvas');
+  if (canvas === null || canvas.dataset.panEnabled !== String(panEnabled)) {
+    throw new Error('Live workload canvas exposed the wrong panning capability');
   }
-  canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 41, clientX: 20 }));
-  canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
-  canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
-  if (Number(canvas.dataset.panX) !== (clampedAtOrigin ? 0 : 15)) {
-    throw new Error('Mouse drag did not publish the applied live-canvas pan');
+  if (panEnabled) {
+    if (canvas.dataset.touchPan !== 'two-finger') {
+      throw new Error('Pannable live workload did not expose two-finger touch panning');
+    }
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 41, clientX: 20 }));
+    canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
+    canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
+    if (Number(canvas.dataset.panX) !== (clampedAtOrigin ? 0 : 15)) {
+      throw new Error('Mouse drag did not publish the applied live-canvas pan');
+    }
+  } else if (canvas.dataset.touchPan !== 'disabled') {
+    throw new Error('Centered live workload exposed touch panning');
   }
   if (canvas.dataset.zoomEnabled !== String(zoomEnabled)) {
     throw new Error('Live workload canvas exposed the wrong zoom capability');
@@ -282,7 +329,7 @@ if (getComputedStyle(benchmarkActivity).display === 'none') {
 }
 console.log('activity-lifecycle-ready');
 
-console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 6 }));
+console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 7 }));
 
 function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   const surface = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"]');

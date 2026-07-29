@@ -18,6 +18,10 @@ export type LiveWorkloadFontFixtures =
       readonly primary: BenchmarkFontFixture;
     }
   | {
+      readonly kind: 'zoom-text';
+      readonly primary: 'inter';
+    }
+  | {
       readonly kind: 'icon-grid';
       readonly primary: typeof ICON_GRID_FONT_FIXTURE;
       readonly labels: BenchmarkFontFixture;
@@ -89,9 +93,13 @@ export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string
 };
 
 export function liveWorkloadFontFixtures(workload: string, selected: BenchmarkFontFixture): LiveWorkloadFontFixtures {
-  return workload === 'icon-grid'
-    ? { kind: 'icon-grid', primary: ICON_GRID_FONT_FIXTURE, labels: selected }
-    : { kind: 'single', primary: selected };
+  if (workload === 'icon-grid') {
+    return { kind: 'icon-grid', primary: ICON_GRID_FONT_FIXTURE, labels: selected };
+  }
+  if (workload === 'zoom-text') {
+    return { kind: 'zoom-text', primary: 'inter' };
+  }
+  return { kind: 'single', primary: selected };
 }
 
 export function selectableFontFixture(value: string): SelectableFontFixture {

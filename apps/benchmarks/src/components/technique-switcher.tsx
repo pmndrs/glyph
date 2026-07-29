@@ -17,7 +17,7 @@ export function TechniqueSwitcher({
 }) {
   return (
     <div
-      className={`grid grid-cols-3 gap-1 ${presentation === 'main' ? 'rounded-md border border-border bg-background p-0.5' : 'h-9 rounded-lg border border-border/80 bg-chrome/80 p-0.5 shadow-xl backdrop-blur-md'} ${className}`}
+      className={`grid grid-cols-3 gap-1 ${presentation === 'main' ? 'rounded-md border border-border bg-background p-0.5' : 'h-8 rounded-lg border border-border/80 bg-black/70 p-0.5'} ${className}`}
       data-testid="technique-switcher"
     >
       {(['bitmap', 'mtsdf', 'slug'] as const).map((value) => (

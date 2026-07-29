@@ -167,7 +167,7 @@ function TelemetryChartPanel({
 }) {
   return (
     <div
-      className={`flex min-h-0 flex-col p-2 ${presentation === 'zen' ? 'bg-chrome/75' : 'bg-surface'}`}
+      className={`flex min-h-0 flex-col p-2 ${presentation === 'zen' ? 'bg-black/70' : 'bg-surface'}`}
       data-scale-maximum={scaleMaximum}
       data-testid={`sparkline-${id}`}
       data-tone={tone}

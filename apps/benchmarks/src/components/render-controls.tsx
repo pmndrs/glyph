@@ -74,6 +74,8 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
           : 'Slug evaluates the source outlines analytically across the rendered-size range.';
     case 'text-ladder':
       return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.';
+    case 'zoom-text':
+      return 'Centered translations of “Shape” cycle while scaling from 8 pt to the largest size the viewport fits.';
     case 'icon-grid':
       return 'Scale and pan a labeled Font Awesome icon grid rendered through the selected technique.';
     case 'off-axis-3d':
@@ -235,6 +237,16 @@ export function Controls({
                 {BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}
               </div>
             </div>
+          ) : workload === 'zoom-text' ? (
+            <div className="grid gap-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
+              <div
+                className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+                data-zoom-font-fixture="inter"
+              >
+                {BENCHMARK_FONT_LABELS.inter}
+              </div>
+            </div>
           ) : (
             <SelectField
               label="Font fixture"
@@ -369,7 +381,7 @@ export function Controls({
           <p className="eyebrow">Live workload</p>
           {workload === 'text-ladder' ? (
             <p className="font-mono text-[9px] uppercase text-muted">Rendered range · 8–512 CSS px</p>
-          ) : (
+          ) : workload !== 'zoom-text' ? (
             <Field
               label={`${workload === 'icon-grid' ? 'Icon size' : 'Rendered size'} · ${fontSize} CSS px`}
               max={workload === 'icon-grid' ? 1_024 : 96}
@@ -381,7 +393,7 @@ export function Controls({
               {...(workload === 'icon-grid' ? { onRangeValueChange: onFontSize } : {})}
               onChange={workload === 'icon-grid' ? undefined : (event) => onFontSize(event.currentTarget.valueAsNumber)}
             />
-          )}
+          ) : null}
           {workloadHasLayoutWidth(workload) && (
             <Field
               label={`Layout width · ${layoutWidthPercent}%`}
@@ -404,7 +416,7 @@ export function Controls({
               onChange={(event) => onWorkloadAmount(event.currentTarget.valueAsNumber)}
             />
           )}
-          {(workload === 'dynamic-layout' || workload === 'paint-effects') && (
+          {(workload === 'dynamic-layout' || workload === 'paint-effects' || workload === 'zoom-text') && (
             <>
               <Toggle checked={animationEnabled} label="Animate" onChange={onAnimationEnabled} />
               <Field

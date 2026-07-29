@@ -48,7 +48,7 @@ export function ZenLayout({
   return (
     <div className="pointer-events-none absolute inset-0 z-20" data-testid="zen-layout">
       <header className="pointer-events-none absolute left-0 top-0 z-30 p-3 sm:p-4">
-        <div className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-2">
+        <div className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-1.5">
           {techniqueControl}
           <ZenSelect ariaLabel="Live workload" options={workloadOptions} value={workloadValue} onChange={onWorkload} />
           <ZenSelect ariaLabel="Font fixture" options={fontOptions} value={fontValue} onChange={onFont} />
@@ -56,13 +56,13 @@ export function ZenLayout({
       </header>
 
       <aside className="pointer-events-none absolute right-3 top-32 z-20 flex w-[min(18rem,calc(100vw-1.5rem))] flex-col gap-2 sm:right-4 sm:top-4">
-        <div className="pointer-events-auto grid h-36 grid-rows-3 gap-px overflow-hidden rounded-xl border border-border/80 bg-border/70 shadow-2xl backdrop-blur-md sm:h-40">
+        <div className="pointer-events-auto grid h-36 grid-rows-3 gap-px overflow-hidden rounded-xl border border-border/80 bg-border/70 sm:h-40">
           {telemetry}
         </div>
-        <div className="pointer-events-auto overflow-hidden rounded-xl border border-border/80 bg-chrome/80 shadow-2xl backdrop-blur-md">
+        <div className="pointer-events-auto overflow-hidden rounded-xl border border-border/80 bg-black/70">
           <button
             aria-expanded={controlsOpen}
-            className="flex min-h-10 w-full items-center justify-between gap-3 px-3 text-left text-xs font-medium text-foreground hover:bg-surface/80"
+            className="flex min-h-8 w-full items-center justify-between gap-3 px-2.5 text-left text-[10px] font-medium text-foreground hover:bg-surface/80"
             type="button"
             onClick={() => setControlsOpen((open) => !open)}
           >
@@ -103,10 +103,10 @@ function ZenSelect({
   readonly onChange: (value: string) => void;
 }) {
   return (
-    <div className="relative max-w-[min(14rem,40vw)]">
+    <div className="relative max-w-[min(11rem,32vw)]">
       <select
         aria-label={ariaLabel}
-        className="h-9 w-full cursor-pointer appearance-none rounded-lg border border-border/80 bg-chrome/80 px-3 pr-8 text-xs text-foreground shadow-xl backdrop-blur-md hover:border-accent focus:border-accent focus:outline-none"
+        className="h-8 w-full cursor-pointer appearance-none rounded-lg border border-border/80 bg-black/70 px-2.5 pr-7 text-[10px] text-foreground hover:border-accent focus:border-accent focus:outline-none"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
       >
@@ -118,7 +118,7 @@ function ZenSelect({
       </select>
       <svg
         aria-hidden="true"
-        className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted"
+        className="pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-muted"
         fill="none"
         viewBox="0 0 16 16"
       >

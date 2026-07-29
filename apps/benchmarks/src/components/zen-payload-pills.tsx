@@ -13,7 +13,7 @@ export function ZenPayloadPills({ summary }: { readonly summary: PayloadSummary 
 
 function ZenPayloadPill({ metric }: { readonly metric: PayloadSummaryMetric }) {
   return (
-    <div className="rounded-full border border-border/80 bg-chrome/80 px-3 py-1.5 font-mono text-[9px] uppercase tracking-wide text-muted shadow-xl backdrop-blur-md">
+    <div className="rounded-full border border-border/80 bg-black/70 px-2.5 py-1 font-mono text-[8px] uppercase tracking-wide text-muted">
       {metric.label} <span className="ml-1 text-foreground">{formatPayloadMetric(metric)}</span>
     </div>
   );

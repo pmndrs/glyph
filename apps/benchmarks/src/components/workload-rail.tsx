@@ -43,6 +43,12 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
+    id: 'zoom-text',
+    label: 'Zoom text',
+    description: 'Cycles through translations of “Shape” while scaling from 8 pt to the largest size that fits.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+  },
+  {
     id: 'icon-grid',
     label: 'Icon grid',
     description: 'Tests a labeled icon font across scale, movement, and raster techniques.',
@@ -115,6 +121,7 @@ function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload
 function isComparisonWorkload(workload: string): boolean {
   return (
     workload === 'text-ladder' ||
+    workload === 'zoom-text' ||
     workload === 'icon-grid' ||
     workload === 'off-axis-3d' ||
     workload === 'dynamic-layout' ||
@@ -185,7 +192,12 @@ export function WorkloadRail({
   readonly onTechnique: (technique: RasterTechnique) => void;
 }) {
   const workloads = workloadsFor(location.mode);
-  const displayedFontFixture = location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture;
+  const displayedFontFixture =
+    location.workload === 'icon-grid'
+      ? ICON_GRID_FONT_FIXTURE
+      : location.workload === 'zoom-text'
+        ? 'inter'
+        : activeFontFixture;
   const selectedMtsdfFixture = location.technique === 'mtsdf' ? mtsdfFixtureFor(displayedFontFixture) : undefined;
   const selectedSlugFixture = location.technique === 'slug' ? slugFixtureFor(displayedFontFixture) : undefined;
   const rasterDescription =
@@ -239,6 +251,11 @@ export function WorkloadRail({
           >
             <span className="block text-xs">{BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}</span>
             <span className="mt-1 block font-mono text-[8px] text-dim">1,402 packed solid icons</span>
+          </div>
+        ) : location.workload === 'zoom-text' ? (
+          <div className="rounded-md border border-accent bg-surface-active px-3 py-2" data-zoom-font-fixture="inter">
+            <span className="block text-xs">{BENCHMARK_FONT_LABELS.inter}</span>
+            <span className="mt-1 block font-mono text-[8px] text-dim">Fixed multilingual zoom fixture</span>
           </div>
         ) : location.workload === 'advanced-shaping' ? (
           <div className="grid gap-1">

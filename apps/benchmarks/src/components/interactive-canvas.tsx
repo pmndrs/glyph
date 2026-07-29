@@ -22,12 +22,14 @@ export function InteractiveCanvas({
   canvasRef,
   className,
   controllerRef,
+  pan: panEnabled = true,
   zoom = false,
 }: {
   readonly label: string;
   readonly canvasRef: RefObject<HTMLCanvasElement | null>;
   readonly className?: string;
   readonly controllerRef: RefObject<CanvasViewController | undefined>;
+  readonly pan?: boolean;
   readonly zoom?: boolean;
 }) {
   const pointers = useRef(new Map<number, PointerPosition>());
@@ -84,6 +86,7 @@ export function InteractiveCanvas({
   }
 
   function beginPointer(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (!panEnabled && !zoom) return;
     if (event.pointerType !== 'touch' && event.button !== 0) return;
     if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -98,7 +101,7 @@ export function InteractiveCanvas({
     gesture.current = next;
     if (previous === undefined || next === undefined) return;
     const touchMayPan = event.pointerType !== 'touch' || pointers.current.size >= 2;
-    if (touchMayPan) {
+    if (panEnabled && touchMayPan) {
       pan(event.currentTarget, next.centerX - previous.centerX, next.centerY - previous.centerY);
     }
     if (zoom && previous.distance !== undefined && next.distance !== undefined && previous.distance > 0) {
@@ -128,12 +131,12 @@ export function InteractiveCanvas({
   return (
     <canvas
       aria-label={label}
-      className={`absolute inset-0 size-full cursor-grab touch-none bg-background active:cursor-grabbing ${className ?? ''}`}
+      className={`absolute inset-0 size-full touch-none bg-background ${panEnabled ? 'cursor-grab active:cursor-grabbing' : ''} ${className ?? ''}`}
       style={{ backgroundColor: '#070709' }}
-      data-pan-enabled="true"
+      data-pan-enabled={String(panEnabled)}
       data-pan-x="0"
       data-pan-y="0"
-      data-touch-pan="two-finger"
+      data-touch-pan={panEnabled ? 'two-finger' : 'disabled'}
       data-zoom="1"
       data-zoom-enabled={String(zoom)}
       ref={canvasRef}

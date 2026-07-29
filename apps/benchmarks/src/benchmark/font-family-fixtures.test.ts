@@ -124,4 +124,11 @@ describe('human-selectable font fixtures', () => {
       primary: 'source-serif-4',
     });
   });
+
+  it('keeps the zoom-text workload on its authored Inter fixture', () => {
+    expect(liveWorkloadFontFixtures('zoom-text', 'source-serif-4')).toEqual({
+      kind: 'zoom-text',
+      primary: 'inter',
+    });
+  });
 });

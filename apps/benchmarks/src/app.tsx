@@ -144,6 +144,7 @@ function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' 
 function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefined {
   switch (workload) {
     case 'text-ladder':
+    case 'zoom-text':
     case 'icon-grid':
     case 'off-axis-3d':
     case 'dynamic-layout':
@@ -195,6 +196,8 @@ function liveWorkloadSceneDescription(
       return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`;
     case 'text-ladder':
       return 'Tests one sentence at every size from 8 through 512 pixels.';
+    case 'zoom-text':
+      return 'Tests retained center scaling from 8 pt to viewport fit while authenticated Inter translations of “Shape” cycle by language.';
     case 'icon-grid':
       return 'Tests a virtualized grid spanning all 1,402 named Font Awesome Solid icons with fixed font-rendered labels.';
     case 'off-axis-3d':
@@ -289,7 +292,11 @@ function Harness() {
   const workloadTechnique = workload.techniques[location.technique];
   const showcaseFrame = advancedShapingFrame(showcaseState);
   const activeFontFixture: BenchmarkFontFixture =
-    location.workload === 'advanced-shaping' ? advancedFontFixture : fontFixture;
+    location.workload === 'advanced-shaping'
+      ? advancedFontFixture
+      : location.workload === 'zoom-text'
+        ? 'inter'
+        : fontFixture;
   const available = workloadTechnique.kind === 'ready';
   const backendAvailable = location.backend !== 'webgpu' || environment.webgpu;
   const zen = location.layout === 'zen' && location.mode === 'benchmark';
@@ -594,9 +601,11 @@ function Harness() {
   const zenFontOptions = zen
     ? location.workload === 'icon-grid'
       ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
-      : location.workload === 'advanced-shaping'
-        ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
-        : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
+      : location.workload === 'zoom-text'
+        ? [{ label: BENCHMARK_FONT_LABELS.inter, value: 'inter' }]
+        : location.workload === 'advanced-shaping'
+          ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
+          : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
     : [];
   const zenPayload = zen
     ? createPayloadSummary({
@@ -750,11 +759,17 @@ function Harness() {
         <ZenLayout
           controls={controls}
           fontOptions={zenFontOptions}
-          fontValue={location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture}
+          fontValue={
+            location.workload === 'icon-grid'
+              ? ICON_GRID_FONT_FIXTURE
+              : location.workload === 'zoom-text'
+                ? 'inter'
+                : activeFontFixture
+          }
           payload={<ZenPayloadPills summary={zenPayload} />}
           techniqueControl={
             <TechniqueSwitcher
-              className="w-52"
+              className="w-44"
               presentation="zen"
               technique={location.technique}
               onTechnique={selectTechnique}
@@ -769,7 +784,7 @@ function Harness() {
           workloadValue={location.workload}
           onExit={() => setLocation({ layout: 'main' })}
           onFont={(value) => {
-            if (location.workload === 'icon-grid') return;
+            if (location.workload === 'icon-grid' || location.workload === 'zoom-text') return;
             if (location.workload === 'advanced-shaping') {
               setAdvancedFontFixture(value as BenchmarkFontFixture);
               invalidateLiveCapture();
@@ -972,7 +987,7 @@ function Scene({
         <div
           className={
             presentation === 'zen'
-              ? 'absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger/50 bg-background/90 p-3 text-xs text-danger shadow-xl backdrop-blur'
+              ? 'absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger/50 bg-black/80 p-3 text-xs text-danger'
               : 'rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger'
           }
         >
@@ -2932,9 +2947,11 @@ function ComparisonWorkloadViewport({
   const rangeLabel =
     workload === 'text-ladder'
       ? '8–512 CSS PX'
-      : workload === 'icon-grid'
-        ? `${fontSize} CSS PX ICONS`
-        : `${fontSize} CSS PX`;
+      : workload === 'zoom-text'
+        ? '8 PT · 10.67 CSS PX → VIEWPORT FIT'
+        : workload === 'icon-grid'
+          ? `${fontSize} CSS PX ICONS`
+          : `${fontSize} CSS PX`;
   return (
     <div
       className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
@@ -3014,24 +3031,34 @@ function ComparisonWorkloadViewport({
       data-source-text-length={stats?.sourceTextLength}
       data-submit-history-length={stats?.submitHistoryLength}
       data-text-ready-ms={stats?.textReadyMs}
+      data-text-update-sample-count={stats?.textUpdateTimings.sampleCount}
       data-technique={technique}
       data-testid="comparison-live-viewport"
       data-total-gpu-bytes={stats?.totalGpuBytes}
       data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-workload={stats?.workload}
+      data-zoom-text={stats?.workload === 'zoom-text' ? stats.zoomText : undefined}
+      data-zoom-language={stats?.workload === 'zoom-text' ? stats.zoomLanguage : undefined}
+      data-zoom-phrase-index={stats?.workload === 'zoom-text' ? stats.zoomPhraseIndex : undefined}
+      data-zoom-phrase-revision={stats?.workload === 'zoom-text' ? stats.zoomPhraseRevision : undefined}
+      data-zoom-base-css-px={stats?.workload === 'zoom-text' ? stats.zoomBaseCssPx : undefined}
+      data-zoom-effective-css-px={stats?.workload === 'zoom-text' ? stats.zoomEffectiveCssPx : undefined}
+      data-zoom-maximum-css-px={stats?.workload === 'zoom-text' ? stats.zoomMaximumCssPx : undefined}
+      data-zoom-scale={stats?.workload === 'zoom-text' ? stats.zoomScale : undefined}
+      data-zoom-maximum-scale={stats?.workload === 'zoom-text' ? stats.zoomMaximumScale : undefined}
       data-workload-amount={
         stats === undefined || workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
           ? undefined
           : stats.appliedAmount
       }
       data-animation-enabled={
-        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects'
+        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects' || stats?.workload === 'zoom-text'
           ? String(stats.appliedAnimationEnabled)
           : undefined
       }
       data-animation-speed={
-        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects'
+        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects' || stats?.workload === 'zoom-text'
           ? stats.appliedAnimationSpeed
           : undefined
       }
@@ -3041,6 +3068,7 @@ function ComparisonWorkloadViewport({
         label={`Live ${techniqueLabel(technique)} ${workload} benchmark using ${backend}`}
         canvasRef={canvasRef}
         controllerRef={previewRef}
+        pan={workload !== 'zoom-text'}
         zoom={workload === 'off-axis-3d'}
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
@@ -3059,7 +3087,8 @@ function ComparisonWorkloadViewport({
           · {rangeLabel}
         </span>
         <span>
-          {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : 'PAN'} · {dpr}× DPR
+          {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} ·{' '}
+          {dpr}× DPR
         </span>
       </div>
       {(publishedStats === undefined || bakeProgressActive) && error === undefined && (

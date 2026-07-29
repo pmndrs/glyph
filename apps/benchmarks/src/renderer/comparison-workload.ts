@@ -36,6 +36,7 @@ import {
 
 export type ComparisonWorkloadId =
   | 'text-ladder'
+  | 'zoom-text'
   | 'icon-grid'
   | 'off-axis-3d'
   | 'dynamic-layout'
@@ -79,6 +80,15 @@ export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats 
   readonly iconScrollY: number;
   readonly iconMaximumScrollX: number;
   readonly iconMaximumScrollY: number;
+  readonly zoomText: string | undefined;
+  readonly zoomLanguage: string | undefined;
+  readonly zoomPhraseIndex: number;
+  readonly zoomPhraseRevision: number;
+  readonly zoomBaseCssPx: number;
+  readonly zoomEffectiveCssPx: number;
+  readonly zoomMaximumCssPx: number;
+  readonly zoomScale: number;
+  readonly zoomMaximumScale: number;
 };
 
 export interface ComparisonWorkloadConfiguration {
@@ -124,6 +134,10 @@ interface WorkloadEntry {
   paintShadowOffset?: readonly [number, number];
   lastWidth?: number;
   reflowPending?: boolean;
+  zoomLanguage?: string;
+  zoomMaximumScale?: number;
+  zoomPhraseIndex?: number;
+  zoomPhraseRevision?: number;
 }
 
 interface LoadedTechniqueFont {
@@ -151,6 +165,22 @@ const LADDER_CSS_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128
 const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.';
 const LADDER_GAP_CSS_PX = 10;
 const LADDER_INSET_CSS_PX = 20;
+export const ZOOM_TEXT_BASE_CSS_PX = 8 * (96 / 72);
+const ZOOM_TEXT_INSET_CSS_PX = 24;
+const ZOOM_TEXT_CYCLES_PER_MS = 1 / 5_000;
+export const ZOOM_TEXT_PHRASES = [
+  { language: 'en', text: 'Shape' },
+  { language: 'fr', text: 'Forme' },
+  { language: 'es', text: 'Forma' },
+  { language: 'de', text: 'Form' },
+  { language: 'pt', text: 'Forma' },
+  { language: 'pl', text: 'Kształt' },
+  { language: 'tr', text: 'Şekil' },
+  { language: 'el', text: 'Σχήμα' },
+  { language: 'ru', text: 'Форма' },
+  { language: 'uk', text: 'Форма' },
+  { language: 'vi', text: 'Hình dạng' },
+] as const;
 const ICON_GRID_LABEL_SIZE = 11;
 const ICON_GRID_LABEL_WIDTH = 112;
 const ICON_GRID_INSET = 24;
@@ -503,6 +533,13 @@ export async function createComparisonWorkloadPreview(options: {
 
     async function applyConfiguration(next: ComparisonWorkloadConfiguration, viewportChanged: boolean): Promise<void> {
       canvasSurface.setGridVisible(next.showGrid);
+      if (next.workload === 'zoom-text' && viewportChanged) {
+        configuration = next;
+        revision += 1;
+        layoutZoomTextEntries(entries, width, height);
+        applyRetainedConfiguration(entries, technique, configuration);
+        return;
+      }
       if (next.workload === 'icon-grid' && (viewportChanged || next.fontSize !== configuration.fontSize)) {
         await iconWindowDrain;
         clampIconGridScene(scene, next.fontSize, width, height);
@@ -622,6 +659,10 @@ export async function createComparisonWorkloadPreview(options: {
         if (snapshot === undefined) return;
         const activeEntries = entries.filter(({ node }) => node.visible);
         const layouts = activeEntries.flatMap(entryLayouts);
+        const activeZoomEntry = configuration.workload === 'zoom-text' ? activeEntries[0] : undefined;
+        const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
+        const effectiveCssFontSize =
+          configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const common = {
           backend,
@@ -631,8 +672,8 @@ export async function createComparisonWorkloadPreview(options: {
           glyphCount: activeEntries.reduce((total, entry) => total + renderedGlyphCount(entry.node), 0),
           missingGlyphCount: layouts.reduce((total, layout) => total + missingGlyphCount(layout), 0),
           drawCount: activeEntries.reduce((total, entry) => total + drawCount(entry.node), 0),
-          layoutWidth: layouts.reduce((maximum, layout) => Math.max(maximum, layout.width), 0),
-          layoutHeight: layouts.reduce((total, layout) => total + layout.height, 0),
+          layoutWidth: layouts.reduce((maximum, layout) => Math.max(maximum, layout.width * zoomScale), 0),
+          layoutHeight: layouts.reduce((total, layout) => total + layout.height * zoomScale, 0),
           lineCount: layouts.reduce((total, layout) => total + layout.lineGlyphCounts.length, 0),
           atlasGpuBytes: sumLoadedFonts(loadedFonts, ({ atlasGpuBytes }) => atlasGpuBytes),
           framebufferGpuBytes,
@@ -658,7 +699,7 @@ export async function createComparisonWorkloadPreview(options: {
           appliedAmount: configuration.amount,
           appliedAnimationEnabled: configuration.animationEnabled,
           appliedAnimationSpeed: configuration.animationSpeed,
-          appliedFontSize: configuration.fontSize,
+          appliedFontSize: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : configuration.fontSize,
           appliedLayoutWidthRatio: configuration.layoutWidthRatio,
           appliedPaintOpacity: configuration.paintOpacity,
           appliedPaintShadowEnabled: technique === 'mtsdf' && configuration.paintShadowEnabled,
@@ -669,6 +710,18 @@ export async function createComparisonWorkloadPreview(options: {
           paintRevision: entries.reduce((maximum, entry) => Math.max(maximum, entry.paintRevision ?? 0), 0),
           lastPaintUpdateMs: entries.reduce((maximum, entry) => Math.max(maximum, entry.lastPaintUpdateMs ?? 0), 0),
           sourceTextLength: activeEntries.reduce((total, entry) => total + entry.sourceText.length, 0),
+          zoomText: activeZoomEntry?.sourceText,
+          zoomLanguage: activeZoomEntry?.zoomLanguage,
+          zoomPhraseIndex: activeZoomEntry?.zoomPhraseIndex ?? -1,
+          zoomPhraseRevision: activeZoomEntry?.zoomPhraseRevision ?? 0,
+          zoomBaseCssPx: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : 0,
+          zoomEffectiveCssPx: configuration.workload === 'zoom-text' ? effectiveCssFontSize : 0,
+          zoomMaximumCssPx:
+            configuration.workload === 'zoom-text'
+              ? ZOOM_TEXT_BASE_CSS_PX * (activeZoomEntry?.zoomMaximumScale ?? 1)
+              : 0,
+          zoomScale: configuration.workload === 'zoom-text' ? zoomScale : 0,
+          zoomMaximumScale: configuration.workload === 'zoom-text' ? (activeZoomEntry?.zoomMaximumScale ?? 1) : 0,
           ...iconGridStats(
             configuration,
             width,
@@ -685,16 +738,16 @@ export async function createComparisonWorkloadPreview(options: {
         if (technique === 'bitmap') {
           const strikePpem = selectBitmapStrikePpem(
             statsFont.bitmapStrikes,
-            configuration.fontSize,
+            configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : configuration.fontSize,
             rendererViewport.pixelRatio,
           );
           onStats({
             technique,
             ...common,
             strikePpem,
-            cssFontSize: configuration.fontSize,
-            renderedPpem: configuration.fontSize * rendererViewport.pixelRatio,
-            scaleRatio: (configuration.fontSize * rendererViewport.pixelRatio) / strikePpem,
+            cssFontSize: effectiveCssFontSize,
+            renderedPpem: effectiveCssFontSize * rendererViewport.pixelRatio,
+            scaleRatio: (effectiveCssFontSize * rendererViewport.pixelRatio) / strikePpem,
             atlasPages: combineBitmapAtlasPages(loadedFonts),
           });
         } else if (technique === 'mtsdf') {
@@ -702,7 +755,7 @@ export async function createComparisonWorkloadPreview(options: {
           if (mtsdfConfiguration === undefined) {
             throw new Error('MTSDF workload is missing its registered raster configuration');
           }
-          const renderedPpem = configuration.fontSize * rendererViewport.pixelRatio;
+          const renderedPpem = effectiveCssFontSize * rendererViewport.pixelRatio;
           onStats({
             technique,
             ...common,
@@ -722,7 +775,7 @@ export async function createComparisonWorkloadPreview(options: {
           if (slugConfiguration === undefined) {
             throw new Error('Slug workload is missing its registered raster configuration');
           }
-          const renderedPpem = configuration.fontSize * rendererViewport.pixelRatio;
+          const renderedPpem = effectiveCssFontSize * rendererViewport.pixelRatio;
           onStats({
             technique,
             ...common,
@@ -866,6 +919,29 @@ function createEntries(
         color: LIVE_TEXT_COLOR,
       });
       return textEntry('primary', text, content);
+    });
+  }
+  if (configuration.workload === 'zoom-text') {
+    return ZOOM_TEXT_PHRASES.map((phrase, zoomPhraseIndex) => {
+      const text = new Text({
+        ...base,
+        text: phrase.text,
+        fontSize: ZOOM_TEXT_BASE_CSS_PX,
+        language: phrase.language,
+        direction: 'ltr',
+        color: LIVE_TEXT_COLOR,
+      });
+      const node = new THREE.Group();
+      node.add(text);
+      node.visible = zoomPhraseIndex === 0;
+      return {
+        ...textEntry('primary', text, phrase.text),
+        node,
+        zoomLanguage: phrase.language,
+        zoomMaximumScale: 1,
+        zoomPhraseIndex,
+        zoomPhraseRevision: 0,
+      };
     });
   }
   if (configuration.workload === 'icon-grid') {
@@ -1085,6 +1161,10 @@ function layoutEntries(
     }
     return;
   }
+  if (configuration.workload === 'zoom-text') {
+    layoutZoomTextEntries(entries, width, height);
+    return;
+  }
   if (configuration.workload === 'icon-grid') {
     const grid = iconGridLayout(ICON_GRID_ITEMS.length, configuration.fontSize, width);
     for (const entry of entries) {
@@ -1116,6 +1196,53 @@ function layoutEntries(
   }
 }
 
+function layoutZoomTextEntries(entries: readonly WorkloadEntry[], viewportWidth: number, viewportHeight: number): void {
+  for (const entry of entries) {
+    const layout = committedLayout(entry.text);
+    entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
+    entry.node.position.set(viewportWidth / 2, -viewportHeight / 2, 0);
+    entry.node.scale.setScalar(1);
+    entry.zoomMaximumScale = zoomTextMaximumScale(layout.width, layout.height, viewportWidth, viewportHeight);
+  }
+}
+
+export function zoomTextMaximumScale(
+  layoutWidth: number,
+  layoutHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): number {
+  positive(layoutWidth, 'zoom text layout width');
+  positive(layoutHeight, 'zoom text layout height');
+  positive(viewportWidth, 'zoom text viewport width');
+  positive(viewportHeight, 'zoom text viewport height');
+  const availableWidth = Math.max(1, viewportWidth - ZOOM_TEXT_INSET_CSS_PX * 2);
+  const availableHeight = Math.max(1, viewportHeight - ZOOM_TEXT_INSET_CSS_PX * 2);
+  return Math.max(1, Math.min(availableWidth / layoutWidth, availableHeight / layoutHeight));
+}
+
+export function zoomTextAnimationState(
+  elapsedMs: number,
+  animationSpeed: number,
+  phraseCount: number = ZOOM_TEXT_PHRASES.length,
+): { readonly phraseIndex: number; readonly phraseRevision: number; readonly progress: number } {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) throw new RangeError('zoom text elapsed time must be nonnegative');
+  if (!Number.isSafeInteger(phraseCount) || phraseCount <= 0) {
+    throw new RangeError('zoom text phrase count must be a positive safe integer');
+  }
+  if (!Number.isFinite(animationSpeed) || animationSpeed < 0 || animationSpeed > 100) {
+    throw new RangeError('zoom text animation speed must be in [0, 100]');
+  }
+  const cycle = elapsedMs * ZOOM_TEXT_CYCLES_PER_MS * animationRate({ animationSpeed });
+  const phraseRevision = Math.floor(cycle);
+  const phase = cycle - phraseRevision;
+  return {
+    phraseIndex: phraseRevision % phraseCount,
+    phraseRevision,
+    progress: (1 - Math.cos(phase * Math.PI * 2)) / 2,
+  };
+}
+
 function iconGridContent(iconIndex: number): {
   readonly content: string;
   readonly glyph: string;
@@ -1141,6 +1268,10 @@ function animateEntries(
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
+  if (configuration.workload === 'zoom-text') {
+    animateZoomText(entries, configuration, timestamp);
+    return;
+  }
   if (configuration.workload === 'paint-effects') {
     animatePaint(entries, configuration, timestamp);
     return;
@@ -1160,6 +1291,23 @@ function animateEntries(
     Math.sin(phase * 0.47) * 0.06 * strength,
   );
   entry.node.position.z = -(130 + Math.sin(phase * 0.61) * 70) * strength;
+}
+
+function animateZoomText(
+  entries: readonly WorkloadEntry[],
+  configuration: ComparisonWorkloadConfiguration,
+  timestamp: number,
+): void {
+  if (!configuration.animationEnabled) return;
+  const state = zoomTextAnimationState(timestamp, configuration.animationSpeed, entries.length);
+  for (const entry of entries) {
+    const visible = entry.zoomPhraseIndex === state.phraseIndex;
+    entry.node.visible = visible;
+    if (!visible) continue;
+    const maximumScale = entry.zoomMaximumScale ?? 1;
+    entry.node.scale.setScalar(1 + (maximumScale - 1) * state.progress);
+    entry.zoomPhraseRevision = state.phraseRevision;
+  }
 }
 
 function animatePaint(
@@ -1218,8 +1366,10 @@ export function comparisonWorkloadUpdateKind(
   viewportChanged = false,
 ): 'rebuild' | 'retained' {
   const paragraphVolumeChanged = next.workload === 'paragraph-stress' && previous.amount !== next.amount;
-  const fontSizeRebuild = previous.fontSize !== next.fontSize && next.workload !== 'icon-grid';
-  return viewportChanged ||
+  const fontSizeRebuild =
+    previous.fontSize !== next.fontSize && next.workload !== 'icon-grid' && next.workload !== 'zoom-text';
+  const viewportRebuild = viewportChanged && next.workload !== 'zoom-text';
+  return viewportRebuild ||
     fontSizeRebuild ||
     previous.layoutWidthRatio !== next.layoutWidthRatio ||
     paragraphVolumeChanged

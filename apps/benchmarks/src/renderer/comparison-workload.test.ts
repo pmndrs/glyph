@@ -9,6 +9,10 @@ import {
   iconGridViewportUpdateKind,
   ladderCssSizes,
   paintWordHue,
+  ZOOM_TEXT_BASE_CSS_PX,
+  ZOOM_TEXT_PHRASES,
+  zoomTextAnimationState,
+  zoomTextMaximumScale,
   type ComparisonWorkloadConfiguration,
 } from './comparison-workload';
 
@@ -71,6 +75,77 @@ describe('comparison workload updates', () => {
     } satisfies ComparisonWorkloadConfiguration;
 
     expect(comparisonWorkloadUpdateKind(iconGrid, { ...iconGrid, fontSize: 1_024 })).toBe('retained');
+  });
+
+  it('keeps Zoom text controls and viewport fitting on retained nodes', () => {
+    const zoomText = {
+      ...baseConfiguration,
+      workload: 'zoom-text',
+    } satisfies ComparisonWorkloadConfiguration;
+
+    expect(comparisonWorkloadUpdateKind(zoomText, { ...zoomText, animationSpeed: 80 })).toBe('retained');
+    expect(comparisonWorkloadUpdateKind(zoomText, { ...zoomText, fontSize: 48 })).toBe('retained');
+    expect(comparisonWorkloadUpdateKind(zoomText, zoomText, true)).toBe('retained');
+  });
+});
+
+describe('Zoom text scale and language cycle', () => {
+  it('retains the reviewed multilingual Shape corpus', () => {
+    expect(ZOOM_TEXT_PHRASES).toEqual([
+      { language: 'en', text: 'Shape' },
+      { language: 'fr', text: 'Forme' },
+      { language: 'es', text: 'Forma' },
+      { language: 'de', text: 'Form' },
+      { language: 'pt', text: 'Forma' },
+      { language: 'pl', text: 'Kształt' },
+      { language: 'tr', text: 'Şekil' },
+      { language: 'el', text: 'Σχήμα' },
+      { language: 'ru', text: 'Форма' },
+      { language: 'uk', text: 'Форма' },
+      { language: 'vi', text: 'Hình dạng' },
+    ]);
+  });
+
+  it('converts the 8 point floor to CSS pixels exactly', () => {
+    expect(ZOOM_TEXT_BASE_CSS_PX).toBeCloseTo(10.666_666_666_7);
+  });
+
+  it('fits each committed word inside both viewport axes', () => {
+    expect(zoomTextMaximumScale(100, 20, 1_000, 500)).toBeCloseTo(9.52);
+    expect(zoomTextMaximumScale(100, 100, 300, 900)).toBeCloseTo(2.52);
+    expect(zoomTextMaximumScale(500, 200, 200, 100)).toBe(1);
+  });
+
+  it('changes phrase only at the minimum-scale boundary', () => {
+    const start = zoomTextAnimationState(0, 50, 3);
+    const maximum = zoomTextAnimationState(2_222.222_222, 50, 3);
+    const next = zoomTextAnimationState(4_444.444_445, 50, 3);
+
+    expect(start).toEqual({ phraseIndex: 0, phraseRevision: 0, progress: 0 });
+    expect(maximum.phraseIndex).toBe(0);
+    expect(maximum.progress).toBeCloseTo(1);
+    expect(next.phraseIndex).toBe(1);
+    expect(next.progress).toBeCloseTo(0);
+  });
+
+  it('eases retained scale with a cosine curve', () => {
+    const oneEighth = zoomTextAnimationState(312.5, 100, 1);
+    const oneQuarter = zoomTextAnimationState(625, 100, 1);
+
+    expect(oneEighth.progress).toBeCloseTo((1 - Math.cos(Math.PI / 4)) / 2);
+    expect(oneEighth.progress).toBeGreaterThan(0.125);
+    expect(oneQuarter.progress).toBeCloseTo(0.5);
+  });
+
+  it('keeps every authenticated Inter phrase explicitly tagged', () => {
+    expect(new Set(ZOOM_TEXT_PHRASES.map(({ language }) => language)).size).toBe(ZOOM_TEXT_PHRASES.length);
+    expect(ZOOM_TEXT_PHRASES.every(({ text }) => text.length > 0)).toBe(true);
+  });
+
+  it('rejects invalid fit and animation inputs', () => {
+    expect(() => zoomTextMaximumScale(0, 20, 100, 100)).toThrow('zoom text layout width must be positive');
+    expect(() => zoomTextAnimationState(-1, 50)).toThrow('zoom text elapsed time must be nonnegative');
+    expect(() => zoomTextAnimationState(0, 101)).toThrow('zoom text animation speed must be in [0, 100]');
   });
 });
 

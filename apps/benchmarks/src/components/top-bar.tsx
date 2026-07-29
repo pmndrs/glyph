@@ -101,11 +101,20 @@ export function TopBar({
         {mode === 'benchmark' && (
           <Button
             aria-label="Enter Zen Mode"
-            className="px-2 text-[10px] sm:px-3"
+            className="size-8 p-0"
+            title="Enter Zen Mode"
             variant="secondary"
             onClick={onZenMode}
           >
-            Zen
+            <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 16 16">
+              <path
+                d="M6 2H2v4M10 2h4v4M14 10v4h-4M6 14H2v-4"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+              />
+            </svg>
           </Button>
         )}
         <Button

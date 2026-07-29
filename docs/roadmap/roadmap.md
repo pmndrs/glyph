@@ -681,6 +681,7 @@ Milestone 9 is closed. Additional Slug optimization hypotheses are future measur
 Deliver:
 
 - one paragraph rendered through bitmap, MSDF, and Slug without reshaping or remeasurement;
+- one fixed-Inter multilingual zoom workload that pre-shapes its language-tagged corpus once, then scales retained Bitmap, MTSDF, and Slug nodes from 8 pt to a responsive viewport-fit bound without animation-time layout;
 - explicit raster-selection API and failure behavior;
 - documented technique recommendations backed by the benchmark corpus;
 - validator, runtime, fixture, and inspector GPU accounting that agrees on the
