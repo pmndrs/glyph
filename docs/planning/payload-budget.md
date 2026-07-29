@@ -174,7 +174,7 @@ The canonical full-face Inter 4.1 bitmap at 16 ppem measures:
 
 | Component | Exact result |
 | --- | ---: |
-| Dense records | 58,740 B; SHA-256 `8baad38084b89f93756ee70c994e4e0d30d6854b1c001af6618e0be413a5f60d` |
+| Dense records | 58,740 B; SHA-256 `06af881cc3c2b6df60abd4a946ad63f8bd12aed6541cca9b1d90826723ef798a` |
 | Present / absent glyphs | 2,915 / 22 |
 | R8 page | 1024 × 679 = 695,296 GPU B |
 | Lossless KTX2 | 695,444 B |
@@ -183,7 +183,7 @@ The canonical full-face Inter 4.1 bitmap at 16 ppem measures:
 | External index + page | 755,252 B |
 | Combined core + embedded raster GLB | 927,164 B |
 | Core with external directory | 172,476 B |
-| Optimized bitmap baker Wasm | 612,472 B raw; 228,219 B gzip; 175,741 B Brotli q11 |
+| Optimized bitmap baker Wasm | 606,995 B raw; 226,695 B gzip; 174,100 B Brotli q11 |
 
 The embedded and external forms have byte-identical records and KTX2 texels. External packaging costs 124 additional serialized bytes for the authenticated URI/length/hash directory.
 
@@ -204,7 +204,7 @@ For the non-subsetted 2,937-glyph Inter V0 face, the shared cost is fixed and th
 | Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
 | Generated bitmap, 16 ppem | 167.0 KiB | 695,296 B | 58,740 B records; 755,064 B embedded companion GLB. |
-| MTSDF | 167.0 KiB | 41,943,040 B | 10-page full-face Inter padded base texture array; 6,979,347 B gzip transport and 39,347,692 B decoded GLB. |
+| MTSDF | 167.0 KiB | 41,943,040 B | 10-page full-face Inter padded base texture array; 6,798,412 B gzip transport and 39,347,712 B decoded GLB. |
 | Slug | 167.0 KiB | generator report required | 40 B × 2,937 = 117,480 B records; legacy subset derived near 2 MiB. |
 
 For the non-subsetted 1,403-glyph Font Awesome V0 face:
@@ -212,7 +212,7 @@ For the non-subsetted 1,403-glyph Font Awesome V0 face:
 | Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
 | Generated bitmap, one strike | 35.2 KiB | generator report required | 20 B × 1,403 = 28,060 B records. |
-| MSDF | 35.2 KiB | generator report required | MTSDF RGBA8; 28,060 B records; legacy subset was modeled at 4–8 MiB. |
+| MSDF | 35.2 KiB | 36,347,904 B | Nine-page full-face MTSDF RGBA8 padded base texture array; 28,060 B records, 7,227,824 B gzip transport, and 32,580,900 B decoded GLB. |
 | Slug | 35.2 KiB | generator report required | 40 B × 1,403 = 56,120 B records; legacy subset derived near 1 MiB. |
 
 ## Large-coverage CJK and icon envelope

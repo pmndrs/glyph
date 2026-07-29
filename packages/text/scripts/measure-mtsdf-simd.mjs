@@ -131,6 +131,7 @@ async function checkEvidence(report) {
   for (const variant of report.variants) {
     const recorded = evidence.variants?.[variant.id]
     if (
+      !sameStrings(recorded?.targetFeatures ?? [], variant.targetFeatures) ||
       recorded?.optimizedBytes !== variant.wasm.optimizedBytes ||
       recorded?.gzipBytes !== variant.wasm.gzipBytes ||
       recorded?.brotliBytes !== variant.wasm.brotliBytes ||
@@ -143,11 +144,42 @@ async function checkEvidence(report) {
     }
     const recordedWarmCalls = evidence.allocation?.warmSevenCaseCorpus
     if (
+      variant.allocation.requestAllocationsPerCall !==
+        evidence.allocation?.requestAllocationsPerCall ||
+      variant.allocation.ownedOutputCopiesPerCall !==
+        evidence.allocation?.ownedOutputCopiesPerCall ||
       variant.allocation.warmWasmAllocationCalls !== recordedWarmCalls?.allocations ||
       variant.allocation.warmWasmReallocationCalls !== recordedWarmCalls?.reallocations ||
       variant.allocation.warmWasmDeallocationCalls !== recordedWarmCalls?.deallocations
     ) {
       throw new Error(`${variant.id} MTSDF allocation evidence is stale`)
+    }
+  }
+  if (report.fullFont !== undefined) checkFullFontEvidence(report.fullFont, evidence)
+}
+
+function checkFullFontEvidence(fullFont, evidence) {
+  const accepted = evidence.completeInter
+  if (
+    evidence.quality?.completeInterChecksumExact !== true ||
+    fullFont.fixture !== accepted?.fixture ||
+    fullFont.glyphs !== accepted?.glyphSlots ||
+    fullFont.skippedGlyphs !== accepted?.requestSkippedGlyphs
+  ) {
+    throw new Error('complete Inter request-corpus evidence is stale')
+  }
+  for (const definition of variantDefinitions) {
+    const variant = fullFont.variants?.[definition.id]
+    if (
+      variant?.generatedGlyphs !== accepted.generatedGlyphs ||
+      variant?.rejectedGlyphs !== accepted.rejectedGlyphs ||
+      !sameNumbers(variant?.rejectedGlyphIds ?? [], accepted.rejectedGlyphIds) ||
+      variant?.checksum !== accepted.checksum ||
+      variant?.compositeSha256 !== accepted.compositeSha256 ||
+      variant?.steadyStateMemoryGrowthBytes !==
+        evidence.allocation?.steadyStateWasmMemoryGrowthBytes
+    ) {
+      throw new Error(`${definition.id} complete Inter SIMD evidence is stale`)
     }
   }
 }
@@ -192,6 +224,9 @@ async function measureFullFont(observations) {
     const order = pass % 2 === 0 ? observations : observations.toReversed()
     for (const observation of order) {
       const measured = measureFontCorpus(observation.generator, corpus.requests)
+      process.stderr.write(
+        `MTSDF full-font ${observation.id} pass ${String(pass + 1)}/2: ${measured.milliseconds.toFixed(3)} ms\n`,
+      )
       results.get(observation.id).push({
         ...measured,
         memoryBytes: observation.memory.buffer.byteLength,
@@ -199,16 +234,6 @@ async function measureFullFont(observations) {
     }
   }
   const scalar = results.get('scalar')
-  const evidence = JSON.parse(await readFile(evidenceUrl, 'utf8'))
-  const acceptedInter = evidence.completeInter
-  if (
-    scalar[0].generatedGlyphs !== acceptedInter?.generatedGlyphs ||
-    scalar[0].rejectedGlyphs !== acceptedInter?.rejectedGlyphs ||
-    scalar[0].compositeSha256 !== acceptedInter?.compositeSha256 ||
-    !sameNumbers(scalar[0].rejectedGlyphIds, acceptedInter?.rejectedGlyphIds ?? [])
-  ) {
-    throw new Error('scalar complete Inter result changed from the accepted SIMD evidence')
-  }
   for (const [variant, passes] of results) {
     for (const pass of passes) {
       if (
@@ -383,6 +408,10 @@ function measureFontCorpus(generator, requests) {
 }
 
 function sameNumbers(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function sameStrings(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
 

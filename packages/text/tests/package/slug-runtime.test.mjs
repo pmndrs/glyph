@@ -134,6 +134,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   )
   assert.notEqual(firstMesh.material, fillMaterial, 'outline selects one specialized material')
   const outlinedMaterial = firstMesh.material
+  const outlinedGeometry = firstMesh.geometry
   const outlineColor = firstMesh.geometry.getAttribute('slugOutlineColor')
   const outlineHalfWidth = firstMesh.geometry.getAttribute('slugOutlineHalfWidth')
   assert.notEqual(outlineColor.data, firstColor.data, 'outline values use a lazy separate buffer')
@@ -162,11 +163,27 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   assert.equal(batch.drawCount, 3, 'zero-width outline remains one draw per page run')
   assert.equal(batch.object.children.length, 3, 'zero-width repaint retains batch identity')
   assert.equal(firstMesh.material, fillMaterial, 'zero width restores the fill-only pipeline')
+  assert.notEqual(firstMesh.geometry, outlinedGeometry, 'zero width releases outlined geometry')
+  assert.equal(
+    firstMesh.geometry.getAttribute('slugOutlineColor'),
+    undefined,
+    'zero width releases the outline color buffer',
+  )
+  assert.equal(
+    firstMesh.geometry.getAttribute('slugOutlineHalfWidth'),
+    undefined,
+    'zero width releases the outline width buffer',
+  )
 
   batch.updatePaint(outlinedPaint)
   assert.equal(batch.drawCount, 3)
   assert.equal(batch.object.children.length, 3, 're-enabling outline does not rebuild meshes')
   assert.equal(firstMesh.material, outlinedMaterial, 'outlined pipeline is reused')
+  assert.notEqual(
+    firstMesh.geometry.getAttribute('slugOutlineColor').data,
+    outlineColor.data,
+    're-enabled outline allocates a new instance buffer',
+  )
 
   const mixedBatch = slug.buildBatches(
     {

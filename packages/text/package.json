@@ -90,6 +90,7 @@
     "measure:mtsdf-simd": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs",
     "check:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs --check",
     "check:mtsdf-simd": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs --check",
+    "check:mtsdf-simd-full-font": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs --check --full-font",
     "provision:mtsdf-oracle": "node ./scripts/provision-msdfgen-oracle.mjs",
     "generate:mtsdf-oracle": "node ./scripts/generate-mtsdf-oracle-evidence.mjs",
     "check:mtsdf-oracle": "node ./scripts/generate-mtsdf-oracle-evidence.mjs --check",
