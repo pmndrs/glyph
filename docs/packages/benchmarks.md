@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:f904353c5b47c118b86af135f92ef1b676abbd229cd2496c6e1e3bdb63d26097"
+source_digest: "sha256:f5fb45800e8f9424472794e063f3ac48a5723fa62fc48a3e557c32b5ae13929e"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -43,7 +43,7 @@ sources:
     title: Retained complete icon-grid traversal evidence
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T10:12:00Z"
+  at: "2026-07-29T10:27:00Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`

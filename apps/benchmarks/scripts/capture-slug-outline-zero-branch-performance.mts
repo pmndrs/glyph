@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -11,14 +12,29 @@ interface CapturedRun {
   readonly fontSize: number
   readonly paintStrokePattern: 'all' | 'alternating'
   readonly pair: number
+  readonly order: string
   readonly variant: Variant
   readonly stats: Record<string, unknown>
+}
+interface ShardObservation extends Record<string, unknown> {
+  readonly backend: Backend
+  readonly runs: readonly CapturedRun[]
+}
+interface CapturedShard {
+  readonly backend: Backend
+  readonly file: string
+  readonly sha256: string
+  readonly observation: ShardObservation
 }
 
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url))
 const cwd = fileURLToPath(new URL('..', import.meta.url))
 const packet = new URL('../fixtures/autoresearch/slug-outline-zero-branch-001/', import.meta.url)
 const output = new URL('performance-chromium149.json', packet)
+const shardFiles = {
+  webgpu: 'performance-webgpu-chromium149.json',
+  webgl2: 'performance-webgl2-chromium149.json',
+} as const
 const manifest = objectRecord(
   JSON.parse(await readFile(new URL('experiment-v0.json', packet), 'utf8')),
   'outline zero-branch experiment',
@@ -27,46 +43,111 @@ const baseCommit = fullCommit(manifest.baseCommit, 'baseCommit')
 const candidateCommit = await headCommit()
 await assertCandidateSnapshot(baseCommit, candidateCommit)
 
-const child = spawn(
-  executable,
-  [
-    '--gpu',
-    '--path',
-    `/?runner=probe&baseCommit=${baseCommit}&candidateCommit=${candidateCommit}`,
-    './vitexec/slug-outline-zero-branch-performance.probe.ts',
-  ],
-  { cwd, stdio: ['ignore', 'pipe', 'pipe'] },
-)
-let transcript = ''
-for (const stream of [child.stdout, child.stderr]) {
-  stream.on('data', (chunk: Buffer) => {
-    const text = chunk.toString()
-    transcript += text
-    process.stdout.write(text)
-  })
-}
-const code = await new Promise<number | null>((resolve, reject) => {
-  child.once('error', reject)
-  child.once('exit', resolve)
-})
-if (code !== 0 || transcript.includes('[error]')) {
-  throw new Error(`outline zero-branch performance capture failed with status ${String(code)}`)
-}
-const marker = /slug-outline-zero-branch-performance-ready (\{[^\n]+\})/.exec(transcript)?.[1]
-if (marker === undefined) {
-  throw new Error('outline zero-branch performance capture omitted its result')
-}
-const observation = assertObservation(JSON.parse(marker), baseCommit, candidateCommit)
-const summaries = summarize(observation.runs)
-const decision = decide(summaries)
 await mkdir(packet, { recursive: true })
-await writeFile(output, `${JSON.stringify({ ...observation, summaries, decision }, null, 2)}\n`)
+const shards: CapturedShard[] = []
+for (const backend of ['webgpu', 'webgl2'] as const) {
+  shards.push(await loadOrCaptureShard(backend))
+}
+const combinedRuns = shards.flatMap((shard) => shard.observation.runs)
+const summaries = summarize(combinedRuns)
+const decision = decide(summaries)
+const primaryObservation = shards[0]!.observation
+const combined = {
+  schemaVersion: 0,
+  kind: 'slug-outline-zero-branch-performance-observation',
+  experimentId: 'slug-outline-zero-branch-001',
+  baseCommit,
+  candidateCommit,
+  capturedAt: new Date().toISOString(),
+  technique: primaryObservation.technique,
+  delivery: primaryObservation.delivery,
+  workload: primaryObservation.workload,
+  fontFixture: primaryObservation.fontFixture,
+  viewport: primaryObservation.viewport,
+  dpr: primaryObservation.dpr,
+  fontSizes: primaryObservation.fontSizes,
+  pairsPerBackend: primaryObservation.pairsPerBackend,
+  steadyStateReportCount: primaryObservation.steadyStateReportCount,
+  environment: primaryObservation.environment,
+  gpuAdapter: primaryObservation.gpuAdapter,
+  shards: shards.map((shard) => ({
+    backend: shard.backend,
+    file: shard.file,
+    sha256: shard.sha256,
+    capturedAt: shard.observation.capturedAt,
+  })),
+  runs: combinedRuns,
+  summaries,
+  decision,
+}
+await writeFile(output, `${JSON.stringify(combined, null, 2)}\n`)
 
-function assertObservation(
+async function loadOrCaptureShard(backend: Backend): Promise<CapturedShard> {
+  const file = shardFiles[backend]
+  const target = new URL(file, packet)
+  try {
+    const retained = await readFile(target, 'utf8')
+    const observation = assertShardObservation(
+      JSON.parse(retained),
+      baseCommit,
+      candidateCommit,
+      backend,
+    )
+    process.stdout.write(`reusing validated ${backend} outline performance shard\n`)
+    return { backend, file, sha256: sha256(retained), observation }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    process.stdout.write(`capturing ${backend} outline performance shard: ${reason}\n`)
+  }
+
+  const child = spawn(
+    executable,
+    [
+      '--gpu',
+      '--path',
+      `/?runner=probe&baseCommit=${baseCommit}&candidateCommit=${candidateCommit}&backend=${backend}`,
+      './vitexec/slug-outline-zero-branch-performance.probe.ts',
+    ],
+    { cwd, stdio: ['ignore', 'pipe', 'pipe'] },
+  )
+  let transcript = ''
+  for (const stream of [child.stdout, child.stderr]) {
+    stream.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      transcript += text
+      process.stdout.write(text)
+    })
+  }
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('exit', resolve)
+  })
+  if (code !== 0 || transcript.includes('[error]')) {
+    throw new Error(
+      `${backend} outline zero-branch performance capture failed with status ${String(code)}`,
+    )
+  }
+  const marker = /slug-outline-zero-branch-performance-ready (\{[^\n]+\})/.exec(transcript)?.[1]
+  if (marker === undefined) {
+    throw new Error(`${backend} outline zero-branch performance capture omitted its result`)
+  }
+  const observation = assertShardObservation(
+    JSON.parse(marker),
+    baseCommit,
+    candidateCommit,
+    backend,
+  )
+  const retained = `${JSON.stringify(observation, null, 2)}\n`
+  await writeFile(target, retained)
+  return { backend, file, sha256: sha256(retained), observation }
+}
+
+function assertShardObservation(
   candidate: unknown,
   expectedBaseCommit: string,
   expectedCandidateCommit: string,
-): Record<string, unknown> & { readonly runs: readonly CapturedRun[] } {
+  expectedBackend: Backend,
+): ShardObservation {
   const record = objectRecord(candidate, 'outline zero-branch performance observation')
   if (
     record.schemaVersion !== 0 ||
@@ -74,52 +155,50 @@ function assertObservation(
     record.experimentId !== 'slug-outline-zero-branch-001' ||
     record.baseCommit !== expectedBaseCommit ||
     record.candidateCommit !== expectedCandidateCommit ||
+    record.backend !== expectedBackend ||
+    record.technique !== 'slug' ||
+    record.delivery !== 'baked' ||
+    record.workload !== 'paint-effects' ||
+    record.fontFixture !== 'inter' ||
     record.dpr !== 2 ||
     record.pairsPerBackend !== 64 ||
     record.steadyStateReportCount !== 12 ||
     !Array.isArray(record.runs) ||
-    record.runs.length !== 256
+    record.runs.length !== 128
   ) {
-    throw new TypeError('outline zero-branch performance observation has an invalid envelope')
+    throw new TypeError(`${expectedBackend} performance shard has an invalid envelope`)
   }
-  const expectedIds = new Set(
-    (['webgpu', 'webgl2'] as const).flatMap((backend) =>
-      Array.from({ length: 64 }, (_, pair) => {
-        const paintStrokePattern = pair % 4 === 3 ? 'all' : 'alternating'
-        const mixedPair = pair - Math.floor(pair / 4)
-        const fontSize =
-          paintStrokePattern === 'all'
-            ? [16, 40, 128][Math.floor(pair / 4) % 3]!
-            : [16, 40, 128][mixedPair % 3]!
-        return (['multiply-zero', 'zero-width-branch'] as const).map(
-          (variant) =>
-            `${backend}-${paintStrokePattern}-${String(fontSize)}px-p${String(pair)}-${variant}`,
-        )
-      }).flat(),
-    ),
-  )
-  const runs: CapturedRun[] = []
-  for (const candidateRun of record.runs) {
+  if (
+    typeof record.capturedAt !== 'string' ||
+    !Number.isFinite(Date.parse(record.capturedAt)) ||
+    !sameNumberArray(record.fontSizes, [16, 40, 128]) ||
+    !sameNumberRecord(record.viewport, { width: 1500, height: 950 })
+  ) {
+    throw new TypeError(`${expectedBackend} performance shard changed its capture contract`)
+  }
+  objectRecord(record.environment, `${expectedBackend} performance environment`)
+  const expectedRuns = expectedRunIdentities(expectedBackend)
+  const capturedRuns: CapturedRun[] = []
+  for (const [index, candidateRun] of record.runs.entries()) {
     const run = objectRecord(candidateRun, 'outline zero-branch run')
     const stats = objectRecord(run.stats, 'outline zero-branch run stats')
+    const expected = expectedRuns[index]!
     if (
-      typeof run.id !== 'string' ||
-      !expectedIds.delete(run.id) ||
-      (run.backend !== 'webgpu' && run.backend !== 'webgl2') ||
-      ![16, 40, 128].includes(run.fontSize as number) ||
-      (run.paintStrokePattern !== 'all' && run.paintStrokePattern !== 'alternating') ||
-      typeof run.pair !== 'number' ||
-      !Number.isInteger(run.pair) ||
-      run.pair < 0 ||
-      run.pair >= 64 ||
-      (run.variant !== 'multiply-zero' && run.variant !== 'zero-width-branch') ||
+      run.id !== expected.id ||
+      run.backend !== expectedBackend ||
+      run.fontSize !== expected.fontSize ||
+      run.paintStrokePattern !== expected.paintStrokePattern ||
+      run.pair !== expected.pair ||
+      run.order !== expected.order ||
+      run.variant !== expected.variant ||
       stats.technique !== 'slug' ||
-      stats.backend !== run.backend ||
+      stats.backend !== expectedBackend ||
       stats.dpr !== 2 ||
       stats.gpuTimingSupported !== true ||
       stats.missingGlyphCount !== 0 ||
       stats.drawCount !== 1 ||
-      stats.appliedPaintStrokePattern !== run.paintStrokePattern ||
+      stats.appliedFontSize !== expected.fontSize ||
+      stats.appliedPaintStrokePattern !== expected.paintStrokePattern ||
       stats.appliedPaintStrokeWidth !== 0.1
     ) {
       throw new TypeError('outline zero-branch run identity or product stats are invalid')
@@ -144,17 +223,64 @@ function assertObservation(
       }
       for (const sample of samples) finiteNonNegative(sample, `${run.id}.${history}`)
     }
-    runs.push(run as unknown as CapturedRun)
+    capturedRuns.push(run as unknown as CapturedRun)
   }
-  if (expectedIds.size !== 0) throw new TypeError('outline zero-branch runs are incomplete')
-  return { ...record, runs }
+  return { ...record, backend: expectedBackend, runs: capturedRuns }
 }
 
-function summarize(runs: readonly CapturedRun[]): readonly Record<string, unknown>[] {
+function expectedRunIdentities(backend: Backend): readonly Omit<CapturedRun, 'stats'>[] {
+  const expected: Array<Omit<CapturedRun, 'stats'>> = []
+  let mixedPair = 0
+  for (let pair = 0; pair < 64; pair += 1) {
+    const paintStrokePattern = pair % 4 === 3 ? 'all' : 'alternating'
+    const fontSize =
+      paintStrokePattern === 'all'
+        ? [16, 40, 128][Math.floor(pair / 4) % 3]!
+        : [16, 40, 128][mixedPair++ % 3]!
+    const variants: readonly Variant[] =
+      pair % 2 === 0
+        ? ['multiply-zero', 'zero-width-branch']
+        : ['zero-width-branch', 'multiply-zero']
+    const order = variants.join('-then-')
+    for (const variant of variants) {
+      expected.push({
+        id: `${backend}-${paintStrokePattern}-${String(fontSize)}px-p${String(pair)}-${variant}`,
+        backend,
+        fontSize,
+        paintStrokePattern,
+        pair,
+        order,
+        variant,
+      })
+    }
+  }
+  return expected
+}
+
+function sameNumberArray(candidate: unknown, expected: readonly number[]): boolean {
+  return (
+    Array.isArray(candidate) &&
+    candidate.length === expected.length &&
+    candidate.every((value, index) => value === expected[index])
+  )
+}
+
+function sameNumberRecord(candidate: unknown, expected: Readonly<Record<string, number>>): boolean {
+  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) return false
+  const record = candidate as Record<string, unknown>
+  const keys = Object.keys(expected)
+  return keys.every((key) => record[key] === expected[key])
+}
+
+function sha256(contents: string): string {
+  return createHash('sha256').update(contents).digest('hex')
+}
+
+function summarize(capturedRuns: readonly CapturedRun[]): readonly Record<string, unknown>[] {
   const results: Record<string, unknown>[] = []
   for (const backend of ['webgpu', 'webgl2'] as const) {
     for (const fontSize of [16, 40, 128] as const) {
-      const selected = runs.filter(
+      const selected = capturedRuns.filter(
         (run) =>
           run.backend === backend &&
           run.paintStrokePattern === 'alternating' &&
@@ -167,7 +293,9 @@ function summarize(runs: readonly CapturedRun[]): readonly Record<string, unknow
         backend,
         'alternating',
         'all-sizes',
-        runs.filter((run) => run.backend === backend && run.paintStrokePattern === 'alternating'),
+        capturedRuns.filter(
+          (run) => run.backend === backend && run.paintStrokePattern === 'alternating',
+        ),
       ),
     )
     for (const fontSize of [16, 40, 128] as const) {
@@ -176,7 +304,7 @@ function summarize(runs: readonly CapturedRun[]): readonly Record<string, unknow
           backend,
           'all',
           fontSize,
-          runs.filter(
+          capturedRuns.filter(
             (run) =>
               run.backend === backend &&
               run.paintStrokePattern === 'all' &&
@@ -190,7 +318,7 @@ function summarize(runs: readonly CapturedRun[]): readonly Record<string, unknow
         backend,
         'all',
         'all-sizes',
-        runs.filter((run) => run.backend === backend && run.paintStrokePattern === 'all'),
+        capturedRuns.filter((run) => run.backend === backend && run.paintStrokePattern === 'all'),
       ),
     )
   }
@@ -201,11 +329,11 @@ function summary(
   backend: Backend,
   paintStrokePattern: 'all' | 'alternating',
   fontSize: number | 'all-sizes',
-  runs: readonly CapturedRun[],
+  capturedRuns: readonly CapturedRun[],
 ): Record<string, unknown> {
-  const baseline = runs.filter((run) => run.variant === 'multiply-zero')
-  const candidate = runs.filter((run) => run.variant === 'zero-width-branch')
-  assertStableResources(runs)
+  const baseline = capturedRuns.filter((run) => run.variant === 'multiply-zero')
+  const candidate = capturedRuns.filter((run) => run.variant === 'zero-width-branch')
+  assertStableResources(capturedRuns)
   const pairedGpuPercent = baseline.map((base) => {
     const match = candidate.find((run) => run.pair === base.pair)
     if (match === undefined) throw new Error('outline zero-branch run lacks its paired baseline')
@@ -288,9 +416,10 @@ function bootstrapMedianConfidence95(values: readonly number[]): {
   }
 }
 
-function assertStableResources(runs: readonly CapturedRun[]): void {
-  const first = runs[0]
-  if (first === undefined) throw new Error('outline zero-branch resource comparison requires runs')
+function assertStableResources(capturedRuns: readonly CapturedRun[]): void {
+  const firstRun = capturedRuns[0]
+  if (firstRun === undefined)
+    throw new Error('outline zero-branch resource comparison requires runs')
   for (const name of [
     'artifactBytes',
     'slugCurveGpuBytes',
@@ -298,8 +427,8 @@ function assertStableResources(runs: readonly CapturedRun[]): void {
     'slugReferenceGpuBytes',
     'slugGpuBytes',
   ]) {
-    const expected = metric(first, name)
-    for (const run of runs) {
+    const expected = metric(firstRun, name)
+    for (const run of capturedRuns) {
       if (metric(run, name) !== expected) {
         throw new Error(`${run.backend} ${String(run.fontSize)}px changed ${name}`)
       }
@@ -326,6 +455,8 @@ async function assertCandidateSnapshot(
   const allowed = new Set([
     '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/quality-chromium149.json',
     '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/performance-chromium149.json',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/performance-webgl2-chromium149.json',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/performance-webgpu-chromium149.json',
     '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/multiply-zero.webgl2.glsl',
     '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/multiply-zero.webgpu.wgsl',
     '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/zero-width-branch.webgl2.glsl',
