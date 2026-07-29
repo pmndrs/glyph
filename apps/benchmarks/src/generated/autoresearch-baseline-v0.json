@@ -14,7 +14,7 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "aad7aed7fe8a93b47794e709803fe9ec08bd73b07028bc7f2ac2df7bdc4e781b",
+      "sha256": "bbe42400fdadfd17ec806ebae8c321c412652c299688ef15088c2a101d12625f",
       "bytes": 5145
     },
     {
@@ -106,6 +106,12 @@
       "path": "apps/benchmarks/fixtures/results/slug-external-render-parity-chromium149.json",
       "sha256": "701f839443b2fbe2f84c78cafb4b403270b652f9bca5ed3544206e6345b88552",
       "bytes": 5816
+    },
+    {
+      "id": "icon-grid-retained-evidence",
+      "path": "apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json",
+      "sha256": "333953b8ef89df40f5ac9aaa7ef1e91377ff18e24bc8124305a1474e8f6f79a5",
+      "bytes": 3318
     }
   ]
 }

@@ -7,6 +7,7 @@
     "build": "pnpm size && vite build && node ./scripts/check-font-notices.mts",
     "admit:live": "node ./scripts/run-admission.mts",
     "capture:browser-reference": "node ./scripts/capture-browser-reference.mts",
+    "capture:icon-grid-retained-evidence": "node ./scripts/capture-icon-grid-retained-evidence.mts",
     "capture:bake-host-baseline": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/capture-bake-host-baseline.mts",
     "capture:advanced-shaping-performance": "node ./scripts/capture-advanced-shaping-performance.mts",
     "capture:raster-performance": "node ./scripts/capture-raster-performance.mts",

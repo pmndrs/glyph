@@ -47,6 +47,10 @@ const evidenceFiles = [
     'slug-external-render-parity',
     'apps/benchmarks/fixtures/results/slug-external-render-parity-chromium149.json',
   ],
+  [
+    'icon-grid-retained-evidence',
+    'apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json',
+  ],
 ] as const
 
 const [workspaceManifest, nodeVersion, rustToolchain] = await Promise.all([

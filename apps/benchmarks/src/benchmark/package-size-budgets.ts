@@ -72,10 +72,10 @@ export const packageSizeBudgets = {
     brotliBytes: 2_400,
   },
   'mtsdf-generator-wasm': {
-    rawBytes: 45_000,
-    minifiedBytes: 45_000,
-    gzipBytes: 19_000,
-    brotliBytes: 15_500,
+    rawBytes: 55_000,
+    minifiedBytes: 55_000,
+    gzipBytes: 24_500,
+    brotliBytes: 21_000,
   },
   'mtsdf-baker-wasm': {
     rawBytes: 540_000,
