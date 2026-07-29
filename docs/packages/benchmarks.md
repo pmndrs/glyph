@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:8d62b5822bb320201ba608c47e6ec34565e9ee95b9240a8c81c163c13f3812cb"
+source_digest: "sha256:5b6d0eedbe2aaf50656563a3fd6e5e1ead5a0d3f419d0c40c0fa0e1554d0003a"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -46,7 +46,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T17:27:14Z"
+  at: "2026-07-29T17:33:31Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -71,7 +71,7 @@ Milestone 9 adds deterministic package-owned Slug GLB fixtures for all seven vis
 
 The fully external release gate freshly bakes canonical Inter into five files: one core GLB, one Slug companion, and separate curve KTX2, header, and reference resources whose roles, lengths, and SHA-256 identities are retained. Public `FontLoader` preserves URL/fetch provenance and public `Text` renders all-external resources byte-identically to the embedded fixture: hash `f879dd9a…b4ecf` on WebGPU and `b34a6866…bed0` on forced WebGL2. Both forms evaluate 84 glyphs and 470,202 curves. The request log requires one fetch each for the core and companion and two each for the three page resources because public `Text` and the independent CPU-reference decode consume them separately; the capture removes its transient bake directory in `finally`.[^slug-external-render-parity-evidence]
 
-The Icon Grid workload adds the complete licensed Font Awesome Free Solid 6.7.2 catalog as 1,402 named glyphs through Bitmap, MTSDF, and Slug. It lays the catalog out on one 38-by-37 two-dimensional coordinate plane, keeps labels centered at a fixed 11 CSS pixels, scales icons logarithmically from 8 to 1,024 CSS pixels, and supports pointer panning in both axes. A viewport-sized pool with three overscan rows and columns recycles only after replacement `Text` content is ready, preventing partially updated slots from flashing during pan, resize, or font replacement. The retained product probe reaches icon 1,401 and returns to the origin with zero missing glyphs for all three techniques; at the standard probe viewport it uses 143 pooled entries rather than retaining the entire catalog. The icon font and label font share one registry but remain separate registered fonts, exercising the public multi-font `Text` path without introducing a React-only registry abstraction.
+The Icon Grid workload adds the complete licensed Font Awesome Free Solid 6.7.2 catalog as 1,402 named glyphs through Bitmap, MTSDF, and Slug. It lays the catalog out on one 38-by-37 two-dimensional coordinate plane, keeps labels centered at a fixed 11 CSS pixels, scales icons logarithmically from 8 to 1,024 CSS pixels, and supports pointer panning in both axes. A viewport-sized pool with three overscan rows and columns recycles only after replacement `Text` content is ready, preventing partially updated slots from flashing during pan, resize, or font replacement. Viewport resize retains that pool while its capacity is unchanged and recycles only the newly exposed window; crossing a capacity boundary performs one serialized replacement instead of rebuilding for every `ResizeObserver` notification. Closing a comparison workload stops its renderer loop before draining outstanding text work, so a hidden or replaced scene cannot keep submitting background frames. The retained product probe reaches icon 1,401 and returns to the origin with zero missing glyphs for all three techniques; at the standard probe viewport it uses 143 pooled entries rather than retaining the entire catalog. The icon font and label font share one registry but remain separate registered fonts, exercising the public multi-font `Text` path without introducing a React-only registry abstraction.
 
 The retained release-role matrix adds 36 focused Chromium 149 observations: six large-size, extreme-scale, complex-script, and viewport-clipping scenes plus one copied-and-adapted affine transform and one same-geometry 1×/8× projection-zoom scene, repeated at DPR 1 and 2 through WebGPU and forced WebGL2. Flat scenes compare the candidate with both the independent scalar Slug sampler and the current browser's source font; transformed scenes use the source font as visual authority and explicitly mark a transformed scalar oracle as not applicable. Three Flatland revision `2935a89f…` supplies historical transform and zoom invariants only. Candidate hashes are exact across DPR within each backend, clipped scenes touch the physical viewport boundary while unclipped scenes do not, and the centered Inter `I` retains a measured one-physical-pixel partial-coverage fringe at both zooms. This evidence proves host viewport clipping under the current renderer boundary; it does not claim the older toolkit's arbitrary per-instance clip-plane API.
 

@@ -28,6 +28,7 @@ import {
 import type { SlugRasterConfiguration, SlugTextLiveStats } from './slug-text'
 import {
   createConfiguredRenderer,
+  disposeConfiguredRenderer,
   readRendererViewportState,
   type RendererBackend,
 } from './webgpu-renderer'
@@ -491,6 +492,24 @@ export async function createComparisonWorkloadPreview(options: {
       viewportChanged: boolean,
     ): Promise<void> {
       canvasSurface.setGridVisible(next.showGrid)
+      if (next.workload === 'icon-grid' && viewportChanged) {
+        clampIconGridScene(scene, next.fontSize, width, height)
+        const nextWindow = iconGridVirtualWindow(
+          ICON_GRID_ITEMS.length,
+          next.fontSize,
+          width,
+          height,
+          -scene.position.x,
+          scene.position.y,
+        )
+        if (iconGridViewportUpdateKind(entries.length, nextWindow) === 'retained') {
+          configuration = next
+          revision += 1
+          applyRetainedConfiguration(entries, technique, configuration)
+          requestIconWindowRefresh()
+          return
+        }
+      }
       if (comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild') {
         await commit(next)
         configuration = next
@@ -591,26 +610,23 @@ export async function createComparisonWorkloadPreview(options: {
     }
 
     const renderFrame = (timestamp: number): void => {
-      if (disposed) return
+      if (closing || disposed) return
       try {
-        if (!closing) {
-          animateEntries(
-            entries,
-            configuration,
-            Math.max(0, timestamp - animationEpoch),
-            width,
-            height,
-            onError,
-            (duration) => {
-              reflowCount += 1
-              lastReflowMs = duration
-            },
-          )
-        }
+        animateEntries(
+          entries,
+          configuration,
+          Math.max(0, timestamp - animationEpoch),
+          width,
+          height,
+          onError,
+          (duration) => {
+            reflowCount += 1
+            lastReflowMs = duration
+          },
+        )
         const started = performance.now()
         canvasSurface.render(scene, camera)
         const submitMs = performance.now() - started
-        if (closing) return
         if (firstDrawMs === 0) firstDrawMs = submitMs
         const snapshot = telemetry.recordSubmit(timestamp, submitMs)
         if (snapshot === undefined) return
@@ -830,23 +846,24 @@ export async function createComparisonWorkloadPreview(options: {
         if (disposal !== undefined) return disposal
         closing = true
         revision += 1
+        const stopRendering = renderer.setAnimationLoop(null)
         const disposalReason = new DOMException('The comparison preview is disposed', 'AbortError')
         for (const waiter of pendingUpdate?.waiters ?? []) waiter.reject(disposalReason)
         pendingUpdate = undefined
         if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
         disposal = (async () => {
+          await stopRendering
           await updateDrain
           await iconWindowDrain
           await gpuTimestampResolution
           disposed = true
-          await renderer.setAnimationLoop(null)
           renderer.setRenderTarget(null)
           renderer.clear()
           disposeEntries(entries)
           entries = []
           for (const loadedFont of loadedFonts) loadedFont.font.dispose()
           canvasSurface.dispose()
-          await renderer.dispose()
+          await disposeConfiguredRenderer(renderer)
         })()
         return disposal
       },
@@ -856,7 +873,7 @@ export async function createComparisonWorkloadPreview(options: {
     iconFont?.font.dispose()
     font?.font.dispose()
     canvasSurface.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1444,6 +1461,16 @@ export interface IconGridVirtualWindow {
 export interface IconGridAssignment {
   readonly index: number
   readonly content: string
+}
+
+export function iconGridViewportUpdateKind(
+  currentPoolCapacity: number,
+  nextWindow: Pick<IconGridVirtualWindow, 'poolCapacity'>,
+): 'rebuild' | 'retained' {
+  if (!Number.isSafeInteger(currentPoolCapacity) || currentPoolCapacity < 0) {
+    throw new RangeError('icon grid pool capacity must be a non-negative safe integer')
+  }
+  return currentPoolCapacity === nextWindow.poolCapacity ? 'retained' : 'rebuild'
 }
 
 export function iconGridAssignmentSignature(

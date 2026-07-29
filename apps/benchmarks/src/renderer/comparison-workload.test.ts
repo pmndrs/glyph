@@ -6,6 +6,7 @@ import {
   iconGridAssignmentSignature,
   iconGridLayout,
   iconGridVirtualWindow,
+  iconGridViewportUpdateKind,
   ladderCssSizes,
   paintWordHue,
   type ComparisonWorkloadConfiguration,
@@ -198,6 +199,21 @@ describe('icon grid layout', () => {
     expect(narrow.indices).toHaveLength(narrow.poolCapacity)
     expect(wide.indices).toHaveLength(wide.poolCapacity)
     expect(narrow.poolCapacity).not.toBe(wide.poolCapacity)
+  })
+
+  it('keeps the virtual pool capacity stable across sub-cell viewport resizes', () => {
+    const before = iconGridVirtualWindow(1_402, 48, 720, 640, 500, 500)
+    const after = iconGridVirtualWindow(1_402, 48, 740, 650, 500, 500)
+    expect(after.poolCapacity).toBe(before.poolCapacity)
+    expect(after.indices).toHaveLength(before.poolCapacity)
+    expect(iconGridViewportUpdateKind(before.poolCapacity, after)).toBe('retained')
+  })
+
+  it('rebuilds the virtual pool only when resize changes its capacity', () => {
+    const before = iconGridVirtualWindow(1_402, 48, 360, 640, 500, 500)
+    const after = iconGridVirtualWindow(1_402, 48, 1_200, 360, 500, 500)
+    expect(iconGridViewportUpdateKind(before.poolCapacity, after)).toBe('rebuild')
+    expect(() => iconGridViewportUpdateKind(-1, after)).toThrow('pool capacity')
   })
 
   it('rejects an invalid virtual viewport or scroll position', () => {
