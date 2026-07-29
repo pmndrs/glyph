@@ -34,6 +34,7 @@ import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/pro
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,
+  ICON_GRID_FONT_FIXTURE,
   SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
   liveWorkloadFontFixtures,
@@ -1132,10 +1133,12 @@ function WorkloadRail({
   readonly onTechnique: (technique: RasterTechnique) => void
 }) {
   const workloads = workloadsFor(location.mode)
+  const displayedFontFixture =
+    location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture
   const selectedMtsdfFixture =
-    location.technique === 'mtsdf' ? mtsdfFixtureFor(activeFontFixture) : undefined
+    location.technique === 'mtsdf' ? mtsdfFixtureFor(displayedFontFixture) : undefined
   const selectedSlugFixture =
-    location.technique === 'slug' ? slugFixtureFor(activeFontFixture) : undefined
+    location.technique === 'slug' ? slugFixtureFor(displayedFontFixture) : undefined
   const rasterDescription =
     selectedSlugFixture !== undefined
       ? `Analytic Slug · ${selectedSlugFixture.raster.pages.length} page${selectedSlugFixture.raster.pages.length === 1 ? '' : 's'} · ${formatBytes(selectedSlugFixture.raster.decodedGpuBytes)} GPU`
@@ -1184,7 +1187,17 @@ function WorkloadRail({
       </nav>
       <div className="mt-5">
         <p className="eyebrow mb-2">Font fixture</p>
-        {location.workload === 'advanced-shaping' ? (
+        {location.workload === 'icon-grid' ? (
+          <div
+            className="rounded-md border border-accent bg-surface-active px-3 py-2"
+            data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
+          >
+            <span className="block text-xs">{BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}</span>
+            <span className="mt-1 block font-mono text-[8px] text-dim">
+              1,402 packed solid icons
+            </span>
+          </div>
+        ) : location.workload === 'advanced-shaping' ? (
           <div className="grid gap-1">
             {ADVANCED_FONT_FIXTURES.map((fixture) => (
               <button
@@ -3904,17 +3917,31 @@ function Controls({
       </div>
       {workload !== 'advanced-shaping' && (
         <div className="min-[1200px]:hidden">
-          <SelectField
-            label="Font fixture"
-            value={selectedFontFixture}
-            onChange={(value) => onSelectedFontFixture(selectableFontFixture(value))}
-          >
-            {SELECTABLE_FONT_FIXTURES.map((fixture) => (
-              <option key={fixture.id} value={fixture.id}>
-                {fixture.label} · {fixture.metadata}
-              </option>
-            ))}
-          </SelectField>
+          {workload === 'icon-grid' ? (
+            <div className="grid gap-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">
+                Font fixture
+              </span>
+              <div
+                className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+                data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
+              >
+                {BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}
+              </div>
+            </div>
+          ) : (
+            <SelectField
+              label="Font fixture"
+              value={selectedFontFixture}
+              onChange={(value) => onSelectedFontFixture(selectableFontFixture(value))}
+            >
+              {SELECTABLE_FONT_FIXTURES.map((fixture) => (
+                <option key={fixture.id} value={fixture.id}>
+                  {fixture.label} · {fixture.metadata}
+                </option>
+              ))}
+            </SelectField>
+          )}
         </div>
       )}
       <div>

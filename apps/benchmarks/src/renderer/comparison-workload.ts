@@ -112,6 +112,7 @@ interface WorkloadEntry {
   readonly node: THREE.Object3D
   sourceText: string
   readonly text: Text
+  readonly labelText?: Text
   readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>
   readonly role: 'primary' | 'secondary'
   virtualIconIndex?: number
@@ -156,6 +157,7 @@ const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.'
 const LADDER_GAP_CSS_PX = 10
 const LADDER_INSET_CSS_PX = 20
 const ICON_GRID_LABEL_SIZE = 11
+const ICON_GRID_LABEL_WIDTH = 112
 const ICON_GRID_INSET = 24
 const ICON_GRID_GAP = 18
 const ICON_GRID_MIN_CELL_WIDTH = 112
@@ -316,7 +318,7 @@ export async function createComparisonWorkloadPreview(options: {
       )
       const scheduledAt = performance.now()
       try {
-        await Promise.all(nextEntries.map(({ text }) => text.ready))
+        await Promise.all(nextEntries.flatMap(entryReadyPromises))
         const readyAt = performance.now()
         if (disposed || commitRevision !== revision) {
           disposeEntries(nextEntries)
@@ -392,22 +394,13 @@ export async function createComparisonWorkloadPreview(options: {
         // but individual Text objects become ready independently. Keep every recyclable slot hidden
         // until the complete window is ready so the pool publishes one coherent assignment.
         entry.node.visible = false
-        entry.text.setProperties({
-          text: content,
-          spans: [
-            {
-              start: 0,
-              end: glyph.length,
-              font: activeIconFont.font,
-              fontSize: configuration.fontSize,
-            },
-          ],
-        })
+        entry.text.setProperties({ text: glyph })
+        entry.labelText?.setProperties({ text: iconGridLabel(iconIndex) })
         recycled += 1
         pendingAssignments.push({ entry, iconIndex, content })
       }
       try {
-        await Promise.all(pendingAssignments.map(({ entry }) => entry.text.ready))
+        await Promise.all(pendingAssignments.flatMap(({ entry }) => entryReadyPromises(entry)))
       } catch (error) {
         for (const { entry } of pendingAssignments) {
           entry.node.visible = false
@@ -422,11 +415,7 @@ export async function createComparisonWorkloadPreview(options: {
         entry.sourceText = content
         const column = iconIndex % window.layout.columns
         const row = Math.floor(iconIndex / window.layout.columns)
-        entry.text.position.set(
-          window.layout.inset + column * (window.layout.cellWidth + window.layout.gap),
-          -(window.layout.inset + row * (window.layout.cellHeight + window.layout.gap)),
-          0,
-        )
+        positionIconGridEntry(entry, window.layout, column, row, configuration.fontSize)
         entry.node.visible = true
       }
       for (const entry of availableEntries.slice(missingIndices.length)) {
@@ -435,6 +424,42 @@ export async function createComparisonWorkloadPreview(options: {
       }
       iconRecycleCount += recycled
       settleIconWindow(window)
+    }
+
+    async function resizeIconPool(
+      poolCapacity: number,
+      iconSize: number,
+      layout: IconGridLayout,
+    ): Promise<void> {
+      if (activeIconFont === undefined) throw new Error('icon grid lost its icon font fixture')
+      if (poolCapacity > entries.length) {
+        const additions = createIconGridEntries(
+          activeFont.font,
+          activeFont.raster,
+          activeIconFont,
+          rendererViewport.pixelRatio,
+          iconSize,
+          poolCapacity - entries.length,
+        )
+        try {
+          await Promise.all(additions.flatMap(entryReadyPromises))
+        } catch (error) {
+          disposeEntries(additions)
+          throw error
+        }
+        if (closing || disposed) {
+          disposeEntries(additions)
+          return
+        }
+        entries = [...entries, ...additions]
+        for (const { node } of additions) scene.add(node)
+      } else if (poolCapacity < entries.length) {
+        const removed = entries.slice(poolCapacity)
+        entries = entries.slice(0, poolCapacity)
+        for (const { node } of removed) scene.remove(node)
+        disposeEntries(removed)
+      }
+      await resizeIconGridEntries(entries, iconSize, layout)
     }
 
     function settleIconWindow(window: IconGridVirtualWindow): void {
@@ -492,7 +517,11 @@ export async function createComparisonWorkloadPreview(options: {
       viewportChanged: boolean,
     ): Promise<void> {
       canvasSurface.setGridVisible(next.showGrid)
-      if (next.workload === 'icon-grid' && viewportChanged) {
+      if (
+        next.workload === 'icon-grid' &&
+        (viewportChanged || next.fontSize !== configuration.fontSize)
+      ) {
+        await iconWindowDrain
         clampIconGridScene(scene, next.fontSize, width, height)
         const nextWindow = iconGridVirtualWindow(
           ICON_GRID_ITEMS.length,
@@ -502,13 +531,12 @@ export async function createComparisonWorkloadPreview(options: {
           -scene.position.x,
           scene.position.y,
         )
-        if (iconGridViewportUpdateKind(entries.length, nextWindow) === 'retained') {
-          configuration = next
-          revision += 1
-          applyRetainedConfiguration(entries, technique, configuration)
-          requestIconWindowRefresh()
-          return
-        }
+        await resizeIconPool(nextWindow.poolCapacity, next.fontSize, nextWindow.layout)
+        configuration = next
+        revision += 1
+        applyRetainedConfiguration(entries, technique, configuration)
+        await applyIconWindow(nextWindow)
+        return
       }
       if (comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild') {
         await commit(next)
@@ -632,7 +660,7 @@ export async function createComparisonWorkloadPreview(options: {
         if (snapshot === undefined) return
         scheduleGpuTimestamp()
         const activeEntries = entries.filter(({ node }) => node.visible)
-        const layouts = activeEntries.map(({ text }) => committedLayout(text))
+        const layouts = activeEntries.flatMap(entryLayouts)
         const framebufferGpuBytes =
           rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
         const common = {
@@ -641,14 +669,14 @@ export async function createComparisonWorkloadPreview(options: {
           showGrid: configuration.showGrid,
           ...snapshot,
           glyphCount: activeEntries.reduce(
-            (total, { text }) => total + renderedGlyphCount(text),
+            (total, entry) => total + renderedGlyphCount(entry.node),
             0,
           ),
           missingGlyphCount: layouts.reduce(
             (total, layout) => total + missingGlyphCount(layout),
             0,
           ),
-          drawCount: activeEntries.reduce((total, { text }) => total + drawCount(text), 0),
+          drawCount: activeEntries.reduce((total, entry) => total + drawCount(entry.node), 0),
           layoutWidth: layouts.reduce((maximum, layout) => Math.max(maximum, layout.width), 0),
           layoutHeight: layouts.reduce((total, layout) => total + layout.height, 0),
           lineCount: layouts.reduce((total, layout) => total + layout.lineGlyphCounts.length, 0),
@@ -928,36 +956,15 @@ function createEntries(
       iconScrollX,
       iconScrollY,
     )
-    return Array.from({ length: window.poolCapacity }, (_, poolIndex) => {
-      const iconIndex = window.indices[poolIndex] ?? 0
-      const { content, glyph } = iconGridContent(iconIndex)
-      const text = new Text({
-        ...base,
-        text: content,
-        spans: [
-          {
-            start: 0,
-            end: glyph.length,
-            font: iconFont.font,
-            fontSize: configuration.fontSize,
-          },
-        ],
-        fontSize: ICON_GRID_LABEL_SIZE,
-        color: LIVE_TEXT_COLOR,
-        width: window.layout.cellWidth,
-        maxLines: 2,
-        overflow: 'ellipsis',
-        wrap: 'none',
-        textAlign: 'center',
-      })
-      const entry = textEntry('primary', text, content)
-      if (window.indices[poolIndex] === undefined) {
-        entry.node.visible = false
-      } else {
-        entry.virtualIconIndex = iconIndex
-      }
-      return entry
-    })
+    return createIconGridEntries(
+      font,
+      raster,
+      iconFont,
+      dpr,
+      configuration.fontSize,
+      window.poolCapacity,
+      window.indices,
+    )
   }
   if (configuration.workload === 'paint-effects') {
     const maximumOutlineWidth = configuration.fontSize / 16
@@ -1045,6 +1052,104 @@ function textEntry(role: WorkloadEntry['role'], text: Text, sourceText: string):
   return { node: text, role, sourceText, text }
 }
 
+function createIconGridEntries(
+  labelFont: RegisteredFont,
+  labelRaster: AnyRasterInput,
+  iconFont: LoadedTechniqueFont,
+  dpr: number,
+  iconSize: number,
+  count: number,
+  indices: readonly number[] = [],
+): readonly WorkloadEntry[] {
+  return Array.from({ length: count }, (_, poolIndex) => {
+    const assignedIndex = indices[poolIndex]
+    const iconIndex = assignedIndex ?? 0
+    const { content, glyph } = iconGridContent(iconIndex)
+    const text = new Text({
+      font: iconFont.font,
+      raster: iconFont.raster,
+      rasterPixelRatio: dpr,
+      text: glyph,
+      fontSize: iconSize,
+      color: LIVE_TEXT_COLOR,
+    })
+    const labelText = new Text({
+      font: labelFont,
+      raster: labelRaster,
+      rasterPixelRatio: dpr,
+      text: iconGridLabel(iconIndex),
+      fontSize: ICON_GRID_LABEL_SIZE,
+      lineHeight: LIVE_TEXT_LINE_HEIGHT,
+      color: LIVE_TEXT_COLOR,
+      width: ICON_GRID_LABEL_WIDTH,
+      maxLines: 2,
+      overflow: 'ellipsis',
+      wrap: 'none',
+      textAlign: 'center',
+    })
+    const node = new THREE.Group()
+    node.add(text, labelText)
+    const entry: WorkloadEntry = {
+      node,
+      role: 'primary',
+      sourceText: content,
+      text,
+      labelText,
+    }
+    if (assignedIndex === undefined) node.visible = false
+    else entry.virtualIconIndex = assignedIndex
+    return entry
+  })
+}
+
+function entryReadyPromises(entry: WorkloadEntry): readonly Promise<void>[] {
+  return entry.labelText === undefined
+    ? [entry.text.ready]
+    : [entry.text.ready, entry.labelText.ready]
+}
+
+function entryLayouts(entry: WorkloadEntry): readonly ParagraphLayout[] {
+  return entry.labelText === undefined
+    ? [committedLayout(entry.text)]
+    : [committedLayout(entry.text), committedLayout(entry.labelText)]
+}
+
+async function resizeIconGridEntries(
+  entries: readonly WorkloadEntry[],
+  iconSize: number,
+  layout: IconGridLayout,
+): Promise<void> {
+  for (const entry of entries) entry.text.setProperties({ fontSize: iconSize })
+  await Promise.all(entries.map(({ text }) => text.ready))
+  for (const entry of entries) {
+    if (entry.virtualIconIndex === undefined) continue
+    const column = entry.virtualIconIndex % layout.columns
+    const row = Math.floor(entry.virtualIconIndex / layout.columns)
+    positionIconGridEntry(entry, layout, column, row, iconSize)
+  }
+}
+
+function positionIconGridEntry(
+  entry: WorkloadEntry,
+  layout: IconGridLayout,
+  column: number,
+  row: number,
+  iconSize: number,
+): void {
+  const iconLayout = committedLayout(entry.text)
+  entry.node.position.set(
+    layout.inset + column * (layout.cellWidth + layout.gap),
+    -(layout.inset + row * (layout.cellHeight + layout.gap)),
+    0,
+  )
+  entry.text.position.set((layout.cellWidth - iconLayout.width) / 2, 0, 0)
+  entry.labelText?.position.set(
+    (layout.cellWidth - ICON_GRID_LABEL_WIDTH) / 2,
+    -(iconSize * LIVE_TEXT_LINE_HEIGHT + ICON_GRID_LABEL_GAP),
+    0,
+  )
+}
+
 function layoutEntries(
   entries: readonly WorkloadEntry[],
   configuration: ComparisonWorkloadConfiguration,
@@ -1070,11 +1175,7 @@ function layoutEntries(
       if (entry.virtualIconIndex === undefined) continue
       const column = entry.virtualIconIndex % grid.columns
       const row = Math.floor(entry.virtualIconIndex / grid.columns)
-      entry.text.position.set(
-        grid.inset + column * (grid.cellWidth + grid.gap),
-        -(grid.inset + row * (grid.cellHeight + grid.gap)),
-        0,
-      )
+      positionIconGridEntry(entry, grid, column, row, configuration.fontSize)
     }
     return
   }
@@ -1115,6 +1216,12 @@ function iconGridContent(iconIndex: number): {
   if (icon === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`)
   const glyph = String.fromCodePoint(icon.codePoint)
   return { content: `${glyph}\n${icon.name}`, glyph }
+}
+
+function iconGridLabel(iconIndex: number): string {
+  const icon = ICON_GRID_ITEMS[iconIndex]
+  if (icon === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`)
+  return icon.name
 }
 
 function animateEntries(
@@ -1218,8 +1325,9 @@ export function comparisonWorkloadUpdateKind(
 ): 'rebuild' | 'retained' {
   const paragraphVolumeChanged =
     next.workload === 'paragraph-stress' && previous.amount !== next.amount
+  const fontSizeRebuild = previous.fontSize !== next.fontSize && next.workload !== 'icon-grid'
   return viewportChanged ||
-    previous.fontSize !== next.fontSize ||
+    fontSizeRebuild ||
     previous.layoutWidthRatio !== next.layoutWidthRatio ||
     paragraphVolumeChanged
     ? 'rebuild'
@@ -1880,6 +1988,7 @@ function disposeEntries(entries: readonly WorkloadEntry[]): void {
   for (const entry of entries) {
     entry.disposed = true
     entry.text.dispose()
+    entry.labelText?.dispose()
     entry.bounds?.geometry.dispose()
     entry.bounds?.material.dispose()
   }

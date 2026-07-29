@@ -69,6 +69,17 @@ describe('comparison workload updates', () => {
     )
     expect(comparisonWorkloadUpdateKind(paragraphStress, paragraphStress)).toBe('retained')
   })
+
+  it('keeps icon-size changes on the retained tile path', () => {
+    const iconGrid = {
+      ...baseConfiguration,
+      workload: 'icon-grid',
+    } satisfies ComparisonWorkloadConfiguration
+
+    expect(comparisonWorkloadUpdateKind(iconGrid, { ...iconGrid, fontSize: 1_024 })).toBe(
+      'retained',
+    )
+  })
 })
 
 describe('dynamic layout animation', () => {

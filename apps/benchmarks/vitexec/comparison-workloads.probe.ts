@@ -41,6 +41,17 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     }
 
     if (workload.id === 'icon-grid') {
+      const displayedFixtures = [
+        ...document.querySelectorAll<HTMLElement>('[data-icon-font-fixture]'),
+      ]
+      if (
+        displayedFixtures.length === 0 ||
+        displayedFixtures.some(
+          (element) => element.dataset.iconFontFixture !== 'font-awesome-free-6.7.2',
+        )
+      ) {
+        throw new Error(`${techniqueLabel(technique)} icon grid exposed the wrong font fixture`)
+      }
       if (
         viewport.getAttribute('data-font-fixture') !== 'font-awesome-free-6.7.2' ||
         viewport.getAttribute('data-label-font-fixture') !== 'inter'
