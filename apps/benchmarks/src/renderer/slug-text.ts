@@ -46,6 +46,11 @@ import {
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry'
 import { compareRgba8Coverage } from './mtsdf-cpu-reference'
 import { renderFlatSlugCpuReference } from './slug-cpu-reference'
+import type {
+  SlugAffineRoleSceneDefinition,
+  SlugProjectionZoomSceneDefinition,
+  SlugRoleSceneDefinition,
+} from './slug-role-scenes'
 import {
   captureSourceOutlineFidelity,
   type SourceOutlineFidelityCapture,
@@ -129,7 +134,69 @@ export interface SlugTextConformanceCapture {
   readonly severeErrorPixels: number
   readonly glyphCount: number
   readonly evaluatedCurves: number
+  readonly viewportClipped: boolean
   readonly renderSubmitMs: number
+}
+
+export interface SlugRoleSceneCapture {
+  readonly scene: SlugRoleSceneDefinition
+  readonly dpr: number
+  readonly width: number
+  readonly height: number
+  readonly candidate: Uint8Array
+  readonly cpuReference: Uint8Array
+  readonly sourceReference: Uint8Array
+  readonly cpuMeanAbsoluteError: number
+  readonly cpuMaximumError: number
+  readonly cpuErrorPixels: number
+  readonly cpuSevereErrorPixels: number
+  readonly sourceMeanAbsoluteError: number
+  readonly sourceMaximumError: number
+  readonly sourceErrorPixels: number
+  readonly glyphCount: number
+  readonly evaluatedCurves: number
+  readonly boundaryInkPixels: number
+  readonly viewportClipped: boolean
+  readonly renderSubmitMs: number
+}
+
+export interface SlugAffineRoleSceneCapture {
+  readonly scene: SlugAffineRoleSceneDefinition
+  readonly dpr: number
+  readonly width: number
+  readonly height: number
+  readonly candidate: Uint8Array
+  readonly sourceReference: Uint8Array
+  readonly sourceMeanAbsoluteError: number
+  readonly sourceMaximumError: number
+  readonly sourceErrorPixels: number
+  readonly boundaryInkPixels: number
+  readonly renderSubmitMs: number
+}
+
+export interface SlugProjectionZoomCapture {
+  readonly zoom: 1 | 8
+  readonly candidate: Uint8Array
+  readonly sourceReference: Uint8Array
+  readonly sourceMeanAbsoluteError: number
+  readonly sourceMaximumError: number
+  readonly sourceErrorPixels: number
+  readonly fringeWidth: number
+  readonly fringeSampleY: number
+  readonly fringeInkMinX: number
+  readonly fringeInkMaxX: number
+  readonly leftFringeWidth: number
+  readonly rightFringeWidth: number
+  readonly inkPixels: number
+  readonly renderSubmitMs: number
+}
+
+export interface SlugProjectionZoomRoleSceneCapture {
+  readonly scene: SlugProjectionZoomSceneDefinition
+  readonly dpr: number
+  readonly width: number
+  readonly height: number
+  readonly captures: readonly [SlugProjectionZoomCapture, SlugProjectionZoomCapture]
 }
 
 interface FlatSlugConformanceResources {
@@ -827,6 +894,269 @@ export async function captureSlugSourceOutlineFidelity(options: {
   }
 }
 
+export async function captureSlugRoleScene(options: {
+  readonly backend: RendererBackend
+  readonly dpr: 1 | 2
+  readonly scene: SlugRoleSceneDefinition
+  readonly signal?: AbortSignal
+}): Promise<SlugRoleSceneCapture> {
+  const { dpr, scene } = options
+  const resources = await createFlatSlugConformanceResources(
+    options.backend,
+    dpr,
+    scene.fontFixture,
+    options.signal,
+    'baked',
+    undefined,
+    {
+      width: scene.physicalWidth / dpr,
+      height: scene.physicalHeight / dpr,
+      fontSize: scene.physicalPpem / dpr,
+      layoutWidth: scene.physicalLayoutWidth / dpr,
+      originX: scene.physicalOriginX / dpr,
+      originY: scene.physicalOriginY / dpr,
+      text: scene.text,
+      language: scene.language,
+      direction: scene.direction,
+    },
+  )
+  try {
+    options.signal?.throwIfAborted()
+    const cpuCapture = await captureFlatSlugConformance(resources)
+    const sourceCapture = await captureSourceOutlineFidelity({
+      candidate: cpuCapture.candidate,
+      width: cpuCapture.width,
+      height: cpuCapture.height,
+      dpr,
+      fontFixture: scene.fontFixture,
+      fontSize: scene.physicalPpem / dpr,
+      direction: scene.direction,
+      layout: committedLayout(resources.line),
+      originX: scene.physicalOriginX / dpr,
+      originY: scene.physicalOriginY / dpr,
+      text: scene.text,
+      renderSubmitMs: cpuCapture.renderSubmitMs,
+    })
+    return {
+      scene,
+      dpr,
+      width: cpuCapture.width,
+      height: cpuCapture.height,
+      candidate: cpuCapture.candidate,
+      cpuReference: cpuCapture.reference,
+      sourceReference: sourceCapture.reference,
+      cpuMeanAbsoluteError: cpuCapture.meanAbsoluteError,
+      cpuMaximumError: cpuCapture.maximumError,
+      cpuErrorPixels: cpuCapture.errorPixels,
+      cpuSevereErrorPixels: cpuCapture.severeErrorPixels,
+      sourceMeanAbsoluteError: sourceCapture.meanAbsoluteError,
+      sourceMaximumError: sourceCapture.maximumError,
+      sourceErrorPixels: sourceCapture.errorPixels,
+      glyphCount: cpuCapture.glyphCount,
+      evaluatedCurves: cpuCapture.evaluatedCurves,
+      boundaryInkPixels: countBoundaryInkPixels(
+        cpuCapture.candidate,
+        cpuCapture.width,
+        cpuCapture.height,
+      ),
+      viewportClipped: cpuCapture.viewportClipped,
+      renderSubmitMs: cpuCapture.renderSubmitMs,
+    }
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+export async function captureSlugAffineRoleScene(options: {
+  readonly backend: RendererBackend
+  readonly dpr: 1 | 2
+  readonly scene: SlugAffineRoleSceneDefinition
+  readonly signal?: AbortSignal
+}): Promise<SlugAffineRoleSceneCapture> {
+  const { dpr, scene } = options
+  const resources = await createFlatSlugConformanceResources(
+    options.backend,
+    dpr,
+    scene.fontFixture,
+    options.signal,
+    'baked',
+    undefined,
+    {
+      width: scene.physicalWidth / dpr,
+      height: scene.physicalHeight / dpr,
+      fontSize: scene.physicalPpem / dpr,
+      layoutWidth: scene.physicalLayoutWidth / dpr,
+      originX: 0,
+      originY: 0,
+      text: scene.text,
+      language: scene.language,
+      direction: scene.direction,
+    },
+  )
+  try {
+    const positionX = scene.physicalPositionX / dpr
+    const positionY = scene.physicalPositionY / dpr
+    resources.line.position.set(positionX, positionY, 0)
+    resources.line.rotation.z = scene.rotationRadians
+    resources.line.scale.set(scene.scaleX, scene.scaleY, 1)
+    resources.line.updateMatrixWorld(true)
+    const capture = await captureFlatSlugCandidate(resources)
+    const cosine = Math.cos(scene.rotationRadians)
+    const sine = Math.sin(scene.rotationRadians)
+    const source = await captureSourceOutlineFidelity({
+      candidate: capture.candidate,
+      width: capture.width,
+      height: capture.height,
+      dpr,
+      fontFixture: scene.fontFixture,
+      fontSize: scene.physicalPpem / dpr,
+      direction: scene.direction,
+      layout: committedLayout(resources.line),
+      originX: 0,
+      originY: 0,
+      text: scene.text,
+      renderSubmitMs: capture.renderSubmitMs,
+      transform: {
+        a: cosine * scene.scaleX,
+        b: -sine * scene.scaleX,
+        c: sine * scene.scaleY,
+        d: cosine * scene.scaleY,
+        e: positionX,
+        f: -positionY,
+      },
+    })
+    return {
+      scene,
+      dpr,
+      width: capture.width,
+      height: capture.height,
+      candidate: capture.candidate,
+      sourceReference: source.reference,
+      sourceMeanAbsoluteError: source.meanAbsoluteError,
+      sourceMaximumError: source.maximumError,
+      sourceErrorPixels: source.errorPixels,
+      boundaryInkPixels: countBoundaryInkPixels(capture.candidate, capture.width, capture.height),
+      renderSubmitMs: capture.renderSubmitMs,
+    }
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+export async function captureSlugProjectionZoomRoleScene(options: {
+  readonly backend: RendererBackend
+  readonly dpr: 1 | 2
+  readonly scene: SlugProjectionZoomSceneDefinition
+  readonly signal?: AbortSignal
+}): Promise<SlugProjectionZoomRoleSceneCapture> {
+  const { dpr, scene } = options
+  const logicalWidth = scene.physicalWidth / dpr
+  const logicalHeight = scene.physicalHeight / dpr
+  const resources = await createFlatSlugConformanceResources(
+    options.backend,
+    dpr,
+    scene.fontFixture,
+    options.signal,
+    'baked',
+    undefined,
+    {
+      width: logicalWidth,
+      height: logicalHeight,
+      fontSize: scene.physicalPpem / dpr,
+      layoutWidth: logicalWidth,
+      originX: 0,
+      originY: 0,
+      text: scene.text,
+      language: 'en',
+      direction: 'ltr',
+    },
+  )
+  try {
+    const layout = committedLayout(resources.line)
+    const zeroOriginReference = renderFlatSlugCpuReference(resources.resource, layout, {
+      width: scene.physicalWidth,
+      height: scene.physicalHeight,
+      dpr,
+    })
+    const bounds = zeroOriginReference.unclippedBounds
+    if (bounds === undefined) throw new Error('Slug projection zoom scene contains no glyph bounds')
+    const originX = (scene.physicalWidth / 2 - (bounds.minX + bounds.maxX + 1) / 2) / dpr
+    const originY = -((scene.physicalHeight / 2 - (bounds.minY + bounds.maxY + 1) / 2) / dpr)
+    resources.line.position.set(originX, originY, 0)
+    const captures: SlugProjectionZoomCapture[] = []
+    for (const zoom of scene.zooms) {
+      resources.camera.zoom = zoom
+      resources.camera.updateProjectionMatrix()
+      const capture = await captureFlatSlugCandidate(resources)
+      const source = await captureSourceOutlineFidelity({
+        candidate: capture.candidate,
+        width: capture.width,
+        height: capture.height,
+        dpr,
+        fontFixture: scene.fontFixture,
+        fontSize: scene.physicalPpem / dpr,
+        direction: 'ltr',
+        layout,
+        originX,
+        originY,
+        text: scene.text,
+        renderSubmitMs: capture.renderSubmitMs,
+        transform: {
+          a: zoom,
+          b: 0,
+          c: 0,
+          d: zoom,
+          e: (logicalWidth * (1 - zoom)) / 2,
+          f: (logicalHeight * (1 - zoom)) / 2,
+        },
+      })
+      const fringe = horizontalFringeAtCenter(capture.candidate, capture.width, capture.height)
+      captures.push({
+        zoom,
+        candidate: capture.candidate,
+        sourceReference: source.reference,
+        sourceMeanAbsoluteError: source.meanAbsoluteError,
+        sourceMaximumError: source.maximumError,
+        sourceErrorPixels: source.errorPixels,
+        fringeWidth: fringe.maximumPartialCoverageRun,
+        fringeSampleY: fringe.sampleY,
+        fringeInkMinX: fringe.inkMinX,
+        fringeInkMaxX: fringe.inkMaxX,
+        leftFringeWidth: fringe.leftPartialCoverageWidth,
+        rightFringeWidth: fringe.rightPartialCoverageWidth,
+        inkPixels: countInkPixels(capture.candidate),
+        renderSubmitMs: capture.renderSubmitMs,
+      })
+    }
+    const one = captures[0]
+    const eight = captures[1]
+    if (one === undefined || eight === undefined) {
+      throw new Error('Slug projection zoom scene omitted a required zoom')
+    }
+    return {
+      scene,
+      dpr,
+      width: scene.physicalWidth,
+      height: scene.physicalHeight,
+      captures: [one, eight],
+    }
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+interface FlatSlugSceneOptions {
+  readonly width: number
+  readonly height: number
+  readonly fontSize: number
+  readonly layoutWidth: number
+  readonly originX: number
+  readonly originY: number
+  readonly text: string
+  readonly language: string
+  readonly direction: 'ltr' | 'rtl'
+}
+
 async function createFlatSlugConformanceResources(
   backend: RendererBackend,
   dpr: number,
@@ -834,13 +1164,14 @@ async function createFlatSlugConformanceResources(
   signal?: AbortSignal,
   delivery: FontDelivery = 'baked',
   bakedArtifact?: SlugBakedArtifactSource,
+  sceneOptions?: FlatSlugSceneOptions,
 ): Promise<FlatSlugConformanceResources> {
   signal?.throwIfAborted()
   const canvas = document.createElement('canvas')
   const renderer = await createConfiguredRenderer({
     canvas,
-    width: WIDTH,
-    height: FLAT_CONFORMANCE_HEIGHT,
+    width: sceneOptions?.width ?? WIDTH,
+    height: sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT,
     backend,
     dpr,
   })
@@ -855,15 +1186,15 @@ async function createFlatSlugConformanceResources(
         : await loadSlugBakedArtifact(bakedArtifact, signal)
     font = loaded.font
     const rasterKey = await slugDescriptorRasterKey()
-    const specimen = rasterConformanceSpecimen(fontFixture)
+    const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture)
     line = new Text({
       text: specimen.text,
       font,
       raster: loaded.raster,
-      fontSize: 64 / dpr,
+      fontSize: sceneOptions?.fontSize ?? 64 / dpr,
       rasterPixelRatio: dpr,
       lineHeight: 1.2,
-      width: 476,
+      width: sceneOptions?.layoutWidth ?? 476,
       wrap: 'word',
       color: 0xffffff,
       language: specimen.language,
@@ -886,15 +1217,17 @@ async function createFlatSlugConformanceResources(
     )
     resource = await loaded.raster.decode(font, raster, signal)
     signal?.throwIfAborted()
-    line.position.set(18, -18, 0)
+    line.position.set(sceneOptions?.originX ?? 18, sceneOptions?.originY ?? -18, 0)
     const scene = new THREE.Scene()
     scene.add(line)
-    const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -FLAT_CONFORMANCE_HEIGHT, 0.1, 1_000)
+    const logicalWidth = sceneOptions?.width ?? WIDTH
+    const logicalHeight = sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT
+    const camera = new THREE.OrthographicCamera(0, logicalWidth, 0, -logicalHeight, 0.1, 1_000)
     camera.position.z = 500
     camera.updateProjectionMatrix()
     target = new THREE.RenderTarget(
-      Math.round(WIDTH * dpr),
-      Math.round(FLAT_CONFORMANCE_HEIGHT * dpr),
+      Math.round(logicalWidth * dpr),
+      Math.round(logicalHeight * dpr),
       {
         depthBuffer: false,
         stencilBuffer: false,
@@ -920,8 +1253,64 @@ async function createFlatSlugConformanceResources(
 async function captureFlatSlugConformance(
   resources: FlatSlugConformanceResources,
 ): Promise<SlugTextConformanceCapture> {
-  const width = Math.round(WIDTH * resources.dpr)
-  const height = Math.round(FLAT_CONFORMANCE_HEIGHT * resources.dpr)
+  const { candidate, width, height, renderSubmitMs } = await captureFlatSlugCandidate(resources)
+  const referenceResult = renderFlatSlugCpuReference(
+    resources.resource,
+    committedLayout(resources.line),
+    {
+      width,
+      height,
+      dpr: resources.dpr,
+      originX: resources.line.position.x,
+      originY: resources.line.position.y,
+    },
+  )
+  const reference = referenceResult.pixels
+  const comparison = compareRgba8Coverage(candidate, reference)
+  const viewportClipped =
+    referenceResult.unclippedBounds !== undefined &&
+    (referenceResult.unclippedBounds.minX < 0 ||
+      referenceResult.unclippedBounds.minY < 0 ||
+      referenceResult.unclippedBounds.maxX >= width ||
+      referenceResult.unclippedBounds.maxY >= height)
+  return {
+    width,
+    height,
+    candidate,
+    reference,
+    difference: comparison.heatmap,
+    meanAbsoluteError: comparison.meanAbsoluteError,
+    maximumError: comparison.maximumError,
+    errorPixels: comparison.errorPixels,
+    severeErrorPixels: comparison.severeErrorPixels,
+    glyphCount: referenceResult.glyphCount,
+    evaluatedCurves: referenceResult.evaluatedCurves,
+    viewportClipped,
+    renderSubmitMs,
+  }
+}
+
+interface FlatSlugCandidateCapture {
+  readonly candidate: Uint8Array
+  readonly width: number
+  readonly height: number
+  readonly renderSubmitMs: number
+}
+
+async function captureFlatSlugCandidate(
+  resources: FlatSlugConformanceResources,
+): Promise<FlatSlugCandidateCapture> {
+  const rendererViewport = readRendererViewportState(resources.renderer)
+  const width = resources.target.width
+  const height = resources.target.height
+  if (
+    rendererViewport.drawingBufferWidth !== width ||
+    rendererViewport.drawingBufferHeight !== height
+  ) {
+    throw new Error(
+      `Slug render target ${String(width)}x${String(height)} does not match drawing buffer ${String(rendererViewport.drawingBufferWidth)}x${String(rendererViewport.drawingBufferHeight)}`,
+    )
+  }
   resources.renderer.setRenderTarget(resources.target)
   resources.renderer.setClearColor(0x000000, 1)
   resources.renderer.clear()
@@ -936,39 +1325,98 @@ async function captureFlatSlugConformance(
     height,
   )
   resources.renderer.setRenderTarget(null)
-  const candidate = compactRgba8Readback(
-    new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
-    width,
-    height,
-    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-  )
-  const referenceResult = renderFlatSlugCpuReference(
-    resources.resource,
-    committedLayout(resources.line),
-    {
+  return {
+    candidate: compactRgba8Readback(
+      new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
       width,
       height,
-      dpr: resources.dpr,
-      originX: resources.line.position.x,
-      originY: resources.line.position.y,
-    },
-  )
-  const reference = referenceResult.pixels
-  const comparison = compareRgba8Coverage(candidate, reference)
-  return {
+      resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+    ),
     width,
     height,
-    candidate,
-    reference,
-    difference: comparison.heatmap,
-    meanAbsoluteError: comparison.meanAbsoluteError,
-    maximumError: comparison.maximumError,
-    errorPixels: comparison.errorPixels,
-    severeErrorPixels: comparison.severeErrorPixels,
-    glyphCount: referenceResult.glyphCount,
-    evaluatedCurves: referenceResult.evaluatedCurves,
     renderSubmitMs,
   }
+}
+
+function countBoundaryInkPixels(bytes: Uint8Array, width: number, height: number): number {
+  let count = 0
+  for (let x = 0; x < width; x += 1) {
+    if (pixelHasInk(bytes, x)) count += 1
+    if (height > 1 && pixelHasInk(bytes, (height - 1) * width + x)) count += 1
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    if (pixelHasInk(bytes, y * width)) count += 1
+    if (width > 1 && pixelHasInk(bytes, y * width + width - 1)) count += 1
+  }
+  return count
+}
+
+function countInkPixels(bytes: Uint8Array): number {
+  let count = 0
+  for (let offset = 0; offset < bytes.byteLength; offset += 4) {
+    if (bytes[offset]! > 32 || bytes[offset + 1]! > 32 || bytes[offset + 2]! > 32) count += 1
+  }
+  return count
+}
+
+interface HorizontalFringeMeasurement {
+  readonly sampleY: number
+  readonly inkMinX: number
+  readonly inkMaxX: number
+  readonly leftPartialCoverageWidth: number
+  readonly rightPartialCoverageWidth: number
+  readonly maximumPartialCoverageRun: number
+}
+
+function horizontalFringeAtCenter(
+  bytes: Uint8Array,
+  width: number,
+  height: number,
+): HorizontalFringeMeasurement {
+  let maximum = 0
+  let run = 0
+  const y = Math.floor(height / 2)
+  let inkMinX = width
+  let inkMaxX = -1
+  for (let x = 0; x < width; x += 1) {
+    const value = bytes[(y * width + x) * 4]!
+    if (value > 8) {
+      inkMinX = Math.min(inkMinX, x)
+      inkMaxX = x
+    }
+    if (value > 8 && value < 247) {
+      run += 1
+      maximum = Math.max(maximum, run)
+    } else {
+      run = 0
+    }
+  }
+  if (inkMaxX < inkMinX) throw new Error('Slug projection zoom center row contains no ink')
+  let leftPartialCoverageWidth = 0
+  for (let x = inkMinX; x <= inkMaxX; x += 1) {
+    const value = bytes[(y * width + x) * 4]!
+    if (value <= 8 || value >= 247) break
+    leftPartialCoverageWidth += 1
+  }
+  let rightPartialCoverageWidth = 0
+  for (let x = inkMaxX; x >= inkMinX; x -= 1) {
+    const value = bytes[(y * width + x) * 4]!
+    if (value <= 8 || value >= 247) break
+    rightPartialCoverageWidth += 1
+  }
+  return {
+    sampleY: y,
+    inkMinX,
+    inkMaxX,
+    leftPartialCoverageWidth,
+    rightPartialCoverageWidth,
+    maximumPartialCoverageRun: maximum,
+  }
+}
+
+function pixelHasInk(bytes: Uint8Array, pixelIndex: number): boolean {
+  const offset = pixelIndex * 4
+  return bytes[offset] !== 0 || bytes[offset + 1] !== 0 || bytes[offset + 2] !== 0
 }
 
 async function disposeFlatSlugConformanceResources(

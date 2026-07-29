@@ -19,6 +19,7 @@ export interface SlugCpuReference {
   /** Top-to-bottom, straight-alpha RGBA8 pixels composited over opaque black. */
   readonly pixels: Uint8Array
   readonly bounds: SlugCpuReferenceBounds | undefined
+  readonly unclippedBounds: SlugCpuReferenceBounds | undefined
   readonly glyphCount: number
   readonly evaluatedCurves: number
 }
@@ -61,6 +62,7 @@ export function renderFlatSlugCpuReference(
   )
   const pixels = opaqueBlack(width, height)
   let bounds: SlugCpuReferenceBounds | undefined
+  let unclippedBounds: SlugCpuReferenceBounds | undefined
   let glyphCount = 0
   let evaluatedCurves = 0
 
@@ -95,17 +97,17 @@ export function renderFlatSlugCpuReference(
     const logicalRight = originX + layout.x[glyphIndex]! + planeRight * scale
     const logicalTop = -(originY - layout.y[glyphIndex]! + planeTop * scale)
     const logicalBottom = -(originY - layout.y[glyphIndex]! + planeBottom * scale)
-    const pixelBounds = clippedPixelBounds(
+    const glyphBounds = pixelBounds(
       logicalLeft * dpr - 0.5,
       logicalTop * dpr - 0.5,
       logicalRight * dpr + 0.5,
       logicalBottom * dpr + 0.5,
-      width,
-      height,
     )
-    if (pixelBounds === undefined) continue
+    unclippedBounds = unionBounds(unclippedBounds, glyphBounds)
+    const clippedBounds = clippedPixelBounds(glyphBounds, width, height)
+    if (clippedBounds === undefined) continue
     glyphCount += 1
-    bounds = unionBounds(bounds, pixelBounds)
+    bounds = unionBounds(bounds, clippedBounds)
 
     const normalizedLeft = planeLeft / resource.planeUnitsPerEm
     const normalizedBottom = planeBottom / resource.planeUnitsPerEm
@@ -117,9 +119,9 @@ export function renderFlatSlugCpuReference(
     const bandOffsetY = -normalizedBottom * bandScaleY
     const pixelsPerEm = Math.min(1 / MINIMUM_FOOTPRINT, fontSize * dpr)
 
-    for (let y = pixelBounds.minY; y <= pixelBounds.maxY; y += 1) {
+    for (let y = clippedBounds.minY; y <= clippedBounds.maxY; y += 1) {
       const renderY = (-(y + 0.5) / dpr - originY + layout.y[glyphIndex]!) / fontSize
-      for (let x = pixelBounds.minX; x <= pixelBounds.maxX; x += 1) {
+      for (let x = clippedBounds.minX; x <= clippedBounds.maxX; x += 1) {
         const renderX = ((x + 0.5) / dpr - originX - layout.x[glyphIndex]!) / fontSize
         const horizontal = evaluateBand(page, {
           axis: 'horizontal',
@@ -150,7 +152,7 @@ export function renderFlatSlugCpuReference(
     }
   }
 
-  return { width, height, pixels, bounds, glyphCount, evaluatedCurves }
+  return { width, height, pixels, bounds, unclippedBounds, glyphCount, evaluatedCurves }
 }
 
 interface BandOptions {
@@ -376,18 +378,29 @@ function assertLayoutArrays(layout: ParagraphLayout): void {
   }
 }
 
-function clippedPixelBounds(
+function pixelBounds(
   left: number,
   top: number,
   right: number,
   bottom: number,
+): SlugCpuReferenceBounds {
+  return {
+    minX: Math.ceil(left - 0.5),
+    minY: Math.ceil(top - 0.5),
+    maxX: Math.ceil(right - 0.5) - 1,
+    maxY: Math.ceil(bottom - 0.5) - 1,
+  }
+}
+
+function clippedPixelBounds(
+  bounds: SlugCpuReferenceBounds,
   width: number,
   height: number,
 ): SlugCpuReferenceBounds | undefined {
-  const minX = Math.max(0, Math.ceil(left - 0.5))
-  const minY = Math.max(0, Math.ceil(top - 0.5))
-  const maxX = Math.min(width - 1, Math.ceil(right - 0.5) - 1)
-  const maxY = Math.min(height - 1, Math.ceil(bottom - 0.5) - 1)
+  const minX = Math.max(0, bounds.minX)
+  const minY = Math.max(0, bounds.minY)
+  const maxX = Math.min(width - 1, bounds.maxX)
+  const maxY = Math.min(height - 1, bounds.maxY)
   return minX > maxX || minY > maxY ? undefined : { minX, minY, maxX, maxY }
 }
 

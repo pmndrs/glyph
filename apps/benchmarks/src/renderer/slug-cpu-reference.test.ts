@@ -13,6 +13,7 @@ describe('flat Slug CPU reference', () => {
     })
 
     expect(result.bounds).toEqual({ minX: 0, minY: 0, maxX: 3, maxY: 3 })
+    expect(result.unclippedBounds).toEqual({ minX: -1, minY: -1, maxX: 3, maxY: 3 })
     expect(result.glyphCount).toBe(1)
     expect(result.evaluatedCurves).toBeGreaterThan(0)
     expect(redRows(result.pixels, 4)).toEqual([
@@ -38,6 +39,7 @@ describe('flat Slug CPU reference', () => {
     })
 
     expect(result.bounds).toEqual({ minX: 0, minY: 0, maxX: 3, maxY: 3 })
+    expect(result.unclippedBounds).toEqual({ minX: -2, minY: -1, maxX: 4, maxY: 3 })
     expect(result.glyphCount).toBe(2)
     expect(redRows(result.pixels, 4)).toEqual([
       [128, 192, 192, 128],
