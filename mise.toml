@@ -1,2 +1,6 @@
 [settings]
 idiomatic_version_file_enable_tools = ["node", "pnpm", "rust"]
+
+[tools]
+"pipx:meson" = "1.11.1"
+"aqua:ninja-build/ninja" = "1.13.2"

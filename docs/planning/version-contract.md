@@ -11,6 +11,12 @@ sources:
   - id: harfbuzz
     resource: https://github.com/harfbuzz/harfbuzz/releases/tag/13.0.0
     title: HarfBuzz 13.0.0
+  - id: meson
+    resource: https://github.com/mesonbuild/meson/releases/tag/1.11.1
+    title: Meson 1.11.1
+  - id: ninja
+    resource: https://github.com/ninja-build/ninja/releases/tag/v1.13.2
+    title: Ninja 1.13.2
   - id: unicode
     resource: https://www.unicode.org/versions/Unicode17.0.0/
     title: Unicode 17.0.0
@@ -61,7 +67,7 @@ sources:
     title: libfuzzer-sys 0.4.13
 generated:
   by: openai-codex/gpt-5
-  at: "2026-07-26T03:29:05Z"
+  at: "2026-07-29T17:18:36Z"
 ---
 
 # V0 toolchain and format version pins
@@ -73,6 +79,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Surface | Pin | Source identity |
 | --- | --- | --- |
 | Rust toolchain | `1.97.1` | `rust-toolchain.toml` |
+| HarfBuzz build system | Meson `1.11.1` + Ninja `1.13.2` | exact root `mise.toml` pins; used to build the authenticated HarfBuzz oracle utilities from source |
 | HarfRust | `0.12.0` | tag commit `60b28ea22b5261710018d69c168a762bcb28794c` |
 | HarfBuzz oracle | `13.0.0` | tag commit `a0fc099681a69ae40665fbea74982a2e9d7a5260` |
 | MTSDF quality oracle | Chlumsky `msdfgen` `1.13.0` | tag `v1.13`, commit `1874bcf7d9624ccc85b4bc9a85d78116f690f35b`; source archive SHA-256 `93cd1ad8918c1a78c5c96e82d4f4c77f0eb86c2e7e8579a0967e54196c4b7167` |

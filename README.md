@@ -177,7 +177,7 @@ pnpm install
 pnpm check
 ```
 
-Use mise to install the exact root Node.js, pnpm, and stable Rust pins. Those canonical versions are required; do not substitute merely compatible local toolchains. The optional coverage-guided font-baker fuzzer is isolated
+Use mise to install the exact root Node.js, pnpm, stable Rust, Meson, and Ninja pins. Meson and Ninja build the authenticated HarfBuzz oracle utilities used by the clean-checkout fixture gates. Those canonical versions are required; do not substitute merely compatible local toolchains. The optional coverage-guided font-baker fuzzer is isolated
 under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and
 `cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
 
