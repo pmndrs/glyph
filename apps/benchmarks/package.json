@@ -11,6 +11,7 @@
     "capture:advanced-shaping-performance": "node ./scripts/capture-advanced-shaping-performance.mts",
     "capture:raster-performance": "node ./scripts/capture-raster-performance.mts",
     "capture:slug-performance-matrix": "node ./scripts/capture-slug-performance-matrix.mts",
+    "capture:slug-outline-performance": "node ./scripts/capture-slug-outline-performance.mts",
     "capture:slug-quality-matrix": "node ./scripts/capture-slug-quality-matrix.mts",
     "capture:slug-role-scenes": "node ./scripts/capture-slug-role-scenes.mts",
     "capture:slug-fixed32-quality": "node ./scripts/capture-slug-fixed32-quality.mts",

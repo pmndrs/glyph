@@ -79,30 +79,40 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', revision)
       const stroke = rangeControl(effectControlLabel('Stroke width', technique))
       const shadow = checkboxControl(effectControlLabel('Shadow', technique))
-      if (technique !== 'mtsdf') {
+      if (technique === 'bitmap') {
         if (!stroke.disabled || stroke.value !== '0') {
-          throw new Error(`${techniqueLabel(technique)} Paint & Effects exposed an active stroke`)
+          throw new Error('Bitmap Paint & Effects exposed an active stroke')
         }
         if (!shadow.disabled || shadow.checked) {
-          throw new Error(`${techniqueLabel(technique)} Paint & Effects exposed an active shadow`)
+          throw new Error('Bitmap Paint & Effects exposed an active shadow')
         }
       } else {
-        if (stroke.disabled) throw new Error('MSDF Paint & Effects disabled its stroke control')
+        if (stroke.disabled) {
+          throw new Error(
+            `${techniqueLabel(technique)} Paint & Effects disabled its stroke control`,
+          )
+        }
         const strokeRevision = numericAttribute(viewport, 'data-configuration-revision')
         setRange('Stroke width', 61)
         await waitForAttribute(viewport, 'data-paint-stroke-width', '0.61')
         await waitForGreaterAttribute(viewport, 'data-configuration-revision', strokeRevision)
-        if (shadow.disabled || !shadow.checked) {
-          throw new Error('MSDF Paint & Effects did not initialize its shadow')
+        if (technique === 'slug') {
+          if (!shadow.disabled || shadow.checked) {
+            throw new Error('Slug Paint & Effects exposed an active shadow')
+          }
+        } else {
+          if (shadow.disabled || !shadow.checked) {
+            throw new Error('MSDF Paint & Effects did not initialize its shadow')
+          }
+          const paintRevisionBeforeShadow = numericAttribute(viewport, 'data-paint-revision')
+          setCheckbox('Shadow', false)
+          await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false')
+          if (numericAttribute(viewport, 'data-paint-revision') <= paintRevisionBeforeShadow) {
+            throw new Error('MSDF shadow control replaced or reset the retained paint batch')
+          }
+          setCheckbox('Shadow', true)
+          await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'true')
         }
-        const paintRevisionBeforeShadow = numericAttribute(viewport, 'data-paint-revision')
-        setCheckbox('Shadow', false)
-        await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false')
-        if (numericAttribute(viewport, 'data-paint-revision') <= paintRevisionBeforeShadow) {
-          throw new Error('MSDF shadow control replaced or reset the retained paint batch')
-        }
-        setCheckbox('Shadow', true)
-        await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'true')
       }
       await waitForGreaterAttribute(viewport, 'data-paint-revision', paintRevision)
       if (
@@ -249,7 +259,7 @@ function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' 
 }
 
 function effectControlLabel(effect: 'Shadow' | 'Stroke width', technique: RasterTechnique): string {
-  if (technique === 'mtsdf') return effect
+  if (technique === 'mtsdf' || (technique === 'slug' && effect === 'Stroke width')) return effect
   return `${effect} · unavailable for ${technique === 'slug' ? 'Slug V0' : 'bitmap'}`
 }
 

@@ -334,7 +334,7 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
       return 'Increase text volume to inspect layout, draw, memory, CPU, and GPU cost.'
     case 'paint-effects':
       return technique === 'slug'
-        ? 'Adjust color and opacity while watching their live analytic rendering cost; Slug V0 intentionally omits stroke and shadow.'
+        ? 'Adjust color, opacity, and analytic stroke while watching their live rendering cost; Slug V0 intentionally omits shadow.'
         : 'Adjust color, opacity, stroke, and shadow while watching their live rendering cost.'
     default:
       return 'Change the paragraph width to inspect live reflow quality and cost.'
@@ -3725,19 +3725,17 @@ function Controls({
                 onChange={(event) => onPaintOpacityPercent(event.currentTarget.valueAsNumber)}
               />
               <Field
-                disabled={technique !== 'mtsdf'}
+                disabled={technique === 'bitmap'}
                 label={
-                  technique === 'mtsdf'
+                  technique !== 'bitmap'
                     ? `Stroke width · ${paintStrokePercent}%`
-                    : technique === 'slug'
-                      ? 'Stroke width · unavailable for Slug V0'
-                      : 'Stroke width · unavailable for bitmap'
+                    : 'Stroke width · unavailable for bitmap'
                 }
                 max={100}
                 min={0}
                 step={1}
                 type="range"
-                value={technique === 'mtsdf' ? paintStrokePercent : 0}
+                value={technique === 'bitmap' ? 0 : paintStrokePercent}
                 onChange={(event) => onPaintStrokePercent(event.currentTarget.valueAsNumber)}
               />
               <Toggle

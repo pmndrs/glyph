@@ -45,21 +45,20 @@ export function loadHeader(
   page: SlugShaderPage,
   index: Node<'uint'>,
   axis: 'horizontal' | 'vertical',
+  namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
 ): Node<'uint'> {
   const texel: Node<'vec4'> = textureLoad(
     page.headerTexture,
     gridCoordinate(index, page.headerWidth),
   )
-  return namedUint(
-    uint(texel.x),
-    axis === 'horizontal' ? 'slugHorizontalHeader' : 'slugVerticalHeader',
-  )
+  return namedUint(uint(texel.x), `${namePrefix}Header`)
 }
 
 export function loadReference(
   page: SlugShaderPage,
   index: Node<'uint'>,
   axis: 'horizontal' | 'vertical',
+  namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
 ): Node<'uint'> {
   const texel = loadUvec4(
     page.referenceTexture,
@@ -68,7 +67,7 @@ export function loadReference(
   const bitOffset = uintMul(uintBitAnd(index, uint(1)), uint(16))
   return namedUint(
     uintBitAnd(uintShiftRight(texel.x, bitOffset), uint(HEADER_REFERENCE_MASK)),
-    axis === 'horizontal' ? 'slugHorizontalReference' : 'slugVerticalReference',
+    `${namePrefix}Reference`,
   )
 }
 

@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T19:34:13Z"
+  at: "2026-07-29T04:55:53Z"
 ---
 
 # Canonical implementation roadmap
@@ -650,6 +650,7 @@ Deliver:
 - independently packaged and embedded raster parity;
 - large-size, extreme-zoom, complex-outline, clipping, and transform scenes;
 - quality-preserving comparisons to source outlines and the reviewed Three Flatland prior art;
+- centered analytic outline through one specialized draw whose unused and all-zero paths retain the original fill material and resource cost;
 - payload, upload, GPU-memory, and frame-time reports;
 - bundle assertions proving bitmap- and MSDF-only consumers do not import Slug code.
 

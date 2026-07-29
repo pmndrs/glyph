@@ -12,9 +12,11 @@
   "files": [
     "src/internal/slug-shaders/calc-coverage.ts",
     "src/internal/slug-shaders/calc-root-code.ts",
+    "src/internal/slug-shaders/distance-to-quad-bezier.ts",
     "src/internal/slug-shaders/slug-dilate.ts",
     "src/internal/slug-shaders/slug-band.ts",
     "src/internal/slug-shaders/slug-render.ts",
+    "src/internal/slug-shaders/slug-stroke.ts",
     "src/internal/slug-shaders/slug-texture.ts",
     "src/internal/slug-shaders/solve-quadratic.ts",
     "src/internal/slug-shaders/tsl-compat.ts",

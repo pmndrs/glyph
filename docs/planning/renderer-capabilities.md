@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  at: "2026-07-29T04:55:53Z"
 ---
 
 # Renderer capability matrix
@@ -61,7 +61,7 @@ This is the intended `pmndrs/text` feature set, not a claim about implemented be
 
 Notes:
 
-1. Bitmap outlines require dilation or another strike; Slug requires stroked contours or another payload/pass. MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range.
+1. Bitmap outlines require dilation or another strike. Slug provides bounded analytic per-glyph outline in one specialized draw. MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range.
 2. Soft effects may require extra samples, padding, or an offscreen blur. The API must report limits rather than imply identical output.
 3. Cosmetic thickness is not a substitute for shaping a real font weight.
 4. Extruded geometry is a separate mesh-generation feature, outside this 2D raster contract.

@@ -13,6 +13,17 @@ export interface SlugDilationResult {
   readonly textureCoordinate: readonly [number, number]
 }
 
+export interface SlugQuadraticDistanceResult {
+  readonly distance: number
+  readonly t: number
+}
+
+export interface SlugReferenceCurve {
+  readonly p0: readonly [number, number]
+  readonly p1: readonly [number, number]
+  readonly p2: readonly [number, number]
+}
+
 /** Decode PMNDRS_font_slug V0's exact `(count << 16) | offset` header. */
 export function decodeSlugHeader(header: number): DecodedSlugHeader {
   const unsignedHeader = header >>> 0
@@ -45,6 +56,26 @@ export function resolveSlugCurveTexel(curveBaseTexel: number, localReference: nu
   if (!Number.isSafeInteger(result))
     throw new RangeError('Slug curve address exceeds safe integer range')
   return result
+}
+
+/** CPU authority for the fill band's capped, sorted-reference early termination. */
+export function referenceSlugBandTraversal(
+  curveMaximums: readonly number[],
+  declaredCurveCount: number = curveMaximums.length,
+): readonly number[] {
+  if (!Number.isSafeInteger(declaredCurveCount) || declaredCurveCount < 0) {
+    throw new RangeError('Slug band curve count must be a nonnegative safe integer')
+  }
+  if (!curveMaximums.every(Number.isFinite)) {
+    throw new TypeError('Slug band curve maxima must be finite')
+  }
+  const visited: number[] = []
+  const curveCount = Math.min(declaredCurveCount, curveMaximums.length, 512)
+  for (let index = 0; index < curveCount; index += 1) {
+    visited.push(index)
+    if (curveMaximums[index]! < -0.5) break
+  }
+  return visited
 }
 
 export function referenceRootCode(y1: number, y2: number, y3: number): number {
@@ -129,6 +160,104 @@ export function referenceCoverage(
     coverage = Math.min(coverage + darken * coverage * (1 - coverage), 1)
   }
   return coverage
+}
+
+/**
+ * Independent three-seed closest-point authority copied from the reviewed
+ * three-flatland stroke reference. The shipping TSL candidate deliberately
+ * uses fewer seeds and must be checked against this stronger calculation.
+ */
+export function referenceDistanceToQuadratic(
+  point: readonly [number, number],
+  curve: SlugReferenceCurve,
+): SlugQuadraticDistanceResult {
+  const ax = curve.p2[0] - 2 * curve.p1[0] + curve.p0[0]
+  const ay = curve.p2[1] - 2 * curve.p1[1] + curve.p0[1]
+  const dx = curve.p1[0] - curve.p0[0]
+  const dy = curve.p1[1] - curve.p0[1]
+  const mx = curve.p0[0] - point[0]
+  const my = curve.p0[1] - point[1]
+  const c3 = ax * ax + ay * ay
+  const c2 = 3 * (ax * dx + ay * dy)
+  const c1 = 2 * (dx * dx + dy * dy) + mx * ax + my * ay
+  const c0 = mx * dx + my * dy
+
+  if (c3 < 1e-12 && dx * dx + dy * dy < 1e-12) {
+    return { distance: Math.hypot(mx, my), t: 0 }
+  }
+
+  const evaluate = (t: number): number => ((c3 * t + c2) * t + c1) * t + c0
+  const derivative = (t: number): number => (3 * c3 * t + 2 * c2) * t + c1
+  const refine = (seed: number): number => {
+    let t = seed
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const slope = derivative(t)
+      if (Math.abs(slope) < 1e-12) break
+      t = Math.min(1, Math.max(0, t - evaluate(t) / slope))
+    }
+    return t
+  }
+
+  let bestT = 0
+  let bestDistanceSquared = Number.POSITIVE_INFINITY
+  for (const t of [0, 1, refine(0), refine(0.5), refine(1)]) {
+    const complement = 1 - t
+    const x =
+      complement * complement * curve.p0[0] + 2 * complement * t * curve.p1[0] + t * t * curve.p2[0]
+    const y =
+      complement * complement * curve.p0[1] + 2 * complement * t * curve.p1[1] + t * t * curve.p2[1]
+    const offsetX = x - point[0]
+    const offsetY = y - point[1]
+    const distanceSquared = offsetX * offsetX + offsetY * offsetY
+    if (distanceSquared < bestDistanceSquared) {
+      bestDistanceSquared = distanceSquared
+      bestT = t
+    }
+  }
+  return { distance: Math.sqrt(bestDistanceSquared), t: bestT }
+}
+
+/** CPU authority for the copied Slug hairline and antialiasing policy. */
+export function referenceSlugStrokeCoverage(
+  curves: readonly SlugReferenceCurve[],
+  point: readonly [number, number],
+  halfWidth: number,
+  emsPerPixel: number,
+): number {
+  const antialiasHalfWidth = emsPerPixel * 0.5
+  const effectiveHalfWidth = Math.max(halfWidth, antialiasHalfWidth)
+  let minimumDistance = Number.POSITIVE_INFINITY
+  for (const curve of curves) {
+    minimumDistance = Math.min(minimumDistance, referenceDistanceToQuadratic(point, curve).distance)
+  }
+  const lower = effectiveHalfWidth - antialiasHalfWidth
+  const upper = effectiveHalfWidth + antialiasHalfWidth
+  if (minimumDistance <= lower) return 1
+  if (minimumDistance >= upper) return 0
+  const t = (minimumDistance - lower) / (upper - lower)
+  return 1 - t * t * (3 - 2 * t)
+}
+
+/** Half-open band interval required to cover a stroke's complete AA support. */
+export function referenceSlugStrokeBandRange(
+  coordinate: number,
+  searchRadius: number,
+  transformScale: number,
+  transformOffset: number,
+  bandCount: number,
+): readonly [number, number] {
+  if (![coordinate, searchRadius, transformScale, transformOffset].every(Number.isFinite)) {
+    throw new TypeError('Slug stroke band inputs must be finite')
+  }
+  if (searchRadius < 0 || transformScale <= 0) {
+    throw new RangeError('Slug stroke band radius and scale must be nonnegative and positive')
+  }
+  if (!Number.isSafeInteger(bandCount) || bandCount <= 0) {
+    throw new RangeError('Slug stroke band count must be a positive safe integer')
+  }
+  const clampIndex = (value: number): number =>
+    Math.min(bandCount - 1, Math.max(0, Math.floor(value * transformScale + transformOffset)))
+  return [clampIndex(coordinate - searchRadius), clampIndex(coordinate + searchRadius) + 1]
 }
 
 export function referenceSlugDilate(
