@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json'
 import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
 import mtsdfManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
+import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json'
 import { exactBaseTextureArrayBytes } from './texture-memory'
 
 interface FixtureIdentity {
@@ -23,6 +24,10 @@ const fixtureIdentities = {
     glyphCount: 954,
   },
   'dot-gothic-16': { directory: 'fonts/dot-gothic-16/', glyphCount: 9362 },
+  'font-awesome-free-6.7.2': {
+    directory: 'fonts/font-awesome-free-6.7.2/',
+    glyphCount: 1403,
+  },
   'noto-sans-cjk-showcase': {
     directory: 'fonts/noto-sans-cjk-showcase-v0/',
     glyphCount: 155,
@@ -33,6 +38,17 @@ const fixtureIdentities = {
 type FixtureId = keyof typeof fixtureIdentities
 
 describe('checked raster fixture manifests', () => {
+  it('authenticates the complete named Font Awesome Solid catalog', () => {
+    expect(fontAwesomeIcons.source).toEqual({
+      version: '6.7.2',
+      url: 'https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.7.2/metadata/icons.json',
+      sha256: 'a3a705d0e03c4fbdf1a61aece3d8fd462024b33794187ef7ee2a0764439170eb',
+    })
+    expect(fontAwesomeIcons.icons).toHaveLength(1_402)
+    expect(new Set(fontAwesomeIcons.icons.map(({ name }) => name)).size).toBe(1_402)
+    expect(new Set(fontAwesomeIcons.icons.map(({ codePoint }) => codePoint)).size).toBe(1_402)
+  })
+
   it.each([
     ['single-density', bitmapManifest],
     ['1x/2x density', bitmapDensityManifest],

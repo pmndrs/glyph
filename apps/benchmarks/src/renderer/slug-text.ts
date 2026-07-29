@@ -20,6 +20,7 @@ import * as THREE from 'three/webgpu'
 import amiriCompressedFontUrl from '../../fixtures/rendering/amiri-slug.font.glb.gz?url'
 import dancingScriptCompressedFontUrl from '../../fixtures/rendering/dancing-script-slug.font.glb.gz?url'
 import dotGothicCompressedFontUrl from '../../fixtures/rendering/dot-gothic-16-slug.font.glb.gz?url'
+import fontAwesomeCompressedFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz?url'
 import interCompressedFontUrl from '../../fixtures/rendering/inter-slug.font.glb.gz?url'
 import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-devanagari-slug.font.glb.gz?url'
 import notoCjkShowcaseCompressedFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-slug.font.glb.gz?url'
@@ -84,6 +85,7 @@ const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'noto-sans-devanagari': devanagariCompressedFontUrl,
   'noto-sans-cjk-showcase': notoCjkShowcaseCompressedFontUrl,
   'dot-gothic-16': dotGothicCompressedFontUrl,
+  'font-awesome-free-6.7.2': fontAwesomeCompressedFontUrl,
   'source-serif-4': sourceSerifCompressedFontUrl,
   'dancing-script': dancingScriptCompressedFontUrl,
 }
@@ -1434,6 +1436,7 @@ export async function loadSlugFont(
   fixture: BenchmarkFontFixture = 'inter',
   delivery: FontDelivery = 'baked',
   onProgress?: BakeProgressListener,
+  registry?: FontRegistry,
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1446,7 +1449,13 @@ export async function loadSlugFont(
   const manifest = slugFixtureManifests.get(fixture)
   if (manifest === undefined) throw new RangeError(`Unknown Slug font fixture: ${fixture}`)
   if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress)
+    const loaded = await loadRuntimeFont(
+      fixture,
+      metrics,
+      signal,
+      onProgress,
+      registry ?? new FontRegistry(),
+    )
     return {
       artifactBytes: metrics.coreArtifactBytes,
       compressedBytes: metrics.sourceFontBytes,
@@ -1459,13 +1468,14 @@ export async function loadSlugFont(
     compressedFontUrls[fixture],
     signal === undefined ? undefined : { signal },
   )
-  return loadSlugFontResponse(response, manifest, metrics, signal)
+  return loadSlugFontResponse(response, manifest, metrics, signal, registry)
 }
 
 /** Load a retained non-production Slug candidate through the ordinary registry boundary. */
 export async function loadSlugBakedArtifact(
   source: SlugBakedArtifactSource,
   signal?: AbortSignal,
+  registry?: FontRegistry,
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1475,7 +1485,13 @@ export async function loadSlugBakedArtifact(
 }> {
   signal?.throwIfAborted()
   const response = await fetch(source.url, signal === undefined ? undefined : { signal })
-  return loadSlugFontResponse(response, source, createFontDeliveryMetrics('baked'), signal)
+  return loadSlugFontResponse(
+    response,
+    source,
+    createFontDeliveryMetrics('baked'),
+    signal,
+    registry,
+  )
 }
 
 async function loadSlugFontResponse(
@@ -1483,6 +1499,7 @@ async function loadSlugFontResponse(
   manifest: Pick<SlugBakedArtifactSource, 'compressed' | 'uncompressed'>,
   metrics: FontDeliveryMetrics,
   signal?: AbortSignal,
+  registry?: FontRegistry,
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1499,11 +1516,12 @@ async function loadSlugFontResponse(
       : await decompressFixture(received, manifest)
   await assertFixtureBytes(artifact, manifest.uncompressed, 'uncompressed')
   signal?.throwIfAborted()
-  const registry = new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes })
+  const activeRegistry =
+    registry ?? new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes })
   return {
     artifactBytes: artifact.byteLength,
     compressedBytes: manifest.compressed.bytes,
-    font: await registry.registerAsset(artifact),
+    font: await activeRegistry.registerAsset(artifact),
     metrics,
     raster: slug,
   }

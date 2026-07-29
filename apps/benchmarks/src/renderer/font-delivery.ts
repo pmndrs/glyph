@@ -14,6 +14,7 @@ import { msdf, type MsdfModule } from '@pmndrs/text/raster/msdf'
 import amiriSourceUrl from '../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url'
 import dancingScriptSourceUrl from '../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url'
 import dotGothicSourceUrl from '../../fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf?url'
+import fontAwesomeSourceUrl from '../../fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf?url'
 import interSourceUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url'
 import notoCjkSourceUrl from '../../fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf?url'
 import devanagariSourceUrl from '../../fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf?url'
@@ -27,6 +28,7 @@ const sourceUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'noto-sans-devanagari': devanagariSourceUrl,
   'noto-sans-cjk-showcase': notoCjkSourceUrl,
   'dot-gothic-16': dotGothicSourceUrl,
+  'font-awesome-free-6.7.2': fontAwesomeSourceUrl,
   'source-serif-4': sourceSerifSourceUrl,
   'dancing-script': dancingScriptSourceUrl,
 }
@@ -63,8 +65,8 @@ export async function loadRuntimeFont(
   metrics: FontDeliveryMetrics,
   signal?: AbortSignal,
   onProgress?: BakeProgressListener,
+  registry = new FontRegistry(),
 ): Promise<RuntimeLoadedFont> {
-  const registry = new FontRegistry()
   const loader = new FontLoader({
     registry,
     runtimeBake: async (request: RuntimeFontBakeRequest) => {

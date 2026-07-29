@@ -1,5 +1,6 @@
 const WORKLOADS = [
   { label: 'Text ladder', id: 'text-ladder' },
+  { label: 'Icon grid', id: 'icon-grid' },
   { label: 'Off-axis / 3D', id: 'off-axis-3d', amountLabel: 'Perspective intensity' },
   { label: 'Dynamic layout', id: 'dynamic-layout', amountLabel: 'Reflow amplitude' },
   { label: 'Paragraph stress', id: 'paragraph-stress', amountLabel: 'Text volume' },
@@ -15,7 +16,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   for (const workload of WORKLOADS) {
     await clickButton(workload.label, false)
     let viewport = await waitForReadyViewport(technique, workload.id)
-    verifyCanvasNavigation(viewport, workload.id === 'off-axis-3d')
+    verifyCanvasNavigation(viewport, workload.id === 'off-axis-3d', workload.id === 'icon-grid')
 
     if (technique === 'bitmap' && workload.id === 'text-ladder') {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true')
@@ -27,8 +28,9 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
 
     if (workload.id !== 'text-ladder') {
       const revision = numericAttribute(viewport, 'data-configuration-revision')
-      assertRangeVisualTravel(rangeControl('Rendered size'))
-      const renderedSize = setDifferentRange('Rendered size', technique === 'bitmap' ? 28 : 52)
+      const sizeLabel = workload.id === 'icon-grid' ? 'Icon size' : 'Rendered size'
+      assertRangeVisualTravel(rangeControl(sizeLabel))
+      const renderedSize = setDifferentRange(sizeLabel, technique === 'bitmap' ? 28 : 52)
       viewport = await waitForViewportAttribute(
         technique,
         workload.id,
@@ -36,6 +38,40 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
         String(renderedSize),
       )
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', revision)
+    }
+
+    if (workload.id === 'icon-grid') {
+      const itemCount = numericAttribute(viewport, 'data-icon-item-count')
+      const labelCount = numericAttribute(viewport, 'data-icon-label-count')
+      const columns = numericAttribute(viewport, 'data-icon-column-count')
+      const rows = numericAttribute(viewport, 'data-icon-row-count')
+      if (itemCount !== 1_402 || labelCount !== itemCount) {
+        throw new Error(`${techniqueLabel(technique)} icon grid omitted an icon or label`)
+      }
+      if (numericAttribute(viewport, 'data-icon-label-size') !== 11) {
+        throw new Error(`${techniqueLabel(technique)} icon labels did not remain fixed at 11 px`)
+      }
+      const poolCapacity = numericAttribute(viewport, 'data-icon-pool-capacity')
+      if (poolCapacity <= 0 || poolCapacity >= itemCount) {
+        throw new Error(`${techniqueLabel(technique)} icon grid did not virtualize its tile pool`)
+      }
+      if (numericAttribute(viewport, 'data-icon-first-visible-index') !== 0) {
+        throw new Error(`${techniqueLabel(technique)} icon grid did not begin at the first icon`)
+      }
+      await verifyIconVirtualization(viewport, technique)
+      if (rows !== Math.ceil(itemCount / columns)) {
+        throw new Error(`${techniqueLabel(technique)} icon grid published invalid dimensions`)
+      }
+      if (columns !== 38 || rows !== 37) {
+        throw new Error(`${techniqueLabel(technique)} icon catalog is not near-square`)
+      }
+      if (
+        numericAttribute(viewport, 'data-icon-grid-width') <= 0 ||
+        numericAttribute(viewport, 'data-icon-grid-height') <= 0 ||
+        numericAttribute(viewport, 'data-missing-glyph-count') !== 0
+      ) {
+        throw new Error(`${techniqueLabel(technique)} icon grid is not render-complete`)
+      }
     }
 
     if ('amountLabel' in workload) {
@@ -126,7 +162,11 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   }
 }
 
-function verifyCanvasNavigation(viewport: HTMLElement, zoomEnabled: boolean): void {
+function verifyCanvasNavigation(
+  viewport: HTMLElement,
+  zoomEnabled: boolean,
+  clampedAtOrigin: boolean,
+): void {
   const canvas = viewport.querySelector<HTMLCanvasElement>('canvas[data-pan-enabled="true"]')
   if (canvas === null || canvas.dataset.touchPan !== 'two-finger') {
     throw new Error('Live workload canvas did not expose shared mouse and touch panning')
@@ -140,7 +180,9 @@ function verifyCanvasNavigation(viewport: HTMLElement, zoomEnabled: boolean): vo
   canvas.dispatchEvent(
     new PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }),
   )
-  if (Number(canvas.dataset.panX) !== 15) throw new Error('Mouse drag did not pan the live canvas')
+  if (Number(canvas.dataset.panX) !== (clampedAtOrigin ? 0 : 15)) {
+    throw new Error('Mouse drag did not publish the applied live-canvas pan')
+  }
   if (canvas.dataset.zoomEnabled !== String(zoomEnabled)) {
     throw new Error('Live workload canvas exposed the wrong zoom capability')
   }
@@ -152,6 +194,58 @@ function verifyCanvasNavigation(viewport: HTMLElement, zoomEnabled: boolean): vo
   if (canvas.dataset.panX !== '0' || canvas.dataset.zoom !== '1') {
     throw new Error('Canvas view reset did not restore pan and zoom')
   }
+}
+
+async function verifyIconVirtualization(
+  viewport: HTMLElement,
+  technique: RasterTechnique,
+): Promise<void> {
+  const canvas = viewport.querySelector<HTMLCanvasElement>('canvas[data-pan-enabled="true"]')
+  if (canvas === null) throw new Error('Icon grid canvas is unavailable')
+  const maximumScrollY = numericAttribute(viewport, 'data-icon-maximum-scroll-y')
+  const maximumScrollX = numericAttribute(viewport, 'data-icon-maximum-scroll-x')
+  if (maximumScrollX <= 0 || maximumScrollY <= 0) {
+    throw new Error(`${techniqueLabel(technique)} icon grid is not pannable on both axes`)
+  }
+  const recycleCount = numericAttribute(viewport, 'data-icon-recycle-count')
+  canvas.dispatchEvent(
+    new PointerEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      pointerId: 51,
+      clientX: 100,
+      clientY: 100,
+    }),
+  )
+  canvas.dispatchEvent(
+    new PointerEvent('pointermove', {
+      bubbles: true,
+      button: 0,
+      pointerId: 51,
+      clientX: 100 - maximumScrollX - 100,
+      clientY: 100 - maximumScrollY - 100,
+    }),
+  )
+  canvas.dispatchEvent(
+    new PointerEvent('pointerup', {
+      bubbles: true,
+      button: 0,
+      pointerId: 51,
+      clientX: 100 - maximumScrollX - 100,
+      clientY: 100 - maximumScrollY - 100,
+    }),
+  )
+  await waitForAttribute(viewport, 'data-icon-last-visible-index', '1401')
+  await waitForGreaterAttribute(viewport, 'data-icon-recycle-count', recycleCount)
+  await waitForAttribute(viewport, 'data-icon-scroll-x', String(maximumScrollX))
+  await waitForAttribute(viewport, 'data-icon-scroll-y', String(maximumScrollY))
+  if (numericAttribute(viewport, 'data-icon-assigned-count') <= 0) {
+    throw new Error(`${techniqueLabel(technique)} recycled every icon tile out of view`)
+  }
+  canvas.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+  await waitForAttribute(viewport, 'data-icon-first-visible-index', '0')
+  await waitForAttribute(viewport, 'data-icon-scroll-x', '0')
+  await waitForAttribute(viewport, 'data-icon-scroll-y', '0')
 }
 
 await clickButton('MSDF', true)
@@ -198,7 +292,7 @@ if (getComputedStyle(benchmarkActivity).display === 'none') {
 }
 console.log('activity-lifecycle-ready')
 
-console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 5 }))
+console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 6 }))
 
 function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   const surface = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"]')

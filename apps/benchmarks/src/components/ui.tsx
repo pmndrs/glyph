@@ -1,5 +1,6 @@
 import type {
   ButtonHTMLAttributes,
+  ChangeEvent,
   CSSProperties,
   InputHTMLAttributes,
   ReactNode,
@@ -57,9 +58,22 @@ export function Chip({
 export function Field({
   label,
   className,
+  onRangeValueChange,
+  rangeScale = 'linear',
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { readonly label: string }) {
+}: InputHTMLAttributes<HTMLInputElement> & {
+  readonly label: string
+  readonly onRangeValueChange?: (value: number) => void
+  readonly rangeScale?: 'linear' | 'logarithmic'
+}) {
   const range = props.type === 'range'
+  const logarithmic = range && rangeScale === 'logarithmic'
+  const rangeMinimum = finiteNumber(props.min, 0)
+  const rangeMaximum = finiteNumber(props.max, 100)
+  const rangeValue = finiteNumber(
+    props.value ?? props.defaultValue,
+    rangeMinimum + (rangeMaximum - rangeMinimum) / 2,
+  )
   const input = (
     <input
       className={classes(
@@ -69,6 +83,26 @@ export function Field({
           : 'rounded-md border border-border bg-background px-2.5 file:mr-2 file:border-0 file:bg-transparent file:text-xs file:text-muted focus:border-accent',
       )}
       {...props}
+      {...(logarithmic
+        ? {
+            'aria-valuemax': rangeMaximum,
+            'aria-valuemin': rangeMinimum,
+            'aria-valuenow': rangeValue,
+            max: 1,
+            min: 0,
+            step: 'any',
+            value: logarithmicRangePosition(rangeValue, rangeMinimum, rangeMaximum),
+            onChange: (event: ChangeEvent<HTMLInputElement>) =>
+              onRangeValueChange?.(
+                logarithmicRangeValue(
+                  event.currentTarget.valueAsNumber,
+                  rangeMinimum,
+                  rangeMaximum,
+                  finiteNumber(props.step, 1),
+                ),
+              ),
+          }
+        : {})}
     />
   )
   return (
@@ -77,7 +111,7 @@ export function Field({
       {range ? (
         <span
           className={classes('range-shell', props.disabled && 'is-disabled')}
-          style={{ '--range-progress': rangeProgress(props) } as CSSProperties}
+          style={{ '--range-progress': rangeProgress(props, rangeScale) } as CSSProperties}
         >
           {input}
         </span>
@@ -88,13 +122,49 @@ export function Field({
   )
 }
 
-function rangeProgress(props: InputHTMLAttributes<HTMLInputElement>): number {
+function rangeProgress(
+  props: InputHTMLAttributes<HTMLInputElement>,
+  scale: 'linear' | 'logarithmic',
+): number {
   const minimum = finiteNumber(props.min, 0)
   const maximum = finiteNumber(props.max, 100)
   const fallback = minimum + (maximum - minimum) / 2
   const value = finiteNumber(props.value ?? props.defaultValue, fallback)
   if (maximum <= minimum) return 0
+  if (scale === 'logarithmic') return logarithmicRangePosition(value, minimum, maximum)
   return Math.min(1, Math.max(0, (value - minimum) / (maximum - minimum)))
+}
+
+export function logarithmicRangePosition(value: number, minimum: number, maximum: number): number {
+  assertLogarithmicRange(value, minimum, maximum)
+  return Math.min(1, Math.max(0, Math.log(value / minimum) / Math.log(maximum / minimum)))
+}
+
+export function logarithmicRangeValue(
+  position: number,
+  minimum: number,
+  maximum: number,
+  step: number,
+): number {
+  assertLogarithmicRange(minimum, minimum, maximum)
+  if (!Number.isFinite(position)) throw new RangeError('range position must be finite')
+  if (!Number.isFinite(step) || step <= 0) throw new RangeError('range step must be positive')
+  const normalized = Math.min(1, Math.max(0, position))
+  const value = minimum * Math.pow(maximum / minimum, normalized)
+  return Math.min(maximum, Math.max(minimum, minimum + Math.round((value - minimum) / step) * step))
+}
+
+function assertLogarithmicRange(value: number, minimum: number, maximum: number): void {
+  if (
+    !Number.isFinite(value) ||
+    !Number.isFinite(minimum) ||
+    !Number.isFinite(maximum) ||
+    value <= 0 ||
+    minimum <= 0 ||
+    maximum <= minimum
+  ) {
+    throw new RangeError('logarithmic range values must be finite, positive, and increasing')
+  }
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
