@@ -324,12 +324,12 @@ async function assertCandidateSnapshot(
     cwd,
   })
   const allowed = new Set([
-    '?? fixtures/autoresearch/slug-outline-zero-branch-001/quality-chromium149.json',
-    '?? fixtures/autoresearch/slug-outline-zero-branch-001/performance-chromium149.json',
-    '?? fixtures/autoresearch/slug-outline-zero-branch-001/generated/multiply-zero.webgl2.glsl',
-    '?? fixtures/autoresearch/slug-outline-zero-branch-001/generated/multiply-zero.webgpu.wgsl',
-    '?? fixtures/autoresearch/slug-outline-zero-branch-001/generated/zero-width-branch.webgl2.glsl',
-    '?? fixtures/autoresearch/slug-outline-zero-branch-001/generated/zero-width-branch.webgpu.wgsl',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/quality-chromium149.json',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/performance-chromium149.json',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/multiply-zero.webgl2.glsl',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/multiply-zero.webgpu.wgsl',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/zero-width-branch.webgl2.glsl',
+    '?? apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/generated/zero-width-branch.webgpu.wgsl',
   ])
   const unexpected = stdout
     .trim()
