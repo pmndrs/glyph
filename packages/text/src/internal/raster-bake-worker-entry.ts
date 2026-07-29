@@ -1,29 +1,29 @@
 /// <reference lib="webworker" />
 
-import type { RasterBakerModule } from '../bake.js'
-import type { JsonValue } from '../raster.js'
-import { transferableArrayBuffer } from './owned-array-buffer.js'
+import type { RasterBakerModule } from '../bake.js';
+import type { JsonValue } from '../raster.js';
+import { transferableArrayBuffer } from './owned-array-buffer.js';
 import {
   isRasterBakeWorkerRequestV0,
   type RasterBakeWorkerFailureV0,
   type RasterBakeWorkerRequestV0,
   type RasterBakeWorkerSuccessV0,
-} from './raster-bake-worker-protocol.js'
-import { bakeProgressMessage } from './bake-progress-protocol.js'
+} from './raster-bake-worker-protocol.js';
+import { bakeProgressMessage } from './bake-progress-protocol.js';
 
-type OptionsNormalizer<Options> = (value: unknown) => Options
+type OptionsNormalizer<Options> = (value: unknown) => Options;
 
 export function startRasterBakeWorker<Kind extends string, Options, Descriptor extends JsonValue>(
   baker: RasterBakerModule<Kind, Options, Descriptor>,
   normalizeOptions: OptionsNormalizer<Options>,
 ): void {
-  const scope = globalThis as unknown as DedicatedWorkerGlobalScope
-  let pending = Promise.resolve()
+  const scope = globalThis as unknown as DedicatedWorkerGlobalScope;
+  let pending = Promise.resolve();
   scope.addEventListener('message', (event: MessageEvent<unknown>) => {
-    const value = event.data
-    if (!isRasterBakeWorkerRequestV0(value)) return
-    pending = pending.then(() => handleMessage(scope, baker, normalizeOptions, value))
-  })
+    const value = event.data;
+    if (!isRasterBakeWorkerRequestV0(value)) return;
+    pending = pending.then(() => handleMessage(scope, baker, normalizeOptions, value));
+  });
 }
 
 async function handleMessage<Kind extends string, Options, Descriptor extends JsonValue>(
@@ -33,8 +33,8 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
   request: RasterBakeWorkerRequestV0,
 ): Promise<void> {
   try {
-    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'loading', 0, 1))
-    const descriptor = baker.descriptor(normalizeOptions(request.options))
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'loading', 0, 1));
+    const descriptor = baker.descriptor(normalizeOptions(request.options));
     const result = await baker.bake({
       font: {
         source: new Uint8Array(request.source),
@@ -47,28 +47,22 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
       descriptor,
       onProgress(progress) {
         scope.postMessage(
-          bakeProgressMessage(
-            request.id,
-            'raster',
-            progress.phase,
-            progress.completed,
-            progress.total,
-          ),
-        )
+          bakeProgressMessage(request.id, 'raster', progress.phase, progress.completed, progress.total),
+        );
       },
-    })
-    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'packaging', 0, 1))
+    });
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'packaging', 0, 1));
     const artifacts: RasterBakeWorkerSuccessV0['artifacts'] = result.artifacts.map((artifact) => {
       if (artifact.role === 'font') {
-        throw new TypeError(`${result.kind} raster baker returned a core font artifact`)
+        throw new TypeError(`${result.kind} raster baker returned a core font artifact`);
       }
       return {
         role: artifact.role,
         id: artifact.id,
         bytes: transferableArrayBuffer(artifact.bytes),
         sha256: artifact.sha256,
-      }
-    })
+      };
+    });
     const response: RasterBakeWorkerSuccessV0 = {
       type: 'bake-raster-result-v0',
       id: request.id,
@@ -79,32 +73,32 @@ async function handleMessage<Kind extends string, Options, Descriptor extends Js
       version: result.version,
       artifacts,
       report: result.report,
-    }
-    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'transferring', 0, 1))
-    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'complete', 1, 1))
+    };
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'transferring', 0, 1));
+    scope.postMessage(bakeProgressMessage(request.id, 'raster', 'complete', 1, 1));
     scope.postMessage(
       response,
       artifacts.map(({ bytes }) => bytes),
-    )
+    );
   } catch (error) {
     const response: RasterBakeWorkerFailureV0 = {
       type: 'bake-raster-result-v0',
       id: request.id,
       ok: false,
       error: serializeError(error),
-    }
-    scope.postMessage(response)
+    };
+    scope.postMessage(response);
   }
 }
 
 function serializeError(error: unknown): RasterBakeWorkerFailureV0['error'] {
   if (error instanceof Error) {
-    const value = error as Error & { readonly code?: unknown; readonly path?: unknown }
+    const value = error as Error & { readonly code?: unknown; readonly path?: unknown };
     return {
       code: typeof value.code === 'string' ? value.code : 'RUNTIME_RASTER_BAKE_FAILED',
       message: value.message,
       ...(typeof value.path === 'string' ? { path: value.path } : {}),
-    }
+    };
   }
-  return { code: 'RUNTIME_RASTER_BAKE_FAILED', message: String(error) }
+  return { code: 'RUNTIME_RASTER_BAKE_FAILED', message: String(error) };
 }

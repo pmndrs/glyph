@@ -1,0 +1,17 @@
+{
+  "printWidth": 120,
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    "**/.cache/**",
+    "**/target/**",
+    "apps/benchmarks/dist/**",
+    "apps/benchmarks/fixtures/**",
+    "packages/text/dist/**",
+    "packages/text/rust/mtsdf-admission/evidence/**",
+    "packages/text/src/bakers/schemas/**",
+    "packages/**/src/generated/**",
+    "packages/**/tests/fixtures/**"
+  ]
+}

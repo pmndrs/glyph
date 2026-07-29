@@ -1,6 +1,6 @@
-import type { BenchmarkEnvironment } from './contracts'
+import type { BenchmarkEnvironment } from './contracts';
 
-let cached: Promise<BenchmarkEnvironment> | undefined
+let cached: Promise<BenchmarkEnvironment> | undefined;
 
 export function environmentResource(browserVersion?: string): Promise<BenchmarkEnvironment> {
   cached ??= Promise.resolve({
@@ -8,8 +8,6 @@ export function environmentResource(browserVersion?: string): Promise<BenchmarkE
     hardwareConcurrency: navigator.hardwareConcurrency,
     webgpu: 'gpu' in navigator,
     crossOriginIsolated: globalThis.crossOriginIsolated,
-  })
-  return browserVersion === undefined
-    ? cached
-    : cached.then((environment) => ({ ...environment, browserVersion }))
+  });
+  return browserVersion === undefined ? cached : cached.then((environment) => ({ ...environment, browserVersion }));
 }

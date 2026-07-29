@@ -4,22 +4,22 @@ title: Responsive editorial flow and mixed-raster composition
 description: Defines the post-V1 layout model and benchmark for responsive multi-column text around exclusions rendered with bitmap, MTSDF, and Slug.
 tags: [layout, benchmark, typography, exclusions, bitmap, mtsdf, slug]
 sources:
-  - id: "pretext"
-    resource: "https://github.com/chenglou/pretext"
-    title: "Pretext"
-  - id: "pretext-playground"
-    resource: "https://pretextjs.dev/playground"
-    title: "Pretext playground"
-  - id: "benchmark-plan"
-    resource: "benchmark-plan.md"
-    title: "Benchmark plan"
-  - id: "roadmap"
-    resource: "../roadmap/roadmap.md"
-    title: "Canonical implementation roadmap"
+  - id: 'pretext'
+    resource: 'https://github.com/chenglou/pretext'
+    title: 'Pretext'
+  - id: 'pretext-playground'
+    resource: 'https://pretextjs.dev/playground'
+    title: 'Pretext playground'
+  - id: 'benchmark-plan'
+    resource: 'benchmark-plan.md'
+    title: 'Benchmark plan'
+  - id: 'roadmap'
+    resource: '../roadmap/roadmap.md'
+    title: 'Canonical implementation roadmap'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T01:29:13Z"
+  at: '2026-07-27T01:29:13Z'
 ---
 
 # Responsive editorial flow and mixed-raster composition
@@ -51,12 +51,12 @@ Dynamic obstacle wrapping alone is not a differentiator: Pretext already demonst
 
 Performance claims must distinguish geometry changes from content changes:
 
-| Change | Pretext | pmndrs/text direction |
-| --- | --- | --- |
-| Same text, new width or obstacle | Reuses prepared segment widths; line walking is allocation-light arithmetic and should be treated as a strong baseline. | Reuses broad shaping and cluster measurements; replans slots and reshapes only affected unsafe boundaries. |
-| Edited or typewriter text | A changed string requires another `prepare` analysis/measurement result, although shared internal measurement caches may still help repeated segments. | Reanalyzes and shapes changed content; the intended advantage is incremental paragraph state with exact clusters and direct reuse by the GPU renderer, not an assumption that HarfRust work is free. |
-| Same layout, moving presentation | Rendering is caller-owned; Pretext produces line strings or ranges rather than positioned GPU glyph instances. | Reuses committed layout and can update or interpolate instance presentation without reshaping. |
-| Changed features, variations, script, or bidi content | Canvas measurement is the browser ground truth for widths, but the documented result is not an exact custom-renderer glyph stream. | HarfRust produces the authoritative glyph IDs, positions, clusters, and flags consumed by every renderer. |
+| Change                                                | Pretext                                                                                                                                                | pmndrs/text direction                                                                                                                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same text, new width or obstacle                      | Reuses prepared segment widths; line walking is allocation-light arithmetic and should be treated as a strong baseline.                                | Reuses broad shaping and cluster measurements; replans slots and reshapes only affected unsafe boundaries.                                                                                           |
+| Edited or typewriter text                             | A changed string requires another `prepare` analysis/measurement result, although shared internal measurement caches may still help repeated segments. | Reanalyzes and shapes changed content; the intended advantage is incremental paragraph state with exact clusters and direct reuse by the GPU renderer, not an assumption that HarfRust work is free. |
+| Same layout, moving presentation                      | Rendering is caller-owned; Pretext produces line strings or ranges rather than positioned GPU glyph instances.                                         | Reuses committed layout and can update or interpolate instance presentation without reshaping.                                                                                                       |
+| Changed features, variations, script, or bidi content | Canvas measurement is the browser ground truth for widths, but the documented result is not an exact custom-renderer glyph stream.                     | HarfRust produces the authoritative glyph IDs, positions, clusters, and flags consumed by every renderer.                                                                                            |
 
 The showcase should exercise all four lanes and label them separately. Repeated resizing is not enough to establish an advantage because it is already Pretext's optimized hot path. Editable complex-script content, local invalidation, and direct GPU publication are the more meaningful product test, but they still require measured evidence.
 
@@ -90,15 +90,15 @@ Represent a composition as an ordered sequence of flow regions. For each line ba
 
 ```ts
 type FlowSlot = Readonly<{
-  inlineStart: number
-  inlineEnd: number
-}>
+  inlineStart: number;
+  inlineEnd: number;
+}>;
 
 type LineBand = Readonly<{
-  blockStart: number
-  blockEnd: number
-  slots: readonly FlowSlot[]
-}>
+  blockStart: number;
+  blockEnd: number;
+  slots: readonly FlowSlot[];
+}>;
 ```
 
 These are illustrative internal values, not an accepted public API.
@@ -139,13 +139,13 @@ The plausible pmndrs/text advantage is total-system work for exact custom render
 
 The comparison must report phases rather than one opaque duration:
 
-| Phase | Required evidence |
-| --- | --- |
-| Prepare | font registration, shaping, segmentation, and retained bytes |
-| Project | obstacle-to-exclusion computation |
-| Reflow | slot planning, line breaking, and affected boundary reshaping |
-| Publish | instance/geometry updates and allocations |
-| Render | warm CPU frame, FPS, GPU time, draw count, and resident GPU bytes |
+| Phase       | Required evidence                                                          |
+| ----------- | -------------------------------------------------------------------------- |
+| Prepare     | font registration, shaping, segmentation, and retained bytes               |
+| Project     | obstacle-to-exclusion computation                                          |
+| Reflow      | slot planning, line breaking, and affected boundary reshaping              |
+| Publish     | instance/geometry updates and allocations                                  |
+| Render      | warm CPU frame, FPS, GPU time, draw count, and resident GPU bytes          |
 | Correctness | safe boundaries, no overlap, expected reading order, and visual references |
 
 Compare both a static first layout and deterministic dynamic updates. Keep approximate browser-compatible breaking and exact GPU-ready shaping labeled as different products when their outputs are not equivalent.

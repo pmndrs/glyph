@@ -1,38 +1,35 @@
-import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const packageDirectory = fileURLToPath(new URL('..', import.meta.url))
-const workspaceDirectory = resolve(packageDirectory, '../..')
-const manifestPath = resolve(
-  packageDirectory,
-  'rust/mtsdf-admission/evidence/native-oracle-v0.json',
-)
-const cargoManifest = resolve(packageDirectory, 'rust/mtsdf-admission/Cargo.toml')
-const provisioner = resolve(packageDirectory, 'scripts/provision-msdfgen-oracle.mjs')
-const checkOnly = process.argv.includes('--check')
-const expectedQualityBlockers = new Set()
+const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
+const workspaceDirectory = resolve(packageDirectory, '../..');
+const manifestPath = resolve(packageDirectory, 'rust/mtsdf-admission/evidence/native-oracle-v0.json');
+const cargoManifest = resolve(packageDirectory, 'rust/mtsdf-admission/Cargo.toml');
+const provisioner = resolve(packageDirectory, 'scripts/provision-msdfgen-oracle.mjs');
+const checkOnly = process.argv.includes('--check');
+const expectedQualityBlockers = new Set();
 
-const candidateCases = emitCandidateCases()
-const existing = await readManifest()
-const nativeCases = checkOnly ? nativeCasesFromManifest(existing) : await generateNativeCases()
-const evidence = buildEvidence(candidateCases, nativeCases)
-const serialized = `${JSON.stringify(evidence, null, 2)}\n`
+const candidateCases = emitCandidateCases();
+const existing = await readManifest();
+const nativeCases = checkOnly ? nativeCasesFromManifest(existing) : await generateNativeCases();
+const evidence = buildEvidence(candidateCases, nativeCases);
+const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
 
 if (checkOnly) {
-  const expected = await readFile(manifestPath, 'utf8')
+  const expected = await readFile(manifestPath, 'utf8');
   if (serialized !== expected) {
-    throw new Error('MTSDF oracle evidence is stale; run pnpm generate:mtsdf-oracle')
+    throw new Error('MTSDF oracle evidence is stale; run pnpm generate:mtsdf-oracle');
   }
 } else {
-  await writeFile(manifestPath, serialized)
+  await writeFile(manifestPath, serialized);
 }
 
 process.stdout.write(
   `${evidence.cases.map(({ id, alpha, median: medianError, coverageMismatches }) => `${id}: alpha ${alpha.meanAbsoluteError.toFixed(3)}, median ${medianError.meanAbsoluteError.toFixed(3)}, coverage ${coverageMismatches}`).join('\n')}\n`,
-)
+);
 
 function emitCandidateCases() {
   const output = execFileSync(
@@ -49,26 +46,16 @@ function emitCandidateCases() {
       '--quiet',
     ],
     { cwd: workspaceDirectory, encoding: 'utf8', maxBuffer: 2_000_000 },
-  )
+  );
   return output
     .trim()
     .split('\n')
     .map((line) => {
-      const [
-        id,
-        width,
-        height,
-        range,
-        scaleX,
-        scaleY,
-        translateX,
-        translateY,
-        shapeDescription,
-        hexadecimal,
-      ] = line.split('\t')
-      const bytes = Buffer.from(hexadecimal, 'hex')
+      const [id, width, height, range, scaleX, scaleY, translateX, translateY, shapeDescription, hexadecimal] =
+        line.split('\t');
+      const bytes = Buffer.from(hexadecimal, 'hex');
       if (bytes.length !== Number(width) * Number(height) * 4) {
-        throw new Error(`${id} candidate byte length does not match its dimensions`)
+        throw new Error(`${id} candidate byte length does not match its dimensions`);
       }
       return {
         id,
@@ -79,20 +66,20 @@ function emitCandidateCases() {
         translate: [Number(translateX), Number(translateY)],
         shapeDescription,
         bytes,
-      }
-    })
+      };
+    });
 }
 
 async function generateNativeCases() {
   const executable = execFileSync(process.execPath, [provisioner], {
     cwd: workspaceDirectory,
     encoding: 'utf8',
-  }).trim()
-  const temporaryDirectory = await mkdtemp('/tmp/pmndrs-mtsdf-oracle-')
+  }).trim();
+  const temporaryDirectory = await mkdtemp('/tmp/pmndrs-mtsdf-oracle-');
   try {
     return await Promise.all(
       candidateCases.map(async (testCase) => {
-        const output = resolve(temporaryDirectory, `${testCase.id}.rgba`)
+        const output = resolve(temporaryDirectory, `${testCase.id}.rgba`);
         execFileSync(
           executable,
           [
@@ -117,12 +104,12 @@ async function generateNativeCases() {
             '-yflip',
           ],
           { cwd: workspaceDirectory },
-        )
-        return { id: testCase.id, bytes: await readFile(output) }
+        );
+        return { id: testCase.id, bytes: await readFile(output) };
       }),
-    )
+    );
   } finally {
-    await rm(temporaryDirectory, { recursive: true, force: true })
+    await rm(temporaryDirectory, { recursive: true, force: true });
   }
 }
 
@@ -130,29 +117,24 @@ function nativeCasesFromManifest(manifest) {
   return manifest.cases.map(({ id, nativeRgbaBase64 }) => ({
     id,
     bytes: Buffer.from(nativeRgbaBase64, 'base64'),
-  }))
+  }));
 }
 
 function buildEvidence(candidates, natives) {
-  const nativeById = new Map(natives.map((entry) => [entry.id, entry.bytes]))
+  const nativeById = new Map(natives.map((entry) => [entry.id, entry.bytes]));
   const cases = candidates.map((candidate) => {
-    const native = nativeById.get(candidate.id)
-    if (!native) throw new Error(`missing native oracle bytes for ${candidate.id}`)
+    const native = nativeById.get(candidate.id);
+    if (!native) throw new Error(`missing native oracle bytes for ${candidate.id}`);
     if (native.length !== candidate.bytes.length) {
-      throw new Error(`${candidate.id} native byte length does not match the candidate`)
+      throw new Error(`${candidate.id} native byte length does not match the candidate`);
     }
-    const comparison = compare(candidate.bytes, native)
-    const isExpectedBlocker = expectedQualityBlockers.has(candidate.id)
+    const comparison = compare(candidate.bytes, native);
+    const isExpectedBlocker = expectedQualityBlockers.has(candidate.id);
     if (isExpectedBlocker && comparison.coverageMismatches < 100) {
-      throw new Error(`${candidate.id} unexpectedly stopped reproducing its quality blocker`)
+      throw new Error(`${candidate.id} unexpectedly stopped reproducing its quality blocker`);
     }
-    if (
-      !isExpectedBlocker &&
-      (comparison.alpha.meanAbsoluteError > 2 || comparison.coverageMismatches > 8)
-    ) {
-      throw new Error(
-        `${candidate.id} exceeds the initial true-distance quality gate: ${JSON.stringify(comparison)}`,
-      )
+    if (!isExpectedBlocker && (comparison.alpha.meanAbsoluteError > 2 || comparison.coverageMismatches > 8)) {
+      throw new Error(`${candidate.id} exceeds the initial true-distance quality gate: ${JSON.stringify(comparison)}`);
     }
     return {
       id: candidate.id,
@@ -167,17 +149,17 @@ function buildEvidence(candidates, natives) {
       nativeRgbaBase64: native.toString('base64'),
       admissionStatus: isExpectedBlocker ? 'blocked' : 'passes-current-thresholds',
       ...comparison,
-    }
-  })
+    };
+  });
 
-  const changed = Buffer.from(nativeById.get(candidates[0].id))
-  changed[3] ^= 1
-  const negativeControl = compare(candidates[0].bytes, changed)
+  const changed = Buffer.from(nativeById.get(candidates[0].id));
+  changed[3] ^= 1;
+  const negativeControl = compare(candidates[0].bytes, changed);
   if (
     negativeControl.alpha.meanAbsoluteError === cases[0].alpha.meanAbsoluteError &&
     negativeControl.alpha.maximumError === cases[0].alpha.maximumError
   ) {
-    throw new Error('MTSDF oracle negative control did not observe a changed alpha byte')
+    throw new Error('MTSDF oracle negative control did not observe a changed alpha byte');
   }
 
   return {
@@ -202,32 +184,31 @@ function buildEvidence(candidates, natives) {
     thresholds: { alphaMeanAbsoluteError: 2, coverageMismatches: 8 },
     negativeControl: { changedCase: candidates[0].id, changedChannel: 'alpha', observed: true },
     cases,
-  }
+  };
 }
 
 function compare(candidate, native) {
-  let alphaAbsoluteError = 0
-  let alphaMaximumError = 0
-  let medianAbsoluteError = 0
-  let medianMaximumError = 0
-  let coverageMismatches = 0
-  let thresholdBoundaryDifferences = 0
-  const pixels = candidate.length / 4
+  let alphaAbsoluteError = 0;
+  let alphaMaximumError = 0;
+  let medianAbsoluteError = 0;
+  let medianMaximumError = 0;
+  let coverageMismatches = 0;
+  let thresholdBoundaryDifferences = 0;
+  const pixels = candidate.length / 4;
   for (let offset = 0; offset < candidate.length; offset += 4) {
-    const alphaError = Math.abs(candidate[offset + 3] - native[offset + 3])
-    const candidateMedian = median(candidate[offset], candidate[offset + 1], candidate[offset + 2])
-    const nativeMedian = median(native[offset], native[offset + 1], native[offset + 2])
-    const medianError = Math.abs(candidateMedian - nativeMedian)
-    alphaAbsoluteError += alphaError
-    alphaMaximumError = Math.max(alphaMaximumError, alphaError)
-    medianAbsoluteError += medianError
-    medianMaximumError = Math.max(medianMaximumError, medianError)
+    const alphaError = Math.abs(candidate[offset + 3] - native[offset + 3]);
+    const candidateMedian = median(candidate[offset], candidate[offset + 1], candidate[offset + 2]);
+    const nativeMedian = median(native[offset], native[offset + 1], native[offset + 2]);
+    const medianError = Math.abs(candidateMedian - nativeMedian);
+    alphaAbsoluteError += alphaError;
+    alphaMaximumError = Math.max(alphaMaximumError, alphaError);
+    medianAbsoluteError += medianError;
+    medianMaximumError = Math.max(medianMaximumError, medianError);
     if (candidateMedian >= 128 !== nativeMedian >= 128) {
-      thresholdBoundaryDifferences += 1
+      thresholdBoundaryDifferences += 1;
       const separatedByQuantizationBand =
-        (candidateMedian <= 126 && nativeMedian >= 129) ||
-        (nativeMedian <= 126 && candidateMedian >= 129)
-      if (separatedByQuantizationBand) coverageMismatches += 1
+        (candidateMedian <= 126 && nativeMedian >= 129) || (nativeMedian <= 126 && candidateMedian >= 129);
+      if (separatedByQuantizationBand) coverageMismatches += 1;
     }
   }
   return {
@@ -241,24 +222,24 @@ function compare(candidate, native) {
     },
     coverageMismatches,
     thresholdBoundaryDifferences,
-  }
+  };
 }
 
 function median(a, b, c) {
-  return Math.max(Math.min(a, b), Math.min(Math.max(a, b), c))
+  return Math.max(Math.min(a, b), Math.min(Math.max(a, b), c));
 }
 
 function sha256(bytes) {
-  return createHash('sha256').update(bytes).digest('hex')
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 async function readManifest() {
   try {
-    return JSON.parse(await readFile(manifestPath, 'utf8'))
+    return JSON.parse(await readFile(manifestPath, 'utf8'));
   } catch (error) {
     if (!checkOnly && error && typeof error === 'object' && error.code === 'ENOENT') {
-      return { cases: [] }
+      return { cases: [] };
     }
-    throw error
+    throw error;
   }
 }

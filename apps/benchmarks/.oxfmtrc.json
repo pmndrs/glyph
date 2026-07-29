@@ -1,6 +1,0 @@
-{
-  "semi": false,
-  "singleQuote": true,
-  "trailingComma": "all",
-  "ignorePatterns": [".cache/**", "dist/**", "fixtures/autoresearch/**/*.json", "fixtures/fonts/**"]
-}

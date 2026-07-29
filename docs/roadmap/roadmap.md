@@ -4,19 +4,19 @@ title: Canonical implementation roadmap
 description: Defines the only active implementation sequence, dependencies, effort estimates, deliverables, and exit gates for pmndrs/text.
 tags: [roadmap, implementation, milestones]
 sources:
-  - id: "citation-1"
-    resource: "../planning/benchmark-plan.md"
-    title: "Benchmark plan"
-  - id: "citation-2"
-    resource: "../planning/conformance-plan.md"
-    title: "Conformance plan"
-  - id: "citation-3"
-    resource: "../../README.md#benchmark-harness-wireframe"
-    title: "Repository benchmark-harness wireframe"
+  - id: 'citation-1'
+    resource: '../planning/benchmark-plan.md'
+    title: 'Benchmark plan'
+  - id: 'citation-2'
+    resource: '../planning/conformance-plan.md'
+    title: 'Conformance plan'
+  - id: 'citation-3'
+    resource: '../../README.md#benchmark-harness-wireframe'
+    title: 'Repository benchmark-harness wireframe'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T13:24:14Z"
+  at: '2026-07-29T13:24:14Z'
 ---
 
 # Canonical implementation roadmap
@@ -113,9 +113,9 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 8.3  |   ✅   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
 | 8.4  |   ✅   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, base-level minification, and effects scenes.                                                 |  L   | 8.3        |
 | 8.5  |   ✅   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state rendering evidence.                                                                                       |  XL  | 8.4        |
-| 8.6  |   🟡   | Add configurable MTSDF quality, bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                    |  XL  | 8.5        |
+| 8.6  |   🟡   | Add configurable MTSDF quality, bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                   |  XL  | 8.5        |
 | 9.1  |   ✅   | Port Slug outline conversion, exact normalization/bands, compact packing, deterministic baker, validator, and embedded/external resources.                                               |  XL  | 7.2        |
-| 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL fill runtime, batching, lifecycle, fail-closed paint boundary, and public `Text` integration.                                           |  XL  | 9.1        |
+| 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL fill runtime, batching, lifecycle, fail-closed paint boundary, and public `Text` integration.                                            |  XL  | 9.1        |
 | 9.3  |   ✅   | Integrate Slug into the shared benchmark/conformance product, release-role scenes, source-outline matrix, and complete two-axis icon-font grid.                                          |  XL  | 9.2        |
 | 9.4  |   ✅   | Reproduce the applicable prior-fork performance baseline, evaluate retained challengers, and close payload, residency, frame-time, and bundle-isolation gates.                           |  XL  | 9.3        |
 | 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.6, 9.4   |
@@ -698,16 +698,16 @@ The project cannot ship before this gate passes.
 
 The order below preserves lanes without pretending the work is part of V1:
 
-| Order | Workstream                                          | Effort  | Why next                                                                                                                                                    |
-| ----: | --------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    11 | Editorial flow regions and mixed-raster composition | XL      | Add responsive columns and exclusions, then prove bitmap, MTSDF, and Slug over one positioned layout in a live editorial benchmark.                         |
-|    12 | Mixed-font spans and explicit font fallback         | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                         |
-|    13 | Large-coverage CJK raster paging and icons          | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
-|    14 | Color emoji                                         | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                              |
-|    15 | Raster effects and expanded recommendations         | L       | Test the bounded shared-traversal Slug outline approximation, then extend accepted outlines, colorization, shadows, and projected-size guidance with measurements.                      |
-|    16 | Measured optimization campaigns                     | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                        |
-|    17 | Advanced font compiler units                        | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                          |
-|    18 | Vertical writing                                    | XL      | Add Japanese top-to-bottom shaping, orientation, column layout, interaction geometry, and three-renderer evidence after complete CJK paging.                |
+| Order | Workstream                                          | Effort  | Why next                                                                                                                                                           |
+| ----: | --------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|    11 | Editorial flow regions and mixed-raster composition | XL      | Add responsive columns and exclusions, then prove bitmap, MTSDF, and Slug over one positioned layout in a live editorial benchmark.                                |
+|    12 | Mixed-font spans and explicit font fallback         | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                                |
+|    13 | Large-coverage CJK raster paging and icons          | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics.        |
+|    14 | Color emoji                                         | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                                     |
+|    15 | Raster effects and expanded recommendations         | L       | Test the bounded shared-traversal Slug outline approximation, then extend accepted outlines, colorization, shadows, and projected-size guidance with measurements. |
+|    16 | Measured optimization campaigns                     | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                               |
+|    17 | Advanced font compiler units                        | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                                 |
+|    18 | Vertical writing                                    | XL      | Add Japanese top-to-bottom shaping, orientation, column layout, interaction geometry, and three-renderer evidence after complete CJK paging.                       |
 
 ### Milestone 11 — editorial flow regions and mixed-raster composition
 

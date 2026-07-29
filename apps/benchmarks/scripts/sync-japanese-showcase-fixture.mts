@@ -1,10 +1,10 @@
-import { resolve } from 'node:path'
+import { resolve } from 'node:path';
 
-import { syncImmutableFixture } from './support/immutable-fixture.mts'
+import { syncImmutableFixture } from './support/immutable-fixture.mts';
 
-const commit = '9a6cc6b8ce992aff77b69c857c46af0b42cdff76'
-const directory = resolve('fixtures/fonts/dot-gothic-16')
-const check = process.argv.includes('--check')
+const commit = '9a6cc6b8ce992aff77b69c857c46af0b42cdff76';
+const directory = resolve('fixtures/fonts/dot-gothic-16');
+const check = process.argv.includes('--check');
 
 await syncImmutableFixture({
   baseUrl: `https://raw.githubusercontent.com/google/fonts/${commit}/ofl/dotgothic16`,
@@ -27,4 +27,4 @@ await syncImmutableFixture({
       sha256: 'ab13744709b98ba1196c45bc1bf9ba89e86df9620673e19ece14a8c6efe8c014',
     },
   ],
-})
+});

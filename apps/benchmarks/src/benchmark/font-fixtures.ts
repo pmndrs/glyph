@@ -1,44 +1,44 @@
-import type { AdvancedShapingFontFixture } from './advanced-shaping'
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT, BENCHMARK_IPSUM_TEXT } from './benchmark-ipsum'
+import type { AdvancedShapingFontFixture } from './advanced-shaping';
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT, BENCHMARK_IPSUM_TEXT } from './benchmark-ipsum';
 
 export type BenchmarkFontFixture =
   | AdvancedShapingFontFixture
   | 'dot-gothic-16'
   | 'font-awesome-free-6.7.2'
   | 'source-serif-4'
-  | 'dancing-script'
+  | 'dancing-script';
 
-export type SelectableFontFixture = 'inter' | 'source-serif-4' | 'dancing-script'
+export type SelectableFontFixture = 'inter' | 'source-serif-4' | 'dancing-script';
 
-export const ICON_GRID_FONT_FIXTURE = 'font-awesome-free-6.7.2' as const
+export const ICON_GRID_FONT_FIXTURE = 'font-awesome-free-6.7.2' as const;
 
 export type LiveWorkloadFontFixtures =
   | {
-      readonly kind: 'single'
-      readonly primary: BenchmarkFontFixture
+      readonly kind: 'single';
+      readonly primary: BenchmarkFontFixture;
     }
   | {
-      readonly kind: 'icon-grid'
-      readonly primary: typeof ICON_GRID_FONT_FIXTURE
-      readonly labels: BenchmarkFontFixture
-    }
+      readonly kind: 'icon-grid';
+      readonly primary: typeof ICON_GRID_FONT_FIXTURE;
+      readonly labels: BenchmarkFontFixture;
+    };
 
 export interface BenchmarkFontFixtureDefinition {
-  readonly id: SelectableFontFixture
-  readonly label: string
-  readonly metadata: string
+  readonly id: SelectableFontFixture;
+  readonly label: string;
+  readonly metadata: string;
 }
 
 export interface AdvancedFontFixtureDefinition {
-  readonly id: BenchmarkFontFixture
-  readonly label: string
-  readonly metadata: string
+  readonly id: BenchmarkFontFixture;
+  readonly label: string;
+  readonly metadata: string;
 }
 
 export interface RasterConformanceSpecimen {
-  readonly text: string
-  readonly language: string
-  readonly direction: 'ltr' | 'rtl'
+  readonly text: string;
+  readonly language: string;
+  readonly direction: 'ltr' | 'rtl';
 }
 
 export const SELECTABLE_FONT_FIXTURES: readonly BenchmarkFontFixtureDefinition[] = [
@@ -53,10 +53,11 @@ export const SELECTABLE_FONT_FIXTURES: readonly BenchmarkFontFixtureDefinition[]
     label: 'Dancing Script',
     metadata: 'Script · 3.000 · CFF',
   },
-] as const
+] as const;
 
-export const SELECTABLE_FONT_FIXTURE_IDS: readonly SelectableFontFixture[] =
-  SELECTABLE_FONT_FIXTURES.map(({ id }) => id)
+export const SELECTABLE_FONT_FIXTURE_IDS: readonly SelectableFontFixture[] = SELECTABLE_FONT_FIXTURES.map(
+  ({ id }) => id,
+);
 
 export const ADVANCED_FONT_FIXTURES: readonly AdvancedFontFixtureDefinition[] = [
   { id: 'inter', label: 'Inter Regular', metadata: 'Sans · Latin' },
@@ -74,7 +75,7 @@ export const ADVANCED_FONT_FIXTURES: readonly AdvancedFontFixtureDefinition[] = 
     metadata: 'Sans · authored Japanese subset',
   },
   { id: 'dot-gothic-16', label: 'DotGothic16', metadata: 'Pixel style · Japanese' },
-] as const
+] as const;
 
 export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: 'Inter Regular 4.1',
@@ -85,46 +86,41 @@ export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string
   'font-awesome-free-6.7.2': 'Font Awesome Free Solid 6.7.2',
   'source-serif-4': 'Source Serif 4 Regular 4.005',
   'dancing-script': 'Dancing Script Regular 3.000',
-}
+};
 
-export function liveWorkloadFontFixtures(
-  workload: string,
-  selected: BenchmarkFontFixture,
-): LiveWorkloadFontFixtures {
+export function liveWorkloadFontFixtures(workload: string, selected: BenchmarkFontFixture): LiveWorkloadFontFixtures {
   return workload === 'icon-grid'
     ? { kind: 'icon-grid', primary: ICON_GRID_FONT_FIXTURE, labels: selected }
-    : { kind: 'single', primary: selected }
+    : { kind: 'single', primary: selected };
 }
 
 export function selectableFontFixture(value: string): SelectableFontFixture {
-  const fixture = SELECTABLE_FONT_FIXTURE_IDS.find((candidate) => candidate === value)
-  if (fixture === undefined) throw new TypeError(`Unknown selectable font fixture: ${value}`)
-  return fixture
+  const fixture = SELECTABLE_FONT_FIXTURE_IDS.find((candidate) => candidate === value);
+  if (fixture === undefined) throw new TypeError(`Unknown selectable font fixture: ${value}`);
+  return fixture;
 }
 
 export function benchmarkIpsumText(): string {
-  return BENCHMARK_IPSUM_TEXT
+  return BENCHMARK_IPSUM_TEXT;
 }
 
 export function conformanceText(): string {
-  return BENCHMARK_IPSUM_CONFORMANCE_TEXT
+  return BENCHMARK_IPSUM_CONFORMANCE_TEXT;
 }
 
 const LATIN_RASTER_CONFORMANCE_SPECIMEN: RasterConformanceSpecimen = {
   text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
   language: 'en',
   direction: 'ltr',
-}
+};
 
 const FONT_AWESOME_ICON_SPECIMEN: RasterConformanceSpecimen = {
   text: '\uf004\uf005\uf015\uf007\uf013\uf0e7\uf164\uf1d8\uf121\uf0f4\uf135\uf02d',
   language: 'en',
   direction: 'ltr',
-}
+};
 
-const rasterConformanceSpecimens: Readonly<
-  Record<BenchmarkFontFixture, RasterConformanceSpecimen>
-> = {
+const rasterConformanceSpecimens: Readonly<Record<BenchmarkFontFixture, RasterConformanceSpecimen>> = {
   inter: LATIN_RASTER_CONFORMANCE_SPECIMEN,
   'source-serif-4': LATIN_RASTER_CONFORMANCE_SPECIMEN,
   'dancing-script': {
@@ -153,10 +149,8 @@ const rasterConformanceSpecimens: Readonly<
     direction: 'ltr',
   },
   'font-awesome-free-6.7.2': FONT_AWESOME_ICON_SPECIMEN,
-}
+};
 
-export function rasterConformanceSpecimen(
-  fontFixture: BenchmarkFontFixture,
-): RasterConformanceSpecimen {
-  return rasterConformanceSpecimens[fontFixture]
+export function rasterConformanceSpecimen(fontFixture: BenchmarkFontFixture): RasterConformanceSpecimen {
+  return rasterConformanceSpecimens[fontFixture];
 }

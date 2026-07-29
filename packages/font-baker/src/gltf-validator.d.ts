@@ -1,4 +1,4 @@
-declare module "gltf-validator" {
+declare module 'gltf-validator' {
   export interface GltfValidatorMessage {
     readonly code: string;
     readonly message: string;

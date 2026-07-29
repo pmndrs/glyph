@@ -4,22 +4,22 @@ title: Proposed architecture
 description: Defines system ownership, import boundaries, font identity, loading, shaping, paragraph, and raster invariants.
 tags: [architecture, loader, baker, shaping, paragraph, raster]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/harfbuzz/harfrust"
-    title: "HarfRust"
-  - id: "citation-2"
-    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
-    title: "glTF 2.0 specification"
-  - id: "citation-3"
-    resource: "https://html.spec.whatwg.org/multipage/workers.html"
-    title: "HTML worker specification"
-  - id: "citation-4"
-    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
-    title: "KTX 2.0 specification"
+  - id: 'citation-1'
+    resource: 'https://github.com/harfbuzz/harfrust'
+    title: 'HarfRust'
+  - id: 'citation-2'
+    resource: 'https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html'
+    title: 'glTF 2.0 specification'
+  - id: 'citation-3'
+    resource: 'https://html.spec.whatwg.org/multipage/workers.html'
+    title: 'HTML worker specification'
+  - id: 'citation-4'
+    resource: 'https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html'
+    title: 'KTX 2.0 specification'
 
 generated:
-  by: "openai-codex/gpt-5.6"
-  at: "2026-07-27T23:09:57Z"
+  by: 'openai-codex/gpt-5.6'
+  at: '2026-07-27T23:09:57Z'
 ---
 
 # Proposed architecture

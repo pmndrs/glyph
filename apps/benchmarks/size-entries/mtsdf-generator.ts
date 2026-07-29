@@ -3,4 +3,4 @@ export {
   createMtsdfGenerator,
   createMtsdfGeneratorFromInstance,
   readMtsdfGeneratorAbi,
-} from '../../../packages/text/dist/internal/mtsdf-generator.js'
+} from '../../../packages/text/dist/internal/mtsdf-generator.js';

@@ -4,22 +4,22 @@ title: PMNDRS_font_slug
 description: Defines Slug glyph, curve, band-header, curve-reference, and GPU page resources bound to a PMNDRS font.
 tags: [gltf, extension, font, slug]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug"
-    title: "Three Flatland Slug"
-  - id: "citation-2"
-    resource: "../../raster-data-contract.md"
-    title: "Raster data contract"
-  - id: "citation-3-1"
-    resource: "../../slug-audit.md"
-    title: "Slug audit"
-  - id: "citation-3-2"
-    resource: "../../gpu-compression.md"
-    title: "GPU compression design"
+  - id: 'citation-1'
+    resource: 'https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug'
+    title: 'Three Flatland Slug'
+  - id: 'citation-2'
+    resource: '../../raster-data-contract.md'
+    title: 'Raster data contract'
+  - id: 'citation-3-1'
+    resource: '../../slug-audit.md'
+    title: 'Slug audit'
+  - id: 'citation-3-2'
+    resource: '../../gpu-compression.md'
+    title: 'GPU compression design'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:08:45Z"
+  at: '2026-07-26T20:08:45Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->

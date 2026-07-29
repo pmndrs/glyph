@@ -1,41 +1,38 @@
-import { packageSizeBudgets } from './package-size-budgets.ts'
+import { packageSizeBudgets } from './package-size-budgets.ts';
 
 interface MeasurementHost {
-  readonly platform: string
-  readonly architecture: string
+  readonly platform: string;
+  readonly architecture: string;
 }
 
 interface SizeEntry {
-  readonly id: string
-  readonly status: string
-  readonly format?: string
-  readonly rawBytes?: number
-  readonly minifiedBytes?: number
-  readonly gzipBytes?: number
-  readonly brotliBytes?: number
+  readonly id: string;
+  readonly status: string;
+  readonly format?: string;
+  readonly rawBytes?: number;
+  readonly minifiedBytes?: number;
+  readonly gzipBytes?: number;
+  readonly brotliBytes?: number;
 }
 
 export interface PackageSizeReport {
-  readonly schemaVersion: number
-  readonly measurementHost: MeasurementHost
-  readonly entries: readonly SizeEntry[]
+  readonly schemaVersion: number;
+  readonly measurementHost: MeasurementHost;
+  readonly entries: readonly SizeEntry[];
 }
 
-export function assertPackageSizeReportFresh(
-  committed: PackageSizeReport,
-  current: PackageSizeReport,
-): void {
+export function assertPackageSizeReportFresh(committed: PackageSizeReport, current: PackageSizeReport): void {
   const sameHost =
     committed.measurementHost.platform === current.measurementHost.platform &&
-    committed.measurementHost.architecture === current.measurementHost.architecture
-  const committedById = new Map(committed.entries.map((entry) => [entry.id, entry]))
+    committed.measurementHost.architecture === current.measurementHost.architecture;
+  const committedById = new Map(committed.entries.map((entry) => [entry.id, entry]));
   const comparable = sameHost
     ? current
     : {
         ...current,
         measurementHost: committed.measurementHost,
         entries: current.entries.map((entry) => committedById.get(entry.id) ?? entry),
-      }
+      };
   if (JSON.stringify(comparable) !== JSON.stringify(committed)) {
     throw new Error(
       `generated package-size report is stale; run pnpm size\n${JSON.stringify({
@@ -44,15 +41,15 @@ export function assertPackageSizeReportFresh(
         committedEntries: committed.entries,
         currentEntries: current.entries,
       })}`,
-    )
+    );
   }
-  if (sameHost) return
+  if (sameHost) return;
 
   for (const entry of current.entries) {
-    if (entry.status !== 'measured') continue
-    const budget = packageSizeBudgets[entry.id as keyof typeof packageSizeBudgets]
+    if (entry.status !== 'measured') continue;
+    const budget = packageSizeBudgets[entry.id as keyof typeof packageSizeBudgets];
     if (budget === undefined) {
-      throw new Error(`foreign-host measurement has no reviewed ${entry.id} budget`)
+      throw new Error(`foreign-host measurement has no reviewed ${entry.id} budget`);
     }
     if (
       entry.rawBytes === undefined ||
@@ -60,7 +57,7 @@ export function assertPackageSizeReportFresh(
       entry.gzipBytes === undefined ||
       entry.brotliBytes === undefined
     ) {
-      throw new Error(`foreign-host measurement is incomplete for ${entry.id}`)
+      throw new Error(`foreign-host measurement is incomplete for ${entry.id}`);
     }
     if (
       entry.rawBytes > budget.rawBytes ||
@@ -68,7 +65,7 @@ export function assertPackageSizeReportFresh(
       entry.gzipBytes > budget.gzipBytes ||
       entry.brotliBytes > budget.brotliBytes
     ) {
-      throw new Error(`foreign-host measurement exceeds the reviewed ${entry.id} budget`)
+      throw new Error(`foreign-host measurement exceeds the reviewed ${entry.id} budget`);
     }
   }
 }

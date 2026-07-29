@@ -4,22 +4,22 @@ title: Shaping data contract V0
 description: Defines the complete reduced SFNT shaping payload, font-function data, batch ABI, byte accounting, and validation.
 tags: [data, shaping, harfrust, wasm, sfnt]
 sources:
-  - id: "citation-1"
-    resource: "https://learn.microsoft.com/en-us/typography/opentype/spec/"
-    title: "OpenType specification"
-  - id: "citation-2"
-    resource: "https://github.com/harfbuzz/harfrust"
-    title: "HarfRust"
-  - id: "citation-3"
-    resource: "https://harfbuzz.github.io/shaping-and-shape-plans.html"
-    title: "HarfBuzz shaping documentation"
-  - id: "citation-4"
-    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
-    title: "glTF 2.0 specification"
+  - id: 'citation-1'
+    resource: 'https://learn.microsoft.com/en-us/typography/opentype/spec/'
+    title: 'OpenType specification'
+  - id: 'citation-2'
+    resource: 'https://github.com/harfbuzz/harfrust'
+    title: 'HarfRust'
+  - id: 'citation-3'
+    resource: 'https://harfbuzz.github.io/shaping-and-shape-plans.html'
+    title: 'HarfBuzz shaping documentation'
+  - id: 'citation-4'
+    resource: 'https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html'
+    title: 'glTF 2.0 specification'
 
 generated:
-  by: "openai-codex/gpt-5.6"
-  at: "2026-07-26T05:40:22Z"
+  by: 'openai-codex/gpt-5.6'
+  at: '2026-07-26T05:40:22Z'
 ---
 
 # Shaping data contract V0
@@ -74,24 +74,24 @@ The package-owned runtime uses Rust 1.97.1, HarfRust 0.12.0 with `default-featur
 
 ### Required tables
 
-| Table | Runtime purpose |
-| --- | --- |
-| `head` | Units per em and canonical face metadata required by the font reader. |
-| `maxp` | Glyph count and glyph-ID bounds. |
-| `cmap` | Unicode scalar and variation-sequence to local glyph-ID mapping. |
-| `hhea` | Horizontal font metrics and `hmtx` cardinality. |
-| `hmtx` | Horizontal advances and side bearings used to initialize glyph positions. |
+| Table  | Runtime purpose                                                                                 |
+| ------ | ----------------------------------------------------------------------------------------------- |
+| `head` | Units per em and canonical face metadata required by the font reader.                           |
+| `maxp` | Glyph count and glyph-ID bounds.                                                                |
+| `cmap` | Unicode scalar and variation-sequence to local glyph-ID mapping.                                |
+| `hhea` | Horizontal font metrics and `hmtx` cardinality.                                                 |
+| `hmtx` | Horizontal advances and side bearings used to initialize glyph positions.                       |
 | `OS/2` | Authoritative typographic metrics and Unicode/font classification used by the runtime contract. |
 
 ### Conditional OpenType-layout tables
 
-| Table | Retention rule |
-| --- | --- |
-| `GDEF` | Retain when present. It supplies glyph classes, mark attachment classes, mark glyph sets, attachment points, and variation stores referenced by layout. |
-| `GSUB` | Retain when present. All supported scripts, language systems, features, lookups, and feature variations remain intact. |
-| `GPOS` | Retain when present. All supported scripts, language systems, features, lookups, anchors, value records, and variation references remain intact. |
-| `kern` | Retain only when present and not made redundant by the bake policy. HarfRust remains authoritative about when legacy kerning applies. |
-| `BASE` | Retain when present so baseline data survives the shaping artifact even though V0 paragraph layout uses the explicit serialized horizontal metrics. |
+| Table                  | Retention rule                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GDEF`                 | Retain when present. It supplies glyph classes, mark attachment classes, mark glyph sets, attachment points, and variation stores referenced by layout.       |
+| `GSUB`                 | Retain when present. All supported scripts, language systems, features, lookups, and feature variations remain intact.                                        |
+| `GPOS`                 | Retain when present. All supported scripts, language systems, features, lookups, anchors, value records, and variation references remain intact.              |
+| `kern`                 | Retain only when present and not made redundant by the bake policy. HarfRust remains authoritative about when legacy kerning applies.                         |
+| `BASE`                 | Retain when present so baseline data survives the shaping artifact even though V0 paragraph layout uses the explicit serialized horizontal metrics.           |
 | `vhea`, `vmtx`, `VORG` | Retain each table exactly when present so vertical advances/origins survive baking. V0 does not fabricate missing tables or expose vertical paragraph layout. |
 
 OpenType extension lookup types are retained inside `GSUB` or `GPOS`; they are not separate tables. All GSUB lookup types 1–8 and GPOS lookup types 1–9 that HarfRust supports remain representable because their original normative table encoding is preserved.
@@ -124,12 +124,12 @@ HarfRust 0.12.0's public `FontFuncs` surface has nominal/variant glyph, horizont
 
 Dense record indexed by local glyph ID:
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `i16` | x minimum |
-| 2 | `i16` | y minimum |
-| 4 | `i16` | x maximum |
-| 6 | `i16` | y maximum |
+| Offset | Type  | Field     |
+| -----: | ----- | --------- |
+|      0 | `i16` | x minimum |
+|      2 | `i16` | y minimum |
+|      4 | `i16` | x maximum |
+|      6 | `i16` | y maximum |
 
 The companion extents-availability view is a dense bitset of exactly `ceil(glyphCount / 8)` bytes. Bit `glyphId & 7` of byte `glyphId >> 3` is one when the record is present. Padding bits in the final byte MUST be zero. A clear bit makes the adapter return `None`; the corresponding eight extent bytes MUST be zero. This distinguishes an absent outline from a valid zero-area box.
 
@@ -156,12 +156,12 @@ This domain-separated encoding is used identically by the baker, loader, cache, 
 
 ```ts
 interface FontMetricsV0 {
-  glyphCount: number
-  glyphIdWidth: 16
-  unitsPerEm: number
-  ascender: number
-  descender: number
-  lineGap: number
+  glyphCount: number;
+  glyphIdWidth: 16;
+  unitsPerEm: number;
+  ascender: number;
+  descender: number;
+  lineGap: number;
 }
 ```
 
@@ -186,123 +186,123 @@ JavaScript and Wasm exchange one batch, never one glyph. All integers are little
 
 ### Shape request header — 32 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `u32` | UTF-16 text byte offset |
-| 4 | `u32` | UTF-16 code-unit count |
-| 8 | `u32` | run-record byte offset |
-| 12 | `u32` | run count |
-| 16 | `u32` | feature-record byte offset |
-| 20 | `u32` | feature count |
-| 24 | `u32` | language-table byte offset |
-| 28 | `u32` | language-table byte length |
+| Offset | Type  | Field                      |
+| -----: | ----- | -------------------------- |
+|      0 | `u32` | UTF-16 text byte offset    |
+|      4 | `u32` | UTF-16 code-unit count     |
+|      8 | `u32` | run-record byte offset     |
+|     12 | `u32` | run count                  |
+|     16 | `u32` | feature-record byte offset |
+|     20 | `u32` | feature count              |
+|     24 | `u32` | language-table byte offset |
+|     28 | `u32` | language-table byte length |
 
 The reshape request begins with the same 32 bytes and appends `rangesOffset: u32` at byte 32 and `rangeCount: u32` at byte 36, for a 40-byte header.
 
 ### Feature record — 16 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `u32` | OpenType tag, big-endian tag bytes packed into the integer |
-| 4 | `u32` | feature value |
-| 8 | `u32` | UTF-16 start, inclusive |
-| 12 | `u32` | UTF-16 end, exclusive |
+| Offset | Type  | Field                                                      |
+| -----: | ----- | ---------------------------------------------------------- |
+|      0 | `u32` | OpenType tag, big-endian tag bytes packed into the integer |
+|      4 | `u32` | feature value                                              |
+|      8 | `u32` | UTF-16 start, inclusive                                    |
+|     12 | `u32` | UTF-16 end, exclusive                                      |
 
 ### Run request record — 32 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `u32` | font handle |
-| 4 | `u32` | UTF-16 text start, inclusive |
-| 8 | `u32` | UTF-16 text end, exclusive |
-| 12 | `u32` | ISO 15924 script tag, using HarfBuzz `hb_script_t` tag semantics and big-endian tag bytes (`Latn`, `Arab`, `Deva`) |
-| 16 | `u32` | language-table byte offset; `0xffffffff` means default language |
-| 20 | `u32` | first feature record |
-| 24 | `u16` | feature count |
-| 26 | `u8` | direction: `0` LTR, `1` RTL; all other values invalid in V0 |
-| 27 | `u8` | cluster level using the V0 mapping below |
-| 28 | `u32` | buffer flags using the V0 mapping below |
+| Offset | Type  | Field                                                                                                              |
+| -----: | ----- | ------------------------------------------------------------------------------------------------------------------ |
+|      0 | `u32` | font handle                                                                                                        |
+|      4 | `u32` | UTF-16 text start, inclusive                                                                                       |
+|      8 | `u32` | UTF-16 text end, exclusive                                                                                         |
+|     12 | `u32` | ISO 15924 script tag, using HarfBuzz `hb_script_t` tag semantics and big-endian tag bytes (`Latn`, `Arab`, `Deva`) |
+|     16 | `u32` | language-table byte offset; `0xffffffff` means default language                                                    |
+|     20 | `u32` | first feature record                                                                                               |
+|     24 | `u16` | feature count                                                                                                      |
+|     26 | `u8`  | direction: `0` LTR, `1` RTL; all other values invalid in V0                                                        |
+|     27 | `u8`  | cluster level using the V0 mapping below                                                                           |
+|     28 | `u32` | buffer flags using the V0 mapping below                                                                            |
 
 Language strings are UTF-8, length-prefixed by `u16`, and deduplicated within a batch. Offset zero is a valid first language record; only `0xffffffff` selects the default language. Text is a contiguous `u16` UTF-16 array. Public clusters always refer to offsets in that original array.
 
 V0 cluster levels mirror the pinned HarfBuzz/HarfRust ABI:
 
-| Value | Name |
-| ---: | --- |
-| 0 | `MONOTONE_GRAPHEMES` (default) |
-| 1 | `MONOTONE_CHARACTERS` |
-| 2 | `CHARACTERS` |
-| 3 | `GRAPHEMES` |
+| Value | Name                           |
+| ----: | ------------------------------ |
+|     0 | `MONOTONE_GRAPHEMES` (default) |
+|     1 | `MONOTONE_CHARACTERS`          |
+|     2 | `CHARACTERS`                   |
+|     3 | `GRAPHEMES`                    |
 
 V0 buffer flags are a bitset; unlisted bits MUST be zero:
 
-| Bit | Value | Name |
-| ---: | ---: | --- |
-| 0 | `0x01` | `BOT` |
-| 1 | `0x02` | `EOT` |
-| 2 | `0x04` | `PRESERVE_DEFAULT_IGNORABLES` |
-| 3 | `0x08` | `REMOVE_DEFAULT_IGNORABLES` |
-| 4 | `0x10` | `DO_NOT_INSERT_DOTTED_CIRCLE` |
-| 5 | `0x20` | `VERIFY` |
-| 6 | `0x40` | `PRODUCE_UNSAFE_TO_CONCAT` |
-| 7 | `0x80` | `PRODUCE_SAFE_TO_INSERT_TATWEEL` |
+| Bit |  Value | Name                             |
+| --: | -----: | -------------------------------- |
+|   0 | `0x01` | `BOT`                            |
+|   1 | `0x02` | `EOT`                            |
+|   2 | `0x04` | `PRESERVE_DEFAULT_IGNORABLES`    |
+|   3 | `0x08` | `REMOVE_DEFAULT_IGNORABLES`      |
+|   4 | `0x10` | `DO_NOT_INSERT_DOTTED_CIRCLE`    |
+|   5 | `0x20` | `VERIFY`                         |
+|   6 | `0x40` | `PRODUCE_UNSAFE_TO_CONCAT`       |
+|   7 | `0x80` | `PRODUCE_SAFE_TO_INSERT_TATWEEL` |
 
 ### Reshape range record — 24 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `u32` | index of the source run record |
-| 4 | `u32` | item UTF-16 start, inclusive |
-| 8 | `u32` | item UTF-16 end, exclusive |
-| 12 | `u32` | context UTF-16 start, inclusive |
-| 16 | `u32` | context UTF-16 end, exclusive |
-| 20 | `u32` | buffer flags for this reshape |
+| Offset | Type  | Field                           |
+| -----: | ----- | ------------------------------- |
+|      0 | `u32` | index of the source run record  |
+|      4 | `u32` | item UTF-16 start, inclusive    |
+|      8 | `u32` | item UTF-16 end, exclusive      |
+|     12 | `u32` | context UTF-16 start, inclusive |
+|     16 | `u32` | context UTF-16 end, exclusive   |
+|     20 | `u32` | buffer flags for this reshape   |
 
 Every item lies inside its context and every context lies inside its referenced run. The range flags replace the broad run's flags so the paragraph engine can declare beginning/end-of-text semantics for the selected line boundary. Pre-context is passed to HarfRust in reverse code-point order as required by its low-overhead API; post-context remains forward. One output run is emitted per range in request order.
 
 ### Result header — 60 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `u32` | complete result byte length |
-| 4 | `u32` | font-handle table offset |
-| 8 | `u32` | font-handle count |
-| 12 | `u32` | run-font-slot array offset |
-| 16 | `u32` | run-glyph-start array offset |
-| 20 | `u32` | run-glyph-count array offset |
-| 24 | `u32` | output run count |
-| 28 | `u32` | glyph-ID array offset |
-| 32 | `u32` | cluster array offset |
-| 36 | `u32` | x-advance array offset |
-| 40 | `u32` | y-advance array offset |
-| 44 | `u32` | x-offset array offset |
-| 48 | `u32` | y-offset array offset |
-| 52 | `u32` | glyph-flag array offset |
-| 56 | `u32` | glyph count |
+| Offset | Type  | Field                        |
+| -----: | ----- | ---------------------------- |
+|      0 | `u32` | complete result byte length  |
+|      4 | `u32` | font-handle table offset     |
+|      8 | `u32` | font-handle count            |
+|     12 | `u32` | run-font-slot array offset   |
+|     16 | `u32` | run-glyph-start array offset |
+|     20 | `u32` | run-glyph-count array offset |
+|     24 | `u32` | output run count             |
+|     28 | `u32` | glyph-ID array offset        |
+|     32 | `u32` | cluster array offset         |
+|     36 | `u32` | x-advance array offset       |
+|     40 | `u32` | y-advance array offset       |
+|     44 | `u32` | x-offset array offset        |
+|     48 | `u32` | y-offset array offset        |
+|     52 | `u32` | glyph-flag array offset      |
+|     56 | `u32` | glyph count                  |
 
 ### Result structure-of-arrays
 
-| Array | Type | Count | Meaning |
-| --- | --- | ---: | --- |
-| `runFontSlots` | `u16` | run count | Index into the result font-handle table. |
-| `runGlyphStarts` | `u32` | run count | First glyph in every glyph array. |
-| `runGlyphCounts` | `u32` | run count | Glyph count in the run. |
-| `glyphIds` | `u16` | glyph count | V0 font-local glyph identity. |
-| `clusters` | `u32` | glyph count | Original UTF-16 source offset. |
-| `xAdvances` | `i32` | glyph count | Horizontal advance in design units. |
-| `yAdvances` | `i32` | glyph count | Vertical advance in design units. |
-| `xOffsets` | `i32` | glyph count | Horizontal placement offset in design units. |
-| `yOffsets` | `i32` | glyph count | Vertical placement offset in design units. |
-| `glyphFlags` | `u16` | glyph count | Stable pmndrs flag mapping, below. |
+| Array            | Type  |       Count | Meaning                                      |
+| ---------------- | ----- | ----------: | -------------------------------------------- |
+| `runFontSlots`   | `u16` |   run count | Index into the result font-handle table.     |
+| `runGlyphStarts` | `u32` |   run count | First glyph in every glyph array.            |
+| `runGlyphCounts` | `u32` |   run count | Glyph count in the run.                      |
+| `glyphIds`       | `u16` | glyph count | V0 font-local glyph identity.                |
+| `clusters`       | `u32` | glyph count | Original UTF-16 source offset.               |
+| `xAdvances`      | `i32` | glyph count | Horizontal advance in design units.          |
+| `yAdvances`      | `i32` | glyph count | Vertical advance in design units.            |
+| `xOffsets`       | `i32` | glyph count | Horizontal placement offset in design units. |
+| `yOffsets`       | `i32` | glyph count | Vertical placement offset in design units.   |
+| `glyphFlags`     | `u16` | glyph count | Stable pmndrs flag mapping, below.           |
 
 V0 glyph flags are:
 
-| Bit | Name | Meaning |
-| ---: | --- | --- |
-| 0 | `UNSAFE_TO_BREAK` | A line break before this glyph may change shaping. |
-| 1 | `UNSAFE_TO_CONCAT` | Concatenating at this boundary may change shaping. |
-| 2 | `SAFE_TO_INSERT_TATWEEL` | HarfRust reports safe kashida insertion. |
-| 3–15 | reserved | MUST be zero when written and ignored when read. |
+|  Bit | Name                     | Meaning                                            |
+| ---: | ------------------------ | -------------------------------------------------- |
+|    0 | `UNSAFE_TO_BREAK`        | A line break before this glyph may change shaping. |
+|    1 | `UNSAFE_TO_CONCAT`       | Concatenating at this boundary may change shaping. |
+|    2 | `SAFE_TO_INSERT_TATWEEL` | HarfRust reports safe kashida insertion.           |
+| 3–15 | reserved                 | MUST be zero when written and ignored when read.   |
 
 The V0 result costs exactly 24 bytes per glyph across the SoA arrays. A wider glyph-ID space requires a format revision and corresponding typed-view API revision. Run indexes cost 10 bytes per run before arena alignment.
 
@@ -322,16 +322,16 @@ Every bake report MUST list each retained table independently:
 
 ```ts
 interface ShapingPayloadReportV0 {
-  format: 'opentype-sfnt-harfrust-v0'
-  sfntDirectoryBytes: number
+  format: 'opentype-sfnt-harfrust-v0';
+  sfntDirectoryBytes: number;
   tables: readonly {
-    tag: string
-    rawBytes: number
-    paddedBytes: number
-  }[]
-  totalRawBytes: number
-  gzipBytes?: number
-  brotliBytes?: number
+    tag: string;
+    rawBytes: number;
+    paddedBytes: number;
+  }[];
+  totalRawBytes: number;
+  gzipBytes?: number;
+  brotliBytes?: number;
 }
 ```
 
@@ -339,23 +339,23 @@ The portable `no_std` Wasm core reports every authoritative raw field and omits 
 
 The pinned source files provide exact initial costs. Inter 4.1 contains 2,937 source glyphs and Font Awesome contains 1,403; the smaller 907/350 counts in existing Slug GLBs are raster subsets and are not valid V0 cardinalities because V0 does not yet compute shaping closure.
 
-| Retained item | Inter raw | Font Awesome raw |
-| --- | ---: | ---: |
-| SFNT directory | 156 B | 108 B |
-| `head` | 54 B | 54 B |
-| `maxp` | 32 B | 32 B |
-| `cmap` | 25,900 B | 18,682 B |
-| `hhea` | 36 B | 36 B |
-| `hmtx` | 11,748 B | 5,612 B |
-| `OS/2` | 96 B | 96 B |
-| `GDEF` | 1,036 B | — |
-| `GSUB` | 24,406 B | — |
-| `GPOS` | 83,724 B | — |
-| Four-byte table padding | 4 B | 4 B |
-| **Canonical shaping SFNT** | **147,192 B** | **24,624 B** |
-| Dense glyph extents | 23,496 B | 11,224 B |
-| Extents availability | 368 B | 176 B |
-| **V0 shaping payload** | **171,056 B** | **36,024 B** |
+| Retained item              |     Inter raw | Font Awesome raw |
+| -------------------------- | ------------: | ---------------: |
+| SFNT directory             |         156 B |            108 B |
+| `head`                     |          54 B |             54 B |
+| `maxp`                     |          32 B |             32 B |
+| `cmap`                     |      25,900 B |         18,682 B |
+| `hhea`                     |          36 B |             36 B |
+| `hmtx`                     |      11,748 B |          5,612 B |
+| `OS/2`                     |          96 B |             96 B |
+| `GDEF`                     |       1,036 B |                — |
+| `GSUB`                     |      24,406 B |                — |
+| `GPOS`                     |      83,724 B |                — |
+| Four-byte table padding    |           4 B |              4 B |
+| **Canonical shaping SFNT** | **147,192 B** |     **24,624 B** |
+| Dense glyph extents        |      23,496 B |         11,224 B |
+| Extents availability       |         368 B |            176 B |
+| **V0 shaping payload**     | **171,056 B** |     **36,024 B** |
 
 The source files are 411,640 B and 426,112 B respectively. The reduced SFNT removes 264,448 B from Inter and 401,488 B from Font Awesome before adding extents and their availability bits. The conformance corpus proves the canonical reconstruction.
 

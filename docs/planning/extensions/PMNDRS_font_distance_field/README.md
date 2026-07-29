@@ -4,19 +4,19 @@ title: PMNDRS_font_distance_field
 description: Defines MTSDF glyph records and linear texture resources for the MSDF raster module.
 tags: [gltf, extension, font, msdf, mtsdf]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/Chlumsky/msdfgen"
-    title: "msdfgen"
-  - id: "citation-2"
-    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
-    title: "KTX 2.0 specification"
-  - id: "citation-3"
-    resource: "../../raster-data-contract.md"
-    title: "Raster data contract"
+  - id: 'citation-1'
+    resource: 'https://github.com/Chlumsky/msdfgen'
+    title: 'msdfgen'
+  - id: 'citation-2'
+    resource: 'https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html'
+    title: 'KTX 2.0 specification'
+  - id: 'citation-3'
+    resource: '../../raster-data-contract.md'
+    title: 'Raster data contract'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T11:22:07Z"
+  at: '2026-07-29T11:22:07Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->

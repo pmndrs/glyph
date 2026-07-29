@@ -4,25 +4,25 @@ title: Benchmark plan
 description: Defines the interactive benchmark lab, headless runner, and reproducible performance, memory, payload, loader, baker, paragraph, and raster measurements.
 tags: [benchmarks, performance, payload]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/isaac-mason/js-physics-benchmarks"
-    title: "isaac-mason/js-physics-benchmarks"
-  - id: "citation-2"
-    resource: "https://www.w3.org/TR/css-fonts-4/"
-    title: "CSS Fonts Module Level 4"
-  - id: "citation-3"
-    resource: "https://www.w3.org/TR/css-text-3/"
-    title: "CSS Text Module Level 3"
-  - id: "citation-4"
-    resource: "https://github.com/drawcall-ai/vitexec"
-    title: "Vitexec"
-  - id: "citation-5"
-    resource: "../../README.md#benchmark-harness-wireframe"
-    title: "Repository benchmark-harness wireframe"
+  - id: 'citation-1'
+    resource: 'https://github.com/isaac-mason/js-physics-benchmarks'
+    title: 'isaac-mason/js-physics-benchmarks'
+  - id: 'citation-2'
+    resource: 'https://www.w3.org/TR/css-fonts-4/'
+    title: 'CSS Fonts Module Level 4'
+  - id: 'citation-3'
+    resource: 'https://www.w3.org/TR/css-text-3/'
+    title: 'CSS Text Module Level 3'
+  - id: 'citation-4'
+    resource: 'https://github.com/drawcall-ai/vitexec'
+    title: 'Vitexec'
+  - id: 'citation-5'
+    resource: '../../README.md#benchmark-harness-wireframe'
+    title: 'Repository benchmark-harness wireframe'
 
 generated:
-  by: "openai-codex/gpt-5.6"
-  at: "2026-07-27T10:26:00Z"
+  by: 'openai-codex/gpt-5.6'
+  at: '2026-07-27T10:26:00Z'
 ---
 
 # Benchmark plan
@@ -59,10 +59,10 @@ The pmndrs/text lab extends that pattern with correctness hashes, image diffs, c
 
 The application has two explicit modes over the same implementation, workload, fixture, and result contracts:
 
-| Mode | Purpose | Visible product | Measurement boundary |
-| --- | --- | --- | --- |
-| Conformance | Prove that an implementation is correct and explain failures. | Browser/reference output, candidate output, raw difference view, structured shaping/layout comparison, tolerances, hashes, pixel statistics, and validation diagnostics. | May include readback, reference composition, byte/perceptual comparison, clipping probes, and hashing; these costs are labeled as test execution and never presented as renderer performance. |
-| Benchmark | Explain the cost a consumer pays in a real continuously rendered scene. | Live text, workload controls, cold-phase breakdowns, warm CPU-ms/FPS/GPU-ms sparklines, memory/payload data, and raw samples. | Measures named bake/startup/shape/layout/upload/first-draw phases and a steady render loop with no readback, hash, diff, screenshot, or conformance oracle inside the timed frame. |
+| Mode        | Purpose                                                                 | Visible product                                                                                                                                                          | Measurement boundary                                                                                                                                                                          |
+| ----------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conformance | Prove that an implementation is correct and explain failures.           | Browser/reference output, candidate output, raw difference view, structured shaping/layout comparison, tolerances, hashes, pixel statistics, and validation diagnostics. | May include readback, reference composition, byte/perceptual comparison, clipping probes, and hashing; these costs are labeled as test execution and never presented as renderer performance. |
+| Benchmark   | Explain the cost a consumer pays in a real continuously rendered scene. | Live text, workload controls, cold-phase breakdowns, warm CPU-ms/FPS/GPU-ms sparklines, memory/payload data, and raw samples.                                            | Measures named bake/startup/shape/layout/upload/first-draw phases and a steady render loop with no readback, hash, diff, screenshot, or conformance oracle inside the timed frame.            |
 
 The product UI exposes four independent axes: **mode** (`Benchmark` or `Conformance`), **technique** (`Bitmap`, `MTSDF`, `Slug`, or another admitted implementation), **backend** (`WebGPU` or `WebGL2 fallback`), and **workload** (benchmark ipsum, text ladder, paragraph reflow, glyph stress, advanced shaping, and so on). Benchmark is the default because this application is primarily a human control plane for real-world cost. Internal target adapters may bind a technique/backend pair, and internal scenarios define workloads, but those implementation terms do not appear in the primary UI. Every axis is encoded in the shareable URL and exported result. “Run conformance” captures the current finite correctness case; “Capture window” records the current live performance window. A passing conformance result admits a combination to benchmarking; it does not make conformance duration a benchmark metric.
 
@@ -70,15 +70,15 @@ The product UI exposes four independent axes: **mode** (`Benchmark` or `Conforma
 
 Status key: ✅ specified or available · 🟡 partial or conditional · ⬜ not started
 
-| Harness gate | Status | Evidence required to advance |
-| --- | :---: | --- |
-| Canonical architecture and scenario contract | ✅ | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces. |
-| Portable baker target | ✅ | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence. |
-| Lab shell under `apps/benchmarks` | ✅ | The responsive token/component shell defaults to the human-facing live benchmark with mode, technique, backend, and workload URL state; finite visual conformance is separate. Fixed histories report CPU submit, FPS, and real WebGPU/WebGL2 GPU timestamps when supported, while capture/export snapshots the live contract on demand. Causal product checks own label fit, control density, horizontal overflow, and mobile/tablet/desktop flow at 390, 1,024, and 1,280 CSS pixels. |
-| Headless product E2E | 🟡 | A browser CLI, Vitexec, and Playwright call the same strict registry execution module. The bounded CI-safe conformance suite includes synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, HarfRust, paragraph, bidi/policy/uikit, and item-5.4 CJK lanes. Hardware-WebGPU and pending-Suspense probes remain maintainer-local, and Milestone 6 awaits its closure review. |
-| Package-size lane | ✅ | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; the browser-core lane externalizes declared `three`, React, and R3F peers, while Worker and shaper JavaScript exclude separately measured Wasm assets. The record names its measurement host: same-host output stays exact, while every foreign-host entry must satisfy the shared complete reviewed budgets. Unicode analysis is 139,936 bytes minified and the Darwin arm64 shaper record is 32,778 bytes minified JavaScript plus 680,312 bytes optimized Wasm. |
-| Browser visual reference | 🟡 | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering. |
-| Stable regression baselines | ⬜ | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds. |
+| Harness gate                                 | Status | Evidence required to advance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------- | :----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Canonical architecture and scenario contract |   ✅   | This plan owns one target registry, one scenario registry, and one runner contract for interactive and headless surfaces.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Portable baker target                        |   ✅   | `packages/font-baker` and the app run immutable Inter 4.1 bytes through the direct-memory Wasm API with deterministic GLB evidence.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Lab shell under `apps/benchmarks`            |   ✅   | The responsive token/component shell defaults to the human-facing live benchmark with mode, technique, backend, and workload URL state; finite visual conformance is separate. Fixed histories report CPU submit, FPS, and real WebGPU/WebGL2 GPU timestamps when supported, while capture/export snapshots the live contract on demand. Causal product checks own label fit, control density, horizontal overflow, and mobile/tablet/desktop flow at 390, 1,024, and 1,280 CSS pixels.                                                                                                                                                                                                                                                    |
+| Headless product E2E                         |   🟡   | A browser CLI, Vitexec, and Playwright call the same strict registry execution module. The bounded CI-safe conformance suite includes synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, HarfRust, paragraph, bidi/policy/uikit, and item-5.4 CJK lanes. Hardware-WebGPU and pending-Suspense probes remain maintainer-local, and Milestone 6 awaits its closure review.                                                                                                                                                                                                                                                                                                  |
+| Package-size lane                            |   ✅   | Independent library-mode entries produce nonzero raw/minified/gzip/Brotli initial-core, Unicode 17 analysis, lazy-validator, runtime-host, runtime-Worker, baker, and shaper JavaScript sizes plus raw/gzip/Brotli Wasm. Rollup static closures exclude dynamic chunks; the browser-core lane externalizes declared `three`, React, and R3F peers, while Worker and shaper JavaScript exclude separately measured Wasm assets. The record names its measurement host: same-host output stays exact, while every foreign-host entry must satisfy the shared complete reviewed budgets. Unicode analysis is 139,936 bytes minified and the Darwin arm64 shaper record is 32,778 bytes minified JavaScript plus 680,312 bytes optimized Wasm. |
+| Browser visual reference                     |   🟡   | Exact font/text/style/viewport inputs, Chromium 149.0.7827.55, Playwright 1.61.1, PNG hash, and regeneration command are pinned; renderer candidates and diffs land with rendering.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Stable regression baselines                  |   ⬜   | Correctness gates pass first; then reviewed raw samples establish noise-aware thresholds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 The lab is both the benchmark product and the canonical product-level test harness described by the [test ownership ladder](conformance-plan.md#test-layers-and-ownership). A scenario first validates semantic output, artifact hashes or schema, lifecycle cleanup, and visual output where relevant; only a passing sample may contribute performance numbers. Synthetic scenarios protect contracts and stress limits, but every user-facing milestone also needs a real-font scenario through public package surfaces. A separate demo, private test hook, or mocked adapter cannot close that end-to-end gate.
 
@@ -88,16 +88,16 @@ The completed paragraph-policy scenario consumes the generated `paragraph-bidi-l
 
 ## Application stack
 
-| Concern | Settled harness choice |
-| --- | --- |
-| Application | A Vite browser application under `apps/benchmarks`; it remains locally runnable and statically publishable. |
-| UI runtime | React 19 with the React Compiler enabled from the first implementation. |
-| Async React | Suspense-backed resources, `use`, transitions, and action-style mutations where they match the lifecycle. Async target/scenario loading is modeled as explicit resources rather than effect-driven fetch orchestration. |
-| Components | The project-owned custom shadcn-derived component set represented by the Figma design. Existing components and tokens are reused; generic generated replacements are not accepted. |
-| Source design | The node-specific [benchmark harness Figma wireframe routed from the repository README](../../README.md#benchmark-harness-wireframe) and its extracted component/token context. The file is visual and token input, not a product contract; the implemented information architecture may diverge to make consumer cost and correctness legible. |
-| Formatting and linting | Oxfmt and Oxlint are authoritative. Oxlint runs React Compiler analysis, Rules of Hooks, accessibility checks, and the Oxlint-compatible `react-you-might-not-need-an-effect` rules as errors; effect-only event logic uses `useEffectEvent` instead of render-time refs. |
-| Tests | Vitest covers contracts and reusable assertions; a committed erasable-TypeScript Vitexec probe exercises the live Vite runner; Playwright exercises fixed mobile viewports and remains reusable for representative headed/GPU lanes. Browser console errors fail the wrapper even when the Vitexec CLI exits successfully. |
-| TypeScript | Strict project references extending the repository base configuration. App and probe code remains erasable TypeScript unless a build-tool configuration explicitly requires otherwise. |
+| Concern                | Settled harness choice                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application            | A Vite browser application under `apps/benchmarks`; it remains locally runnable and statically publishable.                                                                                                                                                                                                                                     |
+| UI runtime             | React 19 with the React Compiler enabled from the first implementation.                                                                                                                                                                                                                                                                         |
+| Async React            | Suspense-backed resources, `use`, transitions, and action-style mutations where they match the lifecycle. Async target/scenario loading is modeled as explicit resources rather than effect-driven fetch orchestration.                                                                                                                         |
+| Components             | The project-owned custom shadcn-derived component set represented by the Figma design. Existing components and tokens are reused; generic generated replacements are not accepted.                                                                                                                                                              |
+| Source design          | The node-specific [benchmark harness Figma wireframe routed from the repository README](../../README.md#benchmark-harness-wireframe) and its extracted component/token context. The file is visual and token input, not a product contract; the implemented information architecture may diverge to make consumer cost and correctness legible. |
+| Formatting and linting | Oxfmt and Oxlint are authoritative. Oxlint runs React Compiler analysis, Rules of Hooks, accessibility checks, and the Oxlint-compatible `react-you-might-not-need-an-effect` rules as errors; effect-only event logic uses `useEffectEvent` instead of render-time refs.                                                                       |
+| Tests                  | Vitest covers contracts and reusable assertions; a committed erasable-TypeScript Vitexec probe exercises the live Vite runner; Playwright exercises fixed mobile viewports and remains reusable for representative headed/GPU lanes. Browser console errors fail the wrapper even when the Vitexec CLI exits successfully.                      |
+| TypeScript             | Strict project references extending the repository base configuration. App and probe code remains erasable TypeScript unless a build-tool configuration explicitly requires otherwise.                                                                                                                                                          |
 
 The visual shell reuses the Figma token system and appropriate project-owned shadcn-derived primitives without treating the mockup hierarchy as immutable. Semantic CSS variables feed Tailwind utilities, so visual values remain centralized instead of becoming scattered literals. Target adapters, scenarios, runner state, validation, and result schemas stay UI-independent. React components subscribe to those contracts; they do not own benchmark execution policy or create a second result model.
 
@@ -139,16 +139,16 @@ The exact TypeScript is accepted with the API fixture, but the contract must exp
 
 ```ts
 interface BenchmarkTarget<Prepared, Output> {
-  id: string
-  label: string
-  kind: 'shaping' | 'paragraph' | 'baker' | 'loader' | 'raster'
-  capabilities: ReadonlySet<BenchmarkCapability>
+  id: string;
+  label: string;
+  kind: 'shaping' | 'paragraph' | 'baker' | 'loader' | 'raster';
+  capabilities: ReadonlySet<BenchmarkCapability>;
 
-  load(context: BenchmarkContext): Promise<void>
-  prepare(scenario: BenchmarkScenario): Promise<Prepared>
-  run(prepared: Prepared, sample: SampleContext): Promise<Output>
-  validate(output: Output, oracle: ScenarioOracle): ValidationResult
-  dispose(): Promise<void>
+  load(context: BenchmarkContext): Promise<void>;
+  prepare(scenario: BenchmarkScenario): Promise<Prepared>;
+  run(prepared: Prepared, sample: SampleContext): Promise<Output>;
+  validate(output: Output, oracle: ScenarioOracle): ValidationResult;
+  dispose(): Promise<void>;
 }
 ```
 
@@ -242,20 +242,20 @@ Initial environments should include one current Chromium desktop reference, one 
 
 ### Text shapes
 
-| Workload | Purpose |
-| --- | --- |
-| 8–16 character Latin label | boundary overhead and common UI latency |
-| 40–80 character mixed-style line | feature ranges and normal app text |
-| 500 character Latin paragraph | throughput, wrapping, and caches |
-| 5,000 character Latin document | steady-state bulk kernels and memory |
-| Arabic short label and paragraph | joining, cursive, marks, RTL |
-| Devanagari short label and paragraph | syllable/reorder/context workload |
-| mixed LTR/RTL paragraph | run segmentation and line ordering |
-| emoji/ZWJ list | supplementary decode and sequence substitution |
-| repeated private-use icon labels | simple cmap/advance and cache ceiling |
-| sparse standalone-SVG icon set | name lookup, selected/full-library paging, and residency |
-| CJK paragraph without spaces | pre-render line fitting, `locl`, supplementary clusters, and variation sequences |
-| CJK page-walk document | first-use fetch/upload, cache reuse, eviction, and page churn |
+| Workload                             | Purpose                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------- |
+| 8–16 character Latin label           | boundary overhead and common UI latency                                          |
+| 40–80 character mixed-style line     | feature ranges and normal app text                                               |
+| 500 character Latin paragraph        | throughput, wrapping, and caches                                                 |
+| 5,000 character Latin document       | steady-state bulk kernels and memory                                             |
+| Arabic short label and paragraph     | joining, cursive, marks, RTL                                                     |
+| Devanagari short label and paragraph | syllable/reorder/context workload                                                |
+| mixed LTR/RTL paragraph              | run segmentation and line ordering                                               |
+| emoji/ZWJ list                       | supplementary decode and sequence substitution                                   |
+| repeated private-use icon labels     | simple cmap/advance and cache ceiling                                            |
+| sparse standalone-SVG icon set       | name lookup, selected/full-library paging, and residency                         |
+| CJK paragraph without spaces         | pre-render line fitting, `locl`, supplementary clusters, and variation sequences |
+| CJK page-walk document               | first-use fetch/upload, cache reuse, eviction, and page churn                    |
 
 Each workload has unique-text and repeated-text variants.
 

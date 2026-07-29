@@ -23,14 +23,7 @@
           "recordStride": { "type": "integer", "enum": [20] },
           "pages": { "$ref": "../../schema/texturePages.PMNDRS_font.schema.json" }
         },
-        "required": [
-          "ppemX",
-          "ppemY",
-          "planeUnitsPerEm",
-          "recordBufferView",
-          "recordStride",
-          "pages"
-        ]
+        "required": ["ppemX", "ppemY", "planeUnitsPerEm", "recordBufferView", "recordStride", "pages"]
       }
     }
   },

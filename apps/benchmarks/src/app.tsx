@@ -14,9 +14,9 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   type ReactNode,
-} from 'react'
+} from 'react';
 
-import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum'
+import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum';
 import {
   ADVANCED_SHAPING_CASES,
   advanceAdvancedShaping,
@@ -27,11 +27,11 @@ import {
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
   type AdvancedShapingState,
-} from './benchmark/advanced-shaping'
-import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts'
-import { environmentResource } from './benchmark/environment'
-import { runRegisteredBenchmark } from './benchmark/execution'
-import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result'
+} from './benchmark/advanced-shaping';
+import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts';
+import { environmentResource } from './benchmark/environment';
+import { runRegisteredBenchmark } from './benchmark/execution';
+import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result';
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,
@@ -43,7 +43,7 @@ import {
   selectableFontFixture,
   type BenchmarkFontFixture,
   type SelectableFontFixture,
-} from './benchmark/font-fixtures'
+} from './benchmark/font-fixtures';
 import {
   readHarnessLocation,
   writeHarnessLocation,
@@ -52,81 +52,71 @@ import {
   type HarnessLocation,
   type HarnessMode,
   type RasterTechnique,
-} from './benchmark/url-state'
-import { ExportPanel } from './components/export-panel'
-import { InteractiveCanvas } from './components/interactive-canvas'
-import { Report } from './components/report'
+} from './benchmark/url-state';
+import { ExportPanel } from './components/export-panel';
+import { InteractiveCanvas } from './components/interactive-canvas';
+import { Report } from './components/report';
 import {
   sparklineAnimatedSampleX,
   sparklineCanvasMetrics,
   sparklineMotionProgress,
   sparklineSampleY,
-} from './components/sparkline'
-import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
-import packageSizes from './generated/package-sizes.json'
-import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
-import mtsdfFixtures from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
-import slugFixtures from '../fixtures/rendering/showcase-slug-fixtures-v0.json'
+} from './components/sparkline';
+import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui';
+import packageSizes from './generated/package-sizes.json';
+import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
+import mtsdfFixtures from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
+import slugFixtures from '../fixtures/rendering/showcase-slug-fixtures-v0.json';
 import type {
   BitmapTextConformanceCapture,
   BitmapTextLiveStats,
   BitmapTextPreview,
   BitmapTextPreviewSnapshot,
   BitmapTextPreviewUpdate,
-} from './renderer/bitmap-text'
-import type {
-  MtsdfTextConformanceCapture,
-  MtsdfTextLiveStats,
-  MtsdfTextPreview,
-} from './renderer/mtsdf-text'
-import type {
-  SlugTextConformanceCapture,
-  SlugTextLiveStats,
-  SlugTextPreview,
-} from './renderer/slug-text'
-import type { RasterTechniqueComparison } from './renderer/raster-technique-compare'
+} from './renderer/bitmap-text';
+import type { MtsdfTextConformanceCapture, MtsdfTextLiveStats, MtsdfTextPreview } from './renderer/mtsdf-text';
+import type { SlugTextConformanceCapture, SlugTextLiveStats, SlugTextPreview } from './renderer/slug-text';
+import type { RasterTechniqueComparison } from './renderer/raster-technique-compare';
 import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPreview,
   ComparisonWorkloadStats,
-} from './renderer/comparison-workload'
-import { createExclusiveLifecycleCoordinator } from './renderer/exclusive-lifecycle'
-import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference'
-import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance'
-import type { BakeProgress } from '@pmndrs/text'
+} from './renderer/comparison-workload';
+import { createExclusiveLifecycleCoordinator } from './renderer/exclusive-lifecycle';
+import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference';
+import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance';
+import type { BakeProgress } from '@pmndrs/text';
 
-type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats
+type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
 interface WorkloadOption {
-  readonly id: string
-  readonly label: string
-  readonly description: string
-  readonly techniques: Readonly<Record<RasterTechnique, WorkloadTechniqueStatus>>
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly techniques: Readonly<Record<RasterTechnique, WorkloadTechniqueStatus>>;
 }
 
-type WorkloadTechniqueStatus =
-  | { readonly kind: 'ready' }
-  | { readonly kind: 'planned'; readonly milestone: 8 | 9 }
+type WorkloadTechniqueStatus = { readonly kind: 'ready' } | { readonly kind: 'planned'; readonly milestone: 8 | 9 };
 
-const READY: WorkloadTechniqueStatus = { kind: 'ready' }
+const READY: WorkloadTechniqueStatus = { kind: 'ready' };
 
-let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined
+let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 
 function importComparisonWorkload() {
-  return import('./renderer/comparison-workload')
+  return import('./renderer/comparison-workload');
 }
 
 function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {
-  comparisonWorkloadModule ??= importComparisonWorkload()
-  return comparisonWorkloadModule
+  comparisonWorkloadModule ??= importComparisonWorkload();
+  return comparisonWorkloadModule;
 }
 
 function scheduleComparisonWorkloadPreload(): () => void {
-  if (globalThis.requestIdleCallback === undefined) return () => undefined
+  if (globalThis.requestIdleCallback === undefined) return () => undefined;
   const request = globalThis.requestIdleCallback(() => {
-    void preloadComparisonWorkload()
-  })
-  return () => globalThis.cancelIdleCallback(request)
+    void preloadComparisonWorkload();
+  });
+  return () => globalThis.cancelIdleCallback(request);
 }
 
 function isComparisonWorkload(workload: string): boolean {
@@ -137,73 +127,71 @@ function isComparisonWorkload(workload: string): boolean {
     workload === 'dynamic-layout' ||
     workload === 'paragraph-stress' ||
     workload === 'paint-effects'
-  )
+  );
 }
 
 interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
-  readonly animatePresentation: boolean
-  readonly fontFixture: BenchmarkFontFixture
-  readonly expectedGlyphCount: number | undefined
-  readonly timelineTick: number | undefined
+  readonly animatePresentation: boolean;
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly expectedGlyphCount: number | undefined;
+  readonly timelineTick: number | undefined;
 }
 
 interface PresentationEvidence {
-  readonly revision: number
-  readonly progress: 0 | 1
-  readonly matchedGlyphs: number
-  readonly targetGlyphs: number
+  readonly revision: number;
+  readonly progress: 0 | 1;
+  readonly matchedGlyphs: number;
+  readonly targetGlyphs: number;
 }
 
 interface ConformanceView {
-  readonly zoom: number
-  readonly panXPercent: number
-  readonly panYPercent: number
+  readonly zoom: number;
+  readonly panXPercent: number;
+  readonly panYPercent: number;
 }
 
 interface ActivityWorkloads {
-  readonly benchmark: string
-  readonly conformance: string
+  readonly benchmark: string;
+  readonly conformance: string;
 }
 
 const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
   zoom: 1,
   panXPercent: 0,
   panYPercent: 0,
-}
+};
 
-const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = []
-const GLYPH_POSITION_TRANSITION_MS = 110
-const TYPEWRITER_INTERVAL_MS = 65
-const liveRendererLifecycle = createExclusiveLifecycleCoordinator()
-const FontNoticesDialog = lazy(() => import('./components/font-notices-dialog'))
+const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = [];
+const GLYPH_POSITION_TRANSITION_MS = 110;
+const TYPEWRITER_INTERVAL_MS = 65;
+const liveRendererLifecycle = createExclusiveLifecycleCoordinator();
+const FontNoticesDialog = lazy(() => import('./components/font-notices-dialog'));
 function mtsdfFixtureFor(fontFixture: BenchmarkFontFixture) {
-  const fixture = mtsdfFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture)
+  const fixture = mtsdfFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture);
   if (fixture === undefined) {
-    throw new Error(`MTSDF fixture manifest is missing ${fontFixture}`)
+    throw new Error(`MTSDF fixture manifest is missing ${fontFixture}`);
   }
-  return fixture
+  return fixture;
 }
 
 function bitmapFixtureFor(fontFixture: BenchmarkFontFixture) {
-  const fixture = bitmapFixtures.artifacts.find(
-    (candidate) => candidate.fontFixture === fontFixture,
-  )
+  const fixture = bitmapFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture);
   if (fixture === undefined) {
-    throw new Error(`bitmap fixture manifest is missing ${fontFixture}`)
+    throw new Error(`bitmap fixture manifest is missing ${fontFixture}`);
   }
-  return fixture
+  return fixture;
 }
 
 function slugFixtureFor(fontFixture: BenchmarkFontFixture) {
-  const fixture = slugFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture)
+  const fixture = slugFixtures.artifacts.find((candidate) => candidate.fontFixture === fontFixture);
   if (fixture === undefined) {
-    throw new Error(`Slug fixture manifest is missing ${fontFixture}`)
+    throw new Error(`Slug fixture manifest is missing ${fontFixture}`);
   }
-  return fixture
+  return fixture;
 }
 
 function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
-  return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'
+  return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
 
 const benchmarkWorkloads: readonly WorkloadOption[] = [
@@ -255,14 +243,13 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
     description: 'Tests the live cost and visual quality of animated text effects.',
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
-]
+];
 
 const conformanceWorkloads: readonly WorkloadOption[] = [
   {
     id: 'mtsdf-slug-compare',
     label: 'MSDF / Slug compare',
-    description:
-      'Renders MSDF and Slug side by side and compares their coverage in a live GPU heatmap.',
+    description: 'Renders MSDF and Slug side by side and compares their coverage in a live GPU heatmap.',
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
@@ -274,18 +261,16 @@ const conformanceWorkloads: readonly WorkloadOption[] = [
   {
     id: 'text-accuracy',
     label: 'Pipeline accuracy',
-    description:
-      'Technique-specific renderer output, sampling reference, difference, and error statistics.',
+    description: 'Technique-specific renderer output, sampling reference, difference, and error statistics.',
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
     id: 'cross-technique-fidelity',
     label: 'Cross-technique fidelity',
-    description:
-      'Bitmap, MSDF, and Slug compared independently with the same outline-derived coverage reference.',
+    description: 'Bitmap, MSDF, and Slug compared independently with the same outline-derived coverage reference.',
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
-]
+];
 
 function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefined {
   switch (workload) {
@@ -295,24 +280,24 @@ function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefine
     case 'dynamic-layout':
     case 'paragraph-stress':
     case 'paint-effects':
-      return workload
+      return workload;
     default:
-      return undefined
+      return undefined;
   }
 }
 
 function workloadAmountLabel(workload: string, amount: number): string | undefined {
   switch (workload) {
     case 'off-axis-3d':
-      return `Perspective intensity · ${amount}%`
+      return `Perspective intensity · ${amount}%`;
     case 'dynamic-layout':
-      return `Reflow amplitude · ${amount}%`
+      return `Reflow amplitude · ${amount}%`;
     case 'paragraph-stress':
-      return `Text volume · ${amount}%`
+      return `Text volume · ${amount}%`;
     case 'paint-effects':
-      return `Hue spread · ${amount}%`
+      return `Hue spread · ${amount}%`;
     default:
-      return undefined
+      return undefined;
   }
 }
 
@@ -322,24 +307,24 @@ function workloadHasLayoutWidth(workload: string): boolean {
     case 'dynamic-layout':
     case 'paint-effects':
     case 'paragraph-stress':
-      return true
+      return true;
     default:
-      return false
+      return false;
   }
 }
 
 function defaultFontSizeForWorkload(workload: string): number {
   switch (workload) {
     case 'icon-grid':
-      return 48
+      return 48;
     case 'off-axis-3d':
-      return 64
+      return 64;
     case 'paint-effects':
-      return 40
+      return 40;
     case 'dynamic-layout':
-      return 24
+      return 24;
     default:
-      return 16
+      return 16;
   }
 }
 
@@ -350,23 +335,23 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
         ? 'Bitmap text looks best at its baked 16 px strike; scaling exposes the need for additional strikes.'
         : technique === 'mtsdf'
           ? 'MSDF text uses one 64 px/em atlas to stay crisp across the rendered-size range.'
-          : 'Slug evaluates the source outlines analytically across the rendered-size range.'
+          : 'Slug evaluates the source outlines analytically across the rendered-size range.';
     case 'text-ladder':
-      return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.'
+      return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.';
     case 'icon-grid':
-      return 'Scale and pan a labeled Font Awesome icon grid rendered through the selected technique.'
+      return 'Scale and pan a labeled Font Awesome icon grid rendered through the selected technique.';
     case 'off-axis-3d':
-      return 'Increase perspective to inspect text at steeper viewing angles.'
+      return 'Increase perspective to inspect text at steeper viewing angles.';
     case 'dynamic-layout':
-      return 'Adjust reflow to stress three independently resizing paragraphs.'
+      return 'Adjust reflow to stress three independently resizing paragraphs.';
     case 'paragraph-stress':
-      return 'Increase text volume to inspect layout, draw, memory, CPU, and GPU cost.'
+      return 'Increase text volume to inspect layout, draw, memory, CPU, and GPU cost.';
     case 'paint-effects':
       return technique === 'slug'
         ? 'Adjust color and opacity while watching their live analytic rendering cost; Slug V0 intentionally omits stroke and shadow.'
-        : 'Adjust color, opacity, stroke, and shadow while watching their live rendering cost.'
+        : 'Adjust color, opacity, stroke, and shadow while watching their live rendering cost.';
     default:
-      return 'Change the paragraph width to inspect live reflow quality and cost.'
+      return 'Change the paragraph width to inspect live reflow quality and cost.';
   }
 }
 
@@ -377,43 +362,39 @@ function liveWorkloadSceneDescription(
 ): string {
   switch (workload) {
     case 'advanced-shaping':
-      return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`
+      return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`;
     case 'text-ladder':
-      return 'Tests one sentence at every size from 8 through 512 pixels.'
+      return 'Tests one sentence at every size from 8 through 512 pixels.';
     case 'icon-grid':
-      return 'Tests a virtualized grid spanning all 1,402 named Font Awesome Solid icons with fixed font-rendered labels.'
+      return 'Tests a virtualized grid spanning all 1,402 named Font Awesome Solid icons with fixed font-rendered labels.';
     case 'off-axis-3d':
-      return 'Tests readability and frame cost as a paragraph leans deep into the scene.'
+      return 'Tests readability and frame cost as a paragraph leans deep into the scene.';
     case 'dynamic-layout':
-      return 'Tests whether three animated paragraphs reflow without stretching their glyphs.'
+      return 'Tests whether three animated paragraphs reflow without stretching their glyphs.';
     case 'paragraph-stress':
-      return 'Tests glyph, line, draw, memory, CPU, and GPU cost under paragraph pressure.'
+      return 'Tests glyph, line, draw, memory, CPU, and GPU cost under paragraph pressure.';
     case 'paint-effects':
       return technique === 'slug'
         ? 'Tests the live cost and quality of Slug V0 animated fill color and opacity.'
-        : 'Tests the live cost and quality of animated color, opacity, stroke, and shadow.'
+        : 'Tests the live cost and quality of animated color, opacity, stroke, and shadow.';
     default:
-      return 'Tests paragraph rendering cost while the viewport reflows the text.'
+      return 'Tests paragraph rendering cost while the viewport reflows the text.';
   }
 }
 
 function formatMs(value: number | undefined): string {
-  return value === undefined ? '—' : `${value.toFixed(2)} ms`
+  return value === undefined ? '—' : `${value.toFixed(2)} ms`;
 }
 
 function formatBytes(value: number | undefined): string {
-  if (value === undefined) return '—'
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`
-  return `${(value / (1024 * 1024)).toFixed(2)} MB`
+  if (value === undefined) return '—';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function ShellFallback() {
-  return (
-    <div className="grid min-h-screen place-items-center bg-background text-sm text-muted">
-      Loading harness…
-    </div>
-  )
+  return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted">Loading harness…</div>;
 }
 
 export function App() {
@@ -425,79 +406,77 @@ export function App() {
       >
         INTERNAL RUNNER HOST
       </div>
-    )
+    );
   }
   return (
     <Suspense fallback={<ShellFallback />}>
       <Harness />
     </Suspense>
-  )
+  );
 }
 
 function Harness() {
-  const environment = use(environmentResource())
-  const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true)
-  const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false)
+  const environment = use(environmentResource());
+  const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true);
+  const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false);
   const [location, setLocationState] = useState(() => {
-    const value = readHarnessLocation(locationSearch(), defaultDeviceDpr())
+    const value = readHarnessLocation(locationSearch(), defaultDeviceDpr());
     if (!environment.webgpu && !new URLSearchParams(locationSearch()).has('backend')) {
-      return { ...value, backend: 'webgl2' as const }
+      return { ...value, backend: 'webgl2' as const };
     }
-    return value
-  })
+    return value;
+  });
   const [activityWorkloads, setActivityWorkloads] = useState<ActivityWorkloads>(() => {
-    const initial = readHarnessLocation(locationSearch(), defaultDeviceDpr())
+    const initial = readHarnessLocation(locationSearch(), defaultDeviceDpr());
     return {
       benchmark: initial.mode === 'benchmark' ? initial.workload : 'benchmark-ipsum',
       conformance: initial.mode === 'conformance' ? initial.workload : 'text-accuracy',
-    }
-  })
-  const [summary, setSummary] = useState<BenchmarkSummary>()
-  const [event, setEvent] = useState<RunnerEvent>()
-  const [liveStats, setLiveStats] = useState<LiveTextStats>()
-  const [liveCapture, setLiveCapture] = useState<LiveBenchmarkCapture>()
-  const [error, setError] = useState<string>()
-  const [dpr, setDpr] = useState<1 | 2>(location.dpr)
-  const [samples, setSamples] = useState(3)
-  const [warmup, setWarmup] = useState(1)
-  const [showGrid, setShowGrid] = useState(true)
-  const [showLayoutBounds, setShowLayoutBounds] = useState(true)
-  const [fontSize, setFontSize] = useState(() => defaultFontSizeForWorkload(location.workload))
-  const [layoutWidthPercent, setLayoutWidthPercent] = useState(82)
-  const [workloadAmount, setWorkloadAmount] = useState(50)
-  const [animationEnabled, setAnimationEnabled] = useState(true)
-  const [animationSpeed, setAnimationSpeed] = useState(50)
-  const [paintOpacityPercent, setPaintOpacityPercent] = useState(100)
-  const [paintShadowEnabled, setPaintShadowEnabled] = useState(true)
-  const [paintStrokePercent, setPaintStrokePercent] = useState(50)
-  const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW)
-  const [comparisonText, setComparisonText] = useState(
-    () => rasterConformanceSpecimen(location.fontFixture).text,
-  )
-  const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
-  const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('inter')
-  const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot())
-  const [fontNoticesOpen, setFontNoticesOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const reportCaptureRequested = useRef(false)
-  const conformanceRunRevision = useRef(0)
+    };
+  });
+  const [summary, setSummary] = useState<BenchmarkSummary>();
+  const [event, setEvent] = useState<RunnerEvent>();
+  const [liveStats, setLiveStats] = useState<LiveTextStats>();
+  const [liveCapture, setLiveCapture] = useState<LiveBenchmarkCapture>();
+  const [error, setError] = useState<string>();
+  const [dpr, setDpr] = useState<1 | 2>(location.dpr);
+  const [samples, setSamples] = useState(3);
+  const [warmup, setWarmup] = useState(1);
+  const [showGrid, setShowGrid] = useState(true);
+  const [showLayoutBounds, setShowLayoutBounds] = useState(true);
+  const [fontSize, setFontSize] = useState(() => defaultFontSizeForWorkload(location.workload));
+  const [layoutWidthPercent, setLayoutWidthPercent] = useState(82);
+  const [workloadAmount, setWorkloadAmount] = useState(50);
+  const [animationEnabled, setAnimationEnabled] = useState(true);
+  const [animationSpeed, setAnimationSpeed] = useState(50);
+  const [paintOpacityPercent, setPaintOpacityPercent] = useState(100);
+  const [paintShadowEnabled, setPaintShadowEnabled] = useState(true);
+  const [paintStrokePercent, setPaintStrokePercent] = useState(50);
+  const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW);
+  const [comparisonText, setComparisonText] = useState(() => rasterConformanceSpecimen(location.fontFixture).text);
+  const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState);
+  const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('inter');
+  const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot());
+  const [fontNoticesOpen, setFontNoticesOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const reportCaptureRequested = useRef(false);
+  const conformanceRunRevision = useRef(0);
 
-  const workload = workloadById(location.mode, location.workload)
-  const fontFixture = location.fontFixture
-  const workloadTechnique = workload.techniques[location.technique]
-  const showcaseFrame = advancedShapingFrame(showcaseState)
+  const workload = workloadById(location.mode, location.workload);
+  const fontFixture = location.fontFixture;
+  const workloadTechnique = workload.techniques[location.technique];
+  const showcaseFrame = advancedShapingFrame(showcaseState);
   const activeFontFixture: BenchmarkFontFixture =
-    location.workload === 'advanced-shaping' ? advancedFontFixture : fontFixture
-  const available = workloadTechnique.kind === 'ready'
-  const backendAvailable = location.backend !== 'webgpu' || environment.webgpu
+    location.workload === 'advanced-shaping' ? advancedFontFixture : fontFixture;
+  const available = workloadTechnique.kind === 'ready';
+  const backendAvailable = location.backend !== 'webgpu' || environment.webgpu;
 
   function setLocation(next: Partial<HarnessLocation>): void {
-    const value = { ...location, ...next }
+    const value = { ...location, ...next };
     if (next.workload !== undefined) {
-      setActivityWorkloads((current) => ({ ...current, [value.mode]: value.workload }))
+      setActivityWorkloads((current) => ({ ...current, [value.mode]: value.workload }));
     }
     if (next.workload !== undefined && next.workload !== location.workload) {
-      setFontSize(defaultFontSizeForWorkload(next.workload))
+      setFontSize(defaultFontSizeForWorkload(next.workload));
     }
     const replacesLiveSurface =
       next.mode !== undefined ||
@@ -505,16 +484,16 @@ function Harness() {
       next.backend !== undefined ||
       next.delivery !== undefined ||
       next.dpr !== undefined ||
-      next.workload !== undefined
-    if (replacesLiveSurface) setLiveStats(undefined)
+      next.workload !== undefined;
+    if (replacesLiveSurface) setLiveStats(undefined);
     if (replacesLiveSurface || next.fontFixture !== undefined) {
-      conformanceRunRevision.current += 1
-      setSummary(undefined)
-      setEvent(undefined)
-      setLiveCapture(undefined)
+      conformanceRunRevision.current += 1;
+      setSummary(undefined);
+      setEvent(undefined);
+      setLiveCapture(undefined);
     }
-    setLocationState(value)
-    globalThis.history?.replaceState(null, '', writeHarnessLocation(value))
+    setLocationState(value);
+    globalThis.history?.replaceState(null, '', writeHarnessLocation(value));
   }
 
   function selectMode(mode: HarnessMode): void {
@@ -522,26 +501,26 @@ function Harness() {
       mode,
       workload: activityWorkloads[mode],
       view: 'scene',
-    })
+    });
   }
 
   function selectTechnique(technique: RasterTechnique): void {
-    const currentWorkload = workloadById(location.mode, location.workload)
+    const currentWorkload = workloadById(location.mode, location.workload);
     const selectedWorkload =
       currentWorkload.techniques[technique].kind === 'ready'
         ? currentWorkload.id
         : location.mode === 'benchmark'
           ? 'benchmark-ipsum'
-          : 'text-accuracy'
+          : 'text-accuracy';
     setLocation({
       technique,
       workload: selectedWorkload,
-    })
+    });
   }
 
   function runConformance(): void {
-    const revision = ++conformanceRunRevision.current
-    setError(undefined)
+    const revision = ++conformanceRunRevision.current;
+    setError(undefined);
     startTransition(async () => {
       try {
         const value = await runRegisteredBenchmark({
@@ -569,20 +548,20 @@ function Harness() {
           controls: { dpr, samples, warmup },
           environment,
           onEvent: (nextEvent) => {
-            if (revision === conformanceRunRevision.current) setEvent(nextEvent)
+            if (revision === conformanceRunRevision.current) setEvent(nextEvent);
           },
-        })
-        if (revision === conformanceRunRevision.current) setSummary(value)
+        });
+        if (revision === conformanceRunRevision.current) setSummary(value);
       } catch (caught) {
         if (revision === conformanceRunRevision.current) {
-          setError(caught instanceof Error ? caught.message : String(caught))
+          setError(caught instanceof Error ? caught.message : String(caught));
         }
       }
-    })
+    });
   }
 
   function completeLiveCapture(stats: LiveTextStats): void {
-    const workloadFonts = liveWorkloadFontFixtures(location.workload, activeFontFixture)
+    const workloadFonts = liveWorkloadFontFixtures(location.workload, activeFontFixture);
     setLiveCapture({
       kind: 'live-benchmark',
       schemaVersion: 0,
@@ -595,42 +574,42 @@ function Harness() {
       ...(workloadFonts.kind === 'icon-grid' ? { labelFontFixture: workloadFonts.labels } : {}),
       environment,
       stats: captureLiveTextStats(stats),
-    })
-    setLocation({ view: 'report' })
+    });
+    setLocation({ view: 'report' });
   }
 
   function captureWindow(): void {
-    if (liveStats === undefined) return
+    if (liveStats === undefined) return;
     if (showGrid || liveStats.showGrid) {
-      reportCaptureRequested.current = true
-      setShowGrid(false)
-      return
+      reportCaptureRequested.current = true;
+      setShowGrid(false);
+      return;
     }
-    completeLiveCapture(liveStats)
+    completeLiveCapture(liveStats);
   }
 
   function publishLiveStats(stats: LiveTextStats): void {
-    setLiveStats(stats)
-    if (!reportCaptureRequested.current || stats.showGrid) return
-    reportCaptureRequested.current = false
-    completeLiveCapture(stats)
+    setLiveStats(stats);
+    if (!reportCaptureRequested.current || stats.showGrid) return;
+    reportCaptureRequested.current = false;
+    completeLiveCapture(stats);
   }
 
   function invalidateLiveCapture(): void {
-    setLiveCapture(undefined)
+    setLiveCapture(undefined);
   }
 
   function dispatchShowcase(command: AdvancedShapingCommand): void {
     if (command.kind === 'select-case') {
-      setAdvancedFontFixture(advancedShapingCase(command.caseId).fontFixture)
+      setAdvancedFontFixture(advancedShapingCase(command.caseId).fontFixture);
     }
-    setShowcaseState((state) => updateAdvancedShaping(state, command))
-    invalidateLiveCapture()
+    setShowcaseState((state) => updateAdvancedShaping(state, command));
+    invalidateLiveCapture();
   }
 
   const advanceShowcase = useEffectEvent(() => {
-    setShowcaseState((state) => advanceAdvancedShaping(state))
-  })
+    setShowcaseState((state) => advanceAdvancedShaping(state));
+  });
   useEffect(() => {
     if (
       location.mode !== 'benchmark' ||
@@ -638,19 +617,19 @@ function Harness() {
       !showcaseState.playing ||
       showcaseState.editedText !== undefined
     )
-      return
-    let animationFrame = 0
-    let lastTickAt = performance.now()
+      return;
+    let animationFrame = 0;
+    let lastTickAt = performance.now();
     const animate = (timestamp: number): void => {
       if (timestamp - lastTickAt >= TYPEWRITER_INTERVAL_MS) {
-        advanceShowcase()
-        lastTickAt = timestamp
+        advanceShowcase();
+        lastTickAt = timestamp;
       }
-      animationFrame = requestAnimationFrame(animate)
-    }
-    animationFrame = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(animationFrame)
-  }, [location.mode, location.workload, showcaseState.editedText, showcaseState.playing])
+      animationFrame = requestAnimationFrame(animate);
+    };
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [location.mode, location.workload, showcaseState.editedText, showcaseState.playing]);
 
   const controls = (
     <Controls
@@ -683,71 +662,70 @@ function Harness() {
       onBackend={(backend) => setLocation({ backend })}
       onDelivery={(delivery) => setLocation({ delivery })}
       onDpr={(value) => {
-        setDpr(value)
-        setLocation({ dpr: value })
+        setDpr(value);
+        setLocation({ dpr: value });
       }}
       onFontNotices={() => setFontNoticesOpen(true)}
       onConformanceReset={() => setConformanceView(INITIAL_CONFORMANCE_VIEW)}
       onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
       onComparisonText={setComparisonText}
       onFontSize={(value) => {
-        setFontSize(value)
-        invalidateLiveCapture()
+        setFontSize(value);
+        invalidateLiveCapture();
       }}
       onLayoutWidthPercent={(value) => {
-        setLayoutWidthPercent(value)
-        invalidateLiveCapture()
+        setLayoutWidthPercent(value);
+        invalidateLiveCapture();
       }}
       onWorkloadAmount={(value) => {
-        setWorkloadAmount(value)
-        invalidateLiveCapture()
+        setWorkloadAmount(value);
+        invalidateLiveCapture();
       }}
       onAnimationEnabled={(value) => {
-        setAnimationEnabled(value)
-        invalidateLiveCapture()
+        setAnimationEnabled(value);
+        invalidateLiveCapture();
       }}
       onAnimationSpeed={(value) => {
-        setAnimationSpeed(value)
-        invalidateLiveCapture()
+        setAnimationSpeed(value);
+        invalidateLiveCapture();
       }}
       onPaintOpacityPercent={(value) => {
-        setPaintOpacityPercent(value)
-        invalidateLiveCapture()
+        setPaintOpacityPercent(value);
+        invalidateLiveCapture();
       }}
       onPaintShadowEnabled={(value) => {
-        setPaintShadowEnabled(value)
-        invalidateLiveCapture()
+        setPaintShadowEnabled(value);
+        invalidateLiveCapture();
       }}
       onPaintStrokePercent={(value) => {
-        setPaintStrokePercent(value)
-        invalidateLiveCapture()
+        setPaintStrokePercent(value);
+        invalidateLiveCapture();
       }}
       onSelectedFontFixture={(value) => {
-        setLocation({ fontFixture: value })
+        setLocation({ fontFixture: value });
       }}
       onSamples={setSamples}
       onShowcase={dispatchShowcase}
       onShowGrid={(value) => {
-        reportCaptureRequested.current = false
-        setShowGrid(value)
-        invalidateLiveCapture()
+        reportCaptureRequested.current = false;
+        setShowGrid(value);
+        invalidateLiveCapture();
       }}
       onShowLayoutBounds={(value) => {
-        setShowLayoutBounds(value)
-        invalidateLiveCapture()
+        setShowLayoutBounds(value);
+        invalidateLiveCapture();
       }}
       onWarmup={setWarmup}
     />
-  )
+  );
 
-  const liveTechniqueComparison =
-    location.mode === 'conformance' && location.workload === 'mtsdf-slug-compare'
+  const liveTechniqueComparison = location.mode === 'conformance' && location.workload === 'mtsdf-slug-compare';
   const actionReady =
     available &&
     backendAvailable &&
     !isPending &&
     !liveTechniqueComparison &&
-    (location.mode === 'conformance' || liveStats)
+    (location.mode === 'conformance' || liveStats);
 
   const scene = (
     <Scene
@@ -784,7 +762,7 @@ function Harness() {
       onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
       onLiveStats={publishLiveStats}
     />
-  )
+  );
 
   return (
     <div className="h-dvh overflow-hidden bg-background text-foreground">
@@ -805,14 +783,14 @@ function Harness() {
             : runConformance
         }
         onControls={() => {
-          setWorkloadPanelOpen(false)
-          setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' })
+          setWorkloadPanelOpen(false);
+          setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
         }}
         onMenu={() => {
           if (!workloadPanelOpen && location.view === 'controls') {
-            setLocation({ view: 'scene' })
+            setLocation({ view: 'scene' });
           }
-          setWorkloadPanelOpen((open) => !open)
+          setWorkloadPanelOpen((open) => !open);
         }}
         onMode={selectMode}
         onTechnique={selectTechnique}
@@ -845,8 +823,8 @@ function Harness() {
             showcaseFrame={showcaseFrame}
             onFontFixture={(value) => setLocation({ fontFixture: value })}
             onAdvancedFontFixture={(value) => {
-              setAdvancedFontFixture(value)
-              invalidateLiveCapture()
+              setAdvancedFontFixture(value);
+              invalidateLiveCapture();
             }}
             onLocation={setLocation}
             onTechnique={selectTechnique}
@@ -859,19 +837,9 @@ function Harness() {
               : 'h-full min-h-0 overflow-hidden p-3'
           }
         >
-          <div
-            className={
-              location.view === 'report' || location.view === 'export' ? 'hidden' : 'h-full'
-            }
-          >
-            {scene}
-          </div>
+          <div className={location.view === 'report' || location.view === 'export' ? 'hidden' : 'h-full'}>{scene}</div>
           {!desktop && location.view === 'controls' && (
-            <CompactSheet
-              phone={phone}
-              title="Controls"
-              onClose={() => setLocation({ view: 'scene' })}
-            >
+            <CompactSheet phone={phone} title="Controls" onClose={() => setLocation({ view: 'scene' })}>
               {controls}
             </CompactSheet>
           )}
@@ -886,9 +854,7 @@ function Harness() {
             </div>
           )}
         </main>
-        <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>
-          {controls}
-        </aside>
+        <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>{controls}</aside>
         {!desktop && workloadPanelOpen && (
           <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
             <WorkloadRail
@@ -900,12 +866,12 @@ function Harness() {
               showTechnique={false}
               onFontFixture={(value) => setLocation({ fontFixture: value })}
               onAdvancedFontFixture={(value) => {
-                setAdvancedFontFixture(value)
-                invalidateLiveCapture()
+                setAdvancedFontFixture(value);
+                invalidateLiveCapture();
               }}
               onLocation={(value) => {
-                setLocation({ ...value, view: 'scene' })
-                setWorkloadPanelOpen(false)
+                setLocation({ ...value, view: 'scene' });
+                setWorkloadPanelOpen(false);
               }}
               onTechnique={selectTechnique}
             />
@@ -919,60 +885,52 @@ function Harness() {
         </Suspense>
       )}
     </div>
-  )
+  );
 }
 
 function locationSearch(): string {
-  return typeof globalThis.location === 'undefined' ? '' : globalThis.location.search
+  return typeof globalThis.location === 'undefined' ? '' : globalThis.location.search;
 }
 
 function subscribeDesktop(listener: () => void): () => void {
-  if (typeof globalThis.matchMedia !== 'function') return () => undefined
-  const media = globalThis.matchMedia('(min-width: 1200px)')
-  media.addEventListener('change', listener)
-  return () => media.removeEventListener('change', listener)
+  if (typeof globalThis.matchMedia !== 'function') return () => undefined;
+  const media = globalThis.matchMedia('(min-width: 1200px)');
+  media.addEventListener('change', listener);
+  return () => media.removeEventListener('change', listener);
 }
 
 function desktopSnapshot(): boolean {
-  return (
-    typeof globalThis.matchMedia !== 'function' ||
-    globalThis.matchMedia('(min-width: 1200px)').matches
-  )
+  return typeof globalThis.matchMedia !== 'function' || globalThis.matchMedia('(min-width: 1200px)').matches;
 }
 
 function subscribePhone(listener: () => void): () => void {
-  if (typeof globalThis.matchMedia !== 'function') return () => undefined
-  const media = globalThis.matchMedia('(max-width: 699px)')
-  media.addEventListener('change', listener)
-  return () => media.removeEventListener('change', listener)
+  if (typeof globalThis.matchMedia !== 'function') return () => undefined;
+  const media = globalThis.matchMedia('(max-width: 699px)');
+  media.addEventListener('change', listener);
+  return () => media.removeEventListener('change', listener);
 }
 
 function phoneSnapshot(): boolean {
-  return (
-    typeof globalThis.matchMedia === 'function' &&
-    globalThis.matchMedia('(max-width: 699px)').matches
-  )
+  return typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(max-width: 699px)').matches;
 }
 
 function defaultDeviceDpr(): 1 | 2 {
-  return (globalThis.devicePixelRatio ?? 1) >= 1.5 ? 2 : 1
+  return (globalThis.devicePixelRatio ?? 1) >= 1.5 ? 2 : 1;
 }
 
 function workloadsFor(mode: HarnessMode): readonly WorkloadOption[] {
-  if (mode === 'benchmark') return benchmarkWorkloads
-  return conformanceWorkloads
+  if (mode === 'benchmark') return benchmarkWorkloads;
+  return conformanceWorkloads;
 }
 
 function workloadById(mode: HarnessMode, id: string): WorkloadOption {
-  const workloads = workloadsFor(mode)
-  return workloads.find((workload) => workload.id === id) ?? workloads[0]!
+  const workloads = workloadsFor(mode);
+  return workloads.find((workload) => workload.id === id) ?? workloads[0]!;
 }
 
 function workloadRailDescription(workload: WorkloadOption, technique: RasterTechnique): string {
-  const status = workload.techniques[technique]
-  return status.kind === 'ready'
-    ? workload.description
-    : `M${status.milestone} · ${workload.description}`
+  const status = workload.techniques[technique];
+  return status.kind === 'ready' ? workload.description : `M${status.milestone} · ${workload.description}`;
 }
 
 function TopBar({
@@ -991,20 +949,20 @@ function TopBar({
   onTechnique,
   workloadPanelOpen,
 }: {
-  readonly compact: boolean
-  readonly phone: boolean
-  readonly location: HarnessLocation
-  readonly mode: HarnessMode
-  readonly liveTechniqueComparison: boolean
-  readonly pending: boolean
-  readonly ready: boolean
-  readonly webgpu: boolean
-  readonly onAction: () => void
-  readonly onControls: () => void
-  readonly onMenu: () => void
-  readonly onMode: (mode: HarnessMode) => void
-  readonly onTechnique: (technique: RasterTechnique) => void
-  readonly workloadPanelOpen: boolean
+  readonly compact: boolean;
+  readonly phone: boolean;
+  readonly location: HarnessLocation;
+  readonly mode: HarnessMode;
+  readonly liveTechniqueComparison: boolean;
+  readonly pending: boolean;
+  readonly ready: boolean;
+  readonly webgpu: boolean;
+  readonly onAction: () => void;
+  readonly onControls: () => void;
+  readonly onMenu: () => void;
+  readonly onMode: (mode: HarnessMode) => void;
+  readonly onTechnique: (technique: RasterTechnique) => void;
+  readonly workloadPanelOpen: boolean;
 }) {
   return (
     <header className="border-b border-border bg-chrome">
@@ -1018,16 +976,7 @@ function TopBar({
           onClick={onMenu}
         >
           <svg aria-hidden="true" className="size-[18px]" viewBox="0 0 24 24">
-            <rect
-              fill="none"
-              height="16"
-              rx="2"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              width="18"
-              x="3"
-              y="4"
-            />
+            <rect fill="none" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" width="18" x="3" y="4" />
             <path d="M9 4v16" fill="none" stroke="currentColor" strokeWidth="1.5" />
             <path
               d={workloadPanelOpen ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'}
@@ -1064,9 +1013,7 @@ function TopBar({
         )}
         <div className="flex-1" />
         <span className="hidden min-[900px]:inline-flex">
-          <Chip tone={webgpu ? 'success' : 'warning'}>
-            {webgpu ? 'WebGPU available' : 'WebGPU unavailable'}
-          </Chip>
+          <Chip tone={webgpu ? 'success' : 'warning'}>{webgpu ? 'WebGPU available' : 'WebGPU unavailable'}</Chip>
         </span>
         {compact && !phone && (
           <Button
@@ -1115,7 +1062,7 @@ function TopBar({
         </Button>
       </div>
     </header>
-  )
+  );
 }
 
 function WorkloadRail({
@@ -1130,42 +1077,33 @@ function WorkloadRail({
   onLocation,
   onTechnique,
 }: {
-  readonly activeFontFixture: BenchmarkFontFixture
-  readonly className?: string
-  readonly fontFixture: SelectableFontFixture
-  readonly location: HarnessLocation
-  readonly showcaseFrame: AdvancedShapingFrame
-  readonly showTechnique?: boolean
-  readonly onAdvancedFontFixture: (fontFixture: BenchmarkFontFixture) => void
-  readonly onFontFixture: (fontFixture: SelectableFontFixture) => void
-  readonly onLocation: (value: Partial<HarnessLocation>) => void
-  readonly onTechnique: (technique: RasterTechnique) => void
+  readonly activeFontFixture: BenchmarkFontFixture;
+  readonly className?: string;
+  readonly fontFixture: SelectableFontFixture;
+  readonly location: HarnessLocation;
+  readonly showcaseFrame: AdvancedShapingFrame;
+  readonly showTechnique?: boolean;
+  readonly onAdvancedFontFixture: (fontFixture: BenchmarkFontFixture) => void;
+  readonly onFontFixture: (fontFixture: SelectableFontFixture) => void;
+  readonly onLocation: (value: Partial<HarnessLocation>) => void;
+  readonly onTechnique: (technique: RasterTechnique) => void;
 }) {
-  const workloads = workloadsFor(location.mode)
-  const displayedFontFixture =
-    location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture
-  const selectedMtsdfFixture =
-    location.technique === 'mtsdf' ? mtsdfFixtureFor(displayedFontFixture) : undefined
-  const selectedSlugFixture =
-    location.technique === 'slug' ? slugFixtureFor(displayedFontFixture) : undefined
+  const workloads = workloadsFor(location.mode);
+  const displayedFontFixture = location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture;
+  const selectedMtsdfFixture = location.technique === 'mtsdf' ? mtsdfFixtureFor(displayedFontFixture) : undefined;
+  const selectedSlugFixture = location.technique === 'slug' ? slugFixtureFor(displayedFontFixture) : undefined;
   const rasterDescription =
     selectedSlugFixture !== undefined
       ? `Analytic Slug · ${selectedSlugFixture.raster.pages.length} page${selectedSlugFixture.raster.pages.length === 1 ? '' : 's'} · ${formatBytes(selectedSlugFixture.raster.decodedGpuBytes)} GPU`
       : selectedMtsdfFixture !== undefined
         ? `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
-        : '16 px grayscale bitmap strike'
+        : '16 px grayscale bitmap strike';
   return (
-    <aside
-      className={`overflow-auto overscroll-contain border-r border-border bg-chrome p-3 ${className}`}
-    >
+    <aside className={`overflow-auto overscroll-contain border-r border-border bg-chrome p-3 ${className}`}>
       {showTechnique && (
         <>
           <p className="eyebrow">Technique</p>
-          <TechniqueSwitcher
-            className="mt-2"
-            technique={location.technique}
-            onTechnique={onTechnique}
-          />
+          <TechniqueSwitcher className="mt-2" technique={location.technique} onTechnique={onTechnique} />
         </>
       )}
       <p className={`eyebrow mb-2 ${showTechnique ? 'mt-5' : ''}`}>
@@ -1180,10 +1118,10 @@ function WorkloadRail({
             type="button"
             onClick={() => onLocation({ workload: workload.id })}
             onFocus={() => {
-              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload()
+              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
             }}
             onPointerEnter={() => {
-              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload()
+              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
             }}
           >
             <span
@@ -1204,9 +1142,7 @@ function WorkloadRail({
             data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
           >
             <span className="block text-xs">{BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}</span>
-            <span className="mt-1 block font-mono text-[8px] text-dim">
-              1,402 packed solid icons
-            </span>
+            <span className="mt-1 block font-mono text-[8px] text-dim">1,402 packed solid icons</span>
           </div>
         ) : location.workload === 'advanced-shaping' ? (
           <div className="grid gap-1">
@@ -1243,7 +1179,7 @@ function WorkloadRail({
         <p className="mt-2 font-mono text-[9px] text-dim">{rasterDescription}</p>
       </div>
     </aside>
-  )
+  );
 }
 
 function TechniqueSwitcher({
@@ -1251,9 +1187,9 @@ function TechniqueSwitcher({
   technique,
   onTechnique,
 }: {
-  readonly className: string
-  readonly technique: RasterTechnique
-  readonly onTechnique: (technique: RasterTechnique) => void
+  readonly className: string;
+  readonly technique: RasterTechnique;
+  readonly onTechnique: (technique: RasterTechnique) => void;
 }) {
   return (
     <div
@@ -1272,7 +1208,7 @@ function TechniqueSwitcher({
         </button>
       ))}
     </div>
-  )
+  );
 }
 
 function Scene({
@@ -1303,38 +1239,38 @@ function Scene({
   onConformanceZoom,
   onLiveStats,
 }: {
-  readonly activeFontFixture: BenchmarkFontFixture
-  readonly activityWorkloads: ActivityWorkloads
-  readonly animationEnabled: boolean
-  readonly animationSpeed: number
-  readonly comparisonText: string
-  readonly conformanceView: ConformanceView
-  readonly dpr: 1 | 2
-  readonly error: string | undefined
-  readonly event: RunnerEvent | undefined
-  readonly fontFixture: SelectableFontFixture
-  readonly fontSize: number
-  readonly grid: boolean
-  readonly layoutWidthPercent: number
-  readonly paintOpacityPercent: number
-  readonly paintShadowEnabled: boolean
-  readonly paintStrokePercent: number
-  readonly showLayoutBounds: boolean
-  readonly workloadAmount: number
-  readonly liveCapture: LiveBenchmarkCapture | undefined
-  readonly liveStats: LiveTextStats | undefined
-  readonly location: HarnessLocation
-  readonly showcaseFrame: AdvancedShapingFrame
-  readonly summary: BenchmarkSummary | undefined
-  readonly onConformancePan: (deltaXPercent: number, deltaYPercent: number) => void
-  readonly onConformanceZoom: (zoom: number) => void
-  readonly onLiveStats: (stats: LiveTextStats) => void
+  readonly activeFontFixture: BenchmarkFontFixture;
+  readonly activityWorkloads: ActivityWorkloads;
+  readonly animationEnabled: boolean;
+  readonly animationSpeed: number;
+  readonly comparisonText: string;
+  readonly conformanceView: ConformanceView;
+  readonly dpr: 1 | 2;
+  readonly error: string | undefined;
+  readonly event: RunnerEvent | undefined;
+  readonly fontFixture: SelectableFontFixture;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly layoutWidthPercent: number;
+  readonly paintOpacityPercent: number;
+  readonly paintShadowEnabled: boolean;
+  readonly paintStrokePercent: number;
+  readonly showLayoutBounds: boolean;
+  readonly workloadAmount: number;
+  readonly liveCapture: LiveBenchmarkCapture | undefined;
+  readonly liveStats: LiveTextStats | undefined;
+  readonly location: HarnessLocation;
+  readonly showcaseFrame: AdvancedShapingFrame;
+  readonly summary: BenchmarkSummary | undefined;
+  readonly onConformancePan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onConformanceZoom: (zoom: number) => void;
+  readonly onLiveStats: (stats: LiveTextStats) => void;
 }) {
-  const workload = workloadById(location.mode, location.workload)
-  const benchmarkWorkload = workloadById('benchmark', activityWorkloads.benchmark)
-  const benchmarkStatus = benchmarkWorkload.techniques[location.technique]
-  const conformanceWorkload = workloadById('conformance', activityWorkloads.conformance)
-  const conformanceStatus = conformanceWorkload.techniques[location.technique]
+  const workload = workloadById(location.mode, location.workload);
+  const benchmarkWorkload = workloadById('benchmark', activityWorkloads.benchmark);
+  const benchmarkStatus = benchmarkWorkload.techniques[location.technique];
+  const conformanceWorkload = workloadById('conformance', activityWorkloads.conformance);
+  const conformanceStatus = conformanceWorkload.techniques[location.technique];
   return (
     <section
       className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3"
@@ -1344,9 +1280,7 @@ function Scene({
     >
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
-          <p className="eyebrow">
-            {location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}
-          </p>
+          <p className="eyebrow">{location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
           <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
         </div>
@@ -1418,19 +1352,16 @@ function Scene({
         </div>
       </Activity>
       {error !== undefined && (
-        <div className="rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">
-          {error}
-        </div>
+        <div className="rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">{error}</div>
       )}
       {location.mode === 'benchmark' && liveCapture !== undefined && (
         <div className="rounded-md border border-success/40 bg-success/5 px-3 py-2 text-xs text-muted">
           Captured the current rolling window at {liveCapture.capturedAt} ·{' '}
-          {liveCapture.stats.framesPerSecond.toFixed(1)} FPS ·{' '}
-          {formatMs(liveCapture.stats.medianSubmitMs)} CPU submit
+          {liveCapture.stats.framesPerSecond.toFixed(1)} FPS · {formatMs(liveCapture.stats.medianSubmitMs)} CPU submit
         </div>
       )}
     </section>
-  )
+  );
 }
 
 function PlannedWorkloadSurface({
@@ -1438,9 +1369,9 @@ function PlannedWorkloadSurface({
   technique,
   workload,
 }: {
-  readonly milestone: 8 | 9
-  readonly technique: RasterTechnique
-  readonly workload: WorkloadOption
+  readonly milestone: 8 | 9;
+  readonly technique: RasterTechnique;
+  readonly workload: WorkloadOption;
 }) {
   return (
     <div className="grid min-h-[520px] place-items-center rounded-md border border-border bg-panel p-8 text-center">
@@ -1452,7 +1383,7 @@ function PlannedWorkloadSurface({
         <p className="mt-2 text-xs leading-relaxed text-muted">{workload.description}</p>
       </div>
     </div>
-  )
+  );
 }
 
 function BenchmarkSurface({
@@ -1476,31 +1407,31 @@ function BenchmarkSurface({
   workload,
   onStats,
 }: {
-  readonly animationEnabled: boolean
-  readonly animationSpeed: number
-  readonly backend: GraphicsBackend
-  readonly delivery: FontDelivery
-  readonly dpr: 1 | 2
-  readonly fontFixture: BenchmarkFontFixture
-  readonly fontSize: number
-  readonly grid: boolean
-  readonly layoutWidthPercent: number
-  readonly paintOpacityPercent: number
-  readonly paintShadowEnabled: boolean
-  readonly paintStrokePercent: number
-  readonly showLayoutBounds: boolean
-  readonly workloadAmount: number
-  readonly showcaseFrame: AdvancedShapingFrame
-  readonly stats: LiveTextStats | undefined
-  readonly technique: RasterTechnique
-  readonly workload: string
-  readonly onStats: (stats: LiveTextStats) => void
+  readonly animationEnabled: boolean;
+  readonly animationSpeed: number;
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly layoutWidthPercent: number;
+  readonly paintOpacityPercent: number;
+  readonly paintShadowEnabled: boolean;
+  readonly paintStrokePercent: number;
+  readonly showLayoutBounds: boolean;
+  readonly workloadAmount: number;
+  readonly showcaseFrame: AdvancedShapingFrame;
+  readonly stats: LiveTextStats | undefined;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+  readonly onStats: (stats: LiveTextStats) => void;
 }) {
   useEffect(() => {
-    return scheduleComparisonWorkloadPreload()
-  }, [])
-  const advanced = workload === 'advanced-shaping'
-  const comparisonWorkload = comparisonWorkloadId(workload)
+    return scheduleComparisonWorkloadPreload();
+  }, []);
+  const advanced = workload === 'advanced-shaping';
+  const comparisonWorkload = comparisonWorkloadId(workload);
   const textConfiguration: LiveTextConfiguration = advanced
     ? {
         anchor: 'measure-center',
@@ -1527,12 +1458,9 @@ function BenchmarkSurface({
         text: benchmarkIpsumText(),
         textAlign: 'start',
         timelineTick: undefined,
-      }
+      };
   return (
-    <div
-      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3"
-      data-testid="benchmark-surface"
-    >
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3" data-testid="benchmark-surface">
       <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,0.55fr))] gap-px overflow-hidden rounded-md border border-border bg-border">
         <TelemetryCharts stats={stats} />
         <div className="metric-summary-grid bg-surface">
@@ -1542,10 +1470,7 @@ function BenchmarkSurface({
           />
         </div>
         <div className="metric-summary-grid bg-surface">
-          <Metric
-            label="Missing glyphs"
-            value={stats === undefined ? '—' : String(stats.missingGlyphCount)}
-          />
+          <Metric label="Missing glyphs" value={stats === undefined ? '—' : String(stats.missingGlyphCount)} />
         </div>
       </div>
       <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface p-3">
@@ -1615,24 +1540,24 @@ function BenchmarkSurface({
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function ConformanceSurface({
   workload,
   ...properties
 }: {
-  readonly backend: GraphicsBackend
-  readonly comparisonText: string
-  readonly conformanceView: ConformanceView
-  readonly dpr: 1 | 2
-  readonly event: RunnerEvent | undefined
-  readonly fontFixture: SelectableFontFixture
-  readonly summary: BenchmarkSummary | undefined
-  readonly technique: RasterTechnique
-  readonly workload: string
-  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
-  readonly onZoom: (zoom: number) => void
+  readonly backend: GraphicsBackend;
+  readonly comparisonText: string;
+  readonly conformanceView: ConformanceView;
+  readonly dpr: 1 | 2;
+  readonly event: RunnerEvent | undefined;
+  readonly fontFixture: SelectableFontFixture;
+  readonly summary: BenchmarkSummary | undefined;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onZoom: (zoom: number) => void;
 }) {
   return workload === 'mtsdf-slug-compare' ? (
     <RasterTechniqueComparisonSurface
@@ -1646,7 +1571,7 @@ function ConformanceSurface({
     />
   ) : (
     <FiniteConformanceSurface {...properties} workload={workload} />
-  )
+  );
 }
 
 function RasterTechniqueComparisonSurface({
@@ -1658,51 +1583,50 @@ function RasterTechniqueComparisonSurface({
   onPan,
   onZoom,
 }: {
-  readonly backend: GraphicsBackend
-  readonly comparisonText: string
-  readonly conformanceView: ConformanceView
-  readonly dpr: 1 | 2
-  readonly fontFixture: SelectableFontFixture
-  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
-  readonly onZoom: (zoom: number) => void
+  readonly backend: GraphicsBackend;
+  readonly comparisonText: string;
+  readonly conformanceView: ConformanceView;
+  readonly dpr: 1 | 2;
+  readonly fontFixture: SelectableFontFixture;
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onZoom: (zoom: number) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const comparisonRef = useRef<RasterTechniqueComparison>(undefined)
-  const [ready, setReady] = useState(false)
-  const [committedText, setCommittedText] = useState('')
-  const [error, setError] = useState<string>()
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const comparisonRef = useRef<RasterTechniqueComparison>(undefined);
+  const [ready, setReady] = useState(false);
+  const [committedText, setCommittedText] = useState('');
+  const [error, setError] = useState<string>();
   const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return
-    setError(caught instanceof Error ? caught.message : String(caught))
-  })
-  const initialView = useEffectEvent(() => conformanceView)
-  const initialText = useEffectEvent(() => comparisonText)
+    if (caught instanceof DOMException && caught.name === 'AbortError') return;
+    setError(caught instanceof Error ? caught.message : String(caught));
+  });
+  const initialView = useEffectEvent(() => conformanceView);
+  const initialText = useEffectEvent(() => comparisonText);
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (canvas === null || container === null) return
-    const controller = new AbortController()
-    let comparison: RasterTechniqueComparison | undefined
-    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
-    let cancelled = false
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (canvas === null || container === null) return;
+    const controller = new AbortController();
+    let comparison: RasterTechniqueComparison | undefined;
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
+    let cancelled = false;
     const resize = (): void => {
-      if (comparison === undefined) return
-      const bounds = container.getBoundingClientRect()
-      comparison.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
-    }
-    const observer = new ResizeObserver(resize)
-    observer.observe(container)
+      if (comparison === undefined) return;
+      const bounds = container.getBoundingClientRect();
+      comparison.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
     const initialization = (async () => {
-      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal);
       try {
-        if (cancelled) return
-        const { createRasterTechniqueComparison } =
-          await import('./renderer/raster-technique-compare')
-        if (cancelled) return
-        const bounds = container.getBoundingClientRect()
-        const optionsText = initialText()
+        if (cancelled) return;
+        const { createRasterTechniqueComparison } = await import('./renderer/raster-technique-compare');
+        if (cancelled) return;
+        const bounds = container.getBoundingClientRect();
+        const optionsText = initialText();
         const created = await createRasterTechniqueComparison({
           backend,
           canvas,
@@ -1713,109 +1637,105 @@ function RasterTechniqueComparisonSurface({
           signal: controller.signal,
           text: optionsText,
           width: Math.max(1, bounds.width),
-        })
+        });
         if (cancelled) {
-          await created.dispose()
-          return
+          await created.dispose();
+          return;
         }
-        comparison = created
-        let text = optionsText
-        let latestText = initialText()
+        comparison = created;
+        let text = optionsText;
+        let latestText = initialText();
         while (latestText !== text) {
-          text = latestText
-          await created.setText(text)
-          latestText = initialText()
+          text = latestText;
+          await created.setText(text);
+          latestText = initialText();
         }
-        if (cancelled) return
-        const view = initialView()
-        created.setView(view.zoom, view.panXPercent, view.panYPercent)
-        resize()
-        comparisonRef.current = created
-        setCommittedText(text)
-        setReady(true)
-        setError(undefined)
+        if (cancelled) return;
+        const view = initialView();
+        created.setView(view.zoom, view.panXPercent, view.panYPercent);
+        resize();
+        comparisonRef.current = created;
+        setCommittedText(text);
+        setReady(true);
+        setError(undefined);
       } catch (caught) {
-        const failedComparison = comparison
-        comparison = undefined
-        if (comparisonRef.current === failedComparison) comparisonRef.current = undefined
+        const failedComparison = comparison;
+        comparison = undefined;
+        if (comparisonRef.current === failedComparison) comparisonRef.current = undefined;
         try {
-          await failedComparison?.dispose()
+          await failedComparison?.dispose();
         } finally {
-          lifecycleLease.release()
-          lifecycleLease = undefined
+          lifecycleLease.release();
+          lifecycleLease = undefined;
         }
-        throw caught
+        throw caught;
       }
-    })()
-    void initialization.catch(publishError)
+    })();
+    void initialization.catch(publishError);
     return () => {
-      cancelled = true
-      controller.abort()
-      observer.disconnect()
+      cancelled = true;
+      controller.abort();
+      observer.disconnect();
       void initialization.then(
         async () => {
           try {
-            if (comparison === undefined) return
-            const current = comparison
-            comparison = undefined
-            if (comparisonRef.current === current) comparisonRef.current = undefined
-            await current.dispose()
+            if (comparison === undefined) return;
+            const current = comparison;
+            comparison = undefined;
+            if (comparisonRef.current === current) comparisonRef.current = undefined;
+            await current.dispose();
           } finally {
-            lifecycleLease?.release()
-            lifecycleLease = undefined
+            lifecycleLease?.release();
+            lifecycleLease = undefined;
           }
         },
         () => {
-          lifecycleLease?.release()
-          lifecycleLease = undefined
+          lifecycleLease?.release();
+          lifecycleLease = undefined;
         },
-      )
-    }
-  }, [backend, dpr, fontFixture])
+      );
+    };
+  }, [backend, dpr, fontFixture]);
 
   useEffect(() => {
-    comparisonRef.current?.setView(
-      conformanceView.zoom,
-      conformanceView.panXPercent,
-      conformanceView.panYPercent,
-    )
-  }, [conformanceView])
+    comparisonRef.current?.setView(conformanceView.zoom, conformanceView.panXPercent, conformanceView.panYPercent);
+  }, [conformanceView]);
 
   useEffect(() => {
-    let current = true
+    let current = true;
     void comparisonRef.current
       ?.setText(comparisonText)
       .then(() => {
         if (current) {
-          setCommittedText(comparisonText)
-          setError(undefined)
+          setCommittedText(comparisonText);
+          setError(undefined);
         }
       })
-      .catch(publishError)
+      .catch(publishError);
     return () => {
-      current = false
-    }
-  }, [comparisonText])
+      current = false;
+    };
+  }, [comparisonText]);
 
   const zoomFromWheel = useEffectEvent((deltaY: number) => {
-    const direction = deltaY < 0 ? 0.25 : -0.25
-    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)))
-  })
+    const direction = deltaY < 0 ? 0.25 : -0.25;
+    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)));
+  });
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas === null) return
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
     const handleWheel = (event: WheelEvent): void => {
-      event.preventDefault()
-      zoomFromWheel(event.deltaY)
-    }
-    canvas.addEventListener('wheel', handleWheel, { passive: false })
-    return () => canvas.removeEventListener('wheel', handleWheel)
-  }, [])
+      event.preventDefault();
+      zoomFromWheel(event.deltaY);
+    };
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, []);
 
   function moveView(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return
-    const bounds = event.currentTarget.getBoundingClientRect()
-    onPan((event.movementX / bounds.width) * 300, (event.movementY / bounds.height) * 100)
+    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    onPan((event.movementX / bounds.width) * 300, (event.movementY / bounds.height) * 100);
   }
 
   return (
@@ -1846,12 +1766,12 @@ function RasterTechniqueComparisonSurface({
           onPointerMove={moveView}
           onPointerCancel={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId)
+              event.currentTarget.releasePointerCapture(event.pointerId);
             }
           }}
           onPointerUp={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId)
+              event.currentTarget.releasePointerCapture(event.pointerId);
             }
           }}
         />
@@ -1872,12 +1792,12 @@ function RasterTechniqueComparisonSurface({
         )}
       </div>
       <div className="rounded-md border border-border bg-surface p-3 text-[10px] text-dim">
-        Both candidates share the same text, layout dimensions, camera, physical target size, and
-        view transform. The heatmap samples both render targets directly on the GPU; black agrees,
-        red is extra MSDF coverage, and cyan is extra Slug coverage.
+        Both candidates share the same text, layout dimensions, camera, physical target size, and view transform. The
+        heatmap samples both render targets directly on the GPU; black agrees, red is extra MSDF coverage, and cyan is
+        extra Slug coverage.
       </div>
     </div>
-  )
+  );
 }
 
 function FiniteConformanceSurface({
@@ -1892,16 +1812,16 @@ function FiniteConformanceSurface({
   onPan,
   onZoom,
 }: {
-  readonly backend: GraphicsBackend
-  readonly conformanceView: ConformanceView
-  readonly dpr: 1 | 2
-  readonly event: RunnerEvent | undefined
-  readonly fontFixture: SelectableFontFixture
-  readonly summary: BenchmarkSummary | undefined
-  readonly technique: RasterTechnique
-  readonly workload: string
-  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
-  readonly onZoom: (zoom: number) => void
+  readonly backend: GraphicsBackend;
+  readonly conformanceView: ConformanceView;
+  readonly dpr: 1 | 2;
+  readonly event: RunnerEvent | undefined;
+  readonly fontFixture: SelectableFontFixture;
+  readonly summary: BenchmarkSummary | undefined;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onZoom: (zoom: number) => void;
 }) {
   const [capture, setCapture] = useState<
     | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
@@ -1909,8 +1829,8 @@ function FiniteConformanceSurface({
     | { readonly kind: 'slug'; readonly value: SlugTextConformanceCapture }
     | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
     | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture }
-  >()
-  const [error, setError] = useState<string>()
+  >();
+  const [error, setError] = useState<string>();
   const publishCapture = useEffectEvent(
     (
       value:
@@ -1920,32 +1840,30 @@ function FiniteConformanceSurface({
         | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
         | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture },
     ) => {
-      setCapture(value)
-      setError(undefined)
+      setCapture(value);
+      setError(undefined);
     },
-  )
+  );
   const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return
-    setError(caught instanceof Error ? caught.message : String(caught))
-  })
+    if (caught instanceof DOMException && caught.name === 'AbortError') return;
+    setError(caught instanceof Error ? caught.message : String(caught));
+  });
   useEffect(() => {
-    if (summary === undefined) return
-    const controller = new AbortController()
-    let cancelled = false
+    if (summary === undefined) return;
+    const controller = new AbortController();
+    let cancelled = false;
     const request =
       workload === 'runtime-fallback'
-        ? import('./renderer/runtime-fallback-conformance').then(
-            async ({ captureRuntimeFallbackConformance }) => ({
-              kind: 'runtime-fallback' as const,
-              value: await captureRuntimeFallbackConformance({
-                backend,
-                dpr,
-                fontFixture,
-                signal: controller.signal,
-                technique,
-              }),
+        ? import('./renderer/runtime-fallback-conformance').then(async ({ captureRuntimeFallbackConformance }) => ({
+            kind: 'runtime-fallback' as const,
+            value: await captureRuntimeFallbackConformance({
+              backend,
+              dpr,
+              fontFixture,
+              signal: controller.signal,
+              technique,
             }),
-          )
+          }))
         : workload === 'cross-technique-fidelity'
           ? technique === 'slug'
             ? import('./renderer/slug-text').then(async ({ captureSlugSourceOutlineFidelity }) => ({
@@ -1958,28 +1876,24 @@ function FiniteConformanceSurface({
                 }),
               }))
             : technique === 'mtsdf'
-              ? import('./renderer/mtsdf-text').then(
-                  async ({ captureMtsdfSourceOutlineFidelity }) => ({
-                    kind: 'source-outline' as const,
-                    value: await captureMtsdfSourceOutlineFidelity({
-                      backend,
-                      dpr,
-                      fontFixture,
-                      signal: controller.signal,
-                    }),
+              ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfSourceOutlineFidelity }) => ({
+                  kind: 'source-outline' as const,
+                  value: await captureMtsdfSourceOutlineFidelity({
+                    backend,
+                    dpr,
+                    fontFixture,
+                    signal: controller.signal,
                   }),
-                )
-              : import('./renderer/bitmap-text').then(
-                  async ({ captureBitmapSourceOutlineFidelity }) => ({
-                    kind: 'source-outline' as const,
-                    value: await captureBitmapSourceOutlineFidelity({
-                      backend,
-                      dpr,
-                      fontFixture,
-                      signal: controller.signal,
-                    }),
+                }))
+              : import('./renderer/bitmap-text').then(async ({ captureBitmapSourceOutlineFidelity }) => ({
+                  kind: 'source-outline' as const,
+                  value: await captureBitmapSourceOutlineFidelity({
+                    backend,
+                    dpr,
+                    fontFixture,
+                    signal: controller.signal,
                   }),
-                )
+                }))
           : technique === 'slug'
             ? import('./renderer/slug-text').then(async ({ captureSlugTextConformance }) => ({
                 kind: 'slug' as const,
@@ -2008,28 +1922,28 @@ function FiniteConformanceSurface({
                     fontFixture,
                     signal: controller.signal,
                   }),
-                }))
+                }));
     void request
       .then((value) => {
-        if (!cancelled) publishCapture(value)
+        if (!cancelled) publishCapture(value);
       })
       .catch((caught: unknown) => {
-        if (!cancelled) publishError(caught)
-      })
+        if (!cancelled) publishError(caught);
+      });
     return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [backend, dpr, fontFixture, summary, technique, workload])
+      cancelled = true;
+      controller.abort();
+    };
+  }, [backend, dpr, fontFixture, summary, technique, workload]);
 
-  const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined
-  const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined
-  const slugCapture = capture?.kind === 'slug' ? capture.value : undefined
-  const analyticCapture = technique === 'slug' ? slugCapture : mtsdfCapture
-  const sourceOutlineCapture = capture?.kind === 'source-outline' ? capture.value : undefined
-  const runtimeFallbackCapture = capture?.kind === 'runtime-fallback' ? capture.value : undefined
-  const isSourceOutline = workload === 'cross-technique-fidelity'
-  const isRuntimeFallback = workload === 'runtime-fallback'
+  const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined;
+  const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined;
+  const slugCapture = capture?.kind === 'slug' ? capture.value : undefined;
+  const analyticCapture = technique === 'slug' ? slugCapture : mtsdfCapture;
+  const sourceOutlineCapture = capture?.kind === 'source-outline' ? capture.value : undefined;
+  const runtimeFallbackCapture = capture?.kind === 'runtime-fallback' ? capture.value : undefined;
+  const isSourceOutline = workload === 'cross-technique-fidelity';
+  const isRuntimeFallback = workload === 'runtime-fallback';
 
   return (
     <div
@@ -2113,10 +2027,7 @@ function FiniteConformanceSurface({
                     : String(bitmapCapture.litPixels)
           }
         />
-        <Metric
-          label="Render submit (diagnostic)"
-          value={formatMs(capture?.value.renderSubmitMs)}
-        />
+        <Metric label="Render submit (diagnostic)" value={formatMs(capture?.value.renderSubmitMs)} />
         <Metric label="Suite duration" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
       </div>
       {isRuntimeFallback ? (
@@ -2243,9 +2154,7 @@ function FiniteConformanceSurface({
       )}
       <div className="rounded-md border border-border bg-surface p-3">
         <div className="flex items-center gap-2 text-xs">
-          <span
-            className={`size-2 rounded-full ${summary?.status === 'passed' ? 'bg-success' : 'bg-dim'}`}
-          />
+          <span className={`size-2 rounded-full ${summary?.status === 'passed' ? 'bg-success' : 'bg-dim'}`} />
           <span className="font-medium">Finite conformance suite</span>
           <span className="ml-auto font-mono text-[10px] text-muted">
             {summary?.validation ??
@@ -2266,7 +2175,7 @@ function FiniteConformanceSurface({
       </div>
       {error !== undefined && <p className="text-xs text-danger">{error}</p>}
     </div>
-  )
+  );
 }
 
 function PixelBytesPanel({
@@ -2279,54 +2188,51 @@ function PixelBytesPanel({
   onPan,
   onZoom,
 }: {
-  readonly bytes: Uint8Array | undefined
-  readonly className?: string
-  readonly conformanceView: ConformanceView
-  readonly height: number | undefined
-  readonly label: string
-  readonly width: number | undefined
-  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
-  readonly onZoom: (zoom: number) => void
+  readonly bytes: Uint8Array | undefined;
+  readonly className?: string;
+  readonly conformanceView: ConformanceView;
+  readonly height: number | undefined;
+  readonly label: string;
+  readonly width: number | undefined;
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onZoom: (zoom: number) => void;
 }) {
-  const interactionRef = useRef<HTMLButtonElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const interactionRef = useRef<HTMLButtonElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const zoomFromWheel = useEffectEvent((deltaY: number) => {
-    const direction = deltaY < 0 ? 0.25 : -0.25
-    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)))
-  })
+    const direction = deltaY < 0 ? 0.25 : -0.25;
+    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)));
+  });
   useEffect(() => {
-    const interaction = interactionRef.current
-    if (interaction === null) return
+    const interaction = interactionRef.current;
+    if (interaction === null) return;
     const handleWheel = (event: WheelEvent): void => {
-      event.preventDefault()
-      zoomFromWheel(event.deltaY)
-    }
-    interaction.addEventListener('wheel', handleWheel, { passive: false })
-    return () => interaction.removeEventListener('wheel', handleWheel)
-  }, [])
+      event.preventDefault();
+      zoomFromWheel(event.deltaY);
+    };
+    interaction.addEventListener('wheel', handleWheel, { passive: false });
+    return () => interaction.removeEventListener('wheel', handleWheel);
+  }, []);
   useLayoutEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas === null || bytes === undefined || width === undefined || height === undefined)
-      return
-    canvas.width = width
-    canvas.height = height
-    const context = canvas.getContext('2d')
-    if (context === null) throw new Error('Unable to create conformance inspection canvas')
+    const canvas = canvasRef.current;
+    if (canvas === null || bytes === undefined || width === undefined || height === undefined) return;
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('Unable to create conformance inspection canvas');
     const pixels =
       bytes.buffer instanceof ArrayBuffer
         ? new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-        : new Uint8ClampedArray(bytes)
-    context.putImageData(new ImageData(pixels, width, height), 0, 0)
-  }, [bytes, height, width])
+        : new Uint8ClampedArray(bytes);
+    context.putImageData(new ImageData(pixels, width, height), 0, 0);
+  }, [bytes, height, width]);
   function moveView(event: ReactPointerEvent<HTMLButtonElement>): void {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return
-    const bounds = event.currentTarget.getBoundingClientRect()
-    onPan((event.movementX / bounds.width) * 100, (event.movementY / bounds.height) * 100)
+    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    onPan((event.movementX / bounds.width) * 100, (event.movementY / bounds.height) * 100);
   }
   return (
-    <figure
-      className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel ${className}`}
-    >
+    <figure className={`flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-panel ${className}`}>
       <figcaption className="border-b border-border px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-muted">
         {label}
       </figcaption>
@@ -2344,12 +2250,12 @@ function PixelBytesPanel({
         onPointerMove={moveView}
         onPointerCancel={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId)
+            event.currentTarget.releasePointerCapture(event.pointerId);
           }
         }}
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId)
+            event.currentTarget.releasePointerCapture(event.pointerId);
           }
         }}
       >
@@ -2367,7 +2273,7 @@ function PixelBytesPanel({
         )}
       </button>
     </figure>
-  )
+  );
 }
 
 function PixelPanel({
@@ -2379,13 +2285,13 @@ function PixelPanel({
   onPan,
   onZoom,
 }: {
-  readonly capture: BitmapTextConformanceCapture | undefined
-  readonly className?: string
-  readonly conformanceView: ConformanceView
-  readonly kind: 'candidate' | 'reference' | 'difference'
-  readonly label: string
-  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
-  readonly onZoom: (zoom: number) => void
+  readonly capture: BitmapTextConformanceCapture | undefined;
+  readonly className?: string;
+  readonly conformanceView: ConformanceView;
+  readonly kind: 'candidate' | 'reference' | 'difference';
+  readonly label: string;
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onZoom: (zoom: number) => void;
 }) {
   return (
     <PixelBytesPanel
@@ -2398,7 +2304,7 @@ function PixelPanel({
       onPan={onPan}
       onZoom={onZoom}
     />
-  )
+  );
 }
 
 function BitmapTextViewport({
@@ -2410,35 +2316,35 @@ function BitmapTextViewport({
   textConfiguration,
   onStats,
 }: {
-  readonly backend: GraphicsBackend
-  readonly delivery: FontDelivery
-  readonly dpr: 1 | 2
-  readonly fontSize: number
-  readonly grid: boolean
-  readonly textConfiguration: LiveTextConfiguration
-  readonly onStats: (stats: BitmapTextLiveStats) => void
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly textConfiguration: LiveTextConfiguration;
+  readonly onStats: (stats: BitmapTextLiveStats) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const previewRef = useRef<BitmapTextPreview>(undefined)
-  const [stats, setStats] = useState<BitmapTextLiveStats>()
-  const [settledRevision, setSettledRevision] = useState(0)
-  const [settledTextLength, setSettledTextLength] = useState(0)
-  const [settledTimelineTick, setSettledTimelineTick] = useState<number>()
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<BitmapTextPreview>(undefined);
+  const [stats, setStats] = useState<BitmapTextLiveStats>();
+  const [settledRevision, setSettledRevision] = useState(0);
+  const [settledTextLength, setSettledTextLength] = useState(0);
+  const [settledTimelineTick, setSettledTimelineTick] = useState<number>();
   const [presentationEvidence, setPresentationEvidence] = useState<PresentationEvidence>({
     revision: 0,
     progress: 1,
     matchedGlyphs: 0,
     targetGlyphs: 0,
-  })
-  const [error, setError] = useState<string>()
+  });
+  const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     reset: resetBakeProgress,
     value: bakeProgressValue,
-  } = useBakeProgress('bitmap')
+  } = useBakeProgress('bitmap');
   const {
     anchor,
     animatePresentation,
@@ -2451,18 +2357,18 @@ function BitmapTextViewport({
     text,
     textAlign,
     timelineTick,
-  } = textConfiguration
+  } = textConfiguration;
   const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
-    finishBakeProgress()
-    setStats(next)
-    onStats(next)
-    setError(undefined)
-  })
+    finishBakeProgress();
+    setStats(next);
+    onStats(next);
+    setError(undefined);
+  });
   const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return
-    finishBakeProgress()
-    setError(caught instanceof Error ? caught.message : String(caught))
-  })
+    if (caught instanceof DOMException && caught.name === 'AbortError') return;
+    finishBakeProgress();
+    setError(caught instanceof Error ? caught.message : String(caught));
+  });
   const previewConfiguration = useEffectEvent(() => ({
     anchor,
     direction,
@@ -2476,53 +2382,49 @@ function BitmapTextViewport({
     text,
     textAlign,
     timelineTick,
-  }))
+  }));
   const publishSettledRevision = useEffectEvent((revision: number) => {
-    setSettledRevision(revision)
-  })
+    setSettledRevision(revision);
+  });
   const publishSettledTimelineTick = useEffectEvent((tick: number | undefined) => {
-    setSettledTimelineTick(tick)
-  })
+    setSettledTimelineTick(tick);
+  });
   const publishSettledTextLength = useEffectEvent((length: number) => {
-    setSettledTextLength(length)
-  })
-  const publishPresentation = useEffectEvent(
-    (snapshot: BitmapTextPreviewSnapshot, progress: 0 | 1) => {
-      setPresentationEvidence({
-        revision: snapshot.revision,
-        progress,
-        matchedGlyphs: snapshot.matchedGlyphs,
-        targetGlyphs: snapshot.targetGlyphs,
-      })
-    },
-  )
+    setSettledTextLength(length);
+  });
+  const publishPresentation = useEffectEvent((snapshot: BitmapTextPreviewSnapshot, progress: 0 | 1) => {
+    setPresentationEvidence({
+      revision: snapshot.revision,
+      progress,
+      matchedGlyphs: snapshot.matchedGlyphs,
+      targetGlyphs: snapshot.targetGlyphs,
+    });
+  });
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (canvas === null || container === null) return
-    const controller = new AbortController()
-    resetBakeProgress()
-    const configuration = previewConfiguration()
-    let preview:
-      | Awaited<ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>>
-      | undefined
-    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
-    let cancelled = false
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (canvas === null || container === null) return;
+    const controller = new AbortController();
+    resetBakeProgress();
+    const configuration = previewConfiguration();
+    let preview: Awaited<ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>> | undefined;
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
+    let cancelled = false;
     const resize = (): void => {
-      if (preview === undefined) return
-      const bounds = container.getBoundingClientRect()
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
-    }
-    const observer = new ResizeObserver(resize)
-    observer.observe(container)
+      if (preview === undefined) return;
+      const bounds = container.getBoundingClientRect();
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
     const initialization = (async () => {
-      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal);
       try {
-        if (cancelled) return
-        const { createBitmapTextPreview } = await import('./renderer/bitmap-text')
-        if (cancelled) return
-        const bounds = container.getBoundingClientRect()
+        if (cancelled) return;
+        const { createBitmapTextPreview } = await import('./renderer/bitmap-text');
+        if (cancelled) return;
+        const bounds = container.getBoundingClientRect();
         const created = await createBitmapTextPreview({
           anchor: configuration.anchor,
           backend,
@@ -2546,64 +2448,64 @@ function BitmapTextViewport({
           onError: publishError,
           onStats: publishStats,
           onBakeProgress: publishBakeProgress,
-        })
+        });
         if (cancelled) {
-          await created.dispose()
-          return
+          await created.dispose();
+          return;
         }
-        preview = created
-        previewRef.current = created
-        publishSettledTimelineTick(configuration.timelineTick)
-        publishSettledTextLength(configuration.text.length)
-        resize()
+        preview = created;
+        previewRef.current = created;
+        publishSettledTimelineTick(configuration.timelineTick);
+        publishSettledTextLength(configuration.text.length);
+        resize();
       } catch (caught) {
-        lifecycleLease.release()
-        lifecycleLease = undefined
-        throw caught
+        lifecycleLease.release();
+        lifecycleLease = undefined;
+        throw caught;
       }
-    })()
-    void initialization.catch(publishError)
+    })();
+    void initialization.catch(publishError);
     return () => {
-      cancelled = true
-      controller.abort()
-      observer.disconnect()
+      cancelled = true;
+      controller.abort();
+      observer.disconnect();
       void initialization.then(
         async () => {
           try {
-            if (preview === undefined) return
-            const current = preview
-            preview = undefined
-            if (previewRef.current === current) previewRef.current = undefined
-            await current.dispose()
+            if (preview === undefined) return;
+            const current = preview;
+            preview = undefined;
+            if (previewRef.current === current) previewRef.current = undefined;
+            await current.dispose();
           } finally {
-            lifecycleLease?.release()
-            lifecycleLease = undefined
+            lifecycleLease?.release();
+            lifecycleLease = undefined;
           }
         },
         () => {
-          lifecycleLease?.release()
-          lifecycleLease = undefined
+          lifecycleLease?.release();
+          lifecycleLease = undefined;
         },
-      )
-    }
-  }, [backend, delivery, dpr, publishBakeProgress, resetBakeProgress])
+      );
+    };
+  }, [backend, delivery, dpr, publishBakeProgress, resetBakeProgress]);
 
   useEffect(() => {
-    previewRef.current?.setGridVisible(grid)
-  }, [grid])
+    previewRef.current?.setGridVisible(grid);
+  }, [grid]);
 
   useEffect(() => {
-    const preview = previewRef.current
-    if (preview === undefined) return
-    let cancelled = false
-    let animationFrame: number | undefined
+    const preview = previewRef.current;
+    if (preview === undefined) return;
+    let cancelled = false;
+    let animationFrame: number | undefined;
     const publishSettled = (snapshot: BitmapTextPreviewSnapshot): void => {
-      if (cancelled) return
-      publishPresentation(snapshot, 1)
-      publishSettledRevision(snapshot.revision)
-      publishSettledTimelineTick(timelineTick)
-      publishSettledTextLength(text.length)
-    }
+      if (cancelled) return;
+      publishPresentation(snapshot, 1);
+      publishSettledRevision(snapshot.revision);
+      publishSettledTimelineTick(timelineTick);
+      publishSettledTextLength(text.length);
+    };
     void preview
       .update({
         anchor,
@@ -2616,34 +2518,31 @@ function BitmapTextViewport({
         textAlign,
       })
       .then((snapshot) => {
-        if (cancelled) return
-        publishPresentation(snapshot, 0)
+        if (cancelled) return;
+        publishPresentation(snapshot, 0);
         if (!animatePresentation) {
-          publishSettled(preview.finishPresentation(snapshot.revision))
-          return
+          publishSettled(preview.finishPresentation(snapshot.revision));
+          return;
         }
-        const startedAt = performance.now()
+        const startedAt = performance.now();
         const animate = (timestamp: number): void => {
-          if (cancelled) return
-          const linearProgress = Math.min(
-            1,
-            Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS),
-          )
-          const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress)
-          const presented = preview.setPresentationProgress(snapshot.revision, easedProgress)
+          if (cancelled) return;
+          const linearProgress = Math.min(1, Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS));
+          const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
+          const presented = preview.setPresentationProgress(snapshot.revision, easedProgress);
           if (linearProgress === 1) {
-            publishSettled(presented)
-            return
+            publishSettled(presented);
+            return;
           }
-          animationFrame = requestAnimationFrame(animate)
-        }
-        animationFrame = requestAnimationFrame(animate)
+          animationFrame = requestAnimationFrame(animate);
+        };
+        animationFrame = requestAnimationFrame(animate);
       })
-      .catch(publishError)
+      .catch(publishError);
     return () => {
-      cancelled = true
-      if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
-    }
+      cancelled = true;
+      if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+    };
   }, [
     anchor,
     animatePresentation,
@@ -2656,7 +2555,7 @@ function BitmapTextViewport({
     text,
     textAlign,
     timelineTick,
-  ])
+  ]);
 
   return (
     <div
@@ -2722,9 +2621,8 @@ function BitmapTextViewport({
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          {delivery === 'runtime' ? 'RUNTIME' : 'BAKED'} {stats?.strikePpem ?? 16} PPEM · {fontSize}{' '}
-          CSS PX / {stats?.renderedPpem ?? fontSize * dpr} DEVICE PX ·{' '}
-          {(stats?.scaleRatio ?? 1).toFixed(2)}×
+          {delivery === 'runtime' ? 'RUNTIME' : 'BAKED'} {stats?.strikePpem ?? 16} PPEM · {fontSize} CSS PX /{' '}
+          {stats?.renderedPpem ?? fontSize * dpr} DEVICE PX · {(stats?.scaleRatio ?? 1).toFixed(2)}×
         </span>
         <span>{dpr}× DPR</span>
       </div>
@@ -2737,7 +2635,7 @@ function BitmapTextViewport({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function MtsdfTextViewport({
@@ -2749,39 +2647,38 @@ function MtsdfTextViewport({
   textConfiguration,
   onStats,
 }: {
-  readonly backend: GraphicsBackend
-  readonly delivery: FontDelivery
-  readonly dpr: 1 | 2
-  readonly fontSize: number
-  readonly grid: boolean
-  readonly textConfiguration: LiveTextConfiguration
-  readonly onStats: (stats: LiveTextStats) => void
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly textConfiguration: LiveTextConfiguration;
+  readonly onStats: (stats: LiveTextStats) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const previewRef = useRef<MtsdfTextPreview>(undefined)
-  const [stats, setStats] = useState<MtsdfTextLiveStats>()
-  const [error, setError] = useState<string>()
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<MtsdfTextPreview>(undefined);
+  const [stats, setStats] = useState<MtsdfTextLiveStats>();
+  const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     reset: resetBakeProgress,
     value: bakeProgressValue,
-  } = useBakeProgress('MSDF')
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } =
-    textConfiguration
+  } = useBakeProgress('MSDF');
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } = textConfiguration;
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
-    finishBakeProgress()
-    setStats(next)
-    onStats(next)
-    setError(undefined)
-  })
+    finishBakeProgress();
+    setStats(next);
+    onStats(next);
+    setError(undefined);
+  });
   const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return
-    finishBakeProgress()
-    setError(caught instanceof Error ? caught.message : String(caught))
-  })
+    if (caught instanceof DOMException && caught.name === 'AbortError') return;
+    finishBakeProgress();
+    setError(caught instanceof Error ? caught.message : String(caught));
+  });
   const previewConfiguration = useEffectEvent(() => ({
     anchor,
     direction,
@@ -2792,32 +2689,32 @@ function MtsdfTextViewport({
     showGrid: grid,
     text,
     textAlign,
-  }))
+  }));
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (canvas === null || container === null) return
-    const controller = new AbortController()
-    resetBakeProgress()
-    const configuration = previewConfiguration()
-    let preview: MtsdfTextPreview | undefined
-    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
-    let cancelled = false
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (canvas === null || container === null) return;
+    const controller = new AbortController();
+    resetBakeProgress();
+    const configuration = previewConfiguration();
+    let preview: MtsdfTextPreview | undefined;
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
+    let cancelled = false;
     const resize = (): void => {
-      if (preview === undefined) return
-      const bounds = container.getBoundingClientRect()
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
-    }
-    const observer = new ResizeObserver(resize)
-    observer.observe(container)
+      if (preview === undefined) return;
+      const bounds = container.getBoundingClientRect();
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
     const initialization = (async () => {
-      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal);
       try {
-        if (cancelled) return
-        const { createMtsdfTextPreview } = await import('./renderer/mtsdf-text')
-        if (cancelled) return
-        const bounds = container.getBoundingClientRect()
+        if (cancelled) return;
+        const { createMtsdfTextPreview } = await import('./renderer/mtsdf-text');
+        if (cancelled) return;
+        const bounds = container.getBoundingClientRect();
         const created = await createMtsdfTextPreview({
           anchor: configuration.anchor,
           backend,
@@ -2839,53 +2736,53 @@ function MtsdfTextViewport({
           onError: publishError,
           onStats: publishStats,
           onBakeProgress: publishBakeProgress,
-        })
+        });
         if (cancelled) {
-          await created.dispose()
-          return
+          await created.dispose();
+          return;
         }
-        preview = created
-        previewRef.current = created
-        resize()
+        preview = created;
+        previewRef.current = created;
+        resize();
       } catch (caught) {
-        lifecycleLease.release()
-        lifecycleLease = undefined
-        throw caught
+        lifecycleLease.release();
+        lifecycleLease = undefined;
+        throw caught;
       }
-    })()
-    void initialization.catch(publishError)
+    })();
+    void initialization.catch(publishError);
     return () => {
-      cancelled = true
-      controller.abort()
-      observer.disconnect()
+      cancelled = true;
+      controller.abort();
+      observer.disconnect();
       void initialization.then(
         async () => {
           try {
-            if (preview === undefined) return
-            const current = preview
-            preview = undefined
-            if (previewRef.current === current) previewRef.current = undefined
-            await current.dispose()
+            if (preview === undefined) return;
+            const current = preview;
+            preview = undefined;
+            if (previewRef.current === current) previewRef.current = undefined;
+            await current.dispose();
           } finally {
-            lifecycleLease?.release()
-            lifecycleLease = undefined
+            lifecycleLease?.release();
+            lifecycleLease = undefined;
           }
         },
         () => {
-          lifecycleLease?.release()
-          lifecycleLease = undefined
+          lifecycleLease?.release();
+          lifecycleLease = undefined;
         },
-      )
-    }
-  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress])
+      );
+    };
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress]);
 
   useEffect(() => {
-    previewRef.current?.setGridVisible(grid)
-  }, [grid])
+    previewRef.current?.setGridVisible(grid);
+  }, [grid]);
 
   useEffect(() => {
-    const preview = previewRef.current
-    if (preview === undefined) return
+    const preview = previewRef.current;
+    if (preview === undefined) return;
     void preview
       .update({
         anchor,
@@ -2897,8 +2794,8 @@ function MtsdfTextViewport({
         text,
         textAlign,
       })
-      .catch(publishError)
-  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text, textAlign])
+      .catch(publishError);
+  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text, textAlign]);
 
   return (
     <div
@@ -2950,8 +2847,8 @@ function MtsdfTextViewport({
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
-          MTSDF {stats?.rasterEmSize ?? '—'} PX/EM · {fontSize} CSS PX /{' '}
-          {stats?.renderedPpem ?? '—'} DEVICE PX · {stats?.scaleRatio.toFixed(2) ?? '—'}×
+          MTSDF {stats?.rasterEmSize ?? '—'} PX/EM · {fontSize} CSS PX / {stats?.renderedPpem ?? '—'} DEVICE PX ·{' '}
+          {stats?.scaleRatio.toFixed(2) ?? '—'}×
         </span>
         <span>{dpr}× DPR</span>
       </div>
@@ -2964,7 +2861,7 @@ function MtsdfTextViewport({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function SlugTextViewport({
@@ -2976,39 +2873,38 @@ function SlugTextViewport({
   textConfiguration,
   onStats,
 }: {
-  readonly backend: GraphicsBackend
-  readonly delivery: FontDelivery
-  readonly dpr: 1 | 2
-  readonly fontSize: number
-  readonly grid: boolean
-  readonly textConfiguration: LiveTextConfiguration
-  readonly onStats: (stats: LiveTextStats) => void
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly textConfiguration: LiveTextConfiguration;
+  readonly onStats: (stats: LiveTextStats) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const previewRef = useRef<SlugTextPreview>(undefined)
-  const [stats, setStats] = useState<SlugTextLiveStats>()
-  const [error, setError] = useState<string>()
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<SlugTextPreview>(undefined);
+  const [stats, setStats] = useState<SlugTextLiveStats>();
+  const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     reset: resetBakeProgress,
     value: bakeProgressValue,
-  } = useBakeProgress('Slug')
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } =
-    textConfiguration
+  } = useBakeProgress('Slug');
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } = textConfiguration;
   const publishStats = useEffectEvent((next: SlugTextLiveStats) => {
-    finishBakeProgress()
-    setStats(next)
-    onStats(next)
-    setError(undefined)
-  })
+    finishBakeProgress();
+    setStats(next);
+    onStats(next);
+    setError(undefined);
+  });
   const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return
-    finishBakeProgress()
-    setError(caught instanceof Error ? caught.message : String(caught))
-  })
+    if (caught instanceof DOMException && caught.name === 'AbortError') return;
+    finishBakeProgress();
+    setError(caught instanceof Error ? caught.message : String(caught));
+  });
   const previewConfiguration = useEffectEvent(() => ({
     anchor,
     direction,
@@ -3019,32 +2915,32 @@ function SlugTextViewport({
     showGrid: grid,
     text,
     textAlign,
-  }))
+  }));
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (canvas === null || container === null) return
-    const controller = new AbortController()
-    resetBakeProgress()
-    const configuration = previewConfiguration()
-    let preview: SlugTextPreview | undefined
-    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
-    let cancelled = false
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (canvas === null || container === null) return;
+    const controller = new AbortController();
+    resetBakeProgress();
+    const configuration = previewConfiguration();
+    let preview: SlugTextPreview | undefined;
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
+    let cancelled = false;
     const resize = (): void => {
-      if (preview === undefined) return
-      const bounds = container.getBoundingClientRect()
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
-    }
-    const observer = new ResizeObserver(resize)
-    observer.observe(container)
+      if (preview === undefined) return;
+      const bounds = container.getBoundingClientRect();
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
     const initialization = (async () => {
-      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal);
       try {
-        if (cancelled) return
-        const { createSlugTextPreview } = await import('./renderer/slug-text')
-        if (cancelled) return
-        const bounds = container.getBoundingClientRect()
+        if (cancelled) return;
+        const { createSlugTextPreview } = await import('./renderer/slug-text');
+        if (cancelled) return;
+        const bounds = container.getBoundingClientRect();
         const created = await createSlugTextPreview({
           anchor: configuration.anchor,
           backend,
@@ -3066,53 +2962,53 @@ function SlugTextViewport({
           onError: publishError,
           onStats: publishStats,
           onBakeProgress: publishBakeProgress,
-        })
+        });
         if (cancelled) {
-          await created.dispose()
-          return
+          await created.dispose();
+          return;
         }
-        preview = created
-        previewRef.current = created
-        resize()
+        preview = created;
+        previewRef.current = created;
+        resize();
       } catch (caught) {
-        lifecycleLease.release()
-        lifecycleLease = undefined
-        throw caught
+        lifecycleLease.release();
+        lifecycleLease = undefined;
+        throw caught;
       }
-    })()
-    void initialization.catch(publishError)
+    })();
+    void initialization.catch(publishError);
     return () => {
-      cancelled = true
-      controller.abort()
-      observer.disconnect()
+      cancelled = true;
+      controller.abort();
+      observer.disconnect();
       void initialization.then(
         async () => {
           try {
-            if (preview === undefined) return
-            const current = preview
-            preview = undefined
-            if (previewRef.current === current) previewRef.current = undefined
-            await current.dispose()
+            if (preview === undefined) return;
+            const current = preview;
+            preview = undefined;
+            if (previewRef.current === current) previewRef.current = undefined;
+            await current.dispose();
           } finally {
-            lifecycleLease?.release()
-            lifecycleLease = undefined
+            lifecycleLease?.release();
+            lifecycleLease = undefined;
           }
         },
         () => {
-          lifecycleLease?.release()
-          lifecycleLease = undefined
+          lifecycleLease?.release();
+          lifecycleLease = undefined;
         },
-      )
-    }
-  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress])
+      );
+    };
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress]);
 
   useEffect(() => {
-    previewRef.current?.setGridVisible(grid)
-  }, [grid])
+    previewRef.current?.setGridVisible(grid);
+  }, [grid]);
 
   useEffect(() => {
-    const preview = previewRef.current
-    if (preview === undefined) return
+    const preview = previewRef.current;
+    if (preview === undefined) return;
     void preview
       .update({
         anchor,
@@ -3124,8 +3020,8 @@ function SlugTextViewport({
         text,
         textAlign,
       })
-      .catch(publishError)
-  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text, textAlign])
+      .catch(publishError);
+  }, [anchor, direction, dpr, features, fontSize, language, layoutWidthRatio, text, textAlign]);
 
   return (
     <div
@@ -3178,8 +3074,7 @@ function SlugTextViewport({
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
         <span>
           SLUG ANALYTIC · {stats?.slugPageCount ?? '—'} PAGE
-          {stats?.slugPageCount === 1 ? '' : 'S'} · {fontSize} CSS PX / {stats?.renderedPpem ?? '—'}{' '}
-          DEVICE PX
+          {stats?.slugPageCount === 1 ? '' : 'S'} · {fontSize} CSS PX / {stats?.renderedPpem ?? '—'} DEVICE PX
         </span>
         <span>{dpr}× DPR</span>
       </div>
@@ -3192,7 +3087,7 @@ function SlugTextViewport({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function ComparisonWorkloadViewport({
@@ -3214,57 +3109,57 @@ function ComparisonWorkloadViewport({
   workload,
   onStats,
 }: {
-  readonly amount: number
-  readonly animationEnabled: boolean
-  readonly animationSpeed: number
-  readonly backend: GraphicsBackend
-  readonly delivery: FontDelivery
-  readonly dpr: 1 | 2
-  readonly fontFixture: BenchmarkFontFixture
-  readonly fontSize: number
-  readonly grid: boolean
-  readonly layoutWidthRatio: number
-  readonly paintOpacity: number
-  readonly paintShadowEnabled: boolean
-  readonly paintStrokeWidth: number
-  readonly showLayoutBounds: boolean
-  readonly technique: RasterTechnique
-  readonly workload: ComparisonWorkloadId
-  readonly onStats: (stats: LiveTextStats) => void
+  readonly amount: number;
+  readonly animationEnabled: boolean;
+  readonly animationSpeed: number;
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly layoutWidthRatio: number;
+  readonly paintOpacity: number;
+  readonly paintShadowEnabled: boolean;
+  readonly paintStrokeWidth: number;
+  readonly showLayoutBounds: boolean;
+  readonly technique: RasterTechnique;
+  readonly workload: ComparisonWorkloadId;
+  readonly onStats: (stats: LiveTextStats) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const previewRef = useRef<ComparisonWorkloadPreview>(undefined)
-  const surfaceKey = `${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${workload}`
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<ComparisonWorkloadPreview>(undefined);
+  const surfaceKey = `${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${workload}`;
   const [publishedStats, setPublishedStats] = useState<
     Readonly<{
-      fontFixture: BenchmarkFontFixture
-      key: string
-      value: ComparisonWorkloadStats
+      fontFixture: BenchmarkFontFixture;
+      key: string;
+      value: ComparisonWorkloadStats;
     }>
-  >()
-  const stats = publishedStats?.value
-  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture)
-  const [error, setError] = useState<string>()
+  >();
+  const stats = publishedStats?.value;
+  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture);
+  const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     reset: resetBakeProgress,
     value: bakeProgressValue,
-  } = useBakeProgress(techniqueLabel(technique))
+  } = useBakeProgress(techniqueLabel(technique));
   const publishStats = useEffectEvent((key: string, next: ComparisonWorkloadStats) => {
-    if (key !== surfaceKey) return
-    finishBakeProgress()
-    setPublishedStats({ fontFixture, key, value: next })
-    onStats(next)
-    setError(undefined)
-  })
+    if (key !== surfaceKey) return;
+    finishBakeProgress();
+    setPublishedStats({ fontFixture, key, value: next });
+    onStats(next);
+    setError(undefined);
+  });
   const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return
-    finishBakeProgress()
-    setError(caught instanceof Error ? caught.message : String(caught))
-  })
+    if (caught instanceof DOMException && caught.name === 'AbortError') return;
+    finishBakeProgress();
+    setError(caught instanceof Error ? caught.message : String(caught));
+  });
   const currentConfiguration = useEffectEvent(() => ({
     amount,
     animationEnabled,
@@ -3278,33 +3173,33 @@ function ComparisonWorkloadViewport({
     showGrid: grid,
     showLayoutBounds,
     workload,
-  }))
+  }));
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const container = containerRef.current
-    if (canvas === null || container === null) return
-    const controller = new AbortController()
-    resetBakeProgress()
-    const effectSurfaceKey = surfaceKey
-    let preview: ComparisonWorkloadPreview | undefined
-    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
-    let cancelled = false
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (canvas === null || container === null) return;
+    const controller = new AbortController();
+    resetBakeProgress();
+    const effectSurfaceKey = surfaceKey;
+    let preview: ComparisonWorkloadPreview | undefined;
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
+    let cancelled = false;
     const resize = (): void => {
-      if (preview === undefined) return
-      const bounds = container.getBoundingClientRect()
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
-    }
-    const observer = new ResizeObserver(resize)
-    observer.observe(container)
+      if (preview === undefined) return;
+      const bounds = container.getBoundingClientRect();
+      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
     const initialization = (async () => {
-      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal);
       try {
-        if (cancelled) return
-        const { createComparisonWorkloadPreview } = await preloadComparisonWorkload()
-        if (cancelled) return
-        const bounds = container.getBoundingClientRect()
-        const configuration = currentConfiguration()
+        if (cancelled) return;
+        const { createComparisonWorkloadPreview } = await preloadComparisonWorkload();
+        if (cancelled) return;
+        const bounds = container.getBoundingClientRect();
+        const configuration = currentConfiguration();
         const created = await createComparisonWorkloadPreview({
           ...configuration,
           backend,
@@ -3318,60 +3213,50 @@ function ComparisonWorkloadViewport({
           onError: publishError,
           onStats: (next) => publishStats(effectSurfaceKey, next),
           onBakeProgress: publishBakeProgress,
-        })
+        });
         if (cancelled) {
-          await created.dispose()
-          return
+          await created.dispose();
+          return;
         }
-        preview = created
-        previewRef.current = created
-        resize()
+        preview = created;
+        previewRef.current = created;
+        resize();
       } catch (caught) {
-        lifecycleLease.release()
-        lifecycleLease = undefined
-        throw caught
+        lifecycleLease.release();
+        lifecycleLease = undefined;
+        throw caught;
       }
-    })()
-    void initialization.catch(publishError)
+    })();
+    void initialization.catch(publishError);
     return () => {
-      cancelled = true
-      controller.abort()
-      observer.disconnect()
+      cancelled = true;
+      controller.abort();
+      observer.disconnect();
       void initialization.then(
         async () => {
           try {
-            if (preview === undefined) return
-            const current = preview
-            preview = undefined
-            if (previewRef.current === current) previewRef.current = undefined
-            await current.dispose()
+            if (preview === undefined) return;
+            const current = preview;
+            preview = undefined;
+            if (previewRef.current === current) previewRef.current = undefined;
+            await current.dispose();
           } finally {
-            lifecycleLease?.release()
-            lifecycleLease = undefined
+            lifecycleLease?.release();
+            lifecycleLease = undefined;
           }
         },
         () => {
-          lifecycleLease?.release()
-          lifecycleLease = undefined
+          lifecycleLease?.release();
+          lifecycleLease = undefined;
         },
-      )
-    }
-  }, [
-    backend,
-    delivery,
-    dpr,
-    fontFixture,
-    publishBakeProgress,
-    resetBakeProgress,
-    surfaceKey,
-    technique,
-    workload,
-  ])
+      );
+    };
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress, surfaceKey, technique, workload]);
 
   useEffect(() => {
-    const preview = previewRef.current
-    if (preview === undefined) return
-    void preview.update(currentConfiguration()).catch(publishError)
+    const preview = previewRef.current;
+    if (preview === undefined) return;
+    void preview.update(currentConfiguration()).catch(publishError);
   }, [
     amount,
     animationEnabled,
@@ -3386,14 +3271,14 @@ function ComparisonWorkloadViewport({
     grid,
     showLayoutBounds,
     workload,
-  ])
+  ]);
 
   const rangeLabel =
     workload === 'text-ladder'
       ? '8–512 CSS PX'
       : workload === 'icon-grid'
         ? `${fontSize} CSS PX ICONS`
-        : `${fontSize} CSS PX`
+        : `${fontSize} CSS PX`;
   return (
     <div
       className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
@@ -3411,9 +3296,7 @@ function ComparisonWorkloadViewport({
       data-draw-count={stats?.drawCount}
       data-first-draw-ms={stats?.firstDrawMs}
       data-font-fixture={workloadFonts.primary}
-      data-label-font-fixture={
-        workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : undefined
-      }
+      data-label-font-fixture={workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : undefined}
       data-font-load-ms={stats?.fontLoadMs}
       data-frames-per-second={stats?.framesPerSecond}
       data-glyph-count={stats?.glyphCount}
@@ -3429,34 +3312,18 @@ function ComparisonWorkloadViewport({
       data-icon-grid-height={stats?.workload === 'icon-grid' ? stats.iconGridHeight : undefined}
       data-icon-label-size={stats?.workload === 'icon-grid' ? stats.iconLabelSize : undefined}
       data-icon-pool-capacity={stats?.workload === 'icon-grid' ? stats.iconPoolCapacity : undefined}
-      data-icon-assigned-count={
-        stats?.workload === 'icon-grid' ? stats.iconAssignedCount : undefined
-      }
-      data-icon-assignment-signature={
-        stats?.workload === 'icon-grid' ? stats.iconAssignmentSignature : undefined
-      }
-      data-icon-first-visible-index={
-        stats?.workload === 'icon-grid' ? stats.iconFirstVisibleIndex : undefined
-      }
-      data-icon-last-visible-index={
-        stats?.workload === 'icon-grid' ? stats.iconLastVisibleIndex : undefined
-      }
+      data-icon-assigned-count={stats?.workload === 'icon-grid' ? stats.iconAssignedCount : undefined}
+      data-icon-assignment-signature={stats?.workload === 'icon-grid' ? stats.iconAssignmentSignature : undefined}
+      data-icon-first-visible-index={stats?.workload === 'icon-grid' ? stats.iconFirstVisibleIndex : undefined}
+      data-icon-last-visible-index={stats?.workload === 'icon-grid' ? stats.iconLastVisibleIndex : undefined}
       data-icon-recycle-count={stats?.workload === 'icon-grid' ? stats.iconRecycleCount : undefined}
-      data-icon-window-revision={
-        stats?.workload === 'icon-grid' ? stats.iconWindowRevision : undefined
-      }
+      data-icon-window-revision={stats?.workload === 'icon-grid' ? stats.iconWindowRevision : undefined}
       data-icon-overscan-rows={stats?.workload === 'icon-grid' ? stats.iconOverscanRows : undefined}
-      data-icon-overscan-columns={
-        stats?.workload === 'icon-grid' ? stats.iconOverscanColumns : undefined
-      }
+      data-icon-overscan-columns={stats?.workload === 'icon-grid' ? stats.iconOverscanColumns : undefined}
       data-icon-scroll-x={stats?.workload === 'icon-grid' ? stats.iconScrollX : undefined}
       data-icon-scroll-y={stats?.workload === 'icon-grid' ? stats.iconScrollY : undefined}
-      data-icon-maximum-scroll-x={
-        stats?.workload === 'icon-grid' ? stats.iconMaximumScrollX : undefined
-      }
-      data-icon-maximum-scroll-y={
-        stats?.workload === 'icon-grid' ? stats.iconMaximumScrollY : undefined
-      }
+      data-icon-maximum-scroll-x={stats?.workload === 'icon-grid' ? stats.iconMaximumScrollX : undefined}
+      data-icon-maximum-scroll-y={stats?.workload === 'icon-grid' ? stats.iconMaximumScrollY : undefined}
       data-line-count={stats?.lineCount}
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
@@ -3465,19 +3332,13 @@ function ComparisonWorkloadViewport({
       data-p95-submit-ms={stats?.p95SubmitMs}
       data-renderer-init-ms={stats?.rendererInitMs}
       data-configuration-revision={stats?.configurationRevision}
-      data-paint-opacity={
-        stats?.workload === 'paint-effects' ? stats.appliedPaintOpacity : undefined
-      }
+      data-paint-opacity={stats?.workload === 'paint-effects' ? stats.appliedPaintOpacity : undefined}
       data-paint-shadow-enabled={
         stats?.workload === 'paint-effects' ? String(stats.appliedPaintShadowEnabled) : undefined
       }
-      data-paint-stroke-width={
-        stats?.workload === 'paint-effects' ? stats.appliedPaintStrokeWidth : undefined
-      }
+      data-paint-stroke-width={stats?.workload === 'paint-effects' ? stats.appliedPaintStrokeWidth : undefined}
       data-paint-revision={stats?.workload === 'paint-effects' ? stats.paintRevision : undefined}
-      data-paint-update-ms={
-        stats?.workload === 'paint-effects' ? stats.lastPaintUpdateMs : undefined
-      }
+      data-paint-update-ms={stats?.workload === 'paint-effects' ? stats.lastPaintUpdateMs : undefined}
       data-presentation-pending={publishedStats !== undefined && publishedStats.key !== surfaceKey}
       data-layout-bounds-visible={
         stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined
@@ -3489,13 +3350,9 @@ function ComparisonWorkloadViewport({
       data-raster-pixel-range={stats?.technique === 'mtsdf' ? stats.rasterPixelRange : undefined}
       data-scale-ratio={stats?.technique === 'slug' ? undefined : stats?.scaleRatio}
       data-slug-curve-gpu-bytes={stats?.technique === 'slug' ? stats.slugCurveGpuBytes : undefined}
-      data-slug-header-gpu-bytes={
-        stats?.technique === 'slug' ? stats.slugHeaderGpuBytes : undefined
-      }
+      data-slug-header-gpu-bytes={stats?.technique === 'slug' ? stats.slugHeaderGpuBytes : undefined}
       data-slug-page-count={stats?.technique === 'slug' ? stats.slugPageCount : undefined}
-      data-slug-reference-gpu-bytes={
-        stats?.technique === 'slug' ? stats.slugReferenceGpuBytes : undefined
-      }
+      data-slug-reference-gpu-bytes={stats?.technique === 'slug' ? stats.slugReferenceGpuBytes : undefined}
       data-slug-gpu-bytes={stats?.technique === 'slug' ? stats.slugGpuBytes : undefined}
       data-startup-ms={stats?.startupMs}
       data-source-text-length={stats?.sourceTextLength}
@@ -3508,8 +3365,7 @@ function ComparisonWorkloadViewport({
       data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
       data-workload={stats?.workload}
       data-workload-amount={
-        stats === undefined ||
-        workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
+        stats === undefined || workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
           ? undefined
           : stats.appliedAmount
       }
@@ -3563,42 +3419,40 @@ function ComparisonWorkloadViewport({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function useBakeProgress(label: string): {
-  readonly value: BakeProgress | undefined
-  readonly active: boolean
-  readonly publish: (progress: BakeProgress) => void
-  readonly finish: () => void
-  readonly reset: () => void
+  readonly value: BakeProgress | undefined;
+  readonly active: boolean;
+  readonly publish: (progress: BakeProgress) => void;
+  readonly finish: () => void;
+  readonly reset: () => void;
 } {
-  const [value, setValue] = useState<BakeProgress>()
-  const [active, setActive] = useState(false)
-  const lastConsoleKey = useRef('')
+  const [value, setValue] = useState<BakeProgress>();
+  const [active, setActive] = useState(false);
+  const lastConsoleKey = useRef('');
   const publish = useCallback(
     (progress: BakeProgress) => {
-      setValue(progress)
-      setActive(true)
-      if (!import.meta.env.DEV) return
-      const percentage = Math.round((progress.completed / progress.total) * 100)
-      const bucket = Math.floor(percentage / 10) * 10
-      const key = `${progress.stage}:${progress.phase}:${String(bucket)}`
-      if (key === lastConsoleKey.current) return
-      lastConsoleKey.current = key
-      console.info(
-        `[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`,
-      )
+      setValue(progress);
+      setActive(true);
+      if (!import.meta.env.DEV) return;
+      const percentage = Math.round((progress.completed / progress.total) * 100);
+      const bucket = Math.floor(percentage / 10) * 10;
+      const key = `${progress.stage}:${progress.phase}:${String(bucket)}`;
+      if (key === lastConsoleKey.current) return;
+      lastConsoleKey.current = key;
+      console.info(`[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
     },
     [label],
-  )
-  const finish = useCallback(() => setActive(false), [])
+  );
+  const finish = useCallback(() => setActive(false), []);
   const reset = useCallback(() => {
-    setValue(undefined)
-    setActive(false)
-    lastConsoleKey.current = ''
-  }, [])
-  return { value, active, publish, finish, reset }
+    setValue(undefined);
+    setActive(false);
+    lastConsoleKey.current = '';
+  }, []);
+  return { value, active, publish, finish, reset };
 }
 
 function BakeProgressOverlay({
@@ -3606,15 +3460,15 @@ function BakeProgressOverlay({
   progress,
   technique,
 }: {
-  readonly backend: GraphicsBackend
-  readonly progress: BakeProgress | undefined
-  readonly technique: 'BITMAP' | 'MSDF' | 'SLUG'
+  readonly backend: GraphicsBackend;
+  readonly progress: BakeProgress | undefined;
+  readonly technique: 'BITMAP' | 'MSDF' | 'SLUG';
 }) {
-  const percentage = bakeProgressPercentage(progress)
+  const percentage = bakeProgressPercentage(progress);
   const label =
     progress === undefined
       ? `INITIALIZING ${technique} ${backend.toUpperCase()}`
-      : `${progress.stage === 'font' ? 'FONT' : technique} ${progress.phase.toUpperCase()}`
+      : `${progress.stage === 'font' ? 'FONT' : technique} ${progress.phase.toUpperCase()}`;
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-background px-8">
       <div className="w-full max-w-sm" data-testid="bake-progress">
@@ -3630,118 +3484,108 @@ function BakeProgressOverlay({
         />
       </div>
     </div>
-  )
+  );
 }
 
 function bakeProgressPercentage(progress: BakeProgress | undefined): number {
-  if (progress === undefined) return 0
-  const ratio = progress.completed / progress.total
+  if (progress === undefined) return 0;
+  const ratio = progress.completed / progress.total;
   if (progress.stage === 'font') {
-    if (progress.phase === 'loading') return 2
-    if (progress.phase === 'baking') return 8
-    if (progress.phase === 'packaging') return 16
-    if (progress.phase === 'transferring') return 19
-    if (progress.phase === 'complete') return 20
-    return Math.round(ratio * 20)
+    if (progress.phase === 'loading') return 2;
+    if (progress.phase === 'baking') return 8;
+    if (progress.phase === 'packaging') return 16;
+    if (progress.phase === 'transferring') return 19;
+    if (progress.phase === 'complete') return 20;
+    return Math.round(ratio * 20);
   }
-  if (progress.phase === 'loading') return 22
-  if (progress.phase === 'rasterizing') return 25 + Math.round(ratio * 65)
-  if (progress.phase === 'packaging') return 92
-  if (progress.phase === 'transferring') return 97
-  if (progress.phase === 'complete') return 100
-  return 20
+  if (progress.phase === 'loading') return 22;
+  if (progress.phase === 'rasterizing') return 25 + Math.round(ratio * 65);
+  if (progress.phase === 'packaging') return 92;
+  if (progress.phase === 'transferring') return 97;
+  if (progress.phase === 'complete') return 100;
+  return 20;
 }
 
-const TELEMETRY_CHART_TRANSITION_MS = 250
+const TELEMETRY_CHART_TRANSITION_MS = 250;
 
 function TelemetryCharts({ stats }: { readonly stats: LiveTextStats | undefined }) {
-  const fpsCanvasRef = useRef<HTMLCanvasElement>(null)
-  const cpuCanvasRef = useRef<HTMLCanvasElement>(null)
-  const gpuCanvasRef = useRef<HTMLCanvasElement>(null)
-  const readStats = useEffectEvent(() => stats)
+  const fpsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cpuCanvasRef = useRef<HTMLCanvasElement>(null);
+  const gpuCanvasRef = useRef<HTMLCanvasElement>(null);
+  const readStats = useEffectEvent(() => stats);
   useEffect(() => {
     const charts = [
       { id: 'fps', canvas: fpsCanvasRef.current, tone: 'success' },
       { id: 'cpu', canvas: cpuCanvasRef.current, tone: 'cyan' },
       { id: 'gpu', canvas: gpuCanvasRef.current, tone: 'warning' },
-    ] as const
-    if (charts.some(({ canvas }) => canvas === null)) return
+    ] as const;
+    if (charts.some(({ canvas }) => canvas === null)) return;
     const drawing = charts.map(({ canvas, id, tone }) => {
-      if (canvas === null) throw new TypeError(`missing ${id} telemetry canvas`)
-      const context = canvas.getContext('2d')
-      if (context === null) throw new TypeError(`missing ${id} telemetry context`)
-      return { canvas, context, height: 1, id, pixelRatio: 0, tone, width: 1 }
-    })
+      if (canvas === null) throw new TypeError(`missing ${id} telemetry canvas`);
+      const context = canvas.getContext('2d');
+      if (context === null) throw new TypeError(`missing ${id} telemetry context`);
+      return { canvas, context, height: 1, id, pixelRatio: 0, tone, width: 1 };
+    });
     const resize = (chart: (typeof drawing)[number]): void => {
-      const { canvas, context, tone } = chart
-      const bounds = canvas.getBoundingClientRect()
-      const metrics = sparklineCanvasMetrics(bounds.width, bounds.height, window.devicePixelRatio)
-      chart.width = metrics.cssWidth
-      chart.height = metrics.cssHeight
-      chart.pixelRatio = metrics.pixelRatio
+      const { canvas, context, tone } = chart;
+      const bounds = canvas.getBoundingClientRect();
+      const metrics = sparklineCanvasMetrics(bounds.width, bounds.height, window.devicePixelRatio);
+      chart.width = metrics.cssWidth;
+      chart.height = metrics.cssHeight;
+      chart.pixelRatio = metrics.pixelRatio;
       if (canvas.width !== metrics.backingWidth || canvas.height !== metrics.backingHeight) {
-        canvas.width = metrics.backingWidth
-        canvas.height = metrics.backingHeight
+        canvas.width = metrics.backingWidth;
+        canvas.height = metrics.backingHeight;
       }
-      context.setTransform(metrics.scaleX, 0, 0, metrics.scaleY, 0, 0)
-      context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`)
-      context.lineWidth = 1.5
-      canvas.dataset.backingHeight = String(metrics.backingHeight)
-      canvas.dataset.backingWidth = String(metrics.backingWidth)
-      canvas.dataset.cssHeight = String(metrics.cssHeight)
-      canvas.dataset.cssWidth = String(metrics.cssWidth)
-      canvas.dataset.pixelRatio = String(metrics.pixelRatio)
-    }
+      context.setTransform(metrics.scaleX, 0, 0, metrics.scaleY, 0, 0);
+      context.strokeStyle = getComputedStyle(canvas).getPropertyValue(`--${tone}`);
+      context.lineWidth = 1.5;
+      canvas.dataset.backingHeight = String(metrics.backingHeight);
+      canvas.dataset.backingWidth = String(metrics.backingWidth);
+      canvas.dataset.cssHeight = String(metrics.cssHeight);
+      canvas.dataset.cssWidth = String(metrics.cssWidth);
+      canvas.dataset.pixelRatio = String(metrics.pixelRatio);
+    };
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const chart = drawing.find(({ canvas }) => canvas === entry.target)
-        if (chart !== undefined) resize(chart)
+        const chart = drawing.find(({ canvas }) => canvas === entry.target);
+        if (chart !== undefined) resize(chart);
       }
-    })
+    });
     for (const chart of drawing) {
-      resizeObserver.observe(chart.canvas)
-      resize(chart)
+      resizeObserver.observe(chart.canvas);
+      resize(chart);
     }
-    let animationFrame = 0
-    let transitionStartedAt = performance.now() - TELEMETRY_CHART_TRANSITION_MS
-    let historySignature = ''
+    let animationFrame = 0;
+    let transitionStartedAt = performance.now() - TELEMETRY_CHART_TRANSITION_MS;
+    let historySignature = '';
     const draw = (timestamp: number): void => {
       for (const chart of drawing) {
-        if (chart.pixelRatio !== Math.max(1, window.devicePixelRatio)) resize(chart)
+        if (chart.pixelRatio !== Math.max(1, window.devicePixelRatio)) resize(chart);
       }
-      const current = readStats()
+      const current = readStats();
       if (current !== undefined) {
-        const signature = `${current.fpsHistoryCursor.length}:${current.fpsHistoryCursor.nextIndex}`
+        const signature = `${current.fpsHistoryCursor.length}:${current.fpsHistoryCursor.nextIndex}`;
         if (signature !== historySignature) {
-          historySignature = signature
-          transitionStartedAt = timestamp
+          historySignature = signature;
+          transitionStartedAt = timestamp;
         }
-        const progress = sparklineMotionProgress(
-          timestamp - transitionStartedAt,
-          TELEMETRY_CHART_TRANSITION_MS,
-        )
+        const progress = sparklineMotionProgress(timestamp - transitionStartedAt, TELEMETRY_CHART_TRANSITION_MS);
         for (const chart of drawing) {
-          const series = telemetryChartSeries(current, chart.id)
-          drawTelemetrySeries(
-            chart,
-            series.values,
-            series.length,
-            series.nextIndex,
-            series.maximum,
-            progress,
-          )
+          const series = telemetryChartSeries(current, chart.id);
+          drawTelemetrySeries(chart, series.values, series.length, series.nextIndex, series.maximum, progress);
         }
       } else {
-        for (const { context, width, height } of drawing) context.clearRect(0, 0, width, height)
+        for (const { context, width, height } of drawing) context.clearRect(0, 0, width, height);
       }
-      animationFrame = requestAnimationFrame(draw)
-    }
-    animationFrame = requestAnimationFrame(draw)
+      animationFrame = requestAnimationFrame(draw);
+    };
+    animationFrame = requestAnimationFrame(draw);
     return () => {
-      cancelAnimationFrame(animationFrame)
-      resizeObserver.disconnect()
-    }
-  }, [])
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+    };
+  }, []);
   return (
     <>
       <TelemetryChartPanel
@@ -3769,9 +3613,7 @@ function TelemetryCharts({ stats }: { readonly stats: LiveTextStats | undefined 
       <TelemetryChartPanel
         canvasRef={gpuCanvasRef}
         current={latestHistoryValue(stats?.gpuHistory, stats?.gpuHistoryCursor)}
-        emptyLabel={
-          stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
-        }
+        emptyLabel={stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'}
         id="gpu"
         label="GPU"
         maximum={stats?.maximumGpuMs}
@@ -3781,7 +3623,7 @@ function TelemetryCharts({ stats }: { readonly stats: LiveTextStats | undefined 
         unit="ms"
       />
     </>
-  )
+  );
 }
 
 function TelemetryChartPanel({
@@ -3796,16 +3638,16 @@ function TelemetryChartPanel({
   tone,
   unit,
 }: {
-  readonly canvasRef: RefObject<HTMLCanvasElement | null>
-  readonly current: number | undefined
-  readonly emptyLabel?: string
-  readonly id: 'cpu' | 'fps' | 'gpu'
-  readonly label: string
-  readonly maximum: number | undefined
-  readonly minimum: number | undefined
-  readonly scaleMaximum: number | undefined
-  readonly tone: 'cyan' | 'success' | 'warning'
-  readonly unit: 'fps' | 'ms'
+  readonly canvasRef: RefObject<HTMLCanvasElement | null>;
+  readonly current: number | undefined;
+  readonly emptyLabel?: string;
+  readonly id: 'cpu' | 'fps' | 'gpu';
+  readonly label: string;
+  readonly maximum: number | undefined;
+  readonly minimum: number | undefined;
+  readonly scaleMaximum: number | undefined;
+  readonly tone: 'cyan' | 'success' | 'warning';
+  readonly unit: 'fps' | 'ms';
 }) {
   return (
     <div
@@ -3826,26 +3668,20 @@ function TelemetryChartPanel({
         </p>
       </div>
       <div className="relative mt-1 min-h-4 w-full flex-1">
-        <canvas
-          aria-label={`${label} history`}
-          className="absolute inset-0 size-full"
-          ref={canvasRef}
-        />
+        <canvas aria-label={`${label} history`} className="absolute inset-0 size-full" ref={canvasRef} />
         {current === undefined && emptyLabel !== undefined && (
-          <span className="absolute inset-0 grid place-items-center font-mono text-[8px] text-dim">
-            {emptyLabel}
-          </span>
+          <span className="absolute inset-0 grid place-items-center font-mono text-[8px] text-dim">{emptyLabel}</span>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function drawTelemetrySeries(
   chart: {
-    readonly context: CanvasRenderingContext2D
-    readonly height: number
-    readonly width: number
+    readonly context: CanvasRenderingContext2D;
+    readonly height: number;
+    readonly width: number;
   },
   values: Float32Array,
   length: number,
@@ -3853,24 +3689,24 @@ function drawTelemetrySeries(
   maximum: number,
   progress: number,
 ): void {
-  const { context, height, width } = chart
-  context.clearRect(0, 0, width, height)
-  context.beginPath()
-  const start = length === values.length ? nextIndex : 0
-  let drawing = false
+  const { context, height, width } = chart;
+  context.clearRect(0, 0, width, height);
+  context.beginPath();
+  const start = length === values.length ? nextIndex : 0;
+  let drawing = false;
   for (let index = 0; index < length; index += 1) {
-    const value = values[(start + index) % values.length] ?? Number.NaN
+    const value = values[(start + index) % values.length] ?? Number.NaN;
     if (!Number.isFinite(value)) {
-      drawing = false
-      continue
+      drawing = false;
+      continue;
     }
-    const x = sparklineAnimatedSampleX(index, length, values.length, width, progress)
-    const y = sparklineSampleY(value, maximum, height)
-    if (!drawing) context.moveTo(x, y)
-    else context.lineTo(x, y)
-    drawing = true
+    const x = sparklineAnimatedSampleX(index, length, values.length, width, progress);
+    const y = sparklineSampleY(value, maximum, height);
+    if (!drawing) context.moveTo(x, y);
+    else context.lineTo(x, y);
+    drawing = true;
   }
-  context.stroke()
+  context.stroke();
 }
 
 function telemetryChartSeries(stats: LiveTextStats, id: 'cpu' | 'fps' | 'gpu') {
@@ -3881,21 +3717,21 @@ function telemetryChartSeries(stats: LiveTextStats, id: 'cpu' | 'fps' | 'gpu') {
         maximum: stats.refreshRateHz,
         nextIndex: stats.fpsHistoryCursor.nextIndex,
         values: stats.fpsHistory,
-      }
+      };
     case 'cpu':
       return {
         length: stats.submitHistoryLength,
         maximum: stats.frameBudgetMs,
         nextIndex: stats.submitHistoryCursor.nextIndex,
         values: stats.submitHistory,
-      }
+      };
     case 'gpu':
       return {
         length: stats.gpuHistoryLength,
         maximum: stats.frameBudgetMs,
         nextIndex: stats.gpuHistoryCursor.nextIndex,
         values: stats.gpuHistory,
-      }
+      };
   }
 }
 
@@ -3903,26 +3739,26 @@ function latestHistoryValue(
   values: Float32Array | undefined,
   cursor: { readonly length: number; readonly nextIndex: number } | undefined,
 ): number | undefined {
-  if (values === undefined || cursor === undefined || cursor.length === 0) return undefined
-  const value = values[(cursor.nextIndex + values.length - 1) % values.length]
-  return value !== undefined && Number.isFinite(value) ? value : undefined
+  if (values === undefined || cursor === undefined || cursor.length === 0) return undefined;
+  const value = values[(cursor.nextIndex + values.length - 1) % values.length];
+  return value !== undefined && Number.isFinite(value) ? value : undefined;
 }
 
 function formatSparklineValue(value: number | undefined, unit: 'fps' | 'ms'): string {
-  if (value === undefined) return '—'
-  if (unit === 'fps') return value.toFixed(1)
-  if (value > 0 && value < 0.01) return '<0.01 ms'
-  return `${value.toFixed(2)} ms`
+  if (value === undefined) return '—';
+  if (unit === 'fps') return value.toFixed(1);
+  if (value > 0 && value < 0.01) return '<0.01 ms';
+  return `${value.toFixed(2)} ms`;
 }
 
 function sparklineToneClass(tone: 'cyan' | 'success' | 'warning'): string {
   switch (tone) {
     case 'cyan':
-      return 'text-cyan'
+      return 'text-cyan';
     case 'success':
-      return 'text-success'
+      return 'text-success';
     case 'warning':
-      return 'text-warning'
+      return 'text-warning';
   }
 }
 
@@ -3975,53 +3811,53 @@ function Controls({
   onShowLayoutBounds,
   onWarmup,
 }: {
-  readonly animationEnabled: boolean
-  readonly animationSpeed: number
-  readonly backend: GraphicsBackend
-  readonly delivery: FontDelivery
-  readonly comparisonText: string
-  readonly conformanceView: ConformanceView
-  readonly dpr: 1 | 2
-  readonly fontFixture: BenchmarkFontFixture
-  readonly liveStats: LiveTextStats | undefined
-  readonly fontSize: number
-  readonly layoutWidthPercent: number
-  readonly paintOpacityPercent: number
-  readonly paintShadowEnabled: boolean
-  readonly paintStrokePercent: number
-  readonly selectedFontFixture: SelectableFontFixture
-  readonly workloadAmount: number
-  readonly mode: HarnessMode
-  readonly technique: RasterTechnique
-  readonly workload: string
-  readonly samples: number
-  readonly showcaseFrame: AdvancedShapingFrame
-  readonly showcaseState: AdvancedShapingState
-  readonly showGrid: boolean
-  readonly showLayoutBounds: boolean
-  readonly warmup: number
-  readonly webgpu: boolean
-  readonly onBackend: (backend: GraphicsBackend) => void
-  readonly onDelivery: (delivery: FontDelivery) => void
-  readonly onAnimationEnabled: (value: boolean) => void
-  readonly onAnimationSpeed: (value: number) => void
-  readonly onComparisonText: (value: string) => void
-  readonly onConformanceReset: () => void
-  readonly onConformanceZoom: (zoom: number) => void
-  readonly onDpr: (dpr: 1 | 2) => void
-  readonly onFontSize: (value: number) => void
-  readonly onFontNotices: () => void
-  readonly onLayoutWidthPercent: (value: number) => void
-  readonly onPaintOpacityPercent: (value: number) => void
-  readonly onPaintShadowEnabled: (value: boolean) => void
-  readonly onPaintStrokePercent: (value: number) => void
-  readonly onSelectedFontFixture: (value: SelectableFontFixture) => void
-  readonly onWorkloadAmount: (value: number) => void
-  readonly onSamples: (value: number) => void
-  readonly onShowcase: (command: AdvancedShapingCommand) => void
-  readonly onShowGrid: (value: boolean) => void
-  readonly onShowLayoutBounds: (value: boolean) => void
-  readonly onWarmup: (value: number) => void
+  readonly animationEnabled: boolean;
+  readonly animationSpeed: number;
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly comparisonText: string;
+  readonly conformanceView: ConformanceView;
+  readonly dpr: 1 | 2;
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly liveStats: LiveTextStats | undefined;
+  readonly fontSize: number;
+  readonly layoutWidthPercent: number;
+  readonly paintOpacityPercent: number;
+  readonly paintShadowEnabled: boolean;
+  readonly paintStrokePercent: number;
+  readonly selectedFontFixture: SelectableFontFixture;
+  readonly workloadAmount: number;
+  readonly mode: HarnessMode;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+  readonly samples: number;
+  readonly showcaseFrame: AdvancedShapingFrame;
+  readonly showcaseState: AdvancedShapingState;
+  readonly showGrid: boolean;
+  readonly showLayoutBounds: boolean;
+  readonly warmup: number;
+  readonly webgpu: boolean;
+  readonly onBackend: (backend: GraphicsBackend) => void;
+  readonly onDelivery: (delivery: FontDelivery) => void;
+  readonly onAnimationEnabled: (value: boolean) => void;
+  readonly onAnimationSpeed: (value: number) => void;
+  readonly onComparisonText: (value: string) => void;
+  readonly onConformanceReset: () => void;
+  readonly onConformanceZoom: (zoom: number) => void;
+  readonly onDpr: (dpr: 1 | 2) => void;
+  readonly onFontSize: (value: number) => void;
+  readonly onFontNotices: () => void;
+  readonly onLayoutWidthPercent: (value: number) => void;
+  readonly onPaintOpacityPercent: (value: number) => void;
+  readonly onPaintShadowEnabled: (value: boolean) => void;
+  readonly onPaintStrokePercent: (value: number) => void;
+  readonly onSelectedFontFixture: (value: SelectableFontFixture) => void;
+  readonly onWorkloadAmount: (value: number) => void;
+  readonly onSamples: (value: number) => void;
+  readonly onShowcase: (command: AdvancedShapingCommand) => void;
+  readonly onShowGrid: (value: boolean) => void;
+  readonly onShowLayoutBounds: (value: boolean) => void;
+  readonly onWarmup: (value: number) => void;
 }) {
   return (
     <section className="grid min-w-0 gap-4 [&>*]:min-w-0" data-testid="controls">
@@ -4033,9 +3869,7 @@ function Controls({
         <div className="min-[1200px]:hidden">
           {workload === 'icon-grid' ? (
             <div className="grid gap-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">
-                Font fixture
-              </span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
               <div
                 className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
                 data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
@@ -4068,10 +3902,7 @@ function Controls({
           >
             WebGPU
           </Button>
-          <Button
-            variant={backend === 'webgl2' ? 'primary' : 'secondary'}
-            onClick={() => onBackend('webgl2')}
-          >
+          <Button variant={backend === 'webgl2' ? 'primary' : 'secondary'} onClick={() => onBackend('webgl2')}>
             WebGL
           </Button>
         </div>
@@ -4160,9 +3991,7 @@ function Controls({
         <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
           <p className="eyebrow">Live workload</p>
           {workload === 'text-ladder' ? (
-            <p className="font-mono text-[9px] uppercase text-muted">
-              Rendered range · 8–512 CSS px
-            </p>
+            <p className="font-mono text-[9px] uppercase text-muted">Rendered range · 8–512 CSS px</p>
           ) : (
             <Field
               label={`${workload === 'icon-grid' ? 'Icon size' : 'Rendered size'} · ${fontSize} CSS px`}
@@ -4173,11 +4002,7 @@ function Controls({
               type="range"
               value={fontSize}
               {...(workload === 'icon-grid' ? { onRangeValueChange: onFontSize } : {})}
-              onChange={
-                workload === 'icon-grid'
-                  ? undefined
-                  : (event) => onFontSize(event.currentTarget.valueAsNumber)
-              }
+              onChange={workload === 'icon-grid' ? undefined : (event) => onFontSize(event.currentTarget.valueAsNumber)}
             />
           )}
           {workloadHasLayoutWidth(workload) && (
@@ -4217,11 +4042,7 @@ function Controls({
             </>
           )}
           {workload === 'dynamic-layout' && (
-            <Toggle
-              checked={showLayoutBounds}
-              label="Show layout bounds"
-              onChange={onShowLayoutBounds}
-            />
+            <Toggle checked={showLayoutBounds} label="Show layout bounds" onChange={onShowLayoutBounds} />
           )}
           {workload === 'paint-effects' && (
             <>
@@ -4276,9 +4097,9 @@ function Controls({
             label="Case"
             value={showcaseState.caseId}
             onChange={(caseId) => {
-              const definition = ADVANCED_SHAPING_CASES.find((entry) => entry.id === caseId)
+              const definition = ADVANCED_SHAPING_CASES.find((entry) => entry.id === caseId);
               if (definition !== undefined) {
-                onShowcase({ kind: 'select-case', caseId: definition.id })
+                onShowcase({ kind: 'select-case', caseId: definition.id });
               }
             }}
           >
@@ -4309,9 +4130,7 @@ function Controls({
             step={1}
             type="range"
             value={showcaseFrame.tick}
-            onChange={(event) =>
-              onShowcase({ kind: 'seek', tick: event.currentTarget.valueAsNumber })
-            }
+            onChange={(event) => onShowcase({ kind: 'seek', tick: event.currentTarget.valueAsNumber })}
           />
           <p className="font-mono text-[9px] leading-relaxed text-muted">
             {showcaseFrame.caseDefinition.language.toUpperCase()} ·{' '}
@@ -4353,7 +4172,7 @@ function Controls({
         Font licenses &amp; notices
       </button>
     </section>
-  )
+  );
 }
 
 function PayloadInspector({
@@ -4363,22 +4182,21 @@ function PayloadInspector({
   technique,
   workload,
 }: {
-  readonly delivery: FontDelivery
-  readonly fontFixture: BenchmarkFontFixture
-  readonly liveStats: LiveTextStats | undefined
-  readonly technique: RasterTechnique
-  readonly workload: string
+  readonly delivery: FontDelivery;
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly liveStats: LiveTextStats | undefined;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
 }) {
-  const runtime = measuredPackageSizeIfAvailable(`${technique}-runtime-js`)
-  const shaper = measuredPackageSize('text-shaper-wasm')
-  const bakerHost = measuredPackageSizeIfAvailable(`${technique}-baker-js`)
-  const bakerWasm = measuredPackageSizeIfAvailable(`${technique}-baker-wasm`)
-  const runtimeBakerHost = measuredPackageSize('runtime-baker-host-js')
-  const runtimeBakerWorker = measuredPackageSize('runtime-baker-worker-js')
-  const coreBakerHost = measuredPackageSize('portable-baker-js')
-  const coreBakerWasm = measuredPackageSize('portable-baker-wasm')
-  const libraryTransferBytes =
-    runtime === undefined ? undefined : runtime.gzipBytes + shaper.gzipBytes
+  const runtime = measuredPackageSizeIfAvailable(`${technique}-runtime-js`);
+  const shaper = measuredPackageSize('text-shaper-wasm');
+  const bakerHost = measuredPackageSizeIfAvailable(`${technique}-baker-js`);
+  const bakerWasm = measuredPackageSizeIfAvailable(`${technique}-baker-wasm`);
+  const runtimeBakerHost = measuredPackageSize('runtime-baker-host-js');
+  const runtimeBakerWorker = measuredPackageSize('runtime-baker-worker-js');
+  const coreBakerHost = measuredPackageSize('portable-baker-js');
+  const coreBakerWasm = measuredPackageSize('portable-baker-wasm');
+  const libraryTransferBytes = runtime === undefined ? undefined : runtime.gzipBytes + shaper.gzipBytes;
   const bakerTransferBytes =
     bakerHost === undefined || bakerWasm === undefined
       ? undefined
@@ -4387,21 +4205,21 @@ function PayloadInspector({
         coreBakerHost.gzipBytes +
         coreBakerWasm.gzipBytes +
         bakerHost.gzipBytes +
-        bakerWasm.gzipBytes
-  const bitmapStats = liveStats?.technique === 'bitmap' ? liveStats : undefined
-  const mtsdfStats = liveStats?.technique === 'mtsdf' ? liveStats : undefined
-  const slugStats = liveStats?.technique === 'slug' ? liveStats : undefined
-  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture)
+        bakerWasm.gzipBytes;
+  const bitmapStats = liveStats?.technique === 'bitmap' ? liveStats : undefined;
+  const mtsdfStats = liveStats?.technique === 'mtsdf' ? liveStats : undefined;
+  const slugStats = liveStats?.technique === 'slug' ? liveStats : undefined;
+  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture);
   const selectedFixtures: readonly {
-    readonly id: BenchmarkFontFixture
-    readonly role: 'font' | 'icons' | 'labels'
+    readonly id: BenchmarkFontFixture;
+    readonly role: 'font' | 'icons' | 'labels';
   }[] =
     workloadFonts.kind === 'icon-grid'
       ? [
           { id: workloadFonts.primary, role: 'icons' },
           { id: workloadFonts.labels, role: 'labels' },
         ]
-      : [{ id: workloadFonts.primary, role: 'font' }]
+      : [{ id: workloadFonts.primary, role: 'font' }];
   const selectedMtsdfFixtures =
     technique === 'mtsdf'
       ? selectedFixtures.map(({ id, role }) => ({
@@ -4409,7 +4227,7 @@ function PayloadInspector({
           fontFixture: id,
           role,
         }))
-      : []
+      : [];
   const selectedSlugFixtures =
     technique === 'slug'
       ? selectedFixtures.map(({ id, role }) => ({
@@ -4417,7 +4235,7 @@ function PayloadInspector({
           fontFixture: id,
           role,
         }))
-      : []
+      : [];
   const selectedBitmapFixtures =
     technique === 'bitmap'
       ? selectedFixtures.map(({ id, role }) => ({
@@ -4425,32 +4243,26 @@ function PayloadInspector({
           fontFixture: id,
           role,
         }))
-      : []
-  const mtsdfFixture = selectedMtsdfFixtures[0]?.fixture
-  const slugFixture = selectedSlugFixtures[0]?.fixture
+      : [];
+  const mtsdfFixture = selectedMtsdfFixtures[0]?.fixture;
+  const slugFixture = selectedSlugFixtures[0]?.fixture;
   const fontTransferBytes =
     technique === 'mtsdf'
       ? sumOptionalBytes(selectedMtsdfFixtures.map(({ fixture }) => fixture.compressed.bytes))
       : technique === 'slug'
         ? sumOptionalBytes(selectedSlugFixtures.map(({ fixture }) => fixture.compressed.bytes))
-        : sumOptionalBytes(selectedBitmapFixtures.map(({ fixture }) => fixture.bytes))
+        : sumOptionalBytes(selectedBitmapFixtures.map(({ fixture }) => fixture.bytes));
   const textureGpuBytes =
     technique === 'mtsdf'
       ? (mtsdfStats?.atlasGpuBytes ??
         sumOptionalBytes(
-          selectedMtsdfFixtures.map(
-            ({ fixture }) => fixture.raster.runtimeTextureArray.basePaddedGpuBytes,
-          ),
+          selectedMtsdfFixtures.map(({ fixture }) => fixture.raster.runtimeTextureArray.basePaddedGpuBytes),
         ))
       : technique === 'slug'
         ? (slugStats?.slugGpuBytes ??
-          sumOptionalBytes(
-            selectedSlugFixtures.map(({ fixture }) => fixture.raster.decodedGpuBytes),
-          ))
+          sumOptionalBytes(selectedSlugFixtures.map(({ fixture }) => fixture.raster.decodedGpuBytes)))
         : (bitmapStats?.atlasGpuBytes ??
-          sumOptionalBytes(
-            selectedBitmapFixtures.map(({ fixture }) => fixture.raster.decodedGpuBytes),
-          ))
+          sumOptionalBytes(selectedBitmapFixtures.map(({ fixture }) => fixture.raster.decodedGpuBytes)));
   const bitmapPages =
     bitmapStats === undefined
       ? selectedBitmapFixtures.flatMap(({ fixture, fontFixture: pageFontFixture, role }) =>
@@ -4466,7 +4278,7 @@ function PayloadInspector({
           label: `${page.strikePpem} px · page ${page.pageIndex + 1} · ${page.width}×${page.height}`,
           embeddedBytes: undefined,
           gpuBytes: page.gpuBytes,
-        }))
+        }));
   const pages =
     technique === 'mtsdf'
       ? selectedMtsdfFixtures.flatMap(({ fixture, fontFixture: pageFontFixture, role }) =>
@@ -4507,20 +4319,15 @@ function PayloadInspector({
                 gpuBytes: slugStats.slugReferenceGpuBytes,
               },
             ]
-        : bitmapPages
-  const pageGpuBytes = pages.reduce((total, page) => total + page.gpuBytes, 0)
-  const textureBaseBytes = technique === 'slug' ? undefined : textureGpuBytes
-  const texturePaddingBytes =
-    textureBaseBytes === undefined ? undefined : Math.max(0, textureBaseBytes - pageGpuBytes)
-  const displayedFontTransferBytes =
-    delivery === 'runtime' ? liveStats?.sourceFontBytes : fontTransferBytes
+        : bitmapPages;
+  const pageGpuBytes = pages.reduce((total, page) => total + page.gpuBytes, 0);
+  const textureBaseBytes = technique === 'slug' ? undefined : textureGpuBytes;
+  const texturePaddingBytes = textureBaseBytes === undefined ? undefined : Math.max(0, textureBaseBytes - pageGpuBytes);
+  const displayedFontTransferBytes = delivery === 'runtime' ? liveStats?.sourceFontBytes : fontTransferBytes;
 
   return (
     <>
-      <div
-        className="rounded-md border border-border bg-surface p-3"
-        data-testid="payload-inspector"
-      >
+      <div className="rounded-md border border-border bg-surface p-3" data-testid="payload-inspector">
         <InspectorTableHeader label="Payload" valueLabel="Gzip" />
         <InspectorDisclosure
           className="mt-3 border-b border-border pb-3"
@@ -4535,8 +4342,8 @@ function PayloadInspector({
           />
           <PayloadRow label={shaper.label} status="loaded" value={formatBytes(shaper.gzipBytes)} />
           <p className="text-[9px] leading-relaxed text-dim">
-            Includes the pmndrs/text core, selected raster runtime, and shaper. External Three.js
-            and React peers are not included; font assets are listed below.
+            Includes the pmndrs/text core, selected raster runtime, and shaper. External Three.js and React peers are
+            not included; font assets are listed below.
           </p>
         </InspectorDisclosure>
         <InspectorDisclosure
@@ -4590,10 +4397,7 @@ function PayloadInspector({
           />
         </div>
       </div>
-      <div
-        className="rounded-md border border-border bg-surface p-3"
-        data-testid="gpu-resource-inspector"
-      >
+      <div className="rounded-md border border-border bg-surface p-3" data-testid="gpu-resource-inspector">
         <InspectorTableHeader label="Resource" valueLabel="GPU" />
         <InspectorDisclosure
           className="mt-3"
@@ -4603,8 +4407,8 @@ function PayloadInspector({
         >
           {technique === 'mtsdf' && (
             <p className="text-[9px] leading-relaxed text-dim">
-              MSDF · {mtsdfFixture?.configuration.emSize ?? 64} px/em ·{' '}
-              {mtsdfFixture?.configuration.pixelRange ?? 8} px range
+              MSDF · {mtsdfFixture?.configuration.emSize ?? 64} px/em · {mtsdfFixture?.configuration.pixelRange ?? 8} px
+              range
             </p>
           )}
           {technique === 'slug' && (
@@ -4618,35 +4422,26 @@ function PayloadInspector({
             <p className="text-[9px] text-dim">Page dimensions appear after the font loads.</p>
           ) : (
             pages.map((page) => (
-              <PayloadRow
-                key={page.key}
-                label={page.label}
-                status="loaded"
-                value={formatBytes(page.gpuBytes)}
-              />
+              <PayloadRow key={page.key} label={page.label} status="loaded" value={formatBytes(page.gpuBytes)} />
             ))
           )}
           {texturePaddingBytes !== undefined && texturePaddingBytes > 0 && (
-            <PayloadRow
-              label="Layer padding"
-              status="loaded"
-              value={formatBytes(texturePaddingBytes)}
-            />
+            <PayloadRow label="Layer padding" status="loaded" value={formatBytes(texturePaddingBytes)} />
           )}
         </InspectorDisclosure>
       </div>
     </>
-  )
+  );
 }
 
 function sumOptionalBytes(values: readonly (number | undefined)[]): number | undefined {
-  if (values.length === 0) return undefined
-  let total = 0
+  if (values.length === 0) return undefined;
+  let total = 0;
   for (const value of values) {
-    if (value === undefined) return undefined
-    total += value
+    if (value === undefined) return undefined;
+    total += value;
   }
-  return total
+  return total;
 }
 
 function PayloadRow({
@@ -4655,10 +4450,10 @@ function PayloadRow({
   status,
   value,
 }: {
-  readonly emphasis?: boolean
-  readonly label: string
-  readonly status?: 'loaded' | 'unloaded'
-  readonly value: string
+  readonly emphasis?: boolean;
+  readonly label: string;
+  readonly status?: 'loaded' | 'unloaded';
+  readonly value: string;
 }) {
   return (
     <div
@@ -4668,7 +4463,7 @@ function PayloadRow({
       {status === undefined ? <span aria-hidden="true" /> : <PayloadStatus status={status} />}
       <span className="whitespace-nowrap text-right font-mono tabular-nums text-dim">{value}</span>
     </div>
-  )
+  );
 }
 
 function PayloadStatus({ status }: { readonly status: 'loaded' | 'unloaded' }) {
@@ -4689,17 +4484,11 @@ function PayloadStatus({ status }: { readonly status: 'loaded' | 'unloaded' }) {
             strokeWidth="1.5"
           />
         ) : (
-          <path
-            d="m3 3 6 6m0-6L3 9"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.25"
-          />
+          <path d="m3 3 6 6m0-6L3 9" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.25" />
         )}
       </svg>
     </span>
-  )
+  );
 }
 
 function InspectorTableHeader({ label, valueLabel }: { label: string; valueLabel: string }) {
@@ -4710,7 +4499,7 @@ function InspectorTableHeader({ label, valueLabel }: { label: string; valueLabel
       <span className="text-center font-mono text-[8px] uppercase text-dim">Loaded</span>
       <span className="text-right font-mono text-[8px] uppercase text-dim">{valueLabel}</span>
     </div>
-  )
+  );
 }
 
 function InspectorDisclosure({
@@ -4720,11 +4509,11 @@ function InspectorDisclosure({
   status,
   value,
 }: {
-  readonly children: ReactNode
-  readonly className?: string
-  readonly label: string
-  readonly status: 'loaded' | 'unloaded'
-  readonly value: string
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly label: string;
+  readonly status: 'loaded' | 'unloaded';
+  readonly value: string;
 }) {
   return (
     <details className={`group ${className ?? ''}`}>
@@ -4745,31 +4534,29 @@ function InspectorDisclosure({
         </svg>
         <span className="text-foreground">{label}</span>
         <PayloadStatus status={status} />
-        <span className="whitespace-nowrap text-right font-mono tabular-nums text-dim">
-          {value}
-        </span>
+        <span className="whitespace-nowrap text-right font-mono tabular-nums text-dim">{value}</span>
       </summary>
       <div className="mt-3 grid gap-2 pl-6">{children}</div>
     </details>
-  )
+  );
 }
 
 interface MeasuredPackageSize {
-  readonly id: string
-  readonly label: string
-  readonly status: string
-  readonly gzipBytes: number
+  readonly id: string;
+  readonly label: string;
+  readonly status: string;
+  readonly gzipBytes: number;
 }
 
 function measuredPackageSize(id: string): MeasuredPackageSize {
-  const entry = measuredPackageSizeIfAvailable(id)
-  if (entry === undefined) throw new Error(`Missing measured package size: ${id}`)
-  return entry
+  const entry = measuredPackageSizeIfAvailable(id);
+  if (entry === undefined) throw new Error(`Missing measured package size: ${id}`);
+  return entry;
 }
 
 function measuredPackageSizeIfAvailable(id: string): MeasuredPackageSize | undefined {
-  const entry = packageSizes.entries.find((candidate) => candidate.id === id)
-  return entry?.status === 'measured' ? entry : undefined
+  const entry = packageSizes.entries.find((candidate) => candidate.id === id);
+  return entry?.status === 'measured' ? entry : undefined;
 }
 
 function CompactSheet({
@@ -4778,10 +4565,10 @@ function CompactSheet({
   title,
   onClose,
 }: {
-  readonly children: ReactNode
-  readonly phone: boolean
-  readonly title: string
-  readonly onClose: () => void
+  readonly children: ReactNode;
+  readonly phone: boolean;
+  readonly title: string;
+  readonly onClose: () => void;
 }) {
   return (
     <>
@@ -4807,7 +4594,7 @@ function CompactSheet({
         {children}
       </section>
     </>
-  )
+  );
 }
 
 function CompactWorkloadPanel({
@@ -4815,9 +4602,9 @@ function CompactWorkloadPanel({
   phone,
   onClose,
 }: {
-  readonly children: ReactNode
-  readonly phone: boolean
-  readonly onClose: () => void
+  readonly children: ReactNode;
+  readonly phone: boolean;
+  readonly onClose: () => void;
 }) {
   return (
     <>
@@ -4833,15 +4620,15 @@ function CompactWorkloadPanel({
         {children}
       </div>
     </>
-  )
+  );
 }
 
 function MobileNavigation({
   location,
   onLocation,
 }: {
-  readonly location: HarnessLocation
-  readonly onLocation: (value: Partial<HarnessLocation>) => void
+  readonly location: HarnessLocation;
+  readonly onLocation: (value: Partial<HarnessLocation>) => void;
 }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[58px] grid-cols-4 border-t border-border bg-chrome p-2 min-[700px]:hidden">
@@ -4857,5 +4644,5 @@ function MobileNavigation({
         </button>
       ))}
     </nav>
-  )
+  );
 }

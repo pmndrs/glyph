@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises';
 
 import {
   createParagraphEngine,
@@ -6,83 +6,79 @@ import {
   FontRegistry,
   type ParagraphConstraints,
   type ParagraphStyle,
-} from '@pmndrs/text'
-import { createFontBaker } from '@pmndrs/text-font-baker'
+} from '@pmndrs/text';
+import { createFontBaker } from '@pmndrs/text-font-baker';
 
-import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts'
-import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts'
+import { createUikitLayoutFixture, YogaMeasureMode } from '../src/benchmark/uikit-layout-fixture.ts';
+import { paragraphLayoutContract } from '../src/benchmark/paragraph-layout-digest.ts';
 
-const root = new URL('../', import.meta.url)
-const output = new URL('../fixtures/contracts/paragraph-bidi-layout-v0.json', import.meta.url)
-const cliArguments = process.argv.slice(2)
+const root = new URL('../', import.meta.url);
+const output = new URL('../fixtures/contracts/paragraph-bidi-layout-v0.json', import.meta.url);
+const cliArguments = process.argv.slice(2);
 if (cliArguments.some((argument) => argument !== '--check') || cliArguments.length > 1) {
-  throw new Error('usage: generate-paragraph-bidi-contract.mts [--check]')
+  throw new Error('usage: generate-paragraph-bidi-contract.mts [--check]');
 }
-const check = cliArguments[0] === '--check'
+const check = cliArguments[0] === '--check';
 const [bakerWasm, shaperWasm] = await Promise.all([
   readFile(new URL('../../packages/font-baker/dist/font_baker.wasm', root)),
   readFile(new URL('../../packages/text/dist/text_shaper.wasm', root)),
-])
+]);
 
 async function runtime(sourceUrl: URL) {
-  const source = await readFile(sourceUrl)
-  const baker = await createFontBaker(bakerWasm)
+  const source = await readFile(sourceUrl);
+  const baker = await createFontBaker(bakerWasm);
   const artifact = baker.bake({
     source,
     descriptor: { formatVersion: 0, fontFaceIndex: 0 },
-  }).artifacts[0]
-  if (artifact === undefined) throw new Error('font baker returned no contract artifact')
-  const registry = new FontRegistry()
-  const font = await registry.registerAsset(artifact.bytes)
-  const shaper = await createRuntimeShaper({ registry, wasm: shaperWasm })
-  return { font, shaper }
+  }).artifacts[0];
+  if (artifact === undefined) throw new Error('font baker returned no contract artifact');
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(artifact.bytes);
+  const shaper = await createRuntimeShaper({ registry, wasm: shaperWasm });
+  return { font, shaper };
 }
 
-const amiri = await runtime(
-  new URL('../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf', import.meta.url),
-)
-const amiriEngine = createParagraphEngine({ shaper: amiri.shaper })
+const amiri = await runtime(new URL('../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf', import.meta.url));
+const amiriEngine = createParagraphEngine({ shaper: amiri.shaper });
 const bidiStyle = {
   fontSize: 40,
   lineHeight: 1.25,
   direction: 'auto',
   language: 'ar',
-} as const satisfies ParagraphStyle
+} as const satisfies ParagraphStyle;
 const bidiConstraints = {
   width: { mode: 'exactly', size: 300 },
   wrap: 'word',
   align: 'start',
-} as const satisfies ParagraphConstraints
-const bidi: Record<string, unknown> = {}
+} as const satisfies ParagraphConstraints;
+const bidi: Record<string, unknown> = {};
 for (const [id, text] of [
   ['ltr', 'ABC مرحبا 123 DEF'],
   ['rtl', 'مرحبا ABC 123 عالم'],
 ] as const) {
-  const paragraph = amiriEngine.create({ text, font: amiri.font.handle, style: bidiStyle })
+  const paragraph = amiriEngine.create({ text, font: amiri.font.handle, style: bidiStyle });
   bidi[id] = {
     text,
     style: bidiStyle,
     constraints: bidiConstraints,
     layout: paragraphLayoutContract(paragraph.layout(bidiConstraints)),
-  }
+  };
 }
 
-const inter = await runtime(
-  new URL('../fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url),
-)
-const policyEngine = createParagraphEngine({ shaper: inter.shaper })
-const policyText = 'one two three four five six seven'
+const inter = await runtime(new URL('../fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url));
+const policyEngine = createParagraphEngine({ shaper: inter.shaper });
+const policyText = 'one two three four five six seven';
 const policyStyle = {
   fontSize: 32,
   lineHeight: 1.25,
   direction: 'ltr',
   language: 'en',
-} as const satisfies ParagraphStyle
+} as const satisfies ParagraphStyle;
 const paragraph = policyEngine.create({
   text: policyText,
   font: inter.font.handle,
   style: policyStyle,
-})
+});
 const policyInputs = {
   start: { width: { mode: 'exactly', size: 180 }, align: 'start' },
   center: { width: { mode: 'exactly', size: 180 }, align: 'center' },
@@ -109,48 +105,39 @@ const policyInputs = {
     height: { mode: 'exactly', size: 80 },
     overflow: 'ellipsis',
   },
-} as const satisfies Record<string, ParagraphConstraints>
-const policyCases: Record<string, unknown> = {}
+} as const satisfies Record<string, ParagraphConstraints>;
+const policyCases: Record<string, unknown> = {};
 for (const [id, constraints] of Object.entries(policyInputs)) {
   policyCases[id] = {
     constraints,
     layout: paragraphLayoutContract(paragraph.layout(constraints), false),
-  }
+  };
 }
 
 const uikitInput = {
   text: 'office AVATAR café — ffi, kerning, marks, and wrapping.',
   font: inter.font.handle,
   style: { fontSize: 31, lineHeight: 1.23, direction: 'ltr', language: 'en' },
-} as const
-const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const
-const uikitParagraph = policyEngine.create(uikitInput)
-const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitPolicy)
-const customLayouting = uikitFixture.customLayouting()
+} as const;
+const uikitPolicy = { wrap: 'word', overflow: 'clip' } as const;
+const uikitParagraph = policyEngine.create(uikitInput);
+const uikitFixture = createUikitLayoutFixture(uikitParagraph, uikitPolicy);
+const customLayouting = uikitFixture.customLayouting();
 const uikitNatural = customLayouting.measure(
   Number.NaN,
   YogaMeasureMode.Undefined,
   Number.NaN,
   YogaMeasureMode.Undefined,
-)
-const uikitAtMost = customLayouting.measure(360, YogaMeasureMode.AtMost, 90, YogaMeasureMode.AtMost)
+);
+const uikitAtMost = customLayouting.measure(360, YogaMeasureMode.AtMost, 90, YogaMeasureMode.AtMost);
 const uikitExactWidth = customLayouting.measure(
   420.001,
   YogaMeasureMode.Exactly,
   Number.NaN,
   YogaMeasureMode.Undefined,
-)
-const uikitDefinite = uikitFixture.resolveYogaLeaf(
-  401.237,
-  YogaMeasureMode.Exactly,
-  150.111,
-  YogaMeasureMode.Exactly,
-)
-const uikitResolved = uikitFixture.layoutResolvedBox(
-  [401.24, 150.12],
-  [7, 11, 13, 17],
-  [1, 2, 3, 4],
-)
+);
+const uikitDefinite = uikitFixture.resolveYogaLeaf(401.237, YogaMeasureMode.Exactly, 150.111, YogaMeasureMode.Exactly);
+const uikitResolved = uikitFixture.layoutResolvedBox([401.24, 150.12], [7, 11, 13, 17], [1, 2, 3, 4]);
 
 const document = {
   schemaVersion: 0,
@@ -195,14 +182,14 @@ const document = {
       layout: paragraphLayoutContract(uikitResolved.layout, false),
     },
   },
-}
+};
 if (check) {
-  const checkedIn = JSON.parse(await readFile(output, 'utf8')) as unknown
+  const checkedIn = JSON.parse(await readFile(output, 'utf8')) as unknown;
   if (JSON.stringify(checkedIn) !== JSON.stringify(document)) {
     throw new Error(
       'paragraph bidi contract is stale; run pnpm generate:paragraph-bidi-contract and review the exact diff',
-    )
+    );
   }
 } else {
-  await writeFile(output, `${JSON.stringify(document, undefined, 2)}\n`)
+  await writeFile(output, `${JSON.stringify(document, undefined, 2)}\n`);
 }

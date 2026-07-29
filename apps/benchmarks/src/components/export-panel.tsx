@@ -1,17 +1,17 @@
-import { useState } from 'react'
-import type { BenchmarkSummary } from '../benchmark/contracts'
-import type { LiveBenchmarkCapture } from '../benchmark/product-result'
-import { Button, Toggle } from './ui'
+import { useState } from 'react';
+import type { BenchmarkSummary } from '../benchmark/contracts';
+import type { LiveBenchmarkCapture } from '../benchmark/product-result';
+import { Button, Toggle } from './ui';
 
 export function ExportPanel({
   liveCapture,
   summary,
 }: {
-  readonly liveCapture?: LiveBenchmarkCapture | undefined
-  readonly summary: BenchmarkSummary | undefined
+  readonly liveCapture?: LiveBenchmarkCapture | undefined;
+  readonly summary: BenchmarkSummary | undefined;
 }) {
-  const [environment, setEnvironment] = useState(true)
-  const [measurements, setMeasurements] = useState(true)
+  const [environment, setEnvironment] = useState(true);
+  const [measurements, setMeasurements] = useState(true);
   const value = JSON.stringify(
     liveCapture !== undefined
       ? {
@@ -28,15 +28,15 @@ export function ExportPanel({
           },
     null,
     2,
-  )
+  );
 
   function download(): void {
-    const anchor = document.createElement('a')
-    const objectUrl = URL.createObjectURL(new Blob([value], { type: 'application/json' }))
-    anchor.href = objectUrl
-    anchor.download = 'pmndrs-text-benchmark.json'
-    anchor.click()
-    queueMicrotask(() => URL.revokeObjectURL(objectUrl))
+    const anchor = document.createElement('a');
+    const objectUrl = URL.createObjectURL(new Blob([value], { type: 'application/json' }));
+    anchor.href = objectUrl;
+    anchor.download = 'pmndrs-text-benchmark.json';
+    anchor.click();
+    queueMicrotask(() => URL.revokeObjectURL(objectUrl));
   }
 
   return (
@@ -61,14 +61,10 @@ export function ExportPanel({
         >
           Copy JSON
         </Button>
-        <Button
-          disabled={summary === undefined && liveCapture === undefined}
-          variant="primary"
-          onClick={download}
-        >
+        <Button disabled={summary === undefined && liveCapture === undefined} variant="primary" onClick={download}>
           Download JSON
         </Button>
       </div>
     </section>
-  )
+  );
 }

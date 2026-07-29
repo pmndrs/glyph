@@ -4,34 +4,34 @@ title: Tooling and fixtures for the first pipeline
 description: Defines the pinned font, text corpus, fixture manifest, oracle tooling, golden updates, and multi-font contract fixtures.
 tags: [tooling, fixtures, testing]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/rsms/inter"
-    title: "Inter"
-  - id: "citation-2"
-    resource: "https://github.com/FortAwesome/Font-Awesome"
-    title: "Font Awesome Free"
-  - id: "citation-3"
-    resource: "https://github.com/lucide-icons/lucide"
-    title: "Lucide"
-  - id: "citation-4"
-    resource: "https://github.com/harfbuzz/harfbuzz/tree/main/test"
-    title: "HarfBuzz test suite"
-  - id: "citation-5-1"
-    resource: "https://www.w3.org/TR/css-fonts-4/"
-    title: "CSS Fonts Module Level 4"
-  - id: "citation-5-2"
-    resource: "https://www.w3.org/TR/css-text-3/"
-    title: "CSS Text Module Level 3"
-  - id: "citation-6"
-    resource: "https://github.com/KhronosGroup/glTF-Validator"
-    title: "Khronos glTF Validator"
-  - id: "citation-7"
-    resource: "https://github.com/drawcall-ai/vitexec"
-    title: "Vitexec"
+  - id: 'citation-1'
+    resource: 'https://github.com/rsms/inter'
+    title: 'Inter'
+  - id: 'citation-2'
+    resource: 'https://github.com/FortAwesome/Font-Awesome'
+    title: 'Font Awesome Free'
+  - id: 'citation-3'
+    resource: 'https://github.com/lucide-icons/lucide'
+    title: 'Lucide'
+  - id: 'citation-4'
+    resource: 'https://github.com/harfbuzz/harfbuzz/tree/main/test'
+    title: 'HarfBuzz test suite'
+  - id: 'citation-5-1'
+    resource: 'https://www.w3.org/TR/css-fonts-4/'
+    title: 'CSS Fonts Module Level 4'
+  - id: 'citation-5-2'
+    resource: 'https://www.w3.org/TR/css-text-3/'
+    title: 'CSS Text Module Level 3'
+  - id: 'citation-6'
+    resource: 'https://github.com/KhronosGroup/glTF-Validator'
+    title: 'Khronos glTF Validator'
+  - id: 'citation-7'
+    resource: 'https://github.com/drawcall-ai/vitexec'
+    title: 'Vitexec'
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-26T03:20:00Z"
+  by: 'openai-codex/gpt-5'
+  at: '2026-07-26T03:20:00Z'
 ---
 
 # Tooling and fixtures for the first pipeline
@@ -43,17 +43,17 @@ Goal: make one-font results reproducible before expanding implementation surface
 
 Use one statically selected, redistributable OpenType font for the first complete path. Inter Regular is the leading candidate because existing Three Flatland work and fixtures already exercise it, but the exact release file, license text, download source, and SHA-256 hash must be pinned before bytes enter the repository.
 
-| Fixture gate | Status | Completion rule |
-| --- | :---: | --- |
-| Reference family selected | ✅ | Inter Regular 4.1 is the immutable V0 fixture. |
-| Exact source, version, license, and SHA-256 | ✅ | The checked-in manifest binds the upstream release/commit, archive member, OFL-1.1 text, byte sizes, and hashes. |
-| Portable baker local real-font lane | ✅ | The package E2E verifies the canonical bytes and cannot skip or substitute an environment font. |
-| Required pull-request real-font lane | ✅ | The checked-in font and license run without network access or ambient machine state. |
-| Benchmark-app product scenario | ✅ | Interactive and browser-headless paths run the canonical bytes through `@pmndrs/text-font-baker`; local upload is an explicit override. |
-| Font-baker fuzzing | ✅ | Fixed-seed Rust and validator-mutation smoke tests run hermetically; longer mutation drivers and pinned cargo-fuzz/libFuzzer exercise the public boundaries, with minimized failures promoted into the checked-in malformed corpus. |
-| GLB-to-HarfRust shaping | ✅ | Canonical Inter is independently validated, registered through `FontRegistry`, contributes exactly its retained 147,192-byte SFNT, 23,496-byte extents, and 368-byte availability views, and matches every pinned HarfRust field through both public batch calls. |
-| Complex-script source/GLB equivalence | ✅ | Amiri Regular 1.002 is pinned by immutable Google Fonts and upstream commits. Source HarfRust equals GLB-extracted reduced-SFNT HarfRust exactly; pinned HarfBuzz 13 independently agrees on every Arabic/Latin glyph field. |
-| CJK universality source/GLB equivalence | ✅ | Noto Sans CJK JP Regular 2.004 is pinned at upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78`, face index 0, with authenticated font/license bytes. Its 13-case source/reduced HarfRust and HarfBuzz 13 documents agree field-for-field. |
+| Fixture gate                                | Status | Completion rule                                                                                                                                                                                                                                                   |
+| ------------------------------------------- | :----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reference family selected                   |   ✅   | Inter Regular 4.1 is the immutable V0 fixture.                                                                                                                                                                                                                    |
+| Exact source, version, license, and SHA-256 |   ✅   | The checked-in manifest binds the upstream release/commit, archive member, OFL-1.1 text, byte sizes, and hashes.                                                                                                                                                  |
+| Portable baker local real-font lane         |   ✅   | The package E2E verifies the canonical bytes and cannot skip or substitute an environment font.                                                                                                                                                                   |
+| Required pull-request real-font lane        |   ✅   | The checked-in font and license run without network access or ambient machine state.                                                                                                                                                                              |
+| Benchmark-app product scenario              |   ✅   | Interactive and browser-headless paths run the canonical bytes through `@pmndrs/text-font-baker`; local upload is an explicit override.                                                                                                                           |
+| Font-baker fuzzing                          |   ✅   | Fixed-seed Rust and validator-mutation smoke tests run hermetically; longer mutation drivers and pinned cargo-fuzz/libFuzzer exercise the public boundaries, with minimized failures promoted into the checked-in malformed corpus.                               |
+| GLB-to-HarfRust shaping                     |   ✅   | Canonical Inter is independently validated, registered through `FontRegistry`, contributes exactly its retained 147,192-byte SFNT, 23,496-byte extents, and 368-byte availability views, and matches every pinned HarfRust field through both public batch calls. |
+| Complex-script source/GLB equivalence       |   ✅   | Amiri Regular 1.002 is pinned by immutable Google Fonts and upstream commits. Source HarfRust equals GLB-extracted reduced-SFNT HarfRust exactly; pinned HarfBuzz 13 independently agrees on every Arabic/Latin glyph field.                                      |
+| CJK universality source/GLB equivalence     |   ✅   | Noto Sans CJK JP Regular 2.004 is pinned at upstream commit `523d033d6cb47f4a80c58a35753646f5c3608a78`, face index 0, with authenticated font/license bytes. Its 13-case source/reduced HarfRust and HarfBuzz 13 documents agree field-for-field.                 |
 
 V0 uses the original glyph IDs and does not subset or remap the font. The checked-in canonical asset must be generated by the same bake core exercised in the loader Worker.
 

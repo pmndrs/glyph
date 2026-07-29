@@ -5,24 +5,24 @@ Use this reference for scene passes, multiple render targets, depth/normal sampl
 ## Begin with a scene pass
 
 ```ts
-import * as THREE from 'three/webgpu'
-import { mrt, normalView, output, pass, vec4 } from 'three/tsl'
+import * as THREE from 'three/webgpu';
+import { mrt, normalView, output, pass, vec4 } from 'three/tsl';
 
-const scenePass = pass(scene, camera)
+const scenePass = pass(scene, camera);
 scenePass.setMRT(
   mrt({
     output,
     normal: normalView,
   }),
-)
+);
 
-const colorNode = scenePass.getTextureNode('output')
-const normalNode = scenePass.getTextureNode('normal')
-const depthNode = scenePass.getTextureNode('depth')
+const colorNode = scenePass.getTextureNode('output');
+const normalNode = scenePass.getTextureNode('normal');
+const depthNode = scenePass.getTextureNode('depth');
 
-const pipeline = new THREE.RenderPipeline(renderer)
-pipeline.outputNode = vec4(colorNode.rgb, 1)
-pipeline.render()
+const pipeline = new THREE.RenderPipeline(renderer);
+pipeline.outputNode = vec4(colorNode.rgb, 1);
+pipeline.render();
 ```
 
 Verify MRT names and pass methods against the pinned version. Do not assume a pass output is a raw `Texture`; keep the texture-node abstraction when the graph must sample it.
@@ -32,8 +32,8 @@ Verify MRT names and pass methods against the pinned version. Do not assume a pa
 Use a texture node when sampling arbitrary coordinates:
 
 ```ts
-const centerDepth = depthNode.sample(screenUV).r
-const neighborDepth = depthNode.sample(screenUV.add(texelOffset)).r
+const centerDepth = depthNode.sample(screenUV).r;
+const neighborDepth = depthNode.sample(screenUV.add(texelOffset)).r;
 ```
 
 Current-fragment depth helpers and arbitrary-UV texture sampling are different operations. Choose from the installed pass API according to the effect's actual need. Do not reach through a texture node's `.value` to guess at a render-time attachment.
@@ -45,11 +45,11 @@ Prefer installed helpers such as view-position reconstruction, screen-position p
 Inspect `three/addons/tsl/display/*` and its paired declarations before implementing a custom pass. Shipped effects demonstrate the current renderer lifecycle and are easier to keep aligned with Three.js.
 
 ```ts
-import { ao } from 'three/addons/tsl/display/GTAONode.js'
-import { denoise } from 'three/addons/tsl/display/DenoiseNode.js'
+import { ao } from 'three/addons/tsl/display/GTAONode.js';
+import { denoise } from 'three/addons/tsl/display/DenoiseNode.js';
 
-const ambientOcclusion = ao(depthNode, normalNode, camera)
-const filtered = denoise(ambientOcclusion.getTextureNode(), depthNode, normalNode, camera)
+const ambientOcclusion = ao(depthNode, normalNode, camera);
+const filtered = denoise(ambientOcclusion.getTextureNode(), depthNode, normalNode, camera);
 ```
 
 Read the installed implementation for channel format, uniforms, resolution scaling, disposal, and composition. Do not copy tuning values or assume a result channel from an older release.

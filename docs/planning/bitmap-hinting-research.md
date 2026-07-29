@@ -19,7 +19,7 @@ sources:
     title: Bitmap GPU conformance probe
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T15:45:00Z"
+  at: '2026-07-26T15:45:00Z'
 ---
 
 # Grayscale bitmap hinting and phase packing research
@@ -43,11 +43,11 @@ True hinting adjusts an outline against a pixel grid before rasterization. A GPU
 
 The first experiment should compare exact physical strikes with identical font bytes and variation coordinates:
 
-| Candidate | Stored coverage | Runtime placement | Cost/risk |
-| --- | --- | --- | --- |
-| Current baseline | One unhinted R8 mask | Integer device-pixel snap | Smallest and deterministic |
-| Hinted single phase | One hinted R8 mask | Integer device-pixel snap | Same texture width; grid-fitted appearance and metrics require an independent oracle |
-| Hinted four phase | Four hinted grayscale masks at `0`, `1/4`, `1/2`, `3/4` horizontal pixels | Preserve continuous shaping advances; select the nearest phase from each glyph's fractional device-pixel origin | Approximately four coverage channels before compression; phase selection and metric policy must be proven |
+| Candidate           | Stored coverage                                                           | Runtime placement                                                                                               | Cost/risk                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Current baseline    | One unhinted R8 mask                                                      | Integer device-pixel snap                                                                                       | Smallest and deterministic                                                                                |
+| Hinted single phase | One hinted R8 mask                                                        | Integer device-pixel snap                                                                                       | Same texture width; grid-fitted appearance and metrics require an independent oracle                      |
+| Hinted four phase   | Four hinted grayscale masks at `0`, `1/4`, `1/2`, `3/4` horizontal pixels | Preserve continuous shaping advances; select the nearest phase from each glyph's fractional device-pixel origin | Approximately four coverage channels before compression; phase selection and metric policy must be proven |
 
 ## Packing hypothesis
 

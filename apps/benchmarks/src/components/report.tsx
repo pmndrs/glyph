@@ -1,29 +1,29 @@
-import { Fragment } from 'react'
-import type { BenchmarkSummary } from '../benchmark/contracts'
-import { BENCHMARK_FONT_LABELS } from '../benchmark/font-fixtures'
-import type { LiveBenchmarkCapture } from '../benchmark/product-result'
-import packageSizes from '../generated/package-sizes.json'
-import { Metric } from './ui'
+import { Fragment } from 'react';
+import type { BenchmarkSummary } from '../benchmark/contracts';
+import { BENCHMARK_FONT_LABELS } from '../benchmark/font-fixtures';
+import type { LiveBenchmarkCapture } from '../benchmark/product-result';
+import packageSizes from '../generated/package-sizes.json';
+import { Metric } from './ui';
 
 function ms(value: number | undefined): string {
-  return value === undefined ? '—' : `${value.toFixed(2)} ms`
+  return value === undefined ? '—' : `${value.toFixed(2)} ms`;
 }
 
 function bytes(value: number | undefined): string {
-  if (value === undefined) return '—'
-  if (value < 1024) return `${value} B`
-  return `${(value / 1024).toFixed(1)} KiB`
+  if (value === undefined) return '—';
+  if (value < 1024) return `${value} B`;
+  return `${(value / 1024).toFixed(1)} KiB`;
 }
 
 export function Report({
   liveCapture,
   summary,
 }: {
-  readonly liveCapture?: LiveBenchmarkCapture | undefined
-  readonly summary: BenchmarkSummary | undefined
+  readonly liveCapture?: LiveBenchmarkCapture | undefined;
+  readonly summary: BenchmarkSummary | undefined;
 }) {
-  if (liveCapture !== undefined) return <LiveReport capture={liveCapture} />
-  const metrics = summary?.measurements[0]?.metrics
+  if (liveCapture !== undefined) return <LiveReport capture={liveCapture} />;
+  const metrics = summary?.measurements[0]?.metrics;
   return (
     <section className="grid gap-3" data-testid="report">
       <header className="flex items-end justify-between gap-4">
@@ -44,9 +44,7 @@ export function Report({
         <div className="flex items-center gap-2 text-xs">
           <span className={`size-2 rounded-full ${summary ? 'bg-success' : 'bg-dim'}`} />
           <span className="font-medium text-foreground">Correctness</span>
-          <span className="ml-auto font-mono text-[10px] text-muted">
-            {summary?.validation ?? 'awaiting run'}
-          </span>
+          <span className="ml-auto font-mono text-[10px] text-muted">{summary?.validation ?? 'awaiting run'}</span>
         </div>
       </div>
       {metrics !== undefined && (
@@ -67,9 +65,7 @@ export function Report({
         <div className="mt-2 grid gap-2">
           {packageSizes.entries.map((entry) => (
             <div className="flex items-center gap-3 text-xs" key={entry.id}>
-              <span
-                className={`size-2 rounded-full ${entry.status === 'measured' ? 'bg-success' : 'bg-warning'}`}
-              />
+              <span className={`size-2 rounded-full ${entry.status === 'measured' ? 'bg-success' : 'bg-warning'}`} />
               <span className="text-foreground">{entry.label}</span>
               <span className="ml-auto font-mono text-[10px] text-muted">
                 {entry.status === 'measured'
@@ -88,21 +84,19 @@ export function Report({
           <dt className="text-dim">Threads</dt>
           <dd className="text-muted">{summary?.environment.hardwareConcurrency ?? '—'}</dd>
           <dt className="text-dim">WebGPU</dt>
-          <dd className="text-muted">
-            {summary?.environment.webgpu === true ? 'available' : 'unavailable'}
-          </dd>
+          <dd className="text-muted">{summary?.environment.webgpu === true ? 'available' : 'unavailable'}</dd>
         </dl>
       </div>
     </section>
-  )
+  );
 }
 
 function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
-  const { stats } = capture
+  const { stats } = capture;
   const fontSelection =
     capture.labelFontFixture === undefined
       ? BENCHMARK_FONT_LABELS[capture.fontFixture]
-      : `${BENCHMARK_FONT_LABELS[capture.fontFixture]} icons · ${BENCHMARK_FONT_LABELS[capture.labelFontFixture]} labels`
+      : `${BENCHMARK_FONT_LABELS[capture.fontFixture]} icons · ${BENCHMARK_FONT_LABELS[capture.labelFontFixture]} labels`;
   return (
     <section className="grid gap-3" data-testid="report">
       <header>
@@ -127,15 +121,14 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Selection</p>
         <p className="mt-2 text-xs text-muted">
-          {capture.technique} · {capture.backend} · {capture.workload} · {fontSelection} ·{' '}
-          {capture.dpr}× DPR
+          {capture.technique} · {capture.backend} · {capture.workload} · {fontSelection} · {capture.dpr}× DPR
         </p>
       </div>
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">System samples</p>
         <p className="mt-1 text-xs text-muted">
-          {stats.textUpdateTimings.sampleCount} committed text updates ·{' '}
-          {stats.submitHistory.length} CPU frames · {stats.gpuHistory.length} GPU frames
+          {stats.textUpdateTimings.sampleCount} committed text updates · {stats.submitHistory.length} CPU frames ·{' '}
+          {stats.gpuHistory.length} GPU frames
         </p>
         <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-x-4 gap-y-2 text-xs">
           <span className="font-mono text-[9px] uppercase text-dim">System</span>
@@ -161,11 +154,7 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
             median={stats.textUpdateTimings.medianTotalMs}
             p95={stats.textUpdateTimings.p95TotalMs}
           />
-          <TimingRow
-            label="Frame submission"
-            median={stats.medianSubmitMs}
-            p95={stats.p95SubmitMs}
-          />
+          <TimingRow label="Frame submission" median={stats.medianSubmitMs} p95={stats.p95SubmitMs} />
           <TimingRow label="GPU frame" median={stats.medianGpuMs} p95={stats.p95GpuMs} />
         </div>
       </div>
@@ -208,23 +197,15 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
         </dl>
       </div>
     </section>
-  )
+  );
 }
 
-function TimingRow({
-  label,
-  median,
-  p95,
-}: {
-  label: string
-  median: number | undefined
-  p95: number | undefined
-}) {
+function TimingRow({ label, median, p95 }: { label: string; median: number | undefined; p95: number | undefined }) {
   return (
     <>
       <span className="text-dim">{label}</span>
       <span className="text-right font-mono text-[10px] text-muted">{ms(median)}</span>
       <span className="text-right font-mono text-[10px] text-muted">{ms(p95)}</span>
     </>
-  )
+  );
 }

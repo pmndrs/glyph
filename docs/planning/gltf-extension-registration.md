@@ -4,40 +4,40 @@ title: glTF vendor-prefix request and extension submission set
 description: Contains the proposed PMNDRS vendor-prefix request and extension submission checklist.
 tags: [gltf, extension, governance]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/KhronosGroup/glTF/blob/main/extensions/Template.md"
-    title: "glTF extension template"
-  - id: "citation-2"
-    resource: "https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md"
-    title: "glTF extension registry guidance"
-  - id: "citation-3"
-    resource: "https://github.com/KhronosGroup/glTF/blob/main/extensions/Prefixes.md"
-    title: "Registered glTF vendor prefixes"
-  - id: "citation-4-1"
-    resource: "https://github.com/KhronosGroup/glTF/issues/2497"
-    title: "BEVY"
-  - id: "citation-4-2"
-    resource: "https://github.com/KhronosGroup/glTF/issues/2344"
-    title: "KITTYCAD"
-  - id: "citation-4-3"
-    resource: "https://github.com/KhronosGroup/glTF/issues/2398"
-    title: "MANYFOLD"
-  - id: "citation-4-4"
-    resource: "https://github.com/KhronosGroup/glTF/issues/2581"
-    title: "PYTHA"
-  - id: "citation-5-1"
-    resource: "https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/GODOT_single_root"
-    title: "GODOT_single_root"
-  - id: "citation-5-2"
-    resource: "https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/CESIUM_primitive_outline"
-    title: "CESIUM_primitive_outline"
-  - id: "citation-5-3"
-    resource: "https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod"
-    title: "MSFT_lod"
+  - id: 'citation-1'
+    resource: 'https://github.com/KhronosGroup/glTF/blob/main/extensions/Template.md'
+    title: 'glTF extension template'
+  - id: 'citation-2'
+    resource: 'https://github.com/KhronosGroup/glTF/blob/main/extensions/README.md'
+    title: 'glTF extension registry guidance'
+  - id: 'citation-3'
+    resource: 'https://github.com/KhronosGroup/glTF/blob/main/extensions/Prefixes.md'
+    title: 'Registered glTF vendor prefixes'
+  - id: 'citation-4-1'
+    resource: 'https://github.com/KhronosGroup/glTF/issues/2497'
+    title: 'BEVY'
+  - id: 'citation-4-2'
+    resource: 'https://github.com/KhronosGroup/glTF/issues/2344'
+    title: 'KITTYCAD'
+  - id: 'citation-4-3'
+    resource: 'https://github.com/KhronosGroup/glTF/issues/2398'
+    title: 'MANYFOLD'
+  - id: 'citation-4-4'
+    resource: 'https://github.com/KhronosGroup/glTF/issues/2581'
+    title: 'PYTHA'
+  - id: 'citation-5-1'
+    resource: 'https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/GODOT_single_root'
+    title: 'GODOT_single_root'
+  - id: 'citation-5-2'
+    resource: 'https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/CESIUM_primitive_outline'
+    title: 'CESIUM_primitive_outline'
+  - id: 'citation-5-3'
+    resource: 'https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod'
+    title: 'MSFT_lod'
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: 'openai-codex/gpt-5'
+  at: '2026-07-25T01:24:00Z'
 ---
 
 # glTF vendor-prefix request and extension submission set
@@ -86,12 +86,12 @@ This request contains the project, URL, contact, and intended namespace use requ
 
 These are no longer illustrative placeholders. They encode the current V0 data contracts and are maintained with the implementation:
 
-| Extension | Specification and schema |
-| --- | --- |
-| `PMNDRS_font` | [Core font](extensions/PMNDRS_font/README.md) |
-| `PMNDRS_font_bitmap` | [Bitmap](extensions/PMNDRS_font_bitmap/README.md) |
+| Extension                    | Specification and schema                                          |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `PMNDRS_font`                | [Core font](extensions/PMNDRS_font/README.md)                     |
+| `PMNDRS_font_bitmap`         | [Bitmap](extensions/PMNDRS_font_bitmap/README.md)                 |
 | `PMNDRS_font_distance_field` | [Distance field](extensions/PMNDRS_font_distance_field/README.md) |
-| `PMNDRS_font_slug` | [Slug](extensions/PMNDRS_font_slug/README.md) |
+| `PMNDRS_font_slug`           | [Slug](extensions/PMNDRS_font_slug/README.md)                     |
 
 `PMNDRS_font` owns one static shaping face, metrics, provenance, and raster directory. The companion extensions own generated bitmap strikes, MTSDF RGBA8 atlases for the MSDF raster, or RGBA16F Slug curves with exact compact band acceleration.
 

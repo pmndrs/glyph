@@ -43,13 +43,8 @@ core_maths = "0.1.1"
 pmndrs-text-mtsdf-core = { path = "../mtsdf-core", default-features = false }
 pmndrs-text-mtsdf-fontations = { path = "../mtsdf-fontations", default-features = false, optional = true }
 pmndrs-text-raster-artifact = { path = "../raster-artifact", default-features = false, optional = true }
-serde = { version = "1.0.229", default-features = false, features = [
-  "alloc",
-  "derive",
-], optional = true }
-serde_json = { version = "1.0.145", default-features = false, features = [
-  "alloc",
-], optional = true }
+serde = { version = "1.0.229", default-features = false, features = ["alloc", "derive"], optional = true }
+serde_json = { version = "1.0.145", default-features = false, features = ["alloc"], optional = true }
 skrifa = { version = "=0.45.1", default-features = false, features = ["libm"], optional = true }
 thiserror = { version = "2.0.19", default-features = false, optional = true }
 

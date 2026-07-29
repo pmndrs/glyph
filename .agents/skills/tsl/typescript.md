@@ -24,9 +24,9 @@ pnpm --filter @pmndrs/text typecheck
 ## Imports
 
 ```ts
-import * as THREE from 'three/webgpu'
-import type { Node, UniformNode } from 'three/webgpu'
-import { Fn, float, uniform, vec3 } from 'three/tsl'
+import * as THREE from 'three/webgpu';
+import type { Node, UniformNode } from 'three/webgpu';
+import { Fn, float, uniform, vec3 } from 'three/tsl';
 ```
 
 Three 0.185.1 publicly re-exports `Node` and `UniformNode` from `three/webgpu`. Keep project code on the public `three/webgpu` and `three/tsl` barrels; do not add `customConditions` or a source-path import merely because an older workaround recommended it.
@@ -36,10 +36,10 @@ Use `import type` for type-only imports. A source-path import requires exact-ver
 ## Preserve node types
 
 ```ts
-type FloatInput = number | Node<'float'>
+type FloatInput = number | Node<'float'>;
 
 function asFloat(value: FloatInput): Node<'float'> {
-  return typeof value === 'number' ? float(value) : value
+  return typeof value === 'number' ? float(value) : value;
 }
 ```
 
@@ -48,9 +48,9 @@ Avoid bare `Node`, `any`, or double casts: they erase useful operator and swizzl
 For arithmetic on the current pinned pair, import the public operator and call it directly:
 
 ```ts
-import { add, mul } from 'three/tsl'
+import { add, mul } from 'three/tsl';
 
-const x: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x))
+const x: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x));
 ```
 
 Avoid assigning `add` or `mul` to a narrower custom function type when an ordinary direct call communicates the same intent. If a future pinned declaration rejects a runtime-supported operation, a private compatibility module can isolate the smallest exact signature while a type fixture owns the discrepancy.

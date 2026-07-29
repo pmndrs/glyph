@@ -3,4 +3,4 @@ export {
   createMtsdfBakerFromInstance,
   msdfBakerFromCore,
   readMtsdfBakerAbi,
-} from '@pmndrs/text/bakers/msdf'
+} from '@pmndrs/text/bakers/msdf';

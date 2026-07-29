@@ -5,7 +5,7 @@ description: Tracks unresolved decisions, blockers, and prototype questions for 
 tags: [questions, governance, blockers]
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T18:00:06Z"
+  at: '2026-07-25T18:00:06Z'
 ---
 
 # Open questions

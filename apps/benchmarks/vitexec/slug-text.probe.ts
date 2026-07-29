@@ -1,11 +1,11 @@
-const executionPath = '/src/benchmark/execution.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const executionPath = '/src/benchmark/execution.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
-])
-const environment = await environmentResource()
-if (!environment.webgpu) throw new Error('Slug WebGPU probe requires an available WebGPU adapter')
+]);
+const environment = await environmentResource();
+if (!environment.webgpu) throw new Error('Slug WebGPU probe requires an available WebGPU adapter');
 
 const result = await runRegisteredBenchmark({
   targetId: 'slug-text-webgpu',
@@ -13,9 +13,9 @@ const result = await runRegisteredBenchmark({
   input: {},
   controls: { dpr: 1, samples: 2, warmup: 1 },
   environment,
-})
+});
 if (!result.validation.includes('deterministic Slug')) {
-  throw new Error('Slug WebGPU probe did not publish its rendering validation')
+  throw new Error('Slug WebGPU probe did not publish its rendering validation');
 }
 for (const measurement of result.measurements) {
   if (
@@ -30,7 +30,7 @@ for (const measurement of result.measurements) {
         measurement.metrics.slugHeaderGpuBytes +
         measurement.metrics.slugReferenceGpuBytes
   ) {
-    throw new Error('Slug WebGPU probe did not execute the exact GPU backend and pixel contract')
+    throw new Error('Slug WebGPU probe did not execute the exact GPU backend and pixel contract');
   }
 }
 const conformance = await runRegisteredBenchmark({
@@ -39,9 +39,9 @@ const conformance = await runRegisteredBenchmark({
   input: { fontFixture: 'inter' },
   controls: { dpr: 1, samples: 2, warmup: 1 },
   environment,
-})
+});
 if (!conformance.validation.includes('CPU Slug comparison')) {
-  throw new Error('Slug WebGPU probe did not publish its sampling validation')
+  throw new Error('Slug WebGPU probe did not publish its sampling validation');
 }
 for (const measurement of conformance.measurements) {
   if (
@@ -52,7 +52,7 @@ for (const measurement of conformance.measurements) {
     measurement.metrics.maximumError > 128 ||
     measurement.metrics.errorPixels > measurement.metrics.pixelCount * 0.03
   ) {
-    throw new Error('Slug WebGPU probe exceeded its analytic CPU comparison envelope')
+    throw new Error('Slug WebGPU probe exceeded its analytic CPU comparison envelope');
   }
 }
 console.log(
@@ -66,6 +66,6 @@ console.log(
     conformanceMetrics: conformance.measurements[0]?.metrics,
     environment,
   }),
-)
+);
 
-export {}
+export {};

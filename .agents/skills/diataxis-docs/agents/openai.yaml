@@ -1,4 +1,4 @@
 interface:
-  display_name: "Diátaxis Documentation"
-  short_description: "Design and review task-focused documentation"
-  default_prompt: "Use $diataxis-docs to classify and improve this documentation."
+  display_name: 'Diátaxis Documentation'
+  short_description: 'Design and review task-focused documentation'
+  default_prompt: 'Use $diataxis-docs to classify and improve this documentation.'

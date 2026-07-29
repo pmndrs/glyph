@@ -1,26 +1,20 @@
-import {
-  useEffect,
-  useEffectEvent,
-  useRef,
-  type PointerEvent as ReactPointerEvent,
-  type RefObject,
-} from 'react'
+import { useEffect, useEffectEvent, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 
 export interface CanvasViewController {
-  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void
-  resetView(): void
-  zoomBy?(factor: number): void
+  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;
+  resetView(): void;
+  zoomBy?(factor: number): void;
 }
 
 interface PointerPosition {
-  readonly x: number
-  readonly y: number
+  readonly x: number;
+  readonly y: number;
 }
 
 interface GestureSnapshot {
-  readonly centerX: number
-  readonly centerY: number
-  readonly distance?: number
+  readonly centerX: number;
+  readonly centerY: number;
+  readonly distance?: number;
 }
 
 export function InteractiveCanvas({
@@ -30,111 +24,106 @@ export function InteractiveCanvas({
   controllerRef,
   zoom = false,
 }: {
-  readonly label: string
-  readonly canvasRef: RefObject<HTMLCanvasElement | null>
-  readonly className?: string
-  readonly controllerRef: RefObject<CanvasViewController | undefined>
-  readonly zoom?: boolean
+  readonly label: string;
+  readonly canvasRef: RefObject<HTMLCanvasElement | null>;
+  readonly className?: string;
+  readonly controllerRef: RefObject<CanvasViewController | undefined>;
+  readonly zoom?: boolean;
 }) {
-  const pointers = useRef(new Map<number, PointerPosition>())
-  const gesture = useRef<GestureSnapshot | undefined>(undefined)
-  const panX = useRef(0)
-  const panY = useRef(0)
-  const zoomScale = useRef(1)
+  const pointers = useRef(new Map<number, PointerPosition>());
+  const gesture = useRef<GestureSnapshot | undefined>(undefined);
+  const panX = useRef(0);
+  const panY = useRef(0);
+  const zoomScale = useRef(1);
 
   function publishView(canvas: HTMLCanvasElement): void {
-    canvas.dataset.panX = String(panX.current)
-    canvas.dataset.panY = String(panY.current)
-    canvas.dataset.zoom = String(zoomScale.current)
+    canvas.dataset.panX = String(panX.current);
+    canvas.dataset.panY = String(panY.current);
+    canvas.dataset.zoom = String(zoomScale.current);
   }
 
   function pan(canvas: HTMLCanvasElement, deltaX: number, deltaY: number): void {
-    const applied = controllerRef.current?.panBy(deltaX, deltaY)
-    panX.current += applied?.deltaX ?? deltaX
-    panY.current += applied?.deltaY ?? deltaY
-    publishView(canvas)
+    const applied = controllerRef.current?.panBy(deltaX, deltaY);
+    panX.current += applied?.deltaX ?? deltaX;
+    panY.current += applied?.deltaY ?? deltaY;
+    publishView(canvas);
   }
 
   function applyZoom(canvas: HTMLCanvasElement, factor: number): void {
-    zoomScale.current *= factor
-    controllerRef.current?.zoomBy?.(factor)
-    publishView(canvas)
+    zoomScale.current *= factor;
+    controllerRef.current?.zoomBy?.(factor);
+    publishView(canvas);
   }
 
   const applyWheelZoom = useEffectEvent((canvas: HTMLCanvasElement, factor: number): void => {
-    applyZoom(canvas, factor)
-  })
+    applyZoom(canvas, factor);
+  });
 
   function reset(canvas: HTMLCanvasElement): void {
-    panX.current = 0
-    panY.current = 0
-    zoomScale.current = 1
-    controllerRef.current?.resetView()
-    publishView(canvas)
+    panX.current = 0;
+    panY.current = 0;
+    zoomScale.current = 1;
+    controllerRef.current?.resetView();
+    publishView(canvas);
   }
 
   function updateGesture(): GestureSnapshot | undefined {
-    const positions = [...pointers.current.values()]
-    if (positions.length === 0) return undefined
+    const positions = [...pointers.current.values()];
+    if (positions.length === 0) return undefined;
     if (positions.length === 1) {
-      const position = positions[0]!
-      return { centerX: position.x, centerY: position.y }
+      const position = positions[0]!;
+      return { centerX: position.x, centerY: position.y };
     }
-    const first = positions[0]!
-    const second = positions[1]!
+    const first = positions[0]!;
+    const second = positions[1]!;
     return {
       centerX: (first.x + second.x) / 2,
       centerY: (first.y + second.y) / 2,
       distance: Math.hypot(second.x - first.x, second.y - first.y),
-    }
+    };
   }
 
   function beginPointer(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (event.pointerType !== 'touch' && event.button !== 0) return
-    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId)
-    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-    gesture.current = updateGesture()
+    if (event.pointerType !== 'touch' && event.button !== 0) return;
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    gesture.current = updateGesture();
   }
 
   function movePointer(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (!pointers.current.has(event.pointerId)) return
-    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-    const previous = gesture.current
-    const next = updateGesture()
-    gesture.current = next
-    if (previous === undefined || next === undefined) return
-    const touchMayPan = event.pointerType !== 'touch' || pointers.current.size >= 2
+    if (!pointers.current.has(event.pointerId)) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const previous = gesture.current;
+    const next = updateGesture();
+    gesture.current = next;
+    if (previous === undefined || next === undefined) return;
+    const touchMayPan = event.pointerType !== 'touch' || pointers.current.size >= 2;
     if (touchMayPan) {
-      pan(event.currentTarget, next.centerX - previous.centerX, next.centerY - previous.centerY)
+      pan(event.currentTarget, next.centerX - previous.centerX, next.centerY - previous.centerY);
     }
-    if (
-      zoom &&
-      previous.distance !== undefined &&
-      next.distance !== undefined &&
-      previous.distance > 0
-    ) {
-      applyZoom(event.currentTarget, next.distance / previous.distance)
+    if (zoom && previous.distance !== undefined && next.distance !== undefined && previous.distance > 0) {
+      applyZoom(event.currentTarget, next.distance / previous.distance);
     }
   }
 
   function endPointer(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (!pointers.current.delete(event.pointerId)) return
-    gesture.current = updateGesture()
+    if (!pointers.current.delete(event.pointerId)) return;
+    gesture.current = updateGesture();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas === null || !zoom) return
+    const canvas = canvasRef.current;
+    if (canvas === null || !zoom) return;
     const zoomWheel = (event: WheelEvent): void => {
-      event.preventDefault()
-      applyWheelZoom(canvas, Math.exp(-event.deltaY * 0.0015))
-    }
-    canvas.addEventListener('wheel', zoomWheel, { passive: false })
-    return () => canvas.removeEventListener('wheel', zoomWheel)
-  }, [canvasRef, controllerRef, zoom])
+      event.preventDefault();
+      applyWheelZoom(canvas, Math.exp(-event.deltaY * 0.0015));
+    };
+    canvas.addEventListener('wheel', zoomWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', zoomWheel);
+  }, [canvasRef, controllerRef, zoom]);
 
   return (
     <canvas
@@ -154,5 +143,5 @@ export function InteractiveCanvas({
       onPointerMove={movePointer}
       onPointerUp={endPointer}
     />
-  )
+  );
 }

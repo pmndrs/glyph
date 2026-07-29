@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
 import {
   comparisonWorkloadUpdateKind,
@@ -10,7 +10,7 @@ import {
   ladderCssSizes,
   paintWordHue,
   type ComparisonWorkloadConfiguration,
-} from './comparison-workload'
+} from './comparison-workload';
 
 const baseConfiguration: ComparisonWorkloadConfiguration = {
   amount: 50,
@@ -25,7 +25,7 @@ const baseConfiguration: ComparisonWorkloadConfiguration = {
   showGrid: true,
   showLayoutBounds: true,
   workload: 'paint-effects',
-}
+};
 
 describe('comparison workload updates', () => {
   it('retains the scene for animation and paint controls', () => {
@@ -39,83 +39,73 @@ describe('comparison workload updates', () => {
       { showGrid: false },
       { showLayoutBounds: false },
     ] satisfies readonly Partial<ComparisonWorkloadConfiguration>[]) {
-      expect(
-        comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, ...update }),
-      ).toBe('retained')
+      expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, ...update })).toBe('retained');
     }
-  })
+  });
 
   it('rebuilds only for dimensions that change text layout', () => {
-    expect(
-      comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, fontSize: 32 }),
-    ).toBe('rebuild')
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, fontSize: 32 })).toBe('rebuild');
     expect(
       comparisonWorkloadUpdateKind(baseConfiguration, {
         ...baseConfiguration,
         layoutWidthRatio: 0.6,
       }),
-    ).toBe('rebuild')
-    expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('rebuild')
-  })
+    ).toBe('rebuild');
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('rebuild');
+  });
 
   it('rebuilds paragraph stress when its text volume changes', () => {
     const paragraphStress = {
       ...baseConfiguration,
       workload: 'paragraph-stress',
-    } satisfies ComparisonWorkloadConfiguration
+    } satisfies ComparisonWorkloadConfiguration;
 
-    expect(comparisonWorkloadUpdateKind(paragraphStress, { ...paragraphStress, amount: 80 })).toBe(
-      'rebuild',
-    )
-    expect(comparisonWorkloadUpdateKind(paragraphStress, paragraphStress)).toBe('retained')
-  })
+    expect(comparisonWorkloadUpdateKind(paragraphStress, { ...paragraphStress, amount: 80 })).toBe('rebuild');
+    expect(comparisonWorkloadUpdateKind(paragraphStress, paragraphStress)).toBe('retained');
+  });
 
   it('keeps icon-size changes on the retained tile path', () => {
     const iconGrid = {
       ...baseConfiguration,
       workload: 'icon-grid',
-    } satisfies ComparisonWorkloadConfiguration
+    } satisfies ComparisonWorkloadConfiguration;
 
-    expect(comparisonWorkloadUpdateKind(iconGrid, { ...iconGrid, fontSize: 1_024 })).toBe(
-      'retained',
-    )
-  })
-})
+    expect(comparisonWorkloadUpdateKind(iconGrid, { ...iconGrid, fontSize: 1_024 })).toBe('retained');
+  });
+});
 
 describe('dynamic layout animation', () => {
   it('starts with the same phase-offset widths used by live frames', () => {
     const configuration = {
       ...baseConfiguration,
       workload: 'dynamic-layout',
-    } satisfies ComparisonWorkloadConfiguration
+    } satisfies ComparisonWorkloadConfiguration;
 
-    const widths = dynamicLayoutWidths(configuration, 1_000, 0)
-    const left = widths[0]!
-    const center = widths[1]!
-    const right = widths[2]!
+    const widths = dynamicLayoutWidths(configuration, 1_000, 0);
+    const left = widths[0]!;
+    const center = widths[1]!;
+    const right = widths[2]!;
 
-    expect(left).toBeCloseTo(576)
-    expect(center).toBeGreaterThan(left)
-    expect(right).toBeLessThan(left)
-  })
-})
+    expect(left).toBeCloseTo(576);
+    expect(center).toBeGreaterThan(left);
+    expect(right).toBeLessThan(left);
+  });
+});
 
 describe('text ladder scale selection', () => {
   it('fills a tall viewport with the complete ordered scale', () => {
-    expect(ladderCssSizes(1_700)).toEqual([
-      8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512,
-    ])
-  })
+    expect(ladderCssSizes(1_700)).toEqual([8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512]);
+  });
 
   it('keeps the complete CSS-pixel range on a small viewport', () => {
-    expect(ladderCssSizes(360).at(0)).toBe(8)
-    expect(ladderCssSizes(360).at(-1)).toBe(512)
-  })
+    expect(ladderCssSizes(360).at(0)).toBe(8);
+    expect(ladderCssSizes(360).at(-1)).toBe(512);
+  });
 
   it('rejects invalid viewport inputs', () => {
-    expect(() => ladderCssSizes(0)).toThrow('text ladder viewport height must be positive')
-  })
-})
+    expect(() => ladderCssSizes(0)).toThrow('text ladder viewport height must be positive');
+  });
+});
 
 describe('icon grid layout', () => {
   it('publishes exact visible index/content assignments in catalog order', () => {
@@ -130,8 +120,8 @@ describe('icon grid layout', () => {
         { index: 7, content: '\uf007\nuser' },
         { index: 41, content: '\uf002\nsearch' },
       ]),
-    )
-  })
+    );
+  });
 
   it('rejects duplicate visible catalog assignments', () => {
     expect(() =>
@@ -139,116 +129,101 @@ describe('icon grid layout', () => {
         { node: { visible: true }, sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
         { node: { visible: true }, sourceText: '\uf003\nenvelope', virtualIconIndex: 41 },
       ]),
-    ).toThrow('assigned catalog index 41 twice')
-  })
+    ).toThrow('assigned catalog index 41 twice');
+  });
 
   it('places every item in a bounded row-major grid', () => {
-    const layout = iconGridLayout(1_402, 48, 720)
-    expect(layout.columns).toBe(38)
-    expect(layout.rows).toBe(37)
-    expect(layout.width).toBe(
-      layout.inset * 2 + layout.columns * layout.cellWidth + (layout.columns - 1) * layout.gap,
-    )
-    expect(layout.height).toBe(
-      layout.inset * 2 + layout.rows * layout.cellHeight + (layout.rows - 1) * layout.gap,
-    )
-  })
+    const layout = iconGridLayout(1_402, 48, 720);
+    expect(layout.columns).toBe(38);
+    expect(layout.rows).toBe(37);
+    expect(layout.width).toBe(layout.inset * 2 + layout.columns * layout.cellWidth + (layout.columns - 1) * layout.gap);
+    expect(layout.height).toBe(layout.inset * 2 + layout.rows * layout.cellHeight + (layout.rows - 1) * layout.gap);
+  });
 
   it('keeps a stable near-square catalog while scale changes cell dimensions', () => {
-    const large = iconGridLayout(1_402, 1_024, 1_920)
-    const small = iconGridLayout(1_402, 8, 1_920)
-    expect(large.columns).toBe(small.columns)
-    expect(large.rows).toBe(small.rows)
-    expect(small.cellWidth).toBe(112)
-    expect(large.cellWidth).toBe(1_024 * 1.25 + 32)
-    expect(small.cellHeight).toBe((8 + 11) * 1.25 + 8)
-    expect(large.cellHeight).toBe((1_024 + 11) * 1.25 + 8)
-    expect(large.cellHeight - small.cellHeight).toBe((1_024 - 8) * 1.25)
-    expect(large.cellWidth + large.gap).toBeGreaterThan(1_024 * 1.25)
-    expect(large.cellHeight + large.gap).toBeGreaterThan((1_024 + 11) * 1.25)
-  })
+    const large = iconGridLayout(1_402, 1_024, 1_920);
+    const small = iconGridLayout(1_402, 8, 1_920);
+    expect(large.columns).toBe(small.columns);
+    expect(large.rows).toBe(small.rows);
+    expect(small.cellWidth).toBe(112);
+    expect(large.cellWidth).toBe(1_024 * 1.25 + 32);
+    expect(small.cellHeight).toBe((8 + 11) * 1.25 + 8);
+    expect(large.cellHeight).toBe((1_024 + 11) * 1.25 + 8);
+    expect(large.cellHeight - small.cellHeight).toBe((1_024 - 8) * 1.25);
+    expect(large.cellWidth + large.gap).toBeGreaterThan(1_024 * 1.25);
+    expect(large.cellHeight + large.gap).toBeGreaterThan((1_024 + 11) * 1.25);
+  });
 
   it('keeps the 1024 px icon pool bounded with conservative two-axis spacing', () => {
-    const window = iconGridVirtualWindow(1_402, 1_024, 1_920, 1_080, 0, 0)
-    expect(window.indices).toHaveLength(window.poolCapacity)
-    expect(window.poolCapacity).toBeLessThan(1_402)
-    expect(window.layout.cellWidth).toBeGreaterThanOrEqual(1_024 * 1.25 + 32)
-    expect(window.layout.cellHeight).toBeGreaterThanOrEqual((1_024 + 11) * 1.25 + 8)
-  })
+    const window = iconGridVirtualWindow(1_402, 1_024, 1_920, 1_080, 0, 0);
+    expect(window.indices).toHaveLength(window.poolCapacity);
+    expect(window.poolCapacity).toBeLessThan(1_402);
+    expect(window.layout.cellWidth).toBeGreaterThanOrEqual(1_024 * 1.25 + 32);
+    expect(window.layout.cellHeight).toBeGreaterThanOrEqual((1_024 + 11) * 1.25 + 8);
+  });
 
   it('rejects invalid item, size, and viewport inputs', () => {
-    expect(() => iconGridLayout(0, 48, 720)).toThrow('item count')
-    expect(() => iconGridLayout(12, 0, 720)).toThrow('icon size')
-    expect(() => iconGridLayout(12, 48, 0)).toThrow('viewport width')
-  })
+    expect(() => iconGridLayout(0, 48, 720)).toThrow('item count');
+    expect(() => iconGridLayout(12, 0, 720)).toThrow('icon size');
+    expect(() => iconGridLayout(12, 48, 0)).toThrow('viewport width');
+  });
 
   it('keeps a bounded overscanned pool while reaching the complete catalog', () => {
-    const top = iconGridVirtualWindow(1_402, 48, 720, 360, 0, 0)
-    expect(top.firstVisibleIndex).toBe(0)
-    expect(top.indices).toHaveLength(top.poolCapacity)
-    expect(top.poolCapacity).toBeLessThan(1_402)
-    expect(new Set(top.indices).size).toBe(top.indices.length)
+    const top = iconGridVirtualWindow(1_402, 48, 720, 360, 0, 0);
+    expect(top.firstVisibleIndex).toBe(0);
+    expect(top.indices).toHaveLength(top.poolCapacity);
+    expect(top.poolCapacity).toBeLessThan(1_402);
+    expect(new Set(top.indices).size).toBe(top.indices.length);
 
-    const bottom = iconGridVirtualWindow(
-      1_402,
-      48,
-      720,
-      360,
-      Number.MAX_SAFE_INTEGER,
-      Number.MAX_SAFE_INTEGER,
-    )
-    expect(bottom.lastVisibleIndex).toBe(1_401)
-    expect(bottom.indices.at(-1)).toBe(1_401)
-    expect(bottom.indices.every((index) => index >= 0 && index < 1_402)).toBe(true)
-  })
+    const bottom = iconGridVirtualWindow(1_402, 48, 720, 360, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+    expect(bottom.lastVisibleIndex).toBe(1_401);
+    expect(bottom.indices.at(-1)).toBe(1_401);
+    expect(bottom.indices.every((index) => index >= 0 && index < 1_402)).toBe(true);
+  });
 
   it('recomputes columns and pool capacity after viewport resize', () => {
-    const narrow = iconGridVirtualWindow(1_402, 48, 360, 640, 500, 500)
-    const wide = iconGridVirtualWindow(1_402, 48, 1_200, 360, 500, 500)
-    expect(narrow.layout.columns).toBe(wide.layout.columns)
-    expect(narrow.layout.rows).toBe(wide.layout.rows)
-    expect(narrow.indices).toHaveLength(narrow.poolCapacity)
-    expect(wide.indices).toHaveLength(wide.poolCapacity)
-    expect(narrow.poolCapacity).not.toBe(wide.poolCapacity)
-  })
+    const narrow = iconGridVirtualWindow(1_402, 48, 360, 640, 500, 500);
+    const wide = iconGridVirtualWindow(1_402, 48, 1_200, 360, 500, 500);
+    expect(narrow.layout.columns).toBe(wide.layout.columns);
+    expect(narrow.layout.rows).toBe(wide.layout.rows);
+    expect(narrow.indices).toHaveLength(narrow.poolCapacity);
+    expect(wide.indices).toHaveLength(wide.poolCapacity);
+    expect(narrow.poolCapacity).not.toBe(wide.poolCapacity);
+  });
 
   it('keeps the virtual pool capacity stable across sub-cell viewport resizes', () => {
-    const before = iconGridVirtualWindow(1_402, 48, 720, 640, 500, 500)
-    const after = iconGridVirtualWindow(1_402, 48, 740, 650, 500, 500)
-    expect(after.poolCapacity).toBe(before.poolCapacity)
-    expect(after.indices).toHaveLength(before.poolCapacity)
-    expect(iconGridViewportUpdateKind(before.poolCapacity, after)).toBe('retained')
-  })
+    const before = iconGridVirtualWindow(1_402, 48, 720, 640, 500, 500);
+    const after = iconGridVirtualWindow(1_402, 48, 740, 650, 500, 500);
+    expect(after.poolCapacity).toBe(before.poolCapacity);
+    expect(after.indices).toHaveLength(before.poolCapacity);
+    expect(iconGridViewportUpdateKind(before.poolCapacity, after)).toBe('retained');
+  });
 
   it('rebuilds the virtual pool only when resize changes its capacity', () => {
-    const before = iconGridVirtualWindow(1_402, 48, 360, 640, 500, 500)
-    const after = iconGridVirtualWindow(1_402, 48, 1_200, 360, 500, 500)
-    expect(iconGridViewportUpdateKind(before.poolCapacity, after)).toBe('rebuild')
-    expect(() => iconGridViewportUpdateKind(-1, after)).toThrow('pool capacity')
-  })
+    const before = iconGridVirtualWindow(1_402, 48, 360, 640, 500, 500);
+    const after = iconGridVirtualWindow(1_402, 48, 1_200, 360, 500, 500);
+    expect(iconGridViewportUpdateKind(before.poolCapacity, after)).toBe('rebuild');
+    expect(() => iconGridViewportUpdateKind(-1, after)).toThrow('pool capacity');
+  });
 
   it('rejects an invalid virtual viewport or scroll position', () => {
-    expect(() => iconGridVirtualWindow(1_402, 48, 720, 0, 0, 0)).toThrow('viewport height')
-    expect(() => iconGridVirtualWindow(1_402, 48, 720, 360, Number.NaN, 0)).toThrow(
-      'scroll positions',
-    )
-  })
-})
+    expect(() => iconGridVirtualWindow(1_402, 48, 720, 0, 0, 0)).toThrow('viewport height');
+    expect(() => iconGridVirtualWindow(1_402, 48, 720, 360, Number.NaN, 0)).toThrow('scroll positions');
+  });
+});
 
 describe('paint word hue sequence', () => {
   it('gives adjacent words equal positive offsets around one circular sequence', () => {
-    const hues = Array.from({ length: 8 }, (_, index) => paintWordHue(index, 8, 0, 50))
-    const unwrapped = hues.map((hue, index) => hue + (index >= 7 ? 1 : 0))
-    const offsets = unwrapped.slice(1).map((hue, index) => hue - unwrapped[index]!)
-    expect(offsets.every((offset) => Math.abs(offset - offsets[0]!) < 1e-12)).toBe(true)
-    expect(offsets[0]).toBeGreaterThan(0)
-  })
+    const hues = Array.from({ length: 8 }, (_, index) => paintWordHue(index, 8, 0, 50));
+    const unwrapped = hues.map((hue, index) => hue + (index >= 7 ? 1 : 0));
+    const offsets = unwrapped.slice(1).map((hue, index) => hue - unwrapped[index]!);
+    expect(offsets.every((offset) => Math.abs(offset - offsets[0]!) < 1e-12)).toBe(true);
+    expect(offsets[0]).toBeGreaterThan(0);
+  });
 
   it('moves every word by the same shared phase', () => {
-    const before = Array.from({ length: 5 }, (_, index) => paintWordHue(index, 5, 0.1, 25))
-    const after = Array.from({ length: 5 }, (_, index) => paintWordHue(index, 5, 0.2, 25))
-    expect(
-      after.every((hue, index) => Math.abs(((hue - before[index]! + 1) % 1) - 0.1) < 1e-12),
-    ).toBe(true)
-  })
-})
+    const before = Array.from({ length: 5 }, (_, index) => paintWordHue(index, 5, 0.1, 25));
+    const after = Array.from({ length: 5 }, (_, index) => paintWordHue(index, 5, 0.2, 25));
+    expect(after.every((hue, index) => Math.abs(((hue - before[index]! + 1) % 1) - 0.1) < 1e-12)).toBe(true);
+  });
+});

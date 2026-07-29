@@ -1,27 +1,27 @@
-import assert from 'node:assert/strict'
-import test from 'node:test'
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { Text, lazyRaster, useFont } from '@pmndrs/text/react'
+import { Text, lazyRaster, useFont } from '@pmndrs/text/react';
 
 test('the React subpath exposes its React 19 runtime through native ESM', async () => {
-  assert.equal(typeof Text, 'function')
-  assert.equal(typeof useFont, 'function')
-  assert.equal(typeof useFont.preload, 'function')
-  assert.equal(typeof useFont.clear, 'function')
-  assert.equal(typeof lazyRaster, 'function')
+  assert.equal(typeof Text, 'function');
+  assert.equal(typeof useFont, 'function');
+  assert.equal(typeof useFont.preload, 'function');
+  assert.equal(typeof useFont.clear, 'function');
+  assert.equal(typeof lazyRaster, 'function');
 
-  let publish
+  let publish;
   const imported = new Promise((resolve) => {
-    publish = resolve
-  })
-  const deferred = lazyRaster(() => imported)
-  let suspended
+    publish = resolve;
+  });
+  const deferred = lazyRaster(() => imported);
+  let suspended;
   try {
-    void deferred.kind
+    void deferred.kind;
   } catch (error) {
-    suspended = error
+    suspended = error;
   }
-  assert.ok(suspended instanceof Promise)
+  assert.ok(suspended instanceof Promise);
 
   publish({
     kind: 'test',
@@ -31,11 +31,11 @@ test('the React subpath exposes its React 19 runtime through native ESM', async 
     decode: async () => null,
     prepare: async () => undefined,
     buildBatches: () => {
-      throw new Error('not used')
+      throw new Error('not used');
     },
     updatePaint: () => undefined,
     dispose: () => undefined,
-  })
-  await suspended
-  assert.equal(deferred.kind, 'test')
-})
+  });
+  await suspended;
+  assert.equal(deferred.kind, 'test');
+});

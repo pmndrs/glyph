@@ -45,13 +45,13 @@ Retain the shader text with the experiment when a decision depends on its loweri
 
 Choose evidence appropriate to the graph:
 
-| Graph | Preferred evidence |
-| --- | --- |
-| pure node math | exact or tolerance-reviewed numeric oracle |
-| compute buffer | deterministic buffer values after explicit completion/readback |
-| material | stable pixel samples plus a reviewed reference image |
-| post-processing | stable intermediate/final pixels and negative controls |
-| migration | old/new parity over the same deterministic scene |
+| Graph           | Preferred evidence                                             |
+| --------------- | -------------------------------------------------------------- |
+| pure node math  | exact or tolerance-reviewed numeric oracle                     |
+| compute buffer  | deterministic buffer values after explicit completion/readback |
+| material        | stable pixel samples plus a reviewed reference image           |
+| post-processing | stable intermediate/final pixels and negative controls         |
+| migration       | old/new parity over the same deterministic scene               |
 
 A screenshot alone is useful for review but weak as an automated oracle. Pair it with deterministic assertions. Make a negative control fail to prove the test observes the changed behavior.
 

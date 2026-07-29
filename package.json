@@ -2,7 +2,6 @@
   "name": "pmndrs-text-workspace",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.15.1",
   "scripts": {
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm docs:check",
@@ -16,5 +15,6 @@
   },
   "devDependencies": {
     "typescript": "7.0.2"
-  }
+  },
+  "packageManager": "pnpm@11.15.1"
 }

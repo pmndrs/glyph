@@ -1,14 +1,14 @@
-import { spawn } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const appRoot = fileURLToPath(new URL('..', import.meta.url))
-const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
-const textRoot = fileURLToPath(new URL('../../../packages/text', import.meta.url))
-const vitexec = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url))
+const appRoot = fileURLToPath(new URL('..', import.meta.url));
+const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url));
+const textRoot = fileURLToPath(new URL('../../../packages/text', import.meta.url));
+const vitexec = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url));
 
-await run('pnpm', ['--filter', '@pmndrs/text', 'measure:mtsdf-simd', '--retain-artifacts'])
+await run('pnpm', ['--filter', '@pmndrs/text', 'measure:mtsdf-simd', '--retain-artifacts']);
 
-const browserRoot = `/@fs${textRoot}`
+const browserRoot = `/@fs${textRoot}`;
 const snippet = `
 const root = ${JSON.stringify(browserRoot)}
 const { createMtsdfGenerator } = await import(root + "/dist/internal/mtsdf-generator.js")
@@ -47,17 +47,17 @@ for (let index = 0; index < ids.length; index += 1) {
     samples: warm,
   }))
 }
-`
+`;
 
-await run(vitexec, ['--gpu', '--timeout', '120', snippet], appRoot)
+await run(vitexec, ['--gpu', '--timeout', '120', snippet], appRoot);
 
 function run(command: string, args: readonly string[], cwd = workspaceRoot): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: 'inherit' })
-    child.once('error', reject)
+    const child = spawn(command, args, { cwd, stdio: 'inherit' });
+    child.once('error', reject);
     child.once('exit', (code, signal) => {
-      if (code === 0) resolve()
-      else reject(new Error(`${command} exited with ${String(code ?? signal)}`))
-    })
-  })
+      if (code === 0) resolve();
+      else reject(new Error(`${command} exited with ${String(code ?? signal)}`));
+    });
+  });
 }

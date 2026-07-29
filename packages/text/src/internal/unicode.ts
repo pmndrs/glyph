@@ -1,5 +1,5 @@
-import { Rules } from '@cto.af/linebreak'
-import { graphemeSegments } from 'unicode-segmenter/grapheme'
+import { Rules } from '@cto.af/linebreak';
+import { graphemeSegments } from 'unicode-segmenter/grapheme';
 import {
   commonScript,
   inheritedScript,
@@ -9,199 +9,187 @@ import {
   scriptRanges,
   unicodeDataVersion,
   unknownScript,
-} from '../generated/unicode-script-data.js'
+} from '../generated/unicode-script-data.js';
 
-export const UNICODE_VERSION: string = unicodeDataVersion
+export const UNICODE_VERSION: string = unicodeDataVersion;
 
 export interface UnicodeBreak {
-  readonly position: number
-  readonly required: boolean
+  readonly position: number;
+  readonly required: boolean;
 }
 
 export interface ScriptItem {
-  readonly start: number
-  readonly end: number
-  readonly script: string
+  readonly start: number;
+  readonly end: number;
+  readonly script: string;
 }
 
 export interface UnicodeTextAnalysis {
-  readonly graphemeBoundaries: Uint32Array
-  readonly lineBreaks: readonly UnicodeBreak[]
-  readonly scriptItems: readonly ScriptItem[]
+  readonly graphemeBoundaries: Uint32Array;
+  readonly lineBreaks: readonly UnicodeBreak[];
+  readonly scriptItems: readonly ScriptItem[];
 }
 
 interface GraphemeScript {
-  readonly start: number
-  readonly end: number
-  script: number
-  readonly candidates: readonly number[]
+  readonly start: number;
+  readonly end: number;
+  script: number;
+  readonly candidates: readonly number[];
 }
 
-const lineBreakRules = new Rules()
+const lineBreakRules = new Rules();
 
 export function analyzeUnicodeText(text: string): UnicodeTextAnalysis {
-  assertWellFormed(text)
+  assertWellFormed(text);
 
   return {
     graphemeBoundaries: findGraphemeBoundaries(text),
     lineBreaks: findLineBreaks(text),
     scriptItems: itemizeScripts(text),
-  }
+  };
 }
 
 export function findGraphemeBoundaries(text: string): Uint32Array {
-  assertWellFormed(text)
-  const boundaries = [0]
-  for (const segment of graphemeSegments(text))
-    boundaries.push(segment.index + segment.segment.length)
-  return Uint32Array.from(boundaries)
+  assertWellFormed(text);
+  const boundaries = [0];
+  for (const segment of graphemeSegments(text)) boundaries.push(segment.index + segment.segment.length);
+  return Uint32Array.from(boundaries);
 }
 
 export function findLineBreaks(text: string): readonly UnicodeBreak[] {
-  assertWellFormed(text)
+  assertWellFormed(text);
   return [...lineBreakRules.breaks(text)].map((entry) => ({
     position: entry.position,
     required: entry.required,
-  }))
+  }));
 }
 
 export function itemizeScripts(text: string): readonly ScriptItem[] {
-  assertWellFormed(text)
+  assertWellFormed(text);
 
-  const graphemes: GraphemeScript[] = []
+  const graphemes: GraphemeScript[] = [];
   for (const segment of graphemeSegments(text)) {
-    const end = segment.index + segment.segment.length
-    const resolved = resolveGraphemeScript(segment.segment)
+    const end = segment.index + segment.segment.length;
+    const resolved = resolveGraphemeScript(segment.segment);
     graphemes.push({
       start: segment.index,
       end,
       ...resolved,
-    })
+    });
   }
-  resolveNeutralScripts(graphemes)
+  resolveNeutralScripts(graphemes);
 
-  const scriptItems: ScriptItem[] = []
+  const scriptItems: ScriptItem[] = [];
   for (const grapheme of graphemes) {
-    const previous = scriptItems.at(-1)
-    const script = uint32ToTag(grapheme.script)
+    const previous = scriptItems.at(-1);
+    const script = uint32ToTag(grapheme.script);
     if (previous !== undefined && previous.end === grapheme.start && previous.script === script) {
-      scriptItems[scriptItems.length - 1] = { ...previous, end: grapheme.end }
+      scriptItems[scriptItems.length - 1] = { ...previous, end: grapheme.end };
     } else {
-      scriptItems.push({ start: grapheme.start, end: grapheme.end, script })
+      scriptItems.push({ start: grapheme.start, end: grapheme.end, script });
     }
   }
 
-  return scriptItems
+  return scriptItems;
 }
 
 export function scriptForCodePoint(codePoint: number): string {
-  assertScalar(codePoint)
-  return uint32ToTag(lookupTriple(scriptRanges, codePoint))
+  assertScalar(codePoint);
+  return uint32ToTag(lookupTriple(scriptRanges, codePoint));
 }
 
 export function scriptsForCodePoint(codePoint: number): readonly string[] {
-  assertScalar(codePoint)
-  const setIndex = lookupTriple(scriptExtensionRanges, codePoint)
-  const start = scriptExtensionOffsets[setIndex]
-  const end = scriptExtensionOffsets[setIndex + 1]
-  if (start === undefined || end === undefined) throw new Error('invalid generated script set')
-  const scripts = []
+  assertScalar(codePoint);
+  const setIndex = lookupTriple(scriptExtensionRanges, codePoint);
+  const start = scriptExtensionOffsets[setIndex];
+  const end = scriptExtensionOffsets[setIndex + 1];
+  if (start === undefined || end === undefined) throw new Error('invalid generated script set');
+  const scripts = [];
   for (let index = start; index < end; index += 1) {
-    const tag = scriptExtensionTags[index]
-    if (tag === undefined) throw new Error('invalid generated script tag')
-    scripts.push(uint32ToTag(tag))
+    const tag = scriptExtensionTags[index];
+    if (tag === undefined) throw new Error('invalid generated script tag');
+    scripts.push(uint32ToTag(tag));
   }
-  return scripts
+  return scripts;
 }
 
 function resolveGraphemeScript(text: string): {
-  readonly script: number
-  readonly candidates: readonly number[]
+  readonly script: number;
+  readonly candidates: readonly number[];
 } {
-  let candidates: number[] | undefined
-  let preferred = commonScript
+  let candidates: number[] | undefined;
+  let preferred = commonScript;
   for (const scalar of text) {
-    const codePoint = scalar.codePointAt(0)
-    if (codePoint === undefined) continue
-    const primary = lookupTriple(scriptRanges, codePoint)
-    if (!isNeutralScript(primary) && preferred === commonScript) preferred = primary
-    const extensions = extensionSet(codePoint).filter((script) => !isNeutralScript(script))
-    if (extensions.length === 0) continue
-    candidates =
-      candidates === undefined
-        ? extensions
-        : candidates.filter((script) => extensions.includes(script))
+    const codePoint = scalar.codePointAt(0);
+    if (codePoint === undefined) continue;
+    const primary = lookupTriple(scriptRanges, codePoint);
+    if (!isNeutralScript(primary) && preferred === commonScript) preferred = primary;
+    const extensions = extensionSet(codePoint).filter((script) => !isNeutralScript(script));
+    if (extensions.length === 0) continue;
+    candidates = candidates === undefined ? extensions : candidates.filter((script) => extensions.includes(script));
   }
   if (candidates === undefined || candidates.length === 0 || candidates.includes(preferred)) {
-    return { script: preferred, candidates: [] }
+    return { script: preferred, candidates: [] };
   }
-  return { script: preferred, candidates }
+  return { script: preferred, candidates };
 }
 
 function resolveNeutralScripts(graphemes: GraphemeScript[]): void {
-  let previous = commonScript
+  let previous = commonScript;
   for (const grapheme of graphemes) {
     if (isNeutralScript(grapheme.script)) {
-      if (acceptsContext(grapheme, previous)) grapheme.script = previous
+      if (acceptsContext(grapheme, previous)) grapheme.script = previous;
     } else {
-      previous = grapheme.script
+      previous = grapheme.script;
     }
   }
-  let next = commonScript
+  let next = commonScript;
   for (let index = graphemes.length - 1; index >= 0; index -= 1) {
-    const grapheme = graphemes[index]
-    if (grapheme === undefined) continue
+    const grapheme = graphemes[index];
+    if (grapheme === undefined) continue;
     if (isNeutralScript(grapheme.script)) {
-      if (acceptsContext(grapheme, next)) grapheme.script = next
+      if (acceptsContext(grapheme, next)) grapheme.script = next;
     } else {
-      next = grapheme.script
+      next = grapheme.script;
     }
   }
 }
 
 function acceptsContext(grapheme: GraphemeScript, script: number): boolean {
-  return (
-    !isNeutralScript(script) &&
-    (grapheme.candidates.length === 0 || grapheme.candidates.includes(script))
-  )
+  return !isNeutralScript(script) && (grapheme.candidates.length === 0 || grapheme.candidates.includes(script));
 }
 
 function extensionSet(codePoint: number): number[] {
-  const setIndex = lookupTriple(scriptExtensionRanges, codePoint)
-  const start = scriptExtensionOffsets[setIndex]
-  const end = scriptExtensionOffsets[setIndex + 1]
-  if (start === undefined || end === undefined) throw new Error('invalid generated script set')
-  return Array.from(scriptExtensionTags.subarray(start, end))
+  const setIndex = lookupTriple(scriptExtensionRanges, codePoint);
+  const start = scriptExtensionOffsets[setIndex];
+  const end = scriptExtensionOffsets[setIndex + 1];
+  if (start === undefined || end === undefined) throw new Error('invalid generated script set');
+  return Array.from(scriptExtensionTags.subarray(start, end));
 }
 
 function lookupTriple(ranges: Uint32Array, codePoint: number): number {
-  let low = 0
-  let high = ranges.length / 3 - 1
+  let low = 0;
+  let high = ranges.length / 3 - 1;
   while (low <= high) {
-    const middle = (low + high) >>> 1
-    const offset = middle * 3
-    const start = ranges[offset]
-    const end = ranges[offset + 1]
-    const value = ranges[offset + 2]
-    if (start === undefined || end === undefined || value === undefined) break
-    if (codePoint < start) high = middle - 1
-    else if (codePoint >= end) low = middle + 1
-    else return value
+    const middle = (low + high) >>> 1;
+    const offset = middle * 3;
+    const start = ranges[offset];
+    const end = ranges[offset + 1];
+    const value = ranges[offset + 2];
+    if (start === undefined || end === undefined || value === undefined) break;
+    if (codePoint < start) high = middle - 1;
+    else if (codePoint >= end) low = middle + 1;
+    else return value;
   }
-  throw new RangeError(`Unicode scalar U+${codePoint.toString(16).toUpperCase()} is not classified`)
+  throw new RangeError(`Unicode scalar U+${codePoint.toString(16).toUpperCase()} is not classified`);
 }
 
 function isNeutralScript(script: number): boolean {
-  return script === commonScript || script === inheritedScript || script === unknownScript
+  return script === commonScript || script === inheritedScript || script === unknownScript;
 }
 
 function uint32ToTag(value: number): string {
-  return String.fromCharCode(
-    value >>> 24,
-    (value >>> 16) & 0xff,
-    (value >>> 8) & 0xff,
-    value & 0xff,
-  )
+  return String.fromCharCode(value >>> 24, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff);
 }
 
 function assertScalar(codePoint: number): void {
@@ -211,10 +199,10 @@ function assertScalar(codePoint: number): void {
     codePoint > 0x10_ffff ||
     (codePoint >= 0xd800 && codePoint <= 0xdfff)
   ) {
-    throw new RangeError('code point must be a Unicode scalar value')
+    throw new RangeError('code point must be a Unicode scalar value');
   }
 }
 
 function assertWellFormed(text: string): void {
-  if (!text.isWellFormed()) throw new RangeError('paragraph text must be well-formed UTF-16')
+  if (!text.isWellFormed()) throw new RangeError('paragraph text must be well-formed UTF-16');
 }

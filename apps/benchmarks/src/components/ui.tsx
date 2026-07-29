@@ -5,10 +5,10 @@ import type {
   InputHTMLAttributes,
   ReactNode,
   TextareaHTMLAttributes,
-} from 'react'
+} from 'react';
 
 function classes(...values: readonly (string | false | undefined)[]): string {
-  return values.filter(Boolean).join(' ')
+  return values.filter(Boolean).join(' ');
 }
 
 export function Button({
@@ -16,29 +16,28 @@ export function Button({
   variant = 'secondary',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
-  readonly variant?: 'primary' | 'secondary' | 'ghost'
+  readonly variant?: 'primary' | 'secondary' | 'ghost';
 }) {
   return (
     <button
       className={classes(
         'inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-45',
         variant === 'primary' && 'bg-accent text-white hover:bg-accent-hover',
-        variant === 'secondary' &&
-          'border border-border bg-surface-raised text-foreground hover:bg-surface-active',
+        variant === 'secondary' && 'border border-border bg-surface-raised text-foreground hover:bg-surface-active',
         variant === 'ghost' && 'text-muted hover:bg-surface-active hover:text-foreground',
         className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 export function Chip({
   children,
   tone = 'neutral',
 }: {
-  readonly children: ReactNode
-  readonly tone?: 'neutral' | 'success' | 'warning' | 'accent'
+  readonly children: ReactNode;
+  readonly tone?: 'neutral' | 'success' | 'warning' | 'accent';
 }) {
   return (
     <span className="inline-flex h-6 items-center gap-2 rounded-full border border-border bg-surface px-2 font-mono text-[10px] text-muted">
@@ -52,7 +51,7 @@ export function Chip({
       />
       {children}
     </span>
-  )
+  );
 }
 
 export function Field({
@@ -62,18 +61,15 @@ export function Field({
   rangeScale = 'linear',
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & {
-  readonly label: string
-  readonly onRangeValueChange?: (value: number) => void
-  readonly rangeScale?: 'linear' | 'logarithmic'
+  readonly label: string;
+  readonly onRangeValueChange?: (value: number) => void;
+  readonly rangeScale?: 'linear' | 'logarithmic';
 }) {
-  const range = props.type === 'range'
-  const logarithmic = range && rangeScale === 'logarithmic'
-  const rangeMinimum = finiteNumber(props.min, 0)
-  const rangeMaximum = finiteNumber(props.max, 100)
-  const rangeValue = finiteNumber(
-    props.value ?? props.defaultValue,
-    rangeMinimum + (rangeMaximum - rangeMinimum) / 2,
-  )
+  const range = props.type === 'range';
+  const logarithmic = range && rangeScale === 'logarithmic';
+  const rangeMinimum = finiteNumber(props.min, 0);
+  const rangeMaximum = finiteNumber(props.max, 100);
+  const rangeValue = finiteNumber(props.value ?? props.defaultValue, rangeMinimum + (rangeMaximum - rangeMinimum) / 2);
   const input = (
     <input
       className={classes(
@@ -104,7 +100,7 @@ export function Field({
           }
         : {})}
     />
-  )
+  );
   return (
     <label className={classes('grid min-w-0 gap-1.5', className)}>
       <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
@@ -119,39 +115,31 @@ export function Field({
         input
       )}
     </label>
-  )
+  );
 }
 
-function rangeProgress(
-  props: InputHTMLAttributes<HTMLInputElement>,
-  scale: 'linear' | 'logarithmic',
-): number {
-  const minimum = finiteNumber(props.min, 0)
-  const maximum = finiteNumber(props.max, 100)
-  const fallback = minimum + (maximum - minimum) / 2
-  const value = finiteNumber(props.value ?? props.defaultValue, fallback)
-  if (maximum <= minimum) return 0
-  if (scale === 'logarithmic') return logarithmicRangePosition(value, minimum, maximum)
-  return Math.min(1, Math.max(0, (value - minimum) / (maximum - minimum)))
+function rangeProgress(props: InputHTMLAttributes<HTMLInputElement>, scale: 'linear' | 'logarithmic'): number {
+  const minimum = finiteNumber(props.min, 0);
+  const maximum = finiteNumber(props.max, 100);
+  const fallback = minimum + (maximum - minimum) / 2;
+  const value = finiteNumber(props.value ?? props.defaultValue, fallback);
+  if (maximum <= minimum) return 0;
+  if (scale === 'logarithmic') return logarithmicRangePosition(value, minimum, maximum);
+  return Math.min(1, Math.max(0, (value - minimum) / (maximum - minimum)));
 }
 
 export function logarithmicRangePosition(value: number, minimum: number, maximum: number): number {
-  assertLogarithmicRange(value, minimum, maximum)
-  return Math.min(1, Math.max(0, Math.log(value / minimum) / Math.log(maximum / minimum)))
+  assertLogarithmicRange(value, minimum, maximum);
+  return Math.min(1, Math.max(0, Math.log(value / minimum) / Math.log(maximum / minimum)));
 }
 
-export function logarithmicRangeValue(
-  position: number,
-  minimum: number,
-  maximum: number,
-  step: number,
-): number {
-  assertLogarithmicRange(minimum, minimum, maximum)
-  if (!Number.isFinite(position)) throw new RangeError('range position must be finite')
-  if (!Number.isFinite(step) || step <= 0) throw new RangeError('range step must be positive')
-  const normalized = Math.min(1, Math.max(0, position))
-  const value = minimum * Math.pow(maximum / minimum, normalized)
-  return Math.min(maximum, Math.max(minimum, minimum + Math.round((value - minimum) / step) * step))
+export function logarithmicRangeValue(position: number, minimum: number, maximum: number, step: number): number {
+  assertLogarithmicRange(minimum, minimum, maximum);
+  if (!Number.isFinite(position)) throw new RangeError('range position must be finite');
+  if (!Number.isFinite(step) || step <= 0) throw new RangeError('range step must be positive');
+  const normalized = Math.min(1, Math.max(0, position));
+  const value = minimum * Math.pow(maximum / minimum, normalized);
+  return Math.min(maximum, Math.max(minimum, minimum + Math.round((value - minimum) / step) * step));
 }
 
 function assertLogarithmicRange(value: number, minimum: number, maximum: number): void {
@@ -163,13 +151,13 @@ function assertLogarithmicRange(value: number, minimum: number, maximum: number)
     minimum <= 0 ||
     maximum <= minimum
   ) {
-    throw new RangeError('logarithmic range values must be finite, positive, and increasing')
+    throw new RangeError('logarithmic range values must be finite, positive, and increasing');
   }
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
-  const number = typeof value === 'number' || typeof value === 'string' ? Number(value) : Number.NaN
-  return Number.isFinite(number) ? number : fallback
+  const number = typeof value === 'number' || typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(number) ? number : fallback;
 }
 
 export function SelectField({
@@ -178,10 +166,10 @@ export function SelectField({
   value,
   onChange,
 }: {
-  readonly label: string
-  readonly children: ReactNode
-  readonly value: string
-  readonly onChange: (value: string) => void
+  readonly label: string;
+  readonly children: ReactNode;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
 }) {
   return (
     <label className="grid min-w-0 gap-1.5">
@@ -194,7 +182,7 @@ export function SelectField({
         {children}
       </select>
     </label>
-  )
+  );
 }
 
 export function TextareaField({
@@ -210,7 +198,7 @@ export function TextareaField({
         {...props}
       />
     </label>
-  )
+  );
 }
 
 export function Toggle({
@@ -219,10 +207,10 @@ export function Toggle({
   label,
   onChange,
 }: {
-  readonly checked: boolean
-  readonly disabled?: boolean
-  readonly label: string
-  readonly onChange: (value: boolean) => void
+  readonly checked: boolean;
+  readonly disabled?: boolean;
+  readonly label: string;
+  readonly onChange: (value: boolean) => void;
 }) {
   return (
     <label
@@ -242,7 +230,7 @@ export function Toggle({
       />
       <span className="relative h-[18px] w-8 rounded-full bg-border transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent after:absolute after:left-0.5 after:top-0.5 after:size-3.5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-3.5" />
     </label>
-  )
+  );
 }
 
 export function Metric({ label, value }: { readonly label: string; readonly value: string }) {
@@ -251,5 +239,5 @@ export function Metric({ label, value }: { readonly label: string; readonly valu
       <div className="font-mono text-[9px] uppercase tracking-[0.08em] text-dim">{label}</div>
       <div className="mt-1 truncate font-mono text-base text-foreground">{value}</div>
     </div>
-  )
+  );
 }

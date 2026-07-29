@@ -1,11 +1,11 @@
-import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
+import type { BenchmarkMeasurement } from '../src/benchmark/contracts';
 
-const executionPath = '/src/benchmark/execution.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const executionPath = '/src/benchmark/execution.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
-])
+]);
 
 const result = await runRegisteredBenchmark({
   targetId: 'react-text-reconciliation',
@@ -13,7 +13,7 @@ const result = await runRegisteredBenchmark({
   input: {},
   controls: { dpr: 1, samples: 3, warmup: 1 },
   environment: await environmentResource(),
-})
+});
 
 if (
   result.status !== 'passed' ||
@@ -33,12 +33,12 @@ if (
       measurement.metrics.r3fDrawCalls < 1,
   )
 ) {
-  throw new Error('registered React Text target did not preserve its reconciliation contract')
+  throw new Error('registered React Text target did not preserve its reconciliation contract');
 }
 
 console.log(
   'react-text-reconciliation-ready',
   JSON.stringify({ hash: result.measurements[0]?.hash, validation: result.validation }),
-)
+);
 
-export {}
+export {};

@@ -18,12 +18,12 @@ Ask two questions internally:
 
 Map the answers:
 
-| Reader need | Mode | Documentation type |
-| --- | --- | --- |
-| Learn by doing | action + acquisition | Tutorial |
-| Complete a real task | action + application | How-to guide |
-| Look up facts while working | cognition + application | Reference |
-| Understand reasons and relationships | cognition + acquisition | Explanation |
+| Reader need                          | Mode                    | Documentation type |
+| ------------------------------------ | ----------------------- | ------------------ |
+| Learn by doing                       | action + acquisition    | Tutorial           |
+| Complete a real task                 | action + application    | How-to guide       |
+| Look up facts while working          | cognition + application | Reference          |
+| Understand reasons and relationships | cognition + acquisition | Explanation        |
 
 Infer the type when the evidence is clear. Ask only when choosing incorrectly would materially change the requested artifact.
 

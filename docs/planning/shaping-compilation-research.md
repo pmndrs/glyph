@@ -43,7 +43,7 @@ sources:
     title: WebGPU Shading Language
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T06:45:24Z"
+  at: '2026-07-26T06:45:24Z'
 ---
 
 # Shaping compilation and execution research
@@ -72,21 +72,21 @@ A smaller bytecode interpreter is plausible, but it does not win merely by makin
 
 The current complete runtime shaper is shared by every font. Its generated size lane reports:
 
-| Component | Raw/minified | Gzip | Brotli |
-| --- | ---: | ---: | ---: |
-| HarfRust shaper Wasm | 680,312 B | 253,568 B | 199,365 B |
-| TypeScript direct-memory bridge | 32,778 B minified | 9,288 B | 8,257 B |
-| **Shared runtime total** | — | **266,274 B** | **209,728 B** |
+| Component                       |      Raw/minified |          Gzip |        Brotli |
+| ------------------------------- | ----------------: | ------------: | ------------: |
+| HarfRust shaper Wasm            |         680,312 B |     253,568 B |     199,365 B |
+| TypeScript direct-memory bridge | 32,778 B minified |       9,288 B |       8,257 B |
+| **Shared runtime total**        |                 — | **266,274 B** | **209,728 B** |
 
 The V0 shaped result costs exactly 24 bytes per produced glyph plus 10 bytes per run before arena alignment. The current Chromium conformance fixture broad-shapes 97 Inter glyphs with one Wasm call in approximately 0.1–0.3 ms warm; paragraph measurement then reuses paragraph-owned arrays without repeating broad shaping.[^shaping-contract]
 
 The authenticated shaping-only GLBs establish the font-data side of the comparison:
 
-| Font | Source | Core GLB | Retained shaping payload |
-| --- | ---: | ---: | ---: |
-| Inter 4.1 | 411,640 B | 172,140 B | 171,056 B |
-| Amiri 1.002 | 431,116 B | 179,048 B | 177,963 B |
-| Noto Sans CJK JP 2.004 | 16,467,736 B | 1,540,480 B | 1,539,372 B |
+| Font                   |       Source |    Core GLB | Retained shaping payload |
+| ---------------------- | -----------: | ----------: | -----------------------: |
+| Inter 4.1              |    411,640 B |   172,140 B |                171,056 B |
+| Amiri 1.002            |    431,116 B |   179,048 B |                177,963 B |
+| Noto Sans CJK JP 2.004 | 16,467,736 B | 1,540,480 B |              1,539,372 B |
 
 The Noto artifact is 654,597 bytes with gzip and 515,676 bytes with Brotli. An alternative representation cannot claim all GLB bytes as savings: container metadata, metrics, glyph extents, provenance, and renderer inputs may remain even if compiled shaping replaces the retained SFNT rules.
 
@@ -116,14 +116,14 @@ dynamic corpus → font rules + runtime evaluator          → shaped glyph runs
 
 ## Candidate disposition
 
-| Candidate | Status | Research disposition |
-| --- | :---: | --- |
-| Shared HarfRust Wasm | ✅ baseline | Preserve as the universal correctness oracle and fallback. |
-| Static pre-shaped runs | 🧪 candidate | Strong for explicitly closed text/localization corpora; invalidated by an unmatched shaping key. |
-| Full pure-JavaScript shaper | ⏸ deprioritized | Avoid a second handwritten universal engine; it is unlikely to beat the current total without reducing capability and would duplicate conformance maintenance. |
-| Semantic bytecode + shared VM | 🧪 priority | Most credible smaller dynamic path; measure total VM plus compiled fonts rather than VM size alone. |
-| Per-font specialized CPU/Wasm | 🧪 priority | Natural first compiler target because it preserves synchronous CPU layout and can prove the semantic IR before GPU work. |
-| Per-font WGSL/WebGPU | 🧪 later | Throughput target for large batches; current CPU-owned UI layout imposes readback and synchronization. |
+| Candidate                     |     Status      | Research disposition                                                                                                                                           |
+| ----------------------------- | :-------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared HarfRust Wasm          |   ✅ baseline   | Preserve as the universal correctness oracle and fallback.                                                                                                     |
+| Static pre-shaped runs        |  🧪 candidate   | Strong for explicitly closed text/localization corpora; invalidated by an unmatched shaping key.                                                               |
+| Full pure-JavaScript shaper   | ⏸ deprioritized | Avoid a second handwritten universal engine; it is unlikely to beat the current total without reducing capability and would duplicate conformance maintenance. |
+| Semantic bytecode + shared VM |   🧪 priority   | Most credible smaller dynamic path; measure total VM plus compiled fonts rather than VM size alone.                                                            |
+| Per-font specialized CPU/Wasm |   🧪 priority   | Natural first compiler target because it preserves synchronous CPU layout and can prove the semantic IR before GPU work.                                       |
+| Per-font WGSL/WebGPU          |    🧪 later     | Throughput target for large batches; current CPU-owned UI layout imposes readback and synchronization.                                                         |
 
 ## Semantic bytecode model
 
@@ -238,16 +238,16 @@ Specialized CPU/Wasm is therefore the first compiler target. It preserves synchr
 
 ## Acceptance matrix
 
-| Dimension | Required evidence |
-| --- | --- |
-| Correctness | Exact HarfBuzz/HarfRust glyph IDs, clusters, four positions, flags, contextual boundaries, and malformed-input behavior. |
-| Universality | Inter, Amiri, Noto CJK, official Unicode corpora, variation sequences, feature ranges, and every declared script capability. |
-| Size | Shared runtime plus every font artifact, raw/gzip/Brotli, for one-font and multi-font portfolios. |
-| CPU performance | Cold initialization, first shape, warm shape, boundary reshape, paragraph measurement, and layout-ready latency. |
+| Dimension       | Required evidence                                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Correctness     | Exact HarfBuzz/HarfRust glyph IDs, clusters, four positions, flags, contextual boundaries, and malformed-input behavior.                       |
+| Universality    | Inter, Amiri, Noto CJK, official Unicode corpora, variation sequences, feature ranges, and every declared script capability.                   |
+| Size            | Shared runtime plus every font artifact, raw/gzip/Brotli, for one-font and multi-font portfolios.                                              |
+| CPU performance | Cold initialization, first shape, warm shape, boundary reshape, paragraph measurement, and layout-ready latency.                               |
 | GPU performance | Pipeline creation, upload, dispatch, compute, staging copy, `mapAsync`, bytes read, CPU-layout-ready latency, and GPU-resident render latency. |
-| Memory | Peak CPU/Wasm memory, GPU storage/staging memory, allocation count, and cache residency. |
-| Robustness | Work bounds, malformed bytecode rejection, device loss, WebGPU absence, fallback equality, and cross-vendor WGSL validation. |
-| Maintenance | Compiler/runtime code size, versioning, generated-artifact review, fuzzing, conformance cost, and font-update regeneration. |
+| Memory          | Peak CPU/Wasm memory, GPU storage/staging memory, allocation count, and cache residency.                                                       |
+| Robustness      | Work bounds, malformed bytecode rejection, device loss, WebGPU absence, fallback equality, and cross-vendor WGSL validation.                   |
+| Maintenance     | Compiler/runtime code size, versioning, generated-artifact review, fuzzing, conformance cost, and font-update regeneration.                    |
 
 The [autoresearch protocol](autoresearch.md) governs performance acceptance: kernel or binary improvements do not qualify when the product-level path is neutral, slower, less universal, or less maintainable.
 
@@ -261,10 +261,17 @@ The [autoresearch protocol](autoresearch.md) governs performance acceptance: ker
 - A compiled format requires a new declared `shapingFormat`, validator, provenance, size lane, fuzz target, and differential conformance matrix.
 
 [^shaping-contract]: Current ABI, byte accounting, ownership, conformance, and benchmark evidence are defined in the shaping data contract.
+
 [^harfbuzz-plans]: HarfBuzz documents that font tables and segment properties select internal script-specific shaping models and shape plans.
+
 [^harfbuzz-operations]: HarfBuzz documents ordered reordering, joining, contextual substitution, and contextual positioning operations over a glyph sequence.
+
 [^opentype-layout]: OpenType defines contextual and chained-context matching across backtrack, input, and lookahead sequences.
+
 [^mlir-gpu]: MLIR documents its evolving middle-level GPU abstraction and GPU-module execution model.
+
 [^mlir-spirv]: MLIR documents progressive lowering from GPU and other dialects into target-constrained SPIR-V.
+
 [^wgsl]: WGSL defines the shader module and compute-pipeline lifecycle consumed by WebGPU implementations.
+
 [^webgpu]: WebGPU specifies asynchronous mapped-buffer readback and the ownership transition between CPU mapping and GPU queue use.

@@ -1,19 +1,17 @@
-import { createHash } from 'node:crypto'
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { createHash } from 'node:crypto';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 
-import { bakeFont } from '@pmndrs/text/bake'
-import { slugBaker } from '@pmndrs/text/bakers/slug'
+import { bakeFont } from '@pmndrs/text/bake';
+import { slugBaker } from '@pmndrs/text/bakers/slug';
 
-const outputDirectory = resolve('fixtures/rendering')
-const showcaseManifestOutput = resolve(outputDirectory, 'showcase-slug-fixtures-v0.json')
-const check = process.argv.includes('--check')
-const requestedFixture = process.argv
-  .find((argument) => argument.startsWith('--fixture='))
-  ?.slice('--fixture='.length)
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-slug-fixture-'))
+const outputDirectory = resolve('fixtures/rendering');
+const showcaseManifestOutput = resolve(outputDirectory, 'showcase-slug-fixtures-v0.json');
+const check = process.argv.includes('--check');
+const requestedFixture = process.argv.find((argument) => argument.startsWith('--fixture='))?.slice('--fixture='.length);
+const temporaryDirectory = await mkdtemp(join(tmpdir(), 'pmndrs-text-slug-fixture-'));
 
 const fixtures = [
   {
@@ -56,17 +54,15 @@ const fixtures = [
     input: resolve('fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf'),
     output: 'dancing-script-slug.font.glb.gz',
   },
-] as const
+] as const;
 
 const selectedFixtures =
-  requestedFixture === undefined
-    ? fixtures
-    : fixtures.filter(({ fontFixture }) => fontFixture === requestedFixture)
+  requestedFixture === undefined ? fixtures : fixtures.filter(({ fontFixture }) => fontFixture === requestedFixture);
 if (selectedFixtures.length === 0) {
-  throw new TypeError(`Unknown Slug fixture: ${String(requestedFixture)}`)
+  throw new TypeError(`Unknown Slug fixture: ${String(requestedFixture)}`);
 }
 if (check && requestedFixture !== undefined) {
-  throw new TypeError('--fixture cannot weaken the complete Slug fixture check')
+  throw new TypeError('--fixture cannot weaken the complete Slug fixture check');
 }
 
 try {
@@ -75,14 +71,14 @@ try {
       ? []
       : (
           JSON.parse(await readFile(showcaseManifestOutput, 'utf8')) as {
-            readonly artifacts: Array<{ readonly fontFixture: string }>
+            readonly artifacts: Array<{ readonly fontFixture: string }>;
           }
-        ).artifacts.filter(({ fontFixture }) => fontFixture !== requestedFixture)
+        ).artifacts.filter(({ fontFixture }) => fontFixture !== requestedFixture);
 
   for (const fixture of selectedFixtures) {
-    const startedAt = performance.now()
-    console.log(`Baking full ${fixture.fontFixture} Slug fixture...`)
-    const bakedOutput = resolve(temporaryDirectory, `${fixture.fontFixture}-slug.font.glb`)
+    const startedAt = performance.now();
+    console.log(`Baking full ${fixture.fontFixture} Slug fixture...`);
+    const bakedOutput = resolve(temporaryDirectory, `${fixture.fontFixture}-slug.font.glb`);
     const report = await bakeFont({
       input: fixture.input,
       output: bakedOutput,
@@ -94,11 +90,11 @@ try {
           options: undefined,
         },
       ],
-    })
-    const baked = await readFile(bakedOutput)
-    const compressed = gzipSync(baked, { level: 9 })
-    const raster = report.rasters.find(({ kind }) => kind === 'slug')
-    if (raster === undefined) throw new Error(`${fixture.fontFixture} bake omitted its Slug report`)
+    });
+    const baked = await readFile(bakedOutput);
+    const compressed = gzipSync(baked, { level: 9 });
+    const raster = report.rasters.find(({ kind }) => kind === 'slug');
+    if (raster === undefined) throw new Error(`${fixture.fontFixture} bake omitted its Slug report`);
     const artifact = {
       fontFixture: fixture.fontFixture,
       file: fixture.output,
@@ -119,58 +115,55 @@ try {
           decodedGpuBytes: page.gpuBytes,
         })),
       },
-    }
-    artifacts.push(artifact)
+    };
+    artifacts.push(artifact);
 
-    const compressedOutput = resolve(outputDirectory, fixture.output)
+    const compressedOutput = resolve(outputDirectory, fixture.output);
     if (check) {
-      const checkedIn = await readFile(compressedOutput)
+      const checkedIn = await readFile(compressedOutput);
       if (!compressed.equals(checkedIn)) {
-        throw new Error(`${fixture.output} is not byte-identical to a fresh package-owned bake`)
+        throw new Error(`${fixture.output} is not byte-identical to a fresh package-owned bake`);
       }
     } else {
-      await writeFile(resolve(temporaryDirectory, fixture.output), compressed)
+      await writeFile(resolve(temporaryDirectory, fixture.output), compressed);
     }
     console.log(
       `Baked ${fixture.fontFixture}: ${raster.pages.length} pages, ${formatBytes(baked.byteLength)} raw, ${formatBytes(compressed.byteLength)} gzip in ${formatDuration(performance.now() - startedAt)}`,
-    )
+    );
   }
 
   artifacts.sort(
     (left, right) =>
       fixtures.findIndex(({ fontFixture }) => fontFixture === left.fontFixture) -
       fixtures.findIndex(({ fontFixture }) => fontFixture === right.fontFixture),
-  )
+  );
 
-  const showcaseManifest = { schemaVersion: 0, artifacts }
+  const showcaseManifest = { schemaVersion: 0, artifacts };
 
   if (check) {
-    const expectedShowcase = JSON.parse(await readFile(showcaseManifestOutput, 'utf8'))
+    const expectedShowcase = JSON.parse(await readFile(showcaseManifestOutput, 'utf8'));
     if (JSON.stringify(showcaseManifest) !== JSON.stringify(expectedShowcase)) {
-      throw new Error('fresh showcase Slug fixtures do not match their canonical manifest')
+      throw new Error('fresh showcase Slug fixtures do not match their canonical manifest');
     }
   } else {
-    await mkdir(outputDirectory, { recursive: true })
+    await mkdir(outputDirectory, { recursive: true });
     for (const fixture of selectedFixtures) {
-      await copyFile(
-        resolve(temporaryDirectory, fixture.output),
-        resolve(outputDirectory, fixture.output),
-      )
+      await copyFile(resolve(temporaryDirectory, fixture.output), resolve(outputDirectory, fixture.output));
     }
-    await writeFile(showcaseManifestOutput, `${JSON.stringify(showcaseManifest, undefined, 2)}\n`)
+    await writeFile(showcaseManifestOutput, `${JSON.stringify(showcaseManifest, undefined, 2)}\n`);
   }
 } finally {
-  await rm(temporaryDirectory, { recursive: true, force: true })
+  await rm(temporaryDirectory, { recursive: true, force: true });
 }
 
 function sha256(bytes: Uint8Array): string {
-  return createHash('sha256').update(bytes).digest('hex')
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function formatBytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
 }
 
 function formatDuration(milliseconds: number): string {
-  return `${(milliseconds / 1_000).toFixed(1)} s`
+  return `${(milliseconds / 1_000).toFixed(1)} s`;
 }

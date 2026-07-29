@@ -17,14 +17,7 @@ required-features = ["std"]
 
 [features]
 default = ["std"]
-std = [
-  "pmndrs-text-raster-artifact/std",
-  "read-fonts/std",
-  "serde/std",
-  "serde_json/std",
-  "skrifa/std",
-  "zeno/std",
-]
+std = ["pmndrs-text-raster-artifact/std", "read-fonts/std", "serde/std", "serde_json/std", "skrifa/std", "zeno/std"]
 
 [dependencies]
 core_maths = "0.1.1"

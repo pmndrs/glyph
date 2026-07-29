@@ -4,22 +4,22 @@ title: Runtime and bake API fixture V0
 description: Defines the canonical proposed package, loader, baker, shaper, paragraph, raster, and cache interfaces.
 tags: [api, loader, baker, shaping, paragraph, raster]
 sources:
-  - id: "citation-1"
-    resource: "https://reactnative.dev/docs/text"
-    title: "React Native Text"
-  - id: "citation-2"
-    resource: "https://github.com/pmndrs/koota"
-    title: "pmndrs/koota"
-  - id: "citation-3"
-    resource: "https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0"
-    title: "pmndrs/uikit at the reviewed revision"
-  - id: "citation-4"
-    resource: "https://threejs.org/docs/pages/Object3D.html"
-    title: "Three.js Object3D"
+  - id: 'citation-1'
+    resource: 'https://reactnative.dev/docs/text'
+    title: 'React Native Text'
+  - id: 'citation-2'
+    resource: 'https://github.com/pmndrs/koota'
+    title: 'pmndrs/koota'
+  - id: 'citation-3'
+    resource: 'https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0'
+    title: 'pmndrs/uikit at the reviewed revision'
+  - id: 'citation-4'
+    resource: 'https://threejs.org/docs/pages/Object3D.html'
+    title: 'Three.js Object3D'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T11:22:07Z"
+  at: '2026-07-29T11:22:07Z'
 ---
 
 # Runtime and bake API fixture V0
@@ -31,13 +31,13 @@ Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScrip
 
 This table reports contract evidence; it does not turn implementation or prose into maintainer acceptance. The [canonical roadmap checklist](../roadmap/roadmap.md#milestone-0--accept-contracts-and-versions) is the only closure gate, and the [decision register](decision-register.md#product-and-public-api) records approval state.
 
-| Contract surface | Status | Current evidence | Remaining gate |
-| --- | :---: | --- | --- |
-| Framework-neutral core API | ✅ accepted | `packages/text` compiles the non-generic text, font, paragraph, raster, and baker seams. | Runtime behavior remains milestone-gated. |
-| React API | ✅ accepted | The thin wrapper, nested-span model, direct props, Suspense behavior, forwarded core ref, and distributive prop derivation are compile-checked against React 19 and React Three Fiber. | Runtime reconciliation belongs to 6.3. |
-| Typed raster capabilities | ✅ accepted | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors. | Concrete first-party packages remain later milestones. |
-| Canonical URL resolution | ✅ accepted | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below. | Runtime behavior belongs to milestone 3. |
-| ESM-only package contract | ✅ accepted | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition. | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
+| Contract surface           |   Status    | Current evidence                                                                                                                                                                       | Remaining gate                                                                     |
+| -------------------------- | :---------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Framework-neutral core API | ✅ accepted | `packages/text` compiles the non-generic text, font, paragraph, raster, and baker seams.                                                                                               | Runtime behavior remains milestone-gated.                                          |
+| React API                  | ✅ accepted | The thin wrapper, nested-span model, direct props, Suspense behavior, forwarded core ref, and distributive prop derivation are compile-checked against React 19 and React Three Fiber. | Runtime reconciliation belongs to 6.3.                                             |
+| Typed raster capabilities  | ✅ accepted | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors.                                                    | Concrete first-party packages remain later milestones.                             |
+| Canonical URL resolution   | ✅ accepted | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below.                                         | Runtime behavior belongs to milestone 3.                                           |
+| ESM-only package contract  | ✅ accepted | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition.                                                                                                    | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
 
 ## Package boundaries
 
@@ -101,55 +101,53 @@ The normal framework-neutral API is one Three.js object. Lower-level loader, par
 
 ```ts
 interface TextLayoutProperties {
-  width?: number
-  height?: number
-  maxLines?: number
-  wrap?: 'none' | 'word' | 'character'
-  overflow?: 'visible' | 'clip' | 'ellipsis'
-  textAlign?: 'start' | 'center' | 'end' | 'justify'
+  width?: number;
+  height?: number;
+  maxLines?: number;
+  wrap?: 'none' | 'word' | 'character';
+  overflow?: 'visible' | 'clip' | 'ellipsis';
+  textAlign?: 'start' | 'center' | 'end' | 'justify';
 }
 
 interface TextShapingProperties {
-  fontSize?: number
+  fontSize?: number;
   /** Unitless multiplier of fontSize. */
-  lineHeight?: number
-  letterSpacing?: number
-  language?: string
-  direction?: 'auto' | 'ltr' | 'rtl'
-  features?: readonly FontFeature[]
+  lineHeight?: number;
+  letterSpacing?: number;
+  language?: string;
+  direction?: 'auto' | 'ltr' | 'rtl';
+  features?: readonly FontFeature[];
 }
 
 interface TextPaintProperties {
-  color?: ColorRepresentation
-  opacity?: number
+  color?: ColorRepresentation;
+  opacity?: number;
   /** Width is in paragraph-local layout units. */
-  outline?: { color: ColorRepresentation; width: number }
+  outline?: { color: ColorRepresentation; width: number };
   /** Offset is in paragraph-local units; positive X is right, positive Y down. */
-  shadow?: { color: ColorRepresentation; offset: readonly [number, number] }
+  shadow?: { color: ColorRepresentation; offset: readonly [number, number] };
 }
 
 interface TextRasterProperties {
   /** Physical device pixels represented by one paragraph-local CSS pixel. */
-  rasterPixelRatio?: number
+  rasterPixelRatio?: number;
 }
 
 interface TextSpan extends TextShapingProperties, TextPaintProperties {
-  start: number
-  end: number
-  font?: AnyFontToken | FontInput | RegisteredFont
+  start: number;
+  end: number;
+  font?: AnyFontToken | FontInput | RegisteredFont;
 }
 
 type TextFontProperties =
   | { font: AnyFontToken; raster?: never }
   | {
-      font: FontInput | RegisteredFont
-      raster: AnyRasterInput
+      font: FontInput | RegisteredFont;
+      raster: AnyRasterInput;
     }
-  | { font?: undefined; raster?: undefined }
+  | { font?: undefined; raster?: undefined };
 
-type TextContentProperties =
-  | { text?: string; spans?: never }
-  | { text: string; spans: readonly TextSpan[] }
+type TextContentProperties = { text?: string; spans?: never } | { text: string; spans: readonly TextSpan[] };
 
 type TextProperties = TextLayoutProperties &
   TextShapingProperties &
@@ -157,15 +155,15 @@ type TextProperties = TextLayoutProperties &
   TextRasterProperties &
   TextFontProperties &
   TextContentProperties & {
-    onLayout?: (layout: ParagraphLayout) => void
-  }
+    onLayout?: (layout: ParagraphLayout) => void;
+  };
 
 declare class Text extends Group {
-  constructor(properties?: TextProperties)
-  readonly ready: Promise<void>
-  readonly layout: ParagraphLayout | undefined
-  setProperties(properties: TextUpdateProperties): void
-  dispose(): void
+  constructor(properties?: TextProperties);
+  readonly ready: Promise<void>;
+  readonly layout: ParagraphLayout | undefined;
+  setProperties(properties: TextUpdateProperties): void;
+  dispose(): void;
 }
 ```
 
@@ -180,12 +178,12 @@ declare class Text extends Group {
 `@pmndrs/text/react` exposes a deliberately small declarative layer:
 
 ```tsx
-import { Text, useFont } from '@pmndrs/text/react'
-import { defineFont } from '@pmndrs/text'
-import { msdf } from '@pmndrs/text/raster/msdf'
+import { Text, useFont } from '@pmndrs/text/react';
+import { defineFont } from '@pmndrs/text';
+import { msdf } from '@pmndrs/text/raster/msdf';
 
-const Inter = '/fonts/Inter-Regular.ttf'
-const TitleFont = defineFont(Inter, msdf)
+const Inter = '/fonts/Inter-Regular.ttf';
+const TitleFont = defineFont(Inter, msdf);
 
 function Label() {
   return (
@@ -201,7 +199,7 @@ function Label() {
     >
       Fast <Text color="#ff8a00">accurate</Text> text
     </Text>
-  )
+  );
 }
 ```
 
@@ -220,34 +218,28 @@ The raw form resolves through the same request, core, and raster caches. Reusabl
 This deliberately adopts React Native's familiar nested-text and inherited-inline-style model while retaining Drei/uikit's direct props and Three.js object semantics. Text-style inheritance is restricted to the text subtree. Non-text R3F children are rejected in V0.
 
 ```ts
-type TextChild = string | number | null | false | ReactElement<ReactTextProps>
+type TextChild = string | number | null | false | ReactElement<ReactTextProps>;
 
 type DistributiveOmit<Value, Keys extends PropertyKey> = Value extends unknown
   ? Omit<Value, Keys & keyof Value>
-  : never
+  : never;
 
-type ReactTextProps =
-  & Omit<ThreeElements['group'], keyof TextProperties | 'children'>
-  & DistributiveOmit<TextProperties, 'text' | 'spans'>
-  & { children?: TextChild | readonly TextChild[] }
+type ReactTextProps = Omit<ThreeElements['group'], keyof TextProperties | 'children'> &
+  DistributiveOmit<TextProperties, 'text' | 'spans'> & { children?: TextChild | readonly TextChild[] };
 
 interface UseFont {
-  (input: FontInput, options?: FontLoadOptions): RegisteredFont
-  <Input extends FontInput, Module extends AnyRasterModule>(
-    token: FontToken<Module, Input>,
-  ): LoadedFont<Module, Input>
-  preload(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>
+  (input: FontInput, options?: FontLoadOptions): RegisteredFont;
+  <Input extends FontInput, Module extends AnyRasterModule>(token: FontToken<Module, Input>): LoadedFont<Module, Input>;
+  preload(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>;
   preload<Input extends FontInput, Module extends AnyRasterModule>(
     token: FontToken<Module, Input>,
-  ): Promise<LoadedFont<Module, Input>>
-  clear(input: FontInput | AnyFontToken): void
+  ): Promise<LoadedFont<Module, Input>>;
+  clear(input: FontInput | AnyFontToken): void;
 }
 
-declare const useFont: UseFont
+declare const useFont: UseFont;
 
-declare function lazyRaster<T extends AnyRasterModule>(
-  load: () => Promise<T | { default: T }>,
-): T
+declare function lazyRaster<T extends AnyRasterModule>(load: () => Promise<T | { default: T }>): T;
 ```
 
 `useFont` suspends on the core-font `FontLoader` promise and deduplicates through the registry. A `FontToken` additionally resolves, automatically runtime-bakes when necessary, and decodes its selected raster index into the same raster-runtime cache used by `<Text>`. A later hook or text object performs no second probe, bake, or index decode. Preloading also initializes the shared shaper module, but it does not shape or lay out a paragraph because text, inherited spans, and constraints are downstream inputs. It therefore cannot know which independently addressable raster pages a future layout will require; page preparation is deduplicated after layout and is included in the owning `Text` object's initial `ready` promise. Once dependencies are ready, shaping, line breaking, boundary reshaping, and positioning are computation rather than Suspense resources. `clear` removes the React preload/cache entry but does not dispose a registered font still owned elsewhere. `lazyRaster` preserves the configured raster value while deferring an engine's module graph. Static imports remain the simplest tree-shakable default. A forwarded ref exposes the core `Text` object; the React wrapper adds no parallel imperative handle.
@@ -255,17 +247,17 @@ declare function lazyRaster<T extends AnyRasterModule>(
 ## Identity
 
 ```ts
-declare const brand: unique symbol
-type Brand<Value, Name extends string> = Value & { readonly [brand]: Name }
+declare const brand: unique symbol;
+type Brand<Value, Name extends string> = Value & { readonly [brand]: Name };
 
-type FontKey = Brand<string, 'FontKey'>
-type RasterKey = Brand<string, 'RasterKey'>
-type Sha256Hex = Brand<string, 'Sha256Hex'>
-type FontHandle = Brand<number, 'FontHandle'>
-type RasterHandle = Brand<number, 'RasterHandle'>
+type FontKey = Brand<string, 'FontKey'>;
+type RasterKey = Brand<string, 'RasterKey'>;
+type Sha256Hex = Brand<string, 'Sha256Hex'>;
+type FontHandle = Brand<number, 'FontHandle'>;
+type RasterHandle = Brand<number, 'RasterHandle'>;
 
-type LocalGlyphId = number
-type FontSlot = number
+type LocalGlyphId = number;
+type FontSlot = number;
 ```
 
 `LocalGlyphId` is meaningful only with a font. Rasters attach only after matching the core font's shaping hash, glyph count, and ID width.
@@ -273,151 +265,133 @@ type FontSlot = number
 ## Loader
 
 ```ts
-type RasterKind = string
+type RasterKind = string;
 
 interface FontSourceOverride {
-  source: string | URL
-  baked?: string | URL
+  source: string | URL;
+  baked?: string | URL;
 }
 
 interface BakedFontSource {
-  baked: string | URL
-  source?: never
+  baked: string | URL;
+  source?: never;
 }
 
-type FontInput = string | URL | FontSourceOverride | BakedFontSource
+type FontInput = string | URL | FontSourceOverride | BakedFontSource;
 
-interface FontToken<
-  Module extends AnyRasterModule,
-  Input extends FontInput = FontInput,
-> {
-  input: Input
-  raster: RasterRequest<Module>
+interface FontToken<Module extends AnyRasterModule, Input extends FontInput = FontInput> {
+  input: Input;
+  raster: RasterRequest<Module>;
 }
 
 interface AnyFontToken {
-  input: FontInput
+  input: FontInput;
   raster: {
-    module: AnyRasterModule
-    options?: unknown
-  }
+    module: AnyRasterModule;
+    options?: unknown;
+  };
 }
 
-type FontInputOf<Token extends AnyFontToken> =
-  Token['input']
+type FontInputOf<Token extends AnyFontToken> = Token['input'];
 
-type FontRasterModuleOf<Token extends AnyFontToken> =
-  Token['raster']['module']
+type FontRasterModuleOf<Token extends AnyFontToken> = Token['raster']['module'];
 
-declare function defineFont<
-  const Input extends FontInput,
-  const Module extends AnyRasterModule,
->(
+declare function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(
   input: Input,
   raster: Module & ([RasterOptionsOf<Module>] extends [never] ? unknown : never),
-): FontToken<Module, Input>
+): FontToken<Module, Input>;
 
 type RasterSource =
   | { type: 'embedded' }
   | { type: 'external'; uri: string; artifactHash: Sha256Hex }
-  | { type: 'external'; artifactHash?: Sha256Hex }
+  | { type: 'external'; artifactHash?: Sha256Hex };
 
 interface RasterReference<Kind extends string = string> {
-  rasterKey: RasterKey
-  kind: Kind
-  extension: string
-  version: number
-  source: RasterSource
+  rasterKey: RasterKey;
+  kind: Kind;
+  extension: string;
+  version: number;
+  source: RasterSource;
 }
 
-declare function defineFont<
-  const Input extends FontInput,
-  const Module extends AnyRasterModule,
->(
+declare function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(
   input: Input,
   raster: RasterRequest<Module>,
-): FontToken<Module, Input>
+): FontToken<Module, Input>;
 
 interface RasterSelection<Kind extends string = string> {
-  rasterKey: RasterKey | string
-  kind?: Kind
+  rasterKey: RasterKey | string;
+  kind?: Kind;
 }
 
 interface RasterResolverContext {
-  font: RegisteredFont
-  reference: RasterReference
-  signal?: AbortSignal
+  font: RegisteredFont;
+  reference: RasterReference;
+  signal?: AbortSignal;
 }
 
-type RasterResolver = (
-  context: RasterResolverContext,
-) => Promise<ArrayBufferView | undefined>
+type RasterResolver = (context: RasterResolverContext) => Promise<ArrayBufferView | undefined>;
 
 interface FontLoadOptions {
-  signal?: AbortSignal
+  signal?: AbortSignal;
 }
 
 interface FontLoadDiagnostic {
-  code: string
-  message: string
-  url?: string
-  cause?: unknown
+  code: string;
+  message: string;
+  url?: string;
+  cause?: unknown;
 }
 
 interface RuntimeFontBakeRequest {
-  source: Uint8Array
-  sourceUrl: string
-  bakedUrl?: string
-  signal?: AbortSignal
+  source: Uint8Array;
+  sourceUrl: string;
+  bakedUrl?: string;
+  signal?: AbortSignal;
 }
 
-type RuntimeFontBake = (
-  request: RuntimeFontBakeRequest,
-) => Promise<ArrayBufferView>
+type RuntimeFontBake = (request: RuntimeFontBakeRequest) => Promise<ArrayBufferView>;
 
 interface FontRegistryOptions {
-  maxArtifactBytes?: number
-  maxBufferViews?: number
-  maxRasters?: number
+  maxArtifactBytes?: number;
+  maxBufferViews?: number;
+  maxRasters?: number;
 }
 
 interface FontLoaderOptions {
-  registry?: FontRegistry
-  baseUrl?: string | URL
-  fetch?: typeof fetch
-  development?: boolean
+  registry?: FontRegistry;
+  baseUrl?: string | URL;
+  fetch?: typeof fetch;
+  development?: boolean;
   /** Host/test seam used only after the mandatory baked probe misses or fails. */
-  runtimeBake?: RuntimeFontBake
-  onDiagnostic?: (diagnostic: FontLoadDiagnostic) => void
-  onWarning?: (diagnostic: FontLoadDiagnostic) => void
+  runtimeBake?: RuntimeFontBake;
+  onDiagnostic?: (diagnostic: FontLoadDiagnostic) => void;
+  onWarning?: (diagnostic: FontLoadDiagnostic) => void;
 }
 
 interface RasterLoadOptions {
-  resolve?: RasterResolver
-  signal?: AbortSignal
+  resolve?: RasterResolver;
+  signal?: AbortSignal;
 }
 
 declare class FontLoader {
-  readonly registry: FontRegistry
-  constructor(options?: FontLoaderOptions)
-  load(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>
-  attachRaster(
-    font: RegisteredFont,
-    bytes: ArrayBufferView,
-  ): Promise<RegisteredRaster>
+  readonly registry: FontRegistry;
+  constructor(options?: FontLoaderOptions);
+  load(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>;
+  attachRaster(font: RegisteredFont, bytes: ArrayBufferView): Promise<RegisteredRaster>;
 }
 
 declare class FontRegistry {
-  constructor(options?: FontRegistryOptions)
-  registerAsset(bytes: ArrayBufferView): Promise<RegisteredFont>
-  get(key: FontKey): RegisteredFont | undefined
-  getByHandle(handle: FontHandle): RegisteredFont | undefined
-  attachRaster(font: RegisteredFont, bytes: ArrayBufferView): Promise<RegisteredRaster>
+  constructor(options?: FontRegistryOptions);
+  registerAsset(bytes: ArrayBufferView): Promise<RegisteredFont>;
+  get(key: FontKey): RegisteredFont | undefined;
+  getByHandle(handle: FontHandle): RegisteredFont | undefined;
+  attachRaster(font: RegisteredFont, bytes: ArrayBufferView): Promise<RegisteredRaster>;
 }
 
 declare class FontLoadError extends Error {
-  readonly code: string
-  readonly url: string | undefined
+  readonly code: string;
+  readonly url: string | undefined;
 }
 ```
 
@@ -435,12 +409,12 @@ The string/`URL` form is the normal API. Resolution is deterministic:
 
 Examples:
 
-| Input | Baked probe | Fallback source |
-| --- | --- | --- |
-| `/fonts/Inter.ttf` | `/fonts/Inter.font.glb` | `/fonts/Inter.ttf` |
+| Input                    | Baked probe                 | Fallback source          |
+| ------------------------ | --------------------------- | ------------------------ |
+| `/fonts/Inter.ttf`       | `/fonts/Inter.font.glb`     | `/fonts/Inter.ttf`       |
 | `/fonts/Inter.woff2?v=4` | `/fonts/Inter.font.glb?v=4` | `/fonts/Inter.woff2?v=4` |
-| `/api/font/Inter` | `/api/font/Inter.font.glb` | `/api/font/Inter` |
-| `/fonts/Inter.font.glb` | same URL | none |
+| `/api/font/Inter`        | `/api/font/Inter.font.glb`  | `/api/font/Inter`        |
+| `/fonts/Inter.font.glb`  | same URL                    | none                     |
 
 The object form only overrides those rules. `{ source }` still derives a sibling. `{ source, baked }` probes the explicit baked URL—even on another path or origin—and falls back to `source` when that baked asset is missing, invalid, or incompatible. `{ baked }` is baked-only and rejects on any fetch or validation failure. An explicitly configured baked URL never changes the source URL used by fallback.
 
@@ -470,54 +444,48 @@ There is no `forceRuntime`, `skipBaked`, or equivalent option. A missing baked c
 
 ```ts
 interface FontMetrics {
-  unitsPerEm: number
-  ascender: number
-  descender: number
-  lineGap: number
+  unitsPerEm: number;
+  ascender: number;
+  descender: number;
+  lineGap: number;
 }
 
 interface RegisteredFont {
-  readonly key: FontKey
-  readonly handle: FontHandle
-  readonly shapingHash: Sha256Hex
-  readonly glyphCount: number
-  readonly glyphIdWidth: 16
-  readonly metrics: FontMetrics
-  readonly rasterReferences: readonly RasterReference[]
-  getRaster(rasterKey: RasterKey | string): RegisteredRaster | undefined
-  loadRaster(
-    selection: RasterSelection,
-    options?: RasterLoadOptions,
-  ): Promise<RegisteredRaster>
-  dispose(): void
+  readonly key: FontKey;
+  readonly handle: FontHandle;
+  readonly shapingHash: Sha256Hex;
+  readonly glyphCount: number;
+  readonly glyphIdWidth: 16;
+  readonly metrics: FontMetrics;
+  readonly rasterReferences: readonly RasterReference[];
+  getRaster(rasterKey: RasterKey | string): RegisteredRaster | undefined;
+  loadRaster(selection: RasterSelection, options?: RasterLoadOptions): Promise<RegisteredRaster>;
+  dispose(): void;
 }
 
 interface RegisteredRaster<Kind extends string = string> {
-  readonly rasterKey: RasterKey
-  readonly handle: RasterHandle
-  readonly font: FontHandle
-  readonly kind: Kind
-  readonly extension: string
-  readonly version: number
+  readonly rasterKey: RasterKey;
+  readonly handle: RasterHandle;
+  readonly font: FontHandle;
+  readonly kind: Kind;
+  readonly extension: string;
+  readonly version: number;
   /** Validated companion-extension JSON; semantics remain module-owned. */
-  readonly extensionData: JsonValue
+  readonly extensionData: JsonValue;
   /** Bounds-checked immutable access to an artifact bufferView. */
-  view(bufferView: number): Uint8Array
-  dispose(): void
+  view(bufferView: number): Uint8Array;
+  dispose(): void;
 }
 
-interface LoadedFont<
-  Module extends AnyRasterModule,
-  Input extends FontInput = FontInput,
-> {
-  readonly input: Input
-  readonly font: RegisteredFont
-  readonly raster: LoadedRaster<Module>
+interface LoadedFont<Module extends AnyRasterModule, Input extends FontInput = FontInput> {
+  readonly input: Input;
+  readonly font: RegisteredFont;
+  readonly raster: LoadedRaster<Module>;
 }
 
 interface RasterDrawBatch {
-  readonly object: Object3D
-  dispose(): void
+  readonly object: Object3D;
+  dispose(): void;
 }
 
 declare class RasterRuntime {
@@ -525,8 +493,8 @@ declare class RasterRuntime {
     font: RegisteredFont,
     request: RasterRequest<Module>,
     options?: RasterLoadOptions,
-  ): Promise<LoadedRaster<Module>>
-  dispose(): void
+  ): Promise<LoadedRaster<Module>>;
+  dispose(): void;
 }
 ```
 
@@ -536,74 +504,74 @@ Every raster module's draw-batch type extends `RasterDrawBatch`, giving the core
 
 ```ts
 interface FontBakeRequestV0 {
-  source: Uint8Array
-  descriptor: FontBakeDescriptorV0
+  source: Uint8Array;
+  descriptor: FontBakeDescriptorV0;
 }
 
 interface FontBakeDescriptorV0 {
-  formatVersion: 0
-  fontFaceIndex: number
+  formatVersion: 0;
+  fontFaceIndex: number;
 }
 
 interface BakeArtifactV0 {
-  role: 'font' | 'raster' | 'raster-page'
-  id: string
-  bytes: Uint8Array
-  sha256: Sha256Hex
+  role: 'font' | 'raster' | 'raster-page';
+  id: string;
+  bytes: Uint8Array;
+  sha256: Sha256Hex;
 }
 
 interface BakeResultV0 {
-  artifacts: readonly BakeArtifactV0[]
-  report: FontPayloadReport
-  warnings: readonly BakeWarning[]
+  artifacts: readonly BakeArtifactV0[];
+  report: FontPayloadReport;
+  warnings: readonly BakeWarning[];
 }
 
 interface BakeWarning {
-  code: string
-  message: string
-  path?: string
+  code: string;
+  message: string;
+  path?: string;
 }
 
 interface SerializedBakeError {
-  code: string
-  message: string
-  path?: string
+  code: string;
+  message: string;
+  path?: string;
 }
 
 interface RasterPagePayloadReport {
-  width: number
-  height: number
-  format: string
-  gpuBytes: number
-  source: 'embedded' | 'external'
-  encodedBytes: number
+  width: number;
+  height: number;
+  format: string;
+  gpuBytes: number;
+  source: 'embedded' | 'external';
+  encodedBytes: number;
 }
 
 interface RasterPayloadReport {
-  metadataBytes: number
-  serializedBytes: number
-  gpuBytes: number
-  pages: readonly RasterPagePayloadReport[]
+  metadataBytes: number;
+  serializedBytes: number;
+  gpuBytes: number;
+  pages: readonly RasterPagePayloadReport[];
 }
 
 interface FontPayloadReport {
-  source: { bytes: number }
-  shared: Record<string, { rawBytes: number }>
+  source: { bytes: number };
+  shared: Record<string, { rawBytes: number }>;
   rasters: readonly {
-    kind: string
-    metadataBytes: number
-    serializedBytes: number
-    gpuBytes: number
-    pages: readonly RasterPagePayloadReport[]
-  }[]
+    kind: string;
+    metadataBytes: number;
+    serializedBytes: number;
+    gpuBytes: number;
+    pages: readonly RasterPagePayloadReport[];
+  }[];
   containers: readonly {
-    artifactId: string
-    role: BakeArtifactV0['role']
-    jsonBytes: number
-    paddingBytes: number
-    totalBytes: number
-  }[]
-  transport: readonly { artifactId: string; format: string; bytes: number }[]
+    artifactId: string;
+    role: BakeArtifactV0['role'];
+    jsonBytes: number;
+    paddingBytes: number;
+    totalBytes: number;
+  }[];
+  transport: readonly { artifactId: string; format: string; bytes: number }[];
 }
 ```
 
@@ -615,76 +583,75 @@ The Node and Worker hosts orchestrate selected raster baker modules and compose 
 
 ```ts
 interface NodeBakeOptions<
-  Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[] =
-    readonly RasterBakePlan<AnyRasterBakerModule>[],
+  Rasters extends readonly RasterBakePlan<AnyRasterBakerModule>[] = readonly RasterBakePlan<AnyRasterBakerModule>[],
 > {
-  input: string | URL
-  output: string | URL
-  font: Omit<FontBakeDescriptorV0, 'formatVersion'>
-  rasters?: Rasters
-  signal?: AbortSignal
+  input: string | URL;
+  output: string | URL;
+  font: Omit<FontBakeDescriptorV0, 'formatVersion'>;
+  rasters?: Rasters;
+  signal?: AbortSignal;
 }
 
 interface NodeBakeExecutionReport {
   timingsMs: {
-    read: number
-    coreBake: number
-    rasterBake: number
-    compose: number
-    validate: number
-    transport: number
-    write: number
-    total: number
-  }
+    read: number;
+    coreBake: number;
+    rasterBake: number;
+    compose: number;
+    validate: number;
+    transport: number;
+    write: number;
+    total: number;
+  };
   memory: {
-    rssBeforeBytes: number
-    rssAfterBytes: number
+    rssBeforeBytes: number;
+    rssAfterBytes: number;
     /** Process-lifetime peak reported by Node, not isolated-operation allocation. */
-    processMaxRssBytes: number
-  }
+    processMaxRssBytes: number;
+  };
   outputs: readonly {
-    role: BakeArtifactV0['role']
-    file: string
-    bytes: number
-    sha256: string
-  }[]
+    role: BakeArtifactV0['role'];
+    file: string;
+    bytes: number;
+    sha256: string;
+  }[];
 }
 
 interface NodeFontBakeReport extends FontPayloadReport {
-  execution: NodeBakeExecutionReport
+  execution: NodeBakeExecutionReport;
 }
 
-declare function bakeFont(options: NodeBakeOptions): Promise<NodeFontBakeReport>
+declare function bakeFont(options: NodeBakeOptions): Promise<NodeFontBakeReport>;
 
 interface ProjectBakeOptions {
-  entries?: readonly (string | URL)[]
-  projectRoot?: string | URL
-  assetRoots?: readonly (string | URL)[]
-  outputRoot?: string | URL
-  signal?: AbortSignal
+  entries?: readonly (string | URL)[];
+  projectRoot?: string | URL;
+  assetRoots?: readonly (string | URL)[];
+  outputRoot?: string | URL;
+  signal?: AbortSignal;
 }
 
 interface ProjectBakeReport {
-  fonts: readonly NodeFontBakeReport[]
+  fonts: readonly NodeFontBakeReport[];
   mappings: readonly {
-    expression: string
-    sourceFile: string
-    assetRoot: string
-    publicPathname: string
-    outputFile: string
-  }[]
-  diagnostics: readonly BakeWarning[]
+    expression: string;
+    sourceFile: string;
+    assetRoot: string;
+    publicPathname: string;
+    outputFile: string;
+  }[];
+  diagnostics: readonly BakeWarning[];
 }
 
-declare function bakeProject(options?: ProjectBakeOptions): Promise<ProjectBakeReport>
+declare function bakeProject(options?: ProjectBakeOptions): Promise<ProjectBakeReport>;
 ```
 
 `bakeProject` is the normal application command:
 
 ```ts
-import { bakeProject } from '@pmndrs/text/bake'
+import { bakeProject } from '@pmndrs/text/bake';
 
-const report = await bakeProject()
+const report = await bakeProject();
 ```
 
 With no entries it analyzes the project's conventional `src` tree; explicit entries restrict the module graph. With no asset roots it uses an existing `public` directory. With no output root, each artifact is written as the canonical `.font.glb` sibling beside its matched source under that asset root. When `outputRoot` is present, the source's asset-root-relative path is reproduced there. `bakeFont` is the explicit low-level escape hatch for a known local input/output pair. For external packaging, `output` names the core artifact and raster artifact names deterministically bind the shaping hash and raster key. The host writes same-directory temporary files and renames them only after every artifact is ready; it rejects source/output overlap, duplicate targets, and package-owned artifact IDs that are not single filenames. Cancellation is checked between every asynchronous or coarse Wasm phase and before publication. The Node host owns filesystem work only.
@@ -725,9 +692,9 @@ There is no dependency-tree or `node_modules` walk. npm's `npm query` can inspec
 The default Node command accepts project entry points and discovers composed definitions rather than requiring users to repeat font and raster configuration in a second manifest:
 
 ```ts
-const origin = getAssetOrigin()
-const Inter = `${origin}/fonts/Inter-Regular.ttf`
-const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }))
+const origin = getAssetOrigin();
+const Inter = `${origin}/fonts/Inter-Regular.ttf`;
+const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }));
 ```
 
 The analyzer follows imports and `const` bindings, identifies the `defineFont` export by symbol rather than spelling, and statically evaluates the raster options as JSON. It resolves the selected raster package through `package.json#pmndrs.text` and lets that package canonicalize its descriptor. It does not execute application modules.
@@ -740,31 +707,31 @@ Dynamic font URLs remain valid. When discovery cannot establish a local source, 
 
 ```ts
 interface RuntimeBakeRequestV0 {
-  type: 'bake-font-v0'
-  id: number
-  source: ArrayBuffer
-  font: FontBakeDescriptorV0
+  type: 'bake-font-v0';
+  id: number;
+  source: ArrayBuffer;
+  font: FontBakeDescriptorV0;
 }
 
 interface RuntimeBakeSuccessV0 {
-  type: 'bake-font-result-v0'
-  id: number
-  ok: true
+  type: 'bake-font-result-v0';
+  id: number;
+  ok: true;
   artifacts: readonly {
-    role: 'font'
-    id: string
-    bytes: ArrayBuffer
-    sha256: Sha256Hex
-  }[]
-  report: FontPayloadReport
-  warnings: readonly BakeWarning[]
+    role: 'font';
+    id: string;
+    bytes: ArrayBuffer;
+    sha256: Sha256Hex;
+  }[];
+  report: FontPayloadReport;
+  warnings: readonly BakeWarning[];
 }
 
 interface RuntimeBakeFailureV0 {
-  type: 'bake-font-result-v0'
-  id: number
-  ok: false
-  error: SerializedBakeError
+  type: 'bake-font-result-v0';
+  id: number;
+  ok: false;
+  error: SerializedBakeError;
 }
 ```
 
@@ -776,78 +743,78 @@ The standard host is cached behind the loader's `import('./runtime-bake.js')` bo
 
 ```ts
 interface FontFeature {
-  tag: string
-  value?: number
-  start?: number
-  end?: number
+  tag: string;
+  value?: number;
+  start?: number;
+  end?: number;
 }
 
 interface ResolvedFontFeature {
-  tag: string
-  value: number
-  start: number
-  end: number
+  tag: string;
+  value: number;
+  start: number;
+  end: number;
 }
 
 interface ShapeRunRequest {
-  font: FontHandle
-  textStart: number
-  textEnd: number
-  direction: 'ltr' | 'rtl'
-  script: string
-  language?: string
-  clusterLevel: number
-  flags: number
-  featureStart: number
-  featureCount: number
+  font: FontHandle;
+  textStart: number;
+  textEnd: number;
+  direction: 'ltr' | 'rtl';
+  script: string;
+  language?: string;
+  clusterLevel: number;
+  flags: number;
+  featureStart: number;
+  featureCount: number;
 }
 
 interface ShapeBatchRequest {
-  textUtf16: Uint16Array
-  runs: readonly ShapeRunRequest[]
-  features: readonly ResolvedFontFeature[]
+  textUtf16: Uint16Array;
+  runs: readonly ShapeRunRequest[];
+  features: readonly ResolvedFontFeature[];
 }
 
 interface ReshapeRange {
-  run: number
-  itemStart: number
-  itemEnd: number
-  contextStart: number
-  contextEnd: number
-  flags: number
+  run: number;
+  itemStart: number;
+  itemEnd: number;
+  contextStart: number;
+  contextEnd: number;
+  flags: number;
 }
 
 interface ReshapeBatchRequest extends ShapeBatchRequest {
-  ranges: readonly ReshapeRange[]
+  ranges: readonly ReshapeRange[];
 }
 
 interface RuntimeShaper {
-  readonly registry: FontRegistry
-  registerFont(font: RegisteredFont): void
-  disposeFont(font: RegisteredFont): void
-  shapeBatch(request: ShapeBatchRequest): ShapedBatchViews
-  reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews
+  readonly registry: FontRegistry;
+  registerFont(font: RegisteredFont): void;
+  disposeFont(font: RegisteredFont): void;
+  shapeBatch(request: ShapeBatchRequest): ShapedBatchViews;
+  reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews;
   memoryReport(): {
-    readonly fontCount: number
-    readonly retainedFontBytes: number
-    readonly planCount: number
-    readonly wasmMemoryBytes: number
-  }
-  dispose(): void
+    readonly fontCount: number;
+    readonly retainedFontBytes: number;
+    readonly planCount: number;
+    readonly wasmMemoryBytes: number;
+  };
+  dispose(): void;
 }
 
 interface ShapedBatchViews {
-  readonly fontHandles: Uint32Array
-  readonly runFontSlots: Uint16Array
-  readonly runGlyphStarts: Uint32Array
-  readonly runGlyphCounts: Uint32Array
-  readonly glyphIds: Uint16Array
-  readonly clusters: Uint32Array
-  readonly xAdvances: Int32Array
-  readonly yAdvances: Int32Array
-  readonly xOffsets: Int32Array
-  readonly yOffsets: Int32Array
-  readonly glyphFlags: Uint16Array
+  readonly fontHandles: Uint32Array;
+  readonly runFontSlots: Uint16Array;
+  readonly runGlyphStarts: Uint32Array;
+  readonly runGlyphCounts: Uint32Array;
+  readonly glyphIds: Uint16Array;
+  readonly clusters: Uint32Array;
+  readonly xAdvances: Int32Array;
+  readonly yAdvances: Int32Array;
+  readonly xOffsets: Int32Array;
+  readonly yOffsets: Int32Array;
+  readonly glyphFlags: Uint16Array;
 }
 ```
 
@@ -863,84 +830,84 @@ For `reshapeRanges`, `itemStart..itemEnd` is the text returned for that output r
 
 ```ts
 interface ParagraphStyle {
-  fontSize?: number
+  fontSize?: number;
   /** Unitless multiplier of fontSize. */
-  lineHeight?: number
-  letterSpacing?: number
-  language?: string
-  direction?: 'auto' | 'ltr' | 'rtl'
-  features?: readonly FontFeature[]
+  lineHeight?: number;
+  letterSpacing?: number;
+  language?: string;
+  direction?: 'auto' | 'ltr' | 'rtl';
+  features?: readonly FontFeature[];
 }
 
 interface ParagraphSpan extends ParagraphStyle {
-  start: number
-  end: number
-  font?: FontHandle
+  start: number;
+  end: number;
+  font?: FontHandle;
 }
 
 interface ParagraphInput {
-  text: string
-  font: FontHandle
-  spans?: readonly ParagraphSpan[]
-  style?: ParagraphStyle
+  text: string;
+  font: FontHandle;
+  spans?: readonly ParagraphSpan[];
+  style?: ParagraphStyle;
 }
 
 interface ParagraphEngine {
-  create(input: ParagraphInput): Paragraph
+  create(input: ParagraphInput): Paragraph;
 }
 
 interface ParagraphEngineOptions {
-  shaper: RuntimeShaper
+  shaper: RuntimeShaper;
 }
 
-declare function createParagraphEngine(options: ParagraphEngineOptions): ParagraphEngine
+declare function createParagraphEngine(options: ParagraphEngineOptions): ParagraphEngine;
 
 type ParagraphAxisConstraint =
   | { mode: 'unconstrained' }
   | { mode: 'at-most'; size: number }
-  | { mode: 'exactly'; size: number }
+  | { mode: 'exactly'; size: number };
 
 interface ParagraphConstraints {
-  width?: ParagraphAxisConstraint
-  height?: ParagraphAxisConstraint
-  maxLines?: number
-  wrap?: 'none' | 'word' | 'character'
-  align?: 'start' | 'center' | 'end' | 'justify'
-  overflow?: 'visible' | 'clip' | 'ellipsis'
+  width?: ParagraphAxisConstraint;
+  height?: ParagraphAxisConstraint;
+  maxLines?: number;
+  wrap?: 'none' | 'word' | 'character';
+  align?: 'start' | 'center' | 'end' | 'justify';
+  overflow?: 'visible' | 'clip' | 'ellipsis';
 }
 
 interface ParagraphMeasurement {
-  readonly width: number
-  readonly height: number
-  readonly contentWidth: number
-  readonly contentHeight: number
-  readonly firstBaseline: number
-  readonly lastBaseline: number
-  readonly overflowed: boolean
+  readonly width: number;
+  readonly height: number;
+  readonly contentWidth: number;
+  readonly contentHeight: number;
+  readonly firstBaseline: number;
+  readonly lastBaseline: number;
+  readonly overflowed: boolean;
 }
 
 interface ParagraphLayout extends ParagraphMeasurement {
-  readonly fontHandles: Uint32Array
-  readonly glyphFontSlots: Uint16Array
-  readonly glyphIds: Uint16Array
-  readonly clusters: Uint32Array
-  readonly glyphFontSizes: Float32Array
-  readonly x: Float32Array
-  readonly y: Float32Array
-  readonly glyphFlags: Uint16Array
-  readonly lineTextStarts: Uint32Array
-  readonly lineTextEnds: Uint32Array
-  readonly lineGlyphStarts: Uint32Array
-  readonly lineGlyphCounts: Uint32Array
-  readonly lineBaselines: Float32Array
-  readonly lineAdvances: Float32Array
+  readonly fontHandles: Uint32Array;
+  readonly glyphFontSlots: Uint16Array;
+  readonly glyphIds: Uint16Array;
+  readonly clusters: Uint32Array;
+  readonly glyphFontSizes: Float32Array;
+  readonly x: Float32Array;
+  readonly y: Float32Array;
+  readonly glyphFlags: Uint16Array;
+  readonly lineTextStarts: Uint32Array;
+  readonly lineTextEnds: Uint32Array;
+  readonly lineGlyphStarts: Uint32Array;
+  readonly lineGlyphCounts: Uint32Array;
+  readonly lineBaselines: Float32Array;
+  readonly lineAdvances: Float32Array;
 }
 
 interface Paragraph {
-  measure(constraints?: ParagraphConstraints): ParagraphMeasurement
-  layout(constraints?: ParagraphConstraints): ParagraphLayout
-  update(input: ParagraphInput): void
-  dispose(): void
+  measure(constraints?: ParagraphConstraints): ParagraphMeasurement;
+  layout(constraints?: ParagraphConstraints): ParagraphLayout;
+  update(input: ParagraphInput): void;
+  dispose(): void;
 }
 ```
 
@@ -964,167 +931,135 @@ uikit is the first required third-party integration, but its `CustomLayouting`, 
 
 ```ts
 interface RuntimeRasterBakeRequest<Options> {
-  source: Uint8Array
-  font: RegisteredFont
-  fontFaceIndex: number
-  rasterKey: RasterKey | string
-  options?: Options
-  signal?: AbortSignal
+  source: Uint8Array;
+  font: RegisteredFont;
+  fontFaceIndex: number;
+  rasterKey: RasterKey | string;
+  options?: Options;
+  signal?: AbortSignal;
 }
 
 interface RuntimeRasterBakerModule<Kind extends string, Options> {
-  readonly kind: Kind
-  bake(request: RuntimeRasterBakeRequest<Options>): Promise<RasterBakeArtifact<Kind>>
+  readonly kind: Kind;
+  bake(request: RuntimeRasterBakeRequest<Options>): Promise<RasterBakeArtifact<Kind>>;
 }
 
 type RuntimeRasterBakerLoader<Kind extends string, Options> = () => Promise<
-  | RuntimeRasterBakerModule<Kind, Options>
-  | { default: RuntimeRasterBakerModule<Kind, Options> }
->
+  RuntimeRasterBakerModule<Kind, Options> | { default: RuntimeRasterBakerModule<Kind, Options> }
+>;
 
 interface RasterModule<Kind extends string, Resource, DrawBatch, Options = never> {
-  readonly kind: Kind
-  readonly extension: string
-  readonly version: number
-  readonly runtimeBaker?: RuntimeRasterBakerLoader<Kind, Options>
-  descriptor(options: RasterOptionsArgument<Options>): JsonValue
-  decode(
-    font: RegisteredFont,
-    raster: RegisteredRaster<Kind>,
-    signal?: AbortSignal,
-  ): Promise<Resource>
-  prepare(
-    layout: ParagraphLayout,
-    resource: Resource,
-    fontSlot: FontSlot,
-    signal?: AbortSignal,
-  ): Promise<void>
-  buildBatches(
-    layout: ParagraphLayout,
-    resource: Resource,
-    fontSlot: FontSlot,
-    paint: GlyphPaint,
-  ): DrawBatch
-  validatePaint?(paint: GlyphPaint): void
-  updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void
-  dispose(resource: Resource): void
+  readonly kind: Kind;
+  readonly extension: string;
+  readonly version: number;
+  readonly runtimeBaker?: RuntimeRasterBakerLoader<Kind, Options>;
+  descriptor(options: RasterOptionsArgument<Options>): JsonValue;
+  decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Resource>;
+  prepare(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, signal?: AbortSignal): Promise<void>;
+  buildBatches(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, paint: GlyphPaint): DrawBatch;
+  validatePaint?(paint: GlyphPaint): void;
+  updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void;
+  dispose(resource: Resource): void;
 }
 
-type LinearRgba = readonly [number, number, number, number]
+type LinearRgba = readonly [number, number, number, number];
 
 interface ResolvedPaint {
-  color: LinearRgba
+  color: LinearRgba;
   /** Width is in paragraph-local layout units. */
-  outline?: { color: LinearRgba; width: number }
+  outline?: { color: LinearRgba; width: number };
   /** Offset is in paragraph-local units; positive X is right, positive Y down. */
-  shadow?: { color: LinearRgba; offset: readonly [number, number] }
+  shadow?: { color: LinearRgba; offset: readonly [number, number] };
 }
 
 interface GlyphPaint {
   /** One palette index per ParagraphLayout glyph. */
-  paintIndices: Uint16Array
-  palette: readonly ResolvedPaint[]
+  paintIndices: Uint16Array;
+  palette: readonly ResolvedPaint[];
 }
 
-type AnyRasterModule = RasterModule<string, any, any, any>
+type AnyRasterModule = RasterModule<string, any, any, any>;
 
-type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue }
+type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
-type RasterOptionsArgument<Options> =
-  [Options] extends [never] ? undefined : Options
+type RasterOptionsArgument<Options> = [Options] extends [never] ? undefined : Options;
 
-type RasterKindOf<M extends AnyRasterModule> =
-  M extends RasterModule<infer Kind, any, any, any> ? Kind : never
+type RasterKindOf<M extends AnyRasterModule> = M extends RasterModule<infer Kind, any, any, any> ? Kind : never;
 
 type RasterResourceOf<M extends AnyRasterModule> =
-  M extends RasterModule<any, infer Resource, any, any> ? Resource : never
+  M extends RasterModule<any, infer Resource, any, any> ? Resource : never;
 
-type RasterBatchOf<M extends AnyRasterModule> =
-  M extends RasterModule<any, any, infer Batch, any> ? Batch : never
+type RasterBatchOf<M extends AnyRasterModule> = M extends RasterModule<any, any, infer Batch, any> ? Batch : never;
 
 type RasterOptionsOf<M extends AnyRasterModule> =
-  M extends RasterModule<any, any, any, infer Options> ? Options : never
+  M extends RasterModule<any, any, any, infer Options> ? Options : never;
 
-declare function defineRaster<const M extends AnyRasterModule>(module: M): M
+declare function defineRaster<const M extends AnyRasterModule>(module: M): M;
 
 type RasterRequest<M extends AnyRasterModule> = {
-  module: M
-} & ([RasterOptionsOf<M>] extends [never]
-  ? { options?: never }
-  : { options: RasterOptionsOf<M> })
+  module: M;
+} & ([RasterOptionsOf<M>] extends [never] ? { options?: never } : { options: RasterOptionsOf<M> });
 
-type RasterInput<M extends AnyRasterModule> =
-  [RasterOptionsOf<M>] extends [never]
-    ? M | RasterRequest<M>
-    : RasterRequest<M>
+type RasterInput<M extends AnyRasterModule> = [RasterOptionsOf<M>] extends [never]
+  ? M | RasterRequest<M>
+  : RasterRequest<M>;
 
-type AnyRasterInput =
-  | AnyRasterModule
-  | { module: AnyRasterModule; options?: unknown }
+type AnyRasterInput = AnyRasterModule | { module: AnyRasterModule; options?: unknown };
 
 interface LoadedRaster<M extends AnyRasterModule> {
-  module: M
-  artifact: RegisteredRaster<RasterKindOf<M>>
-  resource: RasterResourceOf<M>
+  module: M;
+  artifact: RegisteredRaster<RasterKindOf<M>>;
+  resource: RasterResourceOf<M>;
 }
 ```
 
 Each raster package owns its configuration surface and returns a typed raster definition. A raster with no required configuration may export a ready-made module value. A module whose options are optional may be passed bare for its canonical defaults or paired with an options object; a module with required options cannot be passed bare. Bitmap exposes only its factory because its strike set is mandatory. MSDF exposes a ready-made module whose optional quality controls default to 64 px/em and a full eight-pixel range:
 
 ```ts
-type StaticNumberTuple<Values extends readonly [number, ...number[]]> =
-  number extends Values[number] ? never : Values
+type StaticNumberTuple<Values extends readonly [number, ...number[]]> = number extends Values[number] ? never : Values;
 
-declare function bitmap<const Strikes extends readonly [number, ...number[]]>(
-  options: { strikes: StaticNumberTuple<Strikes> },
-): RasterRequest<BitmapModule>
+declare function bitmap<const Strikes extends readonly [number, ...number[]]>(options: {
+  strikes: StaticNumberTuple<Strikes>;
+}): RasterRequest<BitmapModule>;
 
 interface MsdfOptions {
   /** Atlas texels per font em; integer 1..=1022, default 64. */
-  readonly emSize?: number
+  readonly emSize?: number;
   /** Full encoded signed-distance range; integer 1..=1020, default 8. */
-  readonly pixelRange?: number
+  readonly pixelRange?: number;
 }
 
-export const msdf: MsdfModule
+export const msdf: MsdfModule;
 
 const compactMsdf = {
   module: msdf,
   options: { emSize: 32, pixelRange: 6 },
-} satisfies RasterRequest<MsdfModule>
+} satisfies RasterRequest<MsdfModule>;
 
-declare const opaqueSnapshotBrand: unique symbol
+declare const opaqueSnapshotBrand: unique symbol;
 
 interface BitmapGlyphPositionSnapshot {
-  readonly glyphCount: number
-  readonly [opaqueSnapshotBrand]: true
+  readonly glyphCount: number;
+  readonly [opaqueSnapshotBrand]: true;
 }
 
 interface BitmapGlyphPositionTransition {
-  readonly matchedGlyphs: number
-  readonly targetGlyphs: number
-  readonly progress: number
-  setProgress(progress: number): void
-  finish(): void
-  dispose(): void
+  readonly matchedGlyphs: number;
+  readonly targetGlyphs: number;
+  readonly progress: number;
+  setProgress(progress: number): void;
+  finish(): void;
+  dispose(): void;
 }
 
-declare function captureBitmapGlyphPositions(
-  object: THREE.Object3D,
-): BitmapGlyphPositionSnapshot
+declare function captureBitmapGlyphPositions(object: THREE.Object3D): BitmapGlyphPositionSnapshot;
 
 declare function createBitmapGlyphPositionTransition(
   object: THREE.Object3D,
   from: BitmapGlyphPositionSnapshot,
-): BitmapGlyphPositionTransition
+): BitmapGlyphPositionTransition;
 
-export const slug: SlugModule
+export const slug: SlugModule;
 ```
 
 Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, no greater than the exported `MAX_BITMAP_PPEM` value of 1022, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
@@ -1138,9 +1073,7 @@ The resource and draw-batch types are owned by their optional raster packages. `
 Raster module values and package-created raster definitions are the only public selection mechanisms. The API does not accept `raster="msdf"`, maintain a built-in name registry, or automatically replace the caller's selected module. External packages implement the same interfaces and own their option types. The built-in MSDF module consumes one MTSDF resource and one batch: fill coverage uses the median of RGB, while outlines and other true-distance effects may use alpha. It never creates parallel MSDF and MTSDF batches.
 
 ```ts
-const deferredMsdf = lazyRaster(() =>
-  import('@pmndrs/text/raster/msdf').then((module) => module.msdf),
-)
+const deferredMsdf = lazyRaster(() => import('@pmndrs/text/raster/msdf').then((module) => module.msdf));
 ```
 
 `decode` validates the raster binding, page directory, and flat records without requiring every external page to become resident. `prepare` examines only glyphs belonging to the supplied font slot, resolves the logical pages they reference, and deduplicates fetch/decode/transcode/upload work. Eager Latin-sized modules may complete it immediately; paged CJK and icon resources may load only the pages required by the positioned run. Core awaits every participating module's `prepare` call before invoking `buildBatches` for a new draw generation.
@@ -1152,58 +1085,51 @@ Bitmap and distance-field records remain CPU-side typed-array inputs for bulk in
 Runtime raster modules and their dynamically loaded generators remain separate modules, but their literal kind connects their contracts:
 
 ```ts
-interface RasterBakerModule<
-  Kind extends string,
-  Options,
-  Descriptor,
-> {
-  readonly kind: Kind
-  readonly extension: string
-  readonly version: number
-  descriptor(options: Options): Descriptor
-  bake(request: RasterBakeRequest<Descriptor>): Promise<RasterBakeArtifact<Kind>>
+interface RasterBakerModule<Kind extends string, Options, Descriptor> {
+  readonly kind: Kind;
+  readonly extension: string;
+  readonly version: number;
+  descriptor(options: Options): Descriptor;
+  bake(request: RasterBakeRequest<Descriptor>): Promise<RasterBakeArtifact<Kind>>;
 }
 
 interface RasterBakeFontContext {
-  source: Uint8Array
-  fontFaceIndex: number
-  glyphCount: number
-  shapingHash: string
+  source: Uint8Array;
+  fontFaceIndex: number;
+  glyphCount: number;
+  shapingHash: string;
 }
 
 interface RasterBakeRequest<Descriptor> {
-  font: RasterBakeFontContext
-  rasterKey: string
-  packaging: RasterPackagingV0
-  descriptor: Descriptor
-  signal?: AbortSignal
+  font: RasterBakeFontContext;
+  rasterKey: string;
+  packaging: RasterPackagingV0;
+  descriptor: Descriptor;
+  signal?: AbortSignal;
 }
 
 interface RasterPackagingV0 {
-  artifact: 'embedded' | 'external'
-  pages: 'embedded' | 'external'
+  artifact: 'embedded' | 'external';
+  pages: 'embedded' | 'external';
 }
 
 interface RasterBakeArtifact<Kind extends string = string> {
-  rasterKey: string
-  kind: Kind
-  extension: string
-  version: number
-  artifacts: readonly BakeArtifactV0[]
-  report: RasterPayloadReport
+  rasterKey: string;
+  kind: Kind;
+  extension: string;
+  version: number;
+  artifacts: readonly BakeArtifactV0[];
+  report: RasterPayloadReport;
 }
 
-declare function defineRasterBaker<
-  const Kind extends string,
-  Options,
-  Descriptor,
->(module: RasterBakerModule<Kind, Options, Descriptor>):
-  RasterBakerModule<Kind, Options, Descriptor>
+declare function defineRasterBaker<const Kind extends string, Options, Descriptor>(
+  module: RasterBakerModule<Kind, Options, Descriptor>,
+): RasterBakerModule<Kind, Options, Descriptor>;
 
 interface RasterBakePlan<M extends AnyRasterBakerModule> {
-  baker: M
-  packaging: RasterPackagingV0
-  options: RasterBakeOptionsOf<M>
+  baker: M;
+  packaging: RasterPackagingV0;
+  options: RasterBakeOptionsOf<M>;
 }
 ```
 

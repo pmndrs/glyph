@@ -4,22 +4,22 @@ title: Rendering implementation difficulty
 description: Compares the relative effort to make bitmap, MSDF, and Slug rasters correct and performant.
 tags: [planning, rendering, effort]
 sources:
-  - id: "citation-1"
-    resource: "https://lup.lub.lu.se/luur/download?func=downloadFile&recordOId=9024910&fileOId=9024911"
-    title: "GPU-accelerated text rendering thesis"
-  - id: "citation-2"
-    resource: "https://github.com/texel-org/windfoil"
-    title: "texel-org/windfoil"
-  - id: "citation-3"
-    resource: "https://github.com/thejustinwalsh/three-flatland/blob/feat/uikit-fork/planning/perf/slug-uikit-shader-perf-plan.md"
-    title: "Three Flatland Slug/uikit performance plan"
-  - id: "citation-4"
-    resource: "../../RESEARCH.md"
-    title: "Research bibliography"
+  - id: 'citation-1'
+    resource: 'https://lup.lub.lu.se/luur/download?func=downloadFile&recordOId=9024910&fileOId=9024911'
+    title: 'GPU-accelerated text rendering thesis'
+  - id: 'citation-2'
+    resource: 'https://github.com/texel-org/windfoil'
+    title: 'texel-org/windfoil'
+  - id: 'citation-3'
+    resource: 'https://github.com/thejustinwalsh/three-flatland/blob/feat/uikit-fork/planning/perf/slug-uikit-shader-perf-plan.md'
+    title: 'Three Flatland Slug/uikit performance plan'
+  - id: 'citation-4'
+    resource: '../../RESEARCH.md'
+    title: 'Research bibliography'
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: 'openai-codex/gpt-5'
+  at: '2026-07-25T01:24:00Z'
 ---
 
 # Rendering implementation difficulty
@@ -36,12 +36,12 @@ Scores are relative planning estimates from 1 (lowest effort/risk) to 5 (highest
 
 ## Ranked summary
 
-| Rank | Technique | Make it work | Make it performant | Primary difficulty |
-| ---: | --- | :---: | :---: | --- |
-| 1 | Generated grayscale bitmap strikes | 2 | 2 | Deterministic rasterization, bounds, atlas packing, and optional hinting; the runtime shader is simple. |
-| 2 | MSDF | 3 | 2 | MTSDF edge coloring, field generation, padding, and atlas quality are harder than the runtime sampling path. |
-| 3 | Slug | 4 | 5 | Correct curve/band generation and robust analytic coverage are followed by fill-bound per-fragment curve work. |
-| — | Windfoil (research only) | 5 | 5 | General-vector technique outside the current text roadmap; no implementation is planned. |
+| Rank | Technique                          | Make it work | Make it performant | Primary difficulty                                                                                             |
+| ---: | ---------------------------------- | :----------: | :----------------: | -------------------------------------------------------------------------------------------------------------- |
+|    1 | Generated grayscale bitmap strikes |      2       |         2          | Deterministic rasterization, bounds, atlas packing, and optional hinting; the runtime shader is simple.        |
+|    2 | MSDF                               |      3       |         2          | MTSDF edge coloring, field generation, padding, and atlas quality are harder than the runtime sampling path.   |
+|    3 | Slug                               |      4       |         5          | Correct curve/band generation and robust analytic coverage are followed by fill-bound per-fragment curve work. |
+|    — | Windfoil (research only)           |      5       |         5          | General-vector technique outside the current text roadmap; no implementation is planned.                       |
 
 ## 1. Generated bitmap strikes
 

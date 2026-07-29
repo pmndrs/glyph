@@ -1,15 +1,14 @@
-import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
+import type { BenchmarkMeasurement } from '../src/benchmark/contracts';
 
-const executionPath = '/src/benchmark/execution.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const executionPath = '/src/benchmark/execution.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
-])
-const environment = await environmentResource()
-if (environment.webgpu !== true)
-  throw new Error('TSL renderer probe requires WebGPU-capable Chrome')
-const expectedHash = 'fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77'
+]);
+const environment = await environmentResource();
+if (environment.webgpu !== true) throw new Error('TSL renderer probe requires WebGPU-capable Chrome');
+const expectedHash = 'fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77';
 
 for (const [targetId, backendMetric] of [
   ['tsl-webgpu-baseline', 'backendWebGpu'],
@@ -21,7 +20,7 @@ for (const [targetId, backendMetric] of [
     input: {},
     controls: { dpr: 1, samples: 3, warmup: 1 },
     environment,
-  })
+  });
   if (
     result.status !== 'passed' ||
     result.measurements.length !== 3 ||
@@ -34,7 +33,7 @@ for (const [targetId, backendMetric] of [
         measurement.metrics.exactRedPixels !== 16,
     )
   ) {
-    throw new Error(`${targetId} did not preserve its exact TSL renderer contract`)
+    throw new Error(`${targetId} did not preserve its exact TSL renderer contract`);
   }
   console.log(
     'tsl-renderer-ready',
@@ -43,7 +42,7 @@ for (const [targetId, backendMetric] of [
       hash: result.measurements[0]?.hash,
       validation: result.validation,
     }),
-  )
+  );
 }
 
-export {}
+export {};

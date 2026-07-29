@@ -1,23 +1,15 @@
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
 
-import { createFontBaker } from "../../dist/index.js";
-import { FontArtifactValidationError, validateFontArtifact } from "../../dist/validator.js";
-import {
-  FONT_ARTIFACT_FUZZ_SEED,
-  mutateFontArtifact,
-} from "../support/font-artifact-mutations.mjs";
+import { createFontBaker } from '../../dist/index.js';
+import { FontArtifactValidationError, validateFontArtifact } from '../../dist/validator.js';
+import { FONT_ARTIFACT_FUZZ_SEED, mutateFontArtifact } from '../support/font-artifact-mutations.mjs';
 
-test("fixed-seed font artifact mutations fail safely and deterministically", async () => {
+test('fixed-seed font artifact mutations fail safely and deterministically', async () => {
   const [source, wasm] = await Promise.all([
-    readFile(
-      new URL(
-        "../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
-        import.meta.url,
-      ),
-    ),
-    readFile(new URL("../../dist/font_baker.wasm", import.meta.url)),
+    readFile(new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
   ]);
   const baker = await createFontBaker(wasm);
   const artifact = baker.bake({

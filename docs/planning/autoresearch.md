@@ -5,7 +5,7 @@ description: Governs evidence-based optimization experiments that cannot trade a
 tags: [optimization, benchmarks, quality]
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T20:20:41Z"
+  at: '2026-07-26T20:20:41Z'
 ---
 
 # Autoresearch optimization protocol

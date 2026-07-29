@@ -11,32 +11,28 @@ import {
   read as readKtx2,
   type KTX2Container,
   type KTX2DataFormatDescriptorBasicFormat,
-} from 'ktx-parse'
+} from 'ktx-parse';
 
-export type RasterKtxValidationErrorCode =
-  | 'KTX2_INVALID'
-  | 'KTX2_VARIANT'
-  | 'KTX2_DFD'
-  | 'KTX2_METADATA'
+export type RasterKtxValidationErrorCode = 'KTX2_INVALID' | 'KTX2_VARIANT' | 'KTX2_DFD' | 'KTX2_METADATA';
 
 export class RasterKtxValidationError extends Error {
-  readonly code: RasterKtxValidationErrorCode
+  readonly code: RasterKtxValidationErrorCode;
 
   constructor(code: RasterKtxValidationErrorCode, message: string, options?: ErrorOptions) {
-    super(message, options)
-    this.name = 'RasterKtxValidationError'
-    this.code = code
+    super(message, options);
+    this.name = 'RasterKtxValidationError';
+    this.code = code;
   }
 }
 
 export interface NativeKtx2Format {
-  readonly vkFormat: number
-  readonly typeSize?: number
-  readonly blockWidth: number
-  readonly blockHeight: number
-  readonly bytesPerBlock: number
-  readonly uncompressedChannelTypes?: readonly number[]
-  readonly float16ChannelTypes?: readonly number[]
+  readonly vkFormat: number;
+  readonly typeSize?: number;
+  readonly blockWidth: number;
+  readonly blockHeight: number;
+  readonly bytesPerBlock: number;
+  readonly uncompressedChannelTypes?: readonly number[];
+  readonly float16ChannelTypes?: readonly number[];
 }
 
 export function validateNativeKtx2(
@@ -45,21 +41,19 @@ export function validateNativeKtx2(
   height: number,
   format: NativeKtx2Format,
 ): KTX2Container {
-  let container: KTX2Container
+  let container: KTX2Container;
   try {
-    container = readKtx2(bytes)
+    container = readKtx2(bytes);
   } catch (error) {
-    throw new RasterKtxValidationError(
-      'KTX2_INVALID',
-      error instanceof Error ? error.message : String(error),
-      { cause: error },
-    )
+    throw new RasterKtxValidationError('KTX2_INVALID', error instanceof Error ? error.message : String(error), {
+      cause: error,
+    });
   }
-  const horizontalBlocks = Math.ceil(width / format.blockWidth)
-  const verticalBlocks = Math.ceil(height / format.blockHeight)
-  const expectedBytes = horizontalBlocks * verticalBlocks * format.bytesPerBlock
+  const horizontalBlocks = Math.ceil(width / format.blockWidth);
+  const verticalBlocks = Math.ceil(height / format.blockHeight);
+  const expectedBytes = horizontalBlocks * verticalBlocks * format.bytesPerBlock;
   if (!Number.isSafeInteger(expectedBytes)) {
-    throw new RasterKtxValidationError('KTX2_VARIANT', 'KTX2 payload size overflowed')
+    throw new RasterKtxValidationError('KTX2_VARIANT', 'KTX2 payload size overflowed');
   }
   if (
     container.vkFormat !== format.vkFormat ||
@@ -78,20 +72,16 @@ export function validateNativeKtx2(
     throw new RasterKtxValidationError(
       'KTX2_VARIANT',
       'KTX2 must be an uncompressed single-level native image matching its declared dimensions and GPU format',
-    )
+    );
   }
   if (
     format.uncompressedChannelTypes !== undefined &&
-    !isLinearUnormDescriptor(
-      container.dataFormatDescriptor,
-      format.bytesPerBlock,
-      format.uncompressedChannelTypes,
-    )
+    !isLinearUnormDescriptor(container.dataFormatDescriptor, format.bytesPerBlock, format.uncompressedChannelTypes)
   ) {
     throw new RasterKtxValidationError(
       'KTX2_DFD',
       'KTX2 data format descriptor does not match its linear UNORM channels',
-    )
+    );
   }
   if (
     format.float16ChannelTypes !== undefined &&
@@ -100,22 +90,19 @@ export function validateNativeKtx2(
     throw new RasterKtxValidationError(
       'KTX2_DFD',
       'KTX2 data format descriptor does not match its linear signed float16 channels',
-    )
+    );
   }
   if (Object.keys(container.keyValue).length !== 0 || container.globalData !== null) {
-    throw new RasterKtxValidationError(
-      'KTX2_METADATA',
-      'baseline KTX2 pages must not contain auxiliary metadata',
-    )
+    throw new RasterKtxValidationError('KTX2_METADATA', 'baseline KTX2 pages must not contain auxiliary metadata');
   }
-  return container
+  return container;
 }
 
 function isLinearFloat16Descriptor(
   descriptors: readonly KTX2DataFormatDescriptorBasicFormat[],
   channelTypes: readonly number[],
 ): boolean {
-  const descriptor = descriptors.length === 1 ? descriptors[0] : undefined
+  const descriptor = descriptors.length === 1 ? descriptors[0] : undefined;
   if (
     descriptor === undefined ||
     descriptor.vendorId !== KHR_DF_VENDORID_KHRONOS ||
@@ -129,9 +116,9 @@ function isLinearFloat16Descriptor(
     !equalNumbers(descriptor.bytesPlane, [8, 0, 0, 0, 0, 0, 0, 0]) ||
     descriptor.samples.length !== channelTypes.length
   ) {
-    return false
+    return false;
   }
-  const qualifiers = KHR_DF_SAMPLE_DATATYPE_SIGNED | KHR_DF_SAMPLE_DATATYPE_FLOAT
+  const qualifiers = KHR_DF_SAMPLE_DATATYPE_SIGNED | KHR_DF_SAMPLE_DATATYPE_FLOAT;
   return descriptor.samples.every(
     (sample, index) =>
       sample.bitOffset === index * 16 &&
@@ -140,7 +127,7 @@ function isLinearFloat16Descriptor(
       equalNumbers(sample.samplePosition, [0, 0, 0, 0]) &&
       sample.sampleLower === -1_082_130_432 &&
       sample.sampleUpper === 0x3f80_0000,
-  )
+  );
 }
 
 function isLinearUnormDescriptor(
@@ -148,7 +135,7 @@ function isLinearUnormDescriptor(
   bytesPerTexel: number,
   channelTypes: readonly number[],
 ): boolean {
-  const descriptor = descriptors.length === 1 ? descriptors[0] : undefined
+  const descriptor = descriptors.length === 1 ? descriptors[0] : undefined;
   if (
     descriptor === undefined ||
     descriptor.vendorId !== KHR_DF_VENDORID_KHRONOS ||
@@ -162,7 +149,7 @@ function isLinearUnormDescriptor(
     !equalNumbers(descriptor.bytesPlane, [bytesPerTexel, 0, 0, 0, 0, 0, 0, 0]) ||
     descriptor.samples.length !== channelTypes.length
   ) {
-    return false
+    return false;
   }
   return descriptor.samples.every(
     (sample, index) =>
@@ -172,9 +159,9 @@ function isLinearUnormDescriptor(
       equalNumbers(sample.samplePosition, [0, 0, 0, 0]) &&
       sample.sampleLower === 0 &&
       sample.sampleUpper === 255,
-  )
+  );
 }
 
 function equalNumbers(left: readonly number[], right: readonly number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index])
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

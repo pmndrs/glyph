@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import type { BenchmarkMeasurement } from './contracts'
-import { scenarioById } from './scenarios'
+import type { BenchmarkMeasurement } from './contracts';
+import { scenarioById } from './scenarios';
 
 const sceneMeasurement: BenchmarkMeasurement = {
   sample: 0,
@@ -25,7 +25,7 @@ const sceneMeasurement: BenchmarkMeasurement = {
     firstDrawMs: 1,
     renderMs: 1,
   },
-}
+};
 
 const samplingMeasurement: BenchmarkMeasurement = {
   sample: 0,
@@ -44,7 +44,7 @@ const samplingMeasurement: BenchmarkMeasurement = {
     errorPixels: 3_231,
     renderMs: 1,
   },
-}
+};
 
 const slugSamplingMeasurement: BenchmarkMeasurement = {
   ...samplingMeasurement,
@@ -54,7 +54,7 @@ const slugSamplingMeasurement: BenchmarkMeasurement = {
     fixtureIsDotGothic: 0,
     severeErrorPixels: 0,
   },
-}
+};
 
 const sourceOutlineMeasurement: BenchmarkMeasurement = {
   sample: 0,
@@ -74,7 +74,7 @@ const sourceOutlineMeasurement: BenchmarkMeasurement = {
     errorPixels: 5_852,
     renderMs: 1,
   },
-}
+};
 
 const runtimeFallbackMeasurement: BenchmarkMeasurement = {
   sample: 0,
@@ -82,12 +82,12 @@ const runtimeFallbackMeasurement: BenchmarkMeasurement = {
   outputBytes: 384 * 128 * 4,
   hash: 'runtime-fallback-frame',
   metrics: { mismatchBytes: 0, changedPixels: 0, maximumError: 0, renderMs: 1 },
-}
+};
 
 describe('MTSDF scenario acceptance', () => {
   it('requires exact runtime fallback parity', () => {
-    const scenario = scenarioById('runtime-fallback-parity')
-    expect(scenario.validate([runtimeFallbackMeasurement])).toContain('exact baked/runtime')
+    const scenario = scenarioById('runtime-fallback-parity');
+    expect(scenario.validate([runtimeFallbackMeasurement])).toContain('exact baked/runtime');
     expect(() =>
       scenario.validate([
         {
@@ -95,28 +95,25 @@ describe('MTSDF scenario acceptance', () => {
           metrics: { ...runtimeFallbackMeasurement.metrics, changedPixels: 1 },
         },
       ]),
-    ).toThrow('runtime-baked rendering diverged')
-  })
+    ).toThrow('runtime-baked rendering diverged');
+  });
   it('accepts renderer-specific MTSDF pixels but rejects drift within one run', () => {
-    const scenario = scenarioById('mtsdf-text-scenes')
-    expect(scenario.validate([sceneMeasurement])).toContain('deterministic MTSDF')
-    expect(() =>
-      scenario.validate([sceneMeasurement, { ...sceneMeasurement, hash: 'second-renderer-frame' }]),
-    ).toThrow('Output hash changed between samples')
-  })
+    const scenario = scenarioById('mtsdf-text-scenes');
+    expect(scenario.validate([sceneMeasurement])).toContain('deterministic MTSDF');
+    expect(() => scenario.validate([sceneMeasurement, { ...sceneMeasurement, hash: 'second-renderer-frame' }])).toThrow(
+      'Output hash changed between samples',
+    );
+  });
 
   it('rejects sampling error outside the reviewed base-level envelope', () => {
-    const scenario = scenarioById('mtsdf-sampling-conformance')
-    expect(scenario.validate([samplingMeasurement])).toContain('CPU MTSDF comparison')
-    expect(
-      scenario.validate([{ ...samplingMeasurement, hash: 'renderer-specific-frame' }]),
-    ).toContain('CPU MTSDF comparison')
+    const scenario = scenarioById('mtsdf-sampling-conformance');
+    expect(scenario.validate([samplingMeasurement])).toContain('CPU MTSDF comparison');
+    expect(scenario.validate([{ ...samplingMeasurement, hash: 'renderer-specific-frame' }])).toContain(
+      'CPU MTSDF comparison',
+    );
     expect(() =>
-      scenario.validate([
-        samplingMeasurement,
-        { ...samplingMeasurement, hash: 'renderer-specific-frame' },
-      ]),
-    ).toThrow('Output hash changed between samples')
+      scenario.validate([samplingMeasurement, { ...samplingMeasurement, hash: 'renderer-specific-frame' }]),
+    ).toThrow('Output hash changed between samples');
     expect(() =>
       scenario.validate([
         {
@@ -124,7 +121,7 @@ describe('MTSDF scenario acceptance', () => {
           metrics: { ...samplingMeasurement.metrics, meanAbsoluteError: 0.251 },
         },
       ]),
-    ).toThrow('comparison contract')
+    ).toThrow('comparison contract');
     expect(() =>
       scenario.validate([
         {
@@ -132,12 +129,12 @@ describe('MTSDF scenario acceptance', () => {
           metrics: { ...samplingMeasurement.metrics, errorPixels: 6_000 },
         },
       ]),
-    ).toThrow('comparison contract')
-  })
+    ).toThrow('comparison contract');
+  });
 
   it('contains the grid-aligned DotGothic exception with a severe-pixel count', () => {
-    const scenario = scenarioById('slug-sampling-conformance')
-    expect(scenario.validate([slugSamplingMeasurement])).toContain('CPU Slug comparison')
+    const scenario = scenarioById('slug-sampling-conformance');
+    expect(scenario.validate([slugSamplingMeasurement])).toContain('CPU Slug comparison');
     expect(() =>
       scenario.validate([
         {
@@ -145,7 +142,7 @@ describe('MTSDF scenario acceptance', () => {
           metrics: { ...slugSamplingMeasurement.metrics, maximumError: 129 },
         },
       ]),
-    ).toThrow('comparison contract')
+    ).toThrow('comparison contract');
     const dotGothic = {
       ...slugSamplingMeasurement,
       metrics: {
@@ -154,20 +151,18 @@ describe('MTSDF scenario acceptance', () => {
         maximumError: 255,
         severeErrorPixels: 64,
       },
-    }
-    expect(scenario.validate([dotGothic])).toContain('CPU Slug comparison')
+    };
+    expect(scenario.validate([dotGothic])).toContain('CPU Slug comparison');
     expect(() =>
-      scenario.validate([
-        { ...dotGothic, metrics: { ...dotGothic.metrics, severeErrorPixels: 65 } },
-      ]),
-    ).toThrow('comparison contract')
-  })
+      scenario.validate([{ ...dotGothic, metrics: { ...dotGothic.metrics, severeErrorPixels: 65 } }]),
+    ).toThrow('comparison contract');
+  });
 
   it('rejects source-outline error outside the reviewed browser envelope', () => {
-    const scenario = scenarioById('source-outline-fidelity')
+    const scenario = scenarioById('source-outline-fidelity');
     expect(scenario.validate([sourceOutlineMeasurement])).toContain(
       'source-outline comparisons within reviewed envelopes',
-    )
+    );
     expect(() =>
       scenario.validate([
         {
@@ -175,7 +170,7 @@ describe('MTSDF scenario acceptance', () => {
           metrics: { ...sourceOutlineMeasurement.metrics, meanAbsoluteError: 12.001 },
         },
       ]),
-    ).toThrow('reviewed browser coverage envelope')
+    ).toThrow('reviewed browser coverage envelope');
     expect(() =>
       scenario.validate([
         {
@@ -186,11 +181,11 @@ describe('MTSDF scenario acceptance', () => {
           },
         },
       ]),
-    ).toThrow('reviewed browser coverage envelope')
-  })
+    ).toThrow('reviewed browser coverage envelope');
+  });
 
   it('keeps the pixel-style Canvas envelope separate from ordinary outlines', () => {
-    const scenario = scenarioById('source-outline-fidelity')
+    const scenario = scenarioById('source-outline-fidelity');
     const dotGothic = {
       ...sourceOutlineMeasurement,
       metrics: {
@@ -201,12 +196,10 @@ describe('MTSDF scenario acceptance', () => {
         physicalPpem: 64,
         meanAbsoluteError: 24,
       },
-    }
-    expect(scenario.validate([dotGothic])).toContain('source-outline comparisons')
+    };
+    expect(scenario.validate([dotGothic])).toContain('source-outline comparisons');
     expect(() =>
-      scenario.validate([
-        { ...dotGothic, metrics: { ...dotGothic.metrics, meanAbsoluteError: 24.001 } },
-      ]),
-    ).toThrow('reviewed browser coverage envelope')
-  })
-})
+      scenario.validate([{ ...dotGothic, metrics: { ...dotGothic.metrics, meanAbsoluteError: 24.001 } }]),
+    ).toThrow('reviewed browser coverage envelope');
+  });
+});

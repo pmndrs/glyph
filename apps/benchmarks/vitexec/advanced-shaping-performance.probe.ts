@@ -1,26 +1,26 @@
-const advancedShapingPath = '/src/benchmark/advanced-shaping.ts'
-const environmentPath = '/src/benchmark/environment.ts'
-const STEADY_STATE_REPORT_COUNT = 12
+const advancedShapingPath = '/src/benchmark/advanced-shaping.ts';
+const environmentPath = '/src/benchmark/environment.ts';
+const STEADY_STATE_REPORT_COUNT = 12;
 const [{ ADVANCED_SHAPING_CASES }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ advancedShapingPath),
   import(/* @vite-ignore */ environmentPath),
-])
+]);
 
-;(await waitForEnabledButton('WebGPU')).click()
-;(await waitForEnabledButton('1× DPR')).click()
-;(await waitForEnabledButton('Advanced shaping', true)).click()
-console.log('advanced-shaping-performance-start')
+(await waitForEnabledButton('WebGPU')).click();
+(await waitForEnabledButton('1× DPR')).click();
+(await waitForEnabledButton('Advanced shaping', true)).click();
+console.log('advanced-shaping-performance-start');
 
-const caseSelector = await waitForSelect('Case')
-const setSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
-if (setSelectValue === undefined) throw new Error('Native select value setter is unavailable')
+const caseSelector = await waitForSelect('Case');
+const setSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+if (setSelectValue === undefined) throw new Error('Native select value setter is unavailable');
 
-const cases: Array<Record<string, number | string>> = []
+const cases: Array<Record<string, number | string>> = [];
 for (const definition of ADVANCED_SHAPING_CASES) {
-  console.log('advanced-shaping-performance-select', definition.id)
-  setSelectValue.call(caseSelector, definition.id)
-  caseSelector.dispatchEvent(new Event('change', { bubbles: true }))
-  const authoredText = definition.showcaseRevealUnits.join('')
+  console.log('advanced-shaping-performance-select', definition.id);
+  setSelectValue.call(caseSelector, definition.id);
+  caseSelector.dispatchEvent(new Event('change', { bubbles: true }));
+  const authoredText = definition.showcaseRevealUnits.join('');
   const viewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
     'data-dpr': '1',
@@ -28,18 +28,18 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     'data-settled-tick': String(definition.showcaseRevealUnits.length),
     'data-settled-text-length': String(authoredText.length),
     'data-missing-glyph-count': '0',
-  })
+  });
   if (viewport.getAttribute('data-gpu-timing-supported') !== 'true') {
-    throw new Error(`${definition.id} did not expose WebGPU timestamp queries`)
+    throw new Error(`${definition.id} did not expose WebGPU timestamp queries`);
   }
-  console.log('advanced-shaping-performance-settled', definition.id)
-  const previousFrameCount = numericAttribute(viewport, 'data-frame-count')
+  console.log('advanced-shaping-performance-settled', definition.id);
+  const previousFrameCount = numericAttribute(viewport, 'data-frame-count');
   await Promise.all([
     waitForGreaterNumericAttribute(viewport, 'data-frame-count', previousFrameCount),
     waitForAtLeastNumericAttribute(viewport, 'data-gpu-history-length', STEADY_STATE_REPORT_COUNT),
     waitForAtLeastNumericAttribute(viewport, 'data-fps-history-length', STEADY_STATE_REPORT_COUNT),
-  ])
-  console.log('advanced-shaping-performance-sampled', definition.id)
+  ]);
+  console.log('advanced-shaping-performance-sampled', definition.id);
   cases.push({
     id: definition.id,
     fontFixture: definition.fontFixture,
@@ -58,11 +58,11 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     artifactBytes: numericAttribute(viewport, 'data-artifact-bytes'),
     atlasGpuBytes: numericAttribute(viewport, 'data-atlas-gpu-bytes'),
     totalGpuBytes: numericAttribute(viewport, 'data-total-gpu-bytes'),
-  })
+  });
 }
 
-const gpuAdapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' })
-const gpuAdapterInfo = gpuAdapter?.info
+const gpuAdapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
+const gpuAdapterInfo = gpuAdapter?.info;
 console.log(
   'advanced-shaping-performance-ready',
   JSON.stringify({
@@ -84,86 +84,74 @@ console.log(
           },
     cases,
   }),
-)
+);
 
 function waitForEnabledButton(label: string, includes = false): Promise<HTMLButtonElement> {
   const find = (): HTMLButtonElement | undefined =>
     [...document.querySelectorAll<HTMLButtonElement>('button')].find(
       (candidate) =>
         !candidate.disabled &&
-        (includes
-          ? candidate.textContent?.includes(label) === true
-          : candidate.textContent?.trim() === label),
-    )
-  const current = find()
-  if (current !== undefined) return Promise.resolve(current)
-  return observeUntil(document.documentElement, find)
+        (includes ? candidate.textContent?.includes(label) === true : candidate.textContent?.trim() === label),
+    );
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(document.documentElement, find);
 }
 
 function waitForSelect(label: string): Promise<HTMLSelectElement> {
   const find = (): HTMLSelectElement | undefined =>
     [...document.querySelectorAll<HTMLSelectElement>('select')].find(
       (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
-    )
-  const current = find()
-  if (current !== undefined) return Promise.resolve(current)
-  return observeUntil(document.documentElement, find)
+    );
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(document.documentElement, find);
 }
 
-function waitForLiveViewportState(
-  attributes: Readonly<Record<string, string>>,
-): Promise<HTMLElement> {
+function waitForLiveViewportState(attributes: Readonly<Record<string, string>>): Promise<HTMLElement> {
   const find = (): HTMLElement | undefined => {
-    const viewport = document.querySelector<HTMLElement>('[data-testid="bitmap-live-viewport"]')
+    const viewport = document.querySelector<HTMLElement>('[data-testid="bitmap-live-viewport"]');
     if (
       viewport === null ||
       Object.entries(attributes).some(([name, value]) => viewport.getAttribute(name) !== value)
     ) {
-      return undefined
+      return undefined;
     }
-    return viewport
-  }
-  const current = find()
-  if (current !== undefined) return Promise.resolve(current)
-  return observeUntil(document.documentElement, find)
+    return viewport;
+  };
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(document.documentElement, find);
 }
 
-function waitForGreaterNumericAttribute(
-  element: HTMLElement,
-  name: string,
-  previous: number,
-): Promise<number> {
+function waitForGreaterNumericAttribute(element: HTMLElement, name: string, previous: number): Promise<number> {
   const find = (): number | undefined => {
-    const value = numericAttribute(element, name)
-    return value > previous ? value : undefined
-  }
-  const current = find()
-  if (current !== undefined) return Promise.resolve(current)
-  return observeUntil(element, find, { attributes: true, attributeFilter: [name] })
+    const value = numericAttribute(element, name);
+    return value > previous ? value : undefined;
+  };
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(element, find, { attributes: true, attributeFilter: [name] });
 }
 
-function waitForAtLeastNumericAttribute(
-  element: HTMLElement,
-  name: string,
-  minimum: number,
-): Promise<number> {
+function waitForAtLeastNumericAttribute(element: HTMLElement, name: string, minimum: number): Promise<number> {
   const find = (): number | undefined => {
-    const value = numericAttribute(element, name)
-    return value >= minimum ? value : undefined
-  }
-  const current = find()
-  if (current !== undefined) return Promise.resolve(current)
-  return observeUntil(element, find, { attributes: true, attributeFilter: [name] })
+    const value = numericAttribute(element, name);
+    return value >= minimum ? value : undefined;
+  };
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(element, find, { attributes: true, attributeFilter: [name] });
 }
 
 function numericAttribute(element: HTMLElement, name: string): number {
-  const raw = element.getAttribute(name)
-  if (raw === null) throw new Error(`${name} is missing from the live viewport`)
-  const value = Number(raw)
+  const raw = element.getAttribute(name);
+  if (raw === null) throw new Error(`${name} is missing from the live viewport`);
+  const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`${name} is not a finite non-negative live metric`)
+    throw new Error(`${name} is not a finite non-negative live metric`);
   }
-  return value
+  return value;
 }
 
 function observeUntil<T>(
@@ -173,13 +161,13 @@ function observeUntil<T>(
 ): Promise<T> {
   return new Promise((resolve) => {
     const observer = new MutationObserver(() => {
-      const value = read()
-      if (value === undefined) return
-      observer.disconnect()
-      resolve(value)
-    })
-    observer.observe(root, options)
-  })
+      const value = read();
+      if (value === undefined) return;
+      observer.disconnect();
+      resolve(value);
+    });
+    observer.observe(root, options);
+  });
 }
 
-export {}
+export {};

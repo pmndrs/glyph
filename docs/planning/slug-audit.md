@@ -4,19 +4,19 @@ title: Three Flatland Slug audit
 description: Identifies reusable prior art, required rewrites, and the reuse plan for the Three Flatland Slug implementation.
 tags: [slug, audit, prior-art]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug"
-    title: "Three Flatland Slug at the audited revision"
-  - id: "citation-2"
-    resource: "https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60"
-    title: "Three Flatland uikit fork at the reviewed revision"
-  - id: "citation-3"
-    resource: "../../RESEARCH.md"
-    title: "Research bibliography"
+  - id: 'citation-1'
+    resource: 'https://github.com/thejustinwalsh/three-flatland/tree/c596ac2313e33cace825fe197a6d730269019175/packages/slug'
+    title: 'Three Flatland Slug at the audited revision'
+  - id: 'citation-2'
+    resource: 'https://github.com/thejustinwalsh/three-flatland/tree/2935a89fcd9999e8a8b3d3b733f7f7302285cd60'
+    title: 'Three Flatland uikit fork at the reviewed revision'
+  - id: 'citation-3'
+    resource: '../../RESEARCH.md'
+    title: 'Research bibliography'
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T01:24:00Z"
+  by: 'openai-codex/gpt-5'
+  at: '2026-07-25T01:24:00Z'
 ---
 
 # Three Flatland Slug audit
@@ -267,32 +267,32 @@ The package includes valuable test categories:
 
 The README records an Inter Regular Slug-raster baseline:
 
-| Subset | Glyphs | Raw | Gzip | Brotli |
-| --- | ---: | ---: | ---: | ---: |
-| All | 2,849 | 12.78 MB | 1.0 MB | 724 KB |
-| Latin | 523 | 2.15 MB | 208 KB | 208 KB |
-| ASCII | 95 | 412 KB | 44 KB | 32 KB |
+| Subset | Glyphs |      Raw |   Gzip | Brotli |
+| ------ | -----: | -------: | -----: | -----: |
+| All    |  2,849 | 12.78 MB | 1.0 MB | 724 KB |
+| Latin  |    523 |  2.15 MB | 208 KB | 208 KB |
+| ASCII  |     95 |   412 KB |  44 KB |  32 KB |
 
 These numbers are useful only as a snapshot of the existing complete Slug GLB; they do not isolate shaping data from raster data. Future benchmarks must report those sections separately.
 
 ## File disposition matrix
 
-| Existing area | Disposition | Destination concept | First required proof |
-| --- | --- | --- | --- |
-| `pipeline/fontParser.ts` | Port/rewrite | Rust canonical outline + Slug generator | outline equivalence and cubic error tests |
-| `pipeline/bandBuilder.ts` | Port | Slug raster baker | corpus capacity statistics |
-| `pipeline/texturePacker.ts` | Port/revise | Slug GPU payload packer | upload and shader agreement |
-| `shaders/*` | Port after audit | renderer adapter | CPU reference + visual snapshots |
-| `glb.ts` | Port philosophy | narrow `PMNDRS_font` reader/validator | corrupt-input suite |
-| `format.ts`, `bake.ts` | Redesign | shared extension + raster schemas | golden bytes and version rules |
-| `baked.ts` object hydration | Retire | flat Wasm/GPU views | allocation/startup benchmark |
-| `textShaper*.ts` | Replace | HarfRust Wasm shaper | three-way conformance |
-| `wrapLines*.ts` | Replace | JS paragraph engine | UAX and reflow fixtures |
-| `textMeasure*.ts` | Replace/derive | shaped-cluster measurement | measure/layout agreement |
-| `SlugFontLoader.ts` | Port product shape | baked loader + worker fallback | one canonical output path |
-| `SlugFontStack.ts` | Redesign | cluster-safe font fallback | mixed-script fallback fixtures |
-| `SlugGeometry.ts` | Adapter-specific | Slug renderer adapter | technique-independent layout reuse |
-| React components | Defer | framework binding | core API stability |
+| Existing area               | Disposition        | Destination concept                     | First required proof                      |
+| --------------------------- | ------------------ | --------------------------------------- | ----------------------------------------- |
+| `pipeline/fontParser.ts`    | Port/rewrite       | Rust canonical outline + Slug generator | outline equivalence and cubic error tests |
+| `pipeline/bandBuilder.ts`   | Port               | Slug raster baker                       | corpus capacity statistics                |
+| `pipeline/texturePacker.ts` | Port/revise        | Slug GPU payload packer                 | upload and shader agreement               |
+| `shaders/*`                 | Port after audit   | renderer adapter                        | CPU reference + visual snapshots          |
+| `glb.ts`                    | Port philosophy    | narrow `PMNDRS_font` reader/validator   | corrupt-input suite                       |
+| `format.ts`, `bake.ts`      | Redesign           | shared extension + raster schemas       | golden bytes and version rules            |
+| `baked.ts` object hydration | Retire             | flat Wasm/GPU views                     | allocation/startup benchmark              |
+| `textShaper*.ts`            | Replace            | HarfRust Wasm shaper                    | three-way conformance                     |
+| `wrapLines*.ts`             | Replace            | JS paragraph engine                     | UAX and reflow fixtures                   |
+| `textMeasure*.ts`           | Replace/derive     | shaped-cluster measurement              | measure/layout agreement                  |
+| `SlugFontLoader.ts`         | Port product shape | baked loader + worker fallback          | one canonical output path                 |
+| `SlugFontStack.ts`          | Redesign           | cluster-safe font fallback              | mixed-script fallback fixtures            |
+| `SlugGeometry.ts`           | Adapter-specific   | Slug renderer adapter                   | technique-independent layout reuse        |
+| React components            | Defer              | framework binding                       | core API stability                        |
 
 ## Prior-art reuse order
 

@@ -1,82 +1,79 @@
-import { execFileSync } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { execFileSync } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 interface Segment {
-  direction: string
-  script: string
-  language: string
-  features: string[]
+  direction: string;
+  script: string;
+  language: string;
+  features: string[];
 }
 
 interface Case extends Partial<Segment> {
-  id: string
-  text: string
-  utf16Length: number
-  codePoints: string[]
-  oracle?: boolean
+  id: string;
+  text: string;
+  utf16Length: number;
+  codePoints: string[];
+  oracle?: boolean;
 }
 
 interface Corpus {
-  schemaVersion: number
-  fontFixture: string
-  clusterUnit: string
-  defaults: Segment
-  cases: Case[]
+  schemaVersion: number;
+  fontFixture: string;
+  clusterUnit: string;
+  defaults: Segment;
+  cases: Case[];
 }
 
 interface HarfBuzzGlyph {
-  g: number
-  cl: number
-  ax: number
-  ay: number
-  dx: number
-  dy: number
-  fl?: number
+  g: number;
+  cl: number;
+  ax: number;
+  ay: number;
+  dx: number;
+  dy: number;
+  fl?: number;
 }
 
 function option(name: string): string | undefined {
-  const index = process.argv.indexOf(name)
-  return index === -1 ? undefined : process.argv[index + 1]
+  const index = process.argv.indexOf(name);
+  return index === -1 ? undefined : process.argv[index + 1];
 }
 
 function codePointClusterToUtf16(text: string, cluster: number): number {
-  return [...text].slice(0, cluster).join('').length
+  return [...text].slice(0, cluster).join('').length;
 }
 
-const executable = option('--hb-shape') ?? process.env.PMNDRS_TEXT_HB_SHAPE ?? 'hb-shape'
-const fontPath = resolve(option('--font') ?? 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf')
-const casesPath = resolve(option('--cases') ?? 'fixtures/shaping/inter-regular/cases.json')
-const outputPath = option('--output')
-const check = process.argv.includes('--check')
+const executable = option('--hb-shape') ?? process.env.PMNDRS_TEXT_HB_SHAPE ?? 'hb-shape';
+const fontPath = resolve(option('--font') ?? 'fixtures/fonts/inter-v4.1/Inter-Regular.ttf');
+const casesPath = resolve(option('--cases') ?? 'fixtures/shaping/inter-regular/cases.json');
+const outputPath = option('--output');
+const check = process.argv.includes('--check');
 if (check && outputPath === undefined) {
-  throw new Error('--check requires --output <committed-oracle.json>')
+  throw new Error('--check requires --output <committed-oracle.json>');
 }
-const versionOutput = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim()
+const versionOutput = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim();
 if (versionOutput !== 'hb-shape (HarfBuzz) 13.0.0') {
-  throw new Error(`expected pinned HarfBuzz 13.0.0, received ${JSON.stringify(versionOutput)}`)
+  throw new Error(`expected pinned HarfBuzz 13.0.0, received ${JSON.stringify(versionOutput)}`);
 }
 
-const corpus = JSON.parse(await readFile(casesPath, 'utf8')) as Corpus
+const corpus = JSON.parse(await readFile(casesPath, 'utf8')) as Corpus;
 if (corpus.schemaVersion !== 0 || corpus.clusterUnit !== 'utf16') {
-  throw new Error('unsupported corpus schema or cluster unit')
+  throw new Error('unsupported corpus schema or cluster unit');
 }
 
 const cases = corpus.cases
   .filter((entry) => entry.oracle !== false)
   .map((entry) => {
-    if (
-      entry.text.length !== entry.utf16Length ||
-      [...entry.text].length !== entry.codePoints.length
-    ) {
-      throw new Error(`case ${entry.id} has inconsistent text metadata`)
+    if (entry.text.length !== entry.utf16Length || [...entry.text].length !== entry.codePoints.length) {
+      throw new Error(`case ${entry.id} has inconsistent text metadata`);
     }
     const segment = {
       direction: entry.direction ?? corpus.defaults.direction,
       script: entry.script ?? corpus.defaults.script,
       language: entry.language ?? corpus.defaults.language,
       features: entry.features ?? corpus.defaults.features,
-    }
+    };
     const raw = execFileSync(
       executable,
       [
@@ -93,8 +90,8 @@ const cases = corpus.cases
         '--no-glyph-names',
       ],
       { encoding: 'utf8' },
-    )
-    const glyphs = JSON.parse(raw) as HarfBuzzGlyph[]
+    );
+    const glyphs = JSON.parse(raw) as HarfBuzzGlyph[];
     return {
       id: entry.id,
       text: entry.text,
@@ -108,8 +105,8 @@ const cases = corpus.cases
         yOffset: glyph.dy,
         flags: glyph.fl ?? 0,
       })),
-    }
-  })
+    };
+  });
 
 const document = {
   schemaVersion: 0,
@@ -123,13 +120,13 @@ const document = {
   clusterUnit: 'utf16',
   positionUnit: 'font-unit',
   cases,
-}
-const output = `${JSON.stringify(document, undefined, 2)}\n`
+};
+const output = `${JSON.stringify(document, undefined, 2)}\n`;
 if (check) {
-  const expected = await readFile(resolve(outputPath!), 'utf8')
-  if (output !== expected) throw new Error(`${resolve(outputPath!)} is stale; regenerate it`)
+  const expected = await readFile(resolve(outputPath!), 'utf8');
+  if (output !== expected) throw new Error(`${resolve(outputPath!)} is stale; regenerate it`);
 } else if (outputPath === undefined) {
-  process.stdout.write(output)
+  process.stdout.write(output);
 } else {
-  await writeFile(resolve(outputPath), output)
+  await writeFile(resolve(outputPath), output);
 }

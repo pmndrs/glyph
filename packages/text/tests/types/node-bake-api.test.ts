@@ -1,5 +1,5 @@
-import { bitmapBaker } from '../../src/bakers/bitmap.js'
-import { bakeFont, bakeProject, type NodeFontBakeReport } from '../../src/node/bake.js'
+import { bitmapBaker } from '../../src/bakers/bitmap.js';
+import { bakeFont, bakeProject, type NodeFontBakeReport } from '../../src/node/bake.js';
 
 const explicit = bakeFont({
   input: new URL('file:///tmp/Inter.ttf'),
@@ -12,21 +12,21 @@ const explicit = bakeFont({
       options: { strikes: [16, 32] },
     },
   ],
-})
+});
 
 const project = bakeProject({
   entries: ['src/main.ts'],
   assetRoots: ['public'],
   outputRoot: 'generated',
-})
+});
 
-declare const report: NodeFontBakeReport
-const elapsed: number = report.execution.timingsMs.total
-const outputHash: string | undefined = report.execution.outputs[0]?.sha256
-void explicit
-void project
-void elapsed
-void outputHash
+declare const report: NodeFontBakeReport;
+const elapsed: number = report.execution.timingsMs.total;
+const outputHash: string | undefined = report.execution.outputs[0]?.sha256;
+void explicit;
+void project;
+void elapsed;
+void outputHash;
 
 void bakeFont({
   input: '/tmp/Inter.ttf',
@@ -40,7 +40,7 @@ void bakeFont({
       options: { strikes: [] },
     },
   ],
-})
+});
 
 void bakeFont({
   input: '/tmp/Inter.ttf',
@@ -54,4 +54,4 @@ void bakeFont({
       options: { strikes: [16] },
     },
   ],
-})
+});

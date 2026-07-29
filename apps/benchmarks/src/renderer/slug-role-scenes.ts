@@ -1,50 +1,50 @@
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures'
+import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 
-export type SlugRoleSceneKind = 'large-size' | 'extreme-zoom' | 'complex-outline' | 'clipping'
+export type SlugRoleSceneKind = 'large-size' | 'extreme-zoom' | 'complex-outline' | 'clipping';
 
 export interface SlugRoleSceneDefinition {
-  readonly id: string
-  readonly kind: SlugRoleSceneKind
-  readonly fontFixture: BenchmarkFontFixture
-  readonly text: string
-  readonly language: string
-  readonly direction: 'ltr' | 'rtl'
-  readonly physicalWidth: number
-  readonly physicalHeight: number
-  readonly physicalPpem: number
-  readonly physicalLayoutWidth: number
-  readonly physicalOriginX: number
-  readonly physicalOriginY: number
-  readonly expectsViewportClipping: boolean
+  readonly id: string;
+  readonly kind: SlugRoleSceneKind;
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly text: string;
+  readonly language: string;
+  readonly direction: 'ltr' | 'rtl';
+  readonly physicalWidth: number;
+  readonly physicalHeight: number;
+  readonly physicalPpem: number;
+  readonly physicalLayoutWidth: number;
+  readonly physicalOriginX: number;
+  readonly physicalOriginY: number;
+  readonly expectsViewportClipping: boolean;
 }
 
 export interface SlugAffineRoleSceneDefinition {
-  readonly id: 'affine-37deg-3x05'
-  readonly kind: 'transform'
-  readonly fontFixture: 'inter'
-  readonly text: string
-  readonly language: 'en'
-  readonly direction: 'ltr'
-  readonly physicalWidth: number
-  readonly physicalHeight: number
-  readonly physicalPpem: number
-  readonly physicalLayoutWidth: number
-  readonly physicalPositionX: number
-  readonly physicalPositionY: number
-  readonly rotationRadians: number
-  readonly scaleX: number
-  readonly scaleY: number
+  readonly id: 'affine-37deg-3x05';
+  readonly kind: 'transform';
+  readonly fontFixture: 'inter';
+  readonly text: string;
+  readonly language: 'en';
+  readonly direction: 'ltr';
+  readonly physicalWidth: number;
+  readonly physicalHeight: number;
+  readonly physicalPpem: number;
+  readonly physicalLayoutWidth: number;
+  readonly physicalPositionX: number;
+  readonly physicalPositionY: number;
+  readonly rotationRadians: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
 }
 
 export interface SlugProjectionZoomSceneDefinition {
-  readonly id: 'camera-zoom-1x-8x'
-  readonly kind: 'projection-zoom'
-  readonly fontFixture: 'inter'
-  readonly text: 'I'
-  readonly physicalWidth: number
-  readonly physicalHeight: number
-  readonly physicalPpem: number
-  readonly zooms: readonly [1, 8]
+  readonly id: 'camera-zoom-1x-8x';
+  readonly kind: 'projection-zoom';
+  readonly fontFixture: 'inter';
+  readonly text: 'I';
+  readonly physicalWidth: number;
+  readonly physicalHeight: number;
+  readonly physicalPpem: number;
+  readonly zooms: readonly [1, 8];
 }
 
 /**
@@ -142,7 +142,7 @@ export const SLUG_ROLE_SCENES: readonly SlugRoleSceneDefinition[] = [
     physicalOriginY: 72,
     expectsViewportClipping: true,
   },
-] as const
+] as const;
 
 /** Copied from the older S3 transform gate, adapted to public Text and source Canvas2D. */
 export const SLUG_AFFINE_ROLE_SCENE: SlugAffineRoleSceneDefinition = {
@@ -161,7 +161,7 @@ export const SLUG_AFFINE_ROLE_SCENE: SlugAffineRoleSceneDefinition = {
   rotationRadians: (37 * Math.PI) / 180,
   scaleX: 3,
   scaleY: 0.5,
-}
+};
 
 /** Copied from the older U2 projection gate: identical geometry at camera zoom 1× and 8×. */
 export const SLUG_PROJECTION_ZOOM_SCENE: SlugProjectionZoomSceneDefinition = {
@@ -173,4 +173,4 @@ export const SLUG_PROJECTION_ZOOM_SCENE: SlugProjectionZoomSceneDefinition = {
   physicalHeight: 384,
   physicalPpem: 20,
   zooms: [1, 8],
-}
+};

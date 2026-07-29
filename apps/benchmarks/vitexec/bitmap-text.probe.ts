@@ -1,25 +1,25 @@
-import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
+import type { BenchmarkMeasurement } from '../src/benchmark/contracts';
 
-const executionPath = '/src/benchmark/execution.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const executionPath = '/src/benchmark/execution.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
-])
-const environment = await environmentResource()
-if (environment.webgpu !== true) throw new Error('Bitmap text probe requires WebGPU-capable Chrome')
+]);
+const environment = await environmentResource();
+if (environment.webgpu !== true) throw new Error('Bitmap text probe requires WebGPU-capable Chrome');
 
 const expectedGeometry = {
   1: { inkPixels: 3_473, bounds: [68, 18, 313, 112] },
   2: { inkPixels: 3_473, bounds: [260, 82, 505, 176] },
-} as const
-const inkPixelsByDpr: number[] = []
+} as const;
+const inkPixelsByDpr: number[] = [];
 
 for (const dpr of [1, 2] as const) {
-  const backendLitPixels: number[] = []
-  const backendInkPixels: number[] = []
-  const backendInkBounds: number[][] = []
-  const expectedOutputBytes = 384 * dpr * 128 * dpr * 4
+  const backendLitPixels: number[] = [];
+  const backendInkPixels: number[] = [];
+  const backendInkBounds: number[][] = [];
+  const expectedOutputBytes = 384 * dpr * 128 * dpr * 4;
   for (const [targetId, backendMetric] of [
     ['bitmap-text-webgpu', 'backendWebGpu'],
     ['bitmap-text-webgl2', 'backendWebGl2'],
@@ -30,7 +30,7 @@ for (const dpr of [1, 2] as const) {
       input: {},
       controls: { dpr, samples: 3, warmup: 1 },
       environment,
-    })
+    });
     if (
       result.status !== 'passed' ||
       result.controls.dpr !== dpr ||
@@ -69,31 +69,23 @@ for (const dpr of [1, 2] as const) {
           (measurement.metrics.inkPixels ?? 0) < 100,
       )
     ) {
-      throw new Error(`${targetId} at ${dpr}x did not preserve its bitmap font-frame contract`)
+      throw new Error(`${targetId} at ${dpr}x did not preserve its bitmap font-frame contract`);
     }
-    const firstMetrics = result.measurements[0]!.metrics!
-    const expected = expectedGeometry[dpr]
+    const firstMetrics = result.measurements[0]!.metrics!;
+    const expected = expectedGeometry[dpr];
     if (
       firstMetrics.inkPixels !== expected.inkPixels ||
       expected.bounds.some(
         (value, index) =>
-          value !==
-          [firstMetrics.inkMinX, firstMetrics.inkMinY, firstMetrics.inkMaxX, firstMetrics.inkMaxY][
-            index
-          ],
+          value !== [firstMetrics.inkMinX, firstMetrics.inkMinY, firstMetrics.inkMaxX, firstMetrics.inkMaxY][index],
       )
     ) {
-      throw new Error(`${targetId} at ${dpr}x does not match the canonical ink geometry`)
+      throw new Error(`${targetId} at ${dpr}x does not match the canonical ink geometry`);
     }
-    backendLitPixels.push(firstMetrics.litPixels!)
-    backendInkPixels.push(firstMetrics.inkPixels!)
-    const inkBounds = [
-      firstMetrics.inkMinX,
-      firstMetrics.inkMinY,
-      firstMetrics.inkMaxX,
-      firstMetrics.inkMaxY,
-    ]
-    backendInkBounds.push(inkBounds)
+    backendLitPixels.push(firstMetrics.litPixels!);
+    backendInkPixels.push(firstMetrics.inkPixels!);
+    const inkBounds = [firstMetrics.inkMinX, firstMetrics.inkMinY, firstMetrics.inkMaxX, firstMetrics.inkMaxY];
+    backendInkBounds.push(inkBounds);
     console.log(
       'bitmap-text-ready',
       JSON.stringify({
@@ -113,35 +105,33 @@ for (const dpr of [1, 2] as const) {
         totalGpuBytes: firstMetrics.totalGpuBytes,
         validation: result.validation,
       }),
-    )
+    );
   }
-  const [webGpuInkPixels, webGl2InkPixels] = backendInkPixels
+  const [webGpuInkPixels, webGl2InkPixels] = backendInkPixels;
   if (webGpuInkPixels === undefined || webGpuInkPixels !== webGl2InkPixels) {
-    throw new Error(`WebGPU and WebGL2 half-coverage ink counts differ at ${dpr}x`)
+    throw new Error(`WebGPU and WebGL2 half-coverage ink counts differ at ${dpr}x`);
   }
-  inkPixelsByDpr.push(webGpuInkPixels)
-  const [webGpuLitPixels, webGl2LitPixels] = backendLitPixels
+  inkPixelsByDpr.push(webGpuInkPixels);
+  const [webGpuLitPixels, webGl2LitPixels] = backendLitPixels;
   if (
     webGpuLitPixels === undefined ||
     webGl2LitPixels === undefined ||
     Math.abs(webGpuLitPixels - webGl2LitPixels) > Math.max(webGpuLitPixels, webGl2LitPixels) * 0.02
   ) {
-    throw new Error(
-      `WebGPU and WebGL2 bitmap edge coverage differs by more than two percent at ${dpr}x`,
-    )
+    throw new Error(`WebGPU and WebGL2 bitmap edge coverage differs by more than two percent at ${dpr}x`);
   }
-  const [webGpuBounds, webGl2Bounds] = backendInkBounds
+  const [webGpuBounds, webGl2Bounds] = backendInkBounds;
   if (
     webGpuBounds === undefined ||
     webGl2Bounds === undefined ||
     webGpuBounds.some((value, index) => value !== webGl2Bounds[index])
   ) {
-    throw new Error(`WebGPU and WebGL2 half-coverage ink bounds differ at ${dpr}x`)
+    throw new Error(`WebGPU and WebGL2 half-coverage ink bounds differ at ${dpr}x`);
   }
 }
 
 if (inkPixelsByDpr[0] !== inkPixelsByDpr[1]) {
-  throw new Error('Bitmap half-coverage ink count changes between exact-density 1x and 2x runs')
+  throw new Error('Bitmap half-coverage ink count changes between exact-density 1x and 2x runs');
 }
 
-export {}
+export {};

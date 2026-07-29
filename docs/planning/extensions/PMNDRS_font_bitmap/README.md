@@ -4,16 +4,16 @@ title: PMNDRS_font_bitmap
 description: Defines generated bitmap strikes, dense glyph records, and texture resources bound to a PMNDRS font.
 tags: [gltf, extension, font, bitmap]
 sources:
-  - id: "citation-1"
-    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
-    title: "KTX 2.0 specification"
-  - id: "citation-2"
-    resource: "../../raster-data-contract.md"
-    title: "Raster data contract"
+  - id: 'citation-1'
+    resource: 'https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html'
+    title: 'KTX 2.0 specification'
+  - id: 'citation-2'
+    resource: '../../raster-data-contract.md'
+    title: 'Raster data contract'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-25T19:20:00Z"
+  at: '2026-07-25T19:20:00Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->

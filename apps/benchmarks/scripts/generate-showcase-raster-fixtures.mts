@@ -1,20 +1,16 @@
-import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
-import { bitmapBaker } from '@pmndrs/text/bakers/bitmap'
-import { bakeFont } from '@pmndrs/text/bake'
+import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
+import { bakeFont } from '@pmndrs/text/bake';
 
-const outputDirectory = resolve('fixtures/rendering')
-await mkdir(outputDirectory, { recursive: true })
-const check = process.argv.includes('--check')
-const requestedFixture = process.argv
-  .find((argument) => argument.startsWith('--fixture='))
-  ?.slice('--fixture='.length)
-const temporaryDirectory = check
-  ? await mkdtemp(join(tmpdir(), 'pmndrs-text-showcase-'))
-  : undefined
+const outputDirectory = resolve('fixtures/rendering');
+await mkdir(outputDirectory, { recursive: true });
+const check = process.argv.includes('--check');
+const requestedFixture = process.argv.find((argument) => argument.startsWith('--fixture='))?.slice('--fixture='.length);
+const temporaryDirectory = check ? await mkdtemp(join(tmpdir(), 'pmndrs-text-showcase-')) : undefined;
 
 const fixtures = [
   {
@@ -57,17 +53,15 @@ const fixtures = [
     input: resolve('fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf'),
     outputStem: 'dancing-script',
   },
-] as const
+] as const;
 
 const selectedFixtures =
-  requestedFixture === undefined
-    ? fixtures
-    : fixtures.filter(({ fontFixture }) => fontFixture === requestedFixture)
+  requestedFixture === undefined ? fixtures : fixtures.filter(({ fontFixture }) => fontFixture === requestedFixture);
 if (selectedFixtures.length === 0) {
-  throw new TypeError(`Unknown bitmap fixture: ${String(requestedFixture)}`)
+  throw new TypeError(`Unknown bitmap fixture: ${String(requestedFixture)}`);
 }
 if (check && requestedFixture !== undefined) {
-  throw new TypeError('--fixture cannot weaken the complete bitmap fixture check')
+  throw new TypeError('--fixture cannot weaken the complete bitmap fixture check');
 }
 
 const configurations = [
@@ -81,27 +75,27 @@ const configurations = [
     fileSuffix: 'bitmap-16-32.font.glb',
     manifestFile: 'showcase-bitmap-density-fixtures-v0.json',
   },
-] as const
+] as const;
 
 try {
   for (const configuration of configurations) {
-    const manifestOutput = resolve(outputDirectory, configuration.manifestFile)
+    const manifestOutput = resolve(outputDirectory, configuration.manifestFile);
     const previousManifest = JSON.parse(await readFile(manifestOutput, 'utf8')) as {
       readonly artifacts: Array<{
-        readonly fontFixture: string
-        readonly [key: string]: unknown
-      }>
-    }
+        readonly fontFixture: string;
+        readonly [key: string]: unknown;
+      }>;
+    };
     const artifacts: Array<{
-      readonly fontFixture: string
-      readonly [key: string]: unknown
+      readonly fontFixture: string;
+      readonly [key: string]: unknown;
     }> =
       requestedFixture === undefined
         ? []
-        : previousManifest.artifacts.filter(({ fontFixture }) => fontFixture !== requestedFixture)
+        : previousManifest.artifacts.filter(({ fontFixture }) => fontFixture !== requestedFixture);
     for (const fixture of selectedFixtures) {
-      const file = `${fixture.outputStem}-${configuration.fileSuffix}`
-      const output = resolve(temporaryDirectory ?? outputDirectory, file)
+      const file = `${fixture.outputStem}-${configuration.fileSuffix}`;
+      const output = resolve(temporaryDirectory ?? outputDirectory, file);
       const report = await bakeFont({
         input: fixture.input,
         output,
@@ -113,12 +107,11 @@ try {
             options: { strikes: [...configuration.strikes] },
           },
         ],
-      })
-      const raster = report.rasters.find(({ kind }) => kind === 'bitmap')
-      if (raster === undefined)
-        throw new Error(`${fixture.fontFixture} bake omitted its bitmap report`)
-      const generated = await readFile(output)
-      const hash = createHash('sha256').update(generated).digest('hex')
+      });
+      const raster = report.rasters.find(({ kind }) => kind === 'bitmap');
+      if (raster === undefined) throw new Error(`${fixture.fontFixture} bake omitted its bitmap report`);
+      const generated = await readFile(output);
+      const hash = createHash('sha256').update(generated).digest('hex');
       artifacts.push({
         fontFixture: fixture.fontFixture,
         file,
@@ -134,11 +127,11 @@ try {
             decodedGpuBytes: page.gpuBytes,
           })),
         },
-      })
+      });
       if (check) {
-        const checkedIn = await readFile(resolve(outputDirectory, file))
+        const checkedIn = await readFile(resolve(outputDirectory, file));
         if (!generated.equals(checkedIn)) {
-          throw new Error(`${file} is not byte-identical to a fresh package-owned bake`)
+          throw new Error(`${file} is not byte-identical to a fresh package-owned bake`);
         }
       }
     }
@@ -146,24 +139,24 @@ try {
       (left, right) =>
         fixtures.findIndex(({ fontFixture }) => fontFixture === left.fontFixture) -
         fixtures.findIndex(({ fontFixture }) => fontFixture === right.fontFixture),
-    )
+    );
     const generatedManifest = {
       schemaVersion: 0,
       strikePpems: configuration.strikes,
       packaging: { artifact: 'embedded', pages: 'embedded' },
       artifacts,
-    }
+    };
     if (check) {
-      const canonicalManifest = JSON.parse(await readFile(manifestOutput, 'utf8'))
+      const canonicalManifest = JSON.parse(await readFile(manifestOutput, 'utf8'));
       if (JSON.stringify(generatedManifest) !== JSON.stringify(canonicalManifest)) {
-        throw new Error(`fresh showcase bitmap fixtures do not match ${configuration.manifestFile}`)
+        throw new Error(`fresh showcase bitmap fixtures do not match ${configuration.manifestFile}`);
       }
     } else {
-      await writeFile(manifestOutput, `${JSON.stringify(generatedManifest, undefined, 2)}\n`)
+      await writeFile(manifestOutput, `${JSON.stringify(generatedManifest, undefined, 2)}\n`);
     }
   }
 } finally {
   if (temporaryDirectory !== undefined) {
-    await rm(temporaryDirectory, { recursive: true, force: true })
+    await rm(temporaryDirectory, { recursive: true, force: true });
   }
 }

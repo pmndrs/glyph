@@ -1,11 +1,11 @@
-const executionPath = '/src/benchmark/execution.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const executionPath = '/src/benchmark/execution.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
-])
-const environment = await environmentResource()
-if (!environment.webgpu) throw new Error('MTSDF WebGPU probe requires an available WebGPU adapter')
+]);
+const environment = await environmentResource();
+if (!environment.webgpu) throw new Error('MTSDF WebGPU probe requires an available WebGPU adapter');
 
 const result = await runRegisteredBenchmark({
   targetId: 'mtsdf-text-webgpu',
@@ -13,9 +13,9 @@ const result = await runRegisteredBenchmark({
   input: {},
   controls: { dpr: 1, samples: 2, warmup: 1 },
   environment,
-})
+});
 if (!result.validation.includes('deterministic MTSDF')) {
-  throw new Error('MTSDF WebGPU probe did not publish its rendering validation')
+  throw new Error('MTSDF WebGPU probe did not publish its rendering validation');
 }
 for (const measurement of result.measurements) {
   if (
@@ -23,7 +23,7 @@ for (const measurement of result.measurements) {
     measurement.metrics.backendWebGl2 !== 0 ||
     measurement.metrics.changedPixels < 500
   ) {
-    throw new Error('MTSDF WebGPU probe did not execute the exact GPU backend and pixel contract')
+    throw new Error('MTSDF WebGPU probe did not execute the exact GPU backend and pixel contract');
   }
 }
 const conformance = await runRegisteredBenchmark({
@@ -32,9 +32,9 @@ const conformance = await runRegisteredBenchmark({
   input: { fontFixture: 'inter' },
   controls: { dpr: 1, samples: 2, warmup: 1 },
   environment,
-})
+});
 if (!conformance.validation.includes('CPU MTSDF comparison')) {
-  throw new Error('MTSDF WebGPU probe did not publish its sampling validation')
+  throw new Error('MTSDF WebGPU probe did not publish its sampling validation');
 }
 for (const measurement of conformance.measurements) {
   if (
@@ -44,7 +44,7 @@ for (const measurement of conformance.measurements) {
     measurement.metrics.maximumError > 48 ||
     measurement.metrics.errorPixels > 5_000
   ) {
-    throw new Error('MTSDF WebGPU probe exceeded its base-level CPU comparison envelope')
+    throw new Error('MTSDF WebGPU probe exceeded its base-level CPU comparison envelope');
   }
 }
 console.log(
@@ -58,6 +58,6 @@ console.log(
     conformanceMetrics: conformance.measurements[0]?.metrics,
     environment,
   }),
-)
+);
 
-export {}
+export {};

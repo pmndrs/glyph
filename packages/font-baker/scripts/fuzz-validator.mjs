@@ -1,33 +1,25 @@
-import { parseArgs } from "node:util";
-import { readFile } from "node:fs/promises";
+import { parseArgs } from 'node:util';
+import { readFile } from 'node:fs/promises';
 
-import { createFontBaker } from "../dist/index.js";
-import { FontArtifactValidationError, validateFontArtifact } from "../dist/validator.js";
-import {
-  FONT_ARTIFACT_FUZZ_SEED,
-  mutateFontArtifact,
-} from "../tests/support/font-artifact-mutations.mjs";
+import { createFontBaker } from '../dist/index.js';
+import { FontArtifactValidationError, validateFontArtifact } from '../dist/validator.js';
+import { FONT_ARTIFACT_FUZZ_SEED, mutateFontArtifact } from '../tests/support/font-artifact-mutations.mjs';
 
 const arguments_ = process.argv.slice(2);
-if (arguments_[0] === "--") arguments_.shift();
+if (arguments_[0] === '--') arguments_.shift();
 const { values } = parseArgs({
   args: arguments_,
   options: {
-    runs: { type: "string", default: "10000" },
-    seed: { type: "string", default: String(FONT_ARTIFACT_FUZZ_SEED) },
+    runs: { type: 'string', default: '10000' },
+    seed: { type: 'string', default: String(FONT_ARTIFACT_FUZZ_SEED) },
   },
   strict: true,
 });
-const runs = positiveInteger(values.runs, "runs");
-const seed = unsignedInteger(values.seed, "seed");
+const runs = positiveInteger(values.runs, 'runs');
+const seed = unsignedInteger(values.seed, 'seed');
 const [source, wasm] = await Promise.all([
-  readFile(
-    new URL(
-      "../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
-      import.meta.url,
-    ),
-  ),
-  readFile(new URL("../dist/font_baker.wasm", import.meta.url)),
+  readFile(new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+  readFile(new URL('../dist/font_baker.wasm', import.meta.url)),
 ]);
 const baker = await createFontBaker(wasm);
 const artifact = baker.bake({
@@ -53,8 +45,7 @@ process.stdout.write(`${JSON.stringify({ seed, runs, accepted, rejected })}\n`);
 
 function positiveInteger(value, name) {
   const result = Number(value);
-  if (!Number.isSafeInteger(result) || result <= 0)
-    throw new TypeError(`${name} must be a positive integer`);
+  if (!Number.isSafeInteger(result) || result <= 0) throw new TypeError(`${name} must be a positive integer`);
   return result;
 }
 

@@ -11,9 +11,9 @@ export const BENCHMARK_IPSUM_CONFORMANCE_LINES = [
   'AVATAR To Wa Yo — “quotes”.',
   'ff fi fl ffi ffl; (brackets).',
   'x²+y²≈z²; 0≤α≤1; ±×÷∞√∑π→←.',
-] as const
+] as const;
 
-export const BENCHMARK_IPSUM_CONFORMANCE_TEXT = BENCHMARK_IPSUM_CONFORMANCE_LINES.join('\n')
+export const BENCHMARK_IPSUM_CONFORMANCE_TEXT = BENCHMARK_IPSUM_CONFORMANCE_LINES.join('\n');
 
 /**
  * Paragraph-scale Latin workload for the continuously rendered benchmark surface.
@@ -28,9 +28,9 @@ export const BENCHMARK_IPSUM_PARAGRAPHS = [
   'Scientific copy adds x²+y²≈z², 0≤α≤1, ±×÷∞, √, ∑, and π. Arrows point both ways: → ←. These symbols expose missing coverage, uneven baselines, bad advances, and atlas placement errors that plain alphabet samples can hide.',
   'Real text is rarely one centered label. It wraps into paragraphs, reflows beside controls, survives narrow and wide containers, and stays readable while the scene continues to render. This corpus repeats ordinary shapes on purpose so caches, batching, and steady-state costs become visible.',
   'Performance is experienced as motion, response, and stability. This scene keeps the paragraph visible while it reports startup, retained bytes, shaping and layout work, CPU frame time, GPU frame time when supported, and frames per second across the selected renderer.',
-] as const
+] as const;
 
-export const BENCHMARK_IPSUM_TEXT = BENCHMARK_IPSUM_PARAGRAPHS.join('\n\n')
+export const BENCHMARK_IPSUM_TEXT = BENCHMARK_IPSUM_PARAGRAPHS.join('\n\n');
 
 /** Exact rendered glyph count for the pinned Inter 4.1 fixture with default features. */
-export const BENCHMARK_IPSUM_INTER_GLYPH_COUNT = 1_151
+export const BENCHMARK_IPSUM_INTER_GLYPH_COUNT = 1_151;

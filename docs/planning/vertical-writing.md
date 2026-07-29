@@ -18,7 +18,7 @@ sources:
     title: Canonical implementation roadmap
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T15:05:00Z"
+  at: '2026-07-27T15:05:00Z'
 ---
 
 # Vertical writing for CJK and mixed scripts
@@ -59,14 +59,14 @@ plan columns, rotate individual glyph instances, or validate vertical pixels.
 
 ## Work breakdown
 
-| Layer | Existing foundation | Required work |
-| --- | --- | --- |
-| Font data | Required vertical tables survive reduction when present. | Typed vertical metrics/origin readers, variable-metric policy, and explicit unsupported-table diagnostics. |
-| Shaping | HarfRust already supplies one universal shaping engine and font-local glyph IDs. | Top-to-bottom direction, `vert`/`vrt2` evidence, vertical advances/offsets, and HarfBuzz differential fixtures. |
-| Unicode | Grapheme, script, bidi, and line-break data are pinned. | Pinned Vertical_Orientation data and cluster-level upright/rotated/transformed policy. |
-| Paragraph | Horizontal broad shaping, safe breaks, and positioned output are allocation-light. | Inline/block axis abstraction, vertical line measurement, right-to-left column progression, vertical alignment/clipping/ellipsis, hit testing, and selection geometry. |
-| Renderers | Bitmap, MTSDF, and Slug consume shared positioned glyph identity. | Per-instance orientation and origin, vertical bounds, pixel snapping for native strikes, batch invariants, and backend parity. |
-| Product evidence | The harness already separates live benchmark and visual conformance modes. | A vertical-reading workload, horizontal/vertical source comparisons, punctuation/orientation closeups, mixed Latin controls, and payload/frame/GPU evidence. |
+| Layer            | Existing foundation                                                                | Required work                                                                                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Font data        | Required vertical tables survive reduction when present.                           | Typed vertical metrics/origin readers, variable-metric policy, and explicit unsupported-table diagnostics.                                                             |
+| Shaping          | HarfRust already supplies one universal shaping engine and font-local glyph IDs.   | Top-to-bottom direction, `vert`/`vrt2` evidence, vertical advances/offsets, and HarfBuzz differential fixtures.                                                        |
+| Unicode          | Grapheme, script, bidi, and line-break data are pinned.                            | Pinned Vertical_Orientation data and cluster-level upright/rotated/transformed policy.                                                                                 |
+| Paragraph        | Horizontal broad shaping, safe breaks, and positioned output are allocation-light. | Inline/block axis abstraction, vertical line measurement, right-to-left column progression, vertical alignment/clipping/ellipsis, hit testing, and selection geometry. |
+| Renderers        | Bitmap, MTSDF, and Slug consume shared positioned glyph identity.                  | Per-instance orientation and origin, vertical bounds, pixel snapping for native strikes, batch invariants, and backend parity.                                         |
+| Product evidence | The harness already separates live benchmark and visual conformance modes.         | A vertical-reading workload, horizontal/vertical source comparisons, punctuation/orientation closeups, mixed Latin controls, and payload/frame/GPU evidence.           |
 
 ## Effort and sequencing
 

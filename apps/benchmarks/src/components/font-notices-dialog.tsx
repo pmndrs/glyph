@@ -1,6 +1,6 @@
-import fontNotices from 'virtual:font-notices'
+import fontNotices from 'virtual:font-notices';
 
-import { Button } from './ui'
+import { Button } from './ui';
 
 export default function FontNoticesDialog({ onClose }: { readonly onClose: () => void }) {
   return (
@@ -16,8 +16,8 @@ export default function FontNoticesDialog({ onClose }: { readonly onClose: () =>
         aria-labelledby="font-notices-title"
         className="relative flex max-h-[80dvh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-chrome shadow-2xl"
         onCancel={(event) => {
-          event.preventDefault()
-          onClose()
+          event.preventDefault();
+          onClose();
         }}
       >
         <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
@@ -36,5 +36,5 @@ export default function FontNoticesDialog({ onClose }: { readonly onClose: () =>
         </pre>
       </dialog>
     </div>
-  )
+  );
 }

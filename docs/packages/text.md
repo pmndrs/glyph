@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
-title: "@pmndrs/text"
+title: '@pmndrs/text'
 description: Implements public font loading, shaping, paragraph measurement, static discovery, and portable raster artifact contracts.
 resource: ../../packages/text
-workspace_package: "@pmndrs/text"
+workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: "sha256:ed08a0858417016a5c444a4badbbbb131f84f6c8632defced6130235ebd6ff04"
+source_digest: 'sha256:d1d4722fb37225570ded2ee74781406c01547e869d8b84864c3d656bccc67614'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -133,7 +133,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T16:49:27Z"
+  at: '2026-07-29T20:27:06Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -250,19 +250,19 @@ The five-line, 120-glyph text above is the bounded conformance specimen. The sep
 
 ## Package scripts
 
-| Script                         | Purpose                                                                                                                                                                                                                                                             |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typecheck`                    | Type-check package source without emission through the repository-pinned compiler.                                                                                                                                                                                  |
-| `test`                         | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, the Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts.                                                                      |
-| `test:types`                   | Compile positive and negative public-contract fixtures through the repository-pinned compiler.                                                                                                                                                                      |
-| `test:unit`                    | Run the focused Bitmap, shaper, MTSDF, Slug, Wasm-host, admission, SIMD, and native-oracle unit gates.                                                                                                                                                               |
-| `test:integration`             | Verify pinned Unicode fixture hashes, then run the Rust public boundaries plus Wasm/package, registration, raster-baker, shaping/paragraph goldens, all 861,948 Unicode 17 bidi cases, UAX #14/#29 conformance, and malformed-artifact integration tests.          |
-| `test:fuzz-smoke`              | Run fixed-seed bitmap, loader-artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations twice and require deterministic, trap-free outcomes.                                                                                               |
-| `build`                        | Derive portable ABI JSON and typed TypeScript from Rust compiler facts, emit ESM/declarations, compile the no-WASI Bitmap, MTSDF, Slug, and shaper Wasm modules, and optimize them with pinned Binaryen. CI checks committed typed contracts for freshness.          |
-| `check:mtsdf-simd`             | Rebuild scalar, auto-vectorized, and explicit-SIMD kernels and freshness-check their bounded corpus, exact native-oracle identities, transfer sizes, and allocation counts without paying for a complete face.                                                       |
-| `check:mtsdf-simd-full-font`   | Run the deliberate release/offline gate over complete Inter and require every kernel to preserve the accepted glyph accounting, rejected IDs, checksum, composite identity, and zero steady-state Wasm memory growth; machine timings remain observations.        |
-| `lint`                         | Run Oxlint with warnings denied over the complete package tree.                                                                                                                                                                                                     |
-| `format:check`                 | Verify Oxfmt output over the complete package tree.                                                                                                                                                                                                                 |
+| Script                       | Purpose                                                                                                                                                                                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typecheck`                  | Type-check package source without emission through the repository-pinned compiler.                                                                                                                                                                          |
+| `test`                       | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, the Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts.                                                             |
+| `test:types`                 | Compile positive and negative public-contract fixtures through the repository-pinned compiler.                                                                                                                                                              |
+| `test:unit`                  | Run the focused Bitmap, shaper, MTSDF, Slug, Wasm-host, admission, SIMD, and native-oracle unit gates.                                                                                                                                                      |
+| `test:integration`           | Verify pinned Unicode fixture hashes, then run the Rust public boundaries plus Wasm/package, registration, raster-baker, shaping/paragraph goldens, all 861,948 Unicode 17 bidi cases, UAX #14/#29 conformance, and malformed-artifact integration tests.   |
+| `test:fuzz-smoke`            | Run fixed-seed bitmap, loader-artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations twice and require deterministic, trap-free outcomes.                                                                                       |
+| `build`                      | Derive portable ABI JSON and typed TypeScript from Rust compiler facts, emit ESM/declarations, compile the no-WASI Bitmap, MTSDF, Slug, and shaper Wasm modules, and optimize them with pinned Binaryen. CI checks committed typed contracts for freshness. |
+| `check:mtsdf-simd`           | Rebuild scalar, auto-vectorized, and explicit-SIMD kernels and freshness-check their bounded corpus, exact native-oracle identities, transfer sizes, and allocation counts without paying for a complete face.                                              |
+| `check:mtsdf-simd-full-font` | Run the deliberate release/offline gate over complete Inter and require every kernel to preserve the accepted glyph accounting, rejected IDs, checksum, composite identity, and zero steady-state Wasm memory growth; machine timings remain observations.  |
+| `lint`                       | Run Oxlint with warnings denied over the complete package tree.                                                                                                                                                                                             |
+| `format:check`               | Verify Oxfmt output over the complete package tree.                                                                                                                                                                                                         |
 
 The [API contract](../planning/api-shapes.md) remains authoritative for public behavior; this concept explains the package that implements its current loading, baking, shaping, and paragraph surfaces. The [canonical roadmap](../roadmap/roadmap.md) alone owns program-wide completion status.
 

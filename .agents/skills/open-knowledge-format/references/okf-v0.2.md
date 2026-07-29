@@ -84,7 +84,7 @@ Trust is derived, not stored as a score. Missing optional trust and lifecycle fi
 
 ```yaml
 ---
-okf_version: "0.2"
+okf_version: '0.2'
 ---
 ```
 

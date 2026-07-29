@@ -4,9 +4,9 @@ import {
   KHR_DF_CHANNEL_RGBSDA_GREEN,
   KHR_DF_CHANNEL_RGBSDA_RED,
   VK_FORMAT_R8G8B8A8_UNORM,
-} from 'ktx-parse'
-import * as THREE from 'three/webgpu'
-import type { Node } from 'three/webgpu'
+} from 'ktx-parse';
+import * as THREE from 'three/webgpu';
+import type { Node } from 'three/webgpu';
 import {
   add,
   attribute as tslAttribute,
@@ -24,8 +24,8 @@ import {
   uv,
   vec2,
   vec3,
-} from 'three/tsl'
-import type { RegisteredFont } from '../font.js'
+} from 'three/tsl';
+import type { RegisteredFont } from '../font.js';
 import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
@@ -35,7 +35,7 @@ import {
   msdfDescriptor,
   msdfRasterKey,
   type MsdfOptions,
-} from '../internal/msdf-contract.js'
+} from '../internal/msdf-contract.js';
 import {
   ABSENT_GLYPH_PAGE,
   DENSE_GLYPH_RECORD_STRIDE,
@@ -45,20 +45,15 @@ import {
   nonnegativeSafeInteger,
   validateDenseGlyphRecords,
   type RasterAtlasPage,
-} from '../internal/raster-atlas.js'
+} from '../internal/raster-atlas.js';
 import {
   assertParallelRasterLayout,
   assertParallelRasterPaint,
   unitRasterQuadGeometry,
-} from '../internal/raster-batch.js'
-import type { ParagraphLayout } from '../layout.js'
-import type { GlyphPaint, ResolvedPaint } from '../paint.js'
-import {
-  defineRaster,
-  type JsonValue,
-  type RasterModule,
-  type RegisteredRaster,
-} from '../raster.js'
+} from '../internal/raster-batch.js';
+import type { ParagraphLayout } from '../layout.js';
+import type { GlyphPaint, ResolvedPaint } from '../paint.js';
+import { defineRaster, type JsonValue, type RasterModule, type RegisteredRaster } from '../raster.js';
 
 export {
   MSDF_EXTENSION,
@@ -77,68 +72,68 @@ export {
   type MsdfConfiguration,
   type MsdfDescriptorV0,
   type MsdfOptions,
-} from '../internal/msdf-contract.js'
+} from '../internal/msdf-contract.js';
 
-const MAX_RUNTIME_GPU_BYTES = 256 * 1024 * 1024
-const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE
-const ABSENT_PAGE = ABSENT_GLYPH_PAGE
+const MAX_RUNTIME_GPU_BYTES = 256 * 1024 * 1024;
+const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
+const ABSENT_PAGE = ABSENT_GLYPH_PAGE;
 
 export interface MsdfPageResource {
-  readonly width: number
-  readonly height: number
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface MsdfAtlasResource {
-  readonly width: number
-  readonly height: number
-  readonly layers: number
-  readonly texture: THREE.DataArrayTexture
+  readonly width: number;
+  readonly height: number;
+  readonly layers: number;
+  readonly texture: THREE.DataArrayTexture;
 }
 
 export interface MsdfResource {
-  readonly emSize: number
-  readonly pixelRange: number
-  readonly planeUnitsPerEm: number
-  readonly records: Uint8Array
-  readonly pages: readonly MsdfPageResource[]
-  readonly atlas: MsdfAtlasResource
+  readonly emSize: number;
+  readonly pixelRange: number;
+  readonly planeUnitsPerEm: number;
+  readonly records: Uint8Array;
+  readonly pages: readonly MsdfPageResource[];
+  readonly atlas: MsdfAtlasResource;
   /** Exact padded base-level texture-array bytes. */
-  readonly gpuBytes: number
+  readonly gpuBytes: number;
 }
 
 interface MsdfBatchRun {
-  readonly glyphIndices: Uint32Array
-  readonly instanceData: THREE.InstancedInterleavedBuffer
-  readonly originAttribute: THREE.InterleavedBufferAttribute
-  readonly sizeAttribute: THREE.InterleavedBufferAttribute
-  readonly uvOriginAttribute: THREE.InterleavedBufferAttribute
-  readonly uvSizeAttribute: THREE.InterleavedBufferAttribute
-  readonly uvBoundsAttribute: THREE.InterleavedBufferAttribute
-  readonly shadowOffsetAttribute: THREE.InterleavedBufferAttribute
-  readonly fillColorAttribute: THREE.InterleavedBufferAttribute
-  readonly outlineColorAttribute: THREE.InterleavedBufferAttribute
-  readonly outlineWidthAttribute: THREE.InterleavedBufferAttribute
-  readonly shadowColorAttribute: THREE.InterleavedBufferAttribute
-  readonly pageIndexAttribute: THREE.InterleavedBufferAttribute
-  readonly geometry: THREE.InstancedBufferGeometry
-  readonly mesh: THREE.Mesh
+  readonly glyphIndices: Uint32Array;
+  readonly instanceData: THREE.InstancedInterleavedBuffer;
+  readonly originAttribute: THREE.InterleavedBufferAttribute;
+  readonly sizeAttribute: THREE.InterleavedBufferAttribute;
+  readonly uvOriginAttribute: THREE.InterleavedBufferAttribute;
+  readonly uvSizeAttribute: THREE.InterleavedBufferAttribute;
+  readonly uvBoundsAttribute: THREE.InterleavedBufferAttribute;
+  readonly shadowOffsetAttribute: THREE.InterleavedBufferAttribute;
+  readonly fillColorAttribute: THREE.InterleavedBufferAttribute;
+  readonly outlineColorAttribute: THREE.InterleavedBufferAttribute;
+  readonly outlineWidthAttribute: THREE.InterleavedBufferAttribute;
+  readonly shadowColorAttribute: THREE.InterleavedBufferAttribute;
+  readonly pageIndexAttribute: THREE.InterleavedBufferAttribute;
+  readonly geometry: THREE.InstancedBufferGeometry;
+  readonly mesh: THREE.Mesh;
 }
 
 export interface MsdfDrawBatch {
-  readonly object: THREE.Group
-  readonly glyphCount: number
-  readonly drawCount: number
-  updatePaint(paint: GlyphPaint): void
-  dispose(): void
+  readonly object: THREE.Group;
+  readonly glyphCount: number;
+  readonly drawCount: number;
+  updatePaint(paint: GlyphPaint): void;
+  dispose(): void;
 }
 
 interface MsdfMaterialState {
-  readonly material: THREE.MeshBasicNodeMaterial
+  readonly material: THREE.MeshBasicNodeMaterial;
 }
 
-const materialByAtlasTexture = new WeakMap<THREE.DataArrayTexture, MsdfMaterialState>()
+const materialByAtlasTexture = new WeakMap<THREE.DataArrayTexture, MsdfMaterialState>();
 
-const INSTANCE_STRIDE = 28
+const INSTANCE_STRIDE = 28;
 const INSTANCE_OFFSETS = {
   origin: 0,
   size: 2,
@@ -151,58 +146,50 @@ const INSTANCE_OFFSETS = {
   outlineWidth: 22,
   shadowColor: 23,
   pageIndex: 27,
-} as const
+} as const;
 
-const msdfModule: RasterModule<
-  typeof MSDF_KIND,
-  MsdfResource,
-  MsdfDrawBatch,
-  MsdfOptions | undefined
-> = defineRaster({
+const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, MsdfOptions | undefined> = defineRaster({
   kind: MSDF_KIND,
   extension: MSDF_EXTENSION,
   version: MSDF_FORMAT_VERSION,
   runtimeBaker: () => import('../runtime-bakers/msdf.js'),
   descriptor: msdfDescriptor,
   async decode(font, raster, signal) {
-    signal?.throwIfAborted()
-    const resource = await decodeMsdfResource(font, raster)
-    signal?.throwIfAborted()
-    return resource
+    signal?.throwIfAborted();
+    const resource = await decodeMsdfResource(font, raster);
+    signal?.throwIfAborted();
+    return resource;
   },
   async prepare(_layout, _resource, _fontSlot, signal) {
-    signal?.throwIfAborted()
+    signal?.throwIfAborted();
   },
   buildBatches(layout, resource, fontSlot, paint) {
-    return buildMsdfBatches(layout, resource, fontSlot, paint)
+    return buildMsdfBatches(layout, resource, fontSlot, paint);
   },
   validatePaint: assertMsdfPaint,
   updatePaint(batch, paint) {
-    batch.updatePaint(paint)
+    batch.updatePaint(paint);
   },
   dispose(resource) {
-    disposeMsdfResource(resource)
+    disposeMsdfResource(resource);
   },
-})
+});
 
-export type MsdfModule = typeof msdfModule
+export type MsdfModule = typeof msdfModule;
 
 /** Configurable MTSDF raster module for `defineFont(source, msdf)`. */
-export const msdf: MsdfModule = msdfModule
+export const msdf: MsdfModule = msdfModule;
 
-async function decodeMsdfResource(
-  font: RegisteredFont,
-  raster: RegisteredRaster,
-): Promise<MsdfResource> {
+async function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Promise<MsdfResource> {
   if (
     raster.font !== font.handle ||
     raster.kind !== MSDF_KIND ||
     raster.extension !== MSDF_EXTENSION ||
     raster.version !== MSDF_FORMAT_VERSION
   ) {
-    throw new TypeError('MTSDF raster is not bound to the supplied font')
+    throw new TypeError('MTSDF raster is not bound to the supplied font');
   }
-  const extension = jsonObject(raster.extensionData, 'MTSDF extension')
+  const extension = jsonObject(raster.extensionData, 'MTSDF extension');
   if (
     extension.version !== MSDF_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
@@ -212,63 +199,48 @@ async function decodeMsdfResource(
     extension.encoding !== 'mtsdf' ||
     extension.recordStride !== RECORD_STRIDE
   ) {
-    throw new TypeError('MTSDF extension does not match the runtime contract')
+    throw new TypeError('MTSDF extension does not match the runtime contract');
   }
-  const emSize = configuredInteger(extension.emSize, 'MTSDF emSize', MTSDF_MAX_EM_SIZE)
-  const pixelRange = configuredInteger(
-    extension.pixelRange,
-    'MTSDF pixelRange',
-    MTSDF_MAX_PIXEL_RANGE,
-  )
-  const planeUnitsPerEm = configuredInteger(
-    extension.planeUnitsPerEm,
-    'MTSDF planeUnitsPerEm',
-    MTSDF_MAX_EM_SIZE,
-  )
+  const emSize = configuredInteger(extension.emSize, 'MTSDF emSize', MTSDF_MAX_EM_SIZE);
+  const pixelRange = configuredInteger(extension.pixelRange, 'MTSDF pixelRange', MTSDF_MAX_PIXEL_RANGE);
+  const planeUnitsPerEm = configuredInteger(extension.planeUnitsPerEm, 'MTSDF planeUnitsPerEm', MTSDF_MAX_EM_SIZE);
   if (planeUnitsPerEm !== emSize) {
-    throw new TypeError('MTSDF planeUnitsPerEm must equal emSize')
+    throw new TypeError('MTSDF planeUnitsPerEm must equal emSize');
   }
   if (raster.rasterKey !== (await msdfRasterKey({ emSize, pixelRange }))) {
-    throw new TypeError('MTSDF raster key does not match its generation policy')
+    throw new TypeError('MTSDF raster key does not match its generation policy');
   }
-  const records = raster.view(
-    nonnegativeSafeInteger(extension.recordBufferView, 'MTSDF recordBufferView'),
-  )
+  const records = raster.view(nonnegativeSafeInteger(extension.recordBufferView, 'MTSDF recordBufferView'));
   if (records.byteLength !== font.glyphCount * RECORD_STRIDE) {
-    throw new TypeError('MTSDF record table does not match the registered glyph count')
+    throw new TypeError('MTSDF record table does not match the registered glyph count');
   }
-  const pageValues = jsonArray(extension.pages, 'MTSDF pages')
-  if (pageValues.length === 0) throw new TypeError('MTSDF raster must contain at least one page')
-  if (pageValues.length > 65_535) throw new RangeError('MTSDF raster contains too many pages')
-  const decodedPages: RasterAtlasPage[] = []
+  const pageValues = jsonArray(extension.pages, 'MTSDF pages');
+  if (pageValues.length === 0) throw new TypeError('MTSDF raster must contain at least one page');
+  if (pageValues.length > 65_535) throw new RangeError('MTSDF raster contains too many pages');
+  const decodedPages: RasterAtlasPage[] = [];
   try {
     for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
-      validateMtsdfPageDirectory(pageValues[pageIndex]!, pageIndex)
-      const page = decodeEmbeddedLosslessAtlasPage(
-        raster,
-        pageValues[pageIndex]!,
-        `MTSDF page ${pageIndex}`,
-        {
-          gpuFormat: 'rgba8unorm',
-          vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
-          blockWidth: 1,
-          blockHeight: 1,
-          bytesPerBlock: 4,
-          uncompressedChannelTypes: [
-            KHR_DF_CHANNEL_RGBSDA_RED,
-            KHR_DF_CHANNEL_RGBSDA_GREEN,
-            KHR_DF_CHANNEL_RGBSDA_BLUE,
-            KHR_DF_CHANNEL_RGBSDA_ALPHA,
-          ],
-          textureFormat: THREE.RGBAFormat,
-          generateMipmaps: false,
-          minFilter: THREE.LinearFilter,
-        },
-      )
-      decodedPages.push(page)
+      validateMtsdfPageDirectory(pageValues[pageIndex]!, pageIndex);
+      const page = decodeEmbeddedLosslessAtlasPage(raster, pageValues[pageIndex]!, `MTSDF page ${pageIndex}`, {
+        gpuFormat: 'rgba8unorm',
+        vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
+        blockWidth: 1,
+        blockHeight: 1,
+        bytesPerBlock: 4,
+        uncompressedChannelTypes: [
+          KHR_DF_CHANNEL_RGBSDA_RED,
+          KHR_DF_CHANNEL_RGBSDA_GREEN,
+          KHR_DF_CHANNEL_RGBSDA_BLUE,
+          KHR_DF_CHANNEL_RGBSDA_ALPHA,
+        ],
+        textureFormat: THREE.RGBAFormat,
+        generateMipmaps: false,
+        minFilter: THREE.LinearFilter,
+      });
+      decodedPages.push(page);
     }
-    validateDenseGlyphRecords(records, decodedPages, 'MTSDF', true)
-    const { atlas, gpuBytes, pages } = createTextureArray(decodedPages)
+    validateDenseGlyphRecords(records, decodedPages, 'MTSDF', true);
+    const { atlas, gpuBytes, pages } = createTextureArray(decodedPages);
     return {
       emSize,
       pixelRange,
@@ -277,64 +249,64 @@ async function decodeMsdfResource(
       pages,
       atlas,
       gpuBytes,
-    }
+    };
   } finally {
-    for (const page of decodedPages) page.texture.dispose()
+    for (const page of decodedPages) page.texture.dispose();
   }
 }
 
 function configuredInteger(value: JsonValue | undefined, label: string, maximum: number): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > maximum) {
-    throw new TypeError(`${label} must be an integer in 1..=${maximum}`)
+    throw new TypeError(`${label} must be an integer in 1..=${maximum}`);
   }
-  return value
+  return value;
 }
 
 function validateMtsdfPageDirectory(value: JsonValue, pageIndex: number): void {
-  const page = jsonObject(value, `MTSDF page ${pageIndex}`)
-  const variants = jsonArray(page.variants, `MTSDF page ${pageIndex} variants`)
+  const page = jsonObject(value, `MTSDF page ${pageIndex}`);
+  const variants = jsonArray(page.variants, `MTSDF page ${pageIndex} variants`);
   if (variants.length !== 1) {
-    throw new TypeError('MTSDF V0 pages must contain exactly one lossless RGBA8 variant')
+    throw new TypeError('MTSDF V0 pages must contain exactly one lossless RGBA8 variant');
   }
-  const variant = jsonObject(variants[0], `MTSDF page ${pageIndex} variant`)
+  const variant = jsonObject(variants[0], `MTSDF page ${pageIndex} variant`);
   if (variant.gpuFormat !== 'rgba8unorm') {
-    throw new TypeError('MTSDF V0 pages accept only the lossless rgba8unorm baseline')
+    throw new TypeError('MTSDF V0 pages accept only the lossless rgba8unorm baseline');
   }
 }
 
 function createTextureArray(pages: readonly RasterAtlasPage[]): {
-  readonly atlas: MsdfAtlasResource
-  readonly gpuBytes: number
-  readonly pages: readonly MsdfPageResource[]
+  readonly atlas: MsdfAtlasResource;
+  readonly gpuBytes: number;
+  readonly pages: readonly MsdfPageResource[];
 } {
-  const width = Math.max(...pages.map((page) => page.width))
-  const height = Math.max(...pages.map((page) => page.height))
-  const baseBytes = width * height * pages.length * 4
+  const width = Math.max(...pages.map((page) => page.width));
+  const height = Math.max(...pages.map((page) => page.height));
+  const baseBytes = width * height * pages.length * 4;
   if (!Number.isSafeInteger(baseBytes) || baseBytes > MAX_RUNTIME_GPU_BYTES) {
-    throw new RangeError('MTSDF pages exceed the runtime GPU-memory limit')
+    throw new RangeError('MTSDF pages exceed the runtime GPU-memory limit');
   }
-  const texels = new Uint8Array(baseBytes)
+  const texels = new Uint8Array(baseBytes);
   for (let layer = 0; layer < pages.length; layer += 1) {
-    const page = pages[layer]!
-    const source = page.texture.image.data
+    const page = pages[layer]!;
+    const source = page.texture.image.data;
     if (!(source instanceof Uint8Array)) {
-      throw new TypeError(`MTSDF page ${layer} is not backed by unsigned-byte RGBA texels`)
+      throw new TypeError(`MTSDF page ${layer} is not backed by unsigned-byte RGBA texels`);
     }
-    const sourceRowBytes = page.width * 4
-    const targetRowBytes = width * 4
+    const sourceRowBytes = page.width * 4;
+    const targetRowBytes = width * 4;
     for (let row = 0; row < page.height; row += 1) {
-      const sourceOffset = row * sourceRowBytes
-      const targetRow = height - row - 1
-      const targetOffset = (layer * height + targetRow) * targetRowBytes
-      texels.set(source.subarray(sourceOffset, sourceOffset + sourceRowBytes), targetOffset)
+      const sourceOffset = row * sourceRowBytes;
+      const targetRow = height - row - 1;
+      const targetOffset = (layer * height + targetRow) * targetRowBytes;
+      texels.set(source.subarray(sourceOffset, sourceOffset + sourceRowBytes), targetOffset);
     }
   }
-  const atlasTexture = new THREE.DataArrayTexture(texels, width, height, pages.length)
-  atlasTexture.colorSpace = THREE.NoColorSpace
-  atlasTexture.generateMipmaps = false
-  atlasTexture.minFilter = THREE.LinearFilter
-  atlasTexture.magFilter = THREE.LinearFilter
-  atlasTexture.needsUpdate = true
+  const atlasTexture = new THREE.DataArrayTexture(texels, width, height, pages.length);
+  atlasTexture.colorSpace = THREE.NoColorSpace;
+  atlasTexture.generateMipmaps = false;
+  atlasTexture.minFilter = THREE.LinearFilter;
+  atlasTexture.magFilter = THREE.LinearFilter;
+  atlasTexture.needsUpdate = true;
   return {
     atlas: { width, height, layers: pages.length, texture: atlasTexture },
     gpuBytes: baseBytes,
@@ -342,15 +314,15 @@ function createTextureArray(pages: readonly RasterAtlasPage[]): {
       width: pageWidth,
       height: pageHeight,
     })),
-  }
+  };
 }
 
 function disposeMsdfResource(resource: MsdfResource): void {
-  const atlasTexture = resource.atlas.texture
-  const state = materialByAtlasTexture.get(atlasTexture)
-  state?.material.dispose()
-  materialByAtlasTexture.delete(atlasTexture)
-  atlasTexture.dispose()
+  const atlasTexture = resource.atlas.texture;
+  const state = materialByAtlasTexture.get(atlasTexture);
+  state?.material.dispose();
+  materialByAtlasTexture.delete(atlasTexture);
+  atlasTexture.dispose();
 }
 
 function buildMsdfBatches(
@@ -359,52 +331,47 @@ function buildMsdfBatches(
   fontSlot: number,
   paint: GlyphPaint,
 ): MsdfDrawBatch {
-  assertParallelRasterLayout(layout, paint)
-  assertMsdfPaint(paint)
-  const records = new DataView(
-    resource.records.buffer,
-    resource.records.byteOffset,
-    resource.records.byteLength,
-  )
-  const group = new THREE.Group()
-  const glyphIndices: number[] = []
+  assertParallelRasterLayout(layout, paint);
+  assertMsdfPaint(paint);
+  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
+  const group = new THREE.Group();
+  const glyphIndices: number[] = [];
 
   for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
-    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue
-    const glyphId = layout.glyphIds[glyphIndex]
-    if (glyphId === undefined) continue
+    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
+    const glyphId = layout.glyphIds[glyphIndex];
+    if (glyphId === undefined) continue;
     if (glyphId >= resource.records.byteLength / RECORD_STRIDE) {
-      throw new TypeError('paragraph layout references an MTSDF glyph outside the registered font')
+      throw new TypeError('paragraph layout references an MTSDF glyph outside the registered font');
     }
-    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true)
-    if (pageIndex === ABSENT_PAGE) continue
+    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
+    if (pageIndex === ABSENT_PAGE) continue;
     if (resource.pages[pageIndex] === undefined) {
-      throw new TypeError('MTSDF batch references a missing page')
+      throw new TypeError('MTSDF batch references a missing page');
     }
-    glyphIndices.push(glyphIndex)
+    glyphIndices.push(glyphIndex);
   }
-  const run =
-    glyphIndices.length === 0 ? undefined : createMsdfRun(layout, resource, glyphIndices, paint)
-  if (run !== undefined) group.add(run.mesh)
+  const run = glyphIndices.length === 0 ? undefined : createMsdfRun(layout, resource, glyphIndices, paint);
+  if (run !== undefined) group.add(run.mesh);
 
-  let disposed = false
+  let disposed = false;
   return {
     object: group,
     glyphCount: glyphIndices.length,
     drawCount: run === undefined ? 0 : 1,
     updatePaint(nextPaint) {
-      if (disposed) throw new TypeError('MTSDF draw batch has been disposed')
-      assertParallelRasterPaint(layout, nextPaint)
-      assertMsdfPaint(nextPaint)
-      if (run !== undefined) updateMsdfRun(layout, resource, run, nextPaint)
+      if (disposed) throw new TypeError('MTSDF draw batch has been disposed');
+      assertParallelRasterPaint(layout, nextPaint);
+      assertMsdfPaint(nextPaint);
+      if (run !== undefined) updateMsdfRun(layout, resource, run, nextPaint);
     },
     dispose() {
-      if (disposed) return
-      disposed = true
-      group.clear()
-      run?.geometry.dispose()
+      if (disposed) return;
+      disposed = true;
+      group.clear();
+      run?.geometry.dispose();
     },
-  }
+  };
 }
 
 function createMsdfRun(
@@ -413,94 +380,52 @@ function createMsdfRun(
   glyphIndices: readonly number[],
   paint: GlyphPaint,
 ): MsdfBatchRun {
-  const count = glyphIndices.length
-  const geometry = unitRasterQuadGeometry()
-  geometry.instanceCount = count
+  const count = glyphIndices.length;
+  const geometry = unitRasterQuadGeometry();
+  geometry.instanceCount = count;
   const instanceData = new THREE.InstancedInterleavedBuffer(
     new Float32Array(count * INSTANCE_STRIDE),
     INSTANCE_STRIDE,
     1,
-  )
-  const originAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfOrigin',
-    2,
-    INSTANCE_OFFSETS.origin,
-  )
-  const sizeAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfSize',
-    2,
-    INSTANCE_OFFSETS.size,
-  )
-  const uvOriginAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfUvOrigin',
-    2,
-    INSTANCE_OFFSETS.uvOrigin,
-  )
-  const uvSizeAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfUvSize',
-    2,
-    INSTANCE_OFFSETS.uvSize,
-  )
-  const uvBoundsAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfUvBounds',
-    4,
-    INSTANCE_OFFSETS.uvBounds,
-  )
+  );
+  const originAttribute = instanceAttribute(geometry, instanceData, 'msdfOrigin', 2, INSTANCE_OFFSETS.origin);
+  const sizeAttribute = instanceAttribute(geometry, instanceData, 'msdfSize', 2, INSTANCE_OFFSETS.size);
+  const uvOriginAttribute = instanceAttribute(geometry, instanceData, 'msdfUvOrigin', 2, INSTANCE_OFFSETS.uvOrigin);
+  const uvSizeAttribute = instanceAttribute(geometry, instanceData, 'msdfUvSize', 2, INSTANCE_OFFSETS.uvSize);
+  const uvBoundsAttribute = instanceAttribute(geometry, instanceData, 'msdfUvBounds', 4, INSTANCE_OFFSETS.uvBounds);
   const shadowOffsetAttribute = instanceAttribute(
     geometry,
     instanceData,
     'msdfShadowOffset',
     2,
     INSTANCE_OFFSETS.shadowOffset,
-  )
-  const fillColorAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfFillColor',
-    4,
-    INSTANCE_OFFSETS.fillColor,
-  )
+  );
+  const fillColorAttribute = instanceAttribute(geometry, instanceData, 'msdfFillColor', 4, INSTANCE_OFFSETS.fillColor);
   const outlineColorAttribute = instanceAttribute(
     geometry,
     instanceData,
     'msdfOutlineColor',
     4,
     INSTANCE_OFFSETS.outlineColor,
-  )
+  );
   const outlineWidthAttribute = instanceAttribute(
     geometry,
     instanceData,
     'msdfOutlineWidth',
     1,
     INSTANCE_OFFSETS.outlineWidth,
-  )
+  );
   const shadowColorAttribute = instanceAttribute(
     geometry,
     instanceData,
     'msdfShadowColor',
     4,
     INSTANCE_OFFSETS.shadowColor,
-  )
-  const pageIndexAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfPageIndex',
-    1,
-    INSTANCE_OFFSETS.pageIndex,
-  )
-  const mesh = new THREE.Mesh(geometry, msdfMaterial(resource.atlas, resource.pixelRange))
-  mesh.frustumCulled = false
-  mesh.renderOrder = glyphIndices[0] ?? 0
+  );
+  const pageIndexAttribute = instanceAttribute(geometry, instanceData, 'msdfPageIndex', 1, INSTANCE_OFFSETS.pageIndex);
+  const mesh = new THREE.Mesh(geometry, msdfMaterial(resource.atlas, resource.pixelRange));
+  mesh.frustumCulled = false;
+  mesh.renderOrder = glyphIndices[0] ?? 0;
   const run: MsdfBatchRun = {
     glyphIndices: Uint32Array.from(glyphIndices),
     instanceData,
@@ -517,9 +442,9 @@ function createMsdfRun(
     pageIndexAttribute,
     geometry,
     mesh,
-  }
-  updateMsdfRun(layout, resource, run, paint)
-  return run
+  };
+  updateMsdfRun(layout, resource, run, paint);
+  return run;
 }
 
 function instanceAttribute(
@@ -529,28 +454,19 @@ function instanceAttribute(
   itemSize: number,
   offset: number,
 ): THREE.InterleavedBufferAttribute {
-  const attribute = new THREE.InterleavedBufferAttribute(data, itemSize, offset, false)
-  geometry.setAttribute(name, attribute)
-  return attribute
+  const attribute = new THREE.InterleavedBufferAttribute(data, itemSize, offset, false);
+  geometry.setAttribute(name, attribute);
+  return attribute;
 }
 
-function updateMsdfRun(
-  layout: ParagraphLayout,
-  resource: MsdfResource,
-  run: MsdfBatchRun,
-  paint: GlyphPaint,
-): void {
-  const records = new DataView(
-    resource.records.buffer,
-    resource.records.byteOffset,
-    resource.records.byteLength,
-  )
+function updateMsdfRun(layout: ParagraphLayout, resource: MsdfResource, run: MsdfBatchRun, paint: GlyphPaint): void {
+  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
   for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    const glyphIndex = run.glyphIndices[instance]!
-    const paintEntry = resolvedPaint(paint, glyphIndex)
-    writeMsdfInstance(layout, resource, run, records, instance, glyphIndex, paintEntry)
+    const glyphIndex = run.glyphIndices[instance]!;
+    const paintEntry = resolvedPaint(paint, glyphIndex);
+    writeMsdfInstance(layout, resource, run, records, instance, glyphIndex, paintEntry);
   }
-  run.instanceData.needsUpdate = true
+  run.instanceData.needsUpdate = true;
 }
 
 function writeMsdfInstance(
@@ -562,213 +478,173 @@ function writeMsdfInstance(
   glyphIndex: number,
   paint: ResolvedPaint,
 ): void {
-  const glyphId = layout.glyphIds[glyphIndex]!
-  const record = glyphId * RECORD_STRIDE
-  const fontSize = layout.glyphFontSizes[glyphIndex]!
+  const glyphId = layout.glyphIds[glyphIndex]!;
+  const record = glyphId * RECORD_STRIDE;
+  const fontSize = layout.glyphFontSizes[glyphIndex]!;
   if (!Number.isFinite(fontSize) || fontSize <= 0) {
-    throw new TypeError('MTSDF glyph font sizes must be positive finite values')
+    throw new TypeError('MTSDF glyph font sizes must be positive finite values');
   }
-  const scale = fontSize / resource.planeUnitsPerEm
-  const planeLeft = records.getInt16(record, true)
-  const planeBottom = records.getInt16(record + 2, true)
-  const planeRight = records.getInt16(record + 4, true)
-  const planeTop = records.getInt16(record + 6, true)
-  const atlasLeft = records.getUint16(record + 8, true)
-  const atlasTop = records.getUint16(record + 10, true)
-  const atlasRight = records.getUint16(record + 12, true)
-  const atlasBottom = records.getUint16(record + 14, true)
-  const pageIndex = records.getUint16(record + 16, true)
-  const baseOriginX = layout.x[glyphIndex]! + planeLeft * scale
-  const baseOriginY = -layout.y[glyphIndex]! + planeBottom * scale
-  const baseWidth = (planeRight - planeLeft) * scale
-  const baseHeight = (planeTop - planeBottom) * scale
-  const shadowX = paint.shadow?.offset[0] ?? 0
-  const shadowY = -(paint.shadow?.offset[1] ?? 0)
-  const originX = baseOriginX + Math.min(0, shadowX)
-  const originY = baseOriginY + Math.min(0, shadowY)
-  const width = baseWidth + Math.abs(shadowX)
-  const height = baseHeight + Math.abs(shadowY)
-  const baseUvX = atlasLeft / resource.atlas.width
-  const baseUvY = 1 - atlasBottom / resource.atlas.height
-  const baseUvWidth = (atlasRight - atlasLeft) / resource.atlas.width
-  const baseUvHeight = (atlasBottom - atlasTop) / resource.atlas.height
-  const uvPerUnitX = baseUvWidth / baseWidth
-  const uvPerUnitY = baseUvHeight / baseHeight
-  const uvOriginX = baseUvX + (originX - baseOriginX) * uvPerUnitX
-  const uvOriginY = baseUvY + (originY - baseOriginY) * uvPerUnitY
-  const outlineAtlasPixels = (paint.outline?.width ?? 0) / scale
-  const maxOutlineAtlasPixels = resource.pixelRange / 2
+  const scale = fontSize / resource.planeUnitsPerEm;
+  const planeLeft = records.getInt16(record, true);
+  const planeBottom = records.getInt16(record + 2, true);
+  const planeRight = records.getInt16(record + 4, true);
+  const planeTop = records.getInt16(record + 6, true);
+  const atlasLeft = records.getUint16(record + 8, true);
+  const atlasTop = records.getUint16(record + 10, true);
+  const atlasRight = records.getUint16(record + 12, true);
+  const atlasBottom = records.getUint16(record + 14, true);
+  const pageIndex = records.getUint16(record + 16, true);
+  const baseOriginX = layout.x[glyphIndex]! + planeLeft * scale;
+  const baseOriginY = -layout.y[glyphIndex]! + planeBottom * scale;
+  const baseWidth = (planeRight - planeLeft) * scale;
+  const baseHeight = (planeTop - planeBottom) * scale;
+  const shadowX = paint.shadow?.offset[0] ?? 0;
+  const shadowY = -(paint.shadow?.offset[1] ?? 0);
+  const originX = baseOriginX + Math.min(0, shadowX);
+  const originY = baseOriginY + Math.min(0, shadowY);
+  const width = baseWidth + Math.abs(shadowX);
+  const height = baseHeight + Math.abs(shadowY);
+  const baseUvX = atlasLeft / resource.atlas.width;
+  const baseUvY = 1 - atlasBottom / resource.atlas.height;
+  const baseUvWidth = (atlasRight - atlasLeft) / resource.atlas.width;
+  const baseUvHeight = (atlasBottom - atlasTop) / resource.atlas.height;
+  const uvPerUnitX = baseUvWidth / baseWidth;
+  const uvPerUnitY = baseUvHeight / baseHeight;
+  const uvOriginX = baseUvX + (originX - baseOriginX) * uvPerUnitX;
+  const uvOriginY = baseUvY + (originY - baseOriginY) * uvPerUnitY;
+  const outlineAtlasPixels = (paint.outline?.width ?? 0) / scale;
+  const maxOutlineAtlasPixels = resource.pixelRange / 2;
   if (outlineAtlasPixels > maxOutlineAtlasPixels) {
-    throw new RangeError(
-      `MTSDF outline width exceeds the ${maxOutlineAtlasPixels}-atlas-pixel field limit`,
-    )
+    throw new RangeError(`MTSDF outline width exceeds the ${maxOutlineAtlasPixels}-atlas-pixel field limit`);
   }
-  setAttribute(run.originAttribute, instance, [originX, originY])
-  setAttribute(run.sizeAttribute, instance, [width, height])
-  setAttribute(run.uvOriginAttribute, instance, [uvOriginX, uvOriginY])
-  setAttribute(run.uvSizeAttribute, instance, [width * uvPerUnitX, height * uvPerUnitY])
-  setAttribute(run.uvBoundsAttribute, instance, [
-    baseUvX,
-    baseUvY,
-    baseUvX + baseUvWidth,
-    baseUvY + baseUvHeight,
-  ])
-  setAttribute(run.shadowOffsetAttribute, instance, [shadowX * uvPerUnitX, shadowY * uvPerUnitY])
-  setAttribute(run.fillColorAttribute, instance, paint.color)
-  setAttribute(run.outlineColorAttribute, instance, paint.outline?.color ?? [0, 0, 0, 0])
-  setAttribute(run.outlineWidthAttribute, instance, [outlineAtlasPixels / resource.pixelRange])
-  setAttribute(run.shadowColorAttribute, instance, paint.shadow?.color ?? [0, 0, 0, 0])
-  setAttribute(run.pageIndexAttribute, instance, [pageIndex])
+  setAttribute(run.originAttribute, instance, [originX, originY]);
+  setAttribute(run.sizeAttribute, instance, [width, height]);
+  setAttribute(run.uvOriginAttribute, instance, [uvOriginX, uvOriginY]);
+  setAttribute(run.uvSizeAttribute, instance, [width * uvPerUnitX, height * uvPerUnitY]);
+  setAttribute(run.uvBoundsAttribute, instance, [baseUvX, baseUvY, baseUvX + baseUvWidth, baseUvY + baseUvHeight]);
+  setAttribute(run.shadowOffsetAttribute, instance, [shadowX * uvPerUnitX, shadowY * uvPerUnitY]);
+  setAttribute(run.fillColorAttribute, instance, paint.color);
+  setAttribute(run.outlineColorAttribute, instance, paint.outline?.color ?? [0, 0, 0, 0]);
+  setAttribute(run.outlineWidthAttribute, instance, [outlineAtlasPixels / resource.pixelRange]);
+  setAttribute(run.shadowColorAttribute, instance, paint.shadow?.color ?? [0, 0, 0, 0]);
+  setAttribute(run.pageIndexAttribute, instance, [pageIndex]);
 }
 
-function setAttribute(
-  attribute: THREE.InterleavedBufferAttribute,
-  instance: number,
-  values: readonly number[],
-): void {
-  ;(attribute.data.array as Float32Array).set(
-    values,
-    instance * attribute.data.stride + attribute.offset,
-  )
+function setAttribute(attribute: THREE.InterleavedBufferAttribute, instance: number, values: readonly number[]): void {
+  (attribute.data.array as Float32Array).set(values, instance * attribute.data.stride + attribute.offset);
 }
 
 function resolvedPaint(paint: GlyphPaint, glyphIndex: number): ResolvedPaint {
-  const paintIndex = paint.paintIndices[glyphIndex]
-  const resolved = paintIndex === undefined ? undefined : paint.palette[paintIndex]
-  if (resolved === undefined) throw new TypeError('glyph paint references a missing palette entry')
-  return resolved
+  const paintIndex = paint.paintIndices[glyphIndex];
+  const resolved = paintIndex === undefined ? undefined : paint.palette[paintIndex];
+  if (resolved === undefined) throw new TypeError('glyph paint references a missing palette entry');
+  return resolved;
 }
 
 function assertMsdfPaint(paint: GlyphPaint): void {
   for (const entry of paint.palette) {
-    assertLinearColor(entry.color, 'MTSDF fill')
+    assertLinearColor(entry.color, 'MTSDF fill');
     if (entry.outline !== undefined) {
-      assertLinearColor(entry.outline.color, 'MTSDF outline')
+      assertLinearColor(entry.outline.color, 'MTSDF outline');
       if (!Number.isFinite(entry.outline.width) || entry.outline.width < 0) {
-        throw new TypeError('MTSDF outline width must be a non-negative finite value')
+        throw new TypeError('MTSDF outline width must be a non-negative finite value');
       }
     }
     if (entry.shadow !== undefined) {
-      assertLinearColor(entry.shadow.color, 'MTSDF shadow')
+      assertLinearColor(entry.shadow.color, 'MTSDF shadow');
       if (entry.shadow.offset.some((value) => !Number.isFinite(value))) {
-        throw new TypeError('MTSDF shadow offsets must be finite values')
+        throw new TypeError('MTSDF shadow offsets must be finite values');
       }
     }
   }
 }
 
 function assertLinearColor(color: readonly number[], label: string): void {
-  if (
-    color.length !== 4 ||
-    color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)
-  ) {
-    throw new TypeError(`${label} color must contain four finite linear values in [0, 1]`)
+  if (color.length !== 4 || color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
+    throw new TypeError(`${label} color must contain four finite linear values in [0, 1]`);
   }
 }
 
 function msdfMaterial(atlas: MsdfAtlasResource, pixelRange: number): THREE.MeshBasicNodeMaterial {
-  const existing = materialByAtlasTexture.get(atlas.texture)
-  if (existing !== undefined) return existing.material
+  const existing = materialByAtlasTexture.get(atlas.texture);
+  if (existing !== undefined) return existing.material;
   const material = new THREE.MeshBasicNodeMaterial({
     depthTest: false,
     depthWrite: false,
     side: THREE.DoubleSide,
     transparent: true,
-  })
-  const origin: Node<'vec2'> = tslAttribute<'vec2'>('msdfOrigin', 'vec2')
-  const size: Node<'vec2'> = tslAttribute<'vec2'>('msdfSize', 'vec2')
-  const uvOrigin: Node<'vec2'> = tslAttribute<'vec2'>('msdfUvOrigin', 'vec2')
-  const uvSize: Node<'vec2'> = tslAttribute<'vec2'>('msdfUvSize', 'vec2')
-  const uvBounds: Node<'vec4'> = tslAttribute<'vec4'>('msdfUvBounds', 'vec4')
-  const shadowOffset: Node<'vec2'> = tslAttribute<'vec2'>('msdfShadowOffset', 'vec2')
-  const fillColor: Node<'vec4'> = tslAttribute<'vec4'>('msdfFillColor', 'vec4')
-  const outlineColor: Node<'vec4'> = tslAttribute<'vec4'>('msdfOutlineColor', 'vec4')
-  const outlineWidth: Node<'float'> = tslAttribute<'float'>('msdfOutlineWidth', 'float')
-  const shadowColor: Node<'vec4'> = tslAttribute<'vec4'>('msdfShadowColor', 'vec4')
-  const pageIndex: Node<'float'> = tslAttribute<'float'>('msdfPageIndex', 'float')
-  const unitUv: Node<'vec2'> = uv()
-  const atlasU: Node<'float'> = add(uvOrigin.x, mul(unitUv.x, uvSize.x))
-  const atlasV: Node<'float'> = add(uvOrigin.y, mul(unitUv.y, uvSize.y))
-  const minimumU: Node<'float'> = add(uvBounds.x, 0.5 / atlas.width)
-  const minimumV: Node<'float'> = add(uvBounds.y, 0.5 / atlas.height)
-  const maximumU: Node<'float'> = sub(uvBounds.z, 0.5 / atlas.width)
-  const maximumV: Node<'float'> = sub(uvBounds.w, 0.5 / atlas.height)
-  const baseInside: Node<'float'> = insideRectangle(atlasU, atlasV, uvBounds)
-  const clampedBaseU: Node<'float'> = clamp(atlasU, minimumU, maximumU)
-  const clampedBaseV: Node<'float'> = clamp(atlasV, minimumV, maximumV)
-  const layer: Node<'int'> = int(pageIndex)
-  const baseSample: Node<'vec4'> = texture(atlas.texture, vec2(clampedBaseU, clampedBaseV)).depth(
-    layer,
-  )
-  const fillDistance: Node<'float'> = sub(median3(baseSample.rgb), 0.5)
-  const trueDistance: Node<'float'> = sub(baseSample.a, 0.5)
-  const pixelsPerDistanceUnit: Node<'float'> = screenPixelRange(atlasU, atlasV, atlas, pixelRange)
-  const fillCoverage: Node<'float'> = mul(
-    distanceCoverage(fillDistance, pixelsPerDistanceUnit),
-    baseInside,
-  )
-  const outlineDistance: Node<'float'> = add(trueDistance, outlineWidth)
-  const outlineCoverage: Node<'float'> = mul(
-    distanceCoverage(outlineDistance, pixelsPerDistanceUnit),
-    baseInside,
-  )
-  const outlineOnly: Node<'float'> = max(sub(outlineCoverage, fillCoverage), 0)
-  const shadowU: Node<'float'> = sub(atlasU, shadowOffset.x)
-  const shadowV: Node<'float'> = sub(atlasV, shadowOffset.y)
-  const shadowInside: Node<'float'> = insideRectangle(shadowU, shadowV, uvBounds)
-  const clampedShadowU: Node<'float'> = clamp(shadowU, minimumU, maximumU)
-  const clampedShadowV: Node<'float'> = clamp(shadowV, minimumV, maximumV)
-  const shadowSample: Node<'vec4'> = texture(
-    atlas.texture,
-    vec2(clampedShadowU, clampedShadowV),
-  ).depth(layer)
-  const shadowDistance: Node<'float'> = sub(shadowSample.a, 0.5)
-  const shadowCoverage: Node<'float'> = mul(
-    distanceCoverage(shadowDistance, pixelsPerDistanceUnit),
-    shadowInside,
-  )
-  const shadowAlpha: Node<'float'> = mul(shadowColor.a, shadowCoverage)
-  const outlineAlpha: Node<'float'> = mul(outlineColor.a, outlineOnly)
-  const fillAlpha: Node<'float'> = mul(fillColor.a, fillCoverage)
+  });
+  const origin: Node<'vec2'> = tslAttribute<'vec2'>('msdfOrigin', 'vec2');
+  const size: Node<'vec2'> = tslAttribute<'vec2'>('msdfSize', 'vec2');
+  const uvOrigin: Node<'vec2'> = tslAttribute<'vec2'>('msdfUvOrigin', 'vec2');
+  const uvSize: Node<'vec2'> = tslAttribute<'vec2'>('msdfUvSize', 'vec2');
+  const uvBounds: Node<'vec4'> = tslAttribute<'vec4'>('msdfUvBounds', 'vec4');
+  const shadowOffset: Node<'vec2'> = tslAttribute<'vec2'>('msdfShadowOffset', 'vec2');
+  const fillColor: Node<'vec4'> = tslAttribute<'vec4'>('msdfFillColor', 'vec4');
+  const outlineColor: Node<'vec4'> = tslAttribute<'vec4'>('msdfOutlineColor', 'vec4');
+  const outlineWidth: Node<'float'> = tslAttribute<'float'>('msdfOutlineWidth', 'float');
+  const shadowColor: Node<'vec4'> = tslAttribute<'vec4'>('msdfShadowColor', 'vec4');
+  const pageIndex: Node<'float'> = tslAttribute<'float'>('msdfPageIndex', 'float');
+  const unitUv: Node<'vec2'> = uv();
+  const atlasU: Node<'float'> = add(uvOrigin.x, mul(unitUv.x, uvSize.x));
+  const atlasV: Node<'float'> = add(uvOrigin.y, mul(unitUv.y, uvSize.y));
+  const minimumU: Node<'float'> = add(uvBounds.x, 0.5 / atlas.width);
+  const minimumV: Node<'float'> = add(uvBounds.y, 0.5 / atlas.height);
+  const maximumU: Node<'float'> = sub(uvBounds.z, 0.5 / atlas.width);
+  const maximumV: Node<'float'> = sub(uvBounds.w, 0.5 / atlas.height);
+  const baseInside: Node<'float'> = insideRectangle(atlasU, atlasV, uvBounds);
+  const clampedBaseU: Node<'float'> = clamp(atlasU, minimumU, maximumU);
+  const clampedBaseV: Node<'float'> = clamp(atlasV, minimumV, maximumV);
+  const layer: Node<'int'> = int(pageIndex);
+  const baseSample: Node<'vec4'> = texture(atlas.texture, vec2(clampedBaseU, clampedBaseV)).depth(layer);
+  const fillDistance: Node<'float'> = sub(median3(baseSample.rgb), 0.5);
+  const trueDistance: Node<'float'> = sub(baseSample.a, 0.5);
+  const pixelsPerDistanceUnit: Node<'float'> = screenPixelRange(atlasU, atlasV, atlas, pixelRange);
+  const fillCoverage: Node<'float'> = mul(distanceCoverage(fillDistance, pixelsPerDistanceUnit), baseInside);
+  const outlineDistance: Node<'float'> = add(trueDistance, outlineWidth);
+  const outlineCoverage: Node<'float'> = mul(distanceCoverage(outlineDistance, pixelsPerDistanceUnit), baseInside);
+  const outlineOnly: Node<'float'> = max(sub(outlineCoverage, fillCoverage), 0);
+  const shadowU: Node<'float'> = sub(atlasU, shadowOffset.x);
+  const shadowV: Node<'float'> = sub(atlasV, shadowOffset.y);
+  const shadowInside: Node<'float'> = insideRectangle(shadowU, shadowV, uvBounds);
+  const clampedShadowU: Node<'float'> = clamp(shadowU, minimumU, maximumU);
+  const clampedShadowV: Node<'float'> = clamp(shadowV, minimumV, maximumV);
+  const shadowSample: Node<'vec4'> = texture(atlas.texture, vec2(clampedShadowU, clampedShadowV)).depth(layer);
+  const shadowDistance: Node<'float'> = sub(shadowSample.a, 0.5);
+  const shadowCoverage: Node<'float'> = mul(distanceCoverage(shadowDistance, pixelsPerDistanceUnit), shadowInside);
+  const shadowAlpha: Node<'float'> = mul(shadowColor.a, shadowCoverage);
+  const outlineAlpha: Node<'float'> = mul(outlineColor.a, outlineOnly);
+  const fillAlpha: Node<'float'> = mul(fillColor.a, fillCoverage);
   // Fill and outlineOnly are disjoint geometric coverages. Summing them forms the complete
   // expanded glyph silhouette; compositing outlineOnly behind fill would attenuate it twice.
-  const glyphAlpha: Node<'float'> = add(fillAlpha, outlineAlpha)
-  const glyphRed: Node<'float'> = add(
-    mul(fillColor.r, fillAlpha),
-    mul(outlineColor.r, outlineAlpha),
-  )
-  const glyphGreen: Node<'float'> = add(
-    mul(fillColor.g, fillAlpha),
-    mul(outlineColor.g, outlineAlpha),
-  )
-  const glyphBlue: Node<'float'> = add(
-    mul(fillColor.b, fillAlpha),
-    mul(outlineColor.b, outlineAlpha),
-  )
-  const shadowRemainder: Node<'float'> = mul(shadowAlpha, sub(1, glyphAlpha))
-  const outputAlpha: Node<'float'> = add(glyphAlpha, shadowRemainder)
-  const outputRed: Node<'float'> = add(glyphRed, mul(shadowColor.r, shadowRemainder))
-  const outputGreen: Node<'float'> = add(glyphGreen, mul(shadowColor.g, shadowRemainder))
-  const outputBlue: Node<'float'> = add(glyphBlue, mul(shadowColor.b, shadowRemainder))
-  const safeOutputAlpha: Node<'float'> = max(outputAlpha, 1e-6)
+  const glyphAlpha: Node<'float'> = add(fillAlpha, outlineAlpha);
+  const glyphRed: Node<'float'> = add(mul(fillColor.r, fillAlpha), mul(outlineColor.r, outlineAlpha));
+  const glyphGreen: Node<'float'> = add(mul(fillColor.g, fillAlpha), mul(outlineColor.g, outlineAlpha));
+  const glyphBlue: Node<'float'> = add(mul(fillColor.b, fillAlpha), mul(outlineColor.b, outlineAlpha));
+  const shadowRemainder: Node<'float'> = mul(shadowAlpha, sub(1, glyphAlpha));
+  const outputAlpha: Node<'float'> = add(glyphAlpha, shadowRemainder);
+  const outputRed: Node<'float'> = add(glyphRed, mul(shadowColor.r, shadowRemainder));
+  const outputGreen: Node<'float'> = add(glyphGreen, mul(shadowColor.g, shadowRemainder));
+  const outputBlue: Node<'float'> = add(glyphBlue, mul(shadowColor.b, shadowRemainder));
+  const safeOutputAlpha: Node<'float'> = max(outputAlpha, 1e-6);
   const outputColor: Node<'vec3'> = vec3(
     div(outputRed, safeOutputAlpha),
     div(outputGreen, safeOutputAlpha),
     div(outputBlue, safeOutputAlpha),
-  )
-  const positionX: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x))
-  const positionY: Node<'float'> = add(origin.y, mul(positionLocal.y, size.y))
-  material.positionNode = vec3(positionX, positionY, 0)
-  material.colorNode = outputColor
-  material.opacityNode = outputAlpha
-  materialByAtlasTexture.set(atlas.texture, { material })
-  return material
+  );
+  const positionX: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x));
+  const positionY: Node<'float'> = add(origin.y, mul(positionLocal.y, size.y));
+  material.positionNode = vec3(positionX, positionY, 0);
+  material.colorNode = outputColor;
+  material.opacityNode = outputAlpha;
+  materialByAtlasTexture.set(atlas.texture, { material });
+  return material;
 }
 
 function median3(value: Node<'vec3'>): Node<'float'> {
-  const lowerPair: Node<'float'> = min(value.r, value.g)
-  const upperPair: Node<'float'> = max(value.r, value.g)
-  return max(lowerPair, min(upperPair, value.b))
+  const lowerPair: Node<'float'> = min(value.r, value.g);
+  const upperPair: Node<'float'> = max(value.r, value.g);
+  return max(lowerPair, min(upperPair, value.b));
 }
 
 function screenPixelRange(
@@ -777,31 +653,21 @@ function screenPixelRange(
   atlas: MsdfAtlasResource,
   pixelRange: number,
 ): Node<'float'> {
-  const screenTexelsU: Node<'float'> = div(1, max(fwidth(atlasU), 1e-6))
-  const screenTexelsV: Node<'float'> = div(1, max(fwidth(atlasV), 1e-6))
+  const screenTexelsU: Node<'float'> = div(1, max(fwidth(atlasU), 1e-6));
+  const screenTexelsV: Node<'float'> = div(1, max(fwidth(atlasV), 1e-6));
   const projectedRange: Node<'float'> = mul(
     0.5,
-    add(
-      mul(pixelRange / atlas.width, screenTexelsU),
-      mul(pixelRange / atlas.height, screenTexelsV),
-    ),
-  )
-  return max(projectedRange, 1)
+    add(mul(pixelRange / atlas.width, screenTexelsU), mul(pixelRange / atlas.height, screenTexelsV)),
+  );
+  return max(projectedRange, 1);
 }
 
-function distanceCoverage(
-  distance: Node<'float'>,
-  pixelsPerDistanceUnit: Node<'float'>,
-): Node<'float'> {
-  return clamp(add(mul(distance, pixelsPerDistanceUnit), 0.5), 0, 1)
+function distanceCoverage(distance: Node<'float'>, pixelsPerDistanceUnit: Node<'float'>): Node<'float'> {
+  return clamp(add(mul(distance, pixelsPerDistanceUnit), 0.5), 0, 1);
 }
 
-function insideRectangle(
-  pointU: Node<'float'>,
-  pointV: Node<'float'>,
-  bounds: Node<'vec4'>,
-): Node<'float'> {
-  const insideX: Node<'float'> = mul(step(bounds.x, pointU), step(pointU, bounds.z))
-  const insideY: Node<'float'> = mul(step(bounds.y, pointV), step(pointV, bounds.w))
-  return mul(insideX, insideY)
+function insideRectangle(pointU: Node<'float'>, pointV: Node<'float'>, bounds: Node<'vec4'>): Node<'float'> {
+  const insideX: Node<'float'> = mul(step(bounds.x, pointU), step(pointU, bounds.z));
+  const insideY: Node<'float'> = mul(step(bounds.y, pointV), step(pointV, bounds.w));
+  return mul(insideX, insideY);
 }

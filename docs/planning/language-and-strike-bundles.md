@@ -19,7 +19,7 @@ sources:
     title: Canonical roadmap
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T16:01:32Z"
+  at: '2026-07-27T16:01:32Z'
 ---
 
 # Language-aware font units and physical bitmap strikes
@@ -71,12 +71,12 @@ Strikes remain separate grayscale textures and record sets. Packing unrelated 1�
 
 ## Staged delivery
 
-| Stage | Status | Scope |
-| --- | :---: | --- |
-| CSS-size-stable DPR and nearest-strike selection | ✅ | `Text.rasterPixelRatio` rebuilds raster batches while reusing the paragraph; unit tests prove 16 CSS px selects 16/32/48 ppem at 1×/2×/3×. |
-| Benchmark 16/32 strike evidence | ⏳ | Publish representative multi-strike fixtures and show selected strike, scale ratio, transport, decoded, and GPU bytes at both DPRs. |
-| External strike/raster paging | ⏳ M13 | Load, deduplicate, cancel, retain, and evict independently addressed logical pages without changing shaping identity. |
-| Language-aware family directory | ⏳ M13/M17 | M13 proves coverage-directed raster delivery over the full CJK shaping core; M17 adds compiler-produced shaping units, closure, optional remapping, and normalized lookup. |
+| Stage                                            |   Status   | Scope                                                                                                                                                                      |
+| ------------------------------------------------ | :--------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSS-size-stable DPR and nearest-strike selection |     ✅     | `Text.rasterPixelRatio` rebuilds raster batches while reusing the paragraph; unit tests prove 16 CSS px selects 16/32/48 ppem at 1×/2×/3×.                                 |
+| Benchmark 16/32 strike evidence                  |     ⏳     | Publish representative multi-strike fixtures and show selected strike, scale ratio, transport, decoded, and GPU bytes at both DPRs.                                        |
+| External strike/raster paging                    |   ⏳ M13   | Load, deduplicate, cancel, retain, and evict independently addressed logical pages without changing shaping identity.                                                      |
+| Language-aware family directory                  | ⏳ M13/M17 | M13 proves coverage-directed raster delivery over the full CJK shaping core; M17 adds compiler-produced shaping units, closure, optional remapping, and normalized lookup. |
 
 ## Required evidence
 

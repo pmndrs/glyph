@@ -32,11 +32,7 @@
           },
           "requiredFeature": {
             "type": "string",
-            "enum": [
-              "texture-compression-bc",
-              "texture-compression-etc2",
-              "texture-compression-astc"
-            ]
+            "enum": ["texture-compression-bc", "texture-compression-etc2", "texture-compression-astc"]
           },
           "quality": { "type": "string", "enum": ["lossless", "quality-gated"] }
         },

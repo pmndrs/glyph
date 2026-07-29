@@ -1,13 +1,13 @@
-import type { BenchmarkMeasurement } from '../src/benchmark/contracts'
+import type { BenchmarkMeasurement } from '../src/benchmark/contracts';
 
-const executionPath = '/src/benchmark/execution.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const executionPath = '/src/benchmark/execution.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ executionPath),
   import(/* @vite-ignore */ environmentPath),
-])
-const environment = await environmentResource()
-if (environment.webgpu !== true) throw new Error('CJK live probe requires WebGPU-capable Chrome')
+]);
+const environment = await environmentResource();
+if (environment.webgpu !== true) throw new Error('CJK live probe requires WebGPU-capable Chrome');
 
 const result = await runRegisteredBenchmark({
   targetId: 'cjk-universality',
@@ -15,14 +15,14 @@ const result = await runRegisteredBenchmark({
   input: {},
   controls: { dpr: 1, samples: 3, warmup: 1 },
   environment,
-})
+});
 const expectedHash =
-  'a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68'
+  'a1a833f2:fbe2aa07:922f9a2e:8c977f4d:85a2f640:fd42b9f7:53d8ec89:8cb3050c:bbfd039d:837a2b43:2f450f5e:9900b4af:c49f3e68';
 if (
   result.status !== 'passed' ||
   result.measurements.length !== 3 ||
   result.measurements.some((measurement: BenchmarkMeasurement) => {
-    const metrics = measurement.metrics
+    const metrics = measurement.metrics;
     return (
       measurement.hash !== expectedHash ||
       measurement.outputBytes !== 10_622 ||
@@ -42,10 +42,10 @@ if (
       metrics.shapingPayloadRawBytes !== 1_539_372 ||
       metrics.shapingPayloadGzipBytes !== 654_925 ||
       metrics.shapingPayloadBrotliBytes !== 514_547
-    )
+    );
   })
 ) {
-  throw new Error('CJK live probe did not preserve its exact shaping and paragraph contract')
+  throw new Error('CJK live probe did not preserve its exact shaping and paragraph contract');
 }
 
 console.log(
@@ -57,6 +57,6 @@ console.log(
     validation: result.validation,
     webgpu: result.environment.webgpu,
   }),
-)
+);
 
-export {}
+export {};

@@ -1,22 +1,22 @@
-import { writeFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
-import type { Browser } from 'playwright'
-import { createServer, type ViteDevServer } from 'vite'
+import { writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import type { Browser } from 'playwright';
+import { createServer, type ViteDevServer } from 'vite';
 
-import { launchProjectChromium } from './support/project-chromium.mts'
+import { launchProjectChromium } from './support/project-chromium.mts';
 
 interface Arguments {
-  readonly cases: readonly BenchmarkCase[]
-  readonly dpr: number
-  readonly samples: number
-  readonly warmup: number
-  readonly port: number
-  readonly output?: string
+  readonly cases: readonly BenchmarkCase[];
+  readonly dpr: number;
+  readonly samples: number;
+  readonly warmup: number;
+  readonly port: number;
+  readonly output?: string;
 }
 
 interface BenchmarkCase {
-  readonly targetId: string
-  readonly scenarioId: string
+  readonly targetId: string;
+  readonly scenarioId: string;
 }
 
 const conformanceCases: readonly BenchmarkCase[] = [
@@ -42,36 +42,35 @@ const conformanceCases: readonly BenchmarkCase[] = [
     targetId: 'advanced-shaping-conformance',
     scenarioId: 'advanced-shaping-conformance',
   },
-]
+];
 
-const readinessTimeoutMs = 30_000
-const browserLaunchTimeoutMs = 60_000
-const navigationTimeoutMs = 30_000
-const benchmarkTimeoutMs = 180_000
+const readinessTimeoutMs = 30_000;
+const browserLaunchTimeoutMs = 60_000;
+const navigationTimeoutMs = 30_000;
+const benchmarkTimeoutMs = 180_000;
 
 function parseArguments(values: readonly string[]): Arguments {
-  const result: Record<string, string> = {}
+  const result: Record<string, string> = {};
   for (let index = 0; index < values.length; index += 2) {
-    const name = values[index]
-    const value = values[index + 1]
+    const name = values[index];
+    const value = values[index + 1];
     if (name === undefined || !name.startsWith('--') || value === undefined) {
-      throw new Error('Arguments must be supplied as --name value pairs')
+      throw new Error('Arguments must be supplied as --name value pairs');
     }
-    result[name.slice(2)] = value
+    result[name.slice(2)] = value;
   }
-  const samples = Number(result.samples ?? 32)
-  const warmup = Number(result.warmup ?? 4)
-  const dpr = Number(result.dpr ?? 1)
-  const port = Number(result.port ?? 5173)
-  if (!Number.isSafeInteger(samples) || samples < 1) throw new Error('samples must be positive')
-  if (!Number.isSafeInteger(warmup) || warmup < 0) throw new Error('warmup must be non-negative')
+  const samples = Number(result.samples ?? 32);
+  const warmup = Number(result.warmup ?? 4);
+  const dpr = Number(result.dpr ?? 1);
+  const port = Number(result.port ?? 5173);
+  if (!Number.isSafeInteger(samples) || samples < 1) throw new Error('samples must be positive');
+  if (!Number.isSafeInteger(warmup) || warmup < 0) throw new Error('warmup must be non-negative');
   if (!Number.isFinite(dpr) || dpr <= 0 || dpr > 4)
-    throw new Error('dpr must be greater than zero but no greater than four')
-  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
-    throw new Error('port must be a valid TCP port')
-  const suite = result.suite
+    throw new Error('dpr must be greater than zero but no greater than four');
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('port must be a valid TCP port');
+  const suite = result.suite;
   if (suite !== undefined && suite !== 'conformance') {
-    throw new Error(`Unknown headless suite: ${suite}`)
+    throw new Error(`Unknown headless suite: ${suite}`);
   }
   return {
     cases:
@@ -88,55 +87,51 @@ function parseArguments(values: readonly string[]): Arguments {
     dpr,
     port,
     ...(result.output === undefined ? {} : { output: result.output }),
-  }
+  };
 }
 
-const options = parseArguments(process.argv.slice(2))
-const root = fileURLToPath(new URL('..', import.meta.url))
+const options = parseArguments(process.argv.slice(2));
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 function reportStage(message: string): void {
-  process.stderr.write(`[headless] ${message}\n`)
+  process.stderr.write(`[headless] ${message}\n`);
 }
 
 async function withinDeadline<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
-  let timeout: NodeJS.Timeout | undefined
+  let timeout: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => reject(new Error(`${label} exceeded ${timeoutMs} ms`)), timeoutMs)
-  })
+    timeout = setTimeout(() => reject(new Error(`${label} exceeded ${timeoutMs} ms`)), timeoutMs);
+  });
   try {
-    return await Promise.race([task, deadline])
+    return await Promise.race([task, deadline]);
   } finally {
-    if (timeout !== undefined) clearTimeout(timeout)
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
-let browser: Browser | undefined
-let server: ViteDevServer | undefined
+let browser: Browser | undefined;
+let server: ViteDevServer | undefined;
 
 try {
-  reportStage('waiting for Vite')
+  reportStage('waiting for Vite');
   server = await createServer({
     root,
     server: { host: '127.0.0.1', port: options.port, strictPort: true },
-  })
-  await withinDeadline('Vite readiness', readinessTimeoutMs, server.listen())
-  reportStage('launching Chromium')
-  browser = await withinDeadline(
-    'Chromium launch',
-    browserLaunchTimeoutMs,
-    launchProjectChromium({ headless: true }),
-  )
+  });
+  await withinDeadline('Vite readiness', readinessTimeoutMs, server.listen());
+  reportStage('launching Chromium');
+  browser = await withinDeadline('Chromium launch', browserLaunchTimeoutMs, launchProjectChromium({ headless: true }));
 
-  const summaries = []
+  const summaries = [];
   for (const benchmarkCase of options.cases) {
-    const caseLabel = `${benchmarkCase.targetId}/${benchmarkCase.scenarioId}`
-    reportStage(`${caseLabel}: opening isolated page`)
-    const page = await browser.newPage()
-    const errors: string[] = []
+    const caseLabel = `${benchmarkCase.targetId}/${benchmarkCase.scenarioId}`;
+    reportStage(`${caseLabel}: opening isolated page`);
+    const page = await browser.newPage();
+    const errors: string[] = [];
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text())
-    })
-    page.on('pageerror', (error) => errors.push(error.message))
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(error.message));
     try {
       await withinDeadline(
         `${caseLabel} navigation`,
@@ -144,26 +139,26 @@ try {
         page.goto(`http://127.0.0.1:${options.port}/?runner=headless`, {
           waitUntil: 'domcontentloaded',
         }),
-      )
-      reportStage(`${caseLabel}: running benchmark`)
+      );
+      reportStage(`${caseLabel}: running benchmark`);
       const summary = await withinDeadline(
         `${caseLabel} benchmark`,
         benchmarkTimeoutMs,
         page.evaluate(
           async (request) => {
-            const executionPath = '/src/benchmark/execution.ts'
-            const environmentPath = '/src/benchmark/environment.ts'
+            const executionPath = '/src/benchmark/execution.ts';
+            const environmentPath = '/src/benchmark/environment.ts';
             const [{ runRegisteredBenchmark }, { environmentResource }] = await Promise.all([
               import(/* @vite-ignore */ executionPath),
               import(/* @vite-ignore */ environmentPath),
-            ])
+            ]);
             return runRegisteredBenchmark({
               targetId: request.targetId,
               scenarioId: request.scenarioId,
               input: {},
               controls: { dpr: request.dpr, samples: request.samples, warmup: request.warmup },
               environment: await environmentResource(request.browserVersion),
-            })
+            });
           },
           {
             ...benchmarkCase,
@@ -173,20 +168,20 @@ try {
             browserVersion: browser.version(),
           },
         ),
-      )
-      if (errors.length > 0) throw new Error(`Headless browser errors: ${errors.join(' | ')}`)
-      summaries.push(summary)
-      reportStage(`${caseLabel}: passed`)
+      );
+      if (errors.length > 0) throw new Error(`Headless browser errors: ${errors.join(' | ')}`);
+      summaries.push(summary);
+      reportStage(`${caseLabel}: passed`);
     } finally {
-      await page.close()
+      await page.close();
     }
   }
 
-  const result = options.cases.length === 1 ? summaries[0] : summaries
-  const serialized = `${JSON.stringify(result, null, 2)}\n`
-  if (options.output === undefined) process.stdout.write(serialized)
-  else await writeFile(options.output, serialized)
+  const result = options.cases.length === 1 ? summaries[0] : summaries;
+  const serialized = `${JSON.stringify(result, null, 2)}\n`;
+  if (options.output === undefined) process.stdout.write(serialized);
+  else await writeFile(options.output, serialized);
 } finally {
-  if (browser !== undefined) await browser.close()
-  if (server !== undefined) await server.close()
+  if (browser !== undefined) await browser.close();
+  if (server !== undefined) await server.close();
 }

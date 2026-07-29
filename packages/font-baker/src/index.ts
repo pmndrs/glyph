@@ -1,7 +1,7 @@
-import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from "./contract.js";
-import { fontBakerAbi, type FontBakerAbi } from "./generated/font-baker-abi.js";
+import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
+import { fontBakerAbi, type FontBakerAbi } from './generated/font-baker-abi.js';
 
-export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from "./contract.js";
+export { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from './contract.js';
 
 export interface FontBakeDescriptorV0 {
   readonly formatVersion: 0;
@@ -14,7 +14,7 @@ export interface FontBakeRequestV0 {
 }
 
 export interface BakeArtifactV0 {
-  readonly role: "font";
+  readonly role: 'font';
   readonly id: string;
   readonly bytes: Uint8Array;
   readonly sha256: string;
@@ -27,7 +27,7 @@ export interface BakeWarning {
 }
 
 export interface ShapingPayloadReportV0 {
-  readonly format: "opentype-sfnt-harfrust-v0";
+  readonly format: 'opentype-sfnt-harfrust-v0';
   readonly sfntDirectoryBytes: number;
   readonly tables: readonly {
     readonly tag: string;
@@ -47,14 +47,14 @@ export interface FontPayloadReportV0 {
   readonly rasters: readonly unknown[];
   readonly containers: readonly {
     readonly artifactId: string;
-    readonly role: "font";
+    readonly role: 'font';
     readonly jsonBytes: number;
     readonly paddingBytes: number;
     readonly totalBytes: number;
   }[];
   readonly transport: readonly {
     readonly artifactId: string;
-    readonly format: "raw" | "gzip" | "brotli";
+    readonly format: 'raw' | 'gzip' | 'brotli';
     readonly bytes: number;
   }[];
 }
@@ -77,7 +77,7 @@ export class FontBakeError extends Error {
 
   constructor(error: SerializedBakeError) {
     super(error.message);
-    this.name = "FontBakeError";
+    this.name = 'FontBakeError';
     this.code = error.code;
     this.path = error.path;
   }
@@ -92,7 +92,7 @@ export type FontBakerWasmSource = BufferSource | WebAssembly.Module;
 export type FontBakerAbiV0 = FontBakerAbi;
 
 interface FontArtifactMetadata {
-  readonly role: "font";
+  readonly role: 'font';
   readonly id: string;
   readonly sha256: string;
 }
@@ -176,26 +176,26 @@ function readExports(exports: WebAssembly.Exports, abi: FontBakerAbiV0): FontBak
   const resultLen = exports[abi.functions.responseByteLength.export];
   if (
     !(memory instanceof WebAssembly.Memory) ||
-    typeof alloc !== "function" ||
-    typeof dealloc !== "function" ||
-    typeof bake !== "function" ||
-    typeof resultLen !== "function"
+    typeof alloc !== 'function' ||
+    typeof dealloc !== 'function' ||
+    typeof bake !== 'function' ||
+    typeof resultLen !== 'function'
   ) {
-    throw new TypeError("invalid @pmndrs/text-font-baker Wasm exports");
+    throw new TypeError('invalid @pmndrs/text-font-baker Wasm exports');
   }
   return {
     memory,
-    pmndrs_font_baker_alloc: alloc as FontBakerExports["pmndrs_font_baker_alloc"],
-    pmndrs_font_baker_dealloc: dealloc as FontBakerExports["pmndrs_font_baker_dealloc"],
-    pmndrs_font_baker_bake: bake as FontBakerExports["pmndrs_font_baker_bake"],
-    pmndrs_font_baker_result_len: resultLen as FontBakerExports["pmndrs_font_baker_result_len"],
+    pmndrs_font_baker_alloc: alloc as FontBakerExports['pmndrs_font_baker_alloc'],
+    pmndrs_font_baker_dealloc: dealloc as FontBakerExports['pmndrs_font_baker_dealloc'],
+    pmndrs_font_baker_bake: bake as FontBakerExports['pmndrs_font_baker_bake'],
+    pmndrs_font_baker_result_len: resultLen as FontBakerExports['pmndrs_font_baker_result_len'],
   };
 }
 
 function copyIntoWasm(exports: FontBakerExports, bytes: Uint8Array): number {
   const pointer = exports.pmndrs_font_baker_alloc(bytes.byteLength);
   if (pointer === 0 && bytes.byteLength !== 0) {
-    throw new RangeError("font baker Wasm allocation failed");
+    throw new RangeError('font baker Wasm allocation failed');
   }
   try {
     new Uint8Array(exports.memory.buffer, pointer, bytes.byteLength).set(bytes);
@@ -210,23 +210,20 @@ function decodeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV
   const response = abi.response;
   if (
     bytes.byteLength < response.headerByteLength ||
-    textDecoder.decode(
-      bytes.subarray(response.magicOffset, response.magicOffset + response.magic.length),
-    ) !== response.magic
+    textDecoder.decode(bytes.subarray(response.magicOffset, response.magicOffset + response.magic.length)) !==
+      response.magic
   ) {
-    throw new TypeError("invalid font baker response envelope");
+    throw new TypeError('invalid font baker response envelope');
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const status = view.getUint32(response.statusOffset, true);
   const metadataLength = view.getUint32(response.metadataByteLengthOffset, true);
   const artifactLength = view.getUint32(response.artifactByteLengthOffset, true);
   if (response.payloadOffset + metadataLength + artifactLength !== bytes.byteLength) {
-    throw new TypeError("invalid font baker response lengths");
+    throw new TypeError('invalid font baker response lengths');
   }
   const metadata: unknown = JSON.parse(
-    textDecoder.decode(
-      bytes.subarray(response.payloadOffset, response.payloadOffset + metadataLength),
-    ),
+    textDecoder.decode(bytes.subarray(response.payloadOffset, response.payloadOffset + metadataLength)),
   );
   if (status !== response.successStatus) {
     throw new FontBakeError(parseSerializedBakeError(metadata));
@@ -235,7 +232,7 @@ function decodeResponse(bytes: Uint8Array, abi: FontBakerAbiV0): FontBakeResultV
   const result = metadata;
   const artifact = result.artifacts[0];
   if (result.artifacts.length !== 1 || artifact === undefined) {
-    throw new TypeError("V0 font baker must return exactly one core artifact");
+    throw new TypeError('V0 font baker must return exactly one core artifact');
   }
   const artifactBytes = bytes.slice(response.payloadOffset + metadataLength);
   return {
@@ -254,17 +251,17 @@ function assertFontResultMetadata(value: unknown): asserts value is FontResultMe
     !Array.isArray(value.warnings) ||
     !value.warnings.every(isBakeWarning)
   ) {
-    throw new TypeError("font baker returned invalid result metadata");
+    throw new TypeError('font baker returned invalid result metadata');
   }
 }
 
 function isFontArtifactMetadata(value: unknown): value is FontArtifactMetadata {
   return (
     isNonArrayObject(value) &&
-    value.role === "font" &&
-    typeof value.id === "string" &&
+    value.role === 'font' &&
+    typeof value.id === 'string' &&
     value.id.length > 0 &&
-    typeof value.sha256 === "string" &&
+    typeof value.sha256 === 'string' &&
     /^[0-9a-f]{64}$/.test(value.sha256)
   );
 }
@@ -288,7 +285,7 @@ function isFontPayloadReport(value: unknown): value is FontPayloadReportV0 {
 function isShapingPayloadReport(value: unknown): value is ShapingPayloadReportV0 {
   return (
     isNonArrayObject(value) &&
-    value.format === "opentype-sfnt-harfrust-v0" &&
+    value.format === 'opentype-sfnt-harfrust-v0' &&
     isNonnegativeSafeInteger(value.sfntDirectoryBytes) &&
     Array.isArray(value.tables) &&
     value.tables.every(isShapingTableReport) &&
@@ -303,7 +300,7 @@ function isShapingPayloadReport(value: unknown): value is ShapingPayloadReportV0
 function isShapingTableReport(value: unknown): boolean {
   return (
     isNonArrayObject(value) &&
-    typeof value.tag === "string" &&
+    typeof value.tag === 'string' &&
     isNonnegativeSafeInteger(value.rawBytes) &&
     isNonnegativeSafeInteger(value.paddedBytes)
   );
@@ -312,8 +309,8 @@ function isShapingTableReport(value: unknown): boolean {
 function isContainerReport(value: unknown): boolean {
   return (
     isNonArrayObject(value) &&
-    typeof value.artifactId === "string" &&
-    value.role === "font" &&
+    typeof value.artifactId === 'string' &&
+    value.role === 'font' &&
     isNonnegativeSafeInteger(value.jsonBytes) &&
     isNonnegativeSafeInteger(value.paddingBytes) &&
     isNonnegativeSafeInteger(value.totalBytes)
@@ -323,8 +320,8 @@ function isContainerReport(value: unknown): boolean {
 function isTransportReport(value: unknown): boolean {
   return (
     isNonArrayObject(value) &&
-    typeof value.artifactId === "string" &&
-    (value.format === "raw" || value.format === "gzip" || value.format === "brotli") &&
+    typeof value.artifactId === 'string' &&
+    (value.format === 'raw' || value.format === 'gzip' || value.format === 'brotli') &&
     isNonnegativeSafeInteger(value.bytes)
   );
 }
@@ -332,21 +329,21 @@ function isTransportReport(value: unknown): boolean {
 function isBakeWarning(value: unknown): value is BakeWarning {
   return (
     isNonArrayObject(value) &&
-    typeof value.code === "string" &&
-    typeof value.message === "string" &&
-    (value.path === undefined || typeof value.path === "string")
+    typeof value.code === 'string' &&
+    typeof value.message === 'string' &&
+    (value.path === undefined || typeof value.path === 'string')
   );
 }
 
 function parseSerializedBakeError(value: unknown): SerializedBakeError {
-  if (!isBakeWarning(value)) throw new TypeError("font baker returned invalid error metadata");
+  if (!isBakeWarning(value)) throw new TypeError('font baker returned invalid error metadata');
   return value;
 }
 
 function isNonArrayObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isNonnegativeSafeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }

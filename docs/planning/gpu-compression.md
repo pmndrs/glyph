@@ -4,55 +4,55 @@ title: GPU compression and compact Slug storage
 description: Distinguishes transport, decoded, and GPU compression and records quality constraints for font rasters.
 tags: [gpu, compression, slug, mtsdf, bitmap]
 sources:
-  - id: "citation-1"
-    resource: "https://gpuweb.github.io/gpuweb/"
-    title: "WebGPU specification"
-  - id: "citation-2-1"
-    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
-    title: "KTX 2.0 specification"
-  - id: "citation-2-2"
-    resource: "https://www.khronos.org/ktx/"
-    title: "Khronos KTX overview"
-  - id: "citation-3-1"
-    resource: "https://github.khronos.org/Vulkan-Site/samples/latest/samples/performance/texture_compression_basisu/README.html"
-    title: "Basis Universal/KTX2 Vulkan sample"
-  - id: "citation-3-2"
-    resource: "https://threejs.org/docs/pages/KTX2Loader.html"
-    title: "Three.js KTX2Loader"
-  - id: "citation-4-1"
-    resource: "https://registry.khronos.org/webgl/specs/2.0/"
-    title: "WebGL 2.0 specification"
-  - id: "citation-4-2"
-    resource: "https://registry.khronos.org/webgl/extensions/"
-    title: "compressed-texture extension registry"
-  - id: "citation-5"
-    resource: "https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug/src/pipeline/texturePacker.ts"
-    title: "Reviewed Three Flatland uikit texture packer"
-  - id: "citation-6"
-    resource: "payload-budget.md"
-    title: "Font payload budget"
-  - id: "gltf-rs"
-    resource: "https://docs.rs/gltf/1.4.1/gltf/"
-    title: "gltf-rs 1.4.1 API"
-  - id: "gltf-json"
-    resource: "https://docs.rs/crate/gltf-json/1.4.1/source/Cargo.toml.orig"
-    title: "gltf-json 1.4.1 package manifest"
-  - id: "ktx2-rs"
-    resource: "https://docs.rs/ktx2/0.5.0/ktx2/"
-    title: "ktx2 0.5.0 API"
-  - id: "ktx-developer-guide"
-    resource: "https://github.com/KhronosGroup/3D-Formats-Guidelines/blob/main/KTXDeveloperGuide.md"
-    title: "Khronos KTX developer guide"
-  - id: "ktx-software"
-    resource: "https://github.com/KhronosGroup/KTX-Software"
-    title: "Khronos KTX-Software"
-  - id: "ktx2-writer"
-    resource: "https://docs.rs/ktx2_writer/0.2.1/ktx2_writer/"
-    title: "ktx2_writer 0.2.1 API"
+  - id: 'citation-1'
+    resource: 'https://gpuweb.github.io/gpuweb/'
+    title: 'WebGPU specification'
+  - id: 'citation-2-1'
+    resource: 'https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html'
+    title: 'KTX 2.0 specification'
+  - id: 'citation-2-2'
+    resource: 'https://www.khronos.org/ktx/'
+    title: 'Khronos KTX overview'
+  - id: 'citation-3-1'
+    resource: 'https://github.khronos.org/Vulkan-Site/samples/latest/samples/performance/texture_compression_basisu/README.html'
+    title: 'Basis Universal/KTX2 Vulkan sample'
+  - id: 'citation-3-2'
+    resource: 'https://threejs.org/docs/pages/KTX2Loader.html'
+    title: 'Three.js KTX2Loader'
+  - id: 'citation-4-1'
+    resource: 'https://registry.khronos.org/webgl/specs/2.0/'
+    title: 'WebGL 2.0 specification'
+  - id: 'citation-4-2'
+    resource: 'https://registry.khronos.org/webgl/extensions/'
+    title: 'compressed-texture extension registry'
+  - id: 'citation-5'
+    resource: 'https://github.com/thejustinwalsh/three-flatland/blob/2935a89fcd9999e8a8b3d3b733f7f7302285cd60/packages/slug/src/pipeline/texturePacker.ts'
+    title: 'Reviewed Three Flatland uikit texture packer'
+  - id: 'citation-6'
+    resource: 'payload-budget.md'
+    title: 'Font payload budget'
+  - id: 'gltf-rs'
+    resource: 'https://docs.rs/gltf/1.4.1/gltf/'
+    title: 'gltf-rs 1.4.1 API'
+  - id: 'gltf-json'
+    resource: 'https://docs.rs/crate/gltf-json/1.4.1/source/Cargo.toml.orig'
+    title: 'gltf-json 1.4.1 package manifest'
+  - id: 'ktx2-rs'
+    resource: 'https://docs.rs/ktx2/0.5.0/ktx2/'
+    title: 'ktx2 0.5.0 API'
+  - id: 'ktx-developer-guide'
+    resource: 'https://github.com/KhronosGroup/3D-Formats-Guidelines/blob/main/KTXDeveloperGuide.md'
+    title: 'Khronos KTX developer guide'
+  - id: 'ktx-software'
+    resource: 'https://github.com/KhronosGroup/KTX-Software'
+    title: 'Khronos KTX-Software'
+  - id: 'ktx2-writer'
+    resource: 'https://docs.rs/ktx2_writer/0.2.1/ktx2_writer/'
+    title: 'ktx2_writer 0.2.1 API'
 
 generated:
-  by: "openai-codex/gpt-5.6"
-  at: "2026-07-27T19:47:03Z"
+  by: 'openai-codex/gpt-5.6'
+  at: '2026-07-27T19:47:03Z'
 ---
 
 # GPU compression and compact Slug storage
@@ -92,13 +92,13 @@ The project should continue to use maintained implementations for parsing, data-
 
 This division is deliberate: generation encodes the package's small canonical subset, while independent implementations prove that the emitted bytes satisfy the wider standards. A general library is not automatically safer if most of its surface is unused and the project-specific extension, resource limits, identities, and ownership rules still require local code.
 
-| Candidate | Useful coverage | Fit for the runtime baker | Decision |
-| --- | --- | --- | --- |
-| `gltf` 1.4.1 | Mature glTF/GLB loader; `Glb` can split and write the binary container | Its typed scene graph, `gltf-json`, macros, and general extension surface are much broader than a package-owned JSON extension plus one BIN chunk; the normal crate is `std`-oriented | Keep as reference/host tooling candidate, not a Wasm baker dependency |
-| `gltf-json` 1.4.1 | Typed core glTF JSON with Serde serialization; MIT OR Apache-2.0 | Adds the entire core document model and derive graph while custom PMNDRS extensions still require package-owned values; it does not remove our four-byte framing policy | Do not add to the baker unless a future general glTF composition feature demonstrates a measured correctness or maintenance win |
-| `ktx2` 0.5.0 | Apache-2.0, `no_std` parser/validator, Vulkan format model, and canonical DFD generation | Excellent match for authoritative DFD construction and independent host validation, but it intentionally exposes no general KTX2 writer | Retain the existing dependency exactly where used |
-| `ktx2_writer` 0.2.1 | Writes BC6H, Zstd-supercompressed cubemaps | Its one public encoding path is unrelated to linear R8/RGBA8 one-level font atlas pages | Reject for this use case |
-| Khronos KTX-Software | Official full read/write/validate/transcode implementation and tools, including Wasm builds | Comprehensive native/Wasm codec surface is disproportionate for uncompressed one-level pages and would duplicate a large optional module inside the runtime baker | Keep as external validation/advanced compression tooling; reconsider only when Basis, Zstd, mip, array, or native block encoding becomes a production requirement |
+| Candidate            | Useful coverage                                                                             | Fit for the runtime baker                                                                                                                                                             | Decision                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gltf` 1.4.1         | Mature glTF/GLB loader; `Glb` can split and write the binary container                      | Its typed scene graph, `gltf-json`, macros, and general extension surface are much broader than a package-owned JSON extension plus one BIN chunk; the normal crate is `std`-oriented | Keep as reference/host tooling candidate, not a Wasm baker dependency                                                                                             |
+| `gltf-json` 1.4.1    | Typed core glTF JSON with Serde serialization; MIT OR Apache-2.0                            | Adds the entire core document model and derive graph while custom PMNDRS extensions still require package-owned values; it does not remove our four-byte framing policy               | Do not add to the baker unless a future general glTF composition feature demonstrates a measured correctness or maintenance win                                   |
+| `ktx2` 0.5.0         | Apache-2.0, `no_std` parser/validator, Vulkan format model, and canonical DFD generation    | Excellent match for authoritative DFD construction and independent host validation, but it intentionally exposes no general KTX2 writer                                               | Retain the existing dependency exactly where used                                                                                                                 |
+| `ktx2_writer` 0.2.1  | Writes BC6H, Zstd-supercompressed cubemaps                                                  | Its one public encoding path is unrelated to linear R8/RGBA8 one-level font atlas pages                                                                                               | Reject for this use case                                                                                                                                          |
+| Khronos KTX-Software | Official full read/write/validate/transcode implementation and tools, including Wasm builds | Comprehensive native/Wasm codec surface is disproportionate for uncompressed one-level pages and would duplicate a large optional module inside the runtime baker                     | Keep as external validation/advanced compression tooling; reconsider only when Basis, Zstd, mip, array, or native block encoding becomes a production requirement |
 
 This matches Khronos guidance that KTX2 is a relatively simple binary container that may be written directly from the specification.[^ktx-developer-guide] Our KTX2 writer is intentionally limited to linear `R8_UNORM` and `R8G8B8A8_UNORM`, one 2D image, one level, no key/value data, no arrays or cubemaps, and no supercompression. Its DFD bytes come from `ktx2`, and `std` builds parse the completed artifact through that maintained implementation.[^ktx2-rs] The GLB writer similarly accepts already-serialized package JSON and one binary payload, then owns only checked lengths, required four-byte padding, and the two standard chunks. The general `gltf` ecosystem remains available for host tools, but its published dependency graph includes the complete `gltf-json` model and `serde_json` rather than a smaller framing primitive.[^gltf-rs][^gltf-json]
 
@@ -106,13 +106,13 @@ The admission rule is therefore capability-based rather than line-count-based: r
 
 ## Three different meanings of compression
 
-| Mechanism | Reduces download | Reduces GPU memory | Runtime work | Suitable for exact band data |
-| --- | --- | --- | --- | --- |
-| HTTP Brotli/gzip over GLB | Yes | No | Browser inflates before upload | Yes |
-| KTX2 Zstandard or other lossless supercompression | Yes | No when inflated to an uncompressed GPU format | Inflate before sampling | Yes |
-| KTX2 Basis Universal | Yes | Usually yes after transcoding to BC/ETC2/ASTC | Worker/Wasm transcode | No; decoded values are lossy |
-| Native BC/ETC2/ASTC blocks in KTX2 | Sometimes | Yes | Capability selection; otherwise no transcode | No |
-| Custom integer/fixed-point packing | Usually | Yes | Shader bit extraction/address reconstruction | Yes when the representation is proven exact |
+| Mechanism                                         | Reduces download | Reduces GPU memory                             | Runtime work                                 | Suitable for exact band data                |
+| ------------------------------------------------- | ---------------- | ---------------------------------------------- | -------------------------------------------- | ------------------------------------------- |
+| HTTP Brotli/gzip over GLB                         | Yes              | No                                             | Browser inflates before upload               | Yes                                         |
+| KTX2 Zstandard or other lossless supercompression | Yes              | No when inflated to an uncompressed GPU format | Inflate before sampling                      | Yes                                         |
+| KTX2 Basis Universal                              | Yes              | Usually yes after transcoding to BC/ETC2/ASTC  | Worker/Wasm transcode                        | No; decoded values are lossy                |
+| Native BC/ETC2/ASTC blocks in KTX2                | Sometimes        | Yes                                            | Capability selection; otherwise no transcode | No                                          |
+| Custom integer/fixed-point packing                | Usually          | Yes                                            | Shader bit extraction/address reconstruction | Yes when the representation is proven exact |
 
 KTX2 is a container, not one compression algorithm. Basis Universal payloads are portable transmission formats that are transcoded to a device-supported GPU format; they are not uploaded unchanged as universal blocks. A KTX2 payload already containing native BC, ETC2, or ASTC blocks can be uploaded directly only when the device supports that format.
 
@@ -239,13 +239,13 @@ Even without lossy curve compression, exact band packing models at about 2.04 Mi
 
 ## Bitmap, emoji, and distance-field payloads
 
-| Raster | Compression stance |
-| --- | --- |
-| Grayscale bitmap strike | Test R/EAC/ASTC-capable targets where the loader can select a compatible single-channel format; retain R8 fallback. |
-| Color bitmap/emoji | Strong KTX2 Basis candidate. Use UASTC for quality-sensitive artwork and measure ETC1S where smaller transport matters more. |
-| MSDF (MTSDF RGBA) | Test UASTC and high-quality native targets only. Channel errors move reconstructed edges and can reduce the usable distance/effect range. |
-| Slug curves | Experimental UASTC/BC7/ASTC path with RGBA16F fallback. |
-| Slug bands | Never use lossy block compression; use exact integer structural packing. |
+| Raster                  | Compression stance                                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Grayscale bitmap strike | Test R/EAC/ASTC-capable targets where the loader can select a compatible single-channel format; retain R8 fallback.                       |
+| Color bitmap/emoji      | Strong KTX2 Basis candidate. Use UASTC for quality-sensitive artwork and measure ETC1S where smaller transport matters more.              |
+| MSDF (MTSDF RGBA)       | Test UASTC and high-quality native targets only. Channel errors move reconstructed edges and can reduce the usable distance/effect range. |
+| Slug curves             | Experimental UASTC/BC7/ASTC path with RGBA16F fallback.                                                                                   |
+| Slug bands              | Never use lossy block compression; use exact integer structural packing.                                                                  |
 
 The generated atlas and reference images must be compared after GPU decoding, not merely before KTX2 encoding. The benchmark must report the actual transcode target selected on each device.
 

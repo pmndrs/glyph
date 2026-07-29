@@ -4,40 +4,40 @@ title: Shaping and layout conformance plan
 description: Defines HarfBuzz, HarfRust, baked-runtime, paragraph, fuzzing, and visual correctness gates.
 tags: [conformance, shaping, layout, testing]
 sources:
-  - id: "citation-1"
-    resource: "https://harfbuzz.github.io/shaping-opentype-features.html"
-    title: "HarfBuzz shaping documentation"
-  - id: "citation-2"
-    resource: "https://github.com/harfbuzz/harfbuzz/tree/main/test"
-    title: "HarfBuzz test suite"
-  - id: "citation-3"
-    resource: "https://github.com/harfbuzz/harfrust"
-    title: "HarfRust"
-  - id: "citation-4-1"
-    resource: "https://unicode.org/reports/tr9/"
-    title: "UAX #9"
-  - id: "citation-4-2"
-    resource: "https://unicode.org/reports/tr14/"
-    title: "UAX #14"
-  - id: "citation-4-3"
-    resource: "https://unicode.org/reports/tr29/"
-    title: "UAX #29"
-  - id: "citation-5-1"
-    resource: "https://www.w3.org/TR/css-fonts-4/"
-    title: "CSS Fonts Module Level 4"
-  - id: "citation-5-2"
-    resource: "https://www.w3.org/TR/css-text-3/"
-    title: "CSS Text Module Level 3"
-  - id: "citation-6"
-    resource: "https://learn.microsoft.com/en-us/typography/opentype/spec/"
-    title: "OpenType specification"
-  - id: "citation-7"
-    resource: "https://github.com/drawcall-ai/vitexec"
-    title: "Vitexec"
+  - id: 'citation-1'
+    resource: 'https://harfbuzz.github.io/shaping-opentype-features.html'
+    title: 'HarfBuzz shaping documentation'
+  - id: 'citation-2'
+    resource: 'https://github.com/harfbuzz/harfbuzz/tree/main/test'
+    title: 'HarfBuzz test suite'
+  - id: 'citation-3'
+    resource: 'https://github.com/harfbuzz/harfrust'
+    title: 'HarfRust'
+  - id: 'citation-4-1'
+    resource: 'https://unicode.org/reports/tr9/'
+    title: 'UAX #9'
+  - id: 'citation-4-2'
+    resource: 'https://unicode.org/reports/tr14/'
+    title: 'UAX #14'
+  - id: 'citation-4-3'
+    resource: 'https://unicode.org/reports/tr29/'
+    title: 'UAX #29'
+  - id: 'citation-5-1'
+    resource: 'https://www.w3.org/TR/css-fonts-4/'
+    title: 'CSS Fonts Module Level 4'
+  - id: 'citation-5-2'
+    resource: 'https://www.w3.org/TR/css-text-3/'
+    title: 'CSS Text Module Level 3'
+  - id: 'citation-6'
+    resource: 'https://learn.microsoft.com/en-us/typography/opentype/spec/'
+    title: 'OpenType specification'
+  - id: 'citation-7'
+    resource: 'https://github.com/drawcall-ai/vitexec'
+    title: 'Vitexec'
 
 generated:
-  by: "openai-codex/gpt-5.6"
-  at: "2026-07-29T15:36:00Z"
+  by: 'openai-codex/gpt-5.6'
+  at: '2026-07-29T15:36:00Z'
 ---
 
 # Shaping and layout conformance plan
@@ -158,21 +158,21 @@ call; an unrelated subsequent shaper call proves the layout owns its arrays.
 
 ## Required script/behavior matrix
 
-| Area | Minimum cases |
-| --- | --- |
-| Latin | kerning, `liga`, `clig`, `calt`, marks, decomposed/composed text, stylistic feature ranges |
-| Greek/Cyrillic | extended cmap, marks, language-specific substitutions where available |
-| Arabic | joining forms, lam-alef, marks, cursive attachment, RTL clusters, line-boundary reshape |
-| Hebrew | RTL order, marks, punctuation, mixed Latin |
-| Devanagari | reordering, conjuncts, pre-base vowels, marks, cluster boundaries |
-| USE script | at least one non-Devanagari USE font/script with syllable behavior |
-| Thai/Lao | marks and line-break tailoring boundary cases |
-| Hangul | precomposed and Jamo sequences |
-| CJK | `cmap` formats 12/14, supplementary Han, standardized and ideographic variation sequences, `locl` for pinned Chinese/Japanese/Korean language cases, no-space line breaking and punctuation boundaries, vertical-form data retained though vertical layout is deferred |
-| Emoji | supplementary scalars, VS15/VS16, modifiers, ZWJ sequences, flags/keycaps |
-| Icons | private-use cmap, missing glyph, no-GSUB fast/simple font, selected/full-library paging, manifest-backed standalone SVG identity, accepted fill rules, and explicit SVG rejection cases |
-| Controls | LF, CRLF, paragraph separator, tabs policy, default ignorables, ZWJ/ZWNJ, soft hyphen |
-| Invalid input | unpaired UTF-16 surrogates and replacement policy at JS boundary |
+| Area           | Minimum cases                                                                                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Latin          | kerning, `liga`, `clig`, `calt`, marks, decomposed/composed text, stylistic feature ranges                                                                                                                                                                             |
+| Greek/Cyrillic | extended cmap, marks, language-specific substitutions where available                                                                                                                                                                                                  |
+| Arabic         | joining forms, lam-alef, marks, cursive attachment, RTL clusters, line-boundary reshape                                                                                                                                                                                |
+| Hebrew         | RTL order, marks, punctuation, mixed Latin                                                                                                                                                                                                                             |
+| Devanagari     | reordering, conjuncts, pre-base vowels, marks, cluster boundaries                                                                                                                                                                                                      |
+| USE script     | at least one non-Devanagari USE font/script with syllable behavior                                                                                                                                                                                                     |
+| Thai/Lao       | marks and line-break tailoring boundary cases                                                                                                                                                                                                                          |
+| Hangul         | precomposed and Jamo sequences                                                                                                                                                                                                                                         |
+| CJK            | `cmap` formats 12/14, supplementary Han, standardized and ideographic variation sequences, `locl` for pinned Chinese/Japanese/Korean language cases, no-space line breaking and punctuation boundaries, vertical-form data retained though vertical layout is deferred |
+| Emoji          | supplementary scalars, VS15/VS16, modifiers, ZWJ sequences, flags/keycaps                                                                                                                                                                                              |
+| Icons          | private-use cmap, missing glyph, no-GSUB fast/simple font, selected/full-library paging, manifest-backed standalone SVG identity, accepted fill rules, and explicit SVG rejection cases                                                                                |
+| Controls       | LF, CRLF, paragraph separator, tabs policy, default ignorables, ZWJ/ZWNJ, soft hyphen                                                                                                                                                                                  |
+| Invalid input  | unpaired UTF-16 surrogates and replacement policy at JS boundary                                                                                                                                                                                                       |
 
 The CJK row is split across two gates. Roadmap item 5.4 now proves exact horizontal CJK source/reduced HarfRust and HarfBuzz agreement, UTF-16 clustering, language-sensitive substitutions, variation handling, and paragraph layout. It conditionally retains source `BASE`, `VORG`, `vhea`, and `vmtx` without fabrication while leaving vertical layout deferred. It does not require CJK raster coverage. Milestone 13 later combines large-coverage CJK raster paging with icon paging, residency, and payload stress; that later work does not block the Latin-first bitmap/MSDF/Slug V1 renderer gate. Before those raster contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK rendering support.
 
@@ -305,14 +305,14 @@ Snapshot comparison must use a perceptual metric and retain raw difference image
 
 Status key: ✅ available · 🟡 partial or conditional · ⬜ not started
 
-| Layer | Status | Required evidence | Canonical owner |
-| --- | :---: | --- | --- |
-| Unit | 🟡 | Deterministic tests for parsing, arithmetic, bounds, hashing, serialization, error mapping, and other isolated policy. Tests may use generated values and inspect package internals. | The package that owns the implementation. |
-| Package integration | 🟡 | The baker, bitmap generator, loader, shaper, and paragraph engine are exercised through public package boundaries with generated ABI equality, zero Wasm imports, direct-memory round trips, structured failures, deterministic bytes/results, and format validation. Rendering remains open. | The package that owns each boundary. |
-| Product end-to-end | 🟡 | Inter, Amiri, and Noto CJK flow through real public baker/loader/registry/shaper/paragraph paths with exact Node, Chromium, and GPU-enabled Vitexec evidence. Rendering remains open. | The shared interactive/headless app under `apps/benchmarks`. |
-| Differential conformance | 🟡 | Pinned HarfRust/HarfBuzz source oracles compare every glyph field; Inter records its exact flag inventory while Amiri and all thirteen CJK cases agree exactly. Each also matches the reduced SFNT, and runtime Inter/CJK paths use registered GLB views. Rendering-era script additions remain open. | The conformance runner and fixture corpus. |
-| Fuzzing | 🟡 | Fixed-seed Rust source, bitmap/loader artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations run twice in normal CI. Pinned cargo-fuzz/libFuzzer exercises the public bake boundary; minimized findings become checked-in fixtures. Renderer targets remain open. | Each package owns its target and regression corpus. |
-| Performance regression | 🟡 | Correctness-passing browser scenarios retain baker, loader, shaper, paragraph, bidi/policy, and CJK timings/payload/memory/call evidence; reviewed noise thresholds and renderer baselines remain open. | The shared benchmark scenario registry and runners. |
+| Layer                    | Status | Required evidence                                                                                                                                                                                                                                                                                     | Canonical owner                                              |
+| ------------------------ | :----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Unit                     |   🟡   | Deterministic tests for parsing, arithmetic, bounds, hashing, serialization, error mapping, and other isolated policy. Tests may use generated values and inspect package internals.                                                                                                                  | The package that owns the implementation.                    |
+| Package integration      |   🟡   | The baker, bitmap generator, loader, shaper, and paragraph engine are exercised through public package boundaries with generated ABI equality, zero Wasm imports, direct-memory round trips, structured failures, deterministic bytes/results, and format validation. Rendering remains open.         | The package that owns each boundary.                         |
+| Product end-to-end       |   🟡   | Inter, Amiri, and Noto CJK flow through real public baker/loader/registry/shaper/paragraph paths with exact Node, Chromium, and GPU-enabled Vitexec evidence. Rendering remains open.                                                                                                                 | The shared interactive/headless app under `apps/benchmarks`. |
+| Differential conformance |   🟡   | Pinned HarfRust/HarfBuzz source oracles compare every glyph field; Inter records its exact flag inventory while Amiri and all thirteen CJK cases agree exactly. Each also matches the reduced SFNT, and runtime Inter/CJK paths use registered GLB views. Rendering-era script additions remain open. | The conformance runner and fixture corpus.                   |
+| Fuzzing                  |   🟡   | Fixed-seed Rust source, bitmap/loader artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations run twice in normal CI. Pinned cargo-fuzz/libFuzzer exercises the public bake boundary; minimized findings become checked-in fixtures. Renderer targets remain open.         | Each package owns its target and regression corpus.          |
+| Performance regression   |   🟡   | Correctness-passing browser scenarios retain baker, loader, shaper, paragraph, bidi/policy, and CJK timings/payload/memory/call evidence; reviewed noise thresholds and renderer baselines remain open.                                                                                               | The shared benchmark scenario registry and runners.          |
 
 Every implementation change adds the lowest-cost unit regression that identifies the defect. A package-boundary change also adds or updates an integration case. Any user-visible vertical slice must add a scenario to the shared benchmark registry and an end-to-end assertion in the appropriate automated or local live-probe lane before its roadmap item can be marked complete. The interactive lab, automated runner, and local probes consume the same scenario contract; duplicating the workload in an ad hoc demo or benchmark script does not satisfy the gate.
 
@@ -329,12 +329,12 @@ Fuzzing supplements the explicit malformed corpus; it never replaces schema, sem
 
 ## Execution environments
 
-| Lane | Runs where | Required scope | Must not claim |
-| --- | --- | --- | --- |
-| Hermetic CI | Pull requests and scheduled CI, without network access | Unit tests, compiled package integration, schema and asset validation, deterministic CPU/Wasm fixtures, and browser smoke cases whose capabilities are genuinely available. | CI does not claim native GPU, driver, color, timing, or interaction coverage when the runner does not provide it. |
-| Vitest product suite | Shared test modules used by the benchmark app | Scenario assertions, structured runtime state, artifact validation, and reusable setup/teardown. | A passing simulated or mocked target is not real-product coverage. |
-| Vitexec live probes | Maintainer machines with the visible benchmark app and real device/browser capabilities | Inject Vitest-compatible probes into the running Vite app, import real modules, drive multi-frame state, inspect exact runtime values, and retain screenshots, traces, profiles, and environment metadata. Use GPU-friendly launch policy where required. | This local lane is not a required pull-request CI check and must not publish unreviewed machine-specific timings as universal baselines. |
-| Playwright automation | Headed local browsers, remote browser endpoints, or CI when representative | Reuse the same scenarios for repeatable navigation, lifecycle, screenshots, and supported WebGL/WebGPU cases. | Headless or software rendering must not silently stand in for a required hardware-GPU acceptance run. |
+| Lane                  | Runs where                                                                              | Required scope                                                                                                                                                                                                                                            | Must not claim                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Hermetic CI           | Pull requests and scheduled CI, without network access                                  | Unit tests, compiled package integration, schema and asset validation, deterministic CPU/Wasm fixtures, and browser smoke cases whose capabilities are genuinely available.                                                                               | CI does not claim native GPU, driver, color, timing, or interaction coverage when the runner does not provide it.                        |
+| Vitest product suite  | Shared test modules used by the benchmark app                                           | Scenario assertions, structured runtime state, artifact validation, and reusable setup/teardown.                                                                                                                                                          | A passing simulated or mocked target is not real-product coverage.                                                                       |
+| Vitexec live probes   | Maintainer machines with the visible benchmark app and real device/browser capabilities | Inject Vitest-compatible probes into the running Vite app, import real modules, drive multi-frame state, inspect exact runtime values, and retain screenshots, traces, profiles, and environment metadata. Use GPU-friendly launch policy where required. | This local lane is not a required pull-request CI check and must not publish unreviewed machine-specific timings as universal baselines. |
+| Playwright automation | Headed local browsers, remote browser endpoints, or CI when representative              | Reuse the same scenarios for repeatable navigation, lifecycle, screenshots, and supported WebGL/WebGPU cases.                                                                                                                                             | Headless or software rendering must not silently stand in for a required hardware-GPU acceptance run.                                    |
 
 Capability checks are explicit test outcomes: pass, fail, or unsupported with a reason. Unsupported GPU/device combinations do not fail portable CI, but a milestone that requires that capability remains incomplete until its designated local/device matrix passes and stores reviewable evidence.
 
@@ -346,15 +346,15 @@ Each probe imports the real scenario driver and pure assertion/result helpers th
 
 Readiness is causal and observable:
 
-| System transition | Accepted synchronization |
-| --- | --- |
-| App and scenario startup | An exported readiness promise/event or explicit lifecycle state owned by the app/scenario. |
-| Worker bake/load | The actual request promise plus request/generation identity and terminal state. |
-| Render publication | A scenario-owned render-complete signal identifying the submitted generation/frame, followed by observable scene state. |
-| WebGPU work/readback | Queue completion and mapped-read completion for the exact submitted work. |
-| WebGL work/readback | The backend's explicit synchronization/readback completion for the exact submission. |
-| Animation or reflow | A deterministic scenario clock/step and the resulting versioned state transition, not elapsed wall time. |
-| DOM-visible outcome | The product event/state that owns the change; DOM observation is acceptable when the DOM is itself the product contract. |
+| System transition        | Accepted synchronization                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| App and scenario startup | An exported readiness promise/event or explicit lifecycle state owned by the app/scenario.                               |
+| Worker bake/load         | The actual request promise plus request/generation identity and terminal state.                                          |
+| Render publication       | A scenario-owned render-complete signal identifying the submitted generation/frame, followed by observable scene state.  |
+| WebGPU work/readback     | Queue completion and mapped-read completion for the exact submitted work.                                                |
+| WebGL work/readback      | The backend's explicit synchronization/readback completion for the exact submission.                                     |
+| Animation or reflow      | A deterministic scenario clock/step and the resulting versioned state transition, not elapsed wall time.                 |
+| DOM-visible outcome      | The product event/state that owns the change; DOM observation is acceptable when the DOM is itself the product contract. |
 
 The following are forbidden in an accepted probe:
 
@@ -368,13 +368,13 @@ Vitexec/Vitest timeouts are watchdogs for a hung or missing completion signal, n
 
 Before promotion from an exploratory probe to the integration/E2E suite, it must satisfy all of these admission gates:
 
-| Gate | Required evidence |
-| --- | --- |
-| Causal review | Every wait names its producer, operation/generation identity, completion signal, and asserted postcondition. |
-| Isolation | Fresh fixture state, explicit seed/clock, deterministic teardown, no external network, and no dependence on execution order. |
-| Negative control | Deliberately wrong expected state fails; withheld completion reaches the watchdog and cannot produce a pass. |
-| Repetition | Default admission run: 100 consecutive executions with zero retries across at least 10 fresh isolated browser/server lifecycles. Each required GPU/backend environment contributes at least 20 of those runs. |
-| Failure policy | Any intermittent failure blocks promotion. After the causal defect is fixed, evidence restarts from zero; the suite never masks the failure with retries. |
+| Gate             | Required evidence                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Causal review    | Every wait names its producer, operation/generation identity, completion signal, and asserted postcondition.                                                                                                  |
+| Isolation        | Fresh fixture state, explicit seed/clock, deterministic teardown, no external network, and no dependence on execution order.                                                                                  |
+| Negative control | Deliberately wrong expected state fails; withheld completion reaches the watchdog and cannot produce a pass.                                                                                                  |
+| Repetition       | Default admission run: 100 consecutive executions with zero retries across at least 10 fresh isolated browser/server lifecycles. Each required GPU/backend environment contributes at least 20 of those runs. |
+| Failure policy   | Any intermittent failure blocks promotion. After the causal defect is fixed, evidence restarts from zero; the suite never masks the failure with retries.                                                     |
 
 Repeated success is supporting evidence, not a substitute for causal synchronization. Run counts, cold lifecycle count, environments, commits, probe hash, failures, and artifacts are retained with the admission record.
 

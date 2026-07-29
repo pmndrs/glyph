@@ -19,7 +19,7 @@ sources:
     title: Autoresearch protocol
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:51:43Z"
+  at: '2026-07-26T19:51:43Z'
 ---
 
 # ADR 0004: Verification and optimization policy

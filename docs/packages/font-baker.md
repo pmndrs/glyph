@@ -1,11 +1,11 @@
 ---
 type: Workspace Package
-title: "@pmndrs/text-font-baker"
+title: '@pmndrs/text-font-baker'
 description: Implements the internal portable Rust/Wasm shaping-resource bake core and direct-memory TypeScript wrapper.
 resource: ../../packages/font-baker
-workspace_package: "@pmndrs/text-font-baker"
+workspace_package: '@pmndrs/text-font-baker'
 documentation_type: reference
-source_digest: "sha256:48ddd4da91d9e0d8f02aeeb3f7a135d3374596f9be8814aa027b2e308cbee4df"
+source_digest: 'sha256:5e0d471e88910fc1c5f3f2ec1837d65dc261b9f1454707262a4471bcb9c71574'
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T16:49:27Z"
+  at: '2026-07-29T20:27:06Z'
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -54,22 +54,23 @@ The isolated nightly fuzz workspace also hosts the repository-owned MTSDF outlin
 
 ## Package scripts
 
-| Script | Purpose |
-| --- | --- |
-| `build` | Derive ABI JSON and typed TypeScript from Rust compiler facts, compile the `no_std` Wasm module, apply pinned `wasm-opt -Oz`, and emit the package. CI checks that the committed typed contract is fresh. |
-| `test:unit` | Run Rust unit tests. |
-| `test:integration` | Run public Rust, compiled Wasm/TypeScript, package-isolation, schema, and malformed-artifact tests. |
-| `test:fuzz-smoke` | Run deterministic artifact-mutation smoke; Rust arbitrary-byte smoke is part of `test:integration`. |
-| `test:e2e` | Verify, bake, validate, inspect, and shape the canonical licensed Inter, Amiri, and Noto CJK fixtures through packaged APIs. |
-| `test` | Build and run unit, integration, fuzz-smoke, and real-font end-to-end layers. |
-| `fuzz:validator` | Run the longer seeded TypeScript validator mutation driver locally. |
-| `fuzz:rust` | Run pinned cargo-fuzz/libFuzzer against the public bake boundary using the nested mise-owned nightly workspace. |
-| `fuzz:mtsdf` | Run pinned cargo-fuzz/libFuzzer against bounded repository-owned MTSDF outline generation. |
-| `fuzz:rust-mutation` | Run the longer deterministic stable-Rust source-font mutation driver. |
-| `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths. |
-| `inspect:font-fixture` | Emit deterministic Fontations-owned glyph, table, cmap-format, nominal, SVS, and IVS facts for an explicit fixture. |
+| Script                    | Purpose                                                                                                                                                                                                   |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build`                   | Derive ABI JSON and typed TypeScript from Rust compiler facts, compile the `no_std` Wasm module, apply pinned `wasm-opt -Oz`, and emit the package. CI checks that the committed typed contract is fresh. |
+| `test:unit`               | Run Rust unit tests.                                                                                                                                                                                      |
+| `test:integration`        | Run public Rust, compiled Wasm/TypeScript, package-isolation, schema, and malformed-artifact tests.                                                                                                       |
+| `test:fuzz-smoke`         | Run deterministic artifact-mutation smoke; Rust arbitrary-byte smoke is part of `test:integration`.                                                                                                       |
+| `test:e2e`                | Verify, bake, validate, inspect, and shape the canonical licensed Inter, Amiri, and Noto CJK fixtures through packaged APIs.                                                                              |
+| `test`                    | Build and run unit, integration, fuzz-smoke, and real-font end-to-end layers.                                                                                                                             |
+| `fuzz:validator`          | Run the longer seeded TypeScript validator mutation driver locally.                                                                                                                                       |
+| `fuzz:rust`               | Run pinned cargo-fuzz/libFuzzer against the public bake boundary using the nested mise-owned nightly workspace.                                                                                           |
+| `fuzz:mtsdf`              | Run pinned cargo-fuzz/libFuzzer against bounded repository-owned MTSDF outline generation.                                                                                                                |
+| `fuzz:rust-mutation`      | Run the longer deterministic stable-Rust source-font mutation driver.                                                                                                                                     |
+| `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths.                                                                                                                               |
+| `inspect:font-fixture`    | Emit deterministic Fontations-owned glyph, table, cmap-format, nominal, SVS, and IVS facts for an explicit fixture.                                                                                       |
 
 See the [implementation evidence](../planning/font-baker-implementation.md) for package-owned proof; the roadmap owns cross-package milestone status.[^implementation-status]
 
 [^fontations]: The package does not maintain a parallel OpenType parser or outline geometry engine.
+
 [^implementation-status]: The implementation-status concept records the executable evidence and next canonical gate.

@@ -1,28 +1,16 @@
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
 
-import {
-  FontBakeError,
-  createFontBaker,
-  createFontBakerFromInstance,
-  readFontBakerAbi,
-} from "../../dist/index.js";
+import { FontBakeError, createFontBaker, createFontBakerFromInstance, readFontBakerAbi } from '../../dist/index.js';
 
 const [wasm, rustReleaseWasm] = await Promise.all([
-  readFile(new URL("../../dist/font_baker.wasm", import.meta.url)),
-  readFile(
-    new URL(
-      "../../rust/target/wasm32-unknown-unknown/release/pmndrs_text_font_baker.wasm",
-      import.meta.url,
-    ),
-  ),
+  readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
+  readFile(new URL('../../rust/target/wasm32-unknown-unknown/release/pmndrs_text_font_baker.wasm', import.meta.url)),
 ]);
-const publishedAbi = JSON.parse(
-  await readFile(new URL("../../dist/font-baker-abi-v0.json", import.meta.url), "utf8"),
-);
+const publishedAbi = JSON.parse(await readFile(new URL('../../dist/font-baker-abi-v0.json', import.meta.url), 'utf8'));
 
-test("the distributed module is the pinned size-optimized zero-import release module", async () => {
+test('the distributed module is the pinned size-optimized zero-import release module', async () => {
   assert(wasm.byteLength < rustReleaseWasm.byteLength);
   const [distributed, rustRelease] = await Promise.all([
     WebAssembly.compile(wasm),
@@ -32,17 +20,20 @@ test("the distributed module is the pinned size-optimized zero-import release mo
   assert.deepEqual(WebAssembly.Module.imports(rustRelease), []);
 });
 
-test("the published and generated TypeScript ABI contracts are identical", async () => {
+test('the published and generated TypeScript ABI contracts are identical', async () => {
   const module = await WebAssembly.compile(wasm);
   assert.deepEqual(WebAssembly.Module.imports(module), []);
   const instance = await WebAssembly.instantiate(module, {});
   const generated = readFontBakerAbi(instance);
-  assert.equal(generated.versions.binaryen, "129.0.0");
+  assert.equal(generated.versions.binaryen, '129.0.0');
   assert.deepEqual(generated, publishedAbi);
-  assert.equal(WebAssembly.Module.exports(module).some(({ name }) => name.includes("abi_")), false);
+  assert.equal(
+    WebAssembly.Module.exports(module).some(({ name }) => name.includes('abi_')),
+    false,
+  );
 });
 
-test("the TypeScript wrapper returns structured Rust errors", async () => {
+test('the TypeScript wrapper returns structured Rust errors', async () => {
   const baker = await createFontBaker(wasm);
   assert.throws(
     () =>
@@ -50,11 +41,11 @@ test("the TypeScript wrapper returns structured Rust errors", async () => {
         source: new Uint8Array([0, 1, 2, 3]),
         descriptor: { formatVersion: 0, fontFaceIndex: 0 },
       }),
-    (error) => error instanceof FontBakeError && error.code === "INVALID_FONT",
+    (error) => error instanceof FontBakeError && error.code === 'INVALID_FONT',
   );
 });
 
-test("the direct-memory shim releases earlier allocations when a later copy fails", () => {
+test('the direct-memory shim releases earlier allocations when a later copy fails', () => {
   const released = [];
   let allocations = 0;
   const instance = fakeFontBakerInstance({
@@ -74,7 +65,7 @@ test("the direct-memory shim releases earlier allocations when a later copy fail
   assert.deepEqual(released, [[4096, 8]]);
 });
 
-test("the direct-memory shim releases an allocation whose memory copy fails", () => {
+test('the direct-memory shim releases an allocation whose memory copy fails', () => {
   const released = [];
   let allocations = 0;
   const baker = createFontBakerFromInstance(
@@ -96,9 +87,9 @@ test("the direct-memory shim releases an allocation whose memory copy fails", ()
   );
 });
 
-test("the response decoder rejects metadata that does not prove the public result", () => {
+test('the response decoder rejects metadata that does not prove the public result', () => {
   const response = fontBakerResponse({
-    artifacts: [{ role: "font", id: "fixture", sha256: "0".repeat(64) }],
+    artifacts: [{ role: 'font', id: 'fixture', sha256: '0'.repeat(64) }],
     report: {},
     warnings: [],
   });
@@ -123,21 +114,17 @@ test("the response decoder rejects metadata that does not prove the public resul
   );
 });
 
-test("direct-memory allocations reject forged releases and recover after invalid requests", async () => {
+test('direct-memory allocations reject forged releases and recover after invalid requests', async () => {
   const module = await WebAssembly.compile(wasm);
   const instance = await WebAssembly.instantiate(module, {});
-  const {
-    memory,
-    pmndrs_font_baker_alloc: allocate,
-    pmndrs_font_baker_dealloc: deallocate,
-  } = instance.exports;
+  const { memory, pmndrs_font_baker_alloc: allocate, pmndrs_font_baker_dealloc: deallocate } = instance.exports;
   const bake = instance.exports.pmndrs_font_baker_bake;
   const resultLength = instance.exports.pmndrs_font_baker_result_len;
   assert.ok(memory instanceof WebAssembly.Memory);
-  assert.equal(typeof allocate, "function");
-  assert.equal(typeof deallocate, "function");
-  assert.equal(typeof bake, "function");
-  assert.equal(typeof resultLength, "function");
+  assert.equal(typeof allocate, 'function');
+  assert.equal(typeof deallocate, 'function');
+  assert.equal(typeof bake, 'function');
+  assert.equal(typeof resultLength, 'function');
 
   assert.equal(allocate(64 * 1024 * 1024 + 1), 0);
   const pointer = allocate(8);
@@ -161,11 +148,7 @@ test("direct-memory allocations reject forged releases and recover after invalid
   deallocate(recovered, 8);
 });
 
-function fakeFontBakerInstance({
-  allocate = () => 0,
-  deallocate = () => undefined,
-  response,
-} = {}) {
+function fakeFontBakerInstance({ allocate = () => 0, deallocate = () => undefined, response } = {}) {
   const memory = new WebAssembly.Memory({ initial: 1 });
   const responsePointer = 16_384;
   if (response !== undefined) {

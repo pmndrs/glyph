@@ -19,7 +19,7 @@ sources:
     title: Repository TSL implementation guidance
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T12:07:13Z"
+  at: '2026-07-27T12:07:13Z'
 ---
 
 # Composable text effects over TSL
@@ -38,13 +38,13 @@ const chromaticPaint = defineTextEffect({
     return {
       color: chromaticColor(color, paintIndex, uniforms.phase),
       opacity,
-    }
+    };
   },
-})
+});
 
 const text = new Text({
   effects: [chromaticPaint],
-})
+});
 ```
 
 The effect list composes in declaration order. Each stage receives the previous stage's color and opacity plus a deliberately small semantic context. Bitmap, MTSDF, and Slug retain ownership of atlas or curve sampling, coverage reconstruction, clipping, outline limits, shadows, and technique-specific validation. An effect cannot reach into those private graphs or mutate a shared material.

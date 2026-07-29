@@ -42,7 +42,7 @@ sources:
     title: TypeGPU functions and WGSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T11:22:07Z"
+  at: '2026-07-29T11:22:07Z'
 ---
 
 # MTSDF generation research
@@ -69,13 +69,13 @@ The repository implementation follows this generation path without adopting the 
 
 ## Open implementation survey
 
-| Implementation | License evidence | Useful findings | Production disposition |
-| --- | --- | --- | --- |
-| Chlumsky `msdfgen` 1.13 | MIT license in the pinned source archive | Canonical C++ core, exact curve-distance selectors, overlap combiners, error correction, MTSDF semantics, and mature fixtures | Test-only native oracle and port reference; never shipped or required by the browser |
-| `klyff_msdf` 0.1.3 | Crate metadata declares MIT; the audited crates.io archive omits a standalone license file | Pure-Rust CPU structure, reusable scratch ownership, SoA edge traversal, compact Wasm proof, and a useful adversarial starting corpus | No product dependency or source copy; retain design findings and differential evidence only |
-| Rust `msdfgen` 0.2.1 | MIT upstream through `msdfgen-sys` | Safe Rust API over the canonical implementation | Rejected: C++ FFI and native build surface violate the portable Rust/Wasm boundary |
-| `oxitext-sdf` 0.2.0 | Apache-2.0 crate metadata | Pure-Rust MTSDF, edge coloring, glyph tiles, and atlas APIs | Research comparison only: duplicates font ownership and brings a broader stack than the core requires |
-| pmndrs/uikit runtime loader | UIKit is MIT; its loader imports `@zappar/msdf-generator` | Confirms practical runtime generation, Worker lifetime, progress, overlap repair, and configurable atlas/range controls | Product precedent, not a reusable generator implementation |
+| Implementation                 | License evidence                                                                                       | Useful findings                                                                                                                               | Production disposition                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Chlumsky `msdfgen` 1.13        | MIT license in the pinned source archive                                                               | Canonical C++ core, exact curve-distance selectors, overlap combiners, error correction, MTSDF semantics, and mature fixtures                 | Test-only native oracle and port reference; never shipped or required by the browser                              |
+| `klyff_msdf` 0.1.3             | Crate metadata declares MIT; the audited crates.io archive omits a standalone license file             | Pure-Rust CPU structure, reusable scratch ownership, SoA edge traversal, compact Wasm proof, and a useful adversarial starting corpus         | No product dependency or source copy; retain design findings and differential evidence only                       |
+| Rust `msdfgen` 0.2.1           | MIT upstream through `msdfgen-sys`                                                                     | Safe Rust API over the canonical implementation                                                                                               | Rejected: C++ FFI and native build surface violate the portable Rust/Wasm boundary                                |
+| `oxitext-sdf` 0.2.0            | Apache-2.0 crate metadata                                                                              | Pure-Rust MTSDF, edge coloring, glyph tiles, and atlas APIs                                                                                   | Research comparison only: duplicates font ownership and brings a broader stack than the core requires             |
+| pmndrs/uikit runtime loader    | UIKit is MIT; its loader imports `@zappar/msdf-generator`                                              | Confirms practical runtime generation, Worker lifetime, progress, overlap repair, and configurable atlas/range controls                       | Product precedent, not a reusable generator implementation                                                        |
 | `@zappar/msdf-generator` 1.2.4 | MIT package; notice records MIT msdfgen, BSD-3-Clause Skia PathOps, and MIT/public-domain stb_truetype | Emscripten Worker wrapper around msdfgen with overlap repair; published package contains a 303.1 kB Wasm module and 444.0 kB unpacked surface | Rejected: duplicates font parsing and geometry dependencies and is materially larger than the repository boundary |
 
 All reviewed implementations permit commercial use, modification, and redistribution under permissive licenses. A port or substantial derivation must preserve the applicable copyright and license notice. The package-owned implementation records msdfgen as algorithm and oracle provenance even where the Rust representation and control flow are original.
@@ -139,12 +139,20 @@ The runtime text renderer has a different boundary. Its hot work is already one 
 
 V1 sequencing deliberately postpones the renderer-neutral extraction until Slug lands. Slug first ports through the current Three.js/TSL integration so its real curve-resource, shader-composition, batching, and lifetime requirements are executable rather than guessed. Milestone 10 then extracts the common direct integration contract beneath all three rasters: core shaping and layout remain renderer-neutral, raster plugins expose backend-neutral prepared batches and resources, a direct WebGPU integration owns raw devices and pipelines, and Three.js becomes one supported adapter over that boundary. A future TypeGPU renderer adapter may reuse the same contract, but the compute-baker experiment can proceed independently and must not force this refactor before Slug provides the missing requirements.
 
-[^valve-sdf]: Green, *Improved Alpha-Tested Magnification for Vector Textures and Special Effects*, 2007.
-[^chlumsky-thesis]: Chlumský, *Shape Decomposition for Multi-Channel Distance Fields*, 2015.
-[^chlumsky-paper]: Chlumský, Sloup, and Šimeček, *Improved Corners with Multi-Channel Signed Distance Fields*, 2018.
+[^valve-sdf]: Green, _Improved Alpha-Tested Magnification for Vector Textures and Special Effects_, 2007.
+
+[^chlumsky-thesis]: Chlumský, _Shape Decomposition for Multi-Channel Distance Fields_, 2015.
+
+[^chlumsky-paper]: Chlumský, Sloup, and Šimeček, _Improved Corners with Multi-Channel Signed Distance Fields_, 2018.
+
 [^msdfgen]: Chlumsky `msdfgen` 1.13 source and documentation.
+
 [^uikit-loader]: Current pmndrs/uikit `TTFLoader` source.
+
 [^zappar-generator]: Published `@zappar/msdf-generator` 1.2.4 metadata, README, archive contents, and license notice.
+
 [^typegpu-pipelines]: TypeGPU pipeline documentation for compute dispatch, bindings, and timestamp measurement.
+
 [^typegpu-interop]: TypeGPU interoperability documentation for raw resource access and `initFromDevice`.
+
 [^typegpu-functions]: TypeGPU function documentation for explicit WGSL shells without the source transformation plugin.

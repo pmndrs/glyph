@@ -19,32 +19,32 @@ This contract is the oracle for the migration.
 When the pinned Three.js version ships the GLSL decoder and TSL encoder, use those exact modules to generate a starting graph:
 
 ```ts
-import GLSLDecoder from 'three/examples/jsm/transpiler/GLSLDecoder.js'
-import TSLEncoder from 'three/examples/jsm/transpiler/TSLEncoder.js'
+import GLSLDecoder from 'three/examples/jsm/transpiler/GLSLDecoder.js';
+import TSLEncoder from 'three/examples/jsm/transpiler/TSLEncoder.js';
 
-const decoder = new GLSLDecoder()
-const encoder = new TSLEncoder()
-encoder.iife = false
+const decoder = new GLSLDecoder();
+const encoder = new TSLEncoder();
+encoder.iife = false;
 
-const ast = decoder.parse(shaderWithMain)
-const draft = encoder.emit(ast)
+const ast = decoder.parse(shaderWithMain);
+const draft = encoder.emit(ast);
 ```
 
 Inspect the installed modules before depending on this API; examples/transpiler code can change independently of the stable application surface. A generated draft is not verification.
 
 ## Translate by responsibility
 
-| GLSL responsibility | TSL direction |
-| --- | --- |
-| uniform declaration | `uniform(initialValue)` and `.value` updates |
-| attribute | typed `attribute(...)` node |
-| varying | built-in coordinate node or explicit `varying(...)` |
-| vertex position | material `positionNode` or `vertexNode` |
-| material color/PBR channel | matching NodeMaterial attachment point |
-| fragment replacement | `fragmentNode` or `outputNode` only when full replacement is intended |
-| operators | node methods such as `.add()`, `.mul()`, and comparisons |
-| shader branch/loop | `If`, `select`, `Loop`, and related TSL nodes |
-| texture sampling | `texture(...)`, texture-node sampling, or load helper appropriate to the source |
+| GLSL responsibility        | TSL direction                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| uniform declaration        | `uniform(initialValue)` and `.value` updates                                    |
+| attribute                  | typed `attribute(...)` node                                                     |
+| varying                    | built-in coordinate node or explicit `varying(...)`                             |
+| vertex position            | material `positionNode` or `vertexNode`                                         |
+| material color/PBR channel | matching NodeMaterial attachment point                                          |
+| fragment replacement       | `fragmentNode` or `outputNode` only when full replacement is intended           |
+| operators                  | node methods such as `.add()`, `.mul()`, and comparisons                        |
+| shader branch/loop         | `If`, `select`, `Loop`, and related TSL nodes                                   |
+| texture sampling           | `texture(...)`, texture-node sampling, or load helper appropriate to the source |
 
 Do not mechanically replace every `ShaderMaterial` with one material class. Select the NodeMaterial whose lighting and render-state behavior matches the original.
 

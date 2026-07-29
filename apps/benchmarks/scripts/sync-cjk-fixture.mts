@@ -1,10 +1,10 @@
-import { resolve } from 'node:path'
+import { resolve } from 'node:path';
 
-import { syncImmutableFixture } from './support/immutable-fixture.mts'
+import { syncImmutableFixture } from './support/immutable-fixture.mts';
 
-const commit = '523d033d6cb47f4a80c58a35753646f5c3608a78'
-const directory = resolve('fixtures/fonts/noto-sans-cjk-2.004')
-const check = process.argv.includes('--check')
+const commit = '523d033d6cb47f4a80c58a35753646f5c3608a78';
+const directory = resolve('fixtures/fonts/noto-sans-cjk-2.004');
+const check = process.argv.includes('--check');
 
 await syncImmutableFixture({
   baseUrl: `https://raw.githubusercontent.com/notofonts/noto-cjk/${commit}`,
@@ -22,4 +22,4 @@ await syncImmutableFixture({
       sha256: '6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2',
     },
   ],
-})
+});

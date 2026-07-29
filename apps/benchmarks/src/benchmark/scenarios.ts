@@ -1,32 +1,30 @@
-import type { BenchmarkScenario } from './contracts'
-import { ADVANCED_SHAPING_CASES } from './advanced-shaping'
-import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json'
-import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json'
-import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json'
-import cjkOracle from '../../fixtures/shaping/noto-sans-cjk/harfrust.json'
+import type { BenchmarkScenario } from './contracts';
+import { ADVANCED_SHAPING_CASES } from './advanced-shaping';
+import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json';
+import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json';
+import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json';
+import cjkOracle from '../../fixtures/shaping/noto-sans-cjk/harfrust.json';
 
 const paragraphPolicyHash = [
   ...Object.values(paragraphBidiContract.bidi).map(({ layout }) => layout.hash),
   ...Object.values(paragraphBidiContract.policies.cases).map(({ layout }) => layout.hash),
   paragraphBidiContract.uikit.resolved.layout.hash,
-].join(':')
-const ADVANCED_SHAPING_HASH = '51ba1d14'
+].join(':');
+const ADVANCED_SHAPING_HASH = '51ba1d14';
 
 function deterministicValidation(hashes: readonly string[]): string {
-  if (hashes.length === 0) throw new Error('Scenario produced no measurements')
-  const unique = new Set(hashes)
-  if (unique.size !== 1) throw new Error('Output hash changed between samples')
-  return `${hashes.length}/${hashes.length} deterministic outputs`
+  if (hashes.length === 0) throw new Error('Scenario produced no measurements');
+  const unique = new Set(hashes);
+  if (unique.size !== 1) throw new Error('Output hash changed between samples');
+  return `${hashes.length}/${hashes.length} deterministic outputs`;
 }
 
-function tslBaselineValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function tslBaselineValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const dpr = metrics?.dpr
-    const physicalSize = typeof dpr === 'number' ? Math.round(4 * dpr) : 0
+    const metrics = value.metrics;
+    const dpr = metrics?.dpr;
+    const physicalSize = typeof dpr === 'number' ? Math.round(4 * dpr) : 0;
     if (
       dpr === undefined ||
       value.outputBytes !== physicalSize * physicalSize * 4 ||
@@ -35,21 +33,19 @@ function tslBaselineValidation(
       metrics.exactRedPixels !== physicalSize * physicalSize ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error('TSL baseline did not preserve its exact backend and pixel contract')
+      throw new Error('TSL baseline did not preserve its exact backend and pixel contract');
     }
   }
-  return `${values.length}/${values.length} exact TSL shader readbacks`
+  return `${values.length}/${values.length} exact TSL shader readbacks`;
 }
 
-function bitmapTextValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function bitmapTextValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const dpr = metrics?.dpr
-    const physicalWidth = typeof dpr === 'number' ? Math.round(384 * dpr) : 0
-    const physicalHeight = typeof dpr === 'number' ? Math.round(128 * dpr) : 0
+    const metrics = value.metrics;
+    const dpr = metrics?.dpr;
+    const physicalWidth = typeof dpr === 'number' ? Math.round(384 * dpr) : 0;
+    const physicalHeight = typeof dpr === 'number' ? Math.round(128 * dpr) : 0;
     if (
       dpr === undefined ||
       value.outputBytes !== physicalWidth * physicalHeight * 4 ||
@@ -85,29 +81,22 @@ function bitmapTextValidation(
       !finiteNonnegative(metrics.clippedRenderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error(
-        'Bitmap text did not preserve its strike, scale, batch, GPU-memory, and pixel contract',
-      )
+      throw new Error('Bitmap text did not preserve its strike, scale, batch, GPU-memory, and pixel contract');
     }
-    if (
-      metrics.fixtureIsInter === 1 &&
-      (metrics.glyphCount !== 120 || metrics.atlasGpuBytes !== 695_296)
-    ) {
-      throw new Error('Canonical Inter bitmap evidence drifted from its exact fixture contract')
+    if (metrics.fixtureIsInter === 1 && (metrics.glyphCount !== 120 || metrics.atlasGpuBytes !== 695_296)) {
+      throw new Error('Canonical Inter bitmap evidence drifted from its exact fixture contract');
     }
   }
-  return `${values.length}/${values.length} exact public Text frames with resize + clipping`
+  return `${values.length}/${values.length} exact public Text frames with resize + clipping`;
 }
 
-function mtsdfTextValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function mtsdfTextValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const dpr = metrics?.dpr
-    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
-    const height = typeof dpr === 'number' ? Math.round(320 * dpr) : 0
+    const metrics = value.metrics;
+    const dpr = metrics?.dpr;
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0;
+    const height = typeof dpr === 'number' ? Math.round(320 * dpr) : 0;
     if (
       dpr === undefined ||
       value.outputBytes !== width * height * 4 ||
@@ -129,23 +118,19 @@ function mtsdfTextValidation(
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error(
-        'MTSDF text did not preserve its resize, base-level, transform, and effects contract',
-      )
+      throw new Error('MTSDF text did not preserve its resize, base-level, transform, and effects contract');
     }
   }
-  return `${values.length}/${values.length} deterministic MTSDF resize + base-level + transform + effects frames`
+  return `${values.length}/${values.length} deterministic MTSDF resize + base-level + transform + effects frames`;
 }
 
-function mtsdfSamplingValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function mtsdfSamplingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const dpr = metrics?.dpr
-    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
-    const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
+    const metrics = value.metrics;
+    const dpr = metrics?.dpr;
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0;
+    const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0;
     if (
       dpr === undefined ||
       value.outputBytes !== width * height * 4 ||
@@ -162,22 +147,22 @@ function mtsdfSamplingValidation(
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error('MTSDF sampling did not preserve its GPU/CPU comparison contract')
+      throw new Error('MTSDF sampling did not preserve its GPU/CPU comparison contract');
     }
     if (metrics.fixtureIsInter === 1 && dpr === 1 && metrics.glyphCount !== 84) {
-      throw new Error('Canonical Inter MTSDF sampling evidence drifted')
+      throw new Error('Canonical Inter MTSDF sampling evidence drifted');
     }
   }
-  return `${values.length}/${values.length} deterministic GPU frames with CPU MTSDF comparison`
+  return `${values.length}/${values.length} deterministic GPU frames with CPU MTSDF comparison`;
 }
 
 function slugTextValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
-  deterministicValidation(values.map((value) => value.hash))
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const dpr = metrics?.dpr
-    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
-    const height = typeof dpr === 'number' ? Math.round(320 * dpr) : 0
+    const metrics = value.metrics;
+    const dpr = metrics?.dpr;
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0;
+    const height = typeof dpr === 'number' ? Math.round(320 * dpr) : 0;
     if (
       dpr === undefined ||
       value.outputBytes !== width * height * 4 ||
@@ -196,30 +181,27 @@ function slugTextValidation(values: readonly import('./contracts').BenchmarkMeas
       !finitePositive(metrics.slugCurveGpuBytes) ||
       !finitePositive(metrics.slugHeaderGpuBytes) ||
       !finitePositive(metrics.slugReferenceGpuBytes) ||
-      metrics.slugGpuBytes !==
-        metrics.slugCurveGpuBytes + metrics.slugHeaderGpuBytes + metrics.slugReferenceGpuBytes ||
+      metrics.slugGpuBytes !== metrics.slugCurveGpuBytes + metrics.slugHeaderGpuBytes + metrics.slugReferenceGpuBytes ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       !finiteNonnegative(metrics.fontLoadMs) ||
       !finiteNonnegative(metrics.firstDrawMs) ||
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error('Slug text did not preserve its analytic scene and GPU-memory contract')
+      throw new Error('Slug text did not preserve its analytic scene and GPU-memory contract');
     }
   }
-  return `${values.length}/${values.length} deterministic Slug resize + transform frames`
+  return `${values.length}/${values.length} deterministic Slug resize + transform frames`;
 }
 
-function slugSamplingValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function slugSamplingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const dpr = metrics?.dpr
-    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
-    const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0
-    const dotGothic = metrics?.fixtureIsDotGothic === 1
+    const metrics = value.metrics;
+    const dpr = metrics?.dpr;
+    const width = typeof dpr === 'number' ? Math.round(512 * dpr) : 0;
+    const height = typeof dpr === 'number' ? Math.round(512 * dpr) : 0;
+    const dotGothic = metrics?.fixtureIsDotGothic === 1;
     if (
       dpr === undefined ||
       value.outputBytes !== width * height * 4 ||
@@ -237,23 +219,21 @@ function slugSamplingValidation(
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error('Slug sampling did not preserve its GPU/CPU comparison contract')
+      throw new Error('Slug sampling did not preserve its GPU/CPU comparison contract');
     }
   }
-  return `${values.length}/${values.length} deterministic GPU frames with CPU Slug comparison`
+  return `${values.length}/${values.length} deterministic GPU frames with CPU Slug comparison`;
 }
 
-function sourceOutlineFidelityValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function sourceOutlineFidelityValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    const metrics = value.metrics
-    const pixelCount = metrics?.pixelCount
-    const isBitmap = metrics?.techniqueBitmap === 1
-    const isMtsdf = metrics?.techniqueMtsdf === 1
-    const isSlug = metrics?.techniqueSlug === 1
-    const dotGothic = metrics?.fixtureIsDotGothic === 1
+    const metrics = value.metrics;
+    const pixelCount = metrics?.pixelCount;
+    const isBitmap = metrics?.techniqueBitmap === 1;
+    const isMtsdf = metrics?.techniqueMtsdf === 1;
+    const isSlug = metrics?.techniqueSlug === 1;
+    const dotGothic = metrics?.fixtureIsDotGothic === 1;
     if (
       typeof pixelCount !== 'number' ||
       pixelCount <= 0 ||
@@ -269,16 +249,14 @@ function sourceOutlineFidelityValidation(
       !finiteNonnegative(metrics.renderMs) ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
-      throw new Error('Source-outline fidelity exceeded the reviewed browser coverage envelope')
+      throw new Error('Source-outline fidelity exceeded the reviewed browser coverage envelope');
     }
   }
-  return `${values.length}/${values.length} deterministic source-outline comparisons within reviewed envelopes`
+  return `${values.length}/${values.length} deterministic source-outline comparisons within reviewed envelopes`;
 }
 
-function runtimeFallbackValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function runtimeFallbackValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
     if (
       value.metrics?.mismatchBytes !== 0 ||
@@ -286,16 +264,14 @@ function runtimeFallbackValidation(
       value.metrics.maximumError !== 0 ||
       !finiteNonnegative(value.metrics.renderMs)
     ) {
-      throw new Error('runtime-baked rendering diverged from the checked-in baked asset')
+      throw new Error('runtime-baked rendering diverged from the checked-in baked asset');
     }
   }
-  return `${values.length}/${values.length} exact baked/runtime fallback frames`
+  return `${values.length}/${values.length} exact baked/runtime fallback frames`;
 }
 
-function reactTextValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function reactTextValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
     if (
       value.hash !== 'bb15bbcc' ||
@@ -311,30 +287,24 @@ function reactTextValidation(
       typeof value.metrics.r3fDrawCalls !== 'number' ||
       value.metrics.r3fDrawCalls < 1
     ) {
-      throw new Error('React Text did not preserve its reconciliation and nested-span contract')
+      throw new Error('React Text did not preserve its reconciliation and nested-span contract');
     }
   }
-  return `${values.length}/${values.length} exact React Text reconciliations + R3F frames`
+  return `${values.length}/${values.length} exact React Text reconciliations + R3F frames`;
 }
 
 function shapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
-  deterministicValidation(values.map((value) => value.hash))
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
-    if (
-      value.metrics?.boundaryCrossings !== 1 ||
-      value.metrics.goldenCases !== 8 ||
-      value.metrics.planCount !== 3
-    ) {
-      throw new Error('Shaping sample did not preserve its call, corpus, and plan-cache contract')
+    if (value.metrics?.boundaryCrossings !== 1 || value.metrics.goldenCases !== 8 || value.metrics.planCount !== 3) {
+      throw new Error('Shaping sample did not preserve its call, corpus, and plan-cache contract');
     }
   }
-  return `${values.length}/${values.length} exact corpus outputs · 1 Wasm call/sample`
+  return `${values.length}/${values.length} exact corpus outputs · 1 Wasm call/sample`;
 }
 
-function paragraphValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function paragraphValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
     if (
       value.metrics?.shapeBoundaryCrossings !== 1 ||
@@ -343,16 +313,14 @@ function paragraphValidation(
       value.metrics.measurementCount !== 3 ||
       value.metrics.positionedGlyphBytes !== 0
     ) {
-      throw new Error('Paragraph sample did not preserve its prepare-once, cached-reflow contract')
+      throw new Error('Paragraph sample did not preserve its prepare-once, cached-reflow contract');
     }
   }
-  return `${values.length}/${values.length} exact paragraph outputs · 0 Wasm reflow calls/sample`
+  return `${values.length}/${values.length} exact paragraph outputs · 0 Wasm reflow calls/sample`;
 }
 
-function paragraphLayoutValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function paragraphLayoutValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
     if (
       value.hash !== 'bb15bbcc:4f111a3f:e8c0e9d5' ||
@@ -362,16 +330,14 @@ function paragraphLayoutValidation(
       value.metrics.layoutCount !== 3 ||
       value.metrics.glyphCount !== 165
     ) {
-      throw new Error('Paragraph layout sample did not preserve its exact SoA and batch contract')
+      throw new Error('Paragraph layout sample did not preserve its exact SoA and batch contract');
     }
   }
-  return `${values.length}/${values.length} exact positioned outputs · 1 reshape batch/changed width`
+  return `${values.length}/${values.length} exact positioned outputs · 1 reshape batch/changed width`;
 }
 
-function paragraphPolicyValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
+function paragraphPolicyValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
   for (const value of values) {
     if (
       value.hash !== paragraphPolicyHash ||
@@ -382,24 +348,20 @@ function paragraphPolicyValidation(
       value.metrics.shapeBoundaryCrossings !== 4 ||
       value.metrics.reshapeBoundaryCrossings !== 5
     ) {
-      throw new Error(
-        'Paragraph policy sample did not preserve its bidi, policy, and uikit contract',
-      )
+      throw new Error('Paragraph policy sample did not preserve its bidi, policy, and uikit contract');
     }
   }
-  return `${values.length}/${values.length} exact bidi/policy outputs · current-uikit-shaped flow`
+  return `${values.length}/${values.length} exact bidi/policy outputs · current-uikit-shaped flow`;
 }
 
-function cjkUniversalityValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
-  const corpusGlyphCount = cjkOracle.cases.reduce((sum, fixture) => sum + fixture.glyphs.length, 0)
+function cjkUniversalityValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
+  const corpusGlyphCount = cjkOracle.cases.reduce((sum, fixture) => sum + fixture.glyphs.length, 0);
   const sourceUtf16Units =
     cjkOracle.cases.reduce((sum, fixture) => sum + fixture.text.length, 0) +
-    Object.values(cjkContract.cases).reduce((sum, fixture) => sum + fixture.text.length, 0)
+    Object.values(cjkContract.cases).reduce((sum, fixture) => sum + fixture.text.length, 0);
   for (const value of values) {
-    const metrics = value.metrics
+    const metrics = value.metrics;
     if (
       metrics?.sourceUtf16Units !== sourceUtf16Units ||
       metrics.corpusCaseCount !== cjkOracle.cases.length ||
@@ -409,16 +371,12 @@ function cjkUniversalityValidation(
       metrics.directShapeBoundaryCrossings !== 1 ||
       metrics.paragraphShapeBoundaryCrossings !== 4 ||
       metrics.reshapeBoundaryCrossings !== 0 ||
-      metrics.retainedFontBytes !==
-        cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
+      metrics.retainedFontBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
       metrics.sourceFontBytes !== cjkManifest.source.fontBytes ||
       metrics.artifactBytes !== cjkManifest.bake.expectedCore.artifactBytes ||
-      metrics.shapingPayloadRawBytes !==
-        cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
-      metrics.shapingPayloadGzipBytes !==
-        cjkManifest.bake.expectedCore.transport.shapingPayload.gzipBytes ||
-      metrics.shapingPayloadBrotliBytes !==
-        cjkManifest.bake.expectedCore.transport.shapingPayload.brotliBytes ||
+      metrics.shapingPayloadRawBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.rawBytes ||
+      metrics.shapingPayloadGzipBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.gzipBytes ||
+      metrics.shapingPayloadBrotliBytes !== cjkManifest.bake.expectedCore.transport.shapingPayload.brotliBytes ||
       typeof metrics.planCount !== 'number' ||
       !Number.isFinite(metrics.planCount) ||
       metrics.planCount < 4 ||
@@ -429,22 +387,17 @@ function cjkUniversalityValidation(
       !finiteNonnegative(metrics.coldRegistrationMs) ||
       !finiteNonnegative(metrics.coldShaperInitializationMs)
     ) {
-      throw new Error('CJK sample did not preserve its exact shaping, layout, and payload contract')
+      throw new Error('CJK sample did not preserve its exact shaping, layout, and payload contract');
     }
   }
-  return `${values.length}/${values.length} exact CJK corpus + horizontal paragraph outputs`
+  return `${values.length}/${values.length} exact CJK corpus + horizontal paragraph outputs`;
 }
 
-function advancedShapingValidation(
-  values: readonly import('./contracts').BenchmarkMeasurement[],
-): string {
-  deterministicValidation(values.map((value) => value.hash))
-  const frameCount = ADVANCED_SHAPING_CASES.reduce(
-    (count, definition) => count + definition.revealUnits.length + 1,
-    0,
-  )
+function advancedShapingValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
+  const frameCount = ADVANCED_SHAPING_CASES.reduce((count, definition) => count + definition.revealUnits.length + 1, 0);
   for (const value of values) {
-    const metrics = value.metrics
+    const metrics = value.metrics;
     if (
       value.hash !== ADVANCED_SHAPING_HASH ||
       value.outputBytes !== 17_362 ||
@@ -457,26 +410,25 @@ function advancedShapingValidation(
       metrics.renderedGlyphCount !== 625 ||
       metrics.drawCount !== 72
     ) {
-      throw new Error('Advanced shaping did not preserve its complete authored frame matrix')
+      throw new Error('Advanced shaping did not preserve its complete authored frame matrix');
     }
   }
-  return `${values.length}/${values.length} exact advanced-shaping timelines · ${frameCount} frames/sample`
+  return `${values.length}/${values.length} exact advanced-shaping timelines · ${frameCount} frames/sample`;
 }
 
 function finiteNonnegative(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function finitePositive(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'slug-sampling-conformance',
     label: 'Slug text accuracy',
-    description:
-      'GPU analytic coverage compared visually with an independent scalar CPU reconstruction.',
+    description: 'GPU analytic coverage compared visually with an independent scalar CPU reconstruction.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
     validate: slugSamplingValidation,
   },
@@ -490,8 +442,7 @@ export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'mtsdf-sampling-conformance',
     label: 'MTSDF text accuracy',
-    description:
-      'GPU TSL sampling compared visually with an independent scalar CPU reconstruction.',
+    description: 'GPU TSL sampling compared visually with an independent scalar CPU reconstruction.',
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm', 'raster']),
     validate: mtsdfSamplingValidation,
   },
@@ -505,16 +456,14 @@ export const scenarios: readonly BenchmarkScenario[] = [
   {
     id: 'advanced-shaping-conformance',
     label: 'Advanced shaping conformance',
-    description:
-      'Every authored Latin, Arabic, Devanagari, bidi, and CJK frame through public Text.',
+    description: 'Every authored Latin, Arabic, Devanagari, bidi, and CJK frame through public Text.',
     requiredCapabilities: new Set(['deterministic', 'shaping', 'paragraph', 'raster']),
     validate: advancedShapingValidation,
   },
   {
     id: 'react-text-reconciliation',
     label: 'React Text reconciliation',
-    description:
-      'React 19 and real R3F retain one public Text object across pinned-oracle nested-span reflow.',
+    description: 'React 19 and real R3F retain one public Text object across pinned-oracle nested-span reflow.',
     requiredCapabilities: new Set(['loader', 'shaping', 'paragraph', 'raster']),
     validate: reactTextValidation,
   },
@@ -604,7 +553,7 @@ export const scenarios: readonly BenchmarkScenario[] = [
     requiredCapabilities: new Set(['paragraph', 'shaping', 'font-bytes', 'wasm']),
     validate: cjkUniversalityValidation,
   },
-]
+];
 
 export const plannedScenarios = [
   'Screen-space ladder',
@@ -612,8 +561,8 @@ export const plannedScenarios = [
   'Dynamic layout',
   'Paragraph stress',
   'Glyph coverage',
-] as const
+] as const;
 
 export function scenarioById(id: string): BenchmarkScenario {
-  return scenarios.find((scenario) => scenario.id === id) ?? scenarios[0]!
+  return scenarios.find((scenario) => scenario.id === id) ?? scenarios[0]!;
 }

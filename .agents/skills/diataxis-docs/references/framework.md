@@ -7,10 +7,10 @@ Diátaxis, created by Daniele Procida, describes four forms of technical documen
 - action versus cognition: doing something versus understanding something;
 - acquisition versus application: learning a skill versus using an existing skill.
 
-| | Acquisition: study | Application: work |
-| --- | --- | --- |
-| Action | Tutorial | How-to guide |
-| Cognition | Explanation | Reference |
+|           | Acquisition: study | Application: work |
+| --------- | ------------------ | ----------------- |
+| Action    | Tutorial           | How-to guide      |
+| Cognition | Explanation        | Reference         |
 
 The framework is a practical compass. It does not require four folders, four sections on every subject, or a simultaneous rewrite of a documentation set.
 
@@ -36,12 +36,12 @@ Diagnostic question: does the reader need an exact fact now, or a mental model t
 
 ## Practical quality signals
 
-| Type | Strong signals | Common failure |
-| --- | --- | --- |
-| Tutorial | one path, tested steps, visible progress, expected results | alternatives and theory interrupt learning |
-| How-to | concrete goal, prerequisites, actionable sequence, success check | teaches the product from first principles |
-| Reference | stable structure, exact facts, defaults, constraints, coverage | procedural narrative or unexplained incompleteness |
-| Explanation | causes, connections, tradeoffs, context, alternatives | becomes a procedure or field-by-field catalog |
+| Type        | Strong signals                                                   | Common failure                                     |
+| ----------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Tutorial    | one path, tested steps, visible progress, expected results       | alternatives and theory interrupt learning         |
+| How-to      | concrete goal, prerequisites, actionable sequence, success check | teaches the product from first principles          |
+| Reference   | stable structure, exact facts, defaults, constraints, coverage   | procedural narrative or unexplained incompleteness |
+| Explanation | causes, connections, tradeoffs, context, alternatives            | becomes a procedure or field-by-field catalog      |
 
 Mixed content is not automatically defective. A short explanation can prevent a dangerous mistake in a how-to, and a reference entry can contain a compact example. Split when a secondary mode changes the reader, pace, or purpose of the page.
 

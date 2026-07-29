@@ -4,31 +4,31 @@ title: uikit integration
 description: Explains how pmndrs/text can replace uikit's current text subsystem incrementally without coupling the core API to Yoga, signals, or uikit rendering internals.
 tags: [uikit, yoga, integration, paragraphs]
 sources:
-  - id: "citation-1"
-    resource: "https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0"
-    title: "pmndrs/uikit at the reviewed revision"
-  - id: "citation-2-1"
-    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/components/text.ts"
-    title: "uikit Text component"
-  - id: "citation-2-2"
-    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/index.ts"
-    title: "text layout setup"
-  - id: "citation-3-1"
-    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/measure.ts"
-    title: "uikit measurement"
-  - id: "citation-3-2"
-    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts"
-    title: "FlexNode"
-  - id: "citation-4-1"
-    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts"
-    title: "uikit instanced text rendering"
-  - id: "citation-4-2"
-    resource: "https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/query.ts"
-    title: "text queries"
+  - id: 'citation-1'
+    resource: 'https://github.com/pmndrs/uikit/tree/0d4d887343d4492234ac9f35a4c470cea4176ca0'
+    title: 'pmndrs/uikit at the reviewed revision'
+  - id: 'citation-2-1'
+    resource: 'https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/components/text.ts'
+    title: 'uikit Text component'
+  - id: 'citation-2-2'
+    resource: 'https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/index.ts'
+    title: 'text layout setup'
+  - id: 'citation-3-1'
+    resource: 'https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/measure.ts'
+    title: 'uikit measurement'
+  - id: 'citation-3-2'
+    resource: 'https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/flex/node.ts'
+    title: 'FlexNode'
+  - id: 'citation-4-1'
+    resource: 'https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/render/instanced-text.ts'
+    title: 'uikit instanced text rendering'
+  - id: 'citation-4-2'
+    resource: 'https://github.com/pmndrs/uikit/blob/0d4d887343d4492234ac9f35a4c470cea4176ca0/packages/uikit/src/text/layout/query.ts'
+    title: 'text queries'
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-25T09:53:00Z"
+  by: 'openai-codex/gpt-5'
+  at: '2026-07-25T09:53:00Z'
 ---
 
 # uikit integration
@@ -108,10 +108,10 @@ Third-party layout systems need only four paragraph operations:
 
 ```ts
 interface Paragraph {
-  measure(constraints?: ParagraphConstraints): ParagraphMeasurement
-  layout(constraints?: ParagraphConstraints): ParagraphLayout
-  update(input: ParagraphInput): void
-  dispose(): void
+  measure(constraints?: ParagraphConstraints): ParagraphMeasurement;
+  layout(constraints?: ParagraphConstraints): ParagraphLayout;
+  update(input: ParagraphInput): void;
+  dispose(): void;
 }
 ```
 
@@ -134,14 +134,14 @@ The first adapter can preserve uikit's existing signal shape:
 
 ```ts
 const customLayouting = computed(() => {
-  const paragraph = paragraphSignal.value
-  if (paragraph == null) return undefined
+  const paragraph = paragraphSignal.value;
+  if (paragraph == null) return undefined;
 
-  const natural = paragraph.measure(policy)
+  const natural = paragraph.measure(policy);
   const minimum = paragraph.measure({
     ...policy,
     width: { mode: 'at-most', size: 0 },
-  })
+  });
 
   return {
     minWidth: minimum.contentWidth,
@@ -151,11 +151,11 @@ const customLayouting = computed(() => {
         ...policy,
         width: mapAxis(width, widthMode),
         height: mapAxis(height, heightMode),
-      })
-      return { width: metrics.width, height: metrics.height }
+      });
+      return { width: metrics.width, height: metrics.height };
     },
-  }
-})
+  };
+});
 ```
 
 After Yoga updates uikit's existing size, padding, and border signals, a computed signal calls `paragraph.layout` with the final content width and height. This is the reactive equivalent of a final commit; uikit does not need a new imperative lifecycle.
@@ -198,14 +198,14 @@ Delete the BMFont-specific `Font`, wrappers, positioned character entries, and M
 
 The repository now carries a current-uikit-shaped fixture at the paragraph boundary. It deliberately implements only the reviewed `CustomLayouting → FlexNode/Yoga modes → resolved size/padding/border signals → positioned layout` contract; it does not pretend to be the production uikit adapter.
 
-| Paragraph-boundary proof | Status | Evidence |
-| --- | :---: | --- |
-| Intrinsic measurement and first baseline | ✅ | Exact `minWidth`, `minHeight`, and first-baseline values come from a prepared Inter paragraph. |
-| Yoga mode translation | ✅ | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path. |
-| Allocation-light repeated measurement | ✅ | Twenty-five measurements reuse paragraph analysis and never materialize positioned glyph arrays. |
-| Final content-box layout | ✅ | Padding and border are removed from the resolved outer box before one final layout; host translation produces the exact centered-coordinate golden. |
-| Point-scale rounding and invalidation ownership | ✅ | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not. |
-| Real-product execution | ✅ | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash. |
+| Paragraph-boundary proof                        | Status | Evidence                                                                                                                                            |
+| ----------------------------------------------- | :----: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intrinsic measurement and first baseline        |   ✅   | Exact `minWidth`, `minHeight`, and first-baseline values come from a prepared Inter paragraph.                                                      |
+| Yoga mode translation                           |   ✅   | `Undefined`, `AtMost`, and `Exactly` cover ignored `NaN`, finite nonnegative constraints, and the definite-two-axis no-measure path.                |
+| Allocation-light repeated measurement           |   ✅   | Twenty-five measurements reuse paragraph analysis and never materialize positioned glyph arrays.                                                    |
+| Final content-box layout                        |   ✅   | Padding and border are removed from the resolved outer box before one final layout; host translation produces the exact centered-coordinate golden. |
+| Point-scale rounding and invalidation ownership |   ✅   | Upward rounding remains in the host fixture; text/shaping changes dirty measurement while paint/raster changes do not.                              |
+| Real-product execution                          |   ✅   | Vitest, Chromium 149, and the WebGPU-active Vitexec lane validate the same generated contract and portable hash.                                    |
 
 Renderer batching, clipping integration, React reconciliation, and cluster-aware interaction remain later integration gates. Closing this paragraph boundary does not claim those production-uikit migration stages are complete.
 

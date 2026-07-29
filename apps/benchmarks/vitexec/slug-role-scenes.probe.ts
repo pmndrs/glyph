@@ -1,25 +1,24 @@
-export {}
+export {};
 
-const slugTextPath = '/src/renderer/slug-text.ts'
-const scenesPath = '/src/renderer/slug-role-scenes.ts'
-const environmentPath = '/src/benchmark/environment.ts'
+const slugTextPath = '/src/renderer/slug-text.ts';
+const scenesPath = '/src/renderer/slug-role-scenes.ts';
+const environmentPath = '/src/benchmark/environment.ts';
 const [slugText, sceneDefinitions, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ slugTextPath),
   import(/* @vite-ignore */ scenesPath),
   import(/* @vite-ignore */ environmentPath),
-])
+]);
 
-const environment = await environmentResource()
-if (!environment.webgpu)
-  throw new Error('Slug role-scene capture requires an available WebGPU adapter')
+const environment = await environmentResource();
+if (!environment.webgpu) throw new Error('Slug role-scene capture requires an available WebGPU adapter');
 
-const observations: Array<Record<string, unknown>> = []
-const dprStableCandidateHashes = new Map<string, string>()
+const observations: Array<Record<string, unknown>> = [];
+const dprStableCandidateHashes = new Map<string, string>();
 for (const backend of ['webgpu', 'webgl2'] as const) {
   for (const dpr of [1, 2] as const) {
     for (const scene of sceneDefinitions.SLUG_ROLE_SCENES) {
-      const capture = await slugText.captureSlugRoleScene({ backend, dpr, scene })
-      const pixelCount = capture.width * capture.height
+      const capture = await slugText.captureSlugRoleScene({ backend, dpr, scene });
+      const pixelCount = capture.width * capture.height;
       if (
         capture.candidate.byteLength !== pixelCount * 4 ||
         capture.cpuReference.byteLength !== pixelCount * 4 ||
@@ -32,14 +31,12 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
         capture.sourceMeanAbsoluteError > 2 ||
         capture.sourceErrorPixels > pixelCount * 0.03 ||
         capture.viewportClipped !== scene.expectsViewportClipping ||
-        (scene.expectsViewportClipping
-          ? capture.boundaryInkPixels <= 0
-          : capture.boundaryInkPixels !== 0)
+        (scene.expectsViewportClipping ? capture.boundaryInkPixels <= 0 : capture.boundaryInkPixels !== 0)
       ) {
-        throw new Error(`Slug role scene exceeded its quality envelope: ${scene.id}`)
+        throw new Error(`Slug role scene exceeded its quality envelope: ${scene.id}`);
       }
-      const candidateHash = await sha256(capture.candidate)
-      assertDprStableCandidate(`${backend}:${scene.id}`, dpr, candidateHash)
+      const candidateHash = await sha256(capture.candidate);
+      assertDprStableCandidate(`${backend}:${scene.id}`, dpr, candidateHash);
       observations.push({
         backend,
         dpr,
@@ -65,15 +62,15 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
         boundaryInkPixels: capture.boundaryInkPixels,
         viewportClipped: capture.viewportClipped,
         renderSubmitMs: capture.renderSubmitMs,
-      })
+      });
     }
 
     const affine = await slugText.captureSlugAffineRoleScene({
       backend,
       dpr,
       scene: sceneDefinitions.SLUG_AFFINE_ROLE_SCENE,
-    })
-    const affinePixelCount = affine.width * affine.height
+    });
+    const affinePixelCount = affine.width * affine.height;
     if (
       affine.candidate.byteLength !== affinePixelCount * 4 ||
       affine.sourceReference.byteLength !== affinePixelCount * 4 ||
@@ -81,10 +78,10 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
       affine.sourceErrorPixels > affinePixelCount * 0.02 ||
       affine.boundaryInkPixels !== 0
     ) {
-      throw new Error('Slug affine role scene exceeded its quality envelope')
+      throw new Error('Slug affine role scene exceeded its quality envelope');
     }
-    const affineCandidateHash = await sha256(affine.candidate)
-    assertDprStableCandidate(`${backend}:${affine.scene.id}`, dpr, affineCandidateHash)
+    const affineCandidateHash = await sha256(affine.candidate);
+    assertDprStableCandidate(`${backend}:${affine.scene.id}`, dpr, affineCandidateHash);
     observations.push({
       backend,
       dpr,
@@ -102,14 +99,14 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
       sourceErrorPixels: affine.sourceErrorPixels,
       boundaryInkPixels: affine.boundaryInkPixels,
       renderSubmitMs: affine.renderSubmitMs,
-    })
+    });
 
     const projectionZoom = await slugText.captureSlugProjectionZoomRoleScene({
       backend,
       dpr,
       scene: sceneDefinitions.SLUG_PROJECTION_ZOOM_SCENE,
-    })
-    const [zoomOne, zoomEight] = projectionZoom.captures
+    });
+    const [zoomOne, zoomEight] = projectionZoom.captures;
     if (
       zoomOne.fringeWidth <= 0 ||
       zoomEight.fringeWidth <= 0 ||
@@ -128,15 +125,11 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
       zoomOne.sourceErrorPixels > projectionZoom.width * projectionZoom.height * 0.01 ||
       zoomEight.sourceErrorPixels > projectionZoom.width * projectionZoom.height * 0.01
     ) {
-      throw new Error('Slug projection zoom did not preserve its screen-space AA contract')
+      throw new Error('Slug projection zoom did not preserve its screen-space AA contract');
     }
     for (const capture of projectionZoom.captures) {
-      const candidateHash = await sha256(capture.candidate)
-      assertDprStableCandidate(
-        `${backend}:${projectionZoom.scene.id}:${String(capture.zoom)}`,
-        dpr,
-        candidateHash,
-      )
+      const candidateHash = await sha256(capture.candidate);
+      assertDprStableCandidate(`${backend}:${projectionZoom.scene.id}:${String(capture.zoom)}`, dpr, candidateHash);
       observations.push({
         backend,
         dpr,
@@ -162,7 +155,7 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
         rightFringeWidth: capture.rightFringeWidth,
         inkPixels: capture.inkPixels,
         renderSubmitMs: capture.renderSubmitMs,
-      })
+      });
     }
   }
 }
@@ -189,21 +182,21 @@ console.log(
     },
     observations,
   }),
-)
+);
 
 async function sha256(bytes: Uint8Array): Promise<string> {
-  const copy = new Uint8Array(bytes.byteLength)
-  copy.set(bytes)
-  const digest = await crypto.subtle.digest('SHA-256', copy.buffer)
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const digest = await crypto.subtle.digest('SHA-256', copy.buffer);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function assertDprStableCandidate(key: string, dpr: 1 | 2, hash: string): void {
-  const first = dprStableCandidateHashes.get(key)
+  const first = dprStableCandidateHashes.get(key);
   if (dpr === 1) {
-    if (first !== undefined) throw new Error(`Duplicate Slug role-scene DPR-1 identity: ${key}`)
-    dprStableCandidateHashes.set(key, hash)
-    return
+    if (first !== undefined) throw new Error(`Duplicate Slug role-scene DPR-1 identity: ${key}`);
+    dprStableCandidateHashes.set(key, hash);
+    return;
   }
-  if (first !== hash) throw new Error(`Slug role scene changed physical output across DPR: ${key}`)
+  if (first !== hash) throw new Error(`Slug role scene changed physical output across DPR: ${key}`);
 }

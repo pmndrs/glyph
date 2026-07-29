@@ -3,4 +3,4 @@ export {
   createBitmapBakerFromInstance,
   bitmapBakerFromCore,
   readBitmapBakerAbi,
-} from '@pmndrs/text/bakers/bitmap'
+} from '@pmndrs/text/bakers/bitmap';

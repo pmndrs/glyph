@@ -15,14 +15,14 @@ Build version-matched TSL code and prove it through the repository's real render
 3. Preserve the existing renderer and public boundaries unless the request explicitly includes a migration. TSL is the right tool for a TSL/WebGPU task; it is not a reason to rewrite unrelated working GLSL or WebGL code.
 4. Identify the execution surface before coding:
 
-| Surface | Start with |
-| --- | --- |
-| Material property or vertex deformation | [nodes.md](nodes.md) |
-| Storage buffer or compute dispatch | [compute.md](compute.md) |
+| Surface                                             | Start with                             |
+| --------------------------------------------------- | -------------------------------------- |
+| Material property or vertex deformation             | [nodes.md](nodes.md)                   |
+| Storage buffer or compute dispatch                  | [compute.md](compute.md)               |
 | Fullscreen pass, MRT, depth, or neighboring samples | [postprocessing.md](postprocessing.md) |
-| Existing GLSL or `ShaderMaterial` migration | [migration.md](migration.md) |
-| Type errors or source-path imports | [typescript.md](typescript.md) |
-| Browser/GPU evidence | [verification.md](verification.md) |
+| Existing GLSL or `ShaderMaterial` migration         | [migration.md](migration.md)           |
+| Type errors or source-path imports                  | [typescript.md](typescript.md)         |
+| Browser/GPU evidence                                | [verification.md](verification.md)     |
 
 Read only the references needed for the selected surface.
 
@@ -31,11 +31,11 @@ Read only the references needed for the selected surface.
 TSL JavaScript builds a node graph; the generated shader runs later on the GPU.
 
 ```ts
-if (material.transparent) return transparentGraph // graph-build decision
+if (material.transparent) return transparentGraph; // graph-build decision
 
 If(value.greaterThan(0.5), () => {
-  result.assign(1)
-}) // GPU decision
+  result.assign(1);
+}); // GPU decision
 ```
 
 Use ordinary JavaScript only for graph structure known while building. Use TSL nodes for per-vertex, per-fragment, or per-invocation behavior.
@@ -43,16 +43,16 @@ Use ordinary JavaScript only for graph structure known while building. Use TSL n
 ## Core patterns
 
 ```ts
-import * as THREE from 'three/webgpu'
-import type { Node } from 'three/webgpu'
-import { vec3 } from 'three/tsl'
+import * as THREE from 'three/webgpu';
+import type { Node } from 'three/webgpu';
+import { vec3 } from 'three/tsl';
 
-const material = new THREE.MeshStandardNodeMaterial()
-const colorNode: Node<'vec3'> = vec3(0.2, 0.5, 1)
+const material = new THREE.MeshStandardNodeMaterial();
+const colorNode: Node<'vec3'> = vec3(0.2, 0.5, 1);
 
-material.colorNode = colorNode
+material.colorNode = colorNode;
 
-await renderer.init()
+await renderer.init();
 ```
 
 Keep these invariants visible in local code:

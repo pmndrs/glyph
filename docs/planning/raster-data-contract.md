@@ -4,25 +4,25 @@ title: Raster data contract V0
 description: Defines packaging-neutral bitmap, MTSDF-backed MSDF, and Slug raster records and GPU resources.
 tags: [data, bitmap, mtsdf, slug, gpu]
 sources:
-  - id: "citation-1"
-    resource: "https://www.rfc-editor.org/rfc/rfc8785.html"
-    title: "RFC 8785: JSON Canonicalization Scheme"
-  - id: "citation-2"
-    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
-    title: "glTF 2.0 specification"
-  - id: "citation-3"
-    resource: "https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html"
-    title: "KTX 2.0 specification"
-  - id: "citation-4"
-    resource: "https://gpuweb.github.io/gpuweb/"
-    title: "WebGPU specification"
-  - id: "citation-5"
-    resource: "https://github.com/Chlumsky/msdfgen"
-    title: "msdfgen"
+  - id: 'citation-1'
+    resource: 'https://www.rfc-editor.org/rfc/rfc8785.html'
+    title: 'RFC 8785: JSON Canonicalization Scheme'
+  - id: 'citation-2'
+    resource: 'https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html'
+    title: 'glTF 2.0 specification'
+  - id: 'citation-3'
+    resource: 'https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html'
+    title: 'KTX 2.0 specification'
+  - id: 'citation-4'
+    resource: 'https://gpuweb.github.io/gpuweb/'
+    title: 'WebGPU specification'
+  - id: 'citation-5'
+    resource: 'https://github.com/Chlumsky/msdfgen'
+    title: 'msdfgen'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T11:22:07Z"
+  at: '2026-07-29T11:22:07Z'
 ---
 
 # Raster data contract V0
@@ -56,14 +56,14 @@ The core `PMNDRS_font.rasters` directory describes availability. Each entry cont
 
 ```ts
 interface RasterReference {
-  rasterKey: string
-  kind: string
-  extension: string
-  version: number
+  rasterKey: string;
+  kind: string;
+  extension: string;
+  version: number;
   source:
     | { type: 'embedded' }
     | { type: 'external'; uri: string; artifactHash: string }
-    | { type: 'external'; artifactHash?: string }
+    | { type: 'external'; artifactHash?: string };
 }
 ```
 
@@ -88,11 +88,11 @@ Every raster extension root contains the reciprocal binding:
 
 ```ts
 interface RasterBindingV0 {
-  version: 0
-  rasterKey: string
-  shapingHash: string
-  glyphCount: number
-  glyphIdWidth: 16
+  version: 0;
+  rasterKey: string;
+  shapingHash: string;
+  glyphCount: number;
+  glyphIdWidth: 16;
 }
 ```
 
@@ -116,29 +116,29 @@ Bitmap and distance-field pages, and losslessly wrapped Slug textures, use the s
 
 ```ts
 interface TextureResourceV0 {
-  width: number
-  height: number
-  mipLevelCount: number
-  colorSpace: 'linear' | 'srgb'
-  variants: readonly TextureVariantV0[]
+  width: number;
+  height: number;
+  mipLevelCount: number;
+  colorSpace: 'linear' | 'srgb';
+  variants: readonly TextureVariantV0[];
 }
 
 type ResourceSourceV0 =
   | { type: 'bufferView'; bufferView: number }
   | {
-      type: 'external'
-      uri: string
-      byteLength: number
-      artifactHash: string
-    }
+      type: 'external';
+      uri: string;
+      byteLength: number;
+      artifactHash: string;
+    };
 
 interface BinaryResourceV0 {
-  source: ResourceSourceV0
+  source: ResourceSourceV0;
 }
 
 interface TextureVariantV0 {
-  source: ResourceSourceV0
-  container: 'ktx2'
+  source: ResourceSourceV0;
+  container: 'ktx2';
   gpuFormat:
     | 'r8unorm'
     | 'rgba8unorm'
@@ -149,9 +149,9 @@ interface TextureVariantV0 {
     | 'bc7-rgba-unorm'
     | 'eac-r11unorm'
     | 'etc2-rgba8unorm'
-    | 'astc-4x4-unorm'
-  requiredFeature?: 'texture-compression-bc' | 'texture-compression-etc2' | 'texture-compression-astc'
-  quality: 'lossless' | 'quality-gated'
+    | 'astc-4x4-unorm';
+  requiredFeature?: 'texture-compression-bc' | 'texture-compression-etc2' | 'texture-compression-astc';
+  quality: 'lossless' | 'quality-gated';
 }
 ```
 
@@ -177,29 +177,29 @@ The bitmap API accepts a non-empty, duplicate-free tuple of positive integer ppe
 
 ```ts
 interface BitmapStrikeV0 {
-  ppemX: number
-  ppemY: number
-  planeUnitsPerEm: number
-  recordBufferView: number
-  recordStride: 20
-  pages: readonly TextureResourceV0[]
+  ppemX: number;
+  ppemY: number;
+  planeUnitsPerEm: number;
+  recordBufferView: number;
+  recordStride: 20;
+  pages: readonly TextureResourceV0[];
 }
 ```
 
 ### Bitmap glyph record — 20 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `i16` | plane left |
-| 2 | `i16` | plane bottom |
-| 4 | `i16` | plane right |
-| 6 | `i16` | plane top |
-| 8 | `u16` | atlas left |
-| 10 | `u16` | atlas top |
-| 12 | `u16` | atlas right |
-| 14 | `u16` | atlas bottom |
-| 16 | `u16` | page index or `0xffff` |
-| 18 | `u16` | flags; zero in V0 |
+| Offset | Type  | Field                  |
+| -----: | ----- | ---------------------- |
+|      0 | `i16` | plane left             |
+|      2 | `i16` | plane bottom           |
+|      4 | `i16` | plane right            |
+|      6 | `i16` | plane top              |
+|      8 | `u16` | atlas left             |
+|     10 | `u16` | atlas top              |
+|     12 | `u16` | atlas right            |
+|     14 | `u16` | atlas bottom           |
+|     16 | `u16` | page index or `0xffff` |
+|     18 | `u16` | flags; zero in V0      |
 
 For bitmap V0, `planeUnitsPerEm` equals the strike ppem and the four plane values are the rasterizer's integer mask placement converted from its upper-left pixel coordinates into the shared baseline-relative Y-up convention. Consequently, a glyph rendered at its native physical ppem has plane width/height exactly equal to its atlas rectangle width/height. Analytic outline bounds are not valid substitutes because they would rescale already rasterized coverage. Projected quad edges are snapped to physical framebuffer pixels before sampling.
 
@@ -225,13 +225,13 @@ This extension is the serialized resource for the public MSDF raster module. V1 
 
 ```ts
 interface MsdfRasterV0 {
-  encoding: 'mtsdf'
-  emSize: number
-  pixelRange: number
-  planeUnitsPerEm: number
-  recordBufferView: number
-  recordStride: 20
-  pages: readonly TextureResourceV0[]
+  encoding: 'mtsdf';
+  emSize: number;
+  pixelRange: number;
+  planeUnitsPerEm: number;
+  recordBufferView: number;
+  recordStride: 20;
+  pages: readonly TextureResourceV0[];
 }
 ```
 
@@ -269,22 +269,22 @@ The quality-preserving V0 layout incorporates the existing uikit fork improvemen
 
 ### Slug glyph record — 40 bytes
 
-| Offset | Type | Field |
-| ---: | --- | --- |
-| 0 | `i16` | plane left |
-| 2 | `i16` | plane bottom |
-| 4 | `i16` | plane right |
-| 6 | `i16` | plane top |
-| 8 | `u16` | page index or `0xffff` |
-| 10 | `u16` | horizontal band count |
-| 12 | `u16` | vertical band count |
-| 14 | `u16` | flags; zero in V0 |
-| 16 | `u32` | glyph curve-base texel |
-| 20 | `u32` | glyph curve-span texels, including contour endpoints and row padding |
-| 24 | `u32` | horizontal header base |
-| 28 | `u32` | vertical header base |
-| 32 | `u32` | curve-reference base |
-| 36 | `u32` | curve-reference count |
+| Offset | Type  | Field                                                                |
+| -----: | ----- | -------------------------------------------------------------------- |
+|      0 | `i16` | plane left                                                           |
+|      2 | `i16` | plane bottom                                                         |
+|      4 | `i16` | plane right                                                          |
+|      6 | `i16` | plane top                                                            |
+|      8 | `u16` | page index or `0xffff`                                               |
+|     10 | `u16` | horizontal band count                                                |
+|     12 | `u16` | vertical band count                                                  |
+|     14 | `u16` | flags; zero in V0                                                    |
+|     16 | `u32` | glyph curve-base texel                                               |
+|     20 | `u32` | glyph curve-span texels, including contour endpoints and row padding |
+|     24 | `u32` | horizontal header base                                               |
+|     28 | `u32` | vertical header base                                                 |
+|     32 | `u32` | curve-reference base                                                 |
+|     36 | `u32` | curve-reference count                                                |
 
 ### Curve texture
 
@@ -316,15 +316,15 @@ Pages expose the curve payload as RGBA16F, headers as R32UI, and references as R
 
 ```ts
 interface SlugPageV0 {
-  curve: TextureResourceV0
-  headerCount: number
-  headerWidth: number
-  headerHeight: number
-  headerResource: BinaryResourceV0
-  referenceCount: number
-  referenceWidth: number
-  referenceHeight: number
-  referenceResource: BinaryResourceV0
+  curve: TextureResourceV0;
+  headerCount: number;
+  headerWidth: number;
+  headerHeight: number;
+  headerResource: BinaryResourceV0;
+  referenceCount: number;
+  referenceWidth: number;
+  referenceHeight: number;
+  referenceResource: BinaryResourceV0;
 }
 ```
 
@@ -345,11 +345,11 @@ references = referenceWidth × referenceHeight × 2
 
 Measured/modelled evidence:
 
-| Fixture | Current optimized-fork GPU layout | Exact header/reference layout | V0 quality-preserving target |
-| --- | ---: | ---: | ---: |
-| Lucide, 1,594 shapes | 1,048,576 B curves + 2,097,152 B R32F bands | 204,032 B headers (797×64) + 884,736 B refs (4096×108, 372 zero tail entries) | 2,201,104 B including 63,760 B records |
-| Inter legacy subset, 907 glyphs | 2,097,152 B combined derived textures | generator report required | exact formula above |
-| Font Awesome legacy subset, 350 glyphs | 1,048,576 B combined derived textures | generator report required | exact formula above |
+| Fixture                                |           Current optimized-fork GPU layout |                                                 Exact header/reference layout |           V0 quality-preserving target |
+| -------------------------------------- | ------------------------------------------: | ----------------------------------------------------------------------------: | -------------------------------------: |
+| Lucide, 1,594 shapes                   | 1,048,576 B curves + 2,097,152 B R32F bands | 204,032 B headers (797×64) + 884,736 B refs (4096×108, 372 zero tail entries) | 2,201,104 B including 63,760 B records |
+| Inter legacy subset, 907 glyphs        |       2,097,152 B combined derived textures |                                                     generator report required |                    exact formula above |
+| Font Awesome legacy subset, 350 glyphs |       1,048,576 B combined derived textures |                                                     generator report required |                    exact formula above |
 
 The Lucide V0 target is about 2.10 MiB and is quality-preserving. It does not count the speculative lossy curve-compression experiment.
 

@@ -1,10 +1,10 @@
-import { resolve } from 'node:path'
+import { resolve } from 'node:path';
 
-import { syncImmutableFixture } from './support/immutable-fixture.mts'
+import { syncImmutableFixture } from './support/immutable-fixture.mts';
 
-const commit = '39d11bc313031c9f68e21a297ce5e4a15cc5365e'
-const directory = resolve('fixtures/fonts/amiri-1.002')
-const check = process.argv.includes('--check')
+const commit = '39d11bc313031c9f68e21a297ce5e4a15cc5365e';
+const directory = resolve('fixtures/fonts/amiri-1.002');
+const check = process.argv.includes('--check');
 const files = [
   {
     localName: 'Amiri-Regular.ttf',
@@ -21,11 +21,11 @@ const files = [
     remotePath: 'METADATA.pb',
     sha256: '3df4f62489d9b01bb900d36e73120c06dfed0c49b585ff4398fd8a11410fd114',
   },
-] as const
+] as const;
 
 await syncImmutableFixture({
   baseUrl: `https://raw.githubusercontent.com/google/fonts/${commit}/ofl/amiri`,
   check,
   directory,
   files,
-})
+});

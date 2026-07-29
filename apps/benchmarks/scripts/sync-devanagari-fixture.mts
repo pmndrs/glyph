@@ -1,10 +1,10 @@
-import { resolve } from 'node:path'
+import { resolve } from 'node:path';
 
-import { syncImmutableFixture } from './support/immutable-fixture.mts'
+import { syncImmutableFixture } from './support/immutable-fixture.mts';
 
-const commit = 'cac60972ca4d7d5e3b5bfae33e90b1e0e5267a66'
-const directory = resolve('fixtures/fonts/noto-sans-devanagari')
-const check = process.argv.includes('--check')
+const commit = 'cac60972ca4d7d5e3b5bfae33e90b1e0e5267a66';
+const directory = resolve('fixtures/fonts/noto-sans-devanagari');
+const check = process.argv.includes('--check');
 
 await syncImmutableFixture({
   baseUrl: `https://raw.githubusercontent.com/google/fonts/${commit}/ofl/notosansdevanagari`,
@@ -27,4 +27,4 @@ await syncImmutableFixture({
       sha256: '3c201abfcd49b2b8f8b8ae6041bad70cdeb2ef03a1c5c0870772e137f1f450c0',
     },
   ],
-})
+});

@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
-import { captureCommand } from "../../scripts/capture-command.mjs";
+import { captureCommand } from '../../scripts/capture-command.mjs';
 
-test("captured command output waits for the stdout stream to close", async () => {
-  const expected = JSON.stringify({ abi: 42, payload: "x".repeat(65_536) });
+test('captured command output waits for the stdout stream to close', async () => {
+  const expected = JSON.stringify({ abi: 42, payload: 'x'.repeat(65_536) });
   const descendantSource = `
     process.on("disconnect", () => {
       process.stdout.write(${JSON.stringify(expected)});
@@ -20,11 +20,7 @@ test("captured command output waits for the stdout stream to close", async () =>
     child.channel?.unref();
   `;
 
-  const output = await captureCommand(process.execPath, [
-    "--input-type=module",
-    "--eval",
-    producerSource,
-  ]);
+  const output = await captureCommand(process.execPath, ['--input-type=module', '--eval', producerSource]);
 
-  assert.deepEqual(JSON.parse(output.toString("utf8")), JSON.parse(expected));
+  assert.deepEqual(JSON.parse(output.toString('utf8')), JSON.parse(expected));
 });

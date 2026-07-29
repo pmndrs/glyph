@@ -119,4 +119,4 @@ export const packageSizeBudgets = {
     gzipBytes: 42_500,
     brotliBytes: 31_500,
   },
-} as const
+} as const;

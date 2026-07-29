@@ -21,7 +21,7 @@ sources:
     title: oxitext-sdf 0.2.0 documentation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-27T03:13:33Z"
+  at: '2026-07-27T03:13:33Z'
 ---
 
 # MTSDF generator admission
@@ -32,12 +32,12 @@ Milestone 8 needs deterministic linear RGBA8 MTSDF bytes from maintained font ou
 
 ## Candidate assessment
 
-| Candidate | Strengths | Admission blockers | Role |
-| --- | --- | --- | --- |
-| `klyff_msdf` 0.1.3 | MIT metadata; pure Rust; direct CPU MTSDF generation; optional Skrifa and WGPU features; reusable allocation owner | Published core uses `std`; default feature selects Skrifa 0.40 rather than the repository's 0.45 line; public threshold setter asserts; intersecting-outline cleanup can panic, always constructs a diagnostic string, and flattens split quadratics to lines; the audited crate archive omits a standalone license file | Design reference and differential evidence only |
-| Rust `msdfgen` 0.2.1 bindings | Safe high-level API over the established implementation; error correction and estimation APIs | Ships C++ FFI through `msdfgen-sys`; native build/runtime surface conflicts with the Rust-only, platform-independent Wasm baker and creates an additional font-parser path | Rejected as product dependency |
-| `oxitext-sdf` 0.2.0 | Apache-2.0; pure-Rust MTSDF and atlas APIs | Pulls a separate OxiText/`ttf-parser`/Rayon stack, duplicates existing Fontations ownership, and has no demonstrated `no_std` or small Wasm profile | Rejected for current package boundary |
-| Chlumsky `msdfgen` | MIT; canonical MTSDF behavior, exact curve-distance selectors, overlap combination, error correction, test rendering, and mature outline corpus | C++/native toolchain and platform matrix | Pinned test-only quality oracle and port reference |
+| Candidate                     | Strengths                                                                                                                                       | Admission blockers                                                                                                                                                                                                                                                                                                       | Role                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `klyff_msdf` 0.1.3            | MIT metadata; pure Rust; direct CPU MTSDF generation; optional Skrifa and WGPU features; reusable allocation owner                              | Published core uses `std`; default feature selects Skrifa 0.40 rather than the repository's 0.45 line; public threshold setter asserts; intersecting-outline cleanup can panic, always constructs a diagnostic string, and flattens split quadratics to lines; the audited crate archive omits a standalone license file | Design reference and differential evidence only    |
+| Rust `msdfgen` 0.2.1 bindings | Safe high-level API over the established implementation; error correction and estimation APIs                                                   | Ships C++ FFI through `msdfgen-sys`; native build/runtime surface conflicts with the Rust-only, platform-independent Wasm baker and creates an additional font-parser path                                                                                                                                               | Rejected as product dependency                     |
+| `oxitext-sdf` 0.2.0           | Apache-2.0; pure-Rust MTSDF and atlas APIs                                                                                                      | Pulls a separate OxiText/`ttf-parser`/Rayon stack, duplicates existing Fontations ownership, and has no demonstrated `no_std` or small Wasm profile                                                                                                                                                                      | Rejected for current package boundary              |
+| Chlumsky `msdfgen`            | MIT; canonical MTSDF behavior, exact curve-distance selectors, overlap combination, error correction, test rendering, and mature outline corpus | C++/native toolchain and platform matrix                                                                                                                                                                                                                                                                                 | Pinned test-only quality oracle and port reference |
 
 The audited crates.io archive for `klyff_msdf` 0.1.3 has SHA-256 `ba670d53fac1c079f354bef3af3b18e6b29165a63c8ac14f871c6e725c1de235`. The audit used the exact published archive, not a moving repository branch.
 

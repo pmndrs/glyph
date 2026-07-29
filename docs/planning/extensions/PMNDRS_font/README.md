@@ -4,25 +4,25 @@ title: PMNDRS_font
 description: Defines the core font, shaping payload, metrics, provenance, and raster directory extension.
 tags: [gltf, extension, font, shaping]
 sources:
-  - id: "citation-1"
-    resource: "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html"
-    title: "glTF 2.0 specification"
-  - id: "citation-2"
-    resource: "../../shaping-data-contract.md"
-    title: "V0 shaping data contract"
-  - id: "citation-3"
-    resource: "../../raster-data-contract.md"
-    title: "V0 raster data contract"
-  - id: "citation-4-1"
-    resource: "../../api-shapes.md"
-    title: "Runtime and bake API fixture"
-  - id: "citation-4-2"
-    resource: "../../payload-budget.md"
-    title: "payload budget"
+  - id: 'citation-1'
+    resource: 'https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html'
+    title: 'glTF 2.0 specification'
+  - id: 'citation-2'
+    resource: '../../shaping-data-contract.md'
+    title: 'V0 shaping data contract'
+  - id: 'citation-3'
+    resource: '../../raster-data-contract.md'
+    title: 'V0 raster data contract'
+  - id: 'citation-4-1'
+    resource: '../../api-shapes.md'
+    title: 'Runtime and bake API fixture'
+  - id: 'citation-4-2'
+    resource: '../../payload-budget.md'
+    title: 'payload budget'
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-26T02:40:00Z"
+  by: 'openai-codex/gpt-5'
+  at: '2026-07-26T02:40:00Z'
 ---
 
 <!-- Copyright 2026 Poimandres contributors. SPDX-License-Identifier: CC-BY-4.0 -->

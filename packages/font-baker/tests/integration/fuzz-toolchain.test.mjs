@@ -1,17 +1,16 @@
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
 
-test("the fuzz-only nightly exception is exact, isolated, and mise-owned", async () => {
-  const [productToolchain, fuzzToolchain, fuzzMise, fuzzManifest, fuzzLock, runner] =
-    await Promise.all([
-      readFile(new URL("../../../../rust-toolchain.toml", import.meta.url), "utf8"),
-      readFile(new URL("../../fuzz/rust-toolchain.toml", import.meta.url), "utf8"),
-      readFile(new URL("../../fuzz/mise.toml", import.meta.url), "utf8"),
-      readFile(new URL("../../fuzz/Cargo.toml", import.meta.url), "utf8"),
-      readFile(new URL("../../fuzz/Cargo.lock", import.meta.url), "utf8"),
-      readFile(new URL("../../scripts/fuzz-rust.mjs", import.meta.url), "utf8"),
-    ]);
+test('the fuzz-only nightly exception is exact, isolated, and mise-owned', async () => {
+  const [productToolchain, fuzzToolchain, fuzzMise, fuzzManifest, fuzzLock, runner] = await Promise.all([
+    readFile(new URL('../../../../rust-toolchain.toml', import.meta.url), 'utf8'),
+    readFile(new URL('../../fuzz/rust-toolchain.toml', import.meta.url), 'utf8'),
+    readFile(new URL('../../fuzz/mise.toml', import.meta.url), 'utf8'),
+    readFile(new URL('../../fuzz/Cargo.toml', import.meta.url), 'utf8'),
+    readFile(new URL('../../fuzz/Cargo.lock', import.meta.url), 'utf8'),
+    readFile(new URL('../../scripts/fuzz-rust.mjs', import.meta.url), 'utf8'),
+  ]);
 
   assert.match(productToolchain, /channel = "1\.97\.1"/);
   assert.doesNotMatch(productToolchain, /nightly/);

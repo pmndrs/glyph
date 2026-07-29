@@ -18,7 +18,7 @@ sources:
     title: Repository decision register
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T13:24:14Z"
+  at: '2026-07-29T13:24:14Z'
 status: draft
 ---
 
@@ -44,11 +44,11 @@ The distance condition is generally cubic. The implementation therefore repeated
 The retained 268-glyph measurement showed the total outlined scene at `2.44×–4.33×` fill-only GPU time:
 
 | Backend | DPR | All outline / fill | Mixed / fill |
-| --- | ---: | ---: | ---: |
-| WebGPU | 1 | 4.33× | 4.27× |
-| WebGPU | 2 | 3.51× | 3.34× |
-| WebGL2 | 1 | 2.48× | 2.45× |
-| WebGL2 | 2 | 2.44× | 2.61× |
+| ------- | --: | -----------------: | -----------: |
+| WebGPU  |   1 |              4.33× |        4.27× |
+| WebGPU  |   2 |              3.51× |        3.34× |
+| WebGL2  |   1 |              2.48× |        2.45× |
+| WebGL2  |   2 |              2.44× |        2.61× |
 
 The per-instance branch was locally useful—it reduced mixed-batch median GPU time by 30.51% on WebGPU and 23.96% on WebGL2 relative to unconditional distance evaluation—but it did not repair the architecture. The generated shader also placed a duplicate `fwidth` inside divergent fragment control flow while disabling derivative-uniformity diagnostics.
 
@@ -82,5 +82,7 @@ The experiment must emit and inspect final WGSL and GLSL, prove one derivative s
 - The `1.15×` performance ceiling is the initial research gate, not evidence already achieved.
 
 [^slug-manual]: The manual's outline-effect and font-conversion sections specify expanded outline contours and additional geometry.
+
 [^slug-reference]: The audited reference snapshot exposes one fill evaluation and no stroke or outline path.
+
 [^rejected-runtime]: This commit introduced the now-rejected one-draw exact-distance runtime; later history owns its removal.

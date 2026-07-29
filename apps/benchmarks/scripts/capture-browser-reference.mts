@@ -1,64 +1,62 @@
-import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
-import { launchProjectChromium } from './support/project-chromium.mts'
+import { launchProjectChromium } from './support/project-chromium.mts';
 
 declare global {
   interface Window {
-    referenceReady: Promise<void>
+    referenceReady: Promise<void>;
   }
 }
 
-const root = fileURLToPath(new URL('..', import.meta.url))
-const outputDirectory = fileURLToPath(new URL('../fixtures/visual/inter-regular/', import.meta.url))
-const imagePath = `${outputDirectory}/browser-html.png`
-const manifestPath = `${outputDirectory}/browser-html.json`
-const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url))
+const root = fileURLToPath(new URL('..', import.meta.url));
+const outputDirectory = fileURLToPath(new URL('../fixtures/visual/inter-regular/', import.meta.url));
+const imagePath = `${outputDirectory}/browser-html.png`;
+const manifestPath = `${outputDirectory}/browser-html.json`;
+const vite = fileURLToPath(new URL('../node_modules/.bin/vite', import.meta.url));
 const server = spawn(vite, ['--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'pipe'],
-})
+});
 
-let serverOutput = ''
+let serverOutput = '';
 const ready = new Promise<void>((resolve, reject) => {
-  server.once('error', reject)
-  server.once('exit', (code) => reject(new Error(`Vite exited before readiness (${String(code)})`)))
+  server.once('error', reject);
+  server.once('exit', (code) => reject(new Error(`Vite exited before readiness (${String(code)})`)));
   for (const stream of [server.stdout, server.stderr]) {
     stream.on('data', (chunk: Buffer) => {
-      serverOutput += chunk.toString()
-      if (serverOutput.includes('Local:')) resolve()
-    })
+      serverOutput += chunk.toString();
+      if (serverOutput.includes('Local:')) resolve();
+    });
   }
-})
+});
 
-await ready
-await mkdir(outputDirectory, { recursive: true })
-const browser = await launchProjectChromium({ headless: true })
-const errors: string[] = []
+await ready;
+await mkdir(outputDirectory, { recursive: true });
+const browser = await launchProjectChromium({ headless: true });
+const errors: string[] = [];
 
 try {
   const page = await browser.newPage({
     viewport: { width: 1024, height: 512 },
     deviceScaleFactor: 1,
-  })
+  });
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text())
-  })
-  page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto('http://127.0.0.1:5173/reference.html', { waitUntil: 'domcontentloaded' })
-  await page.evaluate(() => window.referenceReady)
-  const family = await page
-    .locator('#reference')
-    .evaluate((element) => getComputedStyle(element).fontFamily)
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('http://127.0.0.1:5173/reference.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => window.referenceReady);
+  const family = await page.locator('#reference').evaluate((element) => getComputedStyle(element).fontFamily);
   if (!family.startsWith('"Fixture Inter"')) {
-    throw new Error(`fixture font was not selected: ${family}`)
+    throw new Error(`fixture font was not selected: ${family}`);
   }
-  await page.locator('#reference').screenshot({ path: imagePath, animations: 'disabled' })
-  if (errors.length > 0) throw new Error(`Browser reference errors: ${errors.join(' | ')}`)
+  await page.locator('#reference').screenshot({ path: imagePath, animations: 'disabled' });
+  if (errors.length > 0) throw new Error(`Browser reference errors: ${errors.join(' | ')}`);
 
-  const bytes = await readFile(imagePath)
+  const bytes = await readFile(imagePath);
   const metadata = {
     schemaVersion: 0,
     id: 'inter-regular-browser-html-v0',
@@ -88,9 +86,9 @@ try {
       constraintWidth: 720,
       text: 'office AVATAR café — ffi, kerning, marks, and wrapping.',
     },
-  }
-  await writeFile(manifestPath, `${JSON.stringify(metadata, undefined, 2)}\n`)
+  };
+  await writeFile(manifestPath, `${JSON.stringify(metadata, undefined, 2)}\n`);
 } finally {
-  await browser.close()
-  server.kill('SIGTERM')
+  await browser.close();
+  server.kill('SIGTERM');
 }

@@ -11,12 +11,12 @@ The public runtime and Node tooling live in `packages/text`; the package-owned p
 The React API is a thin `@pmndrs/text/react` wrapper over the Three.js API. It follows the familiar React Native model: a root `<Text>` owns one paragraph, nested `<Text>` elements describe inherited inline styles, and ordinary React Three Fiber props place the result in the scene.
 
 ```tsx
-import { defineFont } from '@pmndrs/text'
-import { Text, useFont } from '@pmndrs/text/react'
-import { msdf } from '@pmndrs/text/raster/msdf'
+import { defineFont } from '@pmndrs/text';
+import { Text, useFont } from '@pmndrs/text/react';
+import { msdf } from '@pmndrs/text/raster/msdf';
 
-const Inter = '/fonts/Inter-Regular.ttf'
-const UiFont = defineFont(Inter, msdf)
+const Inter = '/fonts/Inter-Regular.ttf';
+const UiFont = defineFont(Inter, msdf);
 
 function Label() {
   return (
@@ -32,20 +32,20 @@ function Label() {
     >
       Fast, <Text color="#ff8a00">accurate</Text> text.
     </Text>
-  )
+  );
 }
 ```
 
 ### Font loading and preloading
 
 ```ts
-import { bitmap } from '@pmndrs/text/raster/bitmap'
-import { slug } from '@pmndrs/text/raster/slug'
+import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { slug } from '@pmndrs/text/raster/slug';
 
-const TitleFont = defineFont(Inter, slug)
-const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }))
+const TitleFont = defineFont(Inter, slug);
+const ProseFont = defineFont(Inter, bitmap({ strikes: [16, 32] }));
 
-await Promise.all([useFont.preload(TitleFont), useFont.preload(ProseFont)])
+await Promise.all([useFont.preload(TitleFont), useFont.preload(ProseFont)]);
 ```
 
 `defineFont` composes one canonical font input with an independently loadable raster; preload warms those asynchronous dependencies, while layout waits for text and downstream constraints. The [API contract](docs/planning/api-shapes.md#loader) defines URL inference, explicit and baked-only inputs, lazy rasters, caching, Suspense, and fallback behavior.
@@ -53,21 +53,21 @@ await Promise.all([useFont.preload(TitleFont), useFont.preload(ProseFont)])
 ### Three.js
 
 ```ts
-import { Text, defineFont } from '@pmndrs/text'
-import { msdf } from '@pmndrs/text/raster/msdf'
+import { Text, defineFont } from '@pmndrs/text';
+import { msdf } from '@pmndrs/text/raster/msdf';
 
-const UiFont = defineFont('/fonts/Inter-Regular.ttf', msdf)
+const UiFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 
 const label = new Text({
   font: UiFont,
   text: 'Fast, accurate text.',
   width: 4,
   fontSize: 0.24,
-})
+});
 
-scene.add(label)
-await label.ready
-label.setProperties({ width: 2.5 })
+scene.add(label);
+await label.ready;
+label.setProperties({ width: 2.5 });
 ```
 
 The framework-neutral `Text` owns the Three.js lifecycle; width changes reflow its paragraph without coupling layout to the selected raster. The [API contract](docs/planning/api-shapes.md#threejs-text-object) defines construction, readiness, mutation, and disposal.
@@ -75,9 +75,9 @@ The framework-neutral `Text` owns the Three.js lifecycle; width changes reflow i
 ### Baking and fallback
 
 ```ts
-import { bakeProject } from '@pmndrs/text/bake'
+import { bakeProject } from '@pmndrs/text/bake';
 
-await bakeProject()
+await bakeProject();
 ```
 
 The Node baker discovers statically declared font and raster requirements; missing or incompatible artifacts use dynamically imported Worker bakers and produce the same canonical records. The [architecture](docs/planning/architecture.md#bake-and-fallback-flow) owns the bake/fallback flow, while the [API contract](docs/planning/api-shapes.md#shared-bake-core) defines discovery and configuration.
@@ -112,19 +112,19 @@ Select the preview to open the editable [benchmark harness wireframe in Figma](h
 
 ## Implementation order
 
-| Order | Result | Effort |
-| ---: | --- | :---: |
-| 0 | Accept the API, identity, GLB, Worker, and package contracts. | S |
-| 1 | Build the interactive/headless benchmark harness first and pin one font inside it. | L |
-| 2 | Emit the core font and compose one package-owned bitmap raster through the Node host. | L |
-| 3 | Load baked assets first and reproduce them through a dynamically imported Worker fallback. | L |
-| 4 | Shape through coarse HarfRust Wasm calls. | L |
-| 5 | Reflow constrained paragraphs in JavaScript. | L |
-| 6 | Produce the first rendering proof with bitmap inside the benchmark harness, then expose it through Three.js and React. | L |
-| 7 | Harden the complete integration proof and establish performance baselines. | L |
-| 8 | Implement and validate the release-quality MSDF engine with fixed MTSDF encoding. | XL |
-| 9 | Port/rewrite and validate the release-quality Slug engine. | XL |
-| 10 | Ship all three optional raster modules over one shaping/layout result. | L |
+| Order | Result                                                                                                                 | Effort |
+| ----: | ---------------------------------------------------------------------------------------------------------------------- | :----: |
+|     0 | Accept the API, identity, GLB, Worker, and package contracts.                                                          |   S    |
+|     1 | Build the interactive/headless benchmark harness first and pin one font inside it.                                     |   L    |
+|     2 | Emit the core font and compose one package-owned bitmap raster through the Node host.                                  |   L    |
+|     3 | Load baked assets first and reproduce them through a dynamically imported Worker fallback.                             |   L    |
+|     4 | Shape through coarse HarfRust Wasm calls.                                                                              |   L    |
+|     5 | Reflow constrained paragraphs in JavaScript.                                                                           |   L    |
+|     6 | Produce the first rendering proof with bitmap inside the benchmark harness, then expose it through Three.js and React. |   L    |
+|     7 | Harden the complete integration proof and establish performance baselines.                                             |   L    |
+|     8 | Implement and validate the release-quality MSDF engine with fixed MTSDF encoding.                                      |   XL   |
+|     9 | Port/rewrite and validate the release-quality Slug engine.                                                             |   XL   |
+|    10 | Ship all three optional raster modules over one shaping/layout result.                                                 |   L    |
 
 The benchmark harness is the first executable product surface, not a reporting layer added afterward. Every later implementation enters through its target/scenario contracts, and the first bitmap frame is rendered in that harness. Bitmap is the easiest end-to-end proof, not the eventual universal default. The package does not ship until bitmap, MSDF, and Slug pass their gates. See the [canonical roadmap](docs/roadmap/roadmap.md) for dependencies, deliverables, issue-sized work, and exit criteria.
 
@@ -144,12 +144,12 @@ Every package and subpath is native ESM. Optional engines and the runtime baker 
 
 Applications select a raster explicitly; the package never silently changes technique.
 
-| Need | Planned recommendation |
-| --- | --- |
-| General-purpose UI and scalable text | MSDF module using its MTSDF atlas |
-| Tiny text at known pixel sizes | Generated bitmap strikes |
-| Large text, extreme zoom, complex outlines, color vector layers | Slug |
-| Pixel-art or intentionally raster typography | Bitmap |
+| Need                                                            | Planned recommendation            |
+| --------------------------------------------------------------- | --------------------------------- |
+| General-purpose UI and scalable text                            | MSDF module using its MTSDF atlas |
+| Tiny text at known pixel sizes                                  | Generated bitmap strikes          |
+| Large text, extreme zoom, complex outlines, color vector layers | Slug                              |
+| Pixel-art or intentionally raster typography                    | Bitmap                            |
 
 The [renderer capability matrix](docs/planning/renderer-capabilities.md) records supported content and effects, while the [implementation difficulty](docs/planning/implementation-difficulty.md) explains the correctness and performance effort behind their order. Windfoil remains research prior art rather than a planned backend.
 

@@ -16,7 +16,7 @@ sources:
     title: Runtime and bake API V0
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T19:51:43Z"
+  at: '2026-07-26T19:51:43Z'
 ---
 
 # ADR 0001: Package and runtime boundaries

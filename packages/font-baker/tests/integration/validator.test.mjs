@@ -1,11 +1,11 @@
-import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
-import test, { before } from "node:test";
+import assert from 'node:assert/strict';
+import { readFile, readdir } from 'node:fs/promises';
+import test, { before } from 'node:test';
 
-import { createFontBaker } from "../../dist/index.js";
-import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from "../../dist/contract.js";
-import { FontArtifactValidationError, validateFontArtifact } from "../../dist/validator.js";
-import { fontBakerWasmUrl } from "../../dist/wasm-url.js";
+import { createFontBaker } from '../../dist/index.js';
+import { FONT_BAKER_VERSION, FONT_FORMAT_VERSION } from '../../dist/contract.js';
+import { FontArtifactValidationError, validateFontArtifact } from '../../dist/validator.js';
+import { fontBakerWasmUrl } from '../../dist/wasm-url.js';
 
 const GLB_MAGIC = 0x46546c67;
 const JSON_CHUNK = 0x4e4f534a;
@@ -15,26 +15,20 @@ let cjkProfileArtifact;
 
 before(async () => {
   const [source, wasm] = await Promise.all([
-    readFile(
-      new URL(
-        "../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf",
-        import.meta.url,
-      ),
-    ),
-    readFile(new URL("../../dist/font_baker.wasm", import.meta.url)),
+    readFile(new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+    readFile(new URL('../../dist/font_baker.wasm', import.meta.url)),
   ]);
   const baker = await createFontBaker(wasm);
-  artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0]
-    .bytes;
+  artifact = baker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } }).artifacts[0].bytes;
   const cjkProfileSource = source.slice();
   for (const [sourceTag, retainedTag] of [
-    ["cvt ", "BASE"],
-    ["fpgm", "vhea"],
-    ["gasp", "vmtx"],
-    ["name", "VORG"],
+    ['cvt ', 'BASE'],
+    ['fpgm', 'vhea'],
+    ['gasp', 'vmtx'],
+    ['name', 'VORG'],
   ]) {
     const record = sourceTableRecord(cjkProfileSource, sourceTag);
-    cjkProfileSource.write(retainedTag, record, 4, "ascii");
+    cjkProfileSource.write(retainedTag, record, 4, 'ascii');
   }
   cjkProfileArtifact = baker.bake({
     source: cjkProfileSource,
@@ -42,18 +36,15 @@ before(async () => {
   }).artifacts[0].bytes;
 });
 
-test("validates the canonical Inter artifact through every core layer", async () => {
+test('validates the canonical Inter artifact through every core layer', async () => {
   const result = await validateFontArtifact(artifact);
 
   assert.equal(result.glyphCount, 2937);
-  assert.equal(
-    result.shapingHash,
-    "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09",
-  );
+  assert.equal(result.shapingHash, '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09');
   assert.equal(result.shapingSfnt.byteLength, 147192);
   assert.equal(result.glyphExtents.byteLength, 23496);
   assert.equal(result.glyphExtentsAvailability.byteLength, 368);
-  assert.equal(result.khronos.validatorVersion, "2.0.0-dev.3.10");
+  assert.equal(result.khronos.validatorVersion, '2.0.0-dev.3.10');
   assert.deepEqual(
     result.khronos.issues.messages.map(({ code, severity, pointer }) => ({
       code,
@@ -61,15 +52,15 @@ test("validates the canonical Inter artifact through every core layer", async ()
       pointer,
     })),
     [
-      { code: "UNSUPPORTED_EXTENSION", severity: 2, pointer: "/extensionsUsed/0" },
-      { code: "UNUSED_OBJECT", severity: 2, pointer: "/bufferViews/0" },
-      { code: "UNUSED_OBJECT", severity: 2, pointer: "/bufferViews/1" },
-      { code: "UNUSED_OBJECT", severity: 2, pointer: "/bufferViews/2" },
+      { code: 'UNSUPPORTED_EXTENSION', severity: 2, pointer: '/extensionsUsed/0' },
+      { code: 'UNUSED_OBJECT', severity: 2, pointer: '/bufferViews/0' },
+      { code: 'UNUSED_OBJECT', severity: 2, pointer: '/bufferViews/1' },
+      { code: 'UNUSED_OBJECT', severity: 2, pointer: '/bufferViews/2' },
     ],
   );
 });
 
-test("validates Node Buffer inputs repeatedly without mutating artifact bytes", async () => {
+test('validates Node Buffer inputs repeatedly without mutating artifact bytes', async () => {
   const input = Buffer.from(artifact);
   const before = Buffer.from(input);
 
@@ -81,101 +72,88 @@ test("validates Node Buffer inputs repeatedly without mutating artifact bytes", 
   assert.deepEqual(second.shapingSfnt, first.shapingSfnt);
 });
 
-test("accepts only the expanded closed CJK shaping-table profile", async () => {
+test('accepts only the expanded closed CJK shaping-table profile', async () => {
   const validated = await validateFontArtifact(cjkProfileArtifact);
   assert.deepEqual(sourceTableTags(validated.shapingSfnt), [
-    "BASE",
-    "GDEF",
-    "GPOS",
-    "GSUB",
-    "OS/2",
-    "VORG",
-    "cmap",
-    "head",
-    "hhea",
-    "hmtx",
-    "maxp",
-    "vhea",
-    "vmtx",
+    'BASE',
+    'GDEF',
+    'GPOS',
+    'GSUB',
+    'OS/2',
+    'VORG',
+    'cmap',
+    'head',
+    'hhea',
+    'hmtx',
+    'maxp',
+    'vhea',
+    'vmtx',
   ]);
 
   const outsideProfile = artifact.slice();
   const decoded = decodeDocument(outsideProfile);
   const shaping = decoded.document.extensions.PMNDRS_font.shaping;
   const shapingView = decoded.document.bufferViews[shaping.bufferView];
-  outsideProfile.set(
-    new TextEncoder().encode("JSTF"),
-    decoded.binStart + shapingView.byteOffset + 12,
-  );
-  await rejectsWithCode(outsideProfile, "SFNT_TABLE_PROFILE");
+  outsideProfile.set(new TextEncoder().encode('JSTF'), decoded.binStart + shapingView.byteOffset + 12);
+  await rejectsWithCode(outsideProfile, 'SFNT_TABLE_PROFILE');
 
   const nonAsciiTag = artifact.slice();
   nonAsciiTag[decoded.binStart + shapingView.byteOffset + 12] |= 0x80;
-  await rejectsWithCode(nonAsciiTag, "SFNT_TABLE_PROFILE");
+  await rejectsWithCode(nonAsciiTag, 'SFNT_TABLE_PROFILE');
 });
 
-test("keeps the packaged extension schema byte-identical to the canonical schema", async () => {
-  const [
-    canonical,
-    packaged,
-    manifestSource,
-    coreSource,
-    schemaFiles,
-    sourceLicense,
-    distributedLicense,
-  ] = await Promise.all([
-    readFile(
-      new URL(
-        "../../../../docs/planning/extensions/PMNDRS_font/schema/glTF.PMNDRS_font.schema.json",
-        import.meta.url,
+test('keeps the packaged extension schema byte-identical to the canonical schema', async () => {
+  const [canonical, packaged, manifestSource, coreSource, schemaFiles, sourceLicense, distributedLicense] =
+    await Promise.all([
+      readFile(
+        new URL(
+          '../../../../docs/planning/extensions/PMNDRS_font/schema/glTF.PMNDRS_font.schema.json',
+          import.meta.url,
+        ),
       ),
-    ),
-    readFile(new URL("../../src/schemas/extensions/glTF.PMNDRS_font.schema.json", import.meta.url)),
-    readFile(new URL("../../package.json", import.meta.url), "utf8"),
-    readFile(new URL("../../dist/index.js", import.meta.url), "utf8"),
-    readdir(new URL("../../src/schemas/gltf-2.0/", import.meta.url)),
-    readFile(new URL("../../src/schemas/KHRONOS-SPEC-LICENSE.txt", import.meta.url)),
-    readFile(new URL("../../dist/schemas/KHRONOS-SPEC-LICENSE.txt", import.meta.url)),
-  ]);
+      readFile(new URL('../../src/schemas/extensions/glTF.PMNDRS_font.schema.json', import.meta.url)),
+      readFile(new URL('../../package.json', import.meta.url), 'utf8'),
+      readFile(new URL('../../dist/index.js', import.meta.url), 'utf8'),
+      readdir(new URL('../../src/schemas/gltf-2.0/', import.meta.url)),
+      readFile(new URL('../../src/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url)),
+      readFile(new URL('../../dist/schemas/KHRONOS-SPEC-LICENSE.txt', import.meta.url)),
+    ]);
   assert.deepEqual(packaged, canonical);
-  assert.equal(schemaFiles.filter((name) => name.endsWith(".json")).length, 33);
+  assert.equal(schemaFiles.filter((name) => name.endsWith('.json')).length, 33);
   assert.deepEqual(distributedLicense, sourceLicense);
 
   const manifest = JSON.parse(manifestSource);
-  assert.deepEqual(manifest.exports["./validate"], {
-    types: "./dist/validator.d.ts",
-    import: "./dist/validator.js",
+  assert.deepEqual(manifest.exports['./validate'], {
+    types: './dist/validator.d.ts',
+    import: './dist/validator.js',
   });
-  assert.deepEqual(manifest.exports["./contract"], {
-    types: "./dist/contract.d.ts",
-    import: "./dist/contract.js",
+  assert.deepEqual(manifest.exports['./contract'], {
+    types: './dist/contract.d.ts',
+    import: './dist/contract.js',
   });
   assert.equal(FONT_BAKER_VERSION, manifest.version);
   assert.equal(FONT_FORMAT_VERSION, 0);
-  assert.deepEqual(manifest.exports["./wasm-url"], {
-    types: "./dist/wasm-url.d.ts",
-    import: "./dist/wasm-url.js",
+  assert.deepEqual(manifest.exports['./wasm-url'], {
+    types: './dist/wasm-url.d.ts',
+    import: './dist/wasm-url.js',
   });
-  assert.equal(fontBakerWasmUrl, new URL("../../dist/font_baker.wasm", import.meta.url).href);
+  assert.equal(fontBakerWasmUrl, new URL('../../dist/font_baker.wasm', import.meta.url).href);
   assert.doesNotMatch(coreSource, /(?:ajv|gltf-validator|validator\.js)/);
 
   const property = JSON.parse(
-    await readFile(
-      new URL("../../src/schemas/gltf-2.0/glTFProperty.schema.json", import.meta.url),
-      "utf8",
-    ),
+    await readFile(new URL('../../src/schemas/gltf-2.0/glTFProperty.schema.json', import.meta.url), 'utf8'),
   );
-  assert.equal(property.$schema, "https://json-schema.org/draft/2020-12/schema");
-  assert.equal(property.$id, "glTFProperty.schema.json");
+  assert.equal(property.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  assert.equal(property.$id, 'glTFProperty.schema.json');
 });
 
-test("rejects malformed GLB framing before schema or payload work", async () => {
+test('rejects malformed GLB framing before schema or payload work', async () => {
   const cases = [
-    ["GLB_MAGIC", mutateU32(artifact, 0, 0)],
-    ["GLB_VERSION", mutateU32(artifact, 4, 1)],
-    ["GLB_LENGTH", mutateU32(artifact, 8, artifact.byteLength - 4)],
-    ["GLB_CHUNK_ORDER", mutateU32(artifact, 16, BIN_CHUNK)],
-    ["GLB_CHUNK_ALIGNMENT", mutateU32(artifact, 12, readU32(artifact, 12) - 1)],
+    ['GLB_MAGIC', mutateU32(artifact, 0, 0)],
+    ['GLB_VERSION', mutateU32(artifact, 4, 1)],
+    ['GLB_LENGTH', mutateU32(artifact, 8, artifact.byteLength - 4)],
+    ['GLB_CHUNK_ORDER', mutateU32(artifact, 16, BIN_CHUNK)],
+    ['GLB_CHUNK_ALIGNMENT', mutateU32(artifact, 12, readU32(artifact, 12) - 1)],
   ];
   for (const [code, bytes] of cases) await rejectsWithCode(bytes, code);
 
@@ -183,118 +161,118 @@ test("rejects malformed GLB framing before schema or payload work", async () => 
   const jsonLength = readU32(padded, 12);
   assert.equal(padded[20 + jsonLength - 1], 0x20);
   padded[20 + jsonLength - 1] = 0;
-  await rejectsWithCode(padded, "GLB_JSON");
+  await rejectsWithCode(padded, 'GLB_JSON');
 });
 
-test("covers every PMNDRS_font required field and raster-source union one field at a time", async () => {
+test('covers every PMNDRS_font required field and raster-source union one field at a time', async () => {
   const base = decodeDocument(artifact).document;
-  const fontPath = ["extensions", "PMNDRS_font"];
+  const fontPath = ['extensions', 'PMNDRS_font'];
   const requiredPaths = [
-    [...fontPath, "version"],
-    [...fontPath, "shaping"],
-    [...fontPath, "metrics"],
-    [...fontPath, "provenance"],
-    [...fontPath, "rasters"],
-    [...fontPath, "shaping", "format"],
-    [...fontPath, "shaping", "bufferView"],
-    [...fontPath, "shaping", "hash"],
-    [...fontPath, "shaping", "fontFunctions"],
-    [...fontPath, "shaping", "fontFunctions", "glyphExtentsBufferView"],
-    [...fontPath, "shaping", "fontFunctions", "glyphExtentsStride"],
-    [...fontPath, "shaping", "fontFunctions", "glyphExtentsAvailabilityBufferView"],
-    ...["glyphCount", "glyphIdWidth", "unitsPerEm", "ascender", "descender", "lineGap"].map(
-      (name) => [...fontPath, "metrics", name],
-    ),
+    [...fontPath, 'version'],
+    [...fontPath, 'shaping'],
+    [...fontPath, 'metrics'],
+    [...fontPath, 'provenance'],
+    [...fontPath, 'rasters'],
+    [...fontPath, 'shaping', 'format'],
+    [...fontPath, 'shaping', 'bufferView'],
+    [...fontPath, 'shaping', 'hash'],
+    [...fontPath, 'shaping', 'fontFunctions'],
+    [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsBufferView'],
+    [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsStride'],
+    [...fontPath, 'shaping', 'fontFunctions', 'glyphExtentsAvailabilityBufferView'],
+    ...['glyphCount', 'glyphIdWidth', 'unitsPerEm', 'ascender', 'descender', 'lineGap'].map((name) => [
+      ...fontPath,
+      'metrics',
+      name,
+    ]),
     ...[
-      "sourceHash",
-      "descriptorHash",
-      "fontFaceIndex",
-      "bakerVersion",
-      "harfrustVersion",
-      "harfbuzzReferenceVersion",
-      "unicodeVersion",
-    ].map((name) => [...fontPath, "provenance", name]),
+      'sourceHash',
+      'descriptorHash',
+      'fontFaceIndex',
+      'bakerVersion',
+      'harfrustVersion',
+      'harfbuzzReferenceVersion',
+      'unicodeVersion',
+    ].map((name) => [...fontPath, 'provenance', name]),
   ];
   for (const path of requiredPaths) {
     const document = structuredClone(base);
     delete atPath(document, path)[path.at(-1)];
-    await rejectsWithPrefix(encodeDocument(artifact, document), "SCHEMA_");
+    await rejectsWithPrefix(encodeDocument(artifact, document), 'SCHEMA_');
   }
 
   const rasterBase = structuredClone(base);
   rasterBase.extensions.PMNDRS_font.rasters = [
     {
-      rasterKey: "a".repeat(64),
-      kind: "bitmap",
-      extension: "PMNDRS_font_bitmap",
+      rasterKey: 'a'.repeat(64),
+      kind: 'bitmap',
+      extension: 'PMNDRS_font_bitmap',
       version: 0,
-      source: { type: "external" },
+      source: { type: 'external' },
     },
   ];
   await validateFontArtifact(encodeDocument(artifact, rasterBase));
-  for (const field of ["rasterKey", "kind", "extension", "version", "source"]) {
+  for (const field of ['rasterKey', 'kind', 'extension', 'version', 'source']) {
     const document = structuredClone(rasterBase);
     delete document.extensions.PMNDRS_font.rasters[0][field];
-    await rejectsWithPrefix(encodeDocument(artifact, document), "SCHEMA_");
+    await rejectsWithPrefix(encodeDocument(artifact, document), 'SCHEMA_');
   }
   for (const source of [
     {},
-    { type: "unknown" },
-    { type: "embedded", uri: "forbidden.glb" },
-    { type: "external", uri: "" },
-    { type: "external", uri: "raster.glb" },
+    { type: 'unknown' },
+    { type: 'embedded', uri: 'forbidden.glb' },
+    { type: 'external', uri: '' },
+    { type: 'external', uri: 'raster.glb' },
   ]) {
     const document = structuredClone(rasterBase);
     document.extensions.PMNDRS_font.rasters[0].source = source;
-    await rejectsWithPrefix(encodeDocument(artifact, document), "SCHEMA_");
+    await rejectsWithPrefix(encodeDocument(artifact, document), 'SCHEMA_');
   }
 });
 
-test("rejects semantic and embedded-payload mutations deterministically", async () => {
+test('rejects semantic and embedded-payload mutations deterministically', async () => {
   const decoded = decodeDocument(artifact);
 
   const incompatible = structuredClone(decoded.document);
-  incompatible.extensions.PMNDRS_font.provenance.harfrustVersion = "0.13.0";
-  await rejectsWithCode(encodeDocument(artifact, incompatible), "FONT_VERSION_INCOMPATIBLE");
+  incompatible.extensions.PMNDRS_font.provenance.harfrustVersion = '0.13.0';
+  await rejectsWithCode(encodeDocument(artifact, incompatible), 'FONT_VERSION_INCOMPATIBLE');
 
   const wrongHash = structuredClone(decoded.document);
-  wrongHash.extensions.PMNDRS_font.shaping.hash = "0".repeat(64);
-  await rejectsWithCode(encodeDocument(artifact, wrongHash), "SHAPING_HASH");
+  wrongHash.extensions.PMNDRS_font.shaping.hash = '0'.repeat(64);
+  await rejectsWithCode(encodeDocument(artifact, wrongHash), 'SHAPING_HASH');
 
   const unclaimed = structuredClone(decoded.document);
   unclaimed.bufferViews.push(structuredClone(unclaimed.bufferViews[2]));
-  await rejectsWithCode(encodeDocument(artifact, unclaimed), "BUFFER_VIEW_UNCLAIMED");
+  await rejectsWithCode(encodeDocument(artifact, unclaimed), 'BUFFER_VIEW_UNCLAIMED');
 
   const extentsMutation = artifact.slice();
   const extentsView = decoded.document.bufferViews[1];
   extentsMutation[decoded.binStart + extentsView.byteOffset] ^= 1;
-  await rejectsWithCode(extentsMutation, "SHAPING_HASH");
+  await rejectsWithCode(extentsMutation, 'SHAPING_HASH');
 
   const sfntMutation = artifact.slice();
   sfntMutation[decoded.binStart + 16] ^= 1;
-  await rejectsWithCode(sfntMutation, "SFNT_TABLE_CHECKSUM");
+  await rejectsWithCode(sfntMutation, 'SFNT_TABLE_CHECKSUM');
 
   const reciprocal = structuredClone(decoded.document);
-  reciprocal.extensionsUsed.push("PMNDRS_font_bitmap");
+  reciprocal.extensionsUsed.push('PMNDRS_font_bitmap');
   reciprocal.extensions.PMNDRS_font.rasters = [
     {
-      rasterKey: "a".repeat(64),
-      kind: "bitmap",
-      extension: "PMNDRS_font_bitmap",
+      rasterKey: 'a'.repeat(64),
+      kind: 'bitmap',
+      extension: 'PMNDRS_font_bitmap',
       version: 0,
-      source: { type: "embedded" },
+      source: { type: 'embedded' },
     },
   ];
-  reciprocal.extensions.PMNDRS_font_bitmap = { rasterKey: "b".repeat(64) };
-  await rejectsWithCode(encodeDocument(artifact, reciprocal), "RASTER_RECIPROCAL_KEY");
+  reciprocal.extensions.PMNDRS_font_bitmap = { rasterKey: 'b'.repeat(64) };
+  await rejectsWithCode(encodeDocument(artifact, reciprocal), 'RASTER_RECIPROCAL_KEY');
 });
 
 async function rejectsWithCode(bytes, code) {
   await assert.rejects(
     validateFontArtifact(bytes),
-    (error) =>
-      error instanceof FontArtifactValidationError &&
-      error.issues.some((issue) => issue.code === code),
+    (error) => error instanceof FontArtifactValidationError && error.issues.some((issue) => issue.code === code),
   );
 }
 
@@ -302,8 +280,7 @@ async function rejectsWithPrefix(bytes, prefix) {
   await assert.rejects(
     validateFontArtifact(bytes),
     (error) =>
-      error instanceof FontArtifactValidationError &&
-      error.issues.some((issue) => issue.code.startsWith(prefix)),
+      error instanceof FontArtifactValidationError && error.issues.some((issue) => issue.code.startsWith(prefix)),
   );
 }
 
@@ -361,7 +338,7 @@ function sourceTableRecord(font, wanted) {
   const count = font.readUInt16BE(4);
   for (let index = 0; index < count; index += 1) {
     const record = 12 + index * 16;
-    if (font.toString("ascii", record, record + 4) === wanted) return record;
+    if (font.toString('ascii', record, record + 4) === wanted) return record;
   }
   throw new Error(`missing source table ${wanted}`);
 }

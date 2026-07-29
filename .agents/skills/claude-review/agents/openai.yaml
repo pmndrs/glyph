@@ -1,4 +1,4 @@
 interface:
-  display_name: "Claude Review"
-  short_description: "Run observable, retained Claude code reviews"
-  default_prompt: "Use $claude-review to run a read-only adversarial review and retain its live trace."
+  display_name: 'Claude Review'
+  short_description: 'Run observable, retained Claude code reviews'
+  default_prompt: 'Use $claude-review to run a read-only adversarial review and retain its live trace.'
