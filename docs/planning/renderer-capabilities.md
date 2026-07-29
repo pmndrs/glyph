@@ -28,10 +28,13 @@ sources:
   - id: "citation-4"
     resource: "slug-audit.md"
     title: "Three Flatland Slug audit"
+  - id: "slug-outline-research"
+    resource: "slug-outline-research.md"
+    title: "Slug outline architecture"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-29T04:55:53Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-29T13:24:14Z"
 ---
 
 # Renderer capability matrix
@@ -52,16 +55,16 @@ This is the intended `pmndrs/text` feature set, not a claim about implemented be
 | Per-span or per-glyph color | ✅ | ✅ | ✅ |
 | Gradient or texture fill | ✅ | ✅ | ✅ |
 | Runtime opacity/fade | ✅ | ✅ | ✅ |
-| Adjustable outline | ⚠️ | ✅ | ⚠️ |
-| Multiple outline bands | ⚠️ | ⚠️ | ⚠️ |
-| Hard drop shadow | ✅ | ✅ | ✅ |
-| Soft shadow or glow | ⚠️ | ✅ | ⚠️ |
+| Adjustable outline | ⚠️ | ✅ | ❌ |
+| Multiple outline bands | ⚠️ | ⚠️ | ❌ |
+| Hard drop shadow | ✅ | ✅ | ❌ |
+| Soft shadow or glow | ⚠️ | ✅ | ❌ |
 | Cosmetic weight adjustment | ⚠️ | ⚠️ | ❌ |
 | 3D extrusion/bevel | ❌ | ❌ | ❌ |
 
 Notes:
 
-1. Bitmap outlines require dilation or another strike. Slug provides bounded analytic per-glyph outline in one specialized draw. MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range.
+1. Bitmap outlines require dilation or another strike. MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range. Slug V0 rejects outline and shadow paint while a bounded shared-traversal approximation remains research.[^slug-outline-research]
 2. Soft effects may require extra samples, padding, or an offscreen blur. The API must report limits rather than imply identical output.
 3. Cosmetic thickness is not a substitute for shaping a real font weight.
 4. Extruded geometry is a separate mesh-generation feature, outside this 2D raster contract.
@@ -106,7 +109,7 @@ Notes:
 
 1. Bitmap quality is tied to available strikes; it is preferred for tiny hinted or deliberately pixel-authored text.
 2. MSDF with MTSDF encoding is the proposed general-purpose default, subject to accepted scale, transform, atlas, and effects benchmarks.
-3. Slug is preferred when large-size or zoomed outline fidelity dominates. Its cost remains shape- and coverage-dependent.
+3. Slug is preferred when large-size or zoomed fill fidelity dominates. Its cost remains shape- and coverage-dependent.
 4. Payload size depends on glyph coverage, strikes, atlas resolution, layer padding, outline complexity, and compression. It must be measured per corpus.
 
 ## Raster-independent behavior
@@ -126,3 +129,5 @@ Switching raster must never reshape text or change line breaks. V1 selects one r
 - Use **bitmap strikes** for tiny or intentionally pixel-authored text and embedded color emoji.
 - Use **Slug** for large or deeply zoomed text, high-fidelity vector layers, and SVG icon fonts.
 - Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
+
+[^slug-outline-research]: The rejected exact-distance design, retained measurements, and replacement gate are recorded separately from the capability table.

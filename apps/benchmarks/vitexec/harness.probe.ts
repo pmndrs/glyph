@@ -232,14 +232,10 @@ paintViewport = await waitForElementState('[data-testid="comparison-live-viewpor
 })
 await waitForAttribute(paintViewport, 'data-paint-opacity', '0.65')
 strokeControl = await waitForRangeControl('Stroke width')
-if (strokeControl.disabled) throw new Error('Slug Paint & Effects stroke control must be enabled')
-setInputValue.call(strokeControl, '0')
-strokeControl.dispatchEvent(new Event('input', { bubbles: true }))
+if (!strokeControl.disabled || strokeControl.value !== '0') {
+  throw new Error('Slug Paint & Effects must expose a disabled zero-width stroke control')
+}
 await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0')
-await waitForAttribute(paintViewport, 'data-draw-count', '1')
-setInputValue.call(strokeControl, '65')
-strokeControl.dispatchEvent(new Event('input', { bubbles: true }))
-await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0.65')
 await waitForAttribute(paintViewport, 'data-draw-count', '1')
 const slugShadowControl = [
   ...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),

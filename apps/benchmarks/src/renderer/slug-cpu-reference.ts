@@ -32,11 +32,6 @@ export interface FlatSlugCpuReferenceOptions {
   readonly originY?: number
   readonly fontSlot?: number
   readonly fill?: readonly [number, number, number, number]
-  readonly outline?: {
-    readonly color: readonly [number, number, number, number]
-    /** Centered outline radius in logical layout units. */
-    readonly width: number
-  }
 }
 
 /**
@@ -55,7 +50,6 @@ export function renderFlatSlugCpuReference(
   const originY = finite(options.originY ?? 0, 'Slug CPU reference origin Y')
   const fontSlot = nonnegativeInteger(options.fontSlot ?? 0, 'Slug CPU reference font slot')
   const fill = linearColor(options.fill ?? [1, 1, 1, 1])
-  const outline = outlineValues(options.outline)
   assertLayoutArrays(layout)
   if (resource.records.byteLength % RECORD_STRIDE !== 0) {
     throw new TypeError('Slug CPU reference record table is not densely packed')
@@ -103,12 +97,11 @@ export function renderFlatSlugCpuReference(
     const logicalRight = originX + layout.x[glyphIndex]! + planeRight * scale
     const logicalTop = -(originY - layout.y[glyphIndex]! + planeTop * scale)
     const logicalBottom = -(originY - layout.y[glyphIndex]! + planeBottom * scale)
-    const outlineSupport = outline.visible ? outline.width * dpr + 0.5 : 0.5
     const glyphBounds = pixelBounds(
-      logicalLeft * dpr - outlineSupport,
-      logicalTop * dpr - outlineSupport,
-      logicalRight * dpr + outlineSupport,
-      logicalBottom * dpr + outlineSupport,
+      logicalLeft * dpr - 0.5,
+      logicalTop * dpr - 0.5,
+      logicalRight * dpr + 0.5,
+      logicalBottom * dpr + 0.5,
     )
     unclippedBounds = unionBounds(unclippedBounds, glyphBounds)
     const clippedBounds = clippedPixelBounds(glyphBounds, width, height)
@@ -125,7 +118,6 @@ export function renderFlatSlugCpuReference(
     const bandOffsetX = -normalizedLeft * bandScaleX
     const bandOffsetY = -normalizedBottom * bandScaleY
     const pixelsPerEm = Math.min(1 / MINIMUM_FOOTPRINT, fontSize * dpr)
-    const emsPerPixel = 1 / pixelsPerEm
 
     for (let y = clippedBounds.minY; y <= clippedBounds.maxY; y += 1) {
       const renderY = (-(y + 0.5) / dpr - originY + layout.y[glyphIndex]!) / fontSize
@@ -155,36 +147,7 @@ export function renderFlatSlugCpuReference(
         })
         evaluatedCurves += horizontal.evaluatedCurves + vertical.evaluatedCurves
         const coverage = combinedCoverage(horizontal, vertical)
-        const pixelOffset = (y * width + x) * 4
-        const fillAlpha = fill[3] * coverage
-        if (outline.visible && fillAlpha < 1) {
-          const outlineCoverage = evaluateStrokeCoverage(page, {
-            curveBase,
-            horizontalBandCount,
-            horizontalHeaderBase,
-            verticalBandCount,
-            verticalHeaderBase,
-            referenceBase,
-            bandScaleX,
-            bandScaleY,
-            bandOffsetX,
-            bandOffsetY,
-            renderX,
-            renderY,
-            halfWidth: outline.width / fontSize,
-            emsPerPixel,
-          })
-          compositeOutlineBehindFill(
-            pixels,
-            pixelOffset,
-            fill,
-            fillAlpha,
-            outline.color,
-            outlineCoverage,
-          )
-        } else if (fillAlpha > 0) {
-          compositeFill(pixels, pixelOffset, fill, coverage)
-        }
+        if (coverage > 0) compositeFill(pixels, (y * width + x) * 4, fill, coverage)
       }
     }
   }
@@ -208,23 +171,6 @@ interface BandResult {
   readonly coverage: number
   readonly weight: number
   readonly evaluatedCurves: number
-}
-
-interface StrokeOptions {
-  readonly curveBase: number
-  readonly horizontalBandCount: number
-  readonly horizontalHeaderBase: number
-  readonly verticalBandCount: number
-  readonly verticalHeaderBase: number
-  readonly referenceBase: number
-  readonly bandScaleX: number
-  readonly bandScaleY: number
-  readonly bandOffsetX: number
-  readonly bandOffsetY: number
-  readonly renderX: number
-  readonly renderY: number
-  readonly halfWidth: number
-  readonly emsPerPixel: number
 }
 
 function evaluateBand(page: SlugPageResource, options: BandOptions): BandResult {
@@ -296,130 +242,6 @@ function combinedCoverage(horizontal: BandResult, vertical: BandResult): number 
   return clamp01(
     Math.max(weighted, Math.min(Math.abs(horizontal.coverage), Math.abs(vertical.coverage))),
   )
-}
-
-function evaluateStrokeCoverage(page: SlugPageResource, options: StrokeOptions): number {
-  const antialiasHalfWidth = options.emsPerPixel * 0.5
-  const effectiveHalfWidth = Math.max(options.halfWidth, antialiasHalfWidth)
-  const searchRadius = effectiveHalfWidth + antialiasHalfWidth
-  let minimumDistance = 1
-  minimumDistance = evaluateStrokeBand(page, options, 'horizontal', searchRadius, minimumDistance)
-  minimumDistance = evaluateStrokeBand(page, options, 'vertical', searchRadius, minimumDistance)
-  const lower = effectiveHalfWidth - antialiasHalfWidth
-  const upper = effectiveHalfWidth + antialiasHalfWidth
-  return 1 - smoothstep(lower, upper, minimumDistance)
-}
-
-function evaluateStrokeBand(
-  page: SlugPageResource,
-  options: StrokeOptions,
-  axis: 'horizontal' | 'vertical',
-  searchRadius: number,
-  initialMinimumDistance: number,
-): number {
-  const bandCount = axis === 'horizontal' ? options.horizontalBandCount : options.verticalBandCount
-  const coordinate = axis === 'horizontal' ? options.renderY : options.renderX
-  const bandScale = axis === 'horizontal' ? options.bandScaleY : options.bandScaleX
-  const bandOffset = axis === 'horizontal' ? options.bandOffsetY : options.bandOffsetX
-  const headerBase =
-    axis === 'horizontal' ? options.horizontalHeaderBase : options.verticalHeaderBase
-  const [firstBand, bandEnd] = strokeBandRange(
-    coordinate,
-    searchRadius,
-    bandScale,
-    bandOffset,
-    bandCount,
-  )
-  const headers = headerTexels(page)
-  const references = referenceTexels(page)
-  const curves = curveTexels(page)
-  let minimumDistance = initialMinimumDistance
-
-  for (let bandIndex = firstBand; bandIndex < bandEnd; bandIndex += 1) {
-    const headerIndex = headerBase + bandIndex
-    if (headerIndex >= page.headerCount) throw new TypeError('Slug stroke header exceeds its page')
-    const header = headers[headerIndex]!
-    const curveCount = Math.min(header >>> 16, MAX_SAFE_BAND_CURVES)
-    const localReferenceOffset = header & 0xffff
-    for (let index = 0; index < curveCount; index += 1) {
-      const referenceIndex = options.referenceBase + localReferenceOffset + index
-      if (referenceIndex >= page.referenceCount) {
-        throw new TypeError('Slug stroke reference exceeds its page')
-      }
-      const packedReference = references[referenceIndex >>> 1]!
-      const curveTexel =
-        options.curveBase + ((packedReference >>> ((referenceIndex & 1) * 16)) & 0xffff)
-      const curve = decodeCurve(curves, page.curveWidth, page.curveHeight, curveTexel)
-      if (
-        axis === 'vertical' &&
-        Math.max(curve.p0y, curve.p1y, curve.p2y) - Math.min(curve.p0y, curve.p1y, curve.p2y) >
-          1e-10
-      ) {
-        continue
-      }
-      minimumDistance = Math.min(
-        minimumDistance,
-        referenceDistanceToQuadratic(options.renderX, options.renderY, curve),
-      )
-    }
-  }
-  return minimumDistance
-}
-
-function strokeBandRange(
-  coordinate: number,
-  searchRadius: number,
-  transformScale: number,
-  transformOffset: number,
-  bandCount: number,
-): readonly [number, number] {
-  const clampIndex = (value: number): number =>
-    Math.min(bandCount - 1, Math.max(0, Math.trunc(value * transformScale + transformOffset)))
-  return [clampIndex(coordinate - searchRadius), clampIndex(coordinate + searchRadius) + 1]
-}
-
-/** Copied from the reviewed three-flatland Slug stroke authority. */
-function referenceDistanceToQuadratic(
-  pointX: number,
-  pointY: number,
-  curve: ReturnType<typeof decodeCurve>,
-): number {
-  const ax = curve.p2x - 2 * curve.p1x + curve.p0x
-  const ay = curve.p2y - 2 * curve.p1y + curve.p0y
-  const dx = curve.p1x - curve.p0x
-  const dy = curve.p1y - curve.p0y
-  const mx = curve.p0x - pointX
-  const my = curve.p0y - pointY
-  const c3 = ax * ax + ay * ay
-  const c2 = 3 * (ax * dx + ay * dy)
-  const c1 = 2 * (dx * dx + dy * dy) + mx * ax + my * ay
-  const c0 = mx * dx + my * dy
-  if (c3 < 1e-12 && dx * dx + dy * dy < 1e-12) return Math.hypot(mx, my)
-
-  const evaluate = (t: number): number => ((c3 * t + c2) * t + c1) * t + c0
-  const derivative = (t: number): number => (3 * c3 * t + 2 * c2) * t + c1
-  const refine = (seed: number): number => {
-    let t = seed
-    for (let iteration = 0; iteration < 3; iteration += 1) {
-      const slope = derivative(t)
-      if (Math.abs(slope) < 1e-12) break
-      t = Math.min(1, Math.max(0, t - evaluate(t) / slope))
-    }
-    return t
-  }
-
-  let bestDistanceSquared = Number.POSITIVE_INFINITY
-  for (const t of [0, 1, refine(0), refine(0.5), refine(1)]) {
-    const complement = 1 - t
-    const x =
-      complement * complement * curve.p0x + 2 * complement * t * curve.p1x + t * t * curve.p2x
-    const y =
-      complement * complement * curve.p0y + 2 * complement * t * curve.p1y + t * t * curve.p2y
-    const offsetX = x - pointX
-    const offsetY = y - pointY
-    bestDistanceSquared = Math.min(bestDistanceSquared, offsetX * offsetX + offsetY * offsetY)
-  }
-  return Math.sqrt(bestDistanceSquared)
 }
 
 function referenceRootCode(first: number, second: number, third: number): number {
@@ -608,31 +430,6 @@ function compositeFill(
   pixels[offset + 2] = byte(fill[2] * sourceAlpha * 255 + pixels[offset + 2]! * destinationScale)
 }
 
-function compositeOutlineBehindFill(
-  pixels: Uint8Array,
-  offset: number,
-  fill: readonly [number, number, number, number],
-  fillAlpha: number,
-  outline: readonly [number, number, number, number],
-  outlineCoverage: number,
-): void {
-  const outlineContribution = outline[3] * outlineCoverage * (1 - fillAlpha)
-  const sourceAlpha = fillAlpha + outlineContribution
-  const destinationScale = 1 - sourceAlpha
-  pixels[offset] = byte(
-    (fill[0] * fillAlpha + outline[0] * outlineContribution) * 255 +
-      pixels[offset]! * destinationScale,
-  )
-  pixels[offset + 1] = byte(
-    (fill[1] * fillAlpha + outline[1] * outlineContribution) * 255 +
-      pixels[offset + 1]! * destinationScale,
-  )
-  pixels[offset + 2] = byte(
-    (fill[2] * fillAlpha + outline[2] * outlineContribution) * 255 +
-      pixels[offset + 2]! * destinationScale,
-  )
-}
-
 function opaqueBlack(width: number, height: number): Uint8Array {
   const pixels = new Uint8Array(width * height * 4)
   for (let offset = 3; offset < pixels.byteLength; offset += 4) pixels[offset] = 255
@@ -648,26 +445,8 @@ function linearColor(
   return color
 }
 
-function outlineValues(outline: FlatSlugCpuReferenceOptions['outline']): {
-  readonly color: readonly [number, number, number, number]
-  readonly width: number
-  readonly visible: boolean
-} {
-  if (outline === undefined) return { color: [0, 0, 0, 0], width: 0, visible: false }
-  const color = linearColor(outline.color)
-  if (!Number.isFinite(outline.width) || outline.width < 0) {
-    throw new TypeError('Slug CPU reference outline width must be a non-negative finite value')
-  }
-  return { color, width: outline.width, visible: outline.width > 0 && color[3] > 0 }
-}
-
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
-}
-
-function smoothstep(lower: number, upper: number, value: number): number {
-  const t = clamp01((value - lower) / (upper - lower))
-  return t * t * (3 - 2 * t)
 }
 
 function byte(value: number): number {

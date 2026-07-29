@@ -142,14 +142,6 @@ export interface SlugTextConformanceCapture {
   readonly renderSubmitMs: number
 }
 
-export type SlugOutlineConformanceVariant = 'fill' | 'zero' | 'outline'
-
-export interface SlugOutlineConformanceCapture extends SlugTextConformanceCapture {
-  readonly variant: SlugOutlineConformanceVariant
-  readonly physicalFontSize: number
-  readonly physicalOutlineWidth: number
-}
-
 export interface SlugRoleSceneCapture {
   readonly scene: SlugRoleSceneDefinition
   readonly dpr: number
@@ -223,7 +215,6 @@ interface FlatSlugConformanceResources {
   readonly line: Text
   readonly resource: SlugResource
   readonly sourceTypes?: SlugRasterSourceTypes
-  readonly outlineWidth?: number
 }
 
 export interface SlugRasterSourceTypes {
@@ -891,47 +882,6 @@ export async function captureSlugTextConformance(options: {
   }
 }
 
-export async function captureSlugOutlineConformance(options: {
-  readonly backend: RendererBackend
-  readonly dpr: 1 | 2
-  readonly variant: SlugOutlineConformanceVariant
-  readonly signal?: AbortSignal
-}): Promise<SlugOutlineConformanceCapture> {
-  const physicalFontSize = 160
-  const physicalOutlineWidth = options.variant === 'outline' ? 8 : 0
-  const resources = await createFlatSlugConformanceResources(
-    options.backend,
-    options.dpr,
-    'inter',
-    options.signal,
-    'baked',
-    undefined,
-    {
-      width: 720 / options.dpr,
-      height: 340 / options.dpr,
-      fontSize: physicalFontSize / options.dpr,
-      layoutWidth: 672 / options.dpr,
-      originX: 24 / options.dpr,
-      originY: -24 / options.dpr,
-      text: 'OQag',
-      language: 'en',
-      direction: 'ltr',
-      ...(options.variant === 'fill' ? {} : { outlineWidth: physicalOutlineWidth / options.dpr }),
-    },
-  )
-  try {
-    options.signal?.throwIfAborted()
-    return {
-      ...(await captureFlatSlugConformance(resources)),
-      variant: options.variant,
-      physicalFontSize,
-      physicalOutlineWidth,
-    }
-  } finally {
-    await disposeFlatSlugConformanceResources(resources)
-  }
-}
-
 export async function captureSlugExternalRenderParity(options: {
   readonly backend: RendererBackend
   readonly externalArtifactUrl: string
@@ -1286,7 +1236,6 @@ interface FlatSlugSceneOptions {
   readonly spans?: readonly TextSpan[]
   readonly language: string
   readonly direction: 'ltr' | 'rtl'
-  readonly outlineWidth?: number
 }
 
 async function createFlatSlugConformanceResources(
@@ -1339,9 +1288,6 @@ async function createFlatSlugConformanceResources(
       language: specimen.language,
       direction: specimen.direction,
       textAlign: 'start',
-      ...(sceneOptions?.outlineWidth === undefined
-        ? {}
-        : { outline: { color: 0xffffff, width: sceneOptions.outlineWidth } }),
     })
     await line.ready
     const conformanceMissingGlyphCount = committedLayout(line).glyphIds.reduce(
@@ -1397,9 +1343,6 @@ async function createFlatSlugConformanceResources(
       line,
       resource,
       ...(sourceTypes === undefined ? {} : { sourceTypes }),
-      ...(sceneOptions?.outlineWidth === undefined
-        ? {}
-        : { outlineWidth: sceneOptions.outlineWidth }),
     }
   } catch (error) {
     line?.dispose()
@@ -1495,9 +1438,6 @@ async function captureFlatSlugConformance(
       dpr: resources.dpr,
       originX: resources.line.position.x,
       originY: resources.line.position.y,
-      ...(resources.outlineWidth === undefined || resources.outlineWidth === 0
-        ? {}
-        : { outline: { color: [1, 1, 1, 1], width: resources.outlineWidth } }),
     },
   )
   const reference = referenceResult.pixels

@@ -40,8 +40,6 @@ export type ComparisonWorkloadId =
   | 'paragraph-stress'
   | 'paint-effects'
 
-type PaintStrokePattern = 'all' | 'alternating'
-
 export type ComparisonWorkloadStats = (
   | BitmapTextLiveStats
   | MtsdfTextLiveStats
@@ -56,7 +54,6 @@ export type ComparisonWorkloadStats = (
   readonly appliedLayoutWidthRatio: number
   readonly appliedPaintOpacity: number
   readonly appliedPaintShadowEnabled: boolean
-  readonly appliedPaintStrokePattern: PaintStrokePattern
   readonly appliedPaintStrokeWidth: number
   readonly appliedShowLayoutBounds: boolean
   readonly reflowCount: number
@@ -95,8 +92,6 @@ export interface ComparisonWorkloadConfiguration {
   readonly layoutWidthRatio: number
   readonly paintOpacity: number
   readonly paintShadowEnabled: boolean
-  /** Internal benchmark fixture control; ordinary paint workloads outline every word. */
-  readonly paintStrokePattern?: PaintStrokePattern
   readonly paintStrokeWidth: number
   readonly showGrid: boolean
   readonly showLayoutBounds: boolean
@@ -198,7 +193,6 @@ export async function createComparisonWorkloadPreview(options: {
   readonly layoutWidthRatio: number
   readonly paintOpacity: number
   readonly paintShadowEnabled: boolean
-  readonly paintStrokePattern?: PaintStrokePattern
   readonly paintStrokeWidth: number
   readonly showGrid: boolean
   readonly showLayoutBounds: boolean
@@ -677,8 +671,7 @@ export async function createComparisonWorkloadPreview(options: {
           appliedLayoutWidthRatio: configuration.layoutWidthRatio,
           appliedPaintOpacity: configuration.paintOpacity,
           appliedPaintShadowEnabled: technique === 'mtsdf' && configuration.paintShadowEnabled,
-          appliedPaintStrokePattern: paintStrokePattern(configuration),
-          appliedPaintStrokeWidth: technique === 'bitmap' ? 0 : configuration.paintStrokeWidth,
+          appliedPaintStrokeWidth: technique === 'mtsdf' ? configuration.paintStrokeWidth : 0,
           appliedShowLayoutBounds: configuration.showLayoutBounds,
           reflowCount,
           lastReflowMs,
@@ -950,9 +943,9 @@ function createEntries(
     })
   }
   if (configuration.workload === 'paint-effects') {
-    const maximumOutlineWidth = configuration.fontSize / (technique === 'slug' ? 20 : 16)
+    const maximumOutlineWidth = configuration.fontSize / 16
     const paintOutlineWidth =
-      technique === 'bitmap' ? undefined : maximumOutlineWidth * configuration.paintStrokeWidth
+      technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined
     const paintShadowOffset =
       technique === 'mtsdf' && configuration.paintShadowEnabled
         ? ([
@@ -963,13 +956,7 @@ function createEntries(
     const text = new Text({
       ...base,
       text: PAINT_EFFECTS_TEXT,
-      spans: paintSpans(
-        0,
-        configuration.amount,
-        paintOutlineWidth,
-        paintShadowOffset,
-        paintStrokePattern(configuration),
-      ),
+      spans: paintSpans(0, configuration.amount, paintOutlineWidth, paintShadowOffset),
       fontSize: configuration.fontSize,
       opacity: configuration.paintOpacity,
       width: Math.max(160, viewportWidth * configuration.layoutWidthRatio),
@@ -1164,7 +1151,6 @@ function animatePaint(
       configuration.amount,
       entry.paintOutlineWidth,
       entry.paintShadowOffset,
-      paintStrokePattern(configuration),
     ),
   })
   entry.paintRevision = (entry.paintRevision ?? 0) + 1
@@ -1180,9 +1166,9 @@ function applyRetainedConfiguration(
     if (entry.bounds !== undefined) entry.bounds.visible = configuration.showLayoutBounds
   }
   if (configuration.workload !== 'paint-effects') return
-  const maximumOutlineWidth = configuration.fontSize / (technique === 'slug' ? 20 : 16)
+  const maximumOutlineWidth = configuration.fontSize / 16
   const paintOutlineWidth =
-    technique === 'bitmap' ? undefined : maximumOutlineWidth * configuration.paintStrokeWidth
+    technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined
   const paintShadowOffset =
     technique === 'mtsdf' && configuration.paintShadowEnabled
       ? ([
@@ -1203,7 +1189,6 @@ function applyRetainedConfiguration(
         configuration.amount,
         paintOutlineWidth,
         paintShadowOffset,
-        paintStrokePattern(configuration),
       ),
     })
   }
@@ -1372,14 +1357,13 @@ function paintSpans(
   amount: number,
   outlineWidth?: number,
   shadowOffset?: readonly [number, number],
-  strokePattern: PaintStrokePattern = 'all',
 ): readonly TextSpan[] {
   return PAINT_WORD_RANGES.map((range, index) => {
     const hue = paintWordHue(index, PAINT_WORD_RANGES.length, phase, amount)
     return {
       ...range,
       color: hslColor(hue, 0.88, 0.53),
-      ...(outlineWidth === undefined || outlineWidth === 0 || !wordHasOutline(index, strokePattern)
+      ...(outlineWidth === undefined || outlineWidth === 0
         ? {}
         : { outline: { color: 0xffffff, width: outlineWidth } }),
       ...(shadowOffset === undefined
@@ -1387,10 +1371,6 @@ function paintSpans(
         : { shadow: { color: hslColor(hue, 0.68, 0.28), offset: shadowOffset } }),
     }
   })
-}
-
-function wordHasOutline(wordIndex: number, pattern: PaintStrokePattern): boolean {
-  return pattern === 'all' || wordIndex % 2 === 0
 }
 
 export function paintWordHue(
@@ -1851,13 +1831,6 @@ function validateConfiguration(
   ) {
     throw new RangeError('comparison workload paint stroke width must be in [0, 1]')
   }
-  if (
-    configuration.paintStrokePattern !== undefined &&
-    configuration.paintStrokePattern !== 'all' &&
-    configuration.paintStrokePattern !== 'alternating'
-  ) {
-    throw new TypeError('comparison workload paint stroke pattern must be all or alternating')
-  }
   if (typeof configuration.showLayoutBounds !== 'boolean') {
     throw new TypeError('comparison workload layout-bounds visibility must be boolean')
   }
@@ -1868,10 +1841,6 @@ function validateConfiguration(
     throw new TypeError('comparison workload shadow visibility must be boolean')
   }
   return configuration
-}
-
-function paintStrokePattern(configuration: ComparisonWorkloadConfiguration): PaintStrokePattern {
-  return configuration.paintStrokePattern ?? 'all'
 }
 
 function committedLayout(text: Text): ParagraphLayout {

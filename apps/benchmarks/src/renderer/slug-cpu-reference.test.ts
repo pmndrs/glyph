@@ -49,72 +49,6 @@ describe('flat Slug CPU reference', () => {
     ])
   })
 
-  it('renders a centered outline behind a translucent fill', () => {
-    const layout = specimenLayout({
-      x: new Float32Array([1]),
-      y: new Float32Array([5]),
-    })
-    const result = renderFlatSlugCpuReference(squareResource(), layout, {
-      width: 6,
-      height: 6,
-      fill: [0, 1, 0, 0.5],
-      outline: { color: [1, 0, 0, 1], width: 1 },
-    })
-
-    expect(result.bounds).toEqual({ minX: 0, minY: 0, maxX: 5, maxY: 5 })
-    expect(result.unclippedBounds).toEqual({ minX: -1, minY: -1, maxX: 5, maxY: 5 })
-    expect(rgbRows(result.pixels, 6)).toEqual([
-      [
-        [227, 0, 0],
-        [255, 0, 0],
-        [255, 0, 0],
-        [255, 0, 0],
-        [255, 0, 0],
-        [227, 0, 0],
-      ],
-      [
-        [255, 0, 0],
-        [128, 128, 0],
-        [128, 128, 0],
-        [128, 128, 0],
-        [128, 128, 0],
-        [255, 0, 0],
-      ],
-      [
-        [255, 0, 0],
-        [128, 128, 0],
-        [0, 128, 0],
-        [0, 128, 0],
-        [128, 128, 0],
-        [255, 0, 0],
-      ],
-      [
-        [255, 0, 0],
-        [128, 128, 0],
-        [0, 128, 0],
-        [0, 128, 0],
-        [128, 128, 0],
-        [255, 0, 0],
-      ],
-      [
-        [255, 0, 0],
-        [128, 128, 0],
-        [128, 128, 0],
-        [128, 128, 0],
-        [128, 128, 0],
-        [255, 0, 0],
-      ],
-      [
-        [227, 0, 0],
-        [255, 0, 0],
-        [255, 0, 0],
-        [255, 0, 0],
-        [255, 0, 0],
-        [227, 0, 0],
-      ],
-    ])
-  })
-
   it('skips canonical absent records and rejects malformed texture storage', () => {
     const absent = squareResource()
     new DataView(absent.records.buffer).setUint16(8, 0xffff, true)
@@ -249,19 +183,6 @@ function redRows(pixels: Uint8Array, width: number): readonly (readonly number[]
   for (let offset = 0; offset < pixels.byteLength; offset += width * 4) {
     const row: number[] = []
     for (let column = 0; column < width; column += 1) row.push(pixels[offset + column * 4]!)
-    rows.push(row)
-  }
-  return rows
-}
-
-function rgbRows(pixels: Uint8Array, width: number): readonly (readonly (readonly number[])[])[] {
-  const rows: number[][][] = []
-  for (let offset = 0; offset < pixels.byteLength; offset += width * 4) {
-    const row: number[][] = []
-    for (let column = 0; column < width; column += 1) {
-      const pixel = offset + column * 4
-      row.push([pixels[pixel]!, pixels[pixel + 1]!, pixels[pixel + 2]!])
-    }
     rows.push(row)
   }
   return rows
