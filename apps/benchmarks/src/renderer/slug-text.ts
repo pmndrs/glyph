@@ -10,10 +10,8 @@ import {
   type RuntimeRasterBakerModule,
 } from '@pmndrs/text'
 import {
-  createSlugExperimentRaster,
   slug,
   slugDescriptorRasterKey,
-  type SlugExperimentVariant,
   type SlugModule,
   type SlugResource,
 } from '@pmndrs/text/raster/slug'
@@ -75,8 +73,6 @@ export interface SlugBakedArtifactSource {
   readonly uncompressed: { readonly bytes: number; readonly sha256: string }
 }
 
-export type { SlugExperimentVariant } from '@pmndrs/text/raster/slug'
-
 const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interCompressedFontUrl,
   amiri: amiriCompressedFontUrl,
@@ -134,12 +130,6 @@ export interface SlugTextConformanceCapture {
   readonly glyphCount: number
   readonly evaluatedCurves: number
   readonly renderSubmitMs: number
-}
-
-export interface SlugFragmentShaderCapture {
-  readonly backend: RendererBackend
-  readonly fragmentShader: string
-  readonly variant: SlugExperimentVariant
 }
 
 interface FlatSlugConformanceResources {
@@ -778,8 +768,6 @@ export async function captureSlugTextConformance(options: {
   readonly dpr: number
   readonly fontFixture?: BenchmarkFontFixture
   readonly signal?: AbortSignal
-  /** Temporary nonshipping graph selection used by Slug performance probes. */
-  readonly slugExperimentVariant?: SlugExperimentVariant
 }): Promise<SlugTextConformanceCapture> {
   options.signal?.throwIfAborted()
   const resources = await createFlatSlugConformanceResources(
@@ -789,7 +777,6 @@ export async function captureSlugTextConformance(options: {
     options.signal,
     options.delivery,
     options.bakedArtifact,
-    options.slugExperimentVariant,
   )
   try {
     options.signal?.throwIfAborted()
@@ -799,61 +786,6 @@ export async function captureSlugTextConformance(options: {
   } finally {
     await disposeFlatSlugConformanceResources(resources)
   }
-}
-
-/** Capture the final Three-generated fragment program after executing the real Slug graph. */
-export async function captureSlugFragmentShader(options: {
-  readonly backend: RendererBackend
-  readonly variant: SlugExperimentVariant
-}): Promise<SlugFragmentShaderCapture> {
-  const resources = await createFlatSlugConformanceResources(
-    options.backend,
-    1,
-    'inter',
-    undefined,
-    'baked',
-    undefined,
-    options.variant,
-  )
-  try {
-    await captureFlatSlugConformance(resources)
-    const backendMatches =
-      options.backend === 'webgpu'
-        ? 'isWebGPUBackend' in resources.renderer.backend &&
-          resources.renderer.backend.isWebGPUBackend === true
-        : 'isWebGLBackend' in resources.renderer.backend &&
-          resources.renderer.backend.isWebGLBackend === true
-    if (!backendMatches) {
-      throw new Error(`Slug shader capture did not initialize requested ${options.backend} backend`)
-    }
-    const mesh = firstSlugMesh(resources.line)
-    const { fragmentShader } = await resources.renderer.debug.getShaderAsync(
-      resources.scene,
-      resources.camera,
-      mesh,
-    )
-    if (fragmentShader === null || fragmentShader.length === 0) {
-      throw new Error(`${options.backend} Slug shader capture returned no fragment program`)
-    }
-    return { backend: options.backend, fragmentShader, variant: options.variant }
-  } finally {
-    await disposeFlatSlugConformanceResources(resources)
-  }
-}
-
-function firstSlugMesh(line: Text): THREE.Mesh {
-  let result: THREE.Mesh | undefined
-  line.traverse((object) => {
-    if (
-      result === undefined &&
-      object instanceof THREE.Mesh &&
-      object.geometry.getAttribute('slugCurveBase') !== undefined
-    ) {
-      result = object
-    }
-  })
-  if (result === undefined) throw new Error('rendered Slug text did not expose a Slug mesh')
-  return result
 }
 
 export async function captureSlugSourceOutlineFidelity(options: {
@@ -902,7 +834,6 @@ async function createFlatSlugConformanceResources(
   signal?: AbortSignal,
   delivery: FontDelivery = 'baked',
   bakedArtifact?: SlugBakedArtifactSource,
-  slugExperimentVariant: SlugExperimentVariant = 'baseline',
 ): Promise<FlatSlugConformanceResources> {
   signal?.throwIfAborted()
   const canvas = document.createElement('canvas')
@@ -920,8 +851,8 @@ async function createFlatSlugConformanceResources(
   try {
     const loaded =
       bakedArtifact === undefined
-        ? await loadSlugFont(signal, fontFixture, delivery, undefined, slugExperimentVariant)
-        : await loadSlugBakedArtifact(bakedArtifact, signal, slugExperimentVariant)
+        ? await loadSlugFont(signal, fontFixture, delivery)
+        : await loadSlugBakedArtifact(bakedArtifact, signal)
     font = loaded.font
     const rasterKey = await slugDescriptorRasterKey()
     const specimen = rasterConformanceSpecimen(fontFixture)
@@ -1055,7 +986,6 @@ export async function loadSlugFont(
   fixture: BenchmarkFontFixture = 'inter',
   delivery: FontDelivery = 'baked',
   onProgress?: BakeProgressListener,
-  slugExperimentVariant: SlugExperimentVariant = 'baseline',
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1074,21 +1004,20 @@ export async function loadSlugFont(
       compressedBytes: metrics.sourceFontBytes,
       font: loaded.font,
       metrics,
-      raster: measuredSlugRaster(metrics, onProgress, slugExperimentVariant),
+      raster: measuredSlugRaster(metrics, onProgress),
     }
   }
   const response = await fetch(
     compressedFontUrls[fixture],
     signal === undefined ? undefined : { signal },
   )
-  return loadSlugFontResponse(response, manifest, metrics, signal, slugExperimentVariant)
+  return loadSlugFontResponse(response, manifest, metrics, signal)
 }
 
 /** Load a retained non-production Slug candidate through the ordinary registry boundary. */
 export async function loadSlugBakedArtifact(
   source: SlugBakedArtifactSource,
   signal?: AbortSignal,
-  slugExperimentVariant: SlugExperimentVariant = 'baseline',
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1098,13 +1027,7 @@ export async function loadSlugBakedArtifact(
 }> {
   signal?.throwIfAborted()
   const response = await fetch(source.url, signal === undefined ? undefined : { signal })
-  return loadSlugFontResponse(
-    response,
-    source,
-    createFontDeliveryMetrics('baked'),
-    signal,
-    slugExperimentVariant,
-  )
+  return loadSlugFontResponse(response, source, createFontDeliveryMetrics('baked'), signal)
 }
 
 async function loadSlugFontResponse(
@@ -1112,7 +1035,6 @@ async function loadSlugFontResponse(
   manifest: Pick<SlugBakedArtifactSource, 'compressed' | 'uncompressed'>,
   metrics: FontDeliveryMetrics,
   signal?: AbortSignal,
-  slugExperimentVariant: SlugExperimentVariant = 'baseline',
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1135,7 +1057,7 @@ async function loadSlugFontResponse(
     compressedBytes: manifest.compressed.bytes,
     font: await registry.registerAsset(artifact),
     metrics,
-    raster: createSlugExperimentRaster(slugExperimentVariant),
+    raster: slug,
   }
 }
 
@@ -1194,12 +1116,10 @@ function slugResourceConfiguration(resource: SlugResource): SlugRasterConfigurat
 function measuredSlugRaster(
   metrics: FontDeliveryMetrics,
   onProgress?: BakeProgressListener,
-  slugExperimentVariant: SlugExperimentVariant = 'baseline',
 ): SlugModule {
-  const experimentRaster = createSlugExperimentRaster(slugExperimentVariant)
-  const runtimeBaker = measuredRuntimeBaker(experimentRaster.runtimeBaker, metrics, onProgress)
+  const runtimeBaker = measuredRuntimeBaker(slug.runtimeBaker, metrics, onProgress)
   return defineRaster({
-    ...experimentRaster,
+    ...slug,
     ...(runtimeBaker === undefined ? {} : { runtimeBaker }),
   })
 }

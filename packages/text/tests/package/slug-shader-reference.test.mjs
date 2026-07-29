@@ -2,12 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  referenceBranchedRootContribution,
   decodeSlugHeader,
   referenceCoverage,
   referenceHorizontalIntersections,
   referenceRootCode,
-  referenceSelectedRootContribution,
   referenceSlugDilate,
   referenceVerticalIntersections,
   resolveSlugCurveTexel,
@@ -47,23 +45,6 @@ test('root eligibility is confined to the two ordered-root bits', () => {
   assert.equal(referenceRootCode(1, 1, 1), 0)
   assert.equal(referenceRootCode(-1, -1, -1), 0)
   assert.equal(referenceRootCode(1, -1, -1) & 1, 1)
-})
-
-test('per-root branches preserve the baseline coverage and weight arithmetic', () => {
-  for (const rootCode of [0, 1, 0x100, 0x101]) {
-    for (const axis of ['horizontal', 'vertical']) {
-      for (const [firstRoot, secondRoot, thickenFactor] of [
-        [-0.75, 0.25, 1],
-        [-0.125, 0.625, 1.75],
-        [0.5, -0.5, 0.6],
-      ]) {
-        assert.deepEqual(
-          referenceBranchedRootContribution(rootCode, firstRoot, secondRoot, thickenFactor, axis),
-          referenceSelectedRootContribution(rootCode, firstRoot, secondRoot, thickenFactor, axis),
-        )
-      }
-    }
-  }
 })
 
 test('stable q-form retains separated roots for the documented grazing regression', () => {
