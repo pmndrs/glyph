@@ -1,0 +1,28 @@
+{
+  "qualityCapturedAt": "2026-07-29T02:34:51.783Z",
+  "performanceCapturedAt": "2026-07-29T02:44:01.828Z",
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+  "hardwareConcurrency": 10,
+  "crossOriginIsolated": false,
+  "gpuAdapter": {
+    "architecture": "metal-3",
+    "description": "",
+    "device": "",
+    "vendor": "apple"
+  },
+  "baseCommit": "1ba4c6713579141c661e7cb2b5f089986258651a",
+  "implementationCandidateCommit": "dac20ea9df48e4b907fdd4211d0348dc3ed6c858",
+  "performanceCandidateCommit": "7ae82fd9e312b5c5a2e73ae48ff6fe6830429f69",
+  "rejectionCommit": "317511f88190ef059694a9ebc5dbc9e80e93a953",
+  "retainedArtifacts": {
+    "experiment-v0.json": "sha256:93a3c6efba6c288983b307305aee7becc502ef6f751bd05269eee4245ce3520e",
+    "quality-chromium149.json": "sha256:c8eebb34e0ec54f5a1a6a0ac92137108865d79d5eee36ba9e24d48e51f067e1a",
+    "performance-chromium149.json": "sha256:aea936b1bc41936477bbc5d206b81f33b0f810374bd9c35cbce27e998d2963c4"
+  },
+  "notVerified": [
+    "Node version used for capture",
+    "pnpm version used for capture",
+    "Rust version used for capture",
+    "operating-system build and physical machine model"
+  ]
+}

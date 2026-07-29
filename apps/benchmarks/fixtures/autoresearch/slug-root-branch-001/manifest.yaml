@@ -1,0 +1,26 @@
+id: slug-root-branch-001
+owner: autoresearch
+baseCommit: 1ba4c6713579141c661e7cb2b5f089986258651a
+target: raster/slug
+hypothesis: Structural per-root branches reduce eager ramp and weight work without changing pixels or artifact resources.
+changedVariables:
+  - root contribution shader control flow
+primaryWorkloads:
+  - text-ladder
+guardWorkloads:
+  - latin-ui
+  - arabic-marks
+  - devanagari
+  - cjk-dense
+  - script-cff
+  - pixel-outline
+backends:
+  - webgpu
+  - webgl2
+qualityPolicy: exact
+metrics:
+  - gpu_ms
+  - artifact_bytes
+  - gpu_memory_bytes
+  - generated_shader_bytes
+status: rejected

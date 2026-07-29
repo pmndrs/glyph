@@ -100,6 +100,12 @@
       "path": "apps/benchmarks/fixtures/results/slug-outline-conformance-chromium149.json",
       "sha256": "544411e41a2729fba393f74e404e37a1eeac87f4f4da80c9f21b87b62586a513",
       "bytes": 3404
+    },
+    {
+      "id": "slug-external-render-parity",
+      "path": "apps/benchmarks/fixtures/results/slug-external-render-parity-chromium149.json",
+      "sha256": "701f839443b2fbe2f84c78cafb4b403270b652f9bca5ed3544206e6345b88552",
+      "bytes": 5816
     }
   ]
 }

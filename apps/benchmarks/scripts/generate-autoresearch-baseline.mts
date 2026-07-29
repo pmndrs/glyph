@@ -43,6 +43,10 @@ const evidenceFiles = [
     'slug-outline-conformance',
     'apps/benchmarks/fixtures/results/slug-outline-conformance-chromium149.json',
   ],
+  [
+    'slug-external-render-parity',
+    'apps/benchmarks/fixtures/results/slug-external-render-parity-chromium149.json',
+  ],
 ] as const
 
 const [workspaceManifest, nodeVersion, rustToolchain] = await Promise.all([

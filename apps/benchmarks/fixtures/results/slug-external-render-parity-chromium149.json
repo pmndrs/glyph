@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 0,
+  "kind": "slug-external-render-parity-observation",
+  "capturedAt": "2026-07-29T08:04:57.901Z",
+  "authority": "public-font-loader-and-text-framebuffer",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  },
+  "gpuAdapter": {
+    "architecture": "metal-3",
+    "description": "",
+    "device": "",
+    "vendor": "apple"
+  },
+  "artifacts": [
+    {
+      "role": "font",
+      "file": "inter-external.font.glb",
+      "bytes": 172552,
+      "sha256": "91397ecdf2259a8abb7ac45f8e2206f3c5a95405ce0092f2466ec15b14ce8386"
+    },
+    {
+      "role": "raster",
+      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
+      "bytes": 119280,
+      "sha256": "eb46a30dbf428f011bb0091b3a49bbf81afaf0b8ebf3da8a2005b522c906acde"
+    },
+    {
+      "role": "raster-page",
+      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
+      "bytes": 2097348,
+      "sha256": "0a2b3e50a690683d1fbc71cc6367f8a2da863126983b93bd8192543ed88f044f"
+    },
+    {
+      "role": "raster-page",
+      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
+      "bytes": 376832,
+      "sha256": "71162d7b853301cc8e109adf17f3b4c1f10ab4ffbe16637cb8c01903a1508280"
+    },
+    {
+      "role": "raster-page",
+      "file": "slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
+      "bytes": 679936,
+      "sha256": "9b6f9f218c8b4585841893241a06af47e0ccb4cc9ddb1b4f887ebe886507ce82"
+    }
+  ],
+  "cases": [
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "width": 512,
+      "height": 512,
+      "framebufferHashes": {
+        "embedded": "f879dd9a45c14689f5008a8a355a164eab04c140d57edc9e5132a7339a2b4ecf",
+        "external": "f879dd9a45c14689f5008a8a355a164eab04c140d57edc9e5132a7339a2b4ecf"
+      },
+      "sourceTypes": {
+        "raster": "external",
+        "curve": "external",
+        "headers": "external",
+        "references": "external"
+      },
+      "glyphCounts": {
+        "embedded": 84,
+        "external": 84
+      },
+      "evaluatedCurves": {
+        "embedded": 470202,
+        "external": 470202
+      },
+      "fetches": [
+        {
+          "url": "transient:///inter-external.font.glb",
+          "count": 1
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
+          "count": 2
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
+          "count": 2
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
+          "count": 2
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
+          "count": 1
+        }
+      ],
+      "fetchContract": "core and companion once; page resources twice for public Text and independent CPU-reference decodes",
+      "embeddedRenderSubmitMs": 18.799999997019768,
+      "externalRenderSubmitMs": 8.100000001490116
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "width": 512,
+      "height": 512,
+      "framebufferHashes": {
+        "embedded": "b34a6866035a801f4fc767199215d9aa809515f32b0f8961d6e04b3ffc79bed0",
+        "external": "b34a6866035a801f4fc767199215d9aa809515f32b0f8961d6e04b3ffc79bed0"
+      },
+      "sourceTypes": {
+        "raster": "external",
+        "curve": "external",
+        "headers": "external",
+        "references": "external"
+      },
+      "glyphCounts": {
+        "embedded": 84,
+        "external": 84
+      },
+      "evaluatedCurves": {
+        "embedded": 470202,
+        "external": 470202
+      },
+      "fetches": [
+        {
+          "url": "transient:///inter-external.font.glb",
+          "count": 1
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-curves.ktx2",
+          "count": 2
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-headers.r32ui.bin",
+          "count": 2
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb-p0-references.r16ui.bin",
+          "count": 2
+        },
+        {
+          "url": "transient:///slug-6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09-7a0e184add86df5a220f16872425af319ba916237ae37ca72f5a9ce748271abb.glb",
+          "count": 1
+        }
+      ],
+      "fetchContract": "core and companion once; page resources twice for public Text and independent CPU-reference decodes",
+      "embeddedRenderSubmitMs": 18.700000002980232,
+      "externalRenderSubmitMs": 13.600000001490116
+    }
+  ]
+}
