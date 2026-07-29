@@ -73,9 +73,11 @@ export type ComparisonWorkloadStats = (
   readonly iconLabelSize: number
   readonly iconPoolCapacity: number
   readonly iconAssignedCount: number
+  readonly iconAssignmentSignature: string
   readonly iconFirstVisibleIndex: number
   readonly iconLastVisibleIndex: number
   readonly iconRecycleCount: number
+  readonly iconWindowRevision: number
   readonly iconOverscanRows: number
   readonly iconOverscanColumns: number
   readonly iconScrollX: number
@@ -288,6 +290,9 @@ export async function createComparisonWorkloadPreview(options: {
     const loadedFonts = activeIconFont === undefined ? [activeFont] : [activeFont, activeIconFont]
     const statsFont = activeIconFont ?? activeFont
     let iconRecycleCount = 0
+    let iconWindowRevision = 0
+    let iconAssignmentSignature = '[]'
+    let settledIconWindow: IconGridVirtualWindow | undefined
     let pendingIconWindow: IconGridVirtualWindow | undefined
     let iconWindowDrain: Promise<void> | undefined
     let iconWindowSuspended = false
@@ -337,6 +342,18 @@ export async function createComparisonWorkloadPreview(options: {
           sceneMs: finishedAt - sceneStartedAt,
           totalMs: finishedAt - readyStarted,
         })
+        if (next.workload === 'icon-grid') {
+          settleIconWindow(
+            iconGridVirtualWindow(
+              ICON_GRID_ITEMS.length,
+              next.fontSize,
+              width,
+              height,
+              -scene.position.x,
+              scene.position.y,
+            ),
+          )
+        }
       } catch (error) {
         disposeEntries(nextEntries)
         throw error
@@ -422,6 +439,20 @@ export async function createComparisonWorkloadPreview(options: {
         delete entry.virtualIconIndex
       }
       iconRecycleCount += recycled
+      settleIconWindow(window)
+    }
+
+    function settleIconWindow(window: IconGridVirtualWindow): void {
+      const assignments = iconGridAssignments(entries)
+      if (
+        assignments.length !== window.indices.length ||
+        assignments.some(({ index }, assignmentIndex) => index !== window.indices[assignmentIndex])
+      ) {
+        throw new Error('icon grid cannot publish a window before every assignment is coherent')
+      }
+      settledIconWindow = window
+      iconAssignmentSignature = JSON.stringify(assignments)
+      iconWindowRevision += 1
     }
 
     function requestIconWindowRefresh(): void {
@@ -671,6 +702,9 @@ export async function createComparisonWorkloadPreview(options: {
             scene.position.y,
             entries,
             iconRecycleCount,
+            iconWindowRevision,
+            iconAssignmentSignature,
+            settledIconWindow,
           ),
         }
         if (technique === 'bitmap') {
@@ -1427,6 +1461,43 @@ export interface IconGridVirtualWindow {
   readonly maximumScrollY: number
 }
 
+export interface IconGridAssignment {
+  readonly index: number
+  readonly content: string
+}
+
+export function iconGridAssignmentSignature(
+  entries: readonly {
+    readonly node: { readonly visible: boolean }
+    readonly sourceText: string
+    readonly virtualIconIndex?: number
+  }[],
+): string {
+  return JSON.stringify(iconGridAssignments(entries))
+}
+
+function iconGridAssignments(
+  entries: readonly {
+    readonly node: { readonly visible: boolean }
+    readonly sourceText: string
+    readonly virtualIconIndex?: number
+  }[],
+): readonly IconGridAssignment[] {
+  const assignments = entries
+    .filter(
+      (entry): entry is typeof entry & { readonly virtualIconIndex: number } =>
+        entry.node.visible && entry.virtualIconIndex !== undefined,
+    )
+    .map(({ sourceText, virtualIconIndex }) => ({ index: virtualIconIndex, content: sourceText }))
+    .sort((left, right) => left.index - right.index)
+  for (let index = 1; index < assignments.length; index += 1) {
+    if (assignments[index - 1]!.index === assignments[index]!.index) {
+      throw new Error(`icon grid assigned catalog index ${String(assignments[index]!.index)} twice`)
+    }
+  }
+  return assignments
+}
+
 export function iconGridLayout(
   itemCount: number,
   iconSize: number,
@@ -1568,6 +1639,9 @@ function iconGridStats(
   scrollY: number,
   entries: readonly WorkloadEntry[],
   recycleCount: number,
+  windowRevision: number,
+  assignmentSignature: string,
+  settledWindow: IconGridVirtualWindow | undefined,
 ): Pick<
   ComparisonWorkloadStats,
   | 'iconItemCount'
@@ -1579,9 +1653,11 @@ function iconGridStats(
   | 'iconLabelSize'
   | 'iconPoolCapacity'
   | 'iconAssignedCount'
+  | 'iconAssignmentSignature'
   | 'iconFirstVisibleIndex'
   | 'iconLastVisibleIndex'
   | 'iconRecycleCount'
+  | 'iconWindowRevision'
   | 'iconOverscanRows'
   | 'iconOverscanColumns'
   | 'iconScrollX'
@@ -1600,9 +1676,11 @@ function iconGridStats(
       iconLabelSize: 0,
       iconPoolCapacity: 0,
       iconAssignedCount: 0,
+      iconAssignmentSignature: '[]',
       iconFirstVisibleIndex: -1,
       iconLastVisibleIndex: -1,
       iconRecycleCount: 0,
+      iconWindowRevision: 0,
       iconOverscanRows: 0,
       iconOverscanColumns: 0,
       iconScrollX: 0,
@@ -1611,14 +1689,16 @@ function iconGridStats(
       iconMaximumScrollY: 0,
     }
   }
-  const window = iconGridVirtualWindow(
-    ICON_GRID_ITEMS.length,
-    configuration.fontSize,
-    viewportWidth,
-    viewportHeight,
-    scrollX,
-    scrollY,
-  )
+  const window =
+    settledWindow ??
+    iconGridVirtualWindow(
+      ICON_GRID_ITEMS.length,
+      configuration.fontSize,
+      viewportWidth,
+      viewportHeight,
+      scrollX,
+      scrollY,
+    )
   return {
     iconItemCount: ICON_GRID_ITEMS.length,
     iconLabelCount: ICON_GRID_ITEMS.length,
@@ -1629,9 +1709,11 @@ function iconGridStats(
     iconLabelSize: ICON_GRID_LABEL_SIZE,
     iconPoolCapacity: entries.length,
     iconAssignedCount: entries.filter(({ node }) => node.visible).length,
+    iconAssignmentSignature: assignmentSignature,
     iconFirstVisibleIndex: window.firstVisibleIndex,
     iconLastVisibleIndex: window.lastVisibleIndex,
     iconRecycleCount: recycleCount,
+    iconWindowRevision: windowRevision,
     iconOverscanRows: ICON_GRID_OVERSCAN_ROWS,
     iconOverscanColumns: ICON_GRID_OVERSCAN_COLUMNS,
     iconScrollX: window.scrollX,

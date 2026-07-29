@@ -1,0 +1,28 @@
+id: slug-hull-bands-001
+owner: milestone-9
+baseCommit: 4d39a4052747b24c582d835e496706f2e063b103
+target: raster/slug
+hypothesis: Packing conservative per-band axis hulls permits an exact early exit before curve texture loads and materially improves dense-source GPU time on both render backends.
+changedVariables:
+  - packed per-band axis hull resources and shader early exit
+primaryWorkloads:
+  - noto-sans-cjk-showcase text ladder at DPR 2
+  - dot-gothic-16 text ladder at DPR 2
+guardWorkloads:
+  - inter text ladder at DPR 2
+  - source-serif-4 text ladder at DPR 2
+  - dancing-script text ladder at DPR 2
+  - amiri text ladder at DPR 2
+  - noto-sans-devanagari text ladder at DPR 2
+  - seven-source conformance matrix at DPR 1 and 2
+backends:
+  - webgpu
+  - webgl2
+qualityPolicy: exact retained baseline pixels
+metrics:
+  - gpu_ms
+  - cpu_submit_ms
+  - evaluated_curves
+  - gzip_bytes
+  - gpu_memory_bytes
+status: rejected

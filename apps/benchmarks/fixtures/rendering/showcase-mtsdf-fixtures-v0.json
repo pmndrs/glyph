@@ -11,11 +11,11 @@
       },
       "uncompressed": {
         "bytes": 39347712,
-        "sha256": "ef14f28d0ddd7ec493d622ccc8ceea2ff28a3fa5ea0fea74fde85695733cb94f"
+        "sha256": "67cb1716a7d8f2665b6a85b747b1d2b00776b2fecb79dbdb4ae3a58b2c467f01"
       },
       "compressed": {
-        "bytes": 6979370,
-        "sha256": "1bcfc093e539acedad145650f939825fb6b9ad62742c3d1c5f8421f16ef9636a"
+        "bytes": 6798412,
+        "sha256": "1e1980e2b20341c5e7f531e970e37cb879da2907d5c84e9603414717bcf495c0"
       },
       "raster": {
         "kind": "msdf",
@@ -112,11 +112,11 @@
       },
       "uncompressed": {
         "bytes": 94640148,
-        "sha256": "67f577d47f26d7d91ae1c39347d8e23c57de39ad4e7cbd2ac57cdc224c4ddd31"
+        "sha256": "f8980dfea06b796029482fdafe2dd1a526a0385a2c826701c441617fe5b151db"
       },
       "compressed": {
-        "bytes": 14834912,
-        "sha256": "bbb7d827287cb59bfc2ced1cdb5640d3865f61378bac9b1516c55f4a7aa7ed1f"
+        "bytes": 14586203,
+        "sha256": "bdacb0084a8f52ba2faefaa5094fb05084bfa3f87c02993b98105e44a632fabc"
       },
       "raster": {
         "kind": "msdf",
@@ -311,11 +311,11 @@
       },
       "uncompressed": {
         "bytes": 13776032,
-        "sha256": "5b0ecf128398b763f43eaf00cea33c40848d31fe121ffed70ddd25381b955725"
+        "sha256": "f0d9bbebc98dadbcd0e51b9361f47f0cab27ceea847fca655f809d39b5913e06"
       },
       "compressed": {
-        "bytes": 3167995,
-        "sha256": "fd234e54f132902f9a03b28ce1a86b33fd56436facf3baf9a42c05a3345e9007"
+        "bytes": 3089728,
+        "sha256": "985160b8df9ee19838bfe8cdc21fdd15b311c6942da015265824e0387234a70d"
       },
       "raster": {
         "kind": "msdf",
@@ -370,11 +370,11 @@
       },
       "uncompressed": {
         "bytes": 175910040,
-        "sha256": "7a8f3662c8c59f0925c7a6755c3d492e04d369d4dd50e41d602d99badc954e42"
+        "sha256": "92880c86427512893bdd366fd2d8e3a8a5adb4a4bae077536cbeb1bc4e3db596"
       },
       "compressed": {
-        "bytes": 49364260,
-        "sha256": "8cd9c14177a7ffd7d9ea39f2f7cc05fabd8056c3e7f786c94dd39e7bbc18a283"
+        "bytes": 44935139,
+        "sha256": "08c63b4bfaffb2b5a17aa9c070dc8279aba3ab8835d66fb77722f4cdbaae67c3"
       },
       "raster": {
         "kind": "msdf",
@@ -712,8 +712,8 @@
         "sha256": "0780c0f0181adad865420df6e5cbdfddfc0214135ede578101d380a40fd5aded"
       },
       "compressed": {
-        "bytes": 6918918,
-        "sha256": "e74282fd81629a1ddaf68a6ed9a4e6f2c9fbf1ac5dff185acbe62b09105a1d67"
+        "bytes": 7227824,
+        "sha256": "75ef82e7ee28d6ee6135634fc13b68ba8fc8fe808c8ec3d8428d8e33cf37c3b6"
       },
       "raster": {
         "kind": "msdf",
@@ -803,11 +803,11 @@
       },
       "uncompressed": {
         "bytes": 3172756,
-        "sha256": "33f4f0ae285764749847bd7317ca441ee87b6d5016ac330574bf3f7414f3d2da"
+        "sha256": "9eaf968aef1c26437ea3fa24a7fc3929ead079b0e2d842f6c34266dc6711cadd"
       },
       "compressed": {
-        "bytes": 1044110,
-        "sha256": "25baa13362c36b501958da04beed16efdbb0e9cdc0d160849106c14cb477bd7a"
+        "bytes": 999289,
+        "sha256": "b1c2dba721f0e14d899f173810a60ea7fb6c16a81139686de89255750b9ff7a3"
       },
       "raster": {
         "kind": "msdf",
@@ -841,11 +841,11 @@
       },
       "uncompressed": {
         "bytes": 16966576,
-        "sha256": "3a29c30c58723154d8e2aa84db70694cc79257527fa426edc0ab877e1c527ef1"
+        "sha256": "a109afde5b7d2ea0b280a8b1e390a25e4061a3ebcd12310e981f6833fb9395d6"
       },
       "compressed": {
-        "bytes": 3702347,
-        "sha256": "07dbb8df47d9a2d2b4d57e3704d859f045d0455bc87f7ce7949dfc8226c11905"
+        "bytes": 3830952,
+        "sha256": "8a9275bac4039e35aef60e94e997af0b580e7a1352a33ae6ae04119dd69ccb37"
       },
       "raster": {
         "kind": "msdf",
@@ -907,11 +907,11 @@
       },
       "uncompressed": {
         "bytes": 13048400,
-        "sha256": "bbc84a34339d96cde2cd05672258070f349813e26c61904c2962c1920601822b"
+        "sha256": "f9a1e65d68dd52347e6c761f03e7a8d1117634007da3ae13f0c95811c1dc9b2c"
       },
       "compressed": {
-        "bytes": 2253050,
-        "sha256": "0887d6703fd7a3e55e93fbe6c80881b5dbd2c232d91985f136934fb41e749683"
+        "bytes": 2260260,
+        "sha256": "32a11f5802fcc3fbbaf0162c162d32588099bfd3f3580832ed29675ff2b36c74"
       },
       "raster": {
         "kind": "msdf",

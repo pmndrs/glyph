@@ -3153,6 +3153,9 @@ function ComparisonWorkloadViewport({
       data-icon-assigned-count={
         stats?.workload === 'icon-grid' ? stats.iconAssignedCount : undefined
       }
+      data-icon-assignment-signature={
+        stats?.workload === 'icon-grid' ? stats.iconAssignmentSignature : undefined
+      }
       data-icon-first-visible-index={
         stats?.workload === 'icon-grid' ? stats.iconFirstVisibleIndex : undefined
       }
@@ -3160,6 +3163,9 @@ function ComparisonWorkloadViewport({
         stats?.workload === 'icon-grid' ? stats.iconLastVisibleIndex : undefined
       }
       data-icon-recycle-count={stats?.workload === 'icon-grid' ? stats.iconRecycleCount : undefined}
+      data-icon-window-revision={
+        stats?.workload === 'icon-grid' ? stats.iconWindowRevision : undefined
+      }
       data-icon-overscan-rows={stats?.workload === 'icon-grid' ? stats.iconOverscanRows : undefined}
       data-icon-overscan-columns={
         stats?.workload === 'icon-grid' ? stats.iconOverscanColumns : undefined

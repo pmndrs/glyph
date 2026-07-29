@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 0,
+  "kind": "icon-grid-retained-evidence",
+  "capturedAt": "2026-07-29T09:31:40.711Z",
+  "authority": "causal-window-revision-and-exact-assignment-signature",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  },
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+  "gpuAdapter": {
+    "architecture": "metal-3",
+    "description": "",
+    "device": "",
+    "vendor": "apple"
+  },
+  "provenance": {
+    "catalogPath": "apps/benchmarks/fixtures/fonts/font-awesome-free-6.7.2/icons.json",
+    "catalogFixtureSha256": "1619fee77e078bc015218bd2c0ac0ae045c307b843bd09dba99c52e20ae5079d",
+    "catalogSourceUrl": "https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.7.2/metadata/icons.json",
+    "catalogSourceSha256": "a3a705d0e03c4fbdf1a61aece3d8fd462024b33794187ef7ee2a0764439170eb",
+    "catalogVersion": "6.7.2",
+    "fontPath": "apps/benchmarks/fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf",
+    "fontSha256": "af19d135d3a935b3ebfbd80320716ffe1202052c5f68dc2c5f1abc57005ac605",
+    "assignmentCatalogSha256": "42904af2641871abf4c3aa0cc931def489a8f13108f75c19adc7a0750c624dde"
+  },
+  "catalogItemCount": 1402,
+  "cases": [
+    {
+      "technique": "bitmap",
+      "traversal": "two-axis-serpentine-75-percent-viewport-stride",
+      "horizontalStops": 10,
+      "verticalStops": 14,
+      "windowsVisited": 140,
+      "uniqueWindowSignatures": 88,
+      "observedAssignmentCount": 1402,
+      "initialRevision": 1,
+      "finalRevision": 142,
+      "resetRevision": 143,
+      "minimumPoolCapacity": 143,
+      "maximumPoolCapacity": 143,
+      "maximumScrollX": 4261,
+      "maximumScrollY": 3360.75,
+      "finalAssignedCount": 139,
+      "finalMissingGlyphCount": 0,
+      "resetAssignedCount": 143,
+      "resetMissingGlyphCount": 0
+    },
+    {
+      "technique": "mtsdf",
+      "traversal": "two-axis-serpentine-75-percent-viewport-stride",
+      "horizontalStops": 10,
+      "verticalStops": 14,
+      "windowsVisited": 140,
+      "uniqueWindowSignatures": 88,
+      "observedAssignmentCount": 1402,
+      "initialRevision": 1,
+      "finalRevision": 142,
+      "resetRevision": 143,
+      "minimumPoolCapacity": 143,
+      "maximumPoolCapacity": 143,
+      "maximumScrollX": 4261,
+      "maximumScrollY": 3360.75,
+      "finalAssignedCount": 139,
+      "finalMissingGlyphCount": 0,
+      "resetAssignedCount": 143,
+      "resetMissingGlyphCount": 0
+    },
+    {
+      "technique": "slug",
+      "traversal": "two-axis-serpentine-75-percent-viewport-stride",
+      "horizontalStops": 10,
+      "verticalStops": 14,
+      "windowsVisited": 140,
+      "uniqueWindowSignatures": 88,
+      "observedAssignmentCount": 1402,
+      "initialRevision": 1,
+      "finalRevision": 142,
+      "resetRevision": 143,
+      "minimumPoolCapacity": 143,
+      "maximumPoolCapacity": 143,
+      "maximumScrollX": 4261,
+      "maximumScrollY": 3360.75,
+      "finalAssignedCount": 139,
+      "finalMissingGlyphCount": 0,
+      "resetAssignedCount": 143,
+      "resetMissingGlyphCount": 0
+    }
+  ]
+}

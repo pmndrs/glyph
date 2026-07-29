@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   comparisonWorkloadUpdateKind,
   dynamicLayoutWidths,
+  iconGridAssignmentSignature,
   iconGridLayout,
   iconGridVirtualWindow,
   ladderCssSizes,
@@ -105,6 +106,30 @@ describe('text ladder scale selection', () => {
 })
 
 describe('icon grid layout', () => {
+  it('publishes exact visible index/content assignments in catalog order', () => {
+    expect(
+      iconGridAssignmentSignature([
+        { node: { visible: true }, sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
+        { node: { visible: false }, sourceText: '\uf00d\nxmark', virtualIconIndex: 12 },
+        { node: { visible: true }, sourceText: '\uf007\nuser', virtualIconIndex: 7 },
+      ]),
+    ).toBe(
+      JSON.stringify([
+        { index: 7, content: '\uf007\nuser' },
+        { index: 41, content: '\uf002\nsearch' },
+      ]),
+    )
+  })
+
+  it('rejects duplicate visible catalog assignments', () => {
+    expect(() =>
+      iconGridAssignmentSignature([
+        { node: { visible: true }, sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
+        { node: { visible: true }, sourceText: '\uf003\nenvelope', virtualIconIndex: 41 },
+      ]),
+    ).toThrow('assigned catalog index 41 twice')
+  })
+
   it('places every item in a bounded row-major grid', () => {
     const layout = iconGridLayout(1_402, 48, 720)
     expect(layout.columns).toBe(38)
