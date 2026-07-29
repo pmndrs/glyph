@@ -35,6 +35,7 @@ import {
   ADVANCED_FONT_FIXTURES,
   SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
+  rasterConformanceSpecimen,
   selectableFontFixture,
   type BenchmarkFontFixture,
   type SelectableFontFixture,
@@ -74,6 +75,7 @@ import type {
   SlugTextLiveStats,
   SlugTextPreview,
 } from './renderer/slug-text'
+import type { RasterTechniqueComparison } from './renderer/raster-technique-compare'
 import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPreview,
@@ -248,6 +250,13 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
 ]
 
 const conformanceWorkloads: readonly WorkloadOption[] = [
+  {
+    id: 'mtsdf-slug-compare',
+    label: 'MSDF / Slug compare',
+    description:
+      'Renders MSDF and Slug side by side and compares their coverage in a live GPU heatmap.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+  },
   {
     id: 'runtime-fallback',
     label: 'Runtime fallback parity',
@@ -454,12 +463,16 @@ function Harness() {
   const [paintShadowEnabled, setPaintShadowEnabled] = useState(true)
   const [paintStrokePercent, setPaintStrokePercent] = useState(50)
   const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW)
+  const [comparisonText, setComparisonText] = useState(
+    () => rasterConformanceSpecimen(location.fontFixture).text,
+  )
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState)
   const [advancedFontFixture, setAdvancedFontFixture] = useState<BenchmarkFontFixture>('inter')
   const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot())
   const [fontNoticesOpen, setFontNoticesOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const reportCaptureRequested = useRef(false)
+  const conformanceRunRevision = useRef(0)
 
   const workload = workloadById(location.mode, location.workload)
   const fontFixture = location.fontFixture
@@ -487,7 +500,9 @@ function Harness() {
       next.workload !== undefined
     if (replacesLiveSurface) setLiveStats(undefined)
     if (replacesLiveSurface || next.fontFixture !== undefined) {
+      conformanceRunRevision.current += 1
       setSummary(undefined)
+      setEvent(undefined)
       setLiveCapture(undefined)
     }
     setLocationState(value)
@@ -517,6 +532,7 @@ function Harness() {
   }
 
   function runConformance(): void {
+    const revision = ++conformanceRunRevision.current
     setError(undefined)
     startTransition(async () => {
       try {
@@ -544,11 +560,15 @@ function Harness() {
           input: { fontFixture: activeFontFixture },
           controls: { dpr, samples, warmup },
           environment,
-          onEvent: setEvent,
+          onEvent: (nextEvent) => {
+            if (revision === conformanceRunRevision.current) setEvent(nextEvent)
+          },
         })
-        setSummary(value)
+        if (revision === conformanceRunRevision.current) setSummary(value)
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : String(caught))
+        if (revision === conformanceRunRevision.current) {
+          setError(caught instanceof Error ? caught.message : String(caught))
+        }
       }
     })
   }
@@ -628,6 +648,7 @@ function Harness() {
       delivery={location.delivery}
       dpr={dpr}
       conformanceView={conformanceView}
+      comparisonText={comparisonText}
       fontFixture={activeFontFixture}
       liveStats={liveStats}
       mode={location.mode}
@@ -658,6 +679,7 @@ function Harness() {
       onFontNotices={() => setFontNoticesOpen(true)}
       onConformanceReset={() => setConformanceView(INITIAL_CONFORMANCE_VIEW)}
       onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
+      onComparisonText={setComparisonText}
       onFontSize={(value) => {
         setFontSize(value)
         invalidateLiveCapture()
@@ -708,8 +730,14 @@ function Harness() {
     />
   )
 
+  const liveTechniqueComparison =
+    location.mode === 'conformance' && location.workload === 'mtsdf-slug-compare'
   const actionReady =
-    available && backendAvailable && !isPending && (location.mode === 'conformance' || liveStats)
+    available &&
+    backendAvailable &&
+    !isPending &&
+    !liveTechniqueComparison &&
+    (location.mode === 'conformance' || liveStats)
 
   const scene = (
     <Scene
@@ -717,6 +745,7 @@ function Harness() {
       fontFixture={fontFixture}
       dpr={dpr}
       conformanceView={conformanceView}
+      comparisonText={comparisonText}
       error={error}
       event={event}
       grid={showGrid}
@@ -754,6 +783,7 @@ function Harness() {
         phone={phone}
         location={location}
         mode={location.mode}
+        liveTechniqueComparison={liveTechniqueComparison}
         pending={isPending}
         ready={Boolean(actionReady)}
         webgpu={environment.webgpu}
@@ -936,6 +966,7 @@ function TopBar({
   phone,
   location,
   mode,
+  liveTechniqueComparison,
   pending,
   ready,
   webgpu,
@@ -950,6 +981,7 @@ function TopBar({
   readonly phone: boolean
   readonly location: HarnessLocation
   readonly mode: HarnessMode
+  readonly liveTechniqueComparison: boolean
   readonly pending: boolean
   readonly ready: boolean
   readonly webgpu: boolean
@@ -1038,7 +1070,9 @@ function TopBar({
               ? location.view === 'report'
                 ? 'Return to live benchmark'
                 : 'Capture report'
-              : 'Run conformance'
+              : liveTechniqueComparison
+                ? 'Live GPU comparison'
+                : 'Run conformance'
           }
           className="px-2 text-[10px] sm:px-3 sm:text-xs"
           disabled={!ready}
@@ -1056,6 +1090,8 @@ function TopBar({
                 <span className="hidden sm:inline">Capture report</span>
               </>
             )
+          ) : liveTechniqueComparison ? (
+            'Live compare'
           ) : (
             <>
               <span className="sm:hidden">Run</span>
@@ -1216,6 +1252,7 @@ function Scene({
   activityWorkloads,
   animationEnabled,
   animationSpeed,
+  comparisonText,
   conformanceView,
   dpr,
   error,
@@ -1242,6 +1279,7 @@ function Scene({
   readonly activityWorkloads: ActivityWorkloads
   readonly animationEnabled: boolean
   readonly animationSpeed: number
+  readonly comparisonText: string
   readonly conformanceView: ConformanceView
   readonly dpr: 1 | 2
   readonly error: string | undefined
@@ -1336,11 +1374,12 @@ function Scene({
           ) : (
             <ConformanceSurface
               backend={location.backend}
+              comparisonText={comparisonText}
               conformanceView={conformanceView}
               dpr={dpr}
               event={event}
               fontFixture={fontFixture}
-              key={`${location.backend}-${String(dpr)}-${fontFixture}-${conformanceWorkload.id}`}
+              key={`${location.backend}-${String(dpr)}-${fontFixture}-${conformanceWorkload.id === 'mtsdf-slug-compare' ? 'paired' : location.technique}-${conformanceWorkload.id}`}
               summary={summary}
               technique={location.technique}
               workload={conformanceWorkload.id}
@@ -1600,6 +1639,268 @@ function BenchmarkSurface({
 }
 
 function ConformanceSurface({
+  workload,
+  ...properties
+}: {
+  readonly backend: GraphicsBackend
+  readonly comparisonText: string
+  readonly conformanceView: ConformanceView
+  readonly dpr: 1 | 2
+  readonly event: RunnerEvent | undefined
+  readonly fontFixture: SelectableFontFixture
+  readonly summary: BenchmarkSummary | undefined
+  readonly technique: RasterTechnique
+  readonly workload: string
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
+  readonly onZoom: (zoom: number) => void
+}) {
+  return workload === 'mtsdf-slug-compare' ? (
+    <RasterTechniqueComparisonSurface
+      backend={properties.backend}
+      comparisonText={properties.comparisonText}
+      conformanceView={properties.conformanceView}
+      dpr={properties.dpr}
+      fontFixture={properties.fontFixture}
+      onPan={properties.onPan}
+      onZoom={properties.onZoom}
+    />
+  ) : (
+    <FiniteConformanceSurface {...properties} workload={workload} />
+  )
+}
+
+function RasterTechniqueComparisonSurface({
+  backend,
+  comparisonText,
+  conformanceView,
+  dpr,
+  fontFixture,
+  onPan,
+  onZoom,
+}: {
+  readonly backend: GraphicsBackend
+  readonly comparisonText: string
+  readonly conformanceView: ConformanceView
+  readonly dpr: 1 | 2
+  readonly fontFixture: SelectableFontFixture
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void
+  readonly onZoom: (zoom: number) => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const comparisonRef = useRef<RasterTechniqueComparison>(undefined)
+  const [ready, setReady] = useState(false)
+  const [committedText, setCommittedText] = useState('')
+  const [error, setError] = useState<string>()
+  const publishError = useEffectEvent((caught: unknown) => {
+    if (caught instanceof DOMException && caught.name === 'AbortError') return
+    setError(caught instanceof Error ? caught.message : String(caught))
+  })
+  const initialView = useEffectEvent(() => conformanceView)
+  const initialText = useEffectEvent(() => comparisonText)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (canvas === null || container === null) return
+    const controller = new AbortController()
+    let comparison: RasterTechniqueComparison | undefined
+    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined
+    let cancelled = false
+    const resize = (): void => {
+      if (comparison === undefined) return
+      const bounds = container.getBoundingClientRect()
+      comparison.resize(Math.max(1, bounds.width), Math.max(1, bounds.height))
+    }
+    const observer = new ResizeObserver(resize)
+    observer.observe(container)
+    const initialization = (async () => {
+      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal)
+      try {
+        if (cancelled) return
+        const { createRasterTechniqueComparison } =
+          await import('./renderer/raster-technique-compare')
+        if (cancelled) return
+        const bounds = container.getBoundingClientRect()
+        const optionsText = initialText()
+        const created = await createRasterTechniqueComparison({
+          backend,
+          canvas,
+          dpr,
+          fontFixture,
+          height: Math.max(1, bounds.height),
+          onError: publishError,
+          signal: controller.signal,
+          text: optionsText,
+          width: Math.max(1, bounds.width),
+        })
+        if (cancelled) {
+          await created.dispose()
+          return
+        }
+        comparison = created
+        let text = optionsText
+        let latestText = initialText()
+        while (latestText !== text) {
+          text = latestText
+          await created.setText(text)
+          latestText = initialText()
+        }
+        if (cancelled) return
+        const view = initialView()
+        created.setView(view.zoom, view.panXPercent, view.panYPercent)
+        resize()
+        comparisonRef.current = created
+        setCommittedText(text)
+        setReady(true)
+        setError(undefined)
+      } catch (caught) {
+        const failedComparison = comparison
+        comparison = undefined
+        if (comparisonRef.current === failedComparison) comparisonRef.current = undefined
+        try {
+          await failedComparison?.dispose()
+        } finally {
+          lifecycleLease.release()
+          lifecycleLease = undefined
+        }
+        throw caught
+      }
+    })()
+    void initialization.catch(publishError)
+    return () => {
+      cancelled = true
+      controller.abort()
+      observer.disconnect()
+      void initialization.then(
+        async () => {
+          try {
+            if (comparison === undefined) return
+            const current = comparison
+            comparison = undefined
+            if (comparisonRef.current === current) comparisonRef.current = undefined
+            await current.dispose()
+          } finally {
+            lifecycleLease?.release()
+            lifecycleLease = undefined
+          }
+        },
+        () => {
+          lifecycleLease?.release()
+          lifecycleLease = undefined
+        },
+      )
+    }
+  }, [backend, dpr, fontFixture])
+
+  useEffect(() => {
+    comparisonRef.current?.setView(
+      conformanceView.zoom,
+      conformanceView.panXPercent,
+      conformanceView.panYPercent,
+    )
+  }, [conformanceView])
+
+  useEffect(() => {
+    let current = true
+    void comparisonRef.current
+      ?.setText(comparisonText)
+      .then(() => {
+        if (current) {
+          setCommittedText(comparisonText)
+          setError(undefined)
+        }
+      })
+      .catch(publishError)
+    return () => {
+      current = false
+    }
+  }, [comparisonText])
+
+  const zoomFromWheel = useEffectEvent((deltaY: number) => {
+    const direction = deltaY < 0 ? 0.25 : -0.25
+    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)))
+  })
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (canvas === null) return
+    const handleWheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      zoomFromWheel(event.deltaY)
+    }
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', handleWheel)
+  }, [])
+
+  function moveView(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    onPan((event.movementX / bounds.width) * 300, (event.movementY / bounds.height) * 100)
+  }
+
+  return (
+    <div
+      className="grid min-h-0 grid-rows-[auto_minmax(420px,1fr)_auto] gap-3"
+      data-comparison-text={committedText}
+      data-conformance-ready={String(ready)}
+      data-testid="raster-technique-comparison"
+    >
+      <div className="grid grid-cols-3 overflow-hidden rounded-md border border-border bg-surface">
+        <Metric label="Pipeline" value="GPU only" />
+        <Metric label="Readback / CPU diff" value="0 / 0" />
+        <Metric label="Heatmap gain" value="8×" />
+      </div>
+      <div
+        ref={containerRef}
+        className="relative min-h-[420px] overflow-hidden rounded-md border border-border bg-background"
+      >
+        <canvas
+          ref={canvasRef}
+          aria-label="Live MSDF and Slug GPU comparison"
+          className={`absolute inset-0 size-full touch-none bg-background ${conformanceView.zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
+          data-pan-x={conformanceView.panXPercent}
+          data-pan-y={conformanceView.panYPercent}
+          data-zoom={conformanceView.zoom}
+          onDoubleClick={() => onZoom(conformanceView.zoom === 1 ? 2 : 1)}
+          onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+          onPointerMove={moveView}
+          onPointerCancel={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId)
+            }
+          }}
+          onPointerUp={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+              event.currentTarget.releasePointerCapture(event.pointerId)
+            }
+          }}
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-3 border-b border-border bg-black/70 font-mono text-[9px] uppercase tracking-wider text-muted">
+          <span className="border-r border-border px-3 py-2">MSDF</span>
+          <span className="border-r border-border px-3 py-2">Slug</span>
+          <span className="px-3 py-2">Delta ×8 · red MSDF / cyan Slug</span>
+        </div>
+        {!ready && error === undefined && (
+          <div className="absolute inset-0 grid place-items-center bg-background text-[10px] text-muted">
+            INITIALIZING GPU COMPARISON
+          </div>
+        )}
+        {error !== undefined && (
+          <div className="absolute inset-0 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
+            {error}
+          </div>
+        )}
+      </div>
+      <div className="rounded-md border border-border bg-surface p-3 text-[10px] text-dim">
+        Both candidates share the same text, layout dimensions, camera, physical target size, and
+        view transform. The heatmap samples both render targets directly on the GPU; black agrees,
+        red is extra MSDF coverage, and cyan is extra Slug coverage.
+      </div>
+    </div>
+  )
+}
+
+function FiniteConformanceSurface({
   backend,
   conformanceView,
   dpr,
@@ -1648,7 +1949,9 @@ function ConformanceSurface({
     setError(caught instanceof Error ? caught.message : String(caught))
   })
   useEffect(() => {
+    if (summary === undefined) return
     const controller = new AbortController()
+    let cancelled = false
     const request =
       workload === 'runtime-fallback'
         ? import('./renderer/runtime-fallback-conformance').then(
@@ -1726,9 +2029,18 @@ function ConformanceSurface({
                     signal: controller.signal,
                   }),
                 }))
-    void request.then(publishCapture).catch(publishError)
-    return () => controller.abort()
-  }, [backend, dpr, fontFixture, technique, workload])
+    void request
+      .then((value) => {
+        if (!cancelled) publishCapture(value)
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) publishError(caught)
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [backend, dpr, fontFixture, summary, technique, workload])
 
   const bitmapCapture = capture?.kind === 'bitmap' ? capture.value : undefined
   const mtsdfCapture = capture?.kind === 'mtsdf' ? capture.value : undefined
@@ -3484,6 +3796,7 @@ function Controls({
   animationSpeed,
   backend,
   delivery,
+  comparisonText,
   conformanceView,
   dpr,
   fontFixture,
@@ -3509,6 +3822,7 @@ function Controls({
   onDelivery,
   onAnimationEnabled,
   onAnimationSpeed,
+  onComparisonText,
   onConformanceReset,
   onConformanceZoom,
   onDpr,
@@ -3530,6 +3844,7 @@ function Controls({
   readonly animationSpeed: number
   readonly backend: GraphicsBackend
   readonly delivery: FontDelivery
+  readonly comparisonText: string
   readonly conformanceView: ConformanceView
   readonly dpr: 1 | 2
   readonly fontFixture: BenchmarkFontFixture
@@ -3555,6 +3870,7 @@ function Controls({
   readonly onDelivery: (delivery: FontDelivery) => void
   readonly onAnimationEnabled: (value: boolean) => void
   readonly onAnimationSpeed: (value: number) => void
+  readonly onComparisonText: (value: string) => void
   readonly onConformanceReset: () => void
   readonly onConformanceZoom: (zoom: number) => void
   readonly onDpr: (dpr: 1 | 2) => void
@@ -3680,6 +3996,15 @@ function Controls({
           <Button variant="secondary" onClick={onConformanceReset}>
             Reset zoom
           </Button>
+        </div>
+      )}
+      {mode === 'conformance' && workload === 'mtsdf-slug-compare' && (
+        <div className="rounded-md border border-border bg-surface p-3">
+          <TextareaField
+            label="Comparison text"
+            value={comparisonText}
+            onChange={(event) => onComparisonText(event.currentTarget.value)}
+          />
         </div>
       )}
       {mode === 'benchmark' && (
