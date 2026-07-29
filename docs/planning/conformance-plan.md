@@ -36,8 +36,8 @@ sources:
     title: "Vitexec"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-27T01:29:13Z"
+  by: "openai-codex/gpt-5.6"
+  at: "2026-07-29T15:36:00Z"
 ---
 
 # Shaping and layout conformance plan
@@ -387,6 +387,8 @@ Status: ✅ implemented by [`.github/workflows/ci.yml`](../../.github/workflows/
 The workflow installs the exact repository Node, pnpm, stable Rust, and Wasm target pins through mise, installs dependencies from the frozen lockfile, and runs `pnpm check` with headless Chromium. Third-party actions use immutable commit SHAs annotated with their verified current release. Vitexec, hardware-GPU claims, timing gates, and coverage-guided nightly fuzzing remain outside this tier.
 
 Wasm runtime portability is verified through the generated ABI and exact source-to-product behavior. Release builds also remap checkout and Cargo paths and enforce exact optimized sizes. An exact Wasm hash identifies output from the canonical release builder: pinned native Rust/Binaryen builds on macOS arm64 and Ubuntu x64 can encode equivalent modules with different internal function-index order, even though the modules have equal length and produce byte-identical artifacts. CI retains failed Wasm outputs for seven days so any future divergence can be compared directly rather than inferred from a hash alone.
+
+GPU framebuffer hashes are portable gates only when an independent byte-level oracle proves exact composition. Filtered analytic coverage may vary across native drivers and SwiftShader while remaining correct. MTSDF and Slug therefore require stable pixels across samples from one renderer invocation, authenticated inputs and resource invariants, and bounded error against their independent scalar CPU reconstructions; hardware-specific hashes remain labeled observations rather than CI expectations.
 
 - formatting and package-owned unit tests;
 - compiled-artifact package integration tests;

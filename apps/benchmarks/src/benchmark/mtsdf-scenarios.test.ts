@@ -97,17 +97,26 @@ describe('MTSDF scenario acceptance', () => {
       ]),
     ).toThrow('runtime-baked rendering diverged')
   })
-  it('rejects a deterministic substitute for the canonical WebGL2 scene', () => {
+  it('accepts renderer-specific MTSDF pixels but rejects drift within one run', () => {
     const scenario = scenarioById('mtsdf-text-scenes')
     expect(scenario.validate([sceneMeasurement])).toContain('deterministic MTSDF')
-    expect(() => scenario.validate([{ ...sceneMeasurement, hash: 'static-substitute' }])).toThrow(
-      'scene evidence drifted',
-    )
+    expect(() =>
+      scenario.validate([sceneMeasurement, { ...sceneMeasurement, hash: 'second-renderer-frame' }]),
+    ).toThrow('Output hash changed between samples')
   })
 
   it('rejects sampling error outside the reviewed base-level envelope', () => {
     const scenario = scenarioById('mtsdf-sampling-conformance')
     expect(scenario.validate([samplingMeasurement])).toContain('CPU MTSDF comparison')
+    expect(
+      scenario.validate([{ ...samplingMeasurement, hash: 'renderer-specific-frame' }]),
+    ).toContain('CPU MTSDF comparison')
+    expect(() =>
+      scenario.validate([
+        samplingMeasurement,
+        { ...samplingMeasurement, hash: 'renderer-specific-frame' },
+      ]),
+    ).toThrow('Output hash changed between samples')
     expect(() =>
       scenario.validate([
         {
