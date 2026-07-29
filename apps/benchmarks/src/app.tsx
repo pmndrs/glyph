@@ -591,102 +591,72 @@ function Harness() {
     />
   );
 
-  if (zen) {
-    const zenFontOptions =
-      location.workload === 'icon-grid'
-        ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
-        : location.workload === 'advanced-shaping'
-          ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
-          : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
-    const payload = createPayloadSummary({
-      delivery: location.delivery,
-      fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
-      fontFixture: activeFontFixture,
-      ...(liveStats === undefined ? {} : { liveStats }),
-      packageSizes,
-      technique: location.technique,
-      workload: location.workload,
-    });
-    return (
-      <ZenLayout
-        controls={controls}
-        fontOptions={zenFontOptions}
-        fontValue={location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture}
-        payload={<ZenPayloadPills summary={payload} />}
-        scene={scene}
-        techniqueControl={
-          <TechniqueSwitcher
-            className="w-[180px]"
-            presentation="zen"
-            technique={location.technique}
-            onTechnique={selectTechnique}
-          />
-        }
-        telemetry={<TelemetryCharts presentation="zen" stats={liveStats} />}
-        workloadOptions={workloadsFor('benchmark').map((option) => ({
-          disabled: option.techniques[location.technique].kind !== 'ready',
-          label: option.label,
-          value: option.id,
-        }))}
-        workloadValue={location.workload}
-        onExit={() => setLocation({ layout: 'main' })}
-        onFont={(value) => {
-          if (location.workload === 'icon-grid') return;
-          if (location.workload === 'advanced-shaping') {
-            setAdvancedFontFixture(value as BenchmarkFontFixture);
-            invalidateLiveCapture();
-            return;
-          }
-          setLocation({ fontFixture: selectableFontFixture(value) });
-        }}
-        onWorkload={(workloadId) => setLocation({ workload: workloadId, view: 'scene' })}
-      />
-    );
-  }
+  const zenFontOptions = zen
+    ? location.workload === 'icon-grid'
+      ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
+      : location.workload === 'advanced-shaping'
+        ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
+        : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
+    : [];
+  const zenPayload = zen
+    ? createPayloadSummary({
+        delivery: location.delivery,
+        fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
+        fontFixture: activeFontFixture,
+        ...(liveStats === undefined ? {} : { liveStats }),
+        packageSizes,
+        technique: location.technique,
+        workload: location.workload,
+      })
+    : undefined;
 
   return (
-    <div className="h-dvh overflow-hidden bg-background text-foreground">
-      <TopBar
-        compact={!desktop}
-        phone={phone}
-        location={location}
-        mode={location.mode}
-        liveTechniqueComparison={liveTechniqueComparison}
-        pending={isPending}
-        ready={Boolean(actionReady)}
-        webgpu={environment.webgpu}
-        onAction={
-          location.mode === 'benchmark'
-            ? location.view === 'report'
-              ? () => setLocation({ view: 'scene' })
-              : captureWindow
-            : runConformance
-        }
-        onControls={() => {
-          setWorkloadPanelOpen(false);
-          setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
-        }}
-        onMenu={() => {
-          if (!workloadPanelOpen && location.view === 'controls') {
-            setLocation({ view: 'scene' });
+    <div className="relative h-dvh overflow-hidden bg-background text-foreground">
+      {!zen && (
+        <TopBar
+          compact={!desktop}
+          phone={phone}
+          location={location}
+          mode={location.mode}
+          liveTechniqueComparison={liveTechniqueComparison}
+          pending={isPending}
+          ready={Boolean(actionReady)}
+          webgpu={environment.webgpu}
+          onAction={
+            location.mode === 'benchmark'
+              ? location.view === 'report'
+                ? () => setLocation({ view: 'scene' })
+                : captureWindow
+              : runConformance
           }
-          setWorkloadPanelOpen((open) => !open);
-        }}
-        onMode={selectMode}
-        onTechnique={selectTechnique}
-        onZenMode={() => setLocation({ layout: 'zen', mode: 'benchmark', view: 'scene' })}
-        workloadPanelOpen={workloadPanelOpen}
-      />
+          onControls={() => {
+            setWorkloadPanelOpen(false);
+            setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
+          }}
+          onMenu={() => {
+            if (!workloadPanelOpen && location.view === 'controls') {
+              setLocation({ view: 'scene' });
+            }
+            setWorkloadPanelOpen((open) => !open);
+          }}
+          onMode={selectMode}
+          onTechnique={selectTechnique}
+          onZenMode={() => setLocation({ layout: 'zen', mode: 'benchmark', view: 'scene' })}
+          workloadPanelOpen={workloadPanelOpen}
+        />
+      )}
       <div
         className={
-          desktop
-            ? 'grid h-[calc(100dvh-52px)] transition-[grid-template-columns] duration-200'
-            : phone
-              ? 'h-[calc(100dvh-52px)] pb-[58px]'
-              : 'h-[calc(100dvh-52px)]'
+          zen
+            ? 'absolute inset-0 grid min-h-0 min-w-0 grid-cols-[0_minmax(0,1fr)_0] overflow-hidden'
+            : desktop
+              ? 'grid h-[calc(100dvh-52px)] transition-[grid-template-columns] duration-200'
+              : phone
+                ? 'h-[calc(100dvh-52px)] pb-[58px]'
+                : 'h-[calc(100dvh-52px)]'
         }
         style={
-          desktop
+          !zen && desktop
             ? {
                 gridTemplateColumns: workloadPanelOpen
                   ? '224px minmax(640px, 1fr) 288px'
@@ -695,48 +665,64 @@ function Harness() {
             : undefined
         }
       >
-        <div className={desktop ? 'min-w-0 overflow-hidden' : 'hidden'}>
-          <WorkloadRail
-            activeFontFixture={activeFontFixture}
-            className="h-full w-56"
-            fontFixture={fontFixture}
-            location={location}
-            showcaseFrame={showcaseFrame}
-            onFontFixture={(value) => setLocation({ fontFixture: value })}
-            onAdvancedFontFixture={(value) => {
-              setAdvancedFontFixture(value);
-              invalidateLiveCapture();
-            }}
-            onLocation={setLocation}
-            onTechnique={selectTechnique}
-          />
+        <div className={zen ? 'invisible min-w-0 overflow-hidden' : desktop ? 'min-w-0 overflow-hidden' : 'hidden'}>
+          {!zen && (
+            <WorkloadRail
+              activeFontFixture={activeFontFixture}
+              className="h-full w-56"
+              fontFixture={fontFixture}
+              location={location}
+              showcaseFrame={showcaseFrame}
+              onFontFixture={(value) => setLocation({ fontFixture: value })}
+              onAdvancedFontFixture={(value) => {
+                setAdvancedFontFixture(value);
+                invalidateLiveCapture();
+              }}
+              onLocation={setLocation}
+              onTechnique={selectTechnique}
+            />
+          )}
         </div>
         <main
           className={
-            desktop
-              ? 'min-w-0 overflow-hidden border-r border-border bg-background p-4'
-              : 'h-full min-h-0 overflow-hidden p-3'
+            zen
+              ? 'h-full min-h-0 min-w-0 overflow-hidden'
+              : desktop
+                ? 'min-w-0 overflow-hidden border-r border-border bg-background p-4'
+                : 'h-full min-h-0 overflow-hidden p-3'
           }
         >
-          <div className={location.view === 'report' || location.view === 'export' ? 'hidden' : 'h-full'}>{scene}</div>
-          {!desktop && location.view === 'controls' && (
+          <div className={zen || (location.view !== 'report' && location.view !== 'export') ? 'h-full' : 'hidden'}>
+            {scene}
+          </div>
+          {!zen && !desktop && location.view === 'controls' && (
             <CompactSheet phone={phone} title="Controls" onClose={() => setLocation({ view: 'scene' })}>
               {controls}
             </CompactSheet>
           )}
-          {location.view === 'report' && (
+          {!zen && location.view === 'report' && (
             <div className="h-full overflow-y-auto overscroll-contain">
               <Report liveCapture={liveCapture} summary={summary} />
             </div>
           )}
-          {location.view === 'export' && (
+          {!zen && location.view === 'export' && (
             <div className="h-full overflow-y-auto overscroll-contain">
               <ExportPanel liveCapture={liveCapture} summary={summary} />
             </div>
           )}
         </main>
-        <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>{controls}</aside>
-        {!desktop && workloadPanelOpen && (
+        <aside
+          className={
+            zen
+              ? 'invisible min-w-0 overflow-hidden'
+              : desktop
+                ? 'overflow-auto overscroll-contain bg-chrome p-4'
+                : 'hidden'
+          }
+        >
+          {!zen && controls}
+        </aside>
+        {!zen && !desktop && workloadPanelOpen && (
           <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
             <WorkloadRail
               activeFontFixture={activeFontFixture}
@@ -758,8 +744,42 @@ function Harness() {
             />
           </CompactWorkloadPanel>
         )}
-        {!desktop && phone && <MobileNavigation location={location} onLocation={setLocation} />}
+        {!zen && !desktop && phone && <MobileNavigation location={location} onLocation={setLocation} />}
       </div>
+      {zen && zenPayload !== undefined && (
+        <ZenLayout
+          controls={controls}
+          fontOptions={zenFontOptions}
+          fontValue={location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture}
+          payload={<ZenPayloadPills summary={zenPayload} />}
+          techniqueControl={
+            <TechniqueSwitcher
+              className="w-[180px]"
+              presentation="zen"
+              technique={location.technique}
+              onTechnique={selectTechnique}
+            />
+          }
+          telemetry={<TelemetryCharts presentation="zen" stats={liveStats} />}
+          workloadOptions={workloadsFor('benchmark').map((option) => ({
+            disabled: option.techniques[location.technique].kind !== 'ready',
+            label: option.label,
+            value: option.id,
+          }))}
+          workloadValue={location.workload}
+          onExit={() => setLocation({ layout: 'main' })}
+          onFont={(value) => {
+            if (location.workload === 'icon-grid') return;
+            if (location.workload === 'advanced-shaping') {
+              setAdvancedFontFixture(value as BenchmarkFontFixture);
+              invalidateLiveCapture();
+              return;
+            }
+            setLocation({ fontFixture: selectableFontFixture(value) });
+          }}
+          onWorkload={(workloadId) => setLocation({ workload: workloadId, view: 'scene' })}
+        />
+      )}
       {fontNoticesOpen && (
         <Suspense fallback={null}>
           <FontNoticesDialog onClose={() => setFontNoticesOpen(false)} />
@@ -1122,36 +1142,56 @@ function BenchmarkSurface({
         onStats={onStats}
       />
     );
-  if (presentation === 'zen') {
-    return (
-      <div className="flex h-full min-h-0 overflow-hidden" data-testid="benchmark-surface">
-        {viewport}
-      </div>
-    );
-  }
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3" data-testid="benchmark-surface">
-      <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,0.55fr))] gap-px overflow-hidden rounded-md border border-border bg-border">
-        <TelemetryCharts stats={stats} />
-        <div className="metric-summary-grid bg-surface">
-          <Metric
-            label="Glyphs / draws"
-            value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
-          />
-        </div>
-        <div className="metric-summary-grid bg-surface">
-          <Metric label="Missing glyphs" value={stats === undefined ? '—' : String(stats.missingGlyphCount)} />
-        </div>
+    <div
+      className={
+        presentation === 'zen'
+          ? 'grid h-full min-h-0 grid-rows-[0_minmax(0,1fr)] overflow-hidden'
+          : 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3'
+      }
+      data-testid="benchmark-surface"
+    >
+      <div
+        className={
+          presentation === 'main'
+            ? 'grid grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,0.55fr))] gap-px overflow-hidden rounded-md border border-border bg-border'
+            : 'invisible overflow-hidden'
+        }
+      >
+        {presentation === 'main' && (
+          <>
+            <TelemetryCharts stats={stats} />
+            <div className="metric-summary-grid bg-surface">
+              <Metric
+                label="Glyphs / draws"
+                value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
+              />
+            </div>
+            <div className="metric-summary-grid bg-surface">
+              <Metric label="Missing glyphs" value={stats === undefined ? '—' : String(stats.missingGlyphCount)} />
+            </div>
+          </>
+        )}
       </div>
-      <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface p-3">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <p className="eyebrow">Realtime scene</p>
-            <p className="mt-1 text-xs text-muted">
-              {liveWorkloadSceneDescription(workload, showcaseFrame, technique)}
-            </p>
-          </div>
-          <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
+      <div
+        className={
+          presentation === 'zen'
+            ? 'flex min-h-0 flex-col overflow-hidden'
+            : 'flex min-h-0 flex-col rounded-md border border-border bg-surface p-3'
+        }
+      >
+        <div className={presentation === 'main' ? 'mb-3 flex items-start justify-between gap-3' : 'hidden'}>
+          {presentation === 'main' && (
+            <>
+              <div>
+                <p className="eyebrow">Realtime scene</p>
+                <p className="mt-1 text-xs text-muted">
+                  {liveWorkloadSceneDescription(workload, showcaseFrame, technique)}
+                </p>
+              </div>
+              <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
+            </>
+          )}
         </div>
         {viewport}
       </div>

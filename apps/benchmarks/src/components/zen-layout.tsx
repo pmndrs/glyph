@@ -13,7 +13,6 @@ export interface ZenLayoutProps {
   readonly fontOptions: readonly ZenSelectOption[];
   readonly fontValue: string;
   readonly payload: ReactNode;
-  readonly scene: ReactNode;
   readonly techniqueControl: ReactNode;
   readonly telemetry: ReactNode;
   readonly workloadOptions: readonly ZenSelectOption[];
@@ -28,7 +27,6 @@ export function ZenLayout({
   fontOptions,
   fontValue,
   payload,
-  scene,
   techniqueControl,
   telemetry,
   workloadOptions,
@@ -40,9 +38,7 @@ export function ZenLayout({
   const [controlsOpen, setControlsOpen] = useState(false);
 
   return (
-    <div className="relative h-dvh overflow-hidden bg-background text-foreground" data-testid="zen-layout">
-      <div className="absolute inset-0 min-h-0 min-w-0">{scene}</div>
-
+    <div className="pointer-events-none absolute inset-0 z-20" data-testid="zen-layout">
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 p-3 sm:p-4">
         <div className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-2">
           {techniqueControl}

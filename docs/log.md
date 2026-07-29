@@ -2,6 +2,7 @@
 
 ## 2026-07-29
 
+- **Retained Zen renderer** — Replaced the Main/Zen host-tree swap with one structural scene slot whose chrome and geometry change in place. A causal GPU-browser probe preserves the exact comparison viewport, canvas, and renderer initialization across both transitions while expanding the retained MTSDF Icon Grid surface from 709×373 to 1,280×720 CSS pixels.
 - **Canonical schema formatter boundary** — Excluded the canonical PMNDRS extension schema JSON and the font-baker's authenticated schema tree from hand-formatting alongside the packaged text runtime copies, then restored exact byte identity between each canonical schema and packaged validator input. Focused core font, Bitmap, MTSDF, and Slug integration gates now protect schema authority from presentation-only drift.
 - **Render controls boundary** — Moved the parity-preserved Main/Zen render controls and detailed payload/resource inspector out of the harness. The extracted boundary owns control-only workload descriptions, authenticated fixture lookup, package-size accounting, disclosure rows, and Zen's minimal-mode filtering; `app.tsx` now keeps the state transitions and passes typed values/callbacks across that boundary.
 - **Responsive shell boundary** — Moved the parity-preserved tablet controls sheet, compact workload panel, and mobile bottom navigation out of the benchmark harness so the harness retains state and renderer lifecycle ownership while layout-specific chrome remains independently maintainable.
