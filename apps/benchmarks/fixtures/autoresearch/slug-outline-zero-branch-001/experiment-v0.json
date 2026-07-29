@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 0,
+  "experimentId": "slug-outline-zero-branch-001",
+  "owner": "autoresearch",
+  "baseCommit": "85bdcebf68f3a32ff681b5afb020b304ecb4d357",
+  "legacyPlanCommit": "2935a89fcd9999e8a8b3d3b733f7f7302285cd60",
+  "target": "raster/slug-outline",
+  "hypothesis": "A per-fragment zero-width branch avoids analytic stroke evaluation for unoutlined instances in a mixed one-draw batch more cheaply than evaluating the stroke graph and multiplying its contribution by zero.",
+  "changedVariables": ["zero-width analytic-stroke shader control flow"],
+  "primaryWorkloads": ["paint-effects alternating outline"],
+  "fontSizes": [16, 40, 128],
+  "backends": ["webgpu", "webgl2"],
+  "qualityPolicy": "exact",
+  "performanceGate": {
+    "metric": "median paired GPU frame-time change",
+    "pairsPerBackend": 64,
+    "minimumImprovementPercent": 5,
+    "maximumScaleRegressionPercent": 2,
+    "requiredBackends": ["webgpu", "webgl2"]
+  }
+}

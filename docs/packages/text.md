@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:859e3797116b7f379488109af0ce341b306fb53f45452345a63e40ab6d4966cf"
+source_digest: "sha256:47ae13ca96f16594936641a905123e3d2f3a2930859b9935c8154c507616984a"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -124,12 +124,14 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T09:34:19Z"
+  at: "2026-07-29T09:55:49Z"
 ---
 
 # Package reference: `@pmndrs/text`
 
 Status: ✅ Milestone 9 Slug integration is complete
+
+A temporary same-build outline experiment exposes independently compiled multiply-zero and zero-width-branch graphs only to the benchmark capture lane. It preserves the ordinary public `slug` module and one-draw per-instance paint contract; the selector and alternate material cache are removed after the retained decision rather than becoming a shipping option.
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing runtime values and types resolve through the public `three/webgpu` and `three/tsl` subpaths rather than the legacy root or internal source exports, matching the renderer boundary used by first-party raster work; package lint rejects those forbidden imports. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 

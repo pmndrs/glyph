@@ -1,0 +1,18 @@
+id: slug-outline-zero-branch-001
+owner: autoresearch
+baseCommit: 85bdcebf68f3a32ff681b5afb020b304ecb4d357
+target: raster/slug-outline
+hypothesis: A per-fragment zero-width branch avoids analytic stroke evaluation for unoutlined instances in a mixed one-draw batch more cheaply than evaluating the stroke graph and multiplying its contribution by zero.
+changedVariables:
+  - zero-width analytic-stroke shader control flow
+primaryWorkloads:
+  - paint-effects alternating outline
+backends:
+  - webgpu
+  - webgl2
+qualityPolicy: exact
+metrics:
+  - gpu_ms
+  - generated_shader_bytes
+  - framebuffer_sha256
+status: active

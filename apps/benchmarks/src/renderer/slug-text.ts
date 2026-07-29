@@ -9,11 +9,14 @@ import {
   type RasterBakeArtifact,
   type RegisteredFont,
   type RuntimeRasterBakerModule,
+  type TextSpan,
 } from '@pmndrs/text'
 import {
+  createSlugOutlineExperimentRaster,
   slug,
   slugDescriptorRasterKey,
   type SlugModule,
+  type SlugOutlineExperimentVariant,
   type SlugResource,
 } from '@pmndrs/text/raster/slug'
 import * as THREE from 'three/webgpu'
@@ -79,6 +82,8 @@ export interface SlugBakedArtifactSource {
   readonly compressed: { readonly bytes: number; readonly sha256: string }
   readonly uncompressed: { readonly bytes: number; readonly sha256: string }
 }
+
+export type { SlugOutlineExperimentVariant } from '@pmndrs/text/raster/slug'
 
 const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interCompressedFontUrl,
@@ -147,6 +152,25 @@ export interface SlugOutlineConformanceCapture extends SlugTextConformanceCaptur
   readonly variant: SlugOutlineConformanceVariant
   readonly physicalFontSize: number
   readonly physicalOutlineWidth: number
+}
+
+export interface SlugOutlineBranchQualityCapture {
+  readonly backend: RendererBackend
+  readonly candidate: Uint8Array
+  readonly drawCount: number
+  readonly dpr: 1 | 2
+  readonly glyphCount: number
+  readonly height: number
+  readonly paintStrokePattern: 'alternating' | 'all'
+  readonly renderSubmitMs: number
+  readonly slugOutlineExperimentVariant: SlugOutlineExperimentVariant
+  readonly width: number
+}
+
+export interface SlugOutlineFragmentShaderCapture {
+  readonly backend: RendererBackend
+  readonly fragmentShader: string
+  readonly slugOutlineExperimentVariant: SlugOutlineExperimentVariant
 }
 
 export interface SlugRoleSceneCapture {
@@ -893,6 +917,7 @@ export async function captureSlugTextConformance(options: {
 export async function captureSlugOutlineConformance(options: {
   readonly backend: RendererBackend
   readonly dpr: 1 | 2
+  readonly slugOutlineExperimentVariant?: SlugOutlineExperimentVariant
   readonly variant: SlugOutlineConformanceVariant
   readonly signal?: AbortSignal
 }): Promise<SlugOutlineConformanceCapture> {
@@ -917,6 +942,8 @@ export async function captureSlugOutlineConformance(options: {
       direction: 'ltr',
       ...(options.variant === 'fill' ? {} : { outlineWidth: physicalOutlineWidth / options.dpr }),
     },
+    undefined,
+    options.slugOutlineExperimentVariant,
   )
   try {
     options.signal?.throwIfAborted()
@@ -929,6 +956,135 @@ export async function captureSlugOutlineConformance(options: {
   } finally {
     await disposeFlatSlugConformanceResources(resources)
   }
+}
+
+/** Capture the mixed-width scene used by the temporary outline graph A/B. */
+export async function captureSlugOutlineBranchQuality(options: {
+  readonly backend: RendererBackend
+  readonly dpr: 1 | 2
+  readonly paintStrokePattern?: 'alternating' | 'all'
+  readonly slugOutlineExperimentVariant: SlugOutlineExperimentVariant
+  readonly signal?: AbortSignal
+}): Promise<SlugOutlineBranchQualityCapture> {
+  const resources = await createSlugOutlineBranchResources(options)
+  try {
+    options.signal?.throwIfAborted()
+    const capture = await captureFlatSlugCandidate(resources)
+    const sceneDrawCount = drawCount(resources.line)
+    if (sceneDrawCount !== 1) {
+      throw new Error(`Slug outline graph A/B produced ${String(sceneDrawCount)} draws; expected 1`)
+    }
+    return {
+      backend: options.backend,
+      candidate: capture.candidate,
+      drawCount: sceneDrawCount,
+      dpr: options.dpr,
+      glyphCount: renderedGlyphCount(resources.line),
+      height: capture.height,
+      paintStrokePattern: options.paintStrokePattern ?? 'alternating',
+      renderSubmitMs: capture.renderSubmitMs,
+      slugOutlineExperimentVariant: options.slugOutlineExperimentVariant,
+      width: capture.width,
+    }
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+/** Capture Three's generated fragment program after executing the mixed-width A/B scene. */
+export async function captureSlugOutlineFragmentShader(options: {
+  readonly backend: RendererBackend
+  readonly slugOutlineExperimentVariant: SlugOutlineExperimentVariant
+  readonly signal?: AbortSignal
+}): Promise<SlugOutlineFragmentShaderCapture> {
+  const resources = await createSlugOutlineBranchResources({ ...options, dpr: 1 })
+  try {
+    options.signal?.throwIfAborted()
+    await captureFlatSlugCandidate(resources)
+    const backendMatches =
+      options.backend === 'webgpu'
+        ? 'isWebGPUBackend' in resources.renderer.backend &&
+          resources.renderer.backend.isWebGPUBackend === true
+        : 'isWebGLBackend' in resources.renderer.backend &&
+          resources.renderer.backend.isWebGLBackend === true
+    if (!backendMatches) {
+      throw new Error(`Slug shader capture did not initialize requested ${options.backend} backend`)
+    }
+    const mesh = firstSlugMesh(resources.line)
+    const { fragmentShader } = await resources.renderer.debug.getShaderAsync(
+      resources.scene,
+      resources.camera,
+      mesh,
+    )
+    if (fragmentShader === null || fragmentShader.length === 0) {
+      throw new Error(`${options.backend} Slug outline shader capture returned no fragment program`)
+    }
+    return {
+      backend: options.backend,
+      fragmentShader,
+      slugOutlineExperimentVariant: options.slugOutlineExperimentVariant,
+    }
+  } finally {
+    await disposeFlatSlugConformanceResources(resources)
+  }
+}
+
+function createSlugOutlineBranchResources(options: {
+  readonly backend: RendererBackend
+  readonly dpr: 1 | 2
+  readonly paintStrokePattern?: 'alternating' | 'all'
+  readonly slugOutlineExperimentVariant: SlugOutlineExperimentVariant
+  readonly signal?: AbortSignal
+}): Promise<FlatSlugConformanceResources> {
+  const physicalFontSize = 160
+  const physicalOutlineWidth = 8
+  const text = 'OQagOQag'
+  const spans: TextSpan[] = []
+  const paintStride = options.paintStrokePattern === 'all' ? 1 : 2
+  for (let index = 0; index < text.length; index += paintStride) {
+    spans.push({
+      start: index,
+      end: index + 1,
+      outline: { color: 0xffffff, width: physicalOutlineWidth / options.dpr },
+    })
+  }
+  return createFlatSlugConformanceResources(
+    options.backend,
+    options.dpr,
+    'inter',
+    options.signal,
+    'baked',
+    undefined,
+    {
+      width: 720 / options.dpr,
+      height: 340 / options.dpr,
+      fontSize: physicalFontSize / options.dpr,
+      layoutWidth: 672 / options.dpr,
+      originX: 24 / options.dpr,
+      originY: -24 / options.dpr,
+      text,
+      spans,
+      language: 'en',
+      direction: 'ltr',
+    },
+    undefined,
+    options.slugOutlineExperimentVariant,
+  )
+}
+
+function firstSlugMesh(line: Text): THREE.Mesh {
+  let result: THREE.Mesh | undefined
+  line.traverse((object) => {
+    if (
+      result === undefined &&
+      object instanceof THREE.Mesh &&
+      object.geometry.getAttribute('slugOutlineHalfWidth') !== undefined
+    ) {
+      result = object
+    }
+  })
+  if (result === undefined) throw new Error('rendered text did not expose an outlined Slug mesh')
+  return result
 }
 
 export async function captureSlugExternalRenderParity(options: {
@@ -1282,6 +1438,7 @@ interface FlatSlugSceneOptions {
   readonly originX: number
   readonly originY: number
   readonly text: string
+  readonly spans?: readonly TextSpan[]
   readonly language: string
   readonly direction: 'ltr' | 'rtl'
   readonly outlineWidth?: number
@@ -1299,6 +1456,7 @@ async function createFlatSlugConformanceResources(
     readonly font: RegisteredFont
     readonly raster: SlugModule
   }>,
+  slugOutlineExperimentVariant: SlugOutlineExperimentVariant = 'multiply-zero',
 ): Promise<FlatSlugConformanceResources> {
   signal?.throwIfAborted()
   const canvas = document.createElement('canvas')
@@ -1317,14 +1475,27 @@ async function createFlatSlugConformanceResources(
     const loaded =
       loadFont === undefined
         ? bakedArtifact === undefined
-          ? await loadSlugFont(signal, fontFixture, delivery)
-          : await loadSlugBakedArtifact(bakedArtifact, signal)
+          ? await loadSlugFont(
+              signal,
+              fontFixture,
+              delivery,
+              undefined,
+              undefined,
+              slugOutlineExperimentVariant,
+            )
+          : await loadSlugBakedArtifact(
+              bakedArtifact,
+              signal,
+              undefined,
+              slugOutlineExperimentVariant,
+            )
         : await loadFont(signal)
     font = loaded.font
     const rasterKey = await slugDescriptorRasterKey()
     const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture)
     line = new Text({
       text: specimen.text,
+      ...(sceneOptions?.spans === undefined ? {} : { spans: sceneOptions.spans }),
       font,
       raster: loaded.raster,
       fontSize: sceneOptions?.fontSize ?? 64 / dpr,
@@ -1667,6 +1838,7 @@ export async function loadSlugFont(
   delivery: FontDelivery = 'baked',
   onProgress?: BakeProgressListener,
   registry?: FontRegistry,
+  slugOutlineExperimentVariant: SlugOutlineExperimentVariant = 'multiply-zero',
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1691,14 +1863,21 @@ export async function loadSlugFont(
       compressedBytes: metrics.sourceFontBytes,
       font: loaded.font,
       metrics,
-      raster: measuredSlugRaster(metrics, onProgress),
+      raster: measuredSlugRaster(metrics, onProgress, slugOutlineExperimentVariant),
     }
   }
   const response = await fetch(
     compressedFontUrls[fixture],
     signal === undefined ? undefined : { signal },
   )
-  return loadSlugFontResponse(response, manifest, metrics, signal, registry)
+  return loadSlugFontResponse(
+    response,
+    manifest,
+    metrics,
+    signal,
+    registry,
+    slugOutlineExperimentVariant,
+  )
 }
 
 /** Load a retained non-production Slug candidate through the ordinary registry boundary. */
@@ -1706,6 +1885,7 @@ export async function loadSlugBakedArtifact(
   source: SlugBakedArtifactSource,
   signal?: AbortSignal,
   registry?: FontRegistry,
+  slugOutlineExperimentVariant: SlugOutlineExperimentVariant = 'multiply-zero',
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1721,6 +1901,7 @@ export async function loadSlugBakedArtifact(
     createFontDeliveryMetrics('baked'),
     signal,
     registry,
+    slugOutlineExperimentVariant,
   )
 }
 
@@ -1730,6 +1911,7 @@ async function loadSlugFontResponse(
   metrics: FontDeliveryMetrics,
   signal?: AbortSignal,
   registry?: FontRegistry,
+  slugOutlineExperimentVariant: SlugOutlineExperimentVariant = 'multiply-zero',
 ): Promise<{
   readonly artifactBytes: number
   readonly compressedBytes: number
@@ -1753,7 +1935,7 @@ async function loadSlugFontResponse(
     compressedBytes: manifest.compressed.bytes,
     font: await activeRegistry.registerAsset(artifact),
     metrics,
-    raster: slug,
+    raster: createSlugOutlineExperimentRaster(slugOutlineExperimentVariant),
   }
 }
 
@@ -1812,10 +1994,12 @@ function slugResourceConfiguration(resource: SlugResource): SlugRasterConfigurat
 function measuredSlugRaster(
   metrics: FontDeliveryMetrics,
   onProgress?: BakeProgressListener,
+  slugOutlineExperimentVariant: SlugOutlineExperimentVariant = 'multiply-zero',
 ): SlugModule {
-  const runtimeBaker = measuredRuntimeBaker(slug.runtimeBaker, metrics, onProgress)
+  const experimentRaster = createSlugOutlineExperimentRaster(slugOutlineExperimentVariant)
+  const runtimeBaker = measuredRuntimeBaker(experimentRaster.runtimeBaker, metrics, onProgress)
   return defineRaster({
-    ...slug,
+    ...experimentRaster,
     ...(runtimeBaker === undefined ? {} : { runtimeBaker }),
   })
 }
