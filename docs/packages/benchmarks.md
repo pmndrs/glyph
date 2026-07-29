@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:7c35f6449b747707e94facf00ca9ea200a099ce4959c80af43c08bbd629f7c61"
+source_digest: "sha256:1ad8b399af2bfa3d972de486bb30313f31bfc84fcbaa3fda5b4d4da52fe7f0a9"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -43,12 +43,14 @@ sources:
     title: Retained complete icon-grid traversal evidence
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T09:42:00Z"
+  at: "2026-07-29T10:06:00Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: ✅ Milestone 9 Slug integration is complete
+
+The temporary outline zero-branch A/B compiles two same-build graphs and precommits exact mixed/all framebuffer gates plus 64 paired sessions per backend. Forty-eight mixed pairs cover 16, 40, and 128 CSS pixels evenly; sixteen all-outlined guards cover the same scales. Every run retains at least twelve GPU timestamps, one draw, zero missing glyphs, and exact resource identities. The candidate must improve the mixed median by at least 5% with a paired-bootstrap upper bound below zero on both backends, while no scale or all-outlined guard may regress by more than 2%.
 
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane; conformance mode is the finite visual correctness inspector. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 
