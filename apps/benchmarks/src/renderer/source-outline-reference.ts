@@ -46,6 +46,17 @@ export interface SourceOutlineReferenceOptions {
   readonly originY: number
   readonly text: string
   readonly renderSubmitMs: number
+  /** Canvas2D affine transform in logical screen coordinates. */
+  readonly transform?: SourceOutlineTransform
+}
+
+export interface SourceOutlineTransform {
+  readonly a: number
+  readonly b: number
+  readonly c: number
+  readonly d: number
+  readonly e: number
+  readonly f: number
 }
 
 /**
@@ -74,7 +85,21 @@ export async function captureSourceOutlineFidelity(
     context.fillStyle = '#000'
     context.fillRect(0, 0, options.width, options.height)
     context.fillStyle = '#fff'
-    context.font = `${options.fontSize * options.dpr}px "${family}"`
+    const transform = options.transform
+    if (transform === undefined) {
+      context.font = `${options.fontSize * options.dpr}px "${family}"`
+    } else {
+      assertSourceOutlineTransform(transform)
+      context.setTransform(
+        options.dpr * transform.a,
+        options.dpr * transform.b,
+        options.dpr * transform.c,
+        options.dpr * transform.d,
+        options.dpr * transform.e,
+        options.dpr * transform.f,
+      )
+      context.font = `${options.fontSize}px "${family}"`
+    }
     context.direction = options.direction
     context.textAlign = 'start'
     context.textBaseline = 'alphabetic'
@@ -86,10 +111,12 @@ export async function captureSourceOutlineFidelity(
       if (start === undefined || end === undefined || baseline === undefined) {
         throw new Error('Paragraph layout contains an incomplete source-reference line')
       }
+      const x = options.originX + (options.direction === 'rtl' ? options.layout.width : 0)
+      const y = -options.originY + baseline
       context.fillText(
         options.text.slice(start, end),
-        (options.originX + (options.direction === 'rtl' ? options.layout.width : 0)) * options.dpr,
-        (-options.originY + baseline) * options.dpr,
+        transform === undefined ? x * options.dpr : x,
+        transform === undefined ? y * options.dpr : y,
       )
     }
     const image = context.getImageData(0, 0, options.width, options.height)
@@ -109,5 +136,16 @@ export async function captureSourceOutlineFidelity(
     }
   } finally {
     document.fonts.delete(face)
+  }
+}
+
+export function assertSourceOutlineTransform(transform: SourceOutlineTransform): void {
+  const components = [transform.a, transform.b, transform.c, transform.d, transform.e, transform.f]
+  if (components.some((component) => !Number.isFinite(component))) {
+    throw new RangeError('source-outline transform components must be finite')
+  }
+  const determinant = transform.a * transform.d - transform.b * transform.c
+  if (!Number.isFinite(determinant) || determinant === 0) {
+    throw new RangeError('source-outline transform must be invertible')
   }
 }
