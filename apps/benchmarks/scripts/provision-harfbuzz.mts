@@ -52,6 +52,17 @@ try {
     '-Ddocs=disabled',
     '-Dutilities=enabled',
     '-Dglib=enabled',
+    '-Dgobject=disabled',
+    '-Dfreetype=disabled',
+    '-Dcairo=disabled',
+    '-Dchafa=disabled',
+    '-Dicu=disabled',
+    '-Dgraphite2=disabled',
+    '-Ddirectwrite=disabled',
+    '-Dcoretext=disabled',
+    '-Dwasm=disabled',
+    '-Draster=disabled',
+    '-Dvector=disabled',
     '-Dintrospection=disabled',
   ])
   await run('meson', ['compile', '-C', buildDirectory, 'hb-shape', 'hb-subset'])

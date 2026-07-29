@@ -111,7 +111,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | KTX2 Rust model/parser | `ktx2` `0.5.0` | compile-time R8 DFD generation plus native artifact validation |
 | KTX2 JavaScript parser | `ktx-parse` `1.1.0` | package-owned artifact and runtime page validation |
 
-GLib development metadata is a native build-host prerequisite, not a fixture identity input. HarfBuzz 13.0.0 gates its `hb-shape` and `hb-subset` targets on `HAVE_GLIB`; the provisioner therefore requires `-Dglib=enabled`, and the pinned Ubuntu 24.04 CI job installs `libglib2.0-dev` explicitly and prints the resolved `glib-2.0` version. GLib owns the utility frontend, while the authenticated HarfBuzz source and exact generated-byte comparison remain authoritative for fixture semantics.
+GLib development metadata is a native build-host prerequisite, not a fixture identity input. HarfBuzz 13.0.0 gates its `hb-shape` and `hb-subset` targets on `HAVE_GLIB`; the provisioner therefore requires `-Dglib=enabled`, and the pinned Ubuntu 24.04 CI job installs `libglib2.0-dev` explicitly and prints the resolved `glib-2.0` version. Every unrelated optional HarfBuzz backend is disabled explicitly so host-installed FreeType, Cairo, ICU, CoreText, or experimental raster/vector dependencies cannot change the source-build graph. GLib owns the utility frontend, while the authenticated HarfBuzz source and exact generated-byte comparison remain authoritative for fixture semantics.
 
 ## Generated contract
 
