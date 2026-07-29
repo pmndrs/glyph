@@ -1,10 +1,12 @@
 export type HarnessMode = 'benchmark' | 'conformance';
+export type HarnessLayout = 'main' | 'zen';
 export type RasterTechnique = 'bitmap' | 'mtsdf' | 'slug';
 export type GraphicsBackend = 'webgpu' | 'webgl2';
 export type FontDelivery = 'baked' | 'runtime';
 
 export interface HarnessLocation {
   readonly mode: HarnessMode;
+  readonly layout: HarnessLayout;
   readonly technique: RasterTechnique;
   readonly backend: GraphicsBackend;
   readonly delivery: FontDelivery;
@@ -16,6 +18,7 @@ export interface HarnessLocation {
 
 export const defaultLocation: HarnessLocation = {
   mode: 'benchmark',
+  layout: 'main',
   technique: 'bitmap',
   backend: 'webgpu',
   delivery: 'baked',
@@ -37,6 +40,7 @@ export function readHarnessLocation(search: string, defaultDpr: 1 | 2 = defaultL
       ['benchmark', 'conformance'],
       hasLegacySelection ? 'conformance' : defaultLocation.mode,
     ),
+    layout: enumValue(values.get('layout'), ['main', 'zen'], defaultLocation.layout),
     technique: enumValue(values.get('technique'), ['bitmap', 'mtsdf', 'slug'], 'bitmap'),
     backend: enumValue(
       values.get('backend'),
@@ -55,6 +59,7 @@ export function readHarnessLocation(search: string, defaultDpr: 1 | 2 = defaultL
 export function writeHarnessLocation(value: HarnessLocation): string {
   const values = new URLSearchParams();
   values.set('mode', value.mode);
+  if (value.layout === 'zen') values.set('layout', value.layout);
   values.set('technique', value.technique);
   values.set('backend', value.backend);
   values.set('delivery', value.delivery);

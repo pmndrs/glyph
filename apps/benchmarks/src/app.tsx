@@ -31,6 +31,7 @@ import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts';
 import { environmentResource } from './benchmark/environment';
 import { runRegisteredBenchmark } from './benchmark/execution';
 import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result';
+import { createPayloadSummary } from './benchmark/payload-summary';
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,
@@ -57,6 +58,10 @@ import { InteractiveCanvas } from './components/interactive-canvas';
 import { Report } from './components/report';
 import { TechniqueSwitcher } from './components/technique-switcher';
 import { TelemetryCharts } from './components/telemetry-charts';
+import { TopBar } from './components/top-bar';
+import { WorkloadRail, workloadById, workloadsFor, type WorkloadOption } from './components/workload-rail';
+import { ZenLayout } from './components/zen-layout';
+import { ZenPayloadPills } from './components/zen-payload-pills';
 import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui';
 import packageSizes from './generated/package-sizes.json';
 import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
@@ -84,17 +89,6 @@ import type { BakeProgress } from '@pmndrs/text';
 
 type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
-interface WorkloadOption {
-  readonly id: string;
-  readonly label: string;
-  readonly description: string;
-  readonly techniques: Readonly<Record<RasterTechnique, WorkloadTechniqueStatus>>;
-}
-
-type WorkloadTechniqueStatus = { readonly kind: 'ready' } | { readonly kind: 'planned'; readonly milestone: 8 | 9 };
-
-const READY: WorkloadTechniqueStatus = { kind: 'ready' };
-
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 
 function importComparisonWorkload() {
@@ -112,17 +106,6 @@ function scheduleComparisonWorkloadPreload(): () => void {
     void preloadComparisonWorkload();
   });
   return () => globalThis.cancelIdleCallback(request);
-}
-
-function isComparisonWorkload(workload: string): boolean {
-  return (
-    workload === 'text-ladder' ||
-    workload === 'icon-grid' ||
-    workload === 'off-axis-3d' ||
-    workload === 'dynamic-layout' ||
-    workload === 'paragraph-stress' ||
-    workload === 'paint-effects'
-  );
 }
 
 interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
@@ -188,84 +171,6 @@ function slugFixtureFor(fontFixture: BenchmarkFontFixture) {
 function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
-
-const benchmarkWorkloads: readonly WorkloadOption[] = [
-  {
-    id: 'benchmark-ipsum',
-    label: 'Benchmark ipsum',
-    description: 'Tests the everyday cost of rendering and reflowing a full paragraph.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'advanced-shaping',
-    label: 'Advanced shaping',
-    description: 'Tests whether complex text stays correct as it types and wraps.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'text-ladder',
-    label: 'Text ladder',
-    description: 'Tests how text quality holds up from 8 to 512 pixels.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'icon-grid',
-    label: 'Icon grid',
-    description: 'Tests a labeled icon font across scale, movement, and raster techniques.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'off-axis-3d',
-    label: 'Off-axis / 3D',
-    description: 'Tests text quality and cost at steep, moving viewing angles.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'dynamic-layout',
-    label: 'Dynamic layout',
-    description: 'Tests whether animated containers reflow text smoothly and correctly.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'paragraph-stress',
-    label: 'Paragraph stress',
-    description: 'Tests rendering cost as paragraphs, glyphs, and atlas pressure grow.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'paint-effects',
-    label: 'Paint & effects',
-    description: 'Tests the live cost and visual quality of animated text effects.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-];
-
-const conformanceWorkloads: readonly WorkloadOption[] = [
-  {
-    id: 'mtsdf-slug-compare',
-    label: 'MSDF / Slug compare',
-    description: 'Renders MSDF and Slug side by side and compares their coverage in a live GPU heatmap.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'runtime-fallback',
-    label: 'Runtime fallback parity',
-    description: 'Tests whether source-font runtime baking reproduces the checked-in baked render.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'text-accuracy',
-    label: 'Pipeline accuracy',
-    description: 'Technique-specific renderer output, sampling reference, difference, and error statistics.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'cross-technique-fidelity',
-    label: 'Cross-technique fidelity',
-    description: 'Bitmap, MSDF, and Slug compared independently with the same outline-derived coverage reference.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-];
 
 function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefined {
   switch (workload) {
@@ -464,6 +369,7 @@ function Harness() {
     location.workload === 'advanced-shaping' ? advancedFontFixture : fontFixture;
   const available = workloadTechnique.kind === 'ready';
   const backendAvailable = location.backend !== 'webgpu' || environment.webgpu;
+  const zen = location.layout === 'zen' && location.mode === 'benchmark';
 
   function setLocation(next: Partial<HarnessLocation>): void {
     const value = { ...location, ...next };
@@ -493,6 +399,7 @@ function Harness() {
 
   function selectMode(mode: HarnessMode): void {
     setLocation({
+      layout: mode === 'conformance' ? 'main' : location.layout,
       mode,
       workload: activityWorkloads[mode],
       view: 'scene',
@@ -628,6 +535,7 @@ function Harness() {
 
   const controls = (
     <Controls
+      minimal={zen}
       backend={location.backend}
       delivery={location.delivery}
       dpr={dpr}
@@ -735,6 +643,7 @@ function Harness() {
       liveCapture={liveCapture}
       liveStats={liveStats}
       location={location}
+      presentation={zen ? 'zen' : 'main'}
       activityWorkloads={activityWorkloads}
       fontSize={fontSize}
       layoutWidthPercent={layoutWidthPercent}
@@ -758,6 +667,59 @@ function Harness() {
       onLiveStats={publishLiveStats}
     />
   );
+
+  if (zen) {
+    const zenFontOptions =
+      location.workload === 'icon-grid'
+        ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
+        : location.workload === 'advanced-shaping'
+          ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
+          : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
+    const payload = createPayloadSummary({
+      delivery: location.delivery,
+      fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
+      fontFixture: activeFontFixture,
+      ...(liveStats === undefined ? {} : { liveStats }),
+      packageSizes,
+      technique: location.technique,
+      workload: location.workload,
+    });
+    return (
+      <ZenLayout
+        controls={controls}
+        fontOptions={zenFontOptions}
+        fontValue={location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture}
+        payload={<ZenPayloadPills summary={payload} />}
+        scene={scene}
+        techniqueControl={
+          <TechniqueSwitcher
+            className="w-[180px]"
+            presentation="zen"
+            technique={location.technique}
+            onTechnique={selectTechnique}
+          />
+        }
+        telemetry={<TelemetryCharts presentation="zen" stats={liveStats} />}
+        workloadOptions={workloadsFor('benchmark').map((option) => ({
+          disabled: option.techniques[location.technique].kind !== 'ready',
+          label: option.label,
+          value: option.id,
+        }))}
+        workloadValue={location.workload}
+        onExit={() => setLocation({ layout: 'main' })}
+        onFont={(value) => {
+          if (location.workload === 'icon-grid') return;
+          if (location.workload === 'advanced-shaping') {
+            setAdvancedFontFixture(value as BenchmarkFontFixture);
+            invalidateLiveCapture();
+            return;
+          }
+          setLocation({ fontFixture: selectableFontFixture(value) });
+        }}
+        onWorkload={(workloadId) => setLocation({ workload: workloadId, view: 'scene' })}
+      />
+    );
+  }
 
   return (
     <div className="h-dvh overflow-hidden bg-background text-foreground">
@@ -789,6 +751,7 @@ function Harness() {
         }}
         onMode={selectMode}
         onTechnique={selectTechnique}
+        onZenMode={() => setLocation({ layout: 'zen', mode: 'benchmark', view: 'scene' })}
         workloadPanelOpen={workloadPanelOpen}
       />
       <div
@@ -913,270 +876,6 @@ function defaultDeviceDpr(): 1 | 2 {
   return (globalThis.devicePixelRatio ?? 1) >= 1.5 ? 2 : 1;
 }
 
-function workloadsFor(mode: HarnessMode): readonly WorkloadOption[] {
-  if (mode === 'benchmark') return benchmarkWorkloads;
-  return conformanceWorkloads;
-}
-
-function workloadById(mode: HarnessMode, id: string): WorkloadOption {
-  const workloads = workloadsFor(mode);
-  return workloads.find((workload) => workload.id === id) ?? workloads[0]!;
-}
-
-function workloadRailDescription(workload: WorkloadOption, technique: RasterTechnique): string {
-  const status = workload.techniques[technique];
-  return status.kind === 'ready' ? workload.description : `M${status.milestone} · ${workload.description}`;
-}
-
-function TopBar({
-  compact,
-  phone,
-  location,
-  mode,
-  liveTechniqueComparison,
-  pending,
-  ready,
-  webgpu,
-  onAction,
-  onControls,
-  onMenu,
-  onMode,
-  onTechnique,
-  workloadPanelOpen,
-}: {
-  readonly compact: boolean;
-  readonly phone: boolean;
-  readonly location: HarnessLocation;
-  readonly mode: HarnessMode;
-  readonly liveTechniqueComparison: boolean;
-  readonly pending: boolean;
-  readonly ready: boolean;
-  readonly webgpu: boolean;
-  readonly onAction: () => void;
-  readonly onControls: () => void;
-  readonly onMenu: () => void;
-  readonly onMode: (mode: HarnessMode) => void;
-  readonly onTechnique: (technique: RasterTechnique) => void;
-  readonly workloadPanelOpen: boolean;
-}) {
-  return (
-    <header className="border-b border-border bg-chrome">
-      <div className="flex h-[52px] items-center gap-2 px-2 sm:gap-3 sm:px-3 lg:px-4">
-        <button
-          aria-expanded={workloadPanelOpen}
-          aria-label={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
-          className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface-raised text-muted transition-colors hover:border-accent hover:text-foreground"
-          title={workloadPanelOpen ? 'Close workload menu' : 'Open workload menu'}
-          type="button"
-          onClick={onMenu}
-        >
-          <svg aria-hidden="true" className="size-[18px]" viewBox="0 0 24 24">
-            <rect fill="none" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" width="18" x="3" y="4" />
-            <path d="M9 4v16" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path
-              d={workloadPanelOpen ? 'm16 9-3 3 3 3' : 'm13 9 3 3-3 3'}
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.5"
-            />
-          </svg>
-        </button>
-        <div className="hidden min-w-0 sm:block">
-          <div className="text-sm font-semibold leading-none">pmndrs/text</div>
-          <div className="mt-1 font-mono text-[9px] text-dim">TEXT PERFORMANCE LAB</div>
-        </div>
-        <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
-          {(['benchmark', 'conformance'] as const).map((value) => (
-            <button
-              className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'}`}
-              key={value}
-              type="button"
-              onClick={() => onMode(value)}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-        {compact && (
-          <TechniqueSwitcher
-            className="w-[148px] sm:w-[180px]"
-            technique={location.technique}
-            onTechnique={onTechnique}
-          />
-        )}
-        <div className="flex-1" />
-        <span className="hidden min-[900px]:inline-flex">
-          <Chip tone={webgpu ? 'success' : 'warning'}>{webgpu ? 'WebGPU available' : 'WebGPU unavailable'}</Chip>
-        </span>
-        {compact && !phone && (
-          <Button
-            aria-label="Open render controls"
-            className="px-2 text-[10px] sm:px-3"
-            variant={location.view === 'controls' ? 'primary' : 'secondary'}
-            onClick={onControls}
-          >
-            Controls
-          </Button>
-        )}
-        <Button
-          aria-label={
-            mode === 'benchmark'
-              ? location.view === 'report'
-                ? 'Return to live benchmark'
-                : 'Capture report'
-              : liveTechniqueComparison
-                ? 'Live GPU comparison'
-                : 'Run conformance'
-          }
-          className="px-2 text-[10px] sm:px-3 sm:text-xs"
-          disabled={!ready}
-          variant="primary"
-          onClick={onAction}
-        >
-          {pending ? (
-            'Running…'
-          ) : mode === 'benchmark' ? (
-            location.view === 'report' ? (
-              'Live view'
-            ) : (
-              <>
-                <span className="sm:hidden">Capture</span>
-                <span className="hidden sm:inline">Capture report</span>
-              </>
-            )
-          ) : liveTechniqueComparison ? (
-            'Live compare'
-          ) : (
-            <>
-              <span className="sm:hidden">Run</span>
-              <span className="hidden sm:inline">Run conformance</span>
-            </>
-          )}
-        </Button>
-      </div>
-    </header>
-  );
-}
-
-function WorkloadRail({
-  activeFontFixture,
-  className = '',
-  fontFixture,
-  location,
-  showcaseFrame,
-  showTechnique = true,
-  onAdvancedFontFixture,
-  onFontFixture,
-  onLocation,
-  onTechnique,
-}: {
-  readonly activeFontFixture: BenchmarkFontFixture;
-  readonly className?: string;
-  readonly fontFixture: SelectableFontFixture;
-  readonly location: HarnessLocation;
-  readonly showcaseFrame: AdvancedShapingFrame;
-  readonly showTechnique?: boolean;
-  readonly onAdvancedFontFixture: (fontFixture: BenchmarkFontFixture) => void;
-  readonly onFontFixture: (fontFixture: SelectableFontFixture) => void;
-  readonly onLocation: (value: Partial<HarnessLocation>) => void;
-  readonly onTechnique: (technique: RasterTechnique) => void;
-}) {
-  const workloads = workloadsFor(location.mode);
-  const displayedFontFixture = location.workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : activeFontFixture;
-  const selectedMtsdfFixture = location.technique === 'mtsdf' ? mtsdfFixtureFor(displayedFontFixture) : undefined;
-  const selectedSlugFixture = location.technique === 'slug' ? slugFixtureFor(displayedFontFixture) : undefined;
-  const rasterDescription =
-    selectedSlugFixture !== undefined
-      ? `Analytic Slug · ${selectedSlugFixture.raster.pages.length} page${selectedSlugFixture.raster.pages.length === 1 ? '' : 's'} · ${formatBytes(selectedSlugFixture.raster.decodedGpuBytes)} GPU`
-      : selectedMtsdfFixture !== undefined
-        ? `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
-        : '16 px grayscale bitmap strike';
-  return (
-    <aside className={`overflow-auto overscroll-contain border-r border-border bg-chrome p-3 ${className}`}>
-      {showTechnique && (
-        <>
-          <p className="eyebrow">Technique</p>
-          <TechniqueSwitcher className="mt-2" technique={location.technique} onTechnique={onTechnique} />
-        </>
-      )}
-      <p className={`eyebrow mb-2 ${showTechnique ? 'mt-5' : ''}`}>
-        {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
-      </p>
-      <nav className="grid gap-1">
-        {workloads.map((workload) => (
-          <button
-            className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-foreground hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
-            disabled={workload.techniques[location.technique].kind !== 'ready'}
-            key={workload.id}
-            type="button"
-            onClick={() => onLocation({ workload: workload.id })}
-            onFocus={() => {
-              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
-            }}
-            onPointerEnter={() => {
-              if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
-            }}
-          >
-            <span
-              className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-transparent'}`}
-            />
-            <span className="block text-xs">{workload.label}</span>
-            <span className="mt-1 block font-mono text-[8px] leading-relaxed text-muted">
-              {workloadRailDescription(workload, location.technique)}
-            </span>
-          </button>
-        ))}
-      </nav>
-      <div className="mt-5">
-        <p className="eyebrow mb-2">Font fixture</p>
-        {location.workload === 'icon-grid' ? (
-          <div
-            className="rounded-md border border-accent bg-surface-active px-3 py-2"
-            data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
-          >
-            <span className="block text-xs">{BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}</span>
-            <span className="mt-1 block font-mono text-[8px] text-dim">1,402 packed solid icons</span>
-          </div>
-        ) : location.workload === 'advanced-shaping' ? (
-          <div className="grid gap-1">
-            {ADVANCED_FONT_FIXTURES.map((fixture) => (
-              <button
-                className={`rounded-md border px-3 py-2 text-left ${activeFontFixture === fixture.id ? 'border-accent bg-surface-active text-foreground' : 'border-border bg-surface text-muted'}`}
-                key={fixture.id}
-                type="button"
-                onClick={() => onAdvancedFontFixture(fixture.id)}
-              >
-                <span className="block text-xs">{fixture.label}</span>
-                <span className="mt-1 block font-mono text-[8px] text-dim">
-                  {fixture.metadata}
-                  {showcaseFrame.caseDefinition.fontFixture === fixture.id ? ' · recommended' : ''}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-1">
-            {SELECTABLE_FONT_FIXTURES.map((fixture) => (
-              <button
-                className={`rounded-md border px-3 py-2 text-left ${fontFixture === fixture.id ? 'border-accent bg-surface-active text-foreground' : 'border-border bg-surface text-muted'}`}
-                key={fixture.id}
-                type="button"
-                onClick={() => onFontFixture(fixture.id)}
-              >
-                <span className="block text-xs">{fixture.label}</span>
-                <span className="mt-1 block font-mono text-[8px] text-dim">{fixture.metadata}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <p className="mt-2 font-mono text-[9px] text-dim">{rasterDescription}</p>
-      </div>
-    </aside>
-  );
-}
-
 function Scene({
   activeFontFixture,
   activityWorkloads,
@@ -1199,6 +898,7 @@ function Scene({
   liveCapture,
   liveStats,
   location,
+  presentation,
   showcaseFrame,
   summary,
   onConformancePan,
@@ -1226,6 +926,7 @@ function Scene({
   readonly liveCapture: LiveBenchmarkCapture | undefined;
   readonly liveStats: LiveTextStats | undefined;
   readonly location: HarnessLocation;
+  readonly presentation: 'main' | 'zen';
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly summary: BenchmarkSummary | undefined;
   readonly onConformancePan: (deltaXPercent: number, deltaYPercent: number) => void;
@@ -1239,24 +940,30 @@ function Scene({
   const conformanceStatus = conformanceWorkload.techniques[location.technique];
   return (
     <section
-      className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3"
+      className={
+        presentation === 'zen'
+          ? 'relative grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)]'
+          : 'grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3'
+      }
       data-captured-at={liveCapture?.capturedAt}
       data-execution-id={summary?.executionId}
       data-testid="scene"
     >
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <p className="eyebrow">{location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
-          <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
-          <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
-          <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL'}</Chip>
-          <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
-          <Chip>{dpr}× DPR</Chip>
-        </div>
-      </header>
+      {presentation === 'main' && (
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div>
+            <p className="eyebrow">{location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
+            <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
+            <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
+            <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL'}</Chip>
+            <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
+            <Chip>{dpr}× DPR</Chip>
+          </div>
+        </header>
+      )}
       <Activity name="benchmark" mode={location.mode === 'benchmark' ? 'visible' : 'hidden'}>
         <div className="contents" data-activity="benchmark">
           {benchmarkStatus.kind === 'planned' ? (
@@ -1279,6 +986,7 @@ function Scene({
               paintOpacityPercent={paintOpacityPercent}
               paintShadowEnabled={paintShadowEnabled}
               paintStrokePercent={paintStrokePercent}
+              presentation={presentation}
               showLayoutBounds={showLayoutBounds}
               workloadAmount={workloadAmount}
               key={`${location.mode}-${location.backend}-${location.delivery}-${String(dpr)}`}
@@ -1318,9 +1026,17 @@ function Scene({
         </div>
       </Activity>
       {error !== undefined && (
-        <div className="rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">{error}</div>
+        <div
+          className={
+            presentation === 'zen'
+              ? 'absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger/50 bg-background/90 p-3 text-xs text-danger shadow-xl backdrop-blur'
+              : 'rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger'
+          }
+        >
+          {error}
+        </div>
       )}
-      {location.mode === 'benchmark' && liveCapture !== undefined && (
+      {presentation === 'main' && location.mode === 'benchmark' && liveCapture !== undefined && (
         <div className="rounded-md border border-success/40 bg-success/5 px-3 py-2 text-xs text-muted">
           Captured the current rolling window at {liveCapture.capturedAt} ·{' '}
           {liveCapture.stats.framesPerSecond.toFixed(1)} FPS · {formatMs(liveCapture.stats.medianSubmitMs)} CPU submit
@@ -1365,6 +1081,7 @@ function BenchmarkSurface({
   paintOpacityPercent,
   paintShadowEnabled,
   paintStrokePercent,
+  presentation,
   showLayoutBounds,
   workloadAmount,
   showcaseFrame,
@@ -1385,6 +1102,7 @@ function BenchmarkSurface({
   readonly paintOpacityPercent: number;
   readonly paintShadowEnabled: boolean;
   readonly paintStrokePercent: number;
+  readonly presentation: 'main' | 'zen';
   readonly showLayoutBounds: boolean;
   readonly workloadAmount: number;
   readonly showcaseFrame: AdvancedShapingFrame;
@@ -1425,6 +1143,69 @@ function BenchmarkSurface({
         textAlign: 'start',
         timelineTick: undefined,
       };
+  const viewport =
+    comparisonWorkload !== undefined ? (
+      <ComparisonWorkloadViewport
+        amount={workloadAmount}
+        animationEnabled={animationEnabled}
+        animationSpeed={animationSpeed}
+        backend={backend}
+        delivery={delivery}
+        dpr={dpr}
+        fontSize={fontSize}
+        fontFixture={fontFixture}
+        grid={grid}
+        layoutWidthRatio={layoutWidthPercent / 100}
+        paintOpacity={paintOpacityPercent / 100}
+        paintShadowEnabled={paintShadowEnabled}
+        paintStrokeWidth={paintStrokePercent / 100}
+        showLayoutBounds={showLayoutBounds}
+        technique={technique}
+        workload={comparisonWorkload}
+        key={`${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${comparisonWorkload}`}
+        onStats={onStats}
+      />
+    ) : technique === 'slug' ? (
+      <SlugTextViewport
+        backend={backend}
+        delivery={delivery}
+        dpr={dpr}
+        fontSize={fontSize}
+        grid={grid}
+        key={textConfiguration.fontFixture}
+        textConfiguration={textConfiguration}
+        onStats={onStats}
+      />
+    ) : technique === 'mtsdf' ? (
+      <MtsdfTextViewport
+        backend={backend}
+        delivery={delivery}
+        dpr={dpr}
+        fontSize={fontSize}
+        grid={grid}
+        key={textConfiguration.fontFixture}
+        textConfiguration={textConfiguration}
+        onStats={onStats}
+      />
+    ) : (
+      <BitmapTextViewport
+        backend={backend}
+        delivery={delivery}
+        dpr={dpr}
+        fontSize={fontSize}
+        grid={grid}
+        key={textConfiguration.fontFixture}
+        textConfiguration={textConfiguration}
+        onStats={onStats}
+      />
+    );
+  if (presentation === 'zen') {
+    return (
+      <div className="flex h-full min-h-0 overflow-hidden" data-testid="benchmark-surface">
+        {viewport}
+      </div>
+    );
+  }
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3" data-testid="benchmark-surface">
       <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,0.55fr))] gap-px overflow-hidden rounded-md border border-border bg-border">
@@ -1449,61 +1230,7 @@ function BenchmarkSurface({
           </div>
           <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
         </div>
-        {comparisonWorkload !== undefined ? (
-          <ComparisonWorkloadViewport
-            amount={workloadAmount}
-            animationEnabled={animationEnabled}
-            animationSpeed={animationSpeed}
-            backend={backend}
-            delivery={delivery}
-            dpr={dpr}
-            fontSize={fontSize}
-            fontFixture={fontFixture}
-            grid={grid}
-            layoutWidthRatio={layoutWidthPercent / 100}
-            paintOpacity={paintOpacityPercent / 100}
-            paintShadowEnabled={paintShadowEnabled}
-            paintStrokeWidth={paintStrokePercent / 100}
-            showLayoutBounds={showLayoutBounds}
-            technique={technique}
-            workload={comparisonWorkload}
-            key={`${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${comparisonWorkload}`}
-            onStats={onStats}
-          />
-        ) : technique === 'slug' ? (
-          <SlugTextViewport
-            backend={backend}
-            delivery={delivery}
-            dpr={dpr}
-            fontSize={fontSize}
-            grid={grid}
-            key={textConfiguration.fontFixture}
-            textConfiguration={textConfiguration}
-            onStats={onStats}
-          />
-        ) : technique === 'mtsdf' ? (
-          <MtsdfTextViewport
-            backend={backend}
-            delivery={delivery}
-            dpr={dpr}
-            fontSize={fontSize}
-            grid={grid}
-            key={textConfiguration.fontFixture}
-            textConfiguration={textConfiguration}
-            onStats={onStats}
-          />
-        ) : (
-          <BitmapTextViewport
-            backend={backend}
-            delivery={delivery}
-            dpr={dpr}
-            fontSize={fontSize}
-            grid={grid}
-            key={textConfiguration.fontFixture}
-            textConfiguration={textConfiguration}
-            onStats={onStats}
-          />
-        )}
+        {viewport}
       </div>
     </div>
   );
@@ -3482,6 +3209,7 @@ function Controls({
   dpr,
   fontFixture,
   liveStats,
+  minimal = false,
   fontSize,
   layoutWidthPercent,
   paintOpacityPercent,
@@ -3530,6 +3258,7 @@ function Controls({
   readonly dpr: 1 | 2;
   readonly fontFixture: BenchmarkFontFixture;
   readonly liveStats: LiveTextStats | undefined;
+  readonly minimal?: boolean;
   readonly fontSize: number;
   readonly layoutWidthPercent: number;
   readonly paintOpacityPercent: number;
@@ -3571,11 +3300,13 @@ function Controls({
 }) {
   return (
     <section className="grid min-w-0 gap-4 [&>*]:min-w-0" data-testid="controls">
-      <div>
-        <p className="eyebrow">Inspection controls</p>
-        <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
-      </div>
-      {workload !== 'advanced-shaping' && (
+      {!minimal && (
+        <div>
+          <p className="eyebrow">Inspection controls</p>
+          <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
+        </div>
+      )}
+      {!minimal && workload !== 'advanced-shaping' && (
         <div className="min-[1200px]:hidden">
           {workload === 'icon-grid' ? (
             <div className="grid gap-1.5">
@@ -3617,61 +3348,80 @@ function Controls({
           </Button>
         </div>
       </div>
-      <div data-testid="font-delivery-switcher">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
-          <fieldset className="grid min-w-0 gap-1.5">
-            <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
-            <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
+      {minimal ? (
+        <fieldset className="grid min-w-0 gap-1.5">
+          <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
+          <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
+            {([1, 2] as const).map((value) => (
               <button
-                aria-pressed={dpr === 1}
-                className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 1 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                aria-pressed={dpr === value}
+                className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === value ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                key={value}
                 type="button"
-                onClick={() => onDpr(1)}
+                onClick={() => onDpr(value)}
               >
-                1×
+                {value}×
               </button>
-              <button
-                aria-pressed={dpr === 2}
-                className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 2 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
-                type="button"
-                onClick={() => onDpr(2)}
-              >
-                2×
-              </button>
-            </div>
-          </fieldset>
-          <div className="grid gap-1.5">
-            <p className="font-mono text-[9px] uppercase text-dim">Source</p>
-            <Button
-              aria-pressed={delivery === 'baked'}
-              className="min-w-[84px] gap-1.5"
-              variant={delivery === 'baked' ? 'primary' : 'secondary'}
-              onClick={() => onDelivery(delivery === 'baked' ? 'runtime' : 'baked')}
-            >
-              <span aria-hidden="true" className="inline-block w-3 text-center">
-                {delivery === 'baked' ? '✓' : ''}
-              </span>
-              Baked
-            </Button>
+            ))}
           </div>
-          <div className="grid gap-1.5">
-            <p className="font-mono text-[9px] uppercase text-dim">Grid</p>
-            <Button
-              aria-label="Show canvas grid"
-              aria-pressed={showGrid}
-              className="w-8 px-0"
-              title="Show canvas grid"
-              variant={showGrid ? 'primary' : 'secondary'}
-              onClick={() => onShowGrid(!showGrid)}
-            >
-              <svg aria-hidden="true" className="size-3.5" fill="none" viewBox="0 0 16 16">
-                <path d="M1.5 5.5h13m-13 5h13m-9-9v13m5-13v13" stroke="currentColor" />
-                <rect height="13" rx="1" stroke="currentColor" width="13" x="1.5" y="1.5" />
-              </svg>
-            </Button>
+        </fieldset>
+      ) : (
+        <div data-testid="font-delivery-switcher">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
+            <fieldset className="grid min-w-0 gap-1.5">
+              <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
+              <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
+                <button
+                  aria-pressed={dpr === 1}
+                  className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 1 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                  type="button"
+                  onClick={() => onDpr(1)}
+                >
+                  1×
+                </button>
+                <button
+                  aria-pressed={dpr === 2}
+                  className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 2 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                  type="button"
+                  onClick={() => onDpr(2)}
+                >
+                  2×
+                </button>
+              </div>
+            </fieldset>
+            <div className="grid gap-1.5">
+              <p className="font-mono text-[9px] uppercase text-dim">Source</p>
+              <Button
+                aria-pressed={delivery === 'baked'}
+                className="min-w-[84px] gap-1.5"
+                variant={delivery === 'baked' ? 'primary' : 'secondary'}
+                onClick={() => onDelivery(delivery === 'baked' ? 'runtime' : 'baked')}
+              >
+                <span aria-hidden="true" className="inline-block w-3 text-center">
+                  {delivery === 'baked' ? '✓' : ''}
+                </span>
+                Baked
+              </Button>
+            </div>
+            <div className="grid gap-1.5">
+              <p className="font-mono text-[9px] uppercase text-dim">Grid</p>
+              <Button
+                aria-label="Show canvas grid"
+                aria-pressed={showGrid}
+                className="w-8 px-0"
+                title="Show canvas grid"
+                variant={showGrid ? 'primary' : 'secondary'}
+                onClick={() => onShowGrid(!showGrid)}
+              >
+                <svg aria-hidden="true" className="size-3.5" fill="none" viewBox="0 0 16 16">
+                  <path d="M1.5 5.5h13m-13 5h13m-9-9v13m5-13v13" stroke="currentColor" />
+                  <rect height="13" rx="1" stroke="currentColor" width="13" x="1.5" y="1.5" />
+                </svg>
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
       {mode === 'conformance' && (
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-md border border-border bg-surface p-3">
           <Field
@@ -3867,20 +3617,24 @@ function Controls({
           />
         </div>
       )}
-      <PayloadInspector
-        delivery={delivery}
-        fontFixture={fontFixture}
-        liveStats={liveStats}
-        technique={technique}
-        workload={workload}
-      />
-      <button
-        className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
-        type="button"
-        onClick={onFontNotices}
-      >
-        Font licenses &amp; notices
-      </button>
+      {!minimal && (
+        <>
+          <PayloadInspector
+            delivery={delivery}
+            fontFixture={fontFixture}
+            liveStats={liveStats}
+            technique={technique}
+            workload={workload}
+          />
+          <button
+            className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
+            type="button"
+            onClick={onFontNotices}
+          >
+            Font licenses &amp; notices
+          </button>
+        </>
+      )}
     </section>
   );
 }

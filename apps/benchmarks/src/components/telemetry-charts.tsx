@@ -13,12 +13,13 @@ import {
 export type TelemetryChartStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
 export interface TelemetryChartsProps {
+  readonly presentation?: 'main' | 'zen';
   readonly stats: TelemetryChartStats | undefined;
 }
 
 const TELEMETRY_CHART_TRANSITION_MS = 250;
 
-export function TelemetryCharts({ stats }: TelemetryChartsProps) {
+export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChartsProps) {
   const fpsCanvasRef = useRef<HTMLCanvasElement>(null);
   const cpuCanvasRef = useRef<HTMLCanvasElement>(null);
   const gpuCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -108,6 +109,7 @@ export function TelemetryCharts({ stats }: TelemetryChartsProps) {
         scaleMaximum={stats?.refreshRateHz}
         tone="success"
         unit="fps"
+        presentation={presentation}
       />
       <TelemetryChartPanel
         canvasRef={cpuCanvasRef}
@@ -119,6 +121,7 @@ export function TelemetryCharts({ stats }: TelemetryChartsProps) {
         scaleMaximum={stats?.frameBudgetMs}
         tone="cyan"
         unit="ms"
+        presentation={presentation}
       />
       <TelemetryChartPanel
         canvasRef={gpuCanvasRef}
@@ -131,6 +134,7 @@ export function TelemetryCharts({ stats }: TelemetryChartsProps) {
         scaleMaximum={stats?.frameBudgetMs}
         tone="warning"
         unit="ms"
+        presentation={presentation}
       />
     </>
   );
@@ -147,6 +151,7 @@ function TelemetryChartPanel({
   scaleMaximum,
   tone,
   unit,
+  presentation,
 }: {
   readonly canvasRef: RefObject<HTMLCanvasElement | null>;
   readonly current: number | undefined;
@@ -158,10 +163,11 @@ function TelemetryChartPanel({
   readonly scaleMaximum: number | undefined;
   readonly tone: 'cyan' | 'success' | 'warning';
   readonly unit: 'fps' | 'ms';
+  readonly presentation: 'main' | 'zen';
 }) {
   return (
     <div
-      className="flex min-h-0 flex-col bg-surface p-2"
+      className={`flex min-h-0 flex-col p-2 ${presentation === 'zen' ? 'bg-chrome/75' : 'bg-surface'}`}
       data-scale-maximum={scaleMaximum}
       data-testid={`sparkline-${id}`}
       data-tone={tone}

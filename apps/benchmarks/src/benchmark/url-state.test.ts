@@ -6,6 +6,7 @@ describe('harness URL state', () => {
   it('round-trips a reproducible selection', () => {
     const value = {
       mode: 'conformance',
+      layout: 'zen',
       technique: 'bitmap',
       backend: 'webgl2',
       delivery: 'runtime',
@@ -17,13 +18,21 @@ describe('harness URL state', () => {
     expect(readHarnessLocation(writeHarnessLocation(value))).toEqual(value);
   });
 
+  it('omits the default main layout from canonical links', () => {
+    const search = writeHarnessLocation({ ...readHarnessLocation(''), layout: 'main' });
+
+    expect(new URLSearchParams(search).has('layout')).toBe(false);
+    expect(readHarnessLocation(search).layout).toBe('main');
+  });
+
   it('rejects unknown axes without losing the human-facing workload', () => {
     expect(
       readHarnessLocation(
-        '?mode=unknown&technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown',
+        '?mode=unknown&layout=unknown&technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown',
       ),
     ).toEqual({
       mode: 'benchmark',
+      layout: 'main',
       technique: 'bitmap',
       backend: 'webgpu',
       delivery: 'baked',
@@ -37,6 +46,7 @@ describe('harness URL state', () => {
   it('maps old bitmap target and scenario links into conformance', () => {
     expect(readHarnessLocation('?target=bitmap-text-webgl2&scenario=bitmap-text-frame')).toEqual({
       mode: 'conformance',
+      layout: 'main',
       technique: 'bitmap',
       backend: 'webgl2',
       delivery: 'baked',
