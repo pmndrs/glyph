@@ -26,6 +26,21 @@ Wait on application or GPU completion signals. Do not use sleeps, arbitrary fram
 
 Assert the renderer's actual backend after initialization. A requested backend that silently falls back does not prove the requested path. Always fail on browser page and console errors. Inspect the installed renderer source and declarations before wiring renderer error or device-loss callbacks: in the pinned version, the `onError` declaration and runtime payload shape disagree, so any callback bridge needs one narrow tested adapter rather than an untyped handler.
 
+## Inspect generated programs
+
+When the TSL graph's behavior or performance is surprising, emit the renderer's final WGSL and fallback GLSL as strings before revising the graph. Verify the program-introspection path against the installed Three.js version; internal renderer properties and program shapes are not stable APIs.
+
+Review the emitted program structurally rather than treating successful compilation, different hashes, or changed byte counts as proof. Look for:
+
+- whether `If`, `select`, and loop nodes became control flow, predication, or eager evaluation;
+- duplicated texture loads, root solves, distance evaluations, derivative work, and helper bodies;
+- graph-build specialization that actually removed unused uniforms, attributes, varyings, and branches;
+- dynamic loop bounds, compiler-unrolled bodies, unreachable exits, and changed work limits;
+- computations hoisted out of branches or repeated across vertex and fragment stages;
+- backend differences between WGSL and GLSL that could invalidate a shared mechanism claim.
+
+Retain the shader text with the experiment when a decision depends on its lowering. Authenticate it alongside the source revision and pair structural inspection with pixels and timings: emitted code explains what was submitted, not whether it is correct or fast on the measured GPU.
+
 ## Correctness evidence
 
 Choose evidence appropriate to the graph:
