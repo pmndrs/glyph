@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T11:22:07Z"
+  at: "2026-07-29T13:24:14Z"
 ---
 
 # Canonical implementation roadmap
@@ -115,7 +115,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 8.5  |   ✅   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state rendering evidence.                                                                                       |  XL  | 8.4        |
 | 8.6  |   🟡   | Add configurable MTSDF quality, bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                    |  XL  | 8.5        |
 | 9.1  |   ✅   | Port Slug outline conversion, exact normalization/bands, compact packing, deterministic baker, validator, and embedded/external resources.                                               |  XL  | 7.2        |
-| 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL runtime, batching, lifecycle, centered one-draw outline, and public `Text` integration.                                                  |  XL  | 9.1        |
+| 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL fill runtime, batching, lifecycle, fail-closed paint boundary, and public `Text` integration.                                           |  XL  | 9.1        |
 | 9.3  |   ✅   | Integrate Slug into the shared benchmark/conformance product, release-role scenes, source-outline matrix, and complete two-axis icon-font grid.                                          |  XL  | 9.2        |
 | 9.4  |   ✅   | Reproduce the applicable prior-fork performance baseline, evaluate retained challengers, and close payload, residency, frame-time, and bundle-isolation gates.                           |  XL  | 9.3        |
 | 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.6, 9.4   |
@@ -655,7 +655,7 @@ Deliver:
 - large-size, extreme-zoom, complex-outline, clipping, and transform scenes;
 - a two-axis virtualized icon-font grid spanning the complete named catalog through Bitmap, MTSDF, and Slug;
 - quality-preserving comparisons to source outlines plus reviewed and adapted implementation invariants from Three Flatland prior art, without treating its rendered pixels as an oracle;
-- centered analytic outline through one specialized draw whose unused and all-zero paths retain the original fill material and resource cost;
+- a fail-closed outline/shadow boundary after measured rejection of the dynamic exact-distance outline;
 - payload, upload, GPU-memory, and frame-time reports;
 - bundle assertions proving bitmap- and MSDF-only consumers do not import Slug code.
 
@@ -667,7 +667,7 @@ Exit only when Slug satisfies its outline-accurate large/zoomed-text role withou
 - [x] Emit and validate native RGBA16F curve pages, R32UI headers, and exact R16UI references in embedded or independently authenticated external packaging, with byte-identical resources between forms.
 - [x] Load a freshly baked external core GLB, external Slug companion, and external curve/header/reference resources through public `FontLoader`; public `Text` renders byte-identically to the embedded fixture on WebGPU and forced WebGL2 while exact fetch counts prove every URL-aware path was exercised.
 - [x] Copy and adapt the reviewed Three Flatland coverage graph to the installed Three.js/TSL version, preserving bounded dynamic traversal, stable quadratic solving, loop-invariant hoists, direct integer addressing, page runs, transactional GPU ownership, and non-Slug import isolation.
-- [x] Render fill and centered per-glyph analytic outline in one draw. Fill-only and restored all-zero batches retain the original material and resource cost; explicit zero width is framebuffer-identical to fill-only, while positive outline has an independent CPU authority and separately retained performance evidence. Mixed batches branch around unused stroke evaluation with exact dual-backend pixels and accepted paired GPU evidence. Slug shadow remains explicitly unsupported.
+- [x] Retain the fill-only material and reject outline/shadow paint before allocation or mutation. The copied dynamic exact-distance outline was proven correct but measured at `2.44×–4.33×` fill-only GPU time, then removed rather than shipped. The [outline research record](../planning/slug-outline-research.md) preserves the rejected architecture and bounded-approximation gate.
 - [x] Retain 36 dual-backend/DPR release-role cells for large text, 1,024-ppem magnification, Arabic, Devanagari, CJK, clipping, affine transform, and projection zoom, with source outlines as the quality authority and historical prior-art transforms as labeled invariants only.
 - [x] Retain the seven-source, 28-cell source-quality matrix and the complete 1,402-icon Font Awesome grid through Bitmap, MTSDF, and Slug with two-axis panning, overscan virtualization, fixed labels, logarithmic scaling, and zero missing glyphs through the final catalog entry.
 - [x] Reproduce the applicable prior-fork baseline improvements: dynamic curve loops, generated-shader hoisting, compact exact band storage, complete band-list deduplication, and exact quadratic bounds. Measure structural root branching instead of assuming it; retain and reject the candidate when the existing generated control flow wins overall.
@@ -704,7 +704,7 @@ The order below preserves lanes without pretending the work is part of V1:
 |    12 | Mixed-font spans and explicit font fallback         | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                         |
 |    13 | Large-coverage CJK raster paging and icons          | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
 |    14 | Color emoji                                         | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                              |
-|    15 | Raster effects and expanded recommendations         | L       | Extend outlines, colorization, shadows, and projected-size guidance with measurements.                                                                      |
+|    15 | Raster effects and expanded recommendations         | L       | Test the bounded shared-traversal Slug outline approximation, then extend accepted outlines, colorization, shadows, and projected-size guidance with measurements.                      |
 |    16 | Measured optimization campaigns                     | ongoing | Activate autoresearch only with strict correctness and visual gates.                                                                                        |
 |    17 | Advanced font compiler units                        | XL each | Add general subsetting, remapping, normalized lookups, or SIMD only from evidence.                                                                          |
 |    18 | Vertical writing                                    | XL      | Add Japanese top-to-bottom shaping, orientation, column layout, interaction geometry, and three-renderer evidence after complete CJK paging.                |

@@ -14,7 +14,7 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "781f749f3009048057c96878da83814c72bac62e435524399ae307f3bf09f18e",
+      "sha256": "112159aad923425915dc40223548416336cab5fe76d4144fcf5fcab4af5a0391",
       "bytes": 5145
     },
     {
@@ -90,18 +90,6 @@
       "bytes": 34328
     },
     {
-      "id": "slug-outline-performance",
-      "path": "apps/benchmarks/fixtures/results/slug-outline-performance-chromium149.json",
-      "sha256": "e9bbb41a38215e63b962a773bd0b13f395e6d7c3739832e082fe310f282657b7",
-      "bytes": 72853
-    },
-    {
-      "id": "slug-outline-conformance",
-      "path": "apps/benchmarks/fixtures/results/slug-outline-conformance-chromium149.json",
-      "sha256": "544411e41a2729fba393f74e404e37a1eeac87f4f4da80c9f21b87b62586a513",
-      "bytes": 3404
-    },
-    {
       "id": "slug-external-render-parity",
       "path": "apps/benchmarks/fixtures/results/slug-external-render-parity-chromium149.json",
       "sha256": "701f839443b2fbe2f84c78cafb4b403270b652f9bca5ed3544206e6345b88552",
@@ -112,12 +100,6 @@
       "path": "apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json",
       "sha256": "333953b8ef89df40f5ac9aaa7ef1e91377ff18e24bc8124305a1474e8f6f79a5",
       "bytes": 3318
-    },
-    {
-      "id": "slug-outline-zero-branch-experiment",
-      "path": "apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/environment.json",
-      "sha256": "0a855cf64f7edb2abe638b0abad03c3638ee0e8d6da85822c0e385cf9da7a483",
-      "bytes": 4738
     }
   ]
 }

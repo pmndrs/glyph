@@ -19,10 +19,13 @@ sources:
   - id: "msdf-atlas-gen"
     resource: "https://github.com/Chlumsky/msdf-atlas-gen"
     title: "Official MSDF atlas generator"
+  - id: "slug-outline-research"
+    resource: "slug-outline-research.md"
+    title: "Slug outline architecture"
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T11:22:07Z"
+  at: "2026-07-29T13:24:14Z"
 ---
 
 # Decision register
@@ -159,8 +162,10 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-106 | Slug V0 artifacts retain exact R16UI reference grids. The Three.js 0.185.1 adapter may pair-pack those values into R32UI texels at decode time because its WebGL TSL backend does not declare an unsigned sampler for `UnsignedShortType`; this preserves reference identity and two-byte density plus at most one terminal padding value. Other adapters remain free to upload R16UI directly, and the exception does not redefine the portable artifact. | Accepted |
 | D-107 | Repository TypeScript commands execute the installed native compiler through one bounded runner that first proves its kill/reap path with a synthetic allocator, supervises the native PID rather than a shell or Node shim, caps aggregate tracked RSS, enforces a wall-time limit, and reports no success while a compiler survives. TSL changes compile reduced operation fixtures and a narrow graph before package or application projects; free functions remain the first mitigation but exact-version pathological overloads use one proven concrete compatibility boundary. | Accepted |
 | D-108 | MTSDF V0 uploads only the authenticated base level and uses bilinear field sampling plus screen derivatives for reconstruction. Conventional GPU mip generation and trilinear cross-level sampling are rejected: averaging encoded MSDF channels is not a distance-field-preserving operation, and the primary MSDF paper plus official generators provide no affirmative mipmap guidance. Runtime, standalone validation, fixtures, and the inspector report the exact padded base texture-array allocation. Any future size-specific representation is an independently authored atlas layer or strike, not a conventional mip chain. | Accepted |
-| D-109 | Slug V0 implements centered analytic outline in one specialized fill-plus-outline draw. Fill-only paint uses the original fill material and allocates no outline attributes or pipeline. Positive outline lazily adds per-instance color/width data and swaps the same mesh; restoring every width to zero restores the fill material. Fill and outline composite per glyph in ordinary painter order, matching the MSDF path rather than promising a global all-outlines-behind-all-fills layer. Mixed batches branch around analytic stroke evaluation when fill is opaque, per-instance width is zero, or per-instance outline alpha is zero. An authenticated same-build experiment preserves exact pixels and one draw while reducing mixed-batch median paired GPU time by 30.51% on WebGPU and 23.96% on WebGL2; all-outlined guards remain below the precommitted 2% median-regression ceiling. The search traverses every intersecting primary-axis band within the `0.05 em` width bound and checks the orthogonal axis only for quantized y-flat curves. Shadow remains unsupported, and fill/outline performance stays separately reported. | Settled for V0 |
+| D-109 | Slug V0 implemented a centered exact-distance outline in one specialized fill-plus-outline draw. Retained measurements later showed `2.44×–4.33×` fill-only GPU time, and generated-shader inspection found duplicated traversal, curve loads, closest-point refinement, and a derivative inside divergent control flow. | Superseded by D-111 |
 | D-110 | MTSDF V0 exposes `emSize` and full `pixelRange` as authenticated integer bake options. `emSize` is limited to `1..=1022`, `pixelRange` to `1..=1020`, `planeUnitsPerEm` equals `emSize`, and field padding is `ceil(pixelRange / 2)`. Omitted or partial options resolve against the 64/8 compatibility defaults; explicit effective 64/8 canonicalizes to the legacy fieldless descriptor and raster key, while every non-default descriptor contains both effective values. The low-level Wasm ABI is unchanged. Passing 32/4 and 32/6 155-glyph subset bakes proves the control path, not a new recommended default; quality and payload benchmarking owns that decision. | Accepted |
+| D-111 | Remove the dynamic exact-distance Slug outline rather than ship an expensive fallback. Slug V0 supports fill and opacity and rejects every runtime outline or shadow property. The generic text outline API remains because MTSDF owns it. | Accepted |
+| D-112 | Research one bounded Slug outline approximation that reuses ordinary fill traversal and screen derivatives without closest-point solving or independent halo traversal. It ships only if its quality is no worse than the MTSDF outline corpus and its median GPU time is at most `1.15×` a same-expanded-quad fill control on both WebGPU and forced WebGL2; otherwise Slug remains fill-only. | Experiment |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 

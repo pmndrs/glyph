@@ -72,6 +72,26 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
     paintIndices: Uint16Array.of(0, 0, 0, 0),
     palette: [{ color: [0.25, 0.5, 0.75, 1] }],
   }
+  for (const outline of [
+    { color: [0, 0, 0, 1], width: 1 },
+    { color: [0, 0, 0, 1], width: 0 },
+    { color: [0, 0, 0, 0], width: 1 },
+  ]) {
+    assert.throws(
+      () =>
+        slug.buildBatches(
+          layout,
+          resource,
+          0,
+          {
+            paintIndices: Uint16Array.of(0, 0, 0, 0),
+            palette: [{ color: [1, 1, 1, 1], outline }],
+          },
+          1,
+        ),
+      /does not support outline paint/,
+    )
+  }
   const batch = slug.buildBatches(layout, resource, 0, paint, 1)
   assert.equal(batch.glyphCount, 3)
   assert.equal(batch.drawCount, 3)
@@ -120,127 +140,21 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
     [1, 0, 0, 0.5],
   )
 
-  const outlinedPaint = {
-    paintIndices: Uint16Array.of(0, 0, 0, 0),
-    palette: [{ color: [1, 1, 1, 1], outline: { color: [0.1, 0.2, 0.3, 0.75], width: 0.8 } }],
-  }
   const fillMaterial = firstMesh.material
-  batch.updatePaint(outlinedPaint)
-  assert.equal(batch.drawCount, 3)
-  assert.equal(batch.object.children.length, 3)
-  assert.deepEqual(
-    batch.object.children.map(({ renderOrder }) => renderOrder),
-    [0, 1, 2],
-  )
-  assert.notEqual(firstMesh.material, fillMaterial, 'outline selects one specialized material')
-  const outlinedMaterial = firstMesh.material
-  const outlinedGeometry = firstMesh.geometry
-  const outlineColor = firstMesh.geometry.getAttribute('slugOutlineColor')
-  const outlineHalfWidth = firstMesh.geometry.getAttribute('slugOutlineHalfWidth')
-  assert.notEqual(outlineColor.data, firstColor.data, 'outline values use a lazy separate buffer')
-  assert.deepEqual(
-    [outlineColor.getX(0), outlineColor.getY(0), outlineColor.getZ(0), outlineColor.getW(0)],
-    [...Float32Array.of(0.1, 0.2, 0.3, 0.75)],
-  )
-  assert.equal(outlineHalfWidth.getX(0), Float32Array.of(0.05)[0])
-  queriedDrawingBuffer = false
-  firstMesh.onBeforeRender(
-    {
-      getDrawingBufferSize(target) {
-        queriedDrawingBuffer = true
-        return target.set(1600, 900)
-      },
-    },
-    {},
-    new THREE.OrthographicCamera(-1, 1, 1, -1),
-  )
-  assert.equal(queriedDrawingBuffer, true, 'outlined material owns a physical viewport hook')
-
-  batch.updatePaint({
-    paintIndices: Uint16Array.of(0, 0, 0, 0),
-    palette: [{ color: [1, 1, 1, 1], outline: { color: [1, 0, 0, 1], width: 0 } }],
-  })
-  assert.equal(batch.drawCount, 3, 'zero-width outline remains one draw per page run')
-  assert.equal(batch.object.children.length, 3, 'zero-width repaint retains batch identity')
-  assert.equal(firstMesh.material, fillMaterial, 'zero width restores the fill-only pipeline')
-  assert.notEqual(firstMesh.geometry, outlinedGeometry, 'zero width releases outlined geometry')
-  assert.equal(
-    firstMesh.geometry.getAttribute('slugOutlineColor'),
-    undefined,
-    'zero width releases the outline color buffer',
-  )
-  assert.equal(
-    firstMesh.geometry.getAttribute('slugOutlineHalfWidth'),
-    undefined,
-    'zero width releases the outline width buffer',
-  )
-
-  batch.updatePaint(outlinedPaint)
-  assert.equal(batch.drawCount, 3)
-  assert.equal(batch.object.children.length, 3, 're-enabling outline does not rebuild meshes')
-  assert.equal(firstMesh.material, outlinedMaterial, 'outlined pipeline is reused')
-  assert.notEqual(
-    firstMesh.geometry.getAttribute('slugOutlineColor').data,
-    outlineColor.data,
-    're-enabled outline allocates a new instance buffer',
-  )
-
-  const mixedBatch = slug.buildBatches(
-    {
-      glyphIds: Uint16Array.of(0, 0),
-      glyphFontSlots: Uint16Array.of(0, 0),
-      glyphFontSizes: Float32Array.of(16, 16),
-      x: Float32Array.of(0, 16),
-      y: Float32Array.of(16, 16),
-    },
-    resource,
-    0,
-    {
-      paintIndices: Uint16Array.of(0, 1),
-      palette: [
-        { color: [1, 1, 1, 1], outline: { color: [1, 0, 0, 1], width: 0.8 } },
-        { color: [1, 1, 1, 1] },
-      ],
-    },
-    1,
-  )
-  assert.equal(mixedBatch.drawCount, 1, 'mixed per-instance outline remains one batch')
-  assert.equal(mixedBatch.object.children.length, 1)
-  const mixedWidths = mixedBatch.object.children[0].geometry.getAttribute('slugOutlineHalfWidth')
-  assert.equal(mixedWidths.getX(0), Float32Array.of(0.05)[0])
-  assert.equal(mixedWidths.getX(1), 0, 'zero-width contribution remains in the shared batch')
-  const mixedMesh = mixedBatch.object.children[0]
-  const mixedMaterial = mixedMesh.material
-  const mixedColors = mixedMesh.geometry.getAttribute('slugColor')
-  const initialMixedColor = [
-    mixedColors.getX(0),
-    mixedColors.getY(0),
-    mixedColors.getZ(0),
-    mixedColors.getW(0),
-  ]
   assert.throws(
     () =>
-      mixedBatch.updatePaint({
-        paintIndices: Uint16Array.of(0, 1),
-        palette: [
-          { color: [0, 1, 0, 1] },
-          { color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 1 } },
-        ],
+      batch.updatePaint({
+        paintIndices: Uint16Array.of(0, 0, 0, 0),
+        palette: [{ color: [0, 1, 0, 1], outline: { color: [0, 0, 0, 1], width: 0 } }],
       }),
-    /exceeds 0\.05 em/,
+    /does not support outline paint/,
   )
   assert.deepEqual(
-    [mixedColors.getX(0), mixedColors.getY(0), mixedColors.getZ(0), mixedColors.getW(0)],
-    initialMixedColor,
+    [firstColor.getX(0), firstColor.getY(0), firstColor.getZ(0), firstColor.getW(0)],
+    [1, 0, 0, 0.5],
     'failed paint validation leaves earlier instance colors unchanged',
   )
-  assert.equal(mixedWidths.getX(0), Float32Array.of(0.05)[0])
-  assert.equal(
-    mixedMesh.material,
-    mixedMaterial,
-    'failed paint validation preserves material state',
-  )
-  mixedBatch.dispose()
+  assert.equal(firstMesh.material, fillMaterial, 'failed paint validation preserves material state')
   assert.throws(
     () =>
       batch.updatePaint({
@@ -255,7 +169,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
         paintIndices: Uint16Array.of(0, 0, 0, 0),
         palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 1 } }],
       }),
-    /exceeds 0\.05 em/,
+    /does not support outline paint/,
   )
 
   batch.dispose()

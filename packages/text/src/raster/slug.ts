@@ -9,11 +9,9 @@ import * as THREE from 'three/webgpu'
 import type { Node, UniformNode } from 'three/webgpu'
 import {
   Fn,
-  If,
   add,
   attribute,
   bool,
-  float,
   mul,
   positionLocal,
   sub,
@@ -45,26 +43,7 @@ import {
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
 } from '../internal/slug-contract.js'
-import {
-  slugDilate,
-  slugRender,
-  slugStroke,
-  type SlugShaderPage,
-} from '../internal/slug-shaders/index.js'
-import {
-  boolAnd,
-  floatAdd,
-  floatDiv,
-  floatGreaterThan,
-  floatLessThan,
-  floatMax,
-  floatMul,
-  floatSub,
-  vec3Add,
-  vec3DivFloat,
-  vec3MulFloat,
-  vec4FromVec3Float,
-} from '../internal/slug-shaders/tsl-compat.js'
+import { slugDilate, slugRender, type SlugShaderPage } from '../internal/slug-shaders/index.js'
 import type { ParagraphLayout } from '../layout.js'
 import type { GlyphPaint, ResolvedPaint } from '../paint.js'
 import {
@@ -91,7 +70,6 @@ export {
 const ABSENT_PAGE = 0xffff
 const MAX_TEXTURE_DIMENSION = 16_384
 const MAX_RUNTIME_GPU_BYTES = 256 * 1024 * 1024
-const SLUG_MAX_OUTLINE_EM = 0.05
 const SLUG_FLOAT_INSTANCE_STRIDE = 17
 const SLUG_FLOAT_INSTANCE_OFFSETS = {
   origin: 0,
@@ -102,8 +80,6 @@ const SLUG_FLOAT_INSTANCE_OFFSETS = {
   bandTransform: 9,
   color: 13,
 } as const
-const SLUG_OUTLINE_INSTANCE_STRIDE = 5
-const SLUG_OUTLINE_INSTANCE_OFFSETS = { color: 0, halfWidth: 4 } as const
 const SLUG_UINT_INSTANCE_STRIDE = 6
 const SLUG_UINT_INSTANCE_OFFSETS = {
   curveBase: 0,
@@ -144,12 +120,9 @@ export interface SlugResource {
 interface SlugBatchRun {
   readonly glyphIndices: Uint32Array
   readonly floatData: THREE.InstancedInterleavedBuffer
-  readonly colorAttribute: THREE.InterleavedBufferAttribute
-  outlineData: THREE.InstancedInterleavedBuffer | undefined
   geometry: THREE.InstancedBufferGeometry
-  readonly page: SlugPageResource
   readonly fillMesh: THREE.Mesh
-  materialState: SlugMaterialState
+  readonly materialState: SlugMaterialState
 }
 
 export interface SlugDrawBatch {
@@ -161,7 +134,6 @@ export interface SlugDrawBatch {
 }
 
 const materialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
-const outlinedMaterialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
 
 const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = defineRaster({
   kind: SLUG_KIND,
@@ -575,8 +547,8 @@ function buildSlugBatches(
       if (disposed) throw new TypeError('Slug draw batch has been disposed')
       assertParallelRasterPaint(layout, nextPaint)
       assertSlugPaint(nextPaint)
-      for (const run of runs) assertSlugRunPaint(layout, run.glyphIndices, nextPaint)
-      for (const run of runs) updateRunPaint(run, layout, nextPaint)
+      for (const run of runs) assertSlugRunPaint(run.glyphIndices, nextPaint)
+      for (const run of runs) updateRunPaint(run, nextPaint)
     },
     dispose() {
       if (disposed) return
@@ -624,9 +596,6 @@ function populateSlugRun(
     1,
   )
   const records = recordView(resource)
-  let outlineData: THREE.InstancedInterleavedBuffer | undefined
-  let outlineVisible = false
-
   for (let instance = 0; instance < count; instance += 1) {
     const glyphIndex = glyphIndices[instance]!
     const glyphId = layout.glyphIds[glyphIndex]!
@@ -673,12 +642,6 @@ function populateSlugRun(
     ])
     const resolvedPaint = resolvedSlugPaint(paint, glyphIndex)
     setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.color, resolvedPaint.color)
-    const outline = slugOutlineValues(fontSize, resolvedPaint)
-    if (outline.visible && outlineData === undefined) {
-      outlineData = createSlugOutlineData(geometry, count)
-    }
-    if (outlineData !== undefined) writeSlugOutlineInstance(outlineData, instance, outline)
-    outlineVisible = outline.visible || outlineVisible
     setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.curveBase, [
       records.getUint32(record + 16, true),
     ])
@@ -753,26 +716,17 @@ function populateSlugRun(
     1,
     SLUG_UINT_INSTANCE_OFFSETS.verticalBandCount,
   )
-  const colorAttribute = instanceAttribute(
-    geometry,
-    floatData,
-    'slugColor',
-    4,
-    SLUG_FLOAT_INSTANCE_OFFSETS.color,
-  )
+  instanceAttribute(geometry, floatData, 'slugColor', 4, SLUG_FLOAT_INSTANCE_OFFSETS.color)
 
   const page = resource.pages[pageIndex]!
-  const initialState = outlineVisible ? slugOutlinedMaterialState(page) : slugMaterialState(page)
+  const initialState = slugMaterialState(page)
   const fillMesh = new THREE.Mesh(geometry, initialState.material)
   fillMesh.frustumCulled = false
   fillMesh.renderOrder = glyphIndices[0] ?? 0
   const run: SlugBatchRun = {
     glyphIndices: Uint32Array.from(glyphIndices),
     floatData,
-    colorAttribute,
-    outlineData,
     geometry,
-    page,
     fillMesh,
     materialState: initialState,
   }
@@ -833,94 +787,14 @@ function assertSlugGlyphInputs(
     }
     glyphIndices.push(glyphIndex)
   }
-  assertSlugRunPaint(layout, glyphIndices, paint)
+  assertSlugRunPaint(glyphIndices, paint)
 }
 
-function assertSlugRunPaint(
-  layout: ParagraphLayout,
-  glyphIndices: ArrayLike<number>,
-  paint: GlyphPaint,
-): void {
+function assertSlugRunPaint(glyphIndices: ArrayLike<number>, paint: GlyphPaint): void {
   for (let instance = 0; instance < glyphIndices.length; instance += 1) {
     const glyphIndex = glyphIndices[instance]!
-    const fontSize = layout.glyphFontSizes[glyphIndex]!
-    if (!Number.isFinite(fontSize) || fontSize <= 0) {
-      throw new TypeError('Slug glyph font sizes must be positive finite values')
-    }
-    slugOutlineValues(fontSize, resolvedSlugPaint(paint, glyphIndex))
+    resolvedSlugPaint(paint, glyphIndex)
   }
-}
-
-interface SlugOutlineValues {
-  readonly color: readonly number[]
-  readonly halfWidth: number
-  readonly visible: boolean
-}
-
-function slugOutlineValues(fontSize: number, paint: ResolvedPaint): SlugOutlineValues {
-  const outlineWidth = paint.outline?.width ?? 0
-  const halfWidth = outlineWidth / fontSize
-  if (halfWidth > SLUG_MAX_OUTLINE_EM) {
-    throw new RangeError(`Slug outline width exceeds ${SLUG_MAX_OUTLINE_EM} em`)
-  }
-  const visible = outlineWidth > 0 && (paint.outline?.color[3] ?? 0) > 0
-  return {
-    color: visible && paint.outline !== undefined ? paint.outline.color : [0, 0, 0, 0],
-    halfWidth,
-    visible,
-  }
-}
-
-function createSlugOutlineData(
-  geometry: THREE.InstancedBufferGeometry,
-  instanceCount: number,
-): THREE.InstancedInterleavedBuffer {
-  const data = new THREE.InstancedInterleavedBuffer(
-    new Float32Array(instanceCount * SLUG_OUTLINE_INSTANCE_STRIDE),
-    SLUG_OUTLINE_INSTANCE_STRIDE,
-    1,
-  )
-  instanceAttribute(geometry, data, 'slugOutlineColor', 4, SLUG_OUTLINE_INSTANCE_OFFSETS.color)
-  instanceAttribute(
-    geometry,
-    data,
-    'slugOutlineHalfWidth',
-    1,
-    SLUG_OUTLINE_INSTANCE_OFFSETS.halfWidth,
-  )
-  return data
-}
-
-function restoreSlugFillOnlyGeometry(run: SlugBatchRun): void {
-  const previous = run.geometry
-  const geometry = unitRasterQuadGeometry()
-  geometry.instanceCount = previous.instanceCount
-  for (const [name, geometryAttribute] of Object.entries(previous.attributes)) {
-    if (
-      name !== 'position' &&
-      name !== 'uv' &&
-      name !== 'slugOutlineColor' &&
-      name !== 'slugOutlineHalfWidth'
-    ) {
-      geometry.setAttribute(name, geometryAttribute)
-    }
-  }
-
-  // Three.js releases attribute buffers only when their owning geometry is disposed. Dispose
-  // while the mesh still points at the outlined geometry, then publish the fill-only replacement.
-  previous.dispose()
-  run.fillMesh.geometry = geometry
-  run.geometry = geometry
-  run.outlineData = undefined
-}
-
-function writeSlugOutlineInstance(
-  data: THREE.InstancedInterleavedBuffer,
-  instance: number,
-  outline: SlugOutlineValues,
-): void {
-  setInstanceValues(data, instance, SLUG_OUTLINE_INSTANCE_OFFSETS.color, outline.color)
-  setInstanceValues(data, instance, SLUG_OUTLINE_INSTANCE_OFFSETS.halfWidth, [outline.halfWidth])
 }
 
 function slugMaterialState(page: SlugPageResource): SlugMaterialState {
@@ -1002,118 +876,6 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
   return state
 }
 
-/** Copied analytic stroke, composed with fill in one specialized draw. */
-function slugOutlinedMaterialState(page: SlugPageResource): SlugMaterialState {
-  const existing = outlinedMaterialStateByCurveTexture.get(page.curveTexture)
-  if (existing !== undefined) return existing
-  const material = new THREE.MeshBasicNodeMaterial({
-    blending: THREE.NormalBlending,
-    depthTest: false,
-    depthWrite: false,
-    side: THREE.FrontSide,
-    transparent: true,
-  })
-  const viewport: UniformNode<'vec2', THREE.Vector2> = uniform(new THREE.Vector2(1, 1))
-  const mvpRow0: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(1, 0, 0, 0))
-  const mvpRow1: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(0, 1, 0, 0))
-  const mvpRow3: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(0, 0, 0, 1))
-  const renderCoordinate = varyingProperty('vec2', 'slugStrokeRenderCoordinate')
-  const origin: Node<'vec2'> = attribute<'vec2'>('slugOrigin', 'vec2')
-  const size: Node<'vec2'> = attribute<'vec2'>('slugSize', 'vec2')
-  const emOrigin: Node<'vec2'> = attribute<'vec2'>('slugEmOrigin', 'vec2')
-  const emSize: Node<'vec2'> = attribute<'vec2'>('slugEmSize', 'vec2')
-  const inverseScale: Node<'float'> = attribute<'float'>('slugInverseScale', 'float')
-  const bandTransform: Node<'vec4'> = attribute<'vec4'>('slugBandTransform', 'vec4')
-  const curveBaseTexel: Node<'uint'> = attribute<'uint'>('slugCurveBase', 'uint')
-  const horizontalHeaderBase: Node<'uint'> = attribute<'uint'>('slugHorizontalHeaderBase', 'uint')
-  const verticalHeaderBase: Node<'uint'> = attribute<'uint'>('slugVerticalHeaderBase', 'uint')
-  const referenceBase: Node<'uint'> = attribute<'uint'>('slugReferenceBase', 'uint')
-  const horizontalBandCount: Node<'uint'> = attribute<'uint'>('slugHorizontalBandCount', 'uint')
-  const verticalBandCount: Node<'uint'> = attribute<'uint'>('slugVerticalBandCount', 'uint')
-  const color: Node<'vec4'> = attribute<'vec4'>('slugColor', 'vec4')
-  const outlineColor: Node<'vec4'> = attribute<'vec4'>('slugOutlineColor', 'vec4')
-  const outlineHalfWidth: Node<'float'> = attribute<'float'>('slugOutlineHalfWidth', 'float')
-
-  material.positionNode = Fn(() => {
-    const directionX = sub(mul(positionLocal.x, 2), 1)
-    const directionY = sub(mul(positionLocal.y, 2), 1)
-    const objectHalfWidth = floatDiv(outlineHalfWidth, inverseScale)
-    const localPosition = vec2(
-      add(add(origin.x, mul(positionLocal.x, size.x)), mul(directionX, objectHalfWidth)),
-      add(add(origin.y, mul(positionLocal.y, size.y)), mul(directionY, objectHalfWidth)),
-    )
-    const emCoordinate = vec2(
-      add(add(emOrigin.x, mul(positionLocal.x, emSize.x)), mul(directionX, outlineHalfWidth)),
-      add(add(emOrigin.y, mul(positionLocal.y, emSize.y)), mul(directionY, outlineHalfWidth)),
-    )
-    const expandedWidth = add(size.x, mul(objectHalfWidth, 2))
-    const expandedHeight = add(size.y, mul(objectHalfWidth, 2))
-    const outwardNormal = vec2(
-      mul(sub(positionLocal.x, 0.5), expandedWidth),
-      mul(sub(positionLocal.y, 0.5), expandedHeight),
-    )
-    const dilated = slugDilate(
-      localPosition,
-      outwardNormal,
-      emCoordinate,
-      inverseScale,
-      mvpRow0,
-      mvpRow1,
-      mvpRow3,
-      viewport,
-    )
-    renderCoordinate.assign(dilated.textureCoordinate)
-    return vec3(dilated.position.x, dilated.position.y, 0)
-  })()
-  const composedColor = Fn(() => {
-    const glyph = {
-      curveBaseTexel,
-      horizontalHeaderBase,
-      verticalHeaderBase,
-      referenceBase,
-      horizontalBandCount,
-      verticalBandCount,
-      bandTransform,
-    }
-    const fillCoverage = slugRender(page, glyph, renderCoordinate, {
-      evenOdd: bool(false),
-      weightBoost: bool(false),
-    })
-    const fillAlpha = floatMul(color.a, fillCoverage).toVar('slugOutlinedFillAlpha')
-    const outlineAlpha = floatMul(outlineColor.a, float(0)).toVar('slugOutlinedOutlineAlpha')
-    const evaluateStroke = (): void => {
-      const strokeCoverage = slugStroke(page, glyph, renderCoordinate, outlineHalfWidth)
-      outlineAlpha.assign(floatMul(outlineColor.a, strokeCoverage))
-    }
-    const strokeCondition = boolAnd(
-      floatLessThan(fillAlpha, float(1)),
-      boolAnd(
-        floatGreaterThan(outlineHalfWidth, float(0)),
-        floatGreaterThan(outlineColor.a, float(0)),
-      ),
-    )
-    If(strokeCondition, evaluateStroke)
-    const outlineContribution = floatMul(outlineAlpha, floatSub(float(1), fillAlpha)).toVar(
-      'slugOutlinedContribution',
-    )
-    const alpha = floatAdd(fillAlpha, outlineContribution).toVar('slugOutlinedAlpha')
-    const premultipliedColor = vec3Add(
-      vec3MulFloat(color.rgb, fillAlpha),
-      vec3MulFloat(outlineColor.rgb, outlineContribution),
-    )
-    return vec4FromVec3Float(
-      vec3DivFloat(premultipliedColor, floatMax(alpha, float(1 / 65_536))),
-      alpha,
-    )
-  })()
-  material.colorNode = composedColor.rgb
-  material.opacityNode = composedColor.a
-
-  const state = { material, viewport, mvpRow0, mvpRow1, mvpRow3 }
-  outlinedMaterialStateByCurveTexture.set(page.curveTexture, state)
-  return state
-}
-
 function updateMvpUniforms(
   state: SlugMaterialState,
   object: THREE.Object3D,
@@ -1127,8 +889,7 @@ function updateMvpUniforms(
   state.mvpRow3.value.set(values[3]!, values[7]!, values[11]!, values[15]!)
 }
 
-function updateRunPaint(run: SlugBatchRun, layout: ParagraphLayout, paint: GlyphPaint): void {
-  let outlineVisible = false
+function updateRunPaint(run: SlugBatchRun, paint: GlyphPaint): void {
   for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
     const glyphIndex = run.glyphIndices[instance]!
     const resolvedPaint = resolvedSlugPaint(paint, glyphIndex)
@@ -1138,35 +899,15 @@ function updateRunPaint(run: SlugBatchRun, layout: ParagraphLayout, paint: Glyph
       SLUG_FLOAT_INSTANCE_OFFSETS.color,
       resolvedPaint.color,
     )
-    const outline = slugOutlineValues(layout.glyphFontSizes[glyphIndex]!, resolvedPaint)
-    if (outline.visible && run.outlineData === undefined) {
-      run.outlineData = createSlugOutlineData(run.geometry, run.glyphIndices.length)
-    }
-    if (run.outlineData !== undefined) {
-      writeSlugOutlineInstance(run.outlineData, instance, outline)
-    }
-    outlineVisible = outline.visible || outlineVisible
   }
   run.floatData.needsUpdate = true
-  if (run.outlineData !== undefined) run.outlineData.needsUpdate = true
-  if (outlineVisible) {
-    run.materialState = slugOutlinedMaterialState(run.page)
-    run.fillMesh.material = run.materialState.material
-  } else {
-    if (run.outlineData !== undefined) restoreSlugFillOnlyGeometry(run)
-    run.materialState = slugMaterialState(run.page)
-    run.fillMesh.material = run.materialState.material
-  }
 }
 
 function assertSlugPaint(paint: GlyphPaint): void {
   for (const entry of paint.palette) {
     assertSlugColor(entry.color, 'Slug fill')
     if (entry.outline !== undefined) {
-      assertSlugColor(entry.outline.color, 'Slug outline')
-      if (!Number.isFinite(entry.outline.width) || entry.outline.width < 0) {
-        throw new TypeError('Slug outline width must be a non-negative finite value')
-      }
+      throw new TypeError('Slug V0 does not support outline paint')
     }
     if (entry.shadow !== undefined) {
       throw new TypeError('Slug V0 does not support shadow paint')
@@ -1190,10 +931,7 @@ function disposeSlugResource(resource: SlugResource): void {
 function disposeSlugPage(page: SlugPageResource): void {
   const state = materialStateByCurveTexture.get(page.curveTexture)
   state?.material.dispose()
-  const outlinedStates = outlinedMaterialStateByCurveTexture.get(page.curveTexture)
-  outlinedStates?.material.dispose()
   materialStateByCurveTexture.delete(page.curveTexture)
-  outlinedMaterialStateByCurveTexture.delete(page.curveTexture)
   page.curveTexture.dispose()
   page.headerTexture.dispose()
   page.referenceTexture.dispose()

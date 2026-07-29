@@ -36,24 +36,12 @@ const evidenceFiles = [
   ],
   ['slug-role-scenes', 'apps/benchmarks/fixtures/results/slug-role-scenes-chromium149.json'],
   [
-    'slug-outline-performance',
-    'apps/benchmarks/fixtures/results/slug-outline-performance-chromium149.json',
-  ],
-  [
-    'slug-outline-conformance',
-    'apps/benchmarks/fixtures/results/slug-outline-conformance-chromium149.json',
-  ],
-  [
     'slug-external-render-parity',
     'apps/benchmarks/fixtures/results/slug-external-render-parity-chromium149.json',
   ],
   [
     'icon-grid-retained-evidence',
     'apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json',
-  ],
-  [
-    'slug-outline-zero-branch-experiment',
-    'apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/environment.json',
   ],
 ] as const
 
