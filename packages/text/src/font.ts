@@ -77,7 +77,12 @@ export type FontRasterModuleOf<Token extends AnyFontToken> = Token['raster']['mo
 
 export function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(
   input: Input,
-  raster: Module & ([RasterOptionsOf<Module>] extends [never] ? unknown : never),
+  raster: Module &
+    ([RasterOptionsOf<Module>] extends [never]
+      ? unknown
+      : undefined extends RasterOptionsOf<Module>
+        ? unknown
+        : never),
 ): FontToken<Module, Input>
 
 export function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(

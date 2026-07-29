@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-26T21:23:09Z"
+  at: "2026-07-29T11:22:07Z"
 ---
 
 # Runtime and bake API fixture V0
@@ -1075,7 +1075,7 @@ interface LoadedRaster<M extends AnyRasterModule> {
 }
 ```
 
-Each raster package owns its configuration surface and returns a typed raster definition. A raster with no required configuration may export a ready-made module value. A module whose descriptor has options cannot be passed bare: its configured request requires those options. Bitmap exposes only its factory because its fixed strike set is mandatory:
+Each raster package owns its configuration surface and returns a typed raster definition. A raster with no required configuration may export a ready-made module value. A module whose options are optional may be passed bare for its canonical defaults or paired with an options object; a module with required options cannot be passed bare. Bitmap exposes only its factory because its strike set is mandatory. MSDF exposes a ready-made module whose optional quality controls default to 64 px/em and a full eight-pixel range:
 
 ```ts
 type StaticNumberTuple<Values extends readonly [number, ...number[]]> =
@@ -1084,6 +1084,20 @@ type StaticNumberTuple<Values extends readonly [number, ...number[]]> =
 declare function bitmap<const Strikes extends readonly [number, ...number[]]>(
   options: { strikes: StaticNumberTuple<Strikes> },
 ): RasterRequest<BitmapModule>
+
+interface MsdfOptions {
+  /** Atlas texels per font em; integer 1..=1022, default 64. */
+  readonly emSize?: number
+  /** Full encoded signed-distance range; integer 1..=1020, default 8. */
+  readonly pixelRange?: number
+}
+
+export const msdf: MsdfModule
+
+const compactMsdf = {
+  module: msdf,
+  options: { emSize: 32, pixelRange: 6 },
+} satisfies RasterRequest<MsdfModule>
 
 declare const opaqueSnapshotBrand: unique symbol
 
@@ -1110,11 +1124,12 @@ declare function createBitmapGlyphPositionTransition(
   from: BitmapGlyphPositionSnapshot,
 ): BitmapGlyphPositionTransition
 
-export const msdf: MsdfModule
 export const slug: SlugModule
 ```
 
 Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, no greater than the exported `MAX_BITMAP_PPEM` value of 1022, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
+
+MSDF option normalization fills a missing field from the 64/8 defaults, then authenticates both effective fields in every non-default descriptor. Explicit 64/8 canonicalizes to the legacy fieldless descriptor and raster key so old baked assets remain compatible. The generated resource sets `planeUnitsPerEm` equal to `emSize` and pads each glyph by `ceil(pixelRange / 2)` texels. These controls allow callers to trade atlas cost against field resolution; they do not change the recommended default without separate quality and payload evidence.
 
 The optional bitmap presentation helpers snapshot copied font handles, glyph IDs, UTF-16 clusters, exact font-size bits, occurrence ordinals, and currently displayed instance origins without retaining a `Text`, batch, texture, or geometry. A transition matches only the same complete glyph identity and updates the target batch's existing origin arrays. New or reshaped glyphs remain at their authoritative target positions; sizes, UVs, paint, shaping, line breaks, and `ParagraphLayout` never interpolate. Progress is finite and bounded to `[0, 1]`, stale or disposed batches reject mutation, and `finish`/`dispose` are idempotent. Target-origin storage is allocated only when a consumer creates a transition. The existing TSL graph still performs the final physical-pixel snap.
 

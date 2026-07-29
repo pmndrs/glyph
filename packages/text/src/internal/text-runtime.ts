@@ -1,4 +1,4 @@
-import type { AnyFontToken, FontInput, LoadedFont, RegisteredFont } from '../font.js'
+import type { FontInput, LoadedFont, RegisteredFont } from '../font.js'
 import {
   FontLoader,
   FontRegistry,
@@ -47,7 +47,7 @@ export function textShaper(registry: FontRegistry): Promise<RuntimeShaper> {
 }
 
 export async function loadTextToken<Module extends AnyRasterModule, Input extends FontInput>(
-  token: AnyFontToken & { readonly input: Input; readonly raster: RasterRequest<Module> },
+  token: { readonly input: Input; readonly raster: RasterRequest<Module> },
   registry: FontRegistry,
   signal?: AbortSignal,
 ): Promise<LoadedFont<Module, Input>> {

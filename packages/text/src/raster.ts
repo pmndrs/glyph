@@ -17,6 +17,12 @@ export type JsonValue =
 
 export type RasterOptionsArgument<Options> = [Options] extends [never] ? undefined : Options
 
+type RasterOptionsOptional<Options> = [Options] extends [never]
+  ? true
+  : undefined extends Options
+    ? true
+    : false
+
 export type StaticNumberTuple<Values extends readonly [number, ...number[]]> =
   number extends Values[number] ? never : Values
 
@@ -179,11 +185,14 @@ type RasterRequestBase<Module extends AnyRasterModule> = {
 export type RasterRequest<Module extends AnyRasterModule> = RasterRequestBase<Module> &
   ([RasterOptionsOf<Module>] extends [never]
     ? { readonly options?: never }
-    : { readonly options: RasterOptionsOf<Module> })
+    : undefined extends RasterOptionsOf<Module>
+      ? { readonly options?: RasterOptionsOf<Module> }
+      : { readonly options: RasterOptionsOf<Module> })
 
-export type RasterInput<Module extends AnyRasterModule> = [RasterOptionsOf<Module>] extends [never]
-  ? Module | RasterRequest<Module>
-  : RasterRequest<Module>
+export type RasterInput<Module extends AnyRasterModule> =
+  RasterOptionsOptional<RasterOptionsOf<Module>> extends true
+    ? Module | RasterRequest<Module>
+    : RasterRequest<Module>
 
 export type AnyRasterInput =
   | AnyRasterModule

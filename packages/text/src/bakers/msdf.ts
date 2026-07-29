@@ -17,10 +17,11 @@ import {
   MSDF_FORMAT_VERSION,
   MSDF_KIND,
   msdfDescriptor,
+  type MsdfOptions,
   type MsdfDescriptorV0,
 } from '../internal/msdf-contract.js'
 
-export type MsdfBakerOptions = undefined
+export type MsdfBakerOptions = MsdfOptions | undefined
 
 export interface MtsdfBakerRequestV0 {
   readonly fontFaceIndex: number

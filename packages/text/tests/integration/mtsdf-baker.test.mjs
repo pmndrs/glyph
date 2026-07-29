@@ -30,7 +30,12 @@ const fontUrl = new URL(
   '../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf',
   import.meta.url,
 )
+const showcaseFontUrl = new URL(
+  '../../../../apps/benchmarks/fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf',
+  import.meta.url,
+)
 const shapingHash = '6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09'
+const showcaseShapingHash = '3f8183c0d56b8b225b8a6a7b2fda80966579b46636b96975434fa30e8c17c33e'
 const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'))
 const progressImports = { env: { pmndrs_text_bake_progress() {} } }
 
@@ -127,6 +132,43 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   assert.equal(extension.pages.length, pages.length)
   await exerciseArtifactValidation(result, raster, pages, rasterKey)
   await exerciseRuntime(result, raster, extension, rasterKey)
+})
+
+test('bakes and validates authenticated 32 px/em quality policies', async () => {
+  const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(showcaseFontUrl)])
+  const core = await createMtsdfBaker(wasm)
+  const reports = []
+  for (const pixelRange of [4, 6]) {
+    const descriptor = msdfDescriptor({ emSize: 32, pixelRange })
+    const rasterKey = await msdfDescriptorRasterKey(descriptor)
+    const result = await msdfBakerFromCore(core).bake({
+      font: {
+        source: new Uint8Array(source),
+        fontFaceIndex: 0,
+        glyphCount: 155,
+        shapingHash: showcaseShapingHash,
+      },
+      rasterKey,
+      packaging: { artifact: 'embedded', pages: 'embedded' },
+      descriptor,
+    })
+    const raster = result.artifacts.find((artifact) => artifact.role === 'raster')
+    assert.ok(raster)
+    const extension = glbRoot(raster.bytes).extensions[MSDF_EXTENSION]
+    assert.equal(extension.emSize, 32)
+    assert.equal(extension.pixelRange, pixelRange)
+    assert.equal(extension.planeUnitsPerEm, 32)
+    const validated = await validateMtsdfArtifact(raster.bytes, {
+      rasterKey,
+      shapingHash: showcaseShapingHash,
+      glyphCount: 155,
+      glyphIdWidth: 16,
+      descriptor,
+    })
+    assert.equal(validated.pages.length, result.report.pages.length)
+    reports.push(result.report)
+  }
+  assert.ok(reports[0].gpuBytes < reports[1].gpuBytes)
 })
 
 test('keeps the packaged MTSDF schema byte-identical to its canonical source', async () => {
@@ -342,7 +384,11 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
 
   const wrongConstant = structuredClone(decoded.document)
   wrongConstant.extensions[MSDF_EXTENSION].pixelRange = MTSDF_PIXEL_RANGE + 1
-  await rejectsMtsdf(rewriteGlbDocument(embeddedBytes, wrongConstant), context, 'MTSDF_CONSTANTS')
+  await rejectsMtsdf(
+    rewriteGlbDocument(embeddedBytes, wrongConstant),
+    context,
+    'MTSDF_CONFIGURATION',
+  )
 
   const flags = embeddedBytes.slice()
   new DataView(flags.buffer).setUint16(recordsStart + present * 20 + 18, 1, true)

@@ -11,6 +11,7 @@ const rasterKey = '2'.repeat(64)
 test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async (t) => {
   const originalWorker = globalThis.Worker
   const workers = []
+  const requests = []
   let terminations = 0
 
   class FixtureWorker {
@@ -27,8 +28,10 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
     postMessage(value, transfer) {
       assert.deepEqual(transfer, [value.source])
       const received = structuredClone(value, { transfer })
+      requests.push(received)
       assert.equal(value.source.byteLength, 0)
       const bytes = Uint8Array.from([received.id, 2, 3, 4]).buffer
+      const bitmapRequest = Array.isArray(received.options?.strikes)
       queueMicrotask(() => {
         this.listeners.get('message')?.({
           data: {
@@ -36,9 +39,8 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
             id: received.id,
             ok: true,
             rasterKey: received.rasterKey,
-            kind: received.options === undefined ? 'msdf' : 'bitmap',
-            extension:
-              received.options === undefined ? 'PMNDRS_font_distance_field' : 'PMNDRS_font_bitmap',
+            kind: bitmapRequest ? 'bitmap' : 'msdf',
+            extension: bitmapRequest ? 'PMNDRS_font_bitmap' : 'PMNDRS_font_distance_field',
             version: 0,
             artifacts: [
               {
@@ -56,7 +58,7 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
                 {
                   width: 1,
                   height: 1,
-                  format: received.options === undefined ? 'rgba8unorm' : 'r8unorm',
+                  format: bitmapRequest ? 'r8unorm' : 'rgba8unorm',
                   gpuBytes: 4,
                   source: 'embedded',
                   encodedBytes: bytes.byteLength,
@@ -96,15 +98,31 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
     fontFaceIndex: 0,
     rasterKey,
   })
+  const configuredMsdfResult = await msdfBaker.default.bake({
+    source,
+    font,
+    fontFaceIndex: 0,
+    rasterKey,
+    options: { emSize: 32, pixelRange: 6 },
+  })
 
   assert.deepEqual(bitmapResult.artifacts[0].bytes, Uint8Array.from([1, 2, 3, 4]))
   assert.deepEqual(msdfResult.artifacts[0].bytes, Uint8Array.from([1, 2, 3, 4]))
+  assert.deepEqual(configuredMsdfResult.artifacts[0].bytes, Uint8Array.from([2, 2, 3, 4]))
+  assert.deepEqual(
+    requests.map(({ options }) => options),
+    [{ strikes: [16] }, undefined, { emSize: 32, pixelRange: 6 }],
+  )
   assert.deepEqual(source, Uint8Array.from([9, 8, 7]))
-  assert.equal(terminations, 2)
+  assert.equal(terminations, 3)
   assert.deepEqual(workers, [
     {
       url: new URL('../../dist/runtime-bakers/bitmap-worker.js', import.meta.url).href,
       options: { name: 'pmndrs-text-bitmap-baker', type: 'module' },
+    },
+    {
+      url: new URL('../../dist/runtime-bakers/msdf-worker.js', import.meta.url).href,
+      options: { name: 'pmndrs-text-mtsdf-baker', type: 'module' },
     },
     {
       url: new URL('../../dist/runtime-bakers/msdf-worker.js', import.meta.url).href,
