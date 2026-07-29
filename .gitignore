@@ -6,3 +6,4 @@ target/
 coverage/
 apps/benchmarks/.cache/
 packages/text/.cache/
+.cache/claude-review/
