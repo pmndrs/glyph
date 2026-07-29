@@ -11,10 +11,6 @@ const paragraphPolicyHash = [
   paragraphBidiContract.uikit.resolved.layout.hash,
 ].join(':')
 const ADVANCED_SHAPING_HASH = '51ba1d14'
-const INTER_MTSDF_WEBGL2_SCENE_HASH =
-  '8cbb665b02225219649f36545f42aebcfe4088d38899551adf109228fa6ab912'
-const INTER_MTSDF_WEBGL2_CONFORMANCE_HASH =
-  'a21ba2802534643cc63bcb7d24afc92a45ec3725d936680d87ae4688a7fc1563'
 
 function deterministicValidation(hashes: readonly string[]): string {
   if (hashes.length === 0) throw new Error('Scenario produced no measurements')
@@ -137,9 +133,6 @@ function mtsdfTextValidation(
         'MTSDF text did not preserve its resize, base-level, transform, and effects contract',
       )
     }
-    if (dpr === 1 && metrics.backendWebGl2 === 1 && value.hash !== INTER_MTSDF_WEBGL2_SCENE_HASH) {
-      throw new Error(`Canonical Inter WebGL2 MTSDF scene evidence drifted: ${value.hash}`)
-    }
   }
   return `${values.length}/${values.length} deterministic MTSDF resize + base-level + transform + effects frames`
 }
@@ -171,12 +164,7 @@ function mtsdfSamplingValidation(
     ) {
       throw new Error('MTSDF sampling did not preserve its GPU/CPU comparison contract')
     }
-    if (
-      metrics.fixtureIsInter === 1 &&
-      dpr === 1 &&
-      (metrics.glyphCount !== 84 ||
-        (metrics.backendWebGl2 === 1 && value.hash !== INTER_MTSDF_WEBGL2_CONFORMANCE_HASH))
-    ) {
+    if (metrics.fixtureIsInter === 1 && dpr === 1 && metrics.glyphCount !== 84) {
       throw new Error('Canonical Inter MTSDF sampling evidence drifted')
     }
   }

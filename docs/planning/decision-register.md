@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T13:24:14Z"
+  at: "2026-07-29T15:36:00Z"
 ---
 
 # Decision register
@@ -183,6 +183,7 @@ The [raster contract](raster-data-contract.md) owns records. The [capability mat
 | D-083 | Maintainer-local product probes use Vitexec for the live Vite/GPU-capable desktop lane and Playwright for explicit mobile viewports; both reject browser-console errors and use causal DOM/application signals without sleeps or retries. | Accepted |
 | D-094 | The React subpath targets React 19.2 and the agreed React Three Fiber 10 alpha lane, presently 10.0.0-alpha.2, exclusively through `@react-three/fiber/webgpu`. Its Three peer accepts 0.185.1. A narrow R3F patch removes eager browser-only Inspector registration from the WebGPU module graph, while the 9.1.0 test-renderer patch retargets static imports to `three/webgpu` and the R3F WebGPU entry; upstream should make Inspector registration lazy and publish a v10-aware WebGPU test entry. Resolved R3F reconciliation uses a real root backed by `WebGPURenderer` and a pinned paragraph oracle; pending Suspense is exercised in the live browser. Test-only reconcilers do not enter the benchmark product registry. | Accepted |
 | D-095 | The benchmark application has distinct conformance and benchmark modes over shared implementation, workload, fixture, and result contracts. The UI exposes mode, raster technique, WebGPU/WebGL2 backend, and workload as independent shareable axes. Conformance visibly compares reference/candidate/diff and may pay readback/oracle costs; benchmark mode measures consumer-facing cold phases and an oracle-free live render loop with CPU-ms, FPS, and GPU-ms sparklines. Conformance duration is never reported as renderer performance. | Accepted |
+| D-113 | Filtered analytic GPU rasters such as MTSDF and Slug require deterministic pixels within one renderer run plus an independent CPU error envelope; they do not use one hardware or driver framebuffer hash as a portable CI golden. Exact cross-backend hashes remain valid only where an independent byte-level oracle proves the operation itself is exact, as with bitmap texel composition. | Accepted |
 
 The [benchmark plan](benchmark-plan.md), [conformance plan](conformance-plan.md), and [autoresearch protocol](autoresearch.md) define the gates.
 
