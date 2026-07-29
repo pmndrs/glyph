@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:7c642d7b5e03ede2f89c1bfa0bd228f69d960d3646fe3ce34649c6b0488a47c6'
+source_digest: 'sha256:1d4eac6af7dd5df8f149c891a7518d272c14c547ab61fdbadc4e09709a7d5da3'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -49,7 +49,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T20:50:02Z'
+  at: '2026-07-29T20:57:43Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
