@@ -41,7 +41,7 @@ try {
   await Promise.all([
     writeFile(
       join(consumerDirectory, 'index.html'),
-      '<!doctype html><script type="module" src="/entry.js"></script>\n',
+      '<!doctype html><link rel="icon" href="data:," /><script type="module" src="/entry.js"></script>\n',
     ),
     writeFile(
       join(consumerDirectory, 'entry.js'),
@@ -77,9 +77,19 @@ try {
   const completion = Promise.withResolvers<PackedResult>()
   const errors: string[] = []
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text())
+    if (message.type() !== 'error') return
+    const location = message.location()
+    const source = location.url === '' ? '' : ` @ ${location.url}:${String(location.lineNumber)}`
+    errors.push(`${message.text()}${source}`)
   })
   page.on('pageerror', (error) => errors.push(error.message))
+  page.on('response', (response) => {
+    if (response.status() >= 400) {
+      errors.push(
+        `HTTP ${String(response.status())} ${response.request().resourceType()} ${response.url()}`,
+      )
+    }
+  })
   await page.exposeFunction('__reportPackedResult', (value: PackedResult) => {
     completion.resolve(value)
   })
