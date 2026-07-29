@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:71e3b117cd6797c0cc0ddd1608fa7d49300ccb65f99f7e14dfba5fd723009c9b"
+source_digest: "sha256:4fe65a8e5309c3e0e7641dfd2dd611dbb6ce9c40459ea7c3850f478536a6d310"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -46,7 +46,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T15:36:00Z"
+  at: "2026-07-29T16:18:15Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -77,7 +77,7 @@ The retained release-role matrix adds 36 focused Chromium 149 observations: six 
 
 Roadmap item 6.0 uses only `WebGPURenderer` and the public `three/webgpu` plus `three/tsl` exports for runtime values and types. App lint rejects the legacy root, internal source paths, addons/examples paths, and bare R3F entry so this boundary cannot silently drift. Direct calls to installed public scalar TSL operators keep clean TypeScript 7.0.2 checks below one second; vector/scalar overloads and method chains remain measured recursive-expansion hazards. A repository-owned `@types/three` patch gives `modelViewProjection` its runtime `Node<'vec4'>` type, with a compile-only regression until the correction is upstream. The same graph produces the exact SHA-256 `fec0f57de0b19bc7dacb5b0fc3de7b56fc68dfdbeeebc8f9f4c506bf6e821c77` through an asserted WebGPU backend and forced WebGL2 fallback, three measured runs each after one warmup. The oracle rejects any non-red pixel, carries an intentional wrong-pixel negative control, and compacts the 256-byte row alignment retained by Three.js's WebGPU readback before comparing it with WebGL2's compact bytes. This is a real dual-backend shader workload, but the synthetic plane is intentionally not mislabeled as the first rendered font frame; item 6.1 owns that claim.
 
-The application's browser and script TypeScript projects use the same native-PID bounded runner as the packages. A synthetic allocator must prove the runner in each worktree before compilation; new TSL work starts with a narrow graph fixture instead of using the complete application as a diagnostic probe.
+The application's browser and script projects use the repository-pinned TypeScript compiler directly. Compiler-sensitive TSL changes begin with the package's focused `NodeExtras` regression before expanding to this complete application; the patched declaration graph keeps the benchmark project below 300 MiB on the recorded validation run without a process guard.
 
 Every measured call receives its actual zero-based sample index; warmups remain outside the reported sample sequence. Controls reject invalid sample/warmup counts and non-finite, non-positive, or greater-than-4 DPR before target loading. The existing 1×/2× scene buttons now select the actual renderer density, initialize from the user's display class, and invalidate stale results. Automated probes and the headless CLI always pass DPR explicitly. Successful summaries include the V0 schema marker and exact controls, so timings, framebuffer bytes, and pixels cannot be compared without their density. The deterministic headless lane runs its cases sequentially through one Chromium/Vite session while opening an isolated page for each case; explicit readiness, launch, navigation, and execution deadlines identify a stalled lifecycle without using time as a readiness signal.
 

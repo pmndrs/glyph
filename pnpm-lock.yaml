@@ -7,7 +7,7 @@ settings:
 patchedDependencies:
   '@react-three/fiber@10.0.0-alpha.2': 0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8
   '@react-three/test-renderer@9.1.0': d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d
-  '@types/three@0.185.1': eaf2a525ca54a0c9de602a9a284a3dac6e632d3e4e5b06147c2206a9a4fef117
+  '@types/three@0.185.1': a5d0add8a1d5e65aab9c242df680720a8962e6d8970c0e1a2c69bc66983f9010
 
 importers:
 
@@ -64,7 +64,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@types/three':
         specifier: 0.185.1
-        version: 0.185.1(patch_hash=eaf2a525ca54a0c9de602a9a284a3dac6e632d3e4e5b06147c2206a9a4fef117)
+        version: 0.185.1(patch_hash=a5d0add8a1d5e65aab9c242df680720a8962e6d8970c0e1a2c69bc66983f9010)
       '@vitejs/plugin-react':
         specifier: 6.0.1
         version: 6.0.1(@rolldown/plugin-babel@0.2.3(@babel/core@8.0.1)(@babel/runtime@7.29.7)(rolldown@1.1.5)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0)))(babel-plugin-react-compiler@1.0.0)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
@@ -144,7 +144,7 @@ importers:
         version: 19.2.14
       '@types/three':
         specifier: 0.185.1
-        version: 0.185.1(patch_hash=eaf2a525ca54a0c9de602a9a284a3dac6e632d3e4e5b06147c2206a9a4fef117)
+        version: 0.185.1(patch_hash=a5d0add8a1d5e65aab9c242df680720a8962e6d8970c0e1a2c69bc66983f9010)
       '@unicode/unicode-17.0.0':
         specifier: 1.6.17
         version: 1.6.17
@@ -2369,7 +2369,7 @@ snapshots:
 
   '@types/stats.js@0.17.4': {}
 
-  '@types/three@0.185.1(patch_hash=eaf2a525ca54a0c9de602a9a284a3dac6e632d3e4e5b06147c2206a9a4fef117)':
+  '@types/three@0.185.1(patch_hash=a5d0add8a1d5e65aab9c242df680720a8962e6d8970c0e1a2c69bc66983f9010)':
     dependencies:
       '@dimforge/rapier3d-compat': 0.12.0
       '@tweenjs/tween.js': 23.1.3

@@ -10,18 +10,16 @@ Measure three isolated fixtures with the repository compiler before committing t
 2. a typed constant node attached to the intended material or pass;
 3. one representative TSL operation from the production graph.
 
-In this repository's TypeScript 7.0.2 and `@types/three` 0.185.1 check, a single `positionLocal.x.mul(4)` method-chain expression did not complete within 60 seconds. Assigning the overloaded `mul` value to a narrower local function type also forces an expensive structural comparison of the augmented `Node` surface. The public free-function form `mul(positionLocal.x, 4)` preserves exact node types and completes in about 0.19 seconds for a scalar float fixture, so prefer that form first.
+Unpatched `@types/three` 0.185.1 modeled `Node<TNodeType>` as a deeply nested conditional/intersection chain. With TypeScript 7.0.2, ordinary TSL expressions could trigger combinatorial type ordering and variance work. The repository's pnpm patch carries the upstream `NodeExtras` lookup-map rewrite from DefinitelyTyped PR 75246, preserving the public type surface while removing that checker shape.
 
-Free functions are not sufficient for every overload in this pinned pair. Reduced Slug fixtures showed `shiftLeft(Node<'uint'>, ...)`, integer `div`/`mod`, uint `add`/`mul`, vector `fwidth`, and object-form `Loop` each crossing a 512 MiB guard in roughly three seconds; an unsigned `textureLoad` result annotation has the same failure. Imports-only and adjacent scalar operations complete around 0.18–0.20 seconds at 4–5 MiB. Treat those results as exact-version compiler/declaration bugs, not permission to erase graph types broadly. Keep the runtime function, isolate the smallest concrete typed adapter, and prove the adapter with a bounded fixture before using it.
+The permanent TSL regression compiles the formerly pathological method chain, uint shift/bitwise operations, integer `div`/`mod`, vector `fwidth`, and object-form `Loop`. After the lookup-map patch, that focused graph completes in about 215 milliseconds at 4 MiB peak RSS; the text, font-baker, benchmark, and benchmark-script projects complete normally with the pinned compiler. Keep this regression broad enough to fail if a dependency update restores the conditional type tree.
 
-Do not invoke `tsc`, `tsgo`, a package-manager typecheck script, or the `node_modules/.bin/tsc` shim directly. TypeScript 7 delegates to a native executable; a wrapper that supervises only the shim can exit while the compiler survives as an orphan. Run the repository guard's synthetic test once per worktree, then pass only compiler arguments after `--`:
+Run the pinned compiler through the package script or pnpm:
 
 ```sh
-node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --self-test
-node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --cwd packages/text -- -p tsconfig.json --noEmit
+pnpm --filter @pmndrs/text typecheck:slug-tsl
+pnpm --filter @pmndrs/text typecheck
 ```
-
-The guard resolves and executes the installed native compiler directly, caps aggregate tracked RSS at 2 GiB by default, hard-kills on the limit or timeout, and does not report completion until tracked processes are gone. Exit 86 identifies the memory ceiling, 124 the timeout, and 125 a probe or containment failure.
 
 ## Imports
 
@@ -55,9 +53,9 @@ import { add, mul } from 'three/tsl'
 const x: Node<'float'> = add(origin.x, mul(positionLocal.x, size.x))
 ```
 
-Do not assign `add` or `mul` to a narrower custom function type. That assignment asks TypeScript to compare every inherited overload and the complete augmented `Node` interface even though the eventual call is scalar. If a reduced fixture proves one exact overload remains pathological, a private compatibility module may deliberately erase only the runtime callable to `Function`, invoke it through `Reflect.apply`, and expose one exact node signature. Name the affected TypeScript and Three versions in that module; never scatter this workaround through graph code.
+Avoid assigning `add` or `mul` to a narrower custom function type when an ordinary direct call communicates the same intent. If a future pinned declaration rejects a runtime-supported operation, a private compatibility module can isolate the smallest exact signature while a type fixture owns the discrepancy.
 
-Treat all operator-like method chains on augmented nodes—including arithmetic, comparison, bitwise, and shift methods—as the same risk class. Copying a graph from another repository does not waive this constraint: preserve its runtime structure while adapting those calls to the installed public free functions before a whole-project check.
+Method chains and free functions both compile tractably with the current lookup-map patch. Prefer the form that keeps the copied graph and expected node type easiest to review, and let the focused regression detect future declaration expansion.
 
 Uniform properties may name both the shader value type and JavaScript value type when inference cannot cross a class boundary:
 
@@ -84,7 +82,7 @@ Do not scatter `@ts-expect-error` through graph code. If one is unavoidable, mak
 
 - Compile positive fixtures that exercise the real imports and graph attachment points.
 - Compile the narrowest TSL fixture before a package or repository project. A whole-project check is not a diagnostic probe for one new graph.
-- Bound and record compiler time for a representative graph; type correctness that makes ordinary editing impractical is not an acceptable integration.
+- Record compiler time for a representative graph when changing the declaration boundary; type correctness that makes ordinary editing impractical is not an acceptable integration.
 - Add negative fixtures only for public generic constraints worth preserving.
 - Run the repository's actual TypeScript version; do not validate with a global compiler.
 - Pair type success with browser execution because declarations cannot prove shader generation or device behavior.

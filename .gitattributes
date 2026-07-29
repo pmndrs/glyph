@@ -1,3 +1,4 @@
+*.patch -whitespace
 **/fixtures/** filter=lfs diff=lfs merge=lfs -text
 **/assets/** filter=lfs diff=lfs merge=lfs -text
 *.avif filter=lfs diff=lfs merge=lfs -text
