@@ -1011,7 +1011,7 @@ function TopBar({
         </div>
         {compact && (
           <TechniqueSwitcher
-            className="w-[120px] sm:w-[168px]"
+            className="w-[148px] sm:w-[180px]"
             technique={location.technique}
             onTechnique={onTechnique}
           />
@@ -1193,7 +1193,7 @@ function TechniqueSwitcher({
 }) {
   return (
     <div
-      className={`grid grid-cols-3 rounded-md border border-border bg-background p-0.5 ${className}`}
+      className={`grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-0.5 ${className}`}
       data-testid="technique-switcher"
     >
       {(['bitmap', 'mtsdf', 'slug'] as const).map((value) => (
@@ -1491,60 +1491,43 @@ function BenchmarkSurface({
           value={stats === undefined ? '—' : String(stats.missingGlyphCount)}
         />
       </div>
-      <div className="grid gap-3 min-[1400px]:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
-        <div className="startup-cost-grid grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-4">
-          <LiveCost label="Renderer init" value={formatMs(stats?.rendererInitMs)} />
-          <LiveCost label="Font fetch + register" value={formatMs(stats?.fontLoadMs)} />
-          <LiveCost label="Core bake" value={formatMs(stats?.coreBakeMs)} />
-          <LiveCost label="Raster bake" value={formatMs(stats?.rasterBakeMs)} />
-          <LiveCost label="Text ready" value={formatMs(stats?.textReadyMs)} />
-          <LiveCost label="First draw submit" value={formatMs(stats?.firstDrawMs)} />
-          <LiveCost label="Upload frame complete" value={formatMs(stats?.uploadFrameCompleteMs)} />
-          <LiveCost label="First GPU frame" value={formatMs(stats?.uploadFrameGpuMs)} />
-          <LiveCost label="Total startup" value={formatMs(stats?.startupMs)} />
-          <LiveCost
-            label="Artifact / GPU"
-            value={`${formatBytes(stats?.artifactBytes)} / ${formatBytes(stats?.totalGpuBytes)}`}
-          />
-        </div>
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border min-[1400px]:grid-cols-1">
-          <Sparkline
-            id="fps"
-            label="FPS"
-            length={stats?.fpsHistoryLength ?? 0}
-            maximum={stats?.maximumFramesPerSecond}
-            minimum={stats?.minimumFramesPerSecond}
-            cursor={stats?.fpsHistoryCursor}
-            tone="success"
-            unit="fps"
-            values={stats?.fpsHistory}
-          />
-          <Sparkline
-            id="cpu"
-            label="CPU frame ms"
-            length={stats?.submitHistoryLength ?? 0}
-            maximum={stats?.maximumSubmitMs}
-            minimum={stats?.minimumSubmitMs}
-            cursor={stats?.submitHistoryCursor}
-            tone="cyan"
-            unit="ms"
-            values={stats?.submitHistory}
-          />
-          <Sparkline
-            emptyLabel={
-              stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
-            }
-            label="GPU frame ms"
-            id="gpu"
-            length={stats?.gpuHistoryLength ?? 0}
-            maximum={stats?.maximumGpuMs}
-            minimum={stats?.minimumGpuMs}
-            cursor={stats?.gpuHistoryCursor}
-            tone="warning"
-            unit="ms"
-            values={stats?.gpuHistory}
-          />
-        </div>
+      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
+        <Sparkline
+          id="fps"
+          label="FPS"
+          length={stats?.fpsHistoryLength ?? 0}
+          maximum={stats?.maximumFramesPerSecond}
+          minimum={stats?.minimumFramesPerSecond}
+          cursor={stats?.fpsHistoryCursor}
+          tone="success"
+          unit="fps"
+          values={stats?.fpsHistory}
+        />
+        <Sparkline
+          id="cpu"
+          label="CPU frame ms"
+          length={stats?.submitHistoryLength ?? 0}
+          maximum={stats?.maximumSubmitMs}
+          minimum={stats?.minimumSubmitMs}
+          cursor={stats?.submitHistoryCursor}
+          tone="cyan"
+          unit="ms"
+          values={stats?.submitHistory}
+        />
+        <Sparkline
+          emptyLabel={
+            stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
+          }
+          label="GPU frame ms"
+          id="gpu"
+          length={stats?.gpuHistoryLength ?? 0}
+          maximum={stats?.maximumGpuMs}
+          minimum={stats?.minimumGpuMs}
+          cursor={stats?.gpuHistoryCursor}
+          tone="warning"
+          unit="ms"
+          values={stats?.gpuHistory}
+        />
       </div>
       <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface p-3">
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -3371,15 +3354,6 @@ function bakeProgressPercentage(progress: BakeProgress | undefined): number {
   if (progress.phase === 'transferring') return 97
   if (progress.phase === 'complete') return 100
   return 20
-}
-
-function LiveCost({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="border-b border-r border-border px-3 py-2">
-      <p className="font-mono text-[8px] uppercase tracking-wider text-dim">{label}</p>
-      <p className="mt-1 font-mono text-[11px] text-foreground">{value}</p>
-    </div>
-  )
 }
 
 function Sparkline({
