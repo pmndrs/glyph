@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: "@pmndrs/text-font-baker"
 documentation_type: reference
-source_digest: "sha256:b46c80e0b1cc4dce6af1a039a546a2528636a81adbeaef8d50a07f56c1ad7a8f"
+source_digest: "sha256:fe50f235f189857e42e66139678febd74b5f741c4ea8baf157e9548220285e3e"
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-28T19:01:30Z"
+  at: "2026-07-29T16:18:15Z"
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -34,7 +34,7 @@ Status: ✅ portable shaping-data core complete; shared by offline and runtime h
 
 This package keeps the Rust crate, `no_std + alloc` Wasm build, compiler-derived ABI contract, direct-linear-memory TypeScript wrapper, core artifact validator, vendored schema bundle, and tiered tests together. It emits a deterministic shaping-only core GLB. A build-only Rust generator emits both portable JSON and an exact typed `as const` TypeScript module from the same compiler facts. The generated contract also carries the exact baker, font-format, HarfRust, HarfBuzz, Unicode, glTF schema, validator, and Binaryen pins consumed by provenance and fixtures. Its contract-only subpath exposes the baker and format versions shared by the bridge, validator, and public loader without importing Wasm host code.
 
-Build and typecheck commands invoke the pinned native TypeScript compiler only through the repository's bounded runner. The runner directly supervises the native PID, enforces a 2 GiB aggregate RSS ceiling and wall-time limit, and refuses to report completion while a tracked compiler process survives.
+Build and typecheck commands invoke the repository-pinned TypeScript compiler directly. The previous native-process memory guard was removed after the patched `@types/three` declaration graph eliminated the checker expansion; this package does not import TSL but shares the same ordinary workspace compiler path.
 
 The separate `@pmndrs/text-font-baker/validate` ESM entry treats every baked asset as untrusted. It enforces exact GLB framing and padding, retains the pinned Khronos 2.0.0-dev.3.10 report with only exact unsupported-extension and extension-buffer informational messages admitted, evaluates the canonical Draft-04 extension schema with Ajv 6.15.0 against the vendored Khronos revision, and checks buffer ranges, versions, reciprocal raster identity, reduced-SFNT checksums/metrics, dense extents, zero padding, and the domain-separated shaping hash. URI-addressed external raster entries require a lowercase SHA-256 artifact hash; resolver-only entries may omit both URI and hash. Its exact Khronos allowlist accepts open package-owned extension names while semantic validation remains with their packages. Closed-profile SFNT tags are compared as their four raw directory bytes, so non-ASCII hostile tags fail through the same structured issue contract instead of escaping through UTF-8 decoding. It exports the strict framing, report, and generic extension-schema primitives used by companion validators without moving companion semantics into core. Node `Buffer` inputs are explicitly copied before the temporary checksum-adjustment normalization, and repeat-validation tests prove the validator never mutates their bytes. The main baker entry has no static edge to either validation engine.
 

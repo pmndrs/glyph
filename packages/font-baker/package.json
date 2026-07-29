@@ -34,7 +34,7 @@
     "generate:abi": "cargo run --manifest-path rust/Cargo.toml --bin generate-abi --locked --quiet",
     "generate:shaping-oracle": "cargo run --manifest-path rust/Cargo.toml --bin generate-shaping-oracle --features oracle --locked --quiet --",
     "inspect:font-fixture": "cargo run --manifest-path rust/Cargo.toml --bin inspect-font-fixture --features oracle --locked --quiet --",
-    "typecheck": "node ../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs -- -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke && pnpm test:e2e",
     "test:unit": "cargo test --manifest-path rust/Cargo.toml --lib --locked",
     "test:integration": "cargo test --manifest-path rust/Cargo.toml --tests --locked && node --test tests/integration/*.test.mjs",

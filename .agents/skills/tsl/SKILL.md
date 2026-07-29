@@ -59,7 +59,7 @@ Keep these invariants visible in local code:
 
 - Build typed node graphs with `three/tsl`; use `three/webgpu` for WebGPU renderer and classes.
 - Invoke an `Fn` when a node value is required: `Fn(() => expression)()`.
-- Use TSL operations rather than JavaScript operators. On the repository's pinned Three.js/TypeScript pair, prefer typed free functions such as `add(left, right)` and `mul(left, right)` for arithmetic; the equivalent method-chain augmentation can expand pathologically under TypeScript 7.
+- Use TSL operations rather than JavaScript operators. Typed free functions such as `add(left, right)` and `mul(left, right)` often make overload selection and review clearer; the repository's patched `NodeExtras` lookup also keeps equivalent method-chain typing tractable.
 - Call `.toVar()` before mutation, then use `.assign()` or compound assignment methods.
 - Update runtime uniforms through `.value`; changing graph structure requires rebuilding the graph.
 - Use `If`, `Loop`, and other TSL control nodes for runtime GPU control flow.
@@ -67,8 +67,8 @@ Keep these invariants visible in local code:
 
 ## Implementation workflow
 
-1. Before the first compiler invocation in a worktree, run `node .agents/skills/tsl/scripts/run-tsc-bounded.mjs --self-test`. Stop if the synthetic memory-limit test fails.
-2. Invoke TypeScript only through that runner. Start with an import-only fixture, a typed constant attachment, and one representative node operation; record elapsed time and peak RSS. Stop if graph typing expands pathologically.
+1. Start compiler-sensitive TSL work with the focused type regression, then expand to the relevant package or application project using the repository-pinned TypeScript compiler.
+2. An import-only fixture, a typed constant attachment, and one representative node operation can help localize a future declaration regression before a complete graph obscures it.
 3. Express the smallest graph that preserves the existing behavior.
 4. Prefer shipped TSL helpers and add-on nodes over custom render passes.
 5. Keep node types intact. Do not cast to a broad `Node` or `unknown` merely to silence the compiler.

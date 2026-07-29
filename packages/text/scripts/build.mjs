@@ -7,8 +7,11 @@ import { writeGeneratedTypescriptAbi } from '../../font-baker/scripts/generated-
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url))
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url))
-const tscGuard = fileURLToPath(
-  new URL('../../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs', import.meta.url),
+const tsc = fileURLToPath(
+  new URL(
+    process.platform === 'win32' ? '../node_modules/.bin/tsc.CMD' : '../node_modules/.bin/tsc',
+    import.meta.url,
+  ),
 )
 const rustEnvironment = reproducibleRustEnvironment(workspaceRoot)
 const executable = process.platform === 'win32' ? 'wasm-opt.CMD' : 'wasm-opt'
@@ -167,7 +170,7 @@ await run(
   ],
   rustEnvironment,
 )
-await run(process.execPath, [tscGuard, '--', '-p', 'tsconfig.build.json'])
+await run(tsc, ['-p', 'tsconfig.build.json'])
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true })
 await rm(new URL('../dist/font_baker.wasm', import.meta.url), { force: true })
 await rm(new URL('../dist/mtsdf-baker-abi-v0.json', import.meta.url), { force: true })

@@ -22,10 +22,16 @@ sources:
   - id: "slug-outline-research"
     resource: "slug-outline-research.md"
     title: "Slug outline architecture"
+  - id: "typescript-go-node-variance"
+    resource: "https://github.com/microsoft/typescript-go/issues/4528"
+    title: "TypeScript Go Three.js Node variance expansion"
+  - id: "definitelytyped-node-extras"
+    resource: "https://github.com/DefinitelyTyped/DefinitelyTyped/pull/75246"
+    title: "NodeExtras lookup-map fix"
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T15:36:00Z"
+  at: "2026-07-29T16:18:15Z"
 ---
 
 # Decision register
@@ -160,12 +166,13 @@ The [architecture](architecture.md) owns loading behavior and dependency rules. 
 | D-104 | Every direct-memory Wasm ABI layout is represented by fixed-width `#[repr(C)]` Rust types. Build-only Rust generators derive published JSON and exact `as const` TypeScript contracts from `size_of`, `align_of`, and `offset_of!`; production hosts import those generated facts, and production Wasm embeds no duplicate contract or ABI-pointer bootstrap. WebAssembly direct memory uses its guaranteed little-endian order; portable GLB, KTX2, SFNT, and extension encodings retain their format-defined byte order. | Accepted |
 | D-105 | V1 retains the current Three.js/TSL integration through Slug so its real shader, resource, batching, and lifetime requirements define the abstraction. After Slug lands, Milestone 10 extracts one renderer-neutral direct integration beneath Bitmap, MSDF, and Slug; Three.js becomes a supported adapter over it, while raw WebGPU and a possible TypeGPU adapter remain independently selectable integrations. Optional TypeGPU compute-baker research may proceed earlier but cannot force the renderer refactor or enter unrelated runtime graphs. | Accepted |
 | D-106 | Slug V0 artifacts retain exact R16UI reference grids. The Three.js 0.185.1 adapter may pair-pack those values into R32UI texels at decode time because its WebGL TSL backend does not declare an unsigned sampler for `UnsignedShortType`; this preserves reference identity and two-byte density plus at most one terminal padding value. Other adapters remain free to upload R16UI directly, and the exception does not redefine the portable artifact. | Accepted |
-| D-107 | Repository TypeScript commands execute the installed native compiler through one bounded runner that first proves its kill/reap path with a synthetic allocator, supervises the native PID rather than a shell or Node shim, caps aggregate tracked RSS, enforces a wall-time limit, and reports no success while a compiler survives. TSL changes compile reduced operation fixtures and a narrow graph before package or application projects; free functions remain the first mitigation but exact-version pathological overloads use one proven concrete compatibility boundary. | Accepted |
+| D-107 | Repository TypeScript commands execute the installed native compiler through one bounded runner that first proves its kill/reap path with a synthetic allocator, supervises the native PID rather than a shell or Node shim, caps aggregate tracked RSS, enforces a wall-time limit, and reports no success while a compiler survives. TSL changes compile reduced operation fixtures and a narrow graph before package or application projects; free functions remain the first mitigation but exact-version pathological overloads use one proven concrete compatibility boundary. | Superseded by D-114 |
 | D-108 | MTSDF V0 uploads only the authenticated base level and uses bilinear field sampling plus screen derivatives for reconstruction. Conventional GPU mip generation and trilinear cross-level sampling are rejected: averaging encoded MSDF channels is not a distance-field-preserving operation, and the primary MSDF paper plus official generators provide no affirmative mipmap guidance. Runtime, standalone validation, fixtures, and the inspector report the exact padded base texture-array allocation. Any future size-specific representation is an independently authored atlas layer or strike, not a conventional mip chain. | Accepted |
 | D-109 | Slug V0 implemented a centered exact-distance outline in one specialized fill-plus-outline draw. Retained measurements later showed `2.44×–4.33×` fill-only GPU time, and generated-shader inspection found duplicated traversal, curve loads, closest-point refinement, and a derivative inside divergent control flow. | Superseded by D-111 |
 | D-110 | MTSDF V0 exposes `emSize` and full `pixelRange` as authenticated integer bake options. `emSize` is limited to `1..=1022`, `pixelRange` to `1..=1020`, `planeUnitsPerEm` equals `emSize`, and field padding is `ceil(pixelRange / 2)`. Omitted or partial options resolve against the 64/8 compatibility defaults; explicit effective 64/8 canonicalizes to the legacy fieldless descriptor and raster key, while every non-default descriptor contains both effective values. The low-level Wasm ABI is unchanged. Passing 32/4 and 32/6 155-glyph subset bakes proves the control path, not a new recommended default; quality and payload benchmarking owns that decision. | Accepted |
 | D-111 | Remove the dynamic exact-distance Slug outline rather than ship an expensive fallback. Slug V0 supports fill and opacity and rejects every runtime outline or shadow property. The generic text outline API remains because MTSDF owns it. | Accepted |
 | D-112 | Research one bounded Slug outline approximation that reuses ordinary fill traversal and screen derivatives without closest-point solving or independent halo traversal. It ships only if its quality is no worse than the MTSDF outline corpus and its median GPU time is at most `1.15×` a same-expanded-quad fill control on both WebGPU and forced WebGL2; otherwise Slug remains fill-only. | Experiment |
+| D-114 | Carry the upstream `NodeExtras` lookup-map rewrite as a version-pinned pnpm patch for `@types/three` 0.185.1. A focused compile-only regression owns every previously explosive TSL operation. Package and application scripts invoke the pinned compiler directly; the native-process memory guard and its repository-wide invocation requirement are removed because they contained a dependency type-graph defect now corrected at its declaration boundary. | Accepted |
 
 The [raster contract](raster-data-contract.md) owns records. The [capability matrix](renderer-capabilities.md), [payload budget](payload-budget.md), and [compression analysis](gpu-compression.md) own evidence and limitations.
 

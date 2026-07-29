@@ -58,7 +58,7 @@
     "test:live": "node ./scripts/run-live-probe.mts",
     "test:unit": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "pnpm --filter @pmndrs/text-font-baker build && node ../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs -- -p tsconfig.json --noEmit && node ../../.agents/skills/tsl/scripts/run-tsc-bounded.mjs -- -p tsconfig.scripts.json --noEmit"
+    "typecheck": "pnpm --filter @pmndrs/text-font-baker build && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit"
   },
   "dependencies": {
     "@pmndrs/text": "workspace:*",
