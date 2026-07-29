@@ -4,6 +4,7 @@ extern crate alloc;
 
 mod color;
 mod distance;
+mod error_correction;
 mod math;
 mod outline;
 
@@ -15,6 +16,7 @@ pub use outline::{Bounds, OutlineSink, OutlineSource};
 use crate::{
     color::color_edges,
     distance::{ContourDistance, Distance4},
+    error_correction::correct_interpolation_artifacts,
     math::Point,
     outline::{BuildFailure, Edge, EdgeSoa, OutlineStorage},
 };
@@ -159,6 +161,7 @@ struct GeneratorScratch {
     hot_edges: EdgeSoa,
     contour_distances: Vec<ContourDistance>,
     output: Vec<u8>,
+    error_stencil: Vec<u8>,
 }
 
 pub struct MtsdfGenerator {
@@ -339,6 +342,21 @@ impl GlyphOutline<'_> {
                 }
             }
         }
+        let horizontal_distance_delta = f64::from(bounds.width())
+            / region.inner_width as f64
+            / f64::from(transform.full_distance_range);
+        let vertical_distance_delta = f64::from(bounds.height())
+            / region.inner_height as f64
+            / f64::from(transform.full_distance_range);
+        correct_interpolation_artifacts(
+            output,
+            total_width,
+            total_height,
+            horizontal_distance_delta,
+            vertical_distance_delta,
+            &mut self.generator.scratch.error_stencil,
+        )
+        .map_err(|()| GenerateError::Allocation)?;
         Ok(output)
     }
 }

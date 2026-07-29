@@ -6,8 +6,6 @@ use crate::{
     outline::{BLUE, CubicSoa, EdgeSoa, GREEN, LineSoa, QuadraticSoa, RED},
 };
 
-const QUADRATIC_STARTS: usize = 8;
-const QUADRATIC_STEPS: usize = 6;
 const CUBIC_STARTS: usize = 8;
 const CUBIC_STEPS: usize = 8;
 const QUADRATIC_WINDING_STEPS: usize = 16;
@@ -325,34 +323,157 @@ fn normalized_abs_dot(a: Point, b: Point) -> f32 {
 }
 
 fn quadratic_distance(point: Point, points: [Point; 3]) -> f32 {
-    let start = squared_distance(point, points[0]);
-    let end = squared_distance(point, points[2]);
-    let (mut best, mut best_t) = if start <= end {
-        (start, 0.0)
+    let qa = F64Point::from(points[0] - point);
+    let ab = F64Point::from(points[1] - points[0]);
+    let br = F64Point::from(points[2] - points[1] - (points[1] - points[0]));
+    let endpoint_start = qa.length();
+    let endpoint_end = F64Point::from(points[2] - point).length();
+    let (mut minimum_distance, mut minimum_direction) = if endpoint_start <= endpoint_end {
+        (endpoint_start, ab)
     } else {
-        (end, 1.0)
+        (endpoint_end, ab + br)
     };
-    for start in 0..=QUADRATIC_STARTS {
-        let mut t = start as f32 / QUADRATIC_STARTS as f32;
-        for _ in 0..QUADRATIC_STEPS {
-            let position = quadratic_point(points, t);
-            let first = quadratic_derivative(points, t);
-            let second = (points[2] - points[1] * 2.0 + points[0]) * 2.0;
-            let delta = position - point;
-            let denominator = first.dot(first) + delta.dot(second);
-            if denominator.abs() <= 1.0e-8 || !denominator.is_finite() {
-                break;
-            }
-            t = (t - delta.dot(first) / denominator).clamp(0.0, 1.0);
+    let mut minimum_offset = if endpoint_start <= endpoint_end {
+        qa
+    } else {
+        F64Point::from(points[2] - point)
+    };
+
+    for t in solve_cubic(
+        br.dot(br),
+        3.0 * ab.dot(br),
+        2.0 * ab.dot(ab) + qa.dot(br),
+        qa.dot(ab),
+    )
+    .into_iter()
+    .flatten()
+    {
+        if !(0.0 < t && t < 1.0) {
+            continue;
         }
-        let candidate = squared_distance(point, quadratic_point(points, t));
-        if candidate <= best {
-            best = candidate;
-            best_t = t;
+        let offset = qa + ab * (2.0 * t) + br * (t * t);
+        let distance = offset.length();
+        if distance <= minimum_distance {
+            minimum_distance = distance;
+            minimum_direction = ab + br * t;
+            minimum_offset = offset;
         }
     }
-    let delta = quadratic_point(points, best_t) - point;
-    non_zero_sign(quadratic_derivative(points, best_t).cross(delta)) * best.sqrt()
+
+    (non_zero_sign64(minimum_direction.cross(minimum_offset)) * minimum_distance) as f32
+}
+
+#[derive(Clone, Copy)]
+struct F64Point {
+    x: f64,
+    y: f64,
+}
+
+impl From<Point> for F64Point {
+    fn from(value: Point) -> Self {
+        Self {
+            x: f64::from(value.x),
+            y: f64::from(value.y),
+        }
+    }
+}
+
+impl core::ops::Add for F64Point {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl core::ops::Mul<f64> for F64Point {
+    type Output = Self;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+        }
+    }
+}
+
+impl F64Point {
+    fn dot(self, other: Self) -> f64 {
+        self.x * other.x + self.y * other.y
+    }
+
+    fn cross(self, other: Self) -> f64 {
+        self.x * other.y - self.y * other.x
+    }
+
+    fn length(self) -> f64 {
+        self.dot(self).sqrt()
+    }
+}
+
+fn non_zero_sign64(value: f64) -> f64 {
+    if value < 0.0 { -1.0 } else { 1.0 }
+}
+
+fn solve_cubic(a: f64, b: f64, c: f64, d: f64) -> [Option<f64>; 3] {
+    if a != 0.0 {
+        let normalized_b = b / a;
+        if normalized_b.abs() < 1.0e6 {
+            return solve_normalized_cubic(normalized_b, c / a, d / a);
+        }
+    }
+    let [first, second] = solve_quadratic(b, c, d);
+    [first, second, None]
+}
+
+fn solve_normalized_cubic(a: f64, b: f64, c: f64) -> [Option<f64>; 3] {
+    let a_squared = a * a;
+    let q = (a_squared - 3.0 * b) / 9.0;
+    let r = (a * (2.0 * a_squared - 9.0 * b) + 27.0 * c) / 54.0;
+    let r_squared = r * r;
+    let q_cubed = q * q * q;
+    let offset = a / 3.0;
+    if r_squared < q_cubed {
+        let angle = (r / q_cubed.sqrt()).clamp(-1.0, 1.0).acos();
+        let radius = -2.0 * q.sqrt();
+        [
+            Some(radius * (angle / 3.0).cos() - offset),
+            Some(radius * ((angle + 2.0 * core::f64::consts::PI) / 3.0).cos() - offset),
+            Some(radius * ((angle - 2.0 * core::f64::consts::PI) / 3.0).cos() - offset),
+        ]
+    } else {
+        let root = (r.abs() + (r_squared - q_cubed).sqrt()).powf(1.0 / 3.0);
+        let u = if r < 0.0 { root } else { -root };
+        let v = if u == 0.0 { 0.0 } else { q / u };
+        let first = u + v - offset;
+        if u == v || (u - v).abs() < 1.0e-12 * (u + v).abs() {
+            [Some(first), Some(-0.5 * (u + v) - offset), None]
+        } else {
+            [Some(first), None, None]
+        }
+    }
+}
+
+fn solve_quadratic(a: f64, b: f64, c: f64) -> [Option<f64>; 2] {
+    if a == 0.0 || b.abs() > 1.0e12 * a.abs() {
+        return if b == 0.0 {
+            [None, None]
+        } else {
+            [Some(-c / b), None]
+        };
+    }
+    let discriminant = b * b - 4.0 * a * c;
+    if discriminant > 0.0 {
+        let root = discriminant.sqrt();
+        [Some((-b + root) / (2.0 * a)), Some((-b - root) / (2.0 * a))]
+    } else if discriminant == 0.0 {
+        [Some(-b / (2.0 * a)), None]
+    } else {
+        [None, None]
+    }
 }
 
 fn cubic_distance(point: Point, points: [Point; 4]) -> f32 {
@@ -391,10 +512,6 @@ fn quadratic_point(points: [Point; 3], t: f32) -> Point {
     points[0] * (one_minus_t * one_minus_t)
         + points[1] * (2.0 * one_minus_t * t)
         + points[2] * (t * t)
-}
-
-fn quadratic_derivative(points: [Point; 3], t: f32) -> Point {
-    (points[1] - points[0]) * (2.0 * (1.0 - t)) + (points[2] - points[1]) * (2.0 * t)
 }
 
 fn cubic_point(points: [Point; 4], t: f32) -> Point {
@@ -455,6 +572,7 @@ fn line_winding(point: Point, a: Point, b: Point) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::outline::WHITE;
 
     #[test]
     fn line_distance_handles_degenerate_edges() {
@@ -467,5 +585,42 @@ mod tests {
     #[test]
     fn cubic_distance_terminates_for_degenerate_control_points() {
         assert_eq!(cubic_distance(Point::new(1.0, 0.0), [Point::ZERO; 4]), 1.0);
+    }
+
+    #[test]
+    fn quadratic_distance_finds_a_stationary_point_missed_by_fixed_newton_starts() {
+        let distance = quadratic_distance(
+            Point::new(84.992_66, 52.003_475),
+            [
+                Point::new(-28.122_19, -39.568_462),
+                Point::new(-48.995_556, -80.687_94),
+                Point::new(-53.369_263, -24.972_748),
+            ],
+        );
+
+        assert!((distance.abs() - 145.534_84).abs() < 1.0e-3);
+    }
+
+    #[test]
+    fn quadratic_segments_keep_zero_distance_on_their_shared_contour() {
+        let mut edges = EdgeSoa::default();
+        edges.quadratics.x0.extend([-1.0, 0.0]);
+        edges.quadratics.y0.extend([0.0, 1.0]);
+        edges.quadratics.cx.extend([-1.0, 1.0]);
+        edges.quadratics.cy.extend([1.0, 1.0]);
+        edges.quadratics.x1.extend([0.0, 1.0]);
+        edges.quadratics.y1.extend([1.0, 0.0]);
+        edges.quadratics.color.extend([WHITE, WHITE]);
+        edges.quadratics.contour.extend([0, 0]);
+        let mut contours = [ContourDistance::default()];
+
+        visit_quadratics(Point::new(0.75, 0.75), &edges.quadratics, &mut contours);
+
+        assert!(
+            contours[0]
+                .lanes
+                .iter()
+                .all(|distance| distance.abs() < 1.0e-6)
+        );
     }
 }
