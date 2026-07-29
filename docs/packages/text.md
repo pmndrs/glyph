@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:309e519a70733260fcff1541f9061381ab127784c9d74c871e0df5c040933f32"
+source_digest: "sha256:302dc1f8e89855eff578376be9c4036295440ae5568fba396780874caa95bc92"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest

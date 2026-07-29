@@ -164,7 +164,10 @@ export interface RasterModule<
   dispose(resource: Resource): void
 }
 
-export type AnyRasterModule = RasterModule<string, any, RasterDrawBatch, any>
+// Deliberately erase every module parameter at heterogeneous token/cache boundaries.
+// Keeping `Kind` as `string` makes the mutable-in-position module surface invariant,
+// so a concrete `RasterModule<'bitmap', ...>` no longer satisfies this erasure.
+export type AnyRasterModule = RasterModule<any, any, any, any>
 
 export type RasterKindOf<Module extends AnyRasterModule> =
   Module extends RasterModule<infer Kind, any, any, any> ? Kind : never
