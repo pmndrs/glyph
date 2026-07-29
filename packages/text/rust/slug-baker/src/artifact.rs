@@ -101,7 +101,7 @@ pub fn bake_slug(
             width: page.width,
             height: page.height,
             format: "rgba16float".into(),
-            mip_bytes: page.gpu_bytes,
+            gpu_bytes: page.gpu_bytes,
             source: if page.embedded {
                 "embedded"
             } else {

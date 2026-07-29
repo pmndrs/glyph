@@ -73,16 +73,16 @@ pub fn bake_mtsdf(
         .map_err(|_| overflow())?;
     let mut gpu_bytes = 0_usize;
     for page in built.pages {
-        let mip_bytes = usize::from(page.width)
+        let page_gpu_bytes = usize::from(page.width)
             .checked_mul(usize::from(page.height))
             .and_then(|texels| texels.checked_mul(4))
             .ok_or_else(overflow)?;
-        gpu_bytes = gpu_bytes.checked_add(mip_bytes).ok_or_else(overflow)?;
+        gpu_bytes = gpu_bytes.checked_add(page_gpu_bytes).ok_or_else(overflow)?;
         page_reports.push(MtsdfPageReportV0 {
             width: page.width,
             height: page.height,
             format: "rgba8unorm".into(),
-            mip_bytes,
+            gpu_bytes: page_gpu_bytes,
             source: if page.embedded {
                 "embedded".into()
             } else {

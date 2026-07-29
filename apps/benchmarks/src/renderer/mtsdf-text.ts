@@ -66,7 +66,7 @@ interface MtsdfFixtureManifest {
   readonly compressed: { readonly bytes: number; readonly sha256: string }
   readonly uncompressed: { readonly bytes: number; readonly sha256: string }
   readonly raster: {
-    readonly runtimeTextureArray: { readonly mipmappedBytes: number }
+    readonly runtimeTextureArray: { readonly basePaddedGpuBytes: number }
   }
 }
 
@@ -772,7 +772,7 @@ export async function loadMtsdfFont(
   const registry = new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes })
   return {
     artifactBytes: artifact.byteLength,
-    atlasGpuBytes: manifest.raster.runtimeTextureArray.mipmappedBytes,
+    atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
     font: await registry.registerAsset(artifact),
     metrics,
@@ -998,8 +998,8 @@ async function createFlatMtsdfConformanceResources(
       text: conformanceText(),
       font,
       raster: loaded.raster,
-      // Match the baked 64 px/em base level in device pixels. Minification and
-      // generated mip selection are exercised by the separate scene corpus.
+      // Match the baked 64 px/em base level in device pixels. Deep minification
+      // is exercised separately with the same authored field and derivative AA.
       fontSize: 64 / dpr,
       rasterPixelRatio: dpr,
       lineHeight: 1.2,

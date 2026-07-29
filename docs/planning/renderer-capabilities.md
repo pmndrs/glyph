@@ -107,7 +107,7 @@ Notes:
 1. Bitmap quality is tied to available strikes; it is preferred for tiny hinted or deliberately pixel-authored text.
 2. MSDF with MTSDF encoding is the proposed general-purpose default, subject to accepted scale, transform, atlas, and effects benchmarks.
 3. Slug is preferred when large-size or zoomed outline fidelity dominates. Its cost remains shape- and coverage-dependent.
-4. Payload size depends on glyph coverage, strikes, atlas resolution, outline complexity, mipmaps, and compression. It must be measured per corpus.
+4. Payload size depends on glyph coverage, strikes, atlas resolution, layer padding, outline complexity, and compression. It must be measured per corpus.
 
 ## Raster-independent behavior
 

@@ -598,18 +598,18 @@ The [MTSDF generator admission](../planning/mtsdf-generator-admission.md) record
 ### 8.3 runtime-and-validation checklist
 
 - [x] Ship optional `@pmndrs/text/raster/msdf` and `@pmndrs/text/bakers/msdf/validate` entries without importing baker Wasm from the renderer.
-- [x] Validate schema, Khronos core structure, reciprocal identity, fixed MTSDF constants, exact dense records, page bounds, embedded/external authentication, linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and generated-mip residency before publication.
+- [x] Validate schema, Khronos core structure, reciprocal identity, fixed MTSDF constants, exact dense records, page bounds, embedded/external authentication, single-level linear RGBA8 KTX2 structure and data-format metadata, arithmetic limits, and padded base-array residency before publication.
 - [x] Share pure KTX2 and dense-record rules across bitmap/MTSDF renderers and standalone validators while keeping Khronos/Ajv outside renderer graphs.
 - [x] Use one instanced resource/batch family for fill, opacity, bounded outline, and translated hard shadow; reject effects beyond the encoded distance range.
-- [x] Generate mipmaps on upload, prevent neighboring-cell sampling, repaint owned attributes without reshaping, and dispose partial or complete texture/material/geometry ownership transactionally.
+- [x] Upload only authenticated base levels, sample them linearly with screen-derivative reconstruction, prevent neighboring-cell sampling, repaint owned attributes without reshaping, and dispose partial or complete texture/material/geometry ownership transactionally.
 - [x] Exercise all ten canonical Inter pages, embedded/external parity, field deletion, semantic mutation, KTX2 DFD corruption, GPU budgets, repaint, and repeated disposal through deterministic tests.
 
-Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGPU and forced WebGL2, with deterministic resize, minification, transformed-text, and fill/outline/shadow scenes plus a finite flat-sampling comparison against an independent scalar CPU atlas reconstruction.
+Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGPU and forced WebGL2, with deterministic resize, deep-minification, transformed-text, and fill/outline/shadow scenes plus a finite flat-sampling comparison against an independent scalar CPU atlas reconstruction.
 
 ### 8.4 dual-backend rendering checklist
 
 - [x] Render one public `Text`/MTSDF batch family through version-matched TSL on WebGPU and forced WebGL2.
-- [x] Exercise resize, mip minification, perspective transform, fill, opacity, outline, and hard shadow without technique-specific scene forks.
+- [x] Exercise resize, deep minification, perspective transform, fill, opacity, outline, and hard shadow without technique-specific scene forks.
 - [x] Pin the canonical forced-WebGL2 scene identity and reject a deterministic static substitute with a negative control.
 - [x] Compare a 64-device-pixel base-level specimen against an independent scalar CPU reconstruction so the oracle and GPU sample the same texture level.
 - [x] Gate mean, maximum, and over-tolerance pixel errors; canonical Inter measures `0.0969` mean / `30` maximum / `3,231` over-tolerance pixels on forced WebGL2 and `0.0187` / `1` / `0` on the admitted WebGPU probe.
@@ -617,7 +617,7 @@ Item 8.3 is closed. Item 8.4 executes the same instanced TSL graph through WebGP
 
 ### 8.5 evidence-and-closure checklist
 
-- [x] Publish six complete-font Bitmap and MTSDF fixtures with authenticated source identity, full glyph counts, page directories, transport bytes, decoded bytes, and exact mip-chain GPU totals.
+- [x] Publish six complete-font Bitmap and MTSDF fixtures with authenticated source identity, full glyph counts, page directories, transport bytes, decoded bytes, and exact padded base-array GPU totals.
 - [x] Surface loaded/unloaded library and baker totals, font download/decoded bytes, texture-array memory, and every atlas page in the human benchmark inspector.
 - [x] Keep runtime rendering independent of baker Wasm; optional Bitmap and MTSDF bakers execute only through one serial lazy module Worker.
 - [x] Exercise deterministic WebGL2 headless conformance and maintainer-local GPU WebGPU product probes without sleeps, retries, or timer cushions.
@@ -662,14 +662,8 @@ Deliver:
 - one paragraph rendered through bitmap, MSDF, and Slug without reshaping or remeasurement;
 - explicit raster-selection API and failure behavior;
 - documented technique recommendations backed by the benchmark corpus;
-- a controlled MTSDF minification campaign after Slug lands: compare no mipmaps,
-  current upload-generated linear mipmaps, and distance-aware authored mipmaps
-  across a 6/8/10/12/16/24-pixel size ladder plus rotated and perspective text;
-  report source-outline error, neighboring-cell bleed, upload cost, GPU time,
-  transport bytes, and exact padded-array residency, then implement only the
-  measured winner;
-- validator and baker-report GPU accounting that matches the runtime's padded
-  texture-array allocation before any MTSDF mip result is accepted;
+- validator, runtime, fixture, and inspector GPU accounting that agrees on the
+  exact MTSDF padded base texture-array allocation;
 - interactive comparison scenarios for bitmap, MSDF, and Slug with correctness/visual gates and downloadable raw results;
 - second-font registration and raster-binding smoke fixtures;
 - release-level conformance, browser, GPU, memory, package-size, and malformed-input suites;

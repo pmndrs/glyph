@@ -423,7 +423,7 @@ function isRasterPagePayloadReport(
     isPositiveSafeInteger(value.width) &&
     isPositiveSafeInteger(value.height) &&
     value.format === pageFormat &&
-    isPositiveSafeInteger(value.mipBytes) &&
+    isPositiveSafeInteger(value.gpuBytes) &&
     (value.source === 'embedded' || value.source === 'external') &&
     isPositiveSafeInteger(value.encodedBytes)
   )

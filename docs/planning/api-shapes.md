@@ -574,7 +574,7 @@ interface RasterPagePayloadReport {
   width: number
   height: number
   format: string
-  mipBytes: number
+  gpuBytes: number
   source: 'embedded' | 'external'
   encodedBytes: number
 }

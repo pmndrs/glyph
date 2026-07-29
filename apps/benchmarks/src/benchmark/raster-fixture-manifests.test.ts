@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json'
 import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
 import mtsdfManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json'
-import { exactMipmappedTextureArrayBytes } from './texture-memory'
+import { exactBaseTextureArrayBytes } from './texture-memory'
 
 interface FixtureIdentity {
   readonly directory: string
@@ -111,13 +111,8 @@ describe('checked raster fixture manifests', () => {
       )
       const textureArray = artifact.raster.runtimeTextureArray
       expect(
-        exactMipmappedTextureArrayBytes(
-          textureArray.width,
-          textureArray.height,
-          textureArray.layers,
-          4,
-        ),
-      ).toBe(textureArray.mipmappedBytes)
+        exactBaseTextureArrayBytes(textureArray.width, textureArray.height, textureArray.layers, 4),
+      ).toBe(textureArray.basePaddedGpuBytes)
     }
   })
 })
