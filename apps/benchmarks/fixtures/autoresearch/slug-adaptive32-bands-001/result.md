@@ -6,31 +6,31 @@ The precommitted `{16, 32}` policy preserves every retained output pixel and red
 
 ## Evidence
 
-| Observation | Adaptive 32 versus fixed 16 |
-| --- | ---: |
-| Exact quality cells | 28/28 byte-identical |
-| Scalar evaluated curves | 2.7–13.5% fewer |
-| Gzip artifact bytes | 6.5–17.0% more |
-| Slug GPU residency | 5.7–14.6% more |
+| Observation             | Adaptive 32 versus fixed 16 |
+| ----------------------- | --------------------------: |
+| Exact quality cells     |        28/28 byte-identical |
+| Scalar evaluated curves |             2.7–13.5% fewer |
+| Gzip artifact bytes     |              6.5–17.0% more |
+| Slug GPU residency      |              5.7–14.6% more |
 
 Five alternating A/B rounds used the 1,500×950 Text Ladder at DPR 2 with twelve causal GPU samples per session. The retained capture contains 140 runs: seven sources, two backends, two variants, and five rounds.
 
-| Backend | Source | Fixed 16 median GPU | Adaptive 32 median GPU | Median paired change | Paired range |
-| --- | --- | ---: | ---: | ---: | ---: |
-| WebGPU | Inter | 0.776 ms | 0.765 ms | −1.4% | −2.8 to −0.6% |
-| WebGPU | Amiri | 1.849 ms | 1.828 ms | −1.4% | −1.8 to −0.3% |
-| WebGPU | Noto Sans Devanagari | 2.554 ms | 2.122 ms | −0.8% | −45.4 to +17.7% |
-| WebGPU | DotGothic16 | 2.539 ms | 2.918 ms | +14.9% | +6.1 to +36.4% |
-| WebGPU | Noto Sans CJK showcase | 2.459 ms | 2.289 ms | −13.6% | −23.6 to +14.0% |
-| WebGPU | Source Serif 4 | 0.760 ms | 0.736 ms | −1.9% | −4.4 to +2.2% |
-| WebGPU | Dancing Script | 2.880 ms | 2.700 ms | −7.5% | −33.1 to +23.1% |
-| WebGL2 | Inter | 0.890 ms | 0.911 ms | +2.8% | +0.9 to +22.3% |
-| WebGL2 | Amiri | 1.962 ms | 1.910 ms | −2.7% | −15.2 to +7.3% |
-| WebGL2 | Noto Sans Devanagari | 2.819 ms | 2.815 ms | −0.5% | −6.6 to +8.6% |
-| WebGL2 | DotGothic16 | 2.922 ms | 2.878 ms | −1.2% | −6.6 to +3.1% |
-| WebGL2 | Noto Sans CJK showcase | 3.112 ms | 3.004 ms | −3.5% | −5.3 to −0.3% |
-| WebGL2 | Source Serif 4 | 0.962 ms | 0.924 ms | −3.9% | −20.3 to +6.8% |
-| WebGL2 | Dancing Script | 2.865 ms | 2.759 ms | +1.1% | −9.1 to +36.7% |
+| Backend | Source                 | Fixed 16 median GPU | Adaptive 32 median GPU | Median paired change |    Paired range |
+| ------- | ---------------------- | ------------------: | ---------------------: | -------------------: | --------------: |
+| WebGPU  | Inter                  |            0.776 ms |               0.765 ms |                −1.4% |   −2.8 to −0.6% |
+| WebGPU  | Amiri                  |            1.849 ms |               1.828 ms |                −1.4% |   −1.8 to −0.3% |
+| WebGPU  | Noto Sans Devanagari   |            2.554 ms |               2.122 ms |                −0.8% | −45.4 to +17.7% |
+| WebGPU  | DotGothic16            |            2.539 ms |               2.918 ms |               +14.9% |  +6.1 to +36.4% |
+| WebGPU  | Noto Sans CJK showcase |            2.459 ms |               2.289 ms |               −13.6% | −23.6 to +14.0% |
+| WebGPU  | Source Serif 4         |            0.760 ms |               0.736 ms |                −1.9% |   −4.4 to +2.2% |
+| WebGPU  | Dancing Script         |            2.880 ms |               2.700 ms |                −7.5% | −33.1 to +23.1% |
+| WebGL2  | Inter                  |            0.890 ms |               0.911 ms |                +2.8% |  +0.9 to +22.3% |
+| WebGL2  | Amiri                  |            1.962 ms |               1.910 ms |                −2.7% |  −15.2 to +7.3% |
+| WebGL2  | Noto Sans Devanagari   |            2.819 ms |               2.815 ms |                −0.5% |   −6.6 to +8.6% |
+| WebGL2  | DotGothic16            |            2.922 ms |               2.878 ms |                −1.2% |   −6.6 to +3.1% |
+| WebGL2  | Noto Sans CJK showcase |            3.112 ms |               3.004 ms |                −3.5% |   −5.3 to −0.3% |
+| WebGL2  | Source Serif 4         |            0.962 ms |               0.924 ms |                −3.9% |  −20.3 to +6.8% |
+| WebGL2  | Dancing Script         |            2.865 ms |               2.759 ms |                +1.1% |  −9.1 to +36.7% |
 
 Exact artifact identities, page sizes, glyph-band distributions, raw histories, and machine summaries are retained in `artifacts-v0.json`, `quality-chromium149.json`, and `performance-chromium149.json`.
 
