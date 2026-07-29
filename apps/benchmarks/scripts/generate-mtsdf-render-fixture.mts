@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { bakeFont } from '@pmndrs/text/bake'
 import { msdfBaker } from '@pmndrs/text/bakers/msdf'
 
-import { exactMipmappedTextureArrayBytes } from '../src/benchmark/texture-memory.ts'
+import { exactBaseTextureArrayBytes } from '../src/benchmark/texture-memory.ts'
 
 const outputDirectory = resolve('fixtures/rendering')
 const showcaseManifestOutput = resolve(outputDirectory, 'showcase-mtsdf-fixtures-v0.json')
@@ -97,7 +97,12 @@ try {
       throw new Error(`${fixture.fontFixture} bake omitted its MTSDF report`)
     const textureArrayWidth = Math.max(...raster.pages.map(({ width }) => width))
     const textureArrayHeight = Math.max(...raster.pages.map(({ height }) => height))
-    const textureArrayBaseBytes = textureArrayWidth * textureArrayHeight * raster.pages.length * 4
+    const basePaddedGpuBytes = exactBaseTextureArrayBytes(
+      textureArrayWidth,
+      textureArrayHeight,
+      raster.pages.length,
+      4,
+    )
     const artifact = {
       fontFixture: fixture.fontFixture,
       file: fixture.output,
@@ -114,20 +119,14 @@ try {
           width: textureArrayWidth,
           height: textureArrayHeight,
           layers: raster.pages.length,
-          baseBytes: textureArrayBaseBytes,
-          mipmappedBytes: exactMipmappedTextureArrayBytes(
-            textureArrayWidth,
-            textureArrayHeight,
-            raster.pages.length,
-            4,
-          ),
+          basePaddedGpuBytes,
         },
         pages: raster.pages.map((page, index) => ({
           index,
           width: page.width,
           height: page.height,
           encodedBytes: page.encodedBytes,
-          decodedGpuBytes: page.mipBytes,
+          decodedGpuBytes: page.gpuBytes,
         })),
       },
     }

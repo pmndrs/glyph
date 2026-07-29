@@ -205,7 +205,7 @@ try {
           height: page.height,
           format: page.format,
           encodedBytes: page.encodedBytes,
-          decodedGpuBytes: page.mipBytes,
+          decodedGpuBytes: page.gpuBytes,
         })),
       },
       ...(experimentName === 'fixed32' ? {} : { glyphBandCounts: countGlyphBands(baked) }),

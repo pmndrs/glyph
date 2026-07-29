@@ -74,7 +74,7 @@ The renderer is straightforward once correct atlas data exists. Most implementat
 
 ### Make it performant
 
-Runtime cost is bounded and texture-oriented. Expected work is atlas occupancy, compression/upload choices, batching, mipmaps, and selecting an appropriate generation scale and distance range. These are conventional GPU optimization problems compared with an analytic curve shader.
+Runtime cost is bounded and texture-oriented. Expected work is atlas occupancy, compression/upload choices, batching, layer padding, and selecting an appropriate generation scale and distance range. These are conventional GPU optimization problems compared with an analytic curve shader.
 
 ### Initial role
 

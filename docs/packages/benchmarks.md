@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:d40884fb78884c75372813184a61cb734c099ff7bd33291be0614ba979a181d2"
+source_digest: "sha256:7f33efc66c264634d5150f33909d97ba610ff2706f78aa6133fb7a042a30c6cc"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Retained Slug release-role evidence
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T03:15:28Z"
+  at: "2026-07-29T03:31:34Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -74,7 +74,7 @@ The Slug-specific 1,500×950 Text Ladder matrix retains twelve raw causal CPU/FP
 
 The first retained challenger doubles every glyph from 16 to 32 bands without changing the format or shader. All 28 quality cells remain byte-identical and scalar traversal falls by 12.0–19.4%, while five-round DPR-2 A/B observations show median GPU changes from −5.3% to −10.4% across Inter and the Japanese showcase on both backends. Fixed 32 is calibration rather than a production policy: gzip grows 14.4–21.6%, Slug GPU residency grows 13.0–20.3%, and Japanese WebGPU pairs cross zero. The retained artifact generator, raw runs, exact hashes, and result note make adaptive per-glyph bands the next bounded challenger instead of silently accepting a universal memory trade. A precommitted `{16, 32, 64}` policy targeting at most six mean references per band is rejected before GPU measurement: it escalates too many glyphs to 64, grows gzip by 9.7–30.2%, and grows residency by 8.6–25.0%. Its exact artifacts and glyph-count distributions prevent the failed threshold from being rediscovered. A separately precommitted `{16, 32}` cap preserves all 28 exact quality cells and lowers scalar traversal 2.7–13.5%, but adds 6.5–17.0% gzip and 5.7–14.6% runtime residency. Across 140 alternating DPR-2 runs, DotGothic16 regresses 14.9% on WebGPU; the Noto CJK WebGPU signal crosses zero and its WebGL2 median reaches only −3.5%. The complete dual-backend guard therefore rejects the universal capped policy.
 
-Six authenticated full-font fixtures cover sans, serif, script, Arabic, Devanagari, and Japanese stress. A seventh deterministic Noto Sans CJK JP subset covers only the authored Advanced Shaping Japanese corpus so the visual default uses a conventional sans rather than DotGothic16's intentional pixel style. Its source is `38,092 B`; its Bitmap GLB is `65,996 B` on one page; and its MTSDF artifact is `1,044,110 B` gzip / `3,172,756 B` raw / one page / `4,215,804 B` exact mipmapped GPU memory. The full Noto CJK font remains the shaping oracle and Milestone 13 paging target. DotGothic16 remains an explicit full-face raster stress fixture, not the representative CJK visual default. A streaming test authenticates all fourteen artifacts, embedded source hashes, complete fixture-local glyph counts, page totals, and exact floor-halved mip chains without rebaking them. The production build emits and links one exact font-notices artifact containing every redistributed license.
+Six authenticated full-font fixtures cover sans, serif, script, Arabic, Devanagari, and Japanese stress. A seventh deterministic Noto Sans CJK JP subset covers only the authored Advanced Shaping Japanese corpus so the visual default uses a conventional sans rather than DotGothic16's intentional pixel style. Its source is `38,092 B`; its Bitmap GLB is `65,996 B` on one page; and its MTSDF artifact is `1,044,110 B` gzip / `3,172,756 B` raw / one page / `3,162,112 B` exact padded base-level GPU memory. The full Noto CJK font remains the shaping oracle and Milestone 13 paging target. DotGothic16 remains an explicit full-face raster stress fixture, not the representative CJK visual default. A streaming test authenticates all fourteen artifacts, embedded source hashes, complete fixture-local glyph counts, page totals, and exact padded base-array allocations without rebaking them. The production build emits and links one exact font-notices artifact containing every redistributed license.
 
 ### Benchmark ipsum corpus
 

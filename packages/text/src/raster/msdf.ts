@@ -97,7 +97,7 @@ export interface MsdfResource {
   readonly records: Uint8Array
   readonly pages: readonly MsdfPageResource[]
   readonly atlas: MsdfAtlasResource
-  /** Padded texture-array bytes including the generated mip-chain budget. */
+  /** Exact padded base-level texture-array bytes. */
   readonly gpuBytes: number
 }
 
@@ -234,8 +234,8 @@ function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Msd
             KHR_DF_CHANNEL_RGBSDA_ALPHA,
           ],
           textureFormat: THREE.RGBAFormat,
-          generateMipmaps: true,
-          minFilter: THREE.LinearMipmapLinearFilter,
+          generateMipmaps: false,
+          minFilter: THREE.LinearFilter,
         },
       )
       decodedPages.push(page)
@@ -276,8 +276,7 @@ function createTextureArray(pages: readonly RasterAtlasPage[]): {
   const width = Math.max(...pages.map((page) => page.width))
   const height = Math.max(...pages.map((page) => page.height))
   const baseBytes = width * height * pages.length * 4
-  const gpuBytes = mipmappedTextureArrayBytes(width, height, pages.length)
-  if (!Number.isSafeInteger(gpuBytes) || gpuBytes > MAX_RUNTIME_GPU_BYTES) {
+  if (!Number.isSafeInteger(baseBytes) || baseBytes > MAX_RUNTIME_GPU_BYTES) {
     throw new RangeError('MTSDF pages exceed the runtime GPU-memory limit')
   }
   const texels = new Uint8Array(baseBytes)
@@ -298,32 +297,17 @@ function createTextureArray(pages: readonly RasterAtlasPage[]): {
   }
   const atlasTexture = new THREE.DataArrayTexture(texels, width, height, pages.length)
   atlasTexture.colorSpace = THREE.NoColorSpace
-  atlasTexture.generateMipmaps = true
-  atlasTexture.minFilter = THREE.LinearMipmapLinearFilter
+  atlasTexture.generateMipmaps = false
+  atlasTexture.minFilter = THREE.LinearFilter
   atlasTexture.magFilter = THREE.LinearFilter
   atlasTexture.needsUpdate = true
   return {
     atlas: { width, height, layers: pages.length, texture: atlasTexture },
-    gpuBytes,
+    gpuBytes: baseBytes,
     pages: pages.map(({ width: pageWidth, height: pageHeight }) => ({
       width: pageWidth,
       height: pageHeight,
     })),
-  }
-}
-
-function mipmappedTextureArrayBytes(width: number, height: number, layers: number): number {
-  let levelWidth = width
-  let levelHeight = height
-  let bytes = 0
-  for (;;) {
-    bytes += levelWidth * levelHeight * layers * 4
-    if (!Number.isSafeInteger(bytes)) {
-      throw new RangeError('MTSDF texture-array byte length exceeds safe integer range')
-    }
-    if (levelWidth === 1 && levelHeight === 1) return bytes
-    levelWidth = Math.max(1, Math.floor(levelWidth / 2))
-    levelHeight = Math.max(1, Math.floor(levelHeight / 2))
   }
 }
 

@@ -52,7 +52,7 @@
           "width": 1024,
           "height": 679,
           "format": "r8unorm",
-          "mipBytes": 695296,
+          "gpuBytes": 695296,
           "source": "embedded",
           "encodedBytes": 695444
         }
@@ -93,7 +93,7 @@
           "width": 1024,
           "height": 679,
           "format": "r8unorm",
-          "mipBytes": 695296,
+          "gpuBytes": 695296,
           "source": "external",
           "encodedBytes": 695444
         }
@@ -193,7 +193,7 @@
                 "width": 1024,
                 "height": 679,
                 "format": "r8unorm",
-                "mipBytes": 695296,
+                "gpuBytes": 695296,
                 "source": "embedded",
                 "encodedBytes": 695444
               }
@@ -311,7 +311,7 @@
                 "width": 1024,
                 "height": 679,
                 "format": "r8unorm",
-                "mipBytes": 695296,
+                "gpuBytes": 695296,
                 "source": "external",
                 "encodedBytes": 695444
               }

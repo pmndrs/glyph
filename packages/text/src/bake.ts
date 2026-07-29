@@ -60,7 +60,7 @@ export interface RasterPagePayloadReport {
   readonly width: number
   readonly height: number
   readonly format: string
-  readonly mipBytes: number
+  readonly gpuBytes: number
   readonly source: 'embedded' | 'external'
   readonly encodedBytes: number
 }

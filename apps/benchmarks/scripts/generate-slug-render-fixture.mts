@@ -111,7 +111,7 @@ try {
           height: page.height,
           format: page.format,
           encodedBytes: page.encodedBytes,
-          decodedGpuBytes: page.mipBytes,
+          decodedGpuBytes: page.gpuBytes,
         })),
       },
     }

@@ -3888,7 +3888,7 @@ function PayloadInspector({
         : bitmapFixture?.bytes
   const textureGpuBytes =
     technique === 'mtsdf'
-      ? mtsdfFixture?.raster.runtimeTextureArray.mipmappedBytes
+      ? mtsdfFixture?.raster.runtimeTextureArray.basePaddedGpuBytes
       : technique === 'slug'
         ? (slugStats?.slugGpuBytes ?? slugFixture?.raster.decodedGpuBytes)
         : (bitmapStats?.atlasGpuBytes ?? bitmapFixture?.raster.decodedGpuBytes)
@@ -3941,16 +3941,7 @@ function PayloadInspector({
             gpuBytes: 'gpuBytes' in page ? page.gpuBytes : page.decodedGpuBytes,
           }))
   const pageGpuBytes = pages.reduce((total, page) => total + page.gpuBytes, 0)
-  const textureBaseBytes =
-    technique === 'mtsdf'
-      ? mtsdfFixture?.raster.runtimeTextureArray.baseBytes
-      : technique === 'slug'
-        ? undefined
-        : textureGpuBytes
-  const textureMipBytes =
-    textureGpuBytes === undefined || textureBaseBytes === undefined
-      ? undefined
-      : textureGpuBytes - textureBaseBytes
+  const textureBaseBytes = technique === 'slug' ? undefined : textureGpuBytes
   const texturePaddingBytes =
     textureBaseBytes === undefined ? undefined : Math.max(0, textureBaseBytes - pageGpuBytes)
   const displayedFontTransferBytes =
@@ -4073,9 +4064,6 @@ function PayloadInspector({
               status="loaded"
               value={formatBytes(texturePaddingBytes)}
             />
-          )}
-          {textureMipBytes !== undefined && textureMipBytes > 0 && (
-            <PayloadRow label="Mip levels" status="loaded" value={formatBytes(textureMipBytes)} />
           )}
         </InspectorDisclosure>
       </div>

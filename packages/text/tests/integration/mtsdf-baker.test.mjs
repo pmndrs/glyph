@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
+import * as THREE from 'three/webgpu'
+
 import {
   createMtsdfBaker,
   createMtsdfBakerFromInstance,
@@ -196,7 +198,7 @@ test('copies a segmented response in bounded chunks and releases its Wasm owners
           width: 1,
           height: 1,
           format: 'rgba8unorm',
-          mipBytes: 4,
+          gpuBytes: 4,
           source: 'embedded',
           encodedBytes: artifactBytes.byteLength,
         },
@@ -376,6 +378,13 @@ async function exerciseArtifactValidation(result, rasterArtifact, pageArtifacts,
   await rejectsMtsdf(badDfd, context, 'KTX2_DFD')
 
   await rejectsMtsdf(embeddedBytes, { ...context, limits: { maxGpuBytes: 1 } }, 'GPU_BUDGET')
+  // The individual Inter pages total 39,111,736 bytes, but the runtime allocates one
+  // 1024×1024×10-layer RGBA8 texture array (41,943,040 bytes).
+  await rejectsMtsdf(
+    embeddedBytes,
+    { ...context, limits: { maxGpuBytes: 40_000_000 } },
+    'GPU_BUDGET',
+  )
   await rejectsMtsdf(rasterArtifact.bytes, context, 'EXTERNAL_PAGE_MISSING')
 
   const tamperedExternalPages = new Map(pageArtifacts.map(({ id, bytes }) => [id, bytes.slice()]))
@@ -517,8 +526,10 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   assert.equal(resource.atlas.width, 1024)
   assert.equal(resource.atlas.height, 1024)
   assert.equal(resource.atlas.layers, 10)
-  assert.equal(resource.atlas.texture.generateMipmaps, true)
-  assert.equal(resource.gpuBytes, 55_924_040)
+  assert.equal(resource.atlas.texture.generateMipmaps, false)
+  assert.equal(resource.atlas.texture.minFilter, THREE.LinearFilter)
+  assert.equal(resource.atlas.texture.magFilter, THREE.LinearFilter)
+  assert.equal(resource.gpuBytes, 41_943_040)
   const glyphIds = firstPresentGlyphByPage(records, resource.pages.length)
   const layout = {
     glyphIds,

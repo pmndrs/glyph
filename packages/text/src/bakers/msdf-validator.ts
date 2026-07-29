@@ -23,7 +23,6 @@ import {
   asArray,
   asInteger,
   checkedProduct,
-  checkedSum,
   claimCoreRasterViews,
   claimOtherRasterExtensionViews,
   claimRasterView,
@@ -52,8 +51,6 @@ import {
 
 const RECORD_STRIDE = 20
 const BYTES_PER_PIXEL = 4
-const MIP_STORAGE_NUMERATOR = 4
-const MIP_STORAGE_DENOMINATOR = 3
 const RGBA8_FORMAT = {
   vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
   blockWidth: 1,
@@ -256,7 +253,8 @@ async function validateMtsdfSemantics(
     )
   }
 
-  let gpuBytes = 0
+  let textureArrayWidth = 0
+  let textureArrayHeight = 0
   const pages: ValidatedMtsdfPageV0[] = []
   const pageValues = asArray(extension.pages, `${extensionPath}/pages`)
   for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
@@ -264,6 +262,8 @@ async function validateMtsdfSemantics(
     const page = requireNonArrayObject(pageValues[pageIndex], pagePath)
     const width = asInteger(page.width, `${pagePath}/width`, 1, limits.maxTextureDimension2D)
     const height = asInteger(page.height, `${pagePath}/height`, 1, limits.maxTextureDimension2D)
+    textureArrayWidth = Math.max(textureArrayWidth, width)
+    textureArrayHeight = Math.max(textureArrayHeight, height)
     if (page.mipLevelCount !== 1 || page.colorSpace !== 'linear') {
       fail('PAGE_BASELINE', 'MTSDF V0 pages must be single-level linear resources', pagePath)
     }
@@ -300,22 +300,6 @@ async function validateMtsdfSemantics(
       'MTSDF',
     )
     validateNativeKtx2(resource.bytes, width, height, RGBA8_FORMAT, variantPath)
-    const baseBytes = checkedProduct(
-      checkedProduct(width, height, pagePath),
-      BYTES_PER_PIXEL,
-      pagePath,
-    )
-    const mipBytes = Math.ceil(
-      checkedProduct(baseBytes, MIP_STORAGE_NUMERATOR, pagePath) / MIP_STORAGE_DENOMINATOR,
-    )
-    gpuBytes = checkedSum(gpuBytes, mipBytes, pagePath)
-    if (gpuBytes > limits.maxGpuBytes) {
-      fail(
-        'GPU_BUDGET',
-        'MTSDF pages and their generated mip chains exceed the configured GPU byte budget',
-        pagePath,
-      )
-    }
     pages.push({
       width,
       height,
@@ -323,6 +307,19 @@ async function validateMtsdfSemantics(
       source: resource.source,
       ...(resource.uri === undefined ? {} : { uri: resource.uri }),
     })
+  }
+
+  const gpuBytes = checkedProduct(
+    checkedProduct(textureArrayWidth, textureArrayHeight, `${extensionPath}/pages`),
+    checkedProduct(pages.length, BYTES_PER_PIXEL, `${extensionPath}/pages`),
+    `${extensionPath}/pages`,
+  )
+  if (gpuBytes > limits.maxGpuBytes) {
+    fail(
+      'GPU_BUDGET',
+      'MTSDF padded base texture array exceeds the configured GPU byte budget',
+      `${extensionPath}/pages`,
+    )
   }
 
   const records = sliceRasterView(parsed, views[recordView]!)

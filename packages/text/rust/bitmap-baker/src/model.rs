@@ -85,7 +85,7 @@ pub struct BitmapPageReportV0 {
     pub width: u16,
     pub height: u16,
     pub format: String,
-    pub mip_bytes: usize,
+    pub gpu_bytes: usize,
     pub source: String,
     pub encoded_bytes: usize,
 }

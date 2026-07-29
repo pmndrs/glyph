@@ -99,7 +99,7 @@ try {
             width: page.width,
             height: page.height,
             encodedBytes: page.encodedBytes,
-            decodedGpuBytes: page.mipBytes,
+            decodedGpuBytes: page.gpuBytes,
           })),
         },
       })

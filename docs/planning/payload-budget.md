@@ -191,14 +191,11 @@ Useful exact formulas:
 
 ```text
 bitmap GPU bytes = Σ(pageWidth × pageHeight × bytesPerPixel)
-MSDF base bytes  = textureArrayWidth × textureArrayHeight × pageCount × 4
-MSDF GPU bytes   = Σ(each floor-halved texture-array mip level)
+MTSDF GPU bytes  = textureArrayWidth × textureArrayHeight × pageCount × 4
 metadata bytes   = glyphRecordStride × representedGlyphCount + page directory
 ```
 
-Mipmaps approach one third of the base texture size for large power-of-two dimensions, but reports use exact floor-halved level sums. The harness presents download bytes, decoded artifact bytes, and exact GPU texture memory separately.
-
-Milestone 10 must not treat that storage cost as proof of quality. Immediately after Slug, one controlled campaign compares no mipmaps, current upload-generated linear mipmaps, and distance-aware authored mipmaps at 6, 8, 10, 12, 16, and 24 device pixels plus rotated and perspective cases. It records source-outline error, neighboring-cell bleed, upload and GPU time, transport, and the runtime's exact padded-array residency. Standalone validation and baker reports must use the same padded-array accounting before the winning representation is selected. Independently repacked size tiers remain strike atlases or texture-array layers because conventional mip levels must preserve spatial correspondence.
+MTSDF uploads only its authenticated base level. Bilinear field sampling and screen derivatives reconstruct coverage without conventional mip generation. Reports present download bytes, decoded artifact bytes, unpadded page texels, layer padding, and exact base-array GPU memory separately. Independently authored size tiers remain strike atlases or texture-array layers rather than conventional mip levels.
 
 ## Planning totals
 
@@ -207,7 +204,7 @@ For the non-subsetted 2,937-glyph Inter V0 face, the shared cost is fixed and th
 | Selected raster | Shared raw baseline | Raster GPU storage | Notes |
 | --- | ---: | ---: | --- |
 | Generated bitmap, 16 ppem | 167.0 KiB | 695,296 B | 58,740 B records; 755,064 B embedded companion GLB. |
-| MTSDF | 167.0 KiB | 55,924,040 B | 10-page full-face Inter texture array with exact mip chain; 6,979,347 B gzip transport and 39,347,692 B decoded GLB. |
+| MTSDF | 167.0 KiB | 41,943,040 B | 10-page full-face Inter padded base texture array; 6,979,347 B gzip transport and 39,347,692 B decoded GLB. |
 | Slug | 167.0 KiB | generator report required | 40 B × 2,937 = 117,480 B records; legacy subset derived near 2 MiB. |
 
 For the non-subsetted 1,403-glyph Font Awesome V0 face:
@@ -249,7 +246,7 @@ interface FontPayloadReport {
       width: number
       height: number
       format: string
-      mipBytes: number
+      gpuBytes: number
       source: 'embedded' | 'external'
       encodedBytes: number
     }>

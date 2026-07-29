@@ -96,15 +96,15 @@ pub fn bake_bitmap(
     let mut page_reports = Vec::with_capacity(built.pages.len());
     let mut gpu_bytes = 0_usize;
     for page in built.pages {
-        let mip_bytes = usize::from(page.width) * usize::from(page.height);
+        let page_gpu_bytes = usize::from(page.width) * usize::from(page.height);
         gpu_bytes = gpu_bytes
-            .checked_add(mip_bytes)
+            .checked_add(page_gpu_bytes)
             .ok_or_else(error::overflow)?;
         page_reports.push(BitmapPageReportV0 {
             width: page.width,
             height: page.height,
             format: "r8unorm".into(),
-            mip_bytes,
+            gpu_bytes: page_gpu_bytes,
             source: if page.embedded {
                 "embedded".into()
             } else {

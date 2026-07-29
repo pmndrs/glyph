@@ -204,7 +204,7 @@ test('copies segmented Slug artifacts in bounded chunks and releases Wasm owners
           width: 1,
           height: 1,
           format: 'rgba16float',
-          mipBytes: 8,
+          gpuBytes: 8,
           source: 'embedded',
           encodedBytes: artifactBytes.byteLength,
         },

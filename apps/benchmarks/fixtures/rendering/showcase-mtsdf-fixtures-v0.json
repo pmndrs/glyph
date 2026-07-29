@@ -26,8 +26,7 @@
           "width": 1024,
           "height": 1024,
           "layers": 10,
-          "baseBytes": 41943040,
-          "mipmappedBytes": 55924040
+          "basePaddedGpuBytes": 41943040
         },
         "pages": [
           {
@@ -128,8 +127,7 @@
           "width": 1024,
           "height": 1023,
           "layers": 24,
-          "baseBytes": 100564992,
-          "mipmappedBytes": 134021280
+          "basePaddedGpuBytes": 100564992
         },
         "pages": [
           {
@@ -328,8 +326,7 @@
           "width": 1024,
           "height": 1011,
           "layers": 4,
-          "baseBytes": 16564224,
-          "mipmappedBytes": 22076784
+          "basePaddedGpuBytes": 16564224
         },
         "pages": [
           {
@@ -388,8 +385,7 @@
           "width": 1024,
           "height": 1017,
           "layers": 44,
-          "baseBytes": 183287808,
-          "mipmappedBytes": 244308944
+          "basePaddedGpuBytes": 183287808
         },
         "pages": [
           {
@@ -728,8 +724,7 @@
           "width": 1024,
           "height": 772,
           "layers": 1,
-          "baseBytes": 3162112,
-          "mipmappedBytes": 4215804
+          "basePaddedGpuBytes": 3162112
         },
         "pages": [
           {
@@ -767,8 +762,7 @@
           "width": 1024,
           "height": 994,
           "layers": 5,
-          "baseBytes": 20357120,
-          "mipmappedBytes": 27139020
+          "basePaddedGpuBytes": 20357120
         },
         "pages": [
           {
@@ -834,8 +828,7 @@
           "width": 1024,
           "height": 1005,
           "layers": 4,
-          "baseBytes": 16465920,
-          "mipmappedBytes": 21946736
+          "basePaddedGpuBytes": 16465920
         },
         "pages": [
           {

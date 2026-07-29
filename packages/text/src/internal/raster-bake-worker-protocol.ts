@@ -99,7 +99,7 @@ function isPayloadReport(value: unknown): value is RasterPayloadReport {
         isPositiveSafeInteger(page.width) &&
         isPositiveSafeInteger(page.height) &&
         typeof page.format === 'string' &&
-        isPositiveSafeInteger(page.mipBytes) &&
+        isPositiveSafeInteger(page.gpuBytes) &&
         (page.source === 'embedded' || page.source === 'external') &&
         isPositiveSafeInteger(page.encodedBytes),
     )
