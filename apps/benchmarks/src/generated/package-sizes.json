@@ -90,10 +90,10 @@
       "label": "Slug runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 396400,
-      "minifiedBytes": 288177,
-      "gzipBytes": 83408,
-      "brotliBytes": 64874
+      "rawBytes": 396710,
+      "minifiedBytes": 288338,
+      "gzipBytes": 83445,
+      "brotliBytes": 64856
     },
     {
       "id": "bitmap-baker-wasm",

@@ -204,8 +204,6 @@ export async function createComparisonWorkloadPreview(options: {
   readonly showLayoutBounds: boolean
   readonly signal?: AbortSignal
   readonly slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource
-  /** Temporary nonshipping graph selection used by the Slug outline A/B. */
-  readonly slugOutlineExperimentVariant?: import('./slug-text').SlugOutlineExperimentVariant
   readonly technique: RasterTechnique
   readonly textLadderSpecimen?: RasterConformanceSpecimen
   readonly width: number
@@ -221,9 +219,6 @@ export async function createComparisonWorkloadPreview(options: {
   }
   if (options.slugBakedArtifact !== undefined && options.delivery !== 'baked') {
     throw new TypeError('a retained Slug candidate artifact requires baked delivery')
-  }
-  if (options.slugOutlineExperimentVariant !== undefined && technique !== 'slug') {
-    throw new TypeError('a Slug outline graph experiment requires the Slug technique')
   }
   let width = positive(options.width, 'comparison workload width')
   let height = positive(options.height, 'comparison workload height')
@@ -277,7 +272,6 @@ export async function createComparisonWorkloadPreview(options: {
       options.onBakeProgress,
       options.slugBakedArtifact,
       sharedRegistry,
-      options.slugOutlineExperimentVariant,
     )
     if (configuration.workload === 'icon-grid') {
       iconFont = await loadTechniqueFont(
@@ -288,7 +282,6 @@ export async function createComparisonWorkloadPreview(options: {
         options.onBakeProgress,
         undefined,
         sharedRegistry,
-        options.slugOutlineExperimentVariant,
       )
     }
     const fontLoadMs = performance.now() - fontStarted
@@ -1765,7 +1758,6 @@ async function loadTechniqueFont(
   onBakeProgress?: import('@pmndrs/text').BakeProgressListener,
   slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource,
   registry?: FontRegistry,
-  slugOutlineExperimentVariant: import('./slug-text').SlugOutlineExperimentVariant = 'multiply-zero',
 ): Promise<LoadedTechniqueFont> {
   if (technique === 'bitmap') {
     const loaded = await loadBitmapFont(
@@ -1805,20 +1797,8 @@ async function loadTechniqueFont(
     await import('./slug-text')
   const loaded =
     slugBakedArtifact === undefined
-      ? await loadSlugFont(
-          signal,
-          fontFixture,
-          delivery,
-          onBakeProgress,
-          registry,
-          slugOutlineExperimentVariant,
-        )
-      : await loadSlugBakedArtifact(
-          slugBakedArtifact,
-          signal,
-          registry,
-          slugOutlineExperimentVariant,
-        )
+      ? await loadSlugFont(signal, fontFixture, delivery, onBakeProgress, registry)
+      : await loadSlugBakedArtifact(slugBakedArtifact, signal, registry)
   const slugConfiguration = await registeredSlugConfiguration(loaded.font, signal)
   return {
     artifactBytes: loaded.compressedBytes,

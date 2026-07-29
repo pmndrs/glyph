@@ -149,7 +149,6 @@ interface SlugBatchRun {
   geometry: THREE.InstancedBufferGeometry
   readonly page: SlugPageResource
   readonly fillMesh: THREE.Mesh
-  readonly outlineExperimentVariant: SlugOutlineExperimentVariant
   materialState: SlugMaterialState
 }
 
@@ -162,10 +161,7 @@ export interface SlugDrawBatch {
 }
 
 const materialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
-const outlinedMaterialStateByCurveTexture = new WeakMap<
-  THREE.DataTexture,
-  Map<SlugOutlineExperimentVariant, SlugMaterialState>
->()
+const outlinedMaterialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
 
 const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = defineRaster({
   kind: SLUG_KIND,
@@ -196,31 +192,8 @@ const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = 
 
 export type SlugModule = typeof slugModule
 
-/** Temporary graph-build selector for the nonshipping Slug outline A/B. */
-export type SlugOutlineExperimentVariant = 'multiply-zero' | 'zero-width-branch'
-
 /** Fixed analytic Slug raster module for `defineFont(source, slug)`. */
 export const slug: SlugModule = slugModule
-
-/**
- * Create a Slug module with one outlined graph selected before pipeline construction.
- * The selector is deliberately not a uniform: the benchmark needs two independently
- * compiled graphs while preserving one draw and the ordinary per-instance paint contract.
- */
-export function createSlugOutlineExperimentRaster(
-  variant: SlugOutlineExperimentVariant,
-): SlugModule {
-  if (variant === 'multiply-zero') return slugModule
-  if (variant !== 'zero-width-branch') {
-    throw new TypeError(`Unknown Slug outline experiment variant: ${String(variant)}`)
-  }
-  return defineRaster({
-    ...slugModule,
-    buildBatches(layout, resource, fontSlot, paint) {
-      return buildSlugBatches(layout, resource, fontSlot, paint, variant)
-    },
-  })
-}
 
 async function decodeSlugResource(
   font: RegisteredFont,
@@ -556,7 +529,6 @@ function buildSlugBatches(
   resource: SlugResource,
   fontSlot: number,
   paint: GlyphPaint,
-  outlineExperimentVariant: SlugOutlineExperimentVariant = 'multiply-zero',
 ): SlugDrawBatch {
   assertParallelRasterLayout(layout, paint)
   assertSlugPaint(paint)
@@ -570,14 +542,7 @@ function buildSlugBatches(
 
   const finishRun = (): void => {
     if (pageIndex === undefined || glyphIndices.length === 0) return
-    const run = createSlugRun(
-      layout,
-      resource,
-      pageIndex,
-      glyphIndices,
-      paint,
-      outlineExperimentVariant,
-    )
+    const run = createSlugRun(layout, resource, pageIndex, glyphIndices, paint)
     runs.push(run)
     group.add(run.fillMesh)
     glyphIndices = []
@@ -628,19 +593,10 @@ function createSlugRun(
   pageIndex: number,
   glyphIndices: readonly number[],
   paint: GlyphPaint,
-  outlineExperimentVariant: SlugOutlineExperimentVariant,
 ): SlugBatchRun {
   const geometry = unitRasterQuadGeometry()
   try {
-    return populateSlugRun(
-      geometry,
-      layout,
-      resource,
-      pageIndex,
-      glyphIndices,
-      paint,
-      outlineExperimentVariant,
-    )
+    return populateSlugRun(geometry, layout, resource, pageIndex, glyphIndices, paint)
   } catch (error) {
     geometry.dispose()
     throw error
@@ -654,7 +610,6 @@ function populateSlugRun(
   pageIndex: number,
   glyphIndices: readonly number[],
   paint: GlyphPaint,
-  outlineExperimentVariant: SlugOutlineExperimentVariant,
 ): SlugBatchRun {
   const count = glyphIndices.length
   geometry.instanceCount = count
@@ -807,9 +762,7 @@ function populateSlugRun(
   )
 
   const page = resource.pages[pageIndex]!
-  const initialState = outlineVisible
-    ? slugOutlinedMaterialState(page, outlineExperimentVariant)
-    : slugMaterialState(page)
+  const initialState = outlineVisible ? slugOutlinedMaterialState(page) : slugMaterialState(page)
   const fillMesh = new THREE.Mesh(geometry, initialState.material)
   fillMesh.frustumCulled = false
   fillMesh.renderOrder = glyphIndices[0] ?? 0
@@ -821,7 +774,6 @@ function populateSlugRun(
     geometry,
     page,
     fillMesh,
-    outlineExperimentVariant,
     materialState: initialState,
   }
   fillMesh.onBeforeRender = (renderer, _scene, camera): void => {
@@ -1051,11 +1003,8 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
 }
 
 /** Copied analytic stroke, composed with fill in one specialized draw. */
-function slugOutlinedMaterialState(
-  page: SlugPageResource,
-  variant: SlugOutlineExperimentVariant,
-): SlugMaterialState {
-  const existing = outlinedMaterialStateByCurveTexture.get(page.curveTexture)?.get(variant)
+function slugOutlinedMaterialState(page: SlugPageResource): SlugMaterialState {
+  const existing = outlinedMaterialStateByCurveTexture.get(page.curveTexture)
   if (existing !== undefined) return existing
   const material = new THREE.MeshBasicNodeMaterial({
     blending: THREE.NormalBlending,
@@ -1136,17 +1085,13 @@ function slugOutlinedMaterialState(
       const strokeCoverage = slugStroke(page, glyph, renderCoordinate, outlineHalfWidth)
       outlineAlpha.assign(floatMul(outlineColor.a, strokeCoverage))
     }
-    const fillNeedsStroke = floatLessThan(fillAlpha, float(1))
-    const strokeCondition =
-      variant === 'multiply-zero'
-        ? fillNeedsStroke
-        : boolAnd(
-            fillNeedsStroke,
-            boolAnd(
-              floatGreaterThan(outlineHalfWidth, float(0)),
-              floatGreaterThan(outlineColor.a, float(0)),
-            ),
-          )
+    const strokeCondition = boolAnd(
+      floatLessThan(fillAlpha, float(1)),
+      boolAnd(
+        floatGreaterThan(outlineHalfWidth, float(0)),
+        floatGreaterThan(outlineColor.a, float(0)),
+      ),
+    )
     If(strokeCondition, evaluateStroke)
     const outlineContribution = floatMul(outlineAlpha, floatSub(float(1), fillAlpha)).toVar(
       'slugOutlinedContribution',
@@ -1165,9 +1110,7 @@ function slugOutlinedMaterialState(
   material.opacityNode = composedColor.a
 
   const state = { material, viewport, mvpRow0, mvpRow1, mvpRow3 }
-  const variants = outlinedMaterialStateByCurveTexture.get(page.curveTexture) ?? new Map()
-  variants.set(variant, state)
-  outlinedMaterialStateByCurveTexture.set(page.curveTexture, variants)
+  outlinedMaterialStateByCurveTexture.set(page.curveTexture, state)
   return state
 }
 
@@ -1207,7 +1150,7 @@ function updateRunPaint(run: SlugBatchRun, layout: ParagraphLayout, paint: Glyph
   run.floatData.needsUpdate = true
   if (run.outlineData !== undefined) run.outlineData.needsUpdate = true
   if (outlineVisible) {
-    run.materialState = slugOutlinedMaterialState(run.page, run.outlineExperimentVariant)
+    run.materialState = slugOutlinedMaterialState(run.page)
     run.fillMesh.material = run.materialState.material
   } else {
     if (run.outlineData !== undefined) restoreSlugFillOnlyGeometry(run)
@@ -1248,9 +1191,7 @@ function disposeSlugPage(page: SlugPageResource): void {
   const state = materialStateByCurveTexture.get(page.curveTexture)
   state?.material.dispose()
   const outlinedStates = outlinedMaterialStateByCurveTexture.get(page.curveTexture)
-  if (outlinedStates !== undefined) {
-    for (const outlinedState of outlinedStates.values()) outlinedState.material.dispose()
-  }
+  outlinedStates?.material.dispose()
   materialStateByCurveTexture.delete(page.curveTexture)
   outlinedMaterialStateByCurveTexture.delete(page.curveTexture)
   page.curveTexture.dispose()
