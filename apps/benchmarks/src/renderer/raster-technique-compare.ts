@@ -6,7 +6,11 @@ import { mul, saturate, sub, texture, vec4 } from 'three/tsl'
 import { rasterConformanceSpecimen, type SelectableFontFixture } from '../benchmark/font-fixtures'
 import { loadMtsdfFont } from './mtsdf-text'
 import { loadSlugFont } from './slug-text'
-import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  createConfiguredRenderer,
+  disposeConfiguredRenderer,
+  type RendererBackend,
+} from './webgpu-renderer'
 
 const BACKGROUND = 0x070709
 const BASE_PHYSICAL_PPEM = 64
@@ -324,7 +328,7 @@ export async function createRasterTechniqueComparison(options: {
         await mutationQueue
         disposed = true
         disposeComparison(activeResources)
-        await renderer.dispose()
+        await disposeConfiguredRenderer(renderer)
       },
     }
   } catch (error) {
@@ -341,7 +345,7 @@ export async function createRasterTechniqueComparison(options: {
       slugMaterial?.dispose()
       heatmapMaterial?.dispose()
     }
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }

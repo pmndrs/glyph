@@ -48,6 +48,7 @@ import {
 import { compactRgba8Readback } from './tsl-baseline'
 import {
   createConfiguredRenderer,
+  disposeConfiguredRenderer,
   readRendererViewportState,
   type RendererBackend,
 } from './webgpu-renderer'
@@ -242,7 +243,7 @@ export function createMtsdfTextTarget(backend: RendererBackend): BenchmarkTarget
       for (const line of resources.lines) line.dispose()
       resources.font.dispose()
       resources.target.dispose()
-      await resources.renderer.dispose()
+      await disposeConfiguredRenderer(resources.renderer)
     },
   }
 }
@@ -594,7 +595,7 @@ export async function createMtsdfTextPreview(options: {
           activeLine.dispose()
           activeFont.dispose()
           canvasSurface.dispose()
-          await renderer.dispose()
+          await disposeConfiguredRenderer(renderer)
         })()
         return disposal
       },
@@ -603,7 +604,7 @@ export async function createMtsdfTextPreview(options: {
     line?.dispose()
     font?.dispose()
     canvasSurface.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -725,7 +726,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     for (const line of lines) line.dispose()
     font?.dispose()
     target?.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1050,7 +1051,7 @@ async function createFlatMtsdfConformanceResources(
     if (resource !== undefined) msdf.dispose(resource)
     font?.dispose()
     target?.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1114,7 +1115,7 @@ async function disposeFlatMtsdfConformanceResources(
   msdf.dispose(resources.resource)
   resources.font.dispose()
   resources.target.dispose()
-  await resources.renderer.dispose()
+  await disposeConfiguredRenderer(resources.renderer)
 }
 
 async function renderMtsdfFrame(resources: MtsdfTextResources): Promise<{

@@ -29,6 +29,7 @@ export async function createConfiguredRenderer(
     forceWebGL: options.backend === 'webgl2',
     trackTimestamp: options.trackGpuTimestamps ?? false,
   })
+  let initialized = false
   try {
     renderer.setPixelRatio(options.dpr)
     renderer.setSize(options.width, options.height, false)
@@ -36,13 +37,76 @@ export async function createConfiguredRenderer(
     renderer.toneMapping = THREE.NoToneMapping
     renderer.outputColorSpace = THREE.LinearSRGBColorSpace
     await renderer.init()
+    initialized = true
     assertRendererBackend(renderer, options.backend)
     renderer.clear()
     return renderer
   } catch (error) {
-    await renderer.dispose()
+    if (initialized) {
+      await disposeConfiguredRenderer(renderer)
+    } else {
+      releaseFailedWebGlContext(renderer)
+    }
     throw error
   }
+}
+
+/**
+ * Disposes a configured renderer only after WebKit has acknowledged WebGL
+ * context loss. Three.js disposal is synchronous even though context release
+ * is not; admitting a replacement renderer before this event can exhaust the
+ * browser's context budget during rapid surface changes.
+ */
+export async function disposeConfiguredRenderer(renderer: THREE.WebGPURenderer): Promise<void> {
+  const contextLoss = monitorWebGlContextLoss(renderer)
+  try {
+    renderer.dispose()
+  } catch (error) {
+    contextLoss.cancel()
+    throw error
+  }
+  await contextLoss.completion
+}
+
+interface ContextLossMonitor {
+  readonly completion: Promise<void>
+  cancel(): void
+}
+
+function monitorWebGlContextLoss(renderer: THREE.WebGPURenderer): ContextLossMonitor {
+  if (!(renderer.backend instanceof THREE.WebGLBackend)) return resolvedContextLossMonitor()
+  const canvas = renderer.domElement
+  const context = canvas.getContext('webgl2')
+  const loseContext = context?.getExtension('WEBGL_lose_context')
+  if (context === null || loseContext === null || context.isContextLost()) {
+    return resolvedContextLossMonitor()
+  }
+
+  let settle = (): void => undefined
+  const completion = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const finish = (): void => {
+    canvas.removeEventListener('webglcontextlost', finish)
+    settle()
+  }
+  canvas.addEventListener('webglcontextlost', finish)
+  return {
+    completion,
+    cancel: finish,
+  }
+}
+
+function resolvedContextLossMonitor(): ContextLossMonitor {
+  return {
+    completion: Promise.resolve(),
+    cancel() {},
+  }
+}
+
+function releaseFailedWebGlContext(renderer: THREE.WebGPURenderer): void {
+  if (!(renderer.backend instanceof THREE.WebGLBackend)) return
+  renderer.domElement.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext()
 }
 
 export function assertRendererBackend(

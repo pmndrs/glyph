@@ -3,7 +3,11 @@ import type { Node } from 'three/webgpu'
 import { float, mul, vec3 } from 'three/tsl'
 
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
-import { createConfiguredRenderer, type RendererBackend } from './webgpu-renderer'
+import {
+  createConfiguredRenderer,
+  disposeConfiguredRenderer,
+  type RendererBackend,
+} from './webgpu-renderer'
 
 const TARGET_SIZE = 4
 const EXPECTED_PIXEL = [255, 0, 0, 255] as const
@@ -47,7 +51,7 @@ export function createTslBaselineTarget(backend: RendererBackend): BenchmarkTarg
       resources.target.dispose()
       resources.geometry.dispose()
       resources.material.dispose()
-      await resources.renderer.dispose()
+      await disposeConfiguredRenderer(resources.renderer)
     },
   }
 }
@@ -102,7 +106,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<B
     target?.dispose()
     geometry?.dispose()
     material?.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }

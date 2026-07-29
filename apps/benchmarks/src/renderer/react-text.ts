@@ -10,7 +10,7 @@ import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { hashParagraphLayout } from '../benchmark/paragraph-layout-digest'
-import { createConfiguredRenderer } from './webgpu-renderer'
+import { createConfiguredRenderer, disposeConfiguredRenderer } from './webgpu-renderer'
 
 const FRAME_WIDTH = 384
 const FRAME_HEIGHT = 128
@@ -56,7 +56,7 @@ export function createReactTextTarget(): BenchmarkTarget {
       flushSync(() => resources.root.unmount())
       resources.font.font.dispose()
       useFont.clear(resources.fontToken)
-      await resources.renderer.dispose()
+      await disposeConfiguredRenderer(resources.renderer)
     },
   }
 }
@@ -100,7 +100,7 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
     flushSync(() => root.unmount())
     font?.font.dispose()
     useFont.clear(fontToken)
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }

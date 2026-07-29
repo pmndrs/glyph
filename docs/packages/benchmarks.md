@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:5b6d0eedbe2aaf50656563a3fd6e5e1ead5a0d3f419d0c40c0fa0e1554d0003a"
+source_digest: "sha256:4d0b27ec3291b2d241d031c17514535368bcecb0979b0a39d1338a1330ce722b"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -41,12 +41,15 @@ sources:
   - id: raster-technique-compare
     resource: ../../apps/benchmarks/src/renderer/raster-technique-compare.ts
     title: Realtime MSDF and Slug GPU comparison
+  - id: renderer-lifecycle
+    resource: ../../apps/benchmarks/src/renderer/webgpu-renderer.ts
+    title: Shared renderer creation and disposal lifecycle
   - id: raster-technique-compare-probe
     resource: ../../apps/benchmarks/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T17:33:31Z"
+  at: "2026-07-29T17:39:24Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -59,7 +62,7 @@ The MSDF / Slug comparison workload owns one renderer, two equal RGBA8 render ta
 
 Font delivery is an explicit benchmark axis. **Baked asset** exercises the normal sibling asset, while **Runtime bake** passes `{ source, baked: null }`, downloads the source font, builds the core font in the serial core-baker Worker, then builds the selected Bitmap or MSDF raster in its serial lazy Worker. The inspector distinguishes the always-loaded runtime/shaper graph from the conditional core and raster baker host, Worker, and Wasm graphs; it reports source download bytes, generated core/raster CPU bytes, bake durations, and atlas GPU memory. The runtime-fallback conformance workload renders both delivery paths through the same public pipeline and requires an exact RGBA frame match. Canonical Inter matched with zero differing bytes for Bitmap and MSDF on the admitted WebGPU product probe; the observed cold MSDF raster bake was roughly 114 seconds on this host and remains an observation, not a portability threshold.
 
-The Benchmark and Conformance tabs are named React 19.2 Activities. Each remembers its last selected workload and preserves its React state, while React disconnects effects for the hidden tree. Hiding Benchmark therefore runs the renderer cleanup that stops its animation loop, drains any active GPU timestamp query, and releases its renderer; hiding Conformance aborts any in-flight finite capture. Advanced-shaping playback is also gated by the visible Benchmark mode because its coordinator lives above the Activity boundary. The live product proof holds a hidden paint revision constant through a complete three-sample Conformance run, then returns to the preserved Paint & Effects workload and observes rendering resume.
+The Benchmark and Conformance tabs are named React 19.2 Activities. Each remembers its last selected workload and preserves its React state, while React disconnects effects for the hidden tree. Hiding Benchmark therefore runs the renderer cleanup that stops its animation loop, drains any active GPU timestamp query, and releases its renderer; hiding Conformance aborts any in-flight finite capture. The exclusive lifecycle does not treat Three.js's synchronous `renderer.dispose()` return as proof that WebGL resources are reusable: it waits for the actual `webglcontextlost` event before admitting a replacement renderer. Failed initialization releases any acquired WebGL context directly instead of calling Three's `dispose()`, whose internal async `setAnimationLoop(null)` would otherwise retry the rejected initialization promise and surface an unhandled rejection. Advanced-shaping playback is also gated by the visible Benchmark mode because its coordinator lives above the Activity boundary. The live product proof holds a hidden paint revision constant through a complete three-sample Conformance run, then returns to the preserved Paint & Effects workload and observes rendering resume.
 
 The Vite build runs the pinned React Compiler preset and emitted production bundles import React's compiler runtime. The compiler optimizes the React tree; renderer identity remains an application responsibility. The comparison workloads therefore retain framework-neutral `Text` objects behind the React surface. Paint & Effects advances one circular per-word chromatic sequence directly on the renderer RAF through the synchronous paint-only batch path; shaping, paragraph layout, geometry, and React do not drive individual color frames. Animate, speed, hue, opacity, shadow, stroke, and layout-bounds controls mutate retained scene state and never enter the scene-rebuild path. Font-size and layout-width changes alone may create a replacement layout; rapid controls pass through a latest-value serialized drain so obsolete intermediate scenes are never published. Live controls invalidate only an explicit capture, not the continuously published typed-array telemetry, so metric labels and graphs do not disappear while a slider moves. Font selection retains the benchmark shell and its last telemetry rather than remounting the whole surface or showing an intermediate loading frame; comparison workloads additionally retain their canvas while the next font prepares. The live probe observes causal, monotonically increasing paint revisions, rejects layout work or batch replacement during paint updates, and proves comparison-workload font switching preserves canvas identity and never empties the CPU metric. Dynamic Layout starts all three paragraph reflows as one batch, waits for every committed layout, and positions the complete trio once; it never recenters a mixture of old and new layouts. Neutral inspection frames remain default-on and share the same typed configuration boundary.
 
@@ -146,8 +149,8 @@ The initial deterministic browser probe is admitted with a checked-in record: 10
 | `dev`                                  | Build the baker dependency and start the Vite application.                                                                                                                                                                                                             |
 | `typecheck`                            | Build the baker dependency and type-check browser and Node script projects.                                                                                                                                                                                            |
 | `test`                                 | Run deterministic Vitest suites and the shared-registry browser smoke test.                                                                                                                                                                                            |
-| `test:unit`                            | Run deterministic Vitest suites plus the Node-side Chromium-launch boundary tests without starting a browser.                                                                                                                                                           |
-| `test:scripts`                         | Prove that the shared Chromium launcher omits `executablePath` locally, injects the exact configured canary path, and rejects an empty configured value.                                                                                                                 |
+| `test:unit`                            | Run deterministic Vitest suites plus the Node-side Chromium-launch boundary tests without starting a browser.                                                                                                                                                          |
+| `test:scripts`                         | Prove that the shared Chromium launcher omits `executablePath` locally, injects the exact configured canary path, and rejects an empty configured value.                                                                                                               |
 | `test:headless`                        | Run synthetic, forced-WebGL2 TSL and bitmap rendering, public React `Text` reconciliation, direct-baker, loader/Worker, exact shaping, paragraph measurement, positioned-layout, bidi/policy/uikit, and CJK scenarios through one bounded browser conformance session. |
 | `test:packed`                          | Pack both runtime packages, install only their tarballs in an isolated Vite consumer, and prove the module Worker returns the canonical artifact in Chromium.                                                                                                          |
 | `lint`                                 | Run Oxlint with warnings denied.                                                                                                                                                                                                                                       |
@@ -196,5 +199,7 @@ The [benchmark plan](../planning/benchmark-plan.md) owns target admission, corre
 [^benchmark-plan]: Local GPU evidence supplements rather than replaces deterministic CI-safe checks.
 
 [^slug-external-render-parity-evidence]: The retained Chromium 149 record authenticates all five generated files, exact source kinds and request counts, equal embedded/external work, and equal framebuffer identities on both renderer backends.
+
 [^raster-technique-compare-probe]: The local hardware lane asserts the WebGPU backend through renderer initialization and treats browser console, shader, and GPU validation errors as failures; the same graph receives a separate forced-WebGL2 initialization check.
+
 [^slug-outline-research]: The planning concept keeps rejected outline evidence separate from the current benchmark capability contract.

@@ -58,6 +58,7 @@ import {
 } from './source-outline-reference'
 import {
   createConfiguredRenderer,
+  disposeConfiguredRenderer,
   readRendererViewportState,
   type RendererBackend,
 } from './webgpu-renderer'
@@ -347,7 +348,7 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
       disposeBitmapLine(resources.line)
       resources.font.dispose()
       resources.target.dispose()
-      await resources.renderer.dispose()
+      await disposeConfiguredRenderer(resources.renderer)
     },
   }
 }
@@ -431,7 +432,7 @@ async function createResources(
     if (line !== undefined) disposeBitmapLine(line)
     font?.dispose()
     target?.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1101,7 +1102,7 @@ export async function createBitmapTextPreview(
           disposeBitmapLine(activeLine)
           activeFont.dispose()
           canvasSurface.dispose()
-          await renderer.dispose()
+          await disposeConfiguredRenderer(renderer)
         })()
         return disposal
       },
@@ -1110,7 +1111,7 @@ export async function createBitmapTextPreview(
     if (line !== undefined) disposeBitmapLine(line)
     font?.dispose()
     canvasSurface.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1155,7 +1156,7 @@ export async function captureBitmapTextConformance(options: {
     disposeBitmapLine(resources.line)
     resources.font.dispose()
     resources.target.dispose()
-    await resources.renderer.dispose()
+    await disposeConfiguredRenderer(resources.renderer)
   }
 }
 
@@ -1190,7 +1191,7 @@ export async function captureBitmapSourceOutlineFidelity(options: {
     disposeBitmapLine(resources.line)
     resources.font.dispose()
     resources.target.dispose()
-    await resources.renderer.dispose()
+    await disposeConfiguredRenderer(resources.renderer)
   }
 }
 

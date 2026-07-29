@@ -61,6 +61,7 @@ import {
 import { compactRgba8Readback } from './tsl-baseline'
 import {
   createConfiguredRenderer,
+  disposeConfiguredRenderer,
   readRendererViewportState,
   type RendererBackend,
 } from './webgpu-renderer'
@@ -360,7 +361,7 @@ export function createSlugTextTarget(backend: RendererBackend): BenchmarkTarget 
       for (const line of resources.lines) line.dispose()
       resources.font.dispose()
       resources.target.dispose()
-      await resources.renderer.dispose()
+      await disposeConfiguredRenderer(resources.renderer)
     },
   }
 }
@@ -719,7 +720,7 @@ export async function createSlugTextPreview(options: {
           activeLine.dispose()
           activeFont.dispose()
           canvasSurface.dispose()
-          await renderer.dispose()
+          await disposeConfiguredRenderer(renderer)
         })()
         return disposal
       },
@@ -728,7 +729,7 @@ export async function createSlugTextPreview(options: {
     line?.dispose()
     font?.dispose()
     canvasSurface.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -850,7 +851,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
     for (const line of lines) line.dispose()
     font?.dispose()
     target?.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1349,7 +1350,7 @@ async function createFlatSlugConformanceResources(
     if (resource !== undefined) slug.dispose(resource)
     font?.dispose()
     target?.dispose()
-    await renderer.dispose()
+    await disposeConfiguredRenderer(renderer)
     throw error
   }
 }
@@ -1601,7 +1602,7 @@ async function disposeFlatSlugConformanceResources(
   slug.dispose(resources.resource)
   resources.font.dispose()
   resources.target.dispose()
-  await resources.renderer.dispose()
+  await disposeConfiguredRenderer(resources.renderer)
 }
 
 export async function loadSlugFont(
