@@ -11,7 +11,7 @@ import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap'
 
 import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json'
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures'
-import { benchmarkIpsumText } from '../benchmark/font-fixtures'
+import { benchmarkIpsumText, ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fixtures'
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state'
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text'
 import { createCanvasSurface } from './canvas-surface'
@@ -271,7 +271,7 @@ export async function createComparisonWorkloadPreview(options: {
     if (configuration.workload === 'icon-grid') {
       iconFont = await loadTechniqueFont(
         technique,
-        'font-awesome-free-6.7.2',
+        ICON_GRID_FONT_FIXTURE,
         options.delivery,
         signal,
         options.onBakeProgress,

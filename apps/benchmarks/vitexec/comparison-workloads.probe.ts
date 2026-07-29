@@ -41,6 +41,14 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     }
 
     if (workload.id === 'icon-grid') {
+      if (
+        viewport.getAttribute('data-font-fixture') !== 'font-awesome-free-6.7.2' ||
+        viewport.getAttribute('data-label-font-fixture') !== 'inter'
+      ) {
+        throw new Error(
+          `${techniqueLabel(technique)} icon grid did not report its icon and label fonts separately`,
+        )
+      }
       const itemCount = numericAttribute(viewport, 'data-icon-item-count')
       const labelCount = numericAttribute(viewport, 'data-icon-label-count')
       const columns = numericAttribute(viewport, 'data-icon-column-count')

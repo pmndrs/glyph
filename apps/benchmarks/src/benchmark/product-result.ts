@@ -79,6 +79,7 @@ export interface LiveBenchmarkCapture {
   readonly workload: string
   readonly dpr: number
   readonly fontFixture: BenchmarkFontFixture
+  readonly labelFontFixture?: BenchmarkFontFixture | undefined
   readonly environment: BenchmarkEnvironment
   readonly stats: CapturedLiveTextStats
 }

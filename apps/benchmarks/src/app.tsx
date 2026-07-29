@@ -33,8 +33,10 @@ import { runRegisteredBenchmark } from './benchmark/execution'
 import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result'
 import {
   ADVANCED_FONT_FIXTURES,
+  BENCHMARK_FONT_LABELS,
   SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
+  liveWorkloadFontFixtures,
   rasterConformanceSpecimen,
   selectableFontFixture,
   type BenchmarkFontFixture,
@@ -574,6 +576,7 @@ function Harness() {
   }
 
   function completeLiveCapture(stats: LiveTextStats): void {
+    const workloadFonts = liveWorkloadFontFixtures(location.workload, activeFontFixture)
     setLiveCapture({
       kind: 'live-benchmark',
       schemaVersion: 0,
@@ -582,7 +585,8 @@ function Harness() {
       backend: location.backend,
       workload: location.workload,
       dpr,
-      fontFixture: activeFontFixture,
+      fontFixture: workloadFonts.primary,
+      ...(workloadFonts.kind === 'icon-grid' ? { labelFontFixture: workloadFonts.labels } : {}),
       environment,
       stats: captureLiveTextStats(stats),
     })
@@ -3264,6 +3268,7 @@ function ComparisonWorkloadViewport({
     }>
   >()
   const stats = publishedStats?.value
+  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture)
   const [error, setError] = useState<string>()
   const {
     active: bakeProgressActive,
@@ -3429,7 +3434,10 @@ function ComparisonWorkloadViewport({
       data-raster-artifact-bytes={stats?.rasterArtifactBytes}
       data-draw-count={stats?.drawCount}
       data-first-draw-ms={stats?.firstDrawMs}
-      data-font-fixture={publishedStats?.fontFixture ?? fontFixture}
+      data-font-fixture={workloadFonts.primary}
+      data-label-font-fixture={
+        workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : undefined
+      }
       data-font-load-ms={stats?.fontLoadMs}
       data-frames-per-second={stats?.framesPerSecond}
       data-glyph-count={stats?.glyphCount}
@@ -4194,6 +4202,7 @@ function Controls({
         fontFixture={fontFixture}
         liveStats={liveStats}
         technique={technique}
+        workload={workload}
       />
       <button
         className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
@@ -4211,11 +4220,13 @@ function PayloadInspector({
   fontFixture,
   liveStats,
   technique,
+  workload,
 }: {
   readonly delivery: FontDelivery
   readonly fontFixture: BenchmarkFontFixture
   readonly liveStats: LiveTextStats | undefined
   readonly technique: RasterTechnique
+  readonly workload: string
 }) {
   const runtime = measuredPackageSizeIfAvailable(`${technique}-runtime-js`)
   const shaper = measuredPackageSize('text-shaper-wasm')
@@ -4237,38 +4248,104 @@ function PayloadInspector({
         bakerHost.gzipBytes +
         bakerWasm.gzipBytes
   const bitmapStats = liveStats?.technique === 'bitmap' ? liveStats : undefined
+  const mtsdfStats = liveStats?.technique === 'mtsdf' ? liveStats : undefined
   const slugStats = liveStats?.technique === 'slug' ? liveStats : undefined
-  const mtsdfFixture = technique === 'mtsdf' ? mtsdfFixtureFor(fontFixture) : undefined
-  const slugFixture = technique === 'slug' ? slugFixtureFor(fontFixture) : undefined
-  const bitmapFixture = technique === 'bitmap' ? bitmapFixtureFor(fontFixture) : undefined
+  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture)
+  const selectedFixtures: readonly {
+    readonly id: BenchmarkFontFixture
+    readonly role: 'font' | 'icons' | 'labels'
+  }[] =
+    workloadFonts.kind === 'icon-grid'
+      ? [
+          { id: workloadFonts.primary, role: 'icons' },
+          { id: workloadFonts.labels, role: 'labels' },
+        ]
+      : [{ id: workloadFonts.primary, role: 'font' }]
+  const selectedMtsdfFixtures =
+    technique === 'mtsdf'
+      ? selectedFixtures.map(({ id, role }) => ({
+          fixture: mtsdfFixtureFor(id),
+          fontFixture: id,
+          role,
+        }))
+      : []
+  const selectedSlugFixtures =
+    technique === 'slug'
+      ? selectedFixtures.map(({ id, role }) => ({
+          fixture: slugFixtureFor(id),
+          fontFixture: id,
+          role,
+        }))
+      : []
+  const selectedBitmapFixtures =
+    technique === 'bitmap'
+      ? selectedFixtures.map(({ id, role }) => ({
+          fixture: bitmapFixtureFor(id),
+          fontFixture: id,
+          role,
+        }))
+      : []
+  const mtsdfFixture = selectedMtsdfFixtures[0]?.fixture
+  const slugFixture = selectedSlugFixtures[0]?.fixture
   const fontTransferBytes =
     technique === 'mtsdf'
-      ? mtsdfFixture?.compressed.bytes
+      ? sumOptionalBytes(selectedMtsdfFixtures.map(({ fixture }) => fixture.compressed.bytes))
       : technique === 'slug'
-        ? slugFixture?.compressed.bytes
-        : bitmapFixture?.bytes
+        ? sumOptionalBytes(selectedSlugFixtures.map(({ fixture }) => fixture.compressed.bytes))
+        : sumOptionalBytes(selectedBitmapFixtures.map(({ fixture }) => fixture.bytes))
   const textureGpuBytes =
     technique === 'mtsdf'
-      ? mtsdfFixture?.raster.runtimeTextureArray.basePaddedGpuBytes
+      ? (mtsdfStats?.atlasGpuBytes ??
+        sumOptionalBytes(
+          selectedMtsdfFixtures.map(
+            ({ fixture }) => fixture.raster.runtimeTextureArray.basePaddedGpuBytes,
+          ),
+        ))
       : technique === 'slug'
-        ? (slugStats?.slugGpuBytes ?? slugFixture?.raster.decodedGpuBytes)
-        : (bitmapStats?.atlasGpuBytes ?? bitmapFixture?.raster.decodedGpuBytes)
+        ? (slugStats?.slugGpuBytes ??
+          sumOptionalBytes(
+            selectedSlugFixtures.map(({ fixture }) => fixture.raster.decodedGpuBytes),
+          ))
+        : (bitmapStats?.atlasGpuBytes ??
+          sumOptionalBytes(
+            selectedBitmapFixtures.map(({ fixture }) => fixture.raster.decodedGpuBytes),
+          ))
+  const bitmapPages =
+    bitmapStats === undefined
+      ? selectedBitmapFixtures.flatMap(({ fixture, fontFixture: pageFontFixture, role }) =>
+          fixture.raster.pages.map((page) => ({
+            key: `${pageFontFixture}-fixture-${page.index}`,
+            label: `${BENCHMARK_FONT_LABELS[pageFontFixture]} ${role} · page ${page.index + 1} · ${page.width}×${page.height}`,
+            embeddedBytes: page.encodedBytes,
+            gpuBytes: page.decodedGpuBytes,
+          })),
+        )
+      : bitmapStats.atlasPages.map((page) => ({
+          key: `${page.strikePpem}-${page.pageIndex}`,
+          label: `${page.strikePpem} px · page ${page.pageIndex + 1} · ${page.width}×${page.height}`,
+          embeddedBytes: undefined,
+          gpuBytes: page.gpuBytes,
+        }))
   const pages =
     technique === 'mtsdf'
-      ? (mtsdfFixture?.raster.pages ?? []).map((page) => ({
-          key: String(page.index),
-          label: `Page ${page.index + 1} · ${page.width}×${page.height}`,
-          embeddedBytes: page.encodedBytes,
-          gpuBytes: page.decodedGpuBytes,
-        }))
+      ? selectedMtsdfFixtures.flatMap(({ fixture, fontFixture: pageFontFixture, role }) =>
+          fixture.raster.pages.map((page) => ({
+            key: `${pageFontFixture}-${String(page.index)}`,
+            label: `${BENCHMARK_FONT_LABELS[pageFontFixture]} ${role} · page ${page.index + 1} · ${page.width}×${page.height}`,
+            embeddedBytes: page.encodedBytes,
+            gpuBytes: page.decodedGpuBytes,
+          })),
+        )
       : technique === 'slug'
         ? slugStats === undefined
-          ? (slugFixture?.raster.pages ?? []).map((page) => ({
-              key: `slug-page-${page.index}`,
-              label: `Page ${page.index + 1} analytic resources · ${page.width}×${page.height}`,
-              embeddedBytes: page.encodedBytes,
-              gpuBytes: page.decodedGpuBytes,
-            }))
+          ? selectedSlugFixtures.flatMap(({ fixture, fontFixture: pageFontFixture, role }) =>
+              fixture.raster.pages.map((page) => ({
+                key: `${pageFontFixture}-slug-page-${page.index}`,
+                label: `${BENCHMARK_FONT_LABELS[pageFontFixture]} ${role} · page ${page.index + 1} analytic resources · ${page.width}×${page.height}`,
+                embeddedBytes: page.encodedBytes,
+                gpuBytes: page.decodedGpuBytes,
+              })),
+            )
           : [
               {
                 key: 'slug-curves',
@@ -4289,18 +4366,7 @@ function PayloadInspector({
                 gpuBytes: slugStats.slugReferenceGpuBytes,
               },
             ]
-        : (bitmapStats?.atlasPages ?? bitmapFixture?.raster.pages ?? []).map((page) => ({
-            key:
-              'strikePpem' in page
-                ? `${page.strikePpem}-${page.pageIndex}`
-                : `fixture-${page.index}`,
-            label:
-              'strikePpem' in page
-                ? `${page.strikePpem} px · page ${page.pageIndex + 1} · ${page.width}×${page.height}`
-                : `Page ${page.index + 1} · ${page.width}×${page.height}`,
-            embeddedBytes: 'encodedBytes' in page ? page.encodedBytes : undefined,
-            gpuBytes: 'gpuBytes' in page ? page.gpuBytes : page.decodedGpuBytes,
-          }))
+        : bitmapPages
   const pageGpuBytes = pages.reduce((total, page) => total + page.gpuBytes, 0)
   const textureBaseBytes = technique === 'slug' ? undefined : textureGpuBytes
   const texturePaddingBytes =
@@ -4430,6 +4496,16 @@ function PayloadInspector({
       </div>
     </>
   )
+}
+
+function sumOptionalBytes(values: readonly (number | undefined)[]): number | undefined {
+  if (values.length === 0) return undefined
+  let total = 0
+  for (const value of values) {
+    if (value === undefined) return undefined
+    total += value
+  }
+  return total
 }
 
 function PayloadRow({

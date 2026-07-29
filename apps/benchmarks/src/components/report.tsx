@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import type { BenchmarkSummary } from '../benchmark/contracts'
+import { BENCHMARK_FONT_LABELS } from '../benchmark/font-fixtures'
 import type { LiveBenchmarkCapture } from '../benchmark/product-result'
 import packageSizes from '../generated/package-sizes.json'
 import { Metric } from './ui'
@@ -98,6 +99,10 @@ export function Report({
 
 function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
   const { stats } = capture
+  const fontSelection =
+    capture.labelFontFixture === undefined
+      ? BENCHMARK_FONT_LABELS[capture.fontFixture]
+      : `${BENCHMARK_FONT_LABELS[capture.fontFixture]} icons · ${BENCHMARK_FONT_LABELS[capture.labelFontFixture]} labels`
   return (
     <section className="grid gap-3" data-testid="report">
       <header>
@@ -122,7 +127,7 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
       <div className="rounded-md border border-border bg-surface p-3">
         <p className="eyebrow">Selection</p>
         <p className="mt-2 text-xs text-muted">
-          {capture.technique} · {capture.backend} · {capture.workload} · {capture.fontFixture} ·{' '}
+          {capture.technique} · {capture.backend} · {capture.workload} · {fontSelection} ·{' '}
           {capture.dpr}× DPR
         </p>
       </div>

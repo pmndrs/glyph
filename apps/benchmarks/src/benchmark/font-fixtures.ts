@@ -10,6 +10,19 @@ export type BenchmarkFontFixture =
 
 export type SelectableFontFixture = 'inter' | 'source-serif-4' | 'dancing-script'
 
+export const ICON_GRID_FONT_FIXTURE = 'font-awesome-free-6.7.2' as const
+
+export type LiveWorkloadFontFixtures =
+  | {
+      readonly kind: 'single'
+      readonly primary: BenchmarkFontFixture
+    }
+  | {
+      readonly kind: 'icon-grid'
+      readonly primary: typeof ICON_GRID_FONT_FIXTURE
+      readonly labels: BenchmarkFontFixture
+    }
+
 export interface BenchmarkFontFixtureDefinition {
   readonly id: SelectableFontFixture
   readonly label: string
@@ -72,6 +85,15 @@ export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string
   'font-awesome-free-6.7.2': 'Font Awesome Free Solid 6.7.2',
   'source-serif-4': 'Source Serif 4 Regular 4.005',
   'dancing-script': 'Dancing Script Regular 3.000',
+}
+
+export function liveWorkloadFontFixtures(
+  workload: string,
+  selected: BenchmarkFontFixture,
+): LiveWorkloadFontFixtures {
+  return workload === 'icon-grid'
+    ? { kind: 'icon-grid', primary: ICON_GRID_FONT_FIXTURE, labels: selected }
+    : { kind: 'single', primary: selected }
 }
 
 export function selectableFontFixture(value: string): SelectableFontFixture {

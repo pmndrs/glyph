@@ -7,6 +7,7 @@ import {
   SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
   conformanceText,
+  liveWorkloadFontFixtures,
   selectableFontFixture,
 } from './font-fixtures'
 
@@ -116,5 +117,17 @@ describe('human-selectable font fixtures', () => {
     expect(benchmarkIpsumText()).toContain('π')
     expect(benchmarkIpsumText().length).toBeGreaterThan(1_000)
     expect(conformanceText()).toContain('π')
+  })
+
+  it('reports the icon catalog font separately from its selected label font', () => {
+    expect(liveWorkloadFontFixtures('icon-grid', 'source-serif-4')).toEqual({
+      kind: 'icon-grid',
+      primary: 'font-awesome-free-6.7.2',
+      labels: 'source-serif-4',
+    })
+    expect(liveWorkloadFontFixtures('benchmark-ipsum', 'source-serif-4')).toEqual({
+      kind: 'single',
+      primary: 'source-serif-4',
+    })
   })
 })
