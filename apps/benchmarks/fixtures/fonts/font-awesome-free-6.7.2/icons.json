@@ -1,0 +1,5618 @@
+{
+  "schemaVersion": 0,
+  "source": {
+    "version": "6.7.2",
+    "url": "https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.7.2/metadata/icons.json",
+    "sha256": "a3a705d0e03c4fbdf1a61aece3d8fd462024b33794187ef7ee2a0764439170eb"
+  },
+  "icons": [
+    {
+      "name": "0",
+      "codePoint": 48
+    },
+    {
+      "name": "1",
+      "codePoint": 49
+    },
+    {
+      "name": "2",
+      "codePoint": 50
+    },
+    {
+      "name": "3",
+      "codePoint": 51
+    },
+    {
+      "name": "4",
+      "codePoint": 52
+    },
+    {
+      "name": "5",
+      "codePoint": 53
+    },
+    {
+      "name": "6",
+      "codePoint": 54
+    },
+    {
+      "name": "7",
+      "codePoint": 55
+    },
+    {
+      "name": "8",
+      "codePoint": 56
+    },
+    {
+      "name": "9",
+      "codePoint": 57
+    },
+    {
+      "name": "a",
+      "codePoint": 65
+    },
+    {
+      "name": "address-book",
+      "codePoint": 62137
+    },
+    {
+      "name": "address-card",
+      "codePoint": 62139
+    },
+    {
+      "name": "align-center",
+      "codePoint": 61495
+    },
+    {
+      "name": "align-justify",
+      "codePoint": 61497
+    },
+    {
+      "name": "align-left",
+      "codePoint": 61494
+    },
+    {
+      "name": "align-right",
+      "codePoint": 61496
+    },
+    {
+      "name": "anchor",
+      "codePoint": 61757
+    },
+    {
+      "name": "anchor-circle-check",
+      "codePoint": 58538
+    },
+    {
+      "name": "anchor-circle-exclamation",
+      "codePoint": 58539
+    },
+    {
+      "name": "anchor-circle-xmark",
+      "codePoint": 58540
+    },
+    {
+      "name": "anchor-lock",
+      "codePoint": 58541
+    },
+    {
+      "name": "angle-down",
+      "codePoint": 61703
+    },
+    {
+      "name": "angle-left",
+      "codePoint": 61700
+    },
+    {
+      "name": "angle-right",
+      "codePoint": 61701
+    },
+    {
+      "name": "angle-up",
+      "codePoint": 61702
+    },
+    {
+      "name": "angles-down",
+      "codePoint": 61699
+    },
+    {
+      "name": "angles-left",
+      "codePoint": 61696
+    },
+    {
+      "name": "angles-right",
+      "codePoint": 61697
+    },
+    {
+      "name": "angles-up",
+      "codePoint": 61698
+    },
+    {
+      "name": "ankh",
+      "codePoint": 63044
+    },
+    {
+      "name": "apple-whole",
+      "codePoint": 62929
+    },
+    {
+      "name": "archway",
+      "codePoint": 62807
+    },
+    {
+      "name": "arrow-down",
+      "codePoint": 61539
+    },
+    {
+      "name": "arrow-down-1-9",
+      "codePoint": 61794
+    },
+    {
+      "name": "arrow-down-9-1",
+      "codePoint": 63622
+    },
+    {
+      "name": "arrow-down-a-z",
+      "codePoint": 61789
+    },
+    {
+      "name": "arrow-down-long",
+      "codePoint": 61813
+    },
+    {
+      "name": "arrow-down-short-wide",
+      "codePoint": 63620
+    },
+    {
+      "name": "arrow-down-up-across-line",
+      "codePoint": 58543
+    },
+    {
+      "name": "arrow-down-up-lock",
+      "codePoint": 58544
+    },
+    {
+      "name": "arrow-down-wide-short",
+      "codePoint": 61792
+    },
+    {
+      "name": "arrow-down-z-a",
+      "codePoint": 63617
+    },
+    {
+      "name": "arrow-left",
+      "codePoint": 61536
+    },
+    {
+      "name": "arrow-left-long",
+      "codePoint": 61815
+    },
+    {
+      "name": "arrow-pointer",
+      "codePoint": 62021
+    },
+    {
+      "name": "arrow-right",
+      "codePoint": 61537
+    },
+    {
+      "name": "arrow-right-arrow-left",
+      "codePoint": 61676
+    },
+    {
+      "name": "arrow-right-from-bracket",
+      "codePoint": 61579
+    },
+    {
+      "name": "arrow-right-long",
+      "codePoint": 61816
+    },
+    {
+      "name": "arrow-right-to-bracket",
+      "codePoint": 61584
+    },
+    {
+      "name": "arrow-right-to-city",
+      "codePoint": 58547
+    },
+    {
+      "name": "arrow-rotate-left",
+      "codePoint": 61666
+    },
+    {
+      "name": "arrow-rotate-right",
+      "codePoint": 61470
+    },
+    {
+      "name": "arrow-trend-down",
+      "codePoint": 57495
+    },
+    {
+      "name": "arrow-trend-up",
+      "codePoint": 57496
+    },
+    {
+      "name": "arrow-turn-down",
+      "codePoint": 61769
+    },
+    {
+      "name": "arrow-turn-up",
+      "codePoint": 61768
+    },
+    {
+      "name": "arrow-up",
+      "codePoint": 61538
+    },
+    {
+      "name": "arrow-up-1-9",
+      "codePoint": 61795
+    },
+    {
+      "name": "arrow-up-9-1",
+      "codePoint": 63623
+    },
+    {
+      "name": "arrow-up-a-z",
+      "codePoint": 61790
+    },
+    {
+      "name": "arrow-up-from-bracket",
+      "codePoint": 57498
+    },
+    {
+      "name": "arrow-up-from-ground-water",
+      "codePoint": 58549
+    },
+    {
+      "name": "arrow-up-from-water-pump",
+      "codePoint": 58550
+    },
+    {
+      "name": "arrow-up-long",
+      "codePoint": 61814
+    },
+    {
+      "name": "arrow-up-right-dots",
+      "codePoint": 58551
+    },
+    {
+      "name": "arrow-up-right-from-square",
+      "codePoint": 61582
+    },
+    {
+      "name": "arrow-up-short-wide",
+      "codePoint": 63621
+    },
+    {
+      "name": "arrow-up-wide-short",
+      "codePoint": 61793
+    },
+    {
+      "name": "arrow-up-z-a",
+      "codePoint": 63618
+    },
+    {
+      "name": "arrows-down-to-line",
+      "codePoint": 58552
+    },
+    {
+      "name": "arrows-down-to-people",
+      "codePoint": 58553
+    },
+    {
+      "name": "arrows-left-right",
+      "codePoint": 61566
+    },
+    {
+      "name": "arrows-left-right-to-line",
+      "codePoint": 58554
+    },
+    {
+      "name": "arrows-rotate",
+      "codePoint": 61473
+    },
+    {
+      "name": "arrows-spin",
+      "codePoint": 58555
+    },
+    {
+      "name": "arrows-split-up-and-left",
+      "codePoint": 58556
+    },
+    {
+      "name": "arrows-to-circle",
+      "codePoint": 58557
+    },
+    {
+      "name": "arrows-to-dot",
+      "codePoint": 58558
+    },
+    {
+      "name": "arrows-to-eye",
+      "codePoint": 58559
+    },
+    {
+      "name": "arrows-turn-right",
+      "codePoint": 58560
+    },
+    {
+      "name": "arrows-turn-to-dots",
+      "codePoint": 58561
+    },
+    {
+      "name": "arrows-up-down",
+      "codePoint": 61565
+    },
+    {
+      "name": "arrows-up-down-left-right",
+      "codePoint": 61511
+    },
+    {
+      "name": "arrows-up-to-line",
+      "codePoint": 58562
+    },
+    {
+      "name": "asterisk",
+      "codePoint": 42
+    },
+    {
+      "name": "at",
+      "codePoint": 64
+    },
+    {
+      "name": "atom",
+      "codePoint": 62930
+    },
+    {
+      "name": "audio-description",
+      "codePoint": 62110
+    },
+    {
+      "name": "austral-sign",
+      "codePoint": 57513
+    },
+    {
+      "name": "award",
+      "codePoint": 62809
+    },
+    {
+      "name": "b",
+      "codePoint": 66
+    },
+    {
+      "name": "baby",
+      "codePoint": 63356
+    },
+    {
+      "name": "baby-carriage",
+      "codePoint": 63357
+    },
+    {
+      "name": "backward",
+      "codePoint": 61514
+    },
+    {
+      "name": "backward-fast",
+      "codePoint": 61513
+    },
+    {
+      "name": "backward-step",
+      "codePoint": 61512
+    },
+    {
+      "name": "bacon",
+      "codePoint": 63461
+    },
+    {
+      "name": "bacteria",
+      "codePoint": 57433
+    },
+    {
+      "name": "bacterium",
+      "codePoint": 57434
+    },
+    {
+      "name": "bag-shopping",
+      "codePoint": 62096
+    },
+    {
+      "name": "bahai",
+      "codePoint": 63078
+    },
+    {
+      "name": "baht-sign",
+      "codePoint": 57516
+    },
+    {
+      "name": "ban",
+      "codePoint": 61534
+    },
+    {
+      "name": "ban-smoking",
+      "codePoint": 62797
+    },
+    {
+      "name": "bandage",
+      "codePoint": 62562
+    },
+    {
+      "name": "bangladeshi-taka-sign",
+      "codePoint": 58086
+    },
+    {
+      "name": "barcode",
+      "codePoint": 61482
+    },
+    {
+      "name": "bars",
+      "codePoint": 61641
+    },
+    {
+      "name": "bars-progress",
+      "codePoint": 63528
+    },
+    {
+      "name": "bars-staggered",
+      "codePoint": 62800
+    },
+    {
+      "name": "baseball",
+      "codePoint": 62515
+    },
+    {
+      "name": "baseball-bat-ball",
+      "codePoint": 62514
+    },
+    {
+      "name": "basket-shopping",
+      "codePoint": 62097
+    },
+    {
+      "name": "basketball",
+      "codePoint": 62516
+    },
+    {
+      "name": "bath",
+      "codePoint": 62157
+    },
+    {
+      "name": "battery-empty",
+      "codePoint": 62020
+    },
+    {
+      "name": "battery-full",
+      "codePoint": 62016
+    },
+    {
+      "name": "battery-half",
+      "codePoint": 62018
+    },
+    {
+      "name": "battery-quarter",
+      "codePoint": 62019
+    },
+    {
+      "name": "battery-three-quarters",
+      "codePoint": 62017
+    },
+    {
+      "name": "bed",
+      "codePoint": 62006
+    },
+    {
+      "name": "bed-pulse",
+      "codePoint": 62599
+    },
+    {
+      "name": "beer-mug-empty",
+      "codePoint": 61692
+    },
+    {
+      "name": "bell",
+      "codePoint": 61683
+    },
+    {
+      "name": "bell-concierge",
+      "codePoint": 62818
+    },
+    {
+      "name": "bell-slash",
+      "codePoint": 61942
+    },
+    {
+      "name": "bezier-curve",
+      "codePoint": 62811
+    },
+    {
+      "name": "bicycle",
+      "codePoint": 61958
+    },
+    {
+      "name": "binoculars",
+      "codePoint": 61925
+    },
+    {
+      "name": "biohazard",
+      "codePoint": 63360
+    },
+    {
+      "name": "bitcoin-sign",
+      "codePoint": 57524
+    },
+    {
+      "name": "blender",
+      "codePoint": 62743
+    },
+    {
+      "name": "blender-phone",
+      "codePoint": 63158
+    },
+    {
+      "name": "blog",
+      "codePoint": 63361
+    },
+    {
+      "name": "bold",
+      "codePoint": 61490
+    },
+    {
+      "name": "bolt",
+      "codePoint": 61671
+    },
+    {
+      "name": "bolt-lightning",
+      "codePoint": 57527
+    },
+    {
+      "name": "bomb",
+      "codePoint": 61922
+    },
+    {
+      "name": "bone",
+      "codePoint": 62935
+    },
+    {
+      "name": "bong",
+      "codePoint": 62812
+    },
+    {
+      "name": "book",
+      "codePoint": 61485
+    },
+    {
+      "name": "book-atlas",
+      "codePoint": 62808
+    },
+    {
+      "name": "book-bible",
+      "codePoint": 63047
+    },
+    {
+      "name": "book-bookmark",
+      "codePoint": 57531
+    },
+    {
+      "name": "book-journal-whills",
+      "codePoint": 63082
+    },
+    {
+      "name": "book-medical",
+      "codePoint": 63462
+    },
+    {
+      "name": "book-open",
+      "codePoint": 62744
+    },
+    {
+      "name": "book-open-reader",
+      "codePoint": 62938
+    },
+    {
+      "name": "book-quran",
+      "codePoint": 63111
+    },
+    {
+      "name": "book-skull",
+      "codePoint": 63159
+    },
+    {
+      "name": "book-tanakh",
+      "codePoint": 63527
+    },
+    {
+      "name": "bookmark",
+      "codePoint": 61486
+    },
+    {
+      "name": "border-all",
+      "codePoint": 63564
+    },
+    {
+      "name": "border-none",
+      "codePoint": 63568
+    },
+    {
+      "name": "border-top-left",
+      "codePoint": 63571
+    },
+    {
+      "name": "bore-hole",
+      "codePoint": 58563
+    },
+    {
+      "name": "bottle-droplet",
+      "codePoint": 58564
+    },
+    {
+      "name": "bottle-water",
+      "codePoint": 58565
+    },
+    {
+      "name": "bowl-food",
+      "codePoint": 58566
+    },
+    {
+      "name": "bowl-rice",
+      "codePoint": 58091
+    },
+    {
+      "name": "bowling-ball",
+      "codePoint": 62518
+    },
+    {
+      "name": "box",
+      "codePoint": 62566
+    },
+    {
+      "name": "box-archive",
+      "codePoint": 61831
+    },
+    {
+      "name": "box-open",
+      "codePoint": 62622
+    },
+    {
+      "name": "box-tissue",
+      "codePoint": 57435
+    },
+    {
+      "name": "boxes-packing",
+      "codePoint": 58567
+    },
+    {
+      "name": "boxes-stacked",
+      "codePoint": 62568
+    },
+    {
+      "name": "braille",
+      "codePoint": 62113
+    },
+    {
+      "name": "brain",
+      "codePoint": 62940
+    },
+    {
+      "name": "brazilian-real-sign",
+      "codePoint": 58476
+    },
+    {
+      "name": "bread-slice",
+      "codePoint": 63468
+    },
+    {
+      "name": "bridge",
+      "codePoint": 58568
+    },
+    {
+      "name": "bridge-circle-check",
+      "codePoint": 58569
+    },
+    {
+      "name": "bridge-circle-exclamation",
+      "codePoint": 58570
+    },
+    {
+      "name": "bridge-circle-xmark",
+      "codePoint": 58571
+    },
+    {
+      "name": "bridge-lock",
+      "codePoint": 58572
+    },
+    {
+      "name": "bridge-water",
+      "codePoint": 58574
+    },
+    {
+      "name": "briefcase",
+      "codePoint": 61617
+    },
+    {
+      "name": "briefcase-medical",
+      "codePoint": 62569
+    },
+    {
+      "name": "broom",
+      "codePoint": 62746
+    },
+    {
+      "name": "broom-ball",
+      "codePoint": 62552
+    },
+    {
+      "name": "brush",
+      "codePoint": 62813
+    },
+    {
+      "name": "bucket",
+      "codePoint": 58575
+    },
+    {
+      "name": "bug",
+      "codePoint": 61832
+    },
+    {
+      "name": "bug-slash",
+      "codePoint": 58512
+    },
+    {
+      "name": "bugs",
+      "codePoint": 58576
+    },
+    {
+      "name": "building",
+      "codePoint": 61869
+    },
+    {
+      "name": "building-circle-arrow-right",
+      "codePoint": 58577
+    },
+    {
+      "name": "building-circle-check",
+      "codePoint": 58578
+    },
+    {
+      "name": "building-circle-exclamation",
+      "codePoint": 58579
+    },
+    {
+      "name": "building-circle-xmark",
+      "codePoint": 58580
+    },
+    {
+      "name": "building-columns",
+      "codePoint": 61852
+    },
+    {
+      "name": "building-flag",
+      "codePoint": 58581
+    },
+    {
+      "name": "building-lock",
+      "codePoint": 58582
+    },
+    {
+      "name": "building-ngo",
+      "codePoint": 58583
+    },
+    {
+      "name": "building-shield",
+      "codePoint": 58584
+    },
+    {
+      "name": "building-un",
+      "codePoint": 58585
+    },
+    {
+      "name": "building-user",
+      "codePoint": 58586
+    },
+    {
+      "name": "building-wheat",
+      "codePoint": 58587
+    },
+    {
+      "name": "bullhorn",
+      "codePoint": 61601
+    },
+    {
+      "name": "bullseye",
+      "codePoint": 61760
+    },
+    {
+      "name": "burger",
+      "codePoint": 63493
+    },
+    {
+      "name": "burst",
+      "codePoint": 58588
+    },
+    {
+      "name": "bus",
+      "codePoint": 61959
+    },
+    {
+      "name": "bus-simple",
+      "codePoint": 62814
+    },
+    {
+      "name": "business-time",
+      "codePoint": 63050
+    },
+    {
+      "name": "c",
+      "codePoint": 67
+    },
+    {
+      "name": "cable-car",
+      "codePoint": 63450
+    },
+    {
+      "name": "cake-candles",
+      "codePoint": 61949
+    },
+    {
+      "name": "calculator",
+      "codePoint": 61932
+    },
+    {
+      "name": "calendar",
+      "codePoint": 61747
+    },
+    {
+      "name": "calendar-check",
+      "codePoint": 62068
+    },
+    {
+      "name": "calendar-day",
+      "codePoint": 63363
+    },
+    {
+      "name": "calendar-days",
+      "codePoint": 61555
+    },
+    {
+      "name": "calendar-minus",
+      "codePoint": 62066
+    },
+    {
+      "name": "calendar-plus",
+      "codePoint": 62065
+    },
+    {
+      "name": "calendar-week",
+      "codePoint": 63364
+    },
+    {
+      "name": "calendar-xmark",
+      "codePoint": 62067
+    },
+    {
+      "name": "camera",
+      "codePoint": 61488
+    },
+    {
+      "name": "camera-retro",
+      "codePoint": 61571
+    },
+    {
+      "name": "camera-rotate",
+      "codePoint": 57560
+    },
+    {
+      "name": "campground",
+      "codePoint": 63163
+    },
+    {
+      "name": "candy-cane",
+      "codePoint": 63366
+    },
+    {
+      "name": "cannabis",
+      "codePoint": 62815
+    },
+    {
+      "name": "capsules",
+      "codePoint": 62571
+    },
+    {
+      "name": "car",
+      "codePoint": 61881
+    },
+    {
+      "name": "car-battery",
+      "codePoint": 62943
+    },
+    {
+      "name": "car-burst",
+      "codePoint": 62945
+    },
+    {
+      "name": "car-on",
+      "codePoint": 58589
+    },
+    {
+      "name": "car-rear",
+      "codePoint": 62942
+    },
+    {
+      "name": "car-side",
+      "codePoint": 62948
+    },
+    {
+      "name": "car-tunnel",
+      "codePoint": 58590
+    },
+    {
+      "name": "caravan",
+      "codePoint": 63743
+    },
+    {
+      "name": "caret-down",
+      "codePoint": 61655
+    },
+    {
+      "name": "caret-left",
+      "codePoint": 61657
+    },
+    {
+      "name": "caret-right",
+      "codePoint": 61658
+    },
+    {
+      "name": "caret-up",
+      "codePoint": 61656
+    },
+    {
+      "name": "carrot",
+      "codePoint": 63367
+    },
+    {
+      "name": "cart-arrow-down",
+      "codePoint": 61976
+    },
+    {
+      "name": "cart-flatbed",
+      "codePoint": 62580
+    },
+    {
+      "name": "cart-flatbed-suitcase",
+      "codePoint": 62877
+    },
+    {
+      "name": "cart-plus",
+      "codePoint": 61975
+    },
+    {
+      "name": "cart-shopping",
+      "codePoint": 61562
+    },
+    {
+      "name": "cash-register",
+      "codePoint": 63368
+    },
+    {
+      "name": "cat",
+      "codePoint": 63166
+    },
+    {
+      "name": "cedi-sign",
+      "codePoint": 57567
+    },
+    {
+      "name": "cent-sign",
+      "codePoint": 58357
+    },
+    {
+      "name": "certificate",
+      "codePoint": 61603
+    },
+    {
+      "name": "chair",
+      "codePoint": 63168
+    },
+    {
+      "name": "chalkboard",
+      "codePoint": 62747
+    },
+    {
+      "name": "chalkboard-user",
+      "codePoint": 62748
+    },
+    {
+      "name": "champagne-glasses",
+      "codePoint": 63391
+    },
+    {
+      "name": "charging-station",
+      "codePoint": 62951
+    },
+    {
+      "name": "chart-area",
+      "codePoint": 61950
+    },
+    {
+      "name": "chart-bar",
+      "codePoint": 61568
+    },
+    {
+      "name": "chart-column",
+      "codePoint": 57571
+    },
+    {
+      "name": "chart-diagram",
+      "codePoint": 59029
+    },
+    {
+      "name": "chart-gantt",
+      "codePoint": 57572
+    },
+    {
+      "name": "chart-line",
+      "codePoint": 61953
+    },
+    {
+      "name": "chart-pie",
+      "codePoint": 61952
+    },
+    {
+      "name": "chart-simple",
+      "codePoint": 58483
+    },
+    {
+      "name": "check",
+      "codePoint": 61452
+    },
+    {
+      "name": "check-double",
+      "codePoint": 62816
+    },
+    {
+      "name": "check-to-slot",
+      "codePoint": 63346
+    },
+    {
+      "name": "cheese",
+      "codePoint": 63471
+    },
+    {
+      "name": "chess",
+      "codePoint": 62521
+    },
+    {
+      "name": "chess-bishop",
+      "codePoint": 62522
+    },
+    {
+      "name": "chess-board",
+      "codePoint": 62524
+    },
+    {
+      "name": "chess-king",
+      "codePoint": 62527
+    },
+    {
+      "name": "chess-knight",
+      "codePoint": 62529
+    },
+    {
+      "name": "chess-pawn",
+      "codePoint": 62531
+    },
+    {
+      "name": "chess-queen",
+      "codePoint": 62533
+    },
+    {
+      "name": "chess-rook",
+      "codePoint": 62535
+    },
+    {
+      "name": "chevron-down",
+      "codePoint": 61560
+    },
+    {
+      "name": "chevron-left",
+      "codePoint": 61523
+    },
+    {
+      "name": "chevron-right",
+      "codePoint": 61524
+    },
+    {
+      "name": "chevron-up",
+      "codePoint": 61559
+    },
+    {
+      "name": "child",
+      "codePoint": 61870
+    },
+    {
+      "name": "child-combatant",
+      "codePoint": 58592
+    },
+    {
+      "name": "child-dress",
+      "codePoint": 58780
+    },
+    {
+      "name": "child-reaching",
+      "codePoint": 58781
+    },
+    {
+      "name": "children",
+      "codePoint": 58593
+    },
+    {
+      "name": "church",
+      "codePoint": 62749
+    },
+    {
+      "name": "circle",
+      "codePoint": 61713
+    },
+    {
+      "name": "circle-arrow-down",
+      "codePoint": 61611
+    },
+    {
+      "name": "circle-arrow-left",
+      "codePoint": 61608
+    },
+    {
+      "name": "circle-arrow-right",
+      "codePoint": 61609
+    },
+    {
+      "name": "circle-arrow-up",
+      "codePoint": 61610
+    },
+    {
+      "name": "circle-check",
+      "codePoint": 61528
+    },
+    {
+      "name": "circle-chevron-down",
+      "codePoint": 61754
+    },
+    {
+      "name": "circle-chevron-left",
+      "codePoint": 61751
+    },
+    {
+      "name": "circle-chevron-right",
+      "codePoint": 61752
+    },
+    {
+      "name": "circle-chevron-up",
+      "codePoint": 61753
+    },
+    {
+      "name": "circle-dollar-to-slot",
+      "codePoint": 62649
+    },
+    {
+      "name": "circle-dot",
+      "codePoint": 61842
+    },
+    {
+      "name": "circle-down",
+      "codePoint": 62296
+    },
+    {
+      "name": "circle-exclamation",
+      "codePoint": 61546
+    },
+    {
+      "name": "circle-h",
+      "codePoint": 62590
+    },
+    {
+      "name": "circle-half-stroke",
+      "codePoint": 61506
+    },
+    {
+      "name": "circle-info",
+      "codePoint": 61530
+    },
+    {
+      "name": "circle-left",
+      "codePoint": 62297
+    },
+    {
+      "name": "circle-minus",
+      "codePoint": 61526
+    },
+    {
+      "name": "circle-nodes",
+      "codePoint": 58594
+    },
+    {
+      "name": "circle-notch",
+      "codePoint": 61902
+    },
+    {
+      "name": "circle-pause",
+      "codePoint": 62091
+    },
+    {
+      "name": "circle-play",
+      "codePoint": 61764
+    },
+    {
+      "name": "circle-plus",
+      "codePoint": 61525
+    },
+    {
+      "name": "circle-question",
+      "codePoint": 61529
+    },
+    {
+      "name": "circle-radiation",
+      "codePoint": 63418
+    },
+    {
+      "name": "circle-right",
+      "codePoint": 62298
+    },
+    {
+      "name": "circle-stop",
+      "codePoint": 62093
+    },
+    {
+      "name": "circle-up",
+      "codePoint": 62299
+    },
+    {
+      "name": "circle-user",
+      "codePoint": 62141
+    },
+    {
+      "name": "circle-xmark",
+      "codePoint": 61527
+    },
+    {
+      "name": "city",
+      "codePoint": 63055
+    },
+    {
+      "name": "clapperboard",
+      "codePoint": 57649
+    },
+    {
+      "name": "clipboard",
+      "codePoint": 62248
+    },
+    {
+      "name": "clipboard-check",
+      "codePoint": 62572
+    },
+    {
+      "name": "clipboard-list",
+      "codePoint": 62573
+    },
+    {
+      "name": "clipboard-question",
+      "codePoint": 58595
+    },
+    {
+      "name": "clipboard-user",
+      "codePoint": 63475
+    },
+    {
+      "name": "clock",
+      "codePoint": 61463
+    },
+    {
+      "name": "clock-rotate-left",
+      "codePoint": 61914
+    },
+    {
+      "name": "clone",
+      "codePoint": 62029
+    },
+    {
+      "name": "closed-captioning",
+      "codePoint": 61962
+    },
+    {
+      "name": "cloud",
+      "codePoint": 61634
+    },
+    {
+      "name": "cloud-arrow-down",
+      "codePoint": 61677
+    },
+    {
+      "name": "cloud-arrow-up",
+      "codePoint": 61678
+    },
+    {
+      "name": "cloud-bolt",
+      "codePoint": 63340
+    },
+    {
+      "name": "cloud-meatball",
+      "codePoint": 63291
+    },
+    {
+      "name": "cloud-moon",
+      "codePoint": 63171
+    },
+    {
+      "name": "cloud-moon-rain",
+      "codePoint": 63292
+    },
+    {
+      "name": "cloud-rain",
+      "codePoint": 63293
+    },
+    {
+      "name": "cloud-showers-heavy",
+      "codePoint": 63296
+    },
+    {
+      "name": "cloud-showers-water",
+      "codePoint": 58596
+    },
+    {
+      "name": "cloud-sun",
+      "codePoint": 63172
+    },
+    {
+      "name": "cloud-sun-rain",
+      "codePoint": 63299
+    },
+    {
+      "name": "clover",
+      "codePoint": 57657
+    },
+    {
+      "name": "code",
+      "codePoint": 61729
+    },
+    {
+      "name": "code-branch",
+      "codePoint": 61734
+    },
+    {
+      "name": "code-commit",
+      "codePoint": 62342
+    },
+    {
+      "name": "code-compare",
+      "codePoint": 57658
+    },
+    {
+      "name": "code-fork",
+      "codePoint": 57659
+    },
+    {
+      "name": "code-merge",
+      "codePoint": 62343
+    },
+    {
+      "name": "code-pull-request",
+      "codePoint": 57660
+    },
+    {
+      "name": "coins",
+      "codePoint": 62750
+    },
+    {
+      "name": "colon-sign",
+      "codePoint": 57664
+    },
+    {
+      "name": "comment",
+      "codePoint": 61557
+    },
+    {
+      "name": "comment-dollar",
+      "codePoint": 63057
+    },
+    {
+      "name": "comment-dots",
+      "codePoint": 62637
+    },
+    {
+      "name": "comment-medical",
+      "codePoint": 63477
+    },
+    {
+      "name": "comment-nodes",
+      "codePoint": 59030
+    },
+    {
+      "name": "comment-slash",
+      "codePoint": 62643
+    },
+    {
+      "name": "comment-sms",
+      "codePoint": 63437
+    },
+    {
+      "name": "comments",
+      "codePoint": 61574
+    },
+    {
+      "name": "comments-dollar",
+      "codePoint": 63059
+    },
+    {
+      "name": "compact-disc",
+      "codePoint": 62751
+    },
+    {
+      "name": "compass",
+      "codePoint": 61774
+    },
+    {
+      "name": "compass-drafting",
+      "codePoint": 62824
+    },
+    {
+      "name": "compress",
+      "codePoint": 61542
+    },
+    {
+      "name": "computer",
+      "codePoint": 58597
+    },
+    {
+      "name": "computer-mouse",
+      "codePoint": 63692
+    },
+    {
+      "name": "cookie",
+      "codePoint": 62819
+    },
+    {
+      "name": "cookie-bite",
+      "codePoint": 62820
+    },
+    {
+      "name": "copy",
+      "codePoint": 61637
+    },
+    {
+      "name": "copyright",
+      "codePoint": 61945
+    },
+    {
+      "name": "couch",
+      "codePoint": 62648
+    },
+    {
+      "name": "cow",
+      "codePoint": 63176
+    },
+    {
+      "name": "credit-card",
+      "codePoint": 61597
+    },
+    {
+      "name": "crop",
+      "codePoint": 61733
+    },
+    {
+      "name": "crop-simple",
+      "codePoint": 62821
+    },
+    {
+      "name": "cross",
+      "codePoint": 63060
+    },
+    {
+      "name": "crosshairs",
+      "codePoint": 61531
+    },
+    {
+      "name": "crow",
+      "codePoint": 62752
+    },
+    {
+      "name": "crown",
+      "codePoint": 62753
+    },
+    {
+      "name": "crutch",
+      "codePoint": 63479
+    },
+    {
+      "name": "cruzeiro-sign",
+      "codePoint": 57682
+    },
+    {
+      "name": "cube",
+      "codePoint": 61874
+    },
+    {
+      "name": "cubes",
+      "codePoint": 61875
+    },
+    {
+      "name": "cubes-stacked",
+      "codePoint": 58598
+    },
+    {
+      "name": "d",
+      "codePoint": 68
+    },
+    {
+      "name": "database",
+      "codePoint": 61888
+    },
+    {
+      "name": "delete-left",
+      "codePoint": 62810
+    },
+    {
+      "name": "democrat",
+      "codePoint": 63303
+    },
+    {
+      "name": "desktop",
+      "codePoint": 62352
+    },
+    {
+      "name": "dharmachakra",
+      "codePoint": 63061
+    },
+    {
+      "name": "diagram-next",
+      "codePoint": 58486
+    },
+    {
+      "name": "diagram-predecessor",
+      "codePoint": 58487
+    },
+    {
+      "name": "diagram-project",
+      "codePoint": 62786
+    },
+    {
+      "name": "diagram-successor",
+      "codePoint": 58490
+    },
+    {
+      "name": "diamond",
+      "codePoint": 61977
+    },
+    {
+      "name": "diamond-turn-right",
+      "codePoint": 62955
+    },
+    {
+      "name": "dice",
+      "codePoint": 62754
+    },
+    {
+      "name": "dice-d20",
+      "codePoint": 63183
+    },
+    {
+      "name": "dice-d6",
+      "codePoint": 63185
+    },
+    {
+      "name": "dice-five",
+      "codePoint": 62755
+    },
+    {
+      "name": "dice-four",
+      "codePoint": 62756
+    },
+    {
+      "name": "dice-one",
+      "codePoint": 62757
+    },
+    {
+      "name": "dice-six",
+      "codePoint": 62758
+    },
+    {
+      "name": "dice-three",
+      "codePoint": 62759
+    },
+    {
+      "name": "dice-two",
+      "codePoint": 62760
+    },
+    {
+      "name": "disease",
+      "codePoint": 63482
+    },
+    {
+      "name": "display",
+      "codePoint": 57699
+    },
+    {
+      "name": "divide",
+      "codePoint": 62761
+    },
+    {
+      "name": "dna",
+      "codePoint": 62577
+    },
+    {
+      "name": "dog",
+      "codePoint": 63187
+    },
+    {
+      "name": "dollar-sign",
+      "codePoint": 36
+    },
+    {
+      "name": "dolly",
+      "codePoint": 62578
+    },
+    {
+      "name": "dong-sign",
+      "codePoint": 57705
+    },
+    {
+      "name": "door-closed",
+      "codePoint": 62762
+    },
+    {
+      "name": "door-open",
+      "codePoint": 62763
+    },
+    {
+      "name": "dove",
+      "codePoint": 62650
+    },
+    {
+      "name": "down-left-and-up-right-to-center",
+      "codePoint": 62498
+    },
+    {
+      "name": "down-long",
+      "codePoint": 62217
+    },
+    {
+      "name": "download",
+      "codePoint": 61465
+    },
+    {
+      "name": "dragon",
+      "codePoint": 63189
+    },
+    {
+      "name": "draw-polygon",
+      "codePoint": 62958
+    },
+    {
+      "name": "droplet",
+      "codePoint": 61507
+    },
+    {
+      "name": "droplet-slash",
+      "codePoint": 62919
+    },
+    {
+      "name": "drum",
+      "codePoint": 62825
+    },
+    {
+      "name": "drum-steelpan",
+      "codePoint": 62826
+    },
+    {
+      "name": "drumstick-bite",
+      "codePoint": 63191
+    },
+    {
+      "name": "dumbbell",
+      "codePoint": 62539
+    },
+    {
+      "name": "dumpster",
+      "codePoint": 63379
+    },
+    {
+      "name": "dumpster-fire",
+      "codePoint": 63380
+    },
+    {
+      "name": "dungeon",
+      "codePoint": 63193
+    },
+    {
+      "name": "e",
+      "codePoint": 69
+    },
+    {
+      "name": "ear-deaf",
+      "codePoint": 62116
+    },
+    {
+      "name": "ear-listen",
+      "codePoint": 62114
+    },
+    {
+      "name": "earth-africa",
+      "codePoint": 62844
+    },
+    {
+      "name": "earth-americas",
+      "codePoint": 62845
+    },
+    {
+      "name": "earth-asia",
+      "codePoint": 62846
+    },
+    {
+      "name": "earth-europe",
+      "codePoint": 63394
+    },
+    {
+      "name": "earth-oceania",
+      "codePoint": 58491
+    },
+    {
+      "name": "egg",
+      "codePoint": 63483
+    },
+    {
+      "name": "eject",
+      "codePoint": 61522
+    },
+    {
+      "name": "elevator",
+      "codePoint": 57709
+    },
+    {
+      "name": "ellipsis",
+      "codePoint": 61761
+    },
+    {
+      "name": "ellipsis-vertical",
+      "codePoint": 61762
+    },
+    {
+      "name": "envelope",
+      "codePoint": 61664
+    },
+    {
+      "name": "envelope-circle-check",
+      "codePoint": 58600
+    },
+    {
+      "name": "envelope-open",
+      "codePoint": 62134
+    },
+    {
+      "name": "envelope-open-text",
+      "codePoint": 63064
+    },
+    {
+      "name": "envelopes-bulk",
+      "codePoint": 63092
+    },
+    {
+      "name": "equals",
+      "codePoint": 61
+    },
+    {
+      "name": "eraser",
+      "codePoint": 61741
+    },
+    {
+      "name": "ethernet",
+      "codePoint": 63382
+    },
+    {
+      "name": "euro-sign",
+      "codePoint": 61779
+    },
+    {
+      "name": "exclamation",
+      "codePoint": 33
+    },
+    {
+      "name": "expand",
+      "codePoint": 61541
+    },
+    {
+      "name": "explosion",
+      "codePoint": 58601
+    },
+    {
+      "name": "eye",
+      "codePoint": 61550
+    },
+    {
+      "name": "eye-dropper",
+      "codePoint": 61947
+    },
+    {
+      "name": "eye-low-vision",
+      "codePoint": 62120
+    },
+    {
+      "name": "eye-slash",
+      "codePoint": 61552
+    },
+    {
+      "name": "f",
+      "codePoint": 70
+    },
+    {
+      "name": "face-angry",
+      "codePoint": 62806
+    },
+    {
+      "name": "face-dizzy",
+      "codePoint": 62823
+    },
+    {
+      "name": "face-flushed",
+      "codePoint": 62841
+    },
+    {
+      "name": "face-frown",
+      "codePoint": 61721
+    },
+    {
+      "name": "face-frown-open",
+      "codePoint": 62842
+    },
+    {
+      "name": "face-grimace",
+      "codePoint": 62847
+    },
+    {
+      "name": "face-grin",
+      "codePoint": 62848
+    },
+    {
+      "name": "face-grin-beam",
+      "codePoint": 62850
+    },
+    {
+      "name": "face-grin-beam-sweat",
+      "codePoint": 62851
+    },
+    {
+      "name": "face-grin-hearts",
+      "codePoint": 62852
+    },
+    {
+      "name": "face-grin-squint",
+      "codePoint": 62853
+    },
+    {
+      "name": "face-grin-squint-tears",
+      "codePoint": 62854
+    },
+    {
+      "name": "face-grin-stars",
+      "codePoint": 62855
+    },
+    {
+      "name": "face-grin-tears",
+      "codePoint": 62856
+    },
+    {
+      "name": "face-grin-tongue",
+      "codePoint": 62857
+    },
+    {
+      "name": "face-grin-tongue-squint",
+      "codePoint": 62858
+    },
+    {
+      "name": "face-grin-tongue-wink",
+      "codePoint": 62859
+    },
+    {
+      "name": "face-grin-wide",
+      "codePoint": 62849
+    },
+    {
+      "name": "face-grin-wink",
+      "codePoint": 62860
+    },
+    {
+      "name": "face-kiss",
+      "codePoint": 62870
+    },
+    {
+      "name": "face-kiss-beam",
+      "codePoint": 62871
+    },
+    {
+      "name": "face-kiss-wink-heart",
+      "codePoint": 62872
+    },
+    {
+      "name": "face-laugh",
+      "codePoint": 62873
+    },
+    {
+      "name": "face-laugh-beam",
+      "codePoint": 62874
+    },
+    {
+      "name": "face-laugh-squint",
+      "codePoint": 62875
+    },
+    {
+      "name": "face-laugh-wink",
+      "codePoint": 62876
+    },
+    {
+      "name": "face-meh",
+      "codePoint": 61722
+    },
+    {
+      "name": "face-meh-blank",
+      "codePoint": 62884
+    },
+    {
+      "name": "face-rolling-eyes",
+      "codePoint": 62885
+    },
+    {
+      "name": "face-sad-cry",
+      "codePoint": 62899
+    },
+    {
+      "name": "face-sad-tear",
+      "codePoint": 62900
+    },
+    {
+      "name": "face-smile",
+      "codePoint": 61720
+    },
+    {
+      "name": "face-smile-beam",
+      "codePoint": 62904
+    },
+    {
+      "name": "face-smile-wink",
+      "codePoint": 62682
+    },
+    {
+      "name": "face-surprise",
+      "codePoint": 62914
+    },
+    {
+      "name": "face-tired",
+      "codePoint": 62920
+    },
+    {
+      "name": "fan",
+      "codePoint": 63587
+    },
+    {
+      "name": "faucet",
+      "codePoint": 57349
+    },
+    {
+      "name": "faucet-drip",
+      "codePoint": 57350
+    },
+    {
+      "name": "fax",
+      "codePoint": 61868
+    },
+    {
+      "name": "feather",
+      "codePoint": 62765
+    },
+    {
+      "name": "feather-pointed",
+      "codePoint": 62827
+    },
+    {
+      "name": "ferry",
+      "codePoint": 58602
+    },
+    {
+      "name": "file",
+      "codePoint": 61787
+    },
+    {
+      "name": "file-arrow-down",
+      "codePoint": 62829
+    },
+    {
+      "name": "file-arrow-up",
+      "codePoint": 62836
+    },
+    {
+      "name": "file-audio",
+      "codePoint": 61895
+    },
+    {
+      "name": "file-circle-check",
+      "codePoint": 58784
+    },
+    {
+      "name": "file-circle-exclamation",
+      "codePoint": 58603
+    },
+    {
+      "name": "file-circle-minus",
+      "codePoint": 58605
+    },
+    {
+      "name": "file-circle-plus",
+      "codePoint": 58516
+    },
+    {
+      "name": "file-circle-question",
+      "codePoint": 58607
+    },
+    {
+      "name": "file-circle-xmark",
+      "codePoint": 58785
+    },
+    {
+      "name": "file-code",
+      "codePoint": 61897
+    },
+    {
+      "name": "file-contract",
+      "codePoint": 62828
+    },
+    {
+      "name": "file-csv",
+      "codePoint": 63197
+    },
+    {
+      "name": "file-excel",
+      "codePoint": 61891
+    },
+    {
+      "name": "file-export",
+      "codePoint": 62830
+    },
+    {
+      "name": "file-fragment",
+      "codePoint": 59031
+    },
+    {
+      "name": "file-half-dashed",
+      "codePoint": 59032
+    },
+    {
+      "name": "file-image",
+      "codePoint": 61893
+    },
+    {
+      "name": "file-import",
+      "codePoint": 62831
+    },
+    {
+      "name": "file-invoice",
+      "codePoint": 62832
+    },
+    {
+      "name": "file-invoice-dollar",
+      "codePoint": 62833
+    },
+    {
+      "name": "file-lines",
+      "codePoint": 61788
+    },
+    {
+      "name": "file-medical",
+      "codePoint": 62583
+    },
+    {
+      "name": "file-pdf",
+      "codePoint": 61889
+    },
+    {
+      "name": "file-pen",
+      "codePoint": 62236
+    },
+    {
+      "name": "file-powerpoint",
+      "codePoint": 61892
+    },
+    {
+      "name": "file-prescription",
+      "codePoint": 62834
+    },
+    {
+      "name": "file-shield",
+      "codePoint": 58608
+    },
+    {
+      "name": "file-signature",
+      "codePoint": 62835
+    },
+    {
+      "name": "file-video",
+      "codePoint": 61896
+    },
+    {
+      "name": "file-waveform",
+      "codePoint": 62584
+    },
+    {
+      "name": "file-word",
+      "codePoint": 61890
+    },
+    {
+      "name": "file-zipper",
+      "codePoint": 61894
+    },
+    {
+      "name": "fill",
+      "codePoint": 62837
+    },
+    {
+      "name": "fill-drip",
+      "codePoint": 62838
+    },
+    {
+      "name": "film",
+      "codePoint": 61448
+    },
+    {
+      "name": "filter",
+      "codePoint": 61616
+    },
+    {
+      "name": "filter-circle-dollar",
+      "codePoint": 63074
+    },
+    {
+      "name": "filter-circle-xmark",
+      "codePoint": 57723
+    },
+    {
+      "name": "fingerprint",
+      "codePoint": 62839
+    },
+    {
+      "name": "fire",
+      "codePoint": 61549
+    },
+    {
+      "name": "fire-burner",
+      "codePoint": 58609
+    },
+    {
+      "name": "fire-extinguisher",
+      "codePoint": 61748
+    },
+    {
+      "name": "fire-flame-curved",
+      "codePoint": 63460
+    },
+    {
+      "name": "fire-flame-simple",
+      "codePoint": 62570
+    },
+    {
+      "name": "fish",
+      "codePoint": 62840
+    },
+    {
+      "name": "fish-fins",
+      "codePoint": 58610
+    },
+    {
+      "name": "flag",
+      "codePoint": 61476
+    },
+    {
+      "name": "flag-checkered",
+      "codePoint": 61726
+    },
+    {
+      "name": "flag-usa",
+      "codePoint": 63309
+    },
+    {
+      "name": "flask",
+      "codePoint": 61635
+    },
+    {
+      "name": "flask-vial",
+      "codePoint": 58611
+    },
+    {
+      "name": "floppy-disk",
+      "codePoint": 61639
+    },
+    {
+      "name": "florin-sign",
+      "codePoint": 57732
+    },
+    {
+      "name": "folder",
+      "codePoint": 61563
+    },
+    {
+      "name": "folder-closed",
+      "codePoint": 57733
+    },
+    {
+      "name": "folder-minus",
+      "codePoint": 63069
+    },
+    {
+      "name": "folder-open",
+      "codePoint": 61564
+    },
+    {
+      "name": "folder-plus",
+      "codePoint": 63070
+    },
+    {
+      "name": "folder-tree",
+      "codePoint": 63490
+    },
+    {
+      "name": "font",
+      "codePoint": 61489
+    },
+    {
+      "name": "font-awesome",
+      "codePoint": 62132
+    },
+    {
+      "name": "football",
+      "codePoint": 62542
+    },
+    {
+      "name": "forward",
+      "codePoint": 61518
+    },
+    {
+      "name": "forward-fast",
+      "codePoint": 61520
+    },
+    {
+      "name": "forward-step",
+      "codePoint": 61521
+    },
+    {
+      "name": "franc-sign",
+      "codePoint": 57743
+    },
+    {
+      "name": "frog",
+      "codePoint": 62766
+    },
+    {
+      "name": "futbol",
+      "codePoint": 61923
+    },
+    {
+      "name": "g",
+      "codePoint": 71
+    },
+    {
+      "name": "gamepad",
+      "codePoint": 61723
+    },
+    {
+      "name": "gas-pump",
+      "codePoint": 62767
+    },
+    {
+      "name": "gauge",
+      "codePoint": 63012
+    },
+    {
+      "name": "gauge-high",
+      "codePoint": 63013
+    },
+    {
+      "name": "gauge-simple",
+      "codePoint": 63017
+    },
+    {
+      "name": "gauge-simple-high",
+      "codePoint": 63018
+    },
+    {
+      "name": "gavel",
+      "codePoint": 61667
+    },
+    {
+      "name": "gear",
+      "codePoint": 61459
+    },
+    {
+      "name": "gears",
+      "codePoint": 61573
+    },
+    {
+      "name": "gem",
+      "codePoint": 62373
+    },
+    {
+      "name": "genderless",
+      "codePoint": 61997
+    },
+    {
+      "name": "ghost",
+      "codePoint": 63202
+    },
+    {
+      "name": "gift",
+      "codePoint": 61547
+    },
+    {
+      "name": "gifts",
+      "codePoint": 63388
+    },
+    {
+      "name": "glass-water",
+      "codePoint": 58612
+    },
+    {
+      "name": "glass-water-droplet",
+      "codePoint": 58613
+    },
+    {
+      "name": "glasses",
+      "codePoint": 62768
+    },
+    {
+      "name": "globe",
+      "codePoint": 61612
+    },
+    {
+      "name": "golf-ball-tee",
+      "codePoint": 62544
+    },
+    {
+      "name": "gopuram",
+      "codePoint": 63076
+    },
+    {
+      "name": "graduation-cap",
+      "codePoint": 61853
+    },
+    {
+      "name": "greater-than",
+      "codePoint": 62
+    },
+    {
+      "name": "greater-than-equal",
+      "codePoint": 62770
+    },
+    {
+      "name": "grip",
+      "codePoint": 62861
+    },
+    {
+      "name": "grip-lines",
+      "codePoint": 63396
+    },
+    {
+      "name": "grip-lines-vertical",
+      "codePoint": 63397
+    },
+    {
+      "name": "grip-vertical",
+      "codePoint": 62862
+    },
+    {
+      "name": "group-arrows-rotate",
+      "codePoint": 58614
+    },
+    {
+      "name": "guarani-sign",
+      "codePoint": 57754
+    },
+    {
+      "name": "guitar",
+      "codePoint": 63398
+    },
+    {
+      "name": "gun",
+      "codePoint": 57755
+    },
+    {
+      "name": "h",
+      "codePoint": 72
+    },
+    {
+      "name": "hammer",
+      "codePoint": 63203
+    },
+    {
+      "name": "hamsa",
+      "codePoint": 63077
+    },
+    {
+      "name": "hand",
+      "codePoint": 62038
+    },
+    {
+      "name": "hand-back-fist",
+      "codePoint": 62037
+    },
+    {
+      "name": "hand-dots",
+      "codePoint": 62561
+    },
+    {
+      "name": "hand-fist",
+      "codePoint": 63198
+    },
+    {
+      "name": "hand-holding",
+      "codePoint": 62653
+    },
+    {
+      "name": "hand-holding-dollar",
+      "codePoint": 62656
+    },
+    {
+      "name": "hand-holding-droplet",
+      "codePoint": 62657
+    },
+    {
+      "name": "hand-holding-hand",
+      "codePoint": 58615
+    },
+    {
+      "name": "hand-holding-heart",
+      "codePoint": 62654
+    },
+    {
+      "name": "hand-holding-medical",
+      "codePoint": 57436
+    },
+    {
+      "name": "hand-lizard",
+      "codePoint": 62040
+    },
+    {
+      "name": "hand-middle-finger",
+      "codePoint": 63494
+    },
+    {
+      "name": "hand-peace",
+      "codePoint": 62043
+    },
+    {
+      "name": "hand-point-down",
+      "codePoint": 61607
+    },
+    {
+      "name": "hand-point-left",
+      "codePoint": 61605
+    },
+    {
+      "name": "hand-point-right",
+      "codePoint": 61604
+    },
+    {
+      "name": "hand-point-up",
+      "codePoint": 61606
+    },
+    {
+      "name": "hand-pointer",
+      "codePoint": 62042
+    },
+    {
+      "name": "hand-scissors",
+      "codePoint": 62039
+    },
+    {
+      "name": "hand-sparkles",
+      "codePoint": 57437
+    },
+    {
+      "name": "hand-spock",
+      "codePoint": 62041
+    },
+    {
+      "name": "handcuffs",
+      "codePoint": 58616
+    },
+    {
+      "name": "hands",
+      "codePoint": 62119
+    },
+    {
+      "name": "hands-asl-interpreting",
+      "codePoint": 62115
+    },
+    {
+      "name": "hands-bound",
+      "codePoint": 58617
+    },
+    {
+      "name": "hands-bubbles",
+      "codePoint": 57438
+    },
+    {
+      "name": "hands-clapping",
+      "codePoint": 57768
+    },
+    {
+      "name": "hands-holding",
+      "codePoint": 62658
+    },
+    {
+      "name": "hands-holding-child",
+      "codePoint": 58618
+    },
+    {
+      "name": "hands-holding-circle",
+      "codePoint": 58619
+    },
+    {
+      "name": "hands-praying",
+      "codePoint": 63108
+    },
+    {
+      "name": "handshake",
+      "codePoint": 62133
+    },
+    {
+      "name": "handshake-angle",
+      "codePoint": 62660
+    },
+    {
+      "name": "handshake-simple",
+      "codePoint": 62662
+    },
+    {
+      "name": "handshake-simple-slash",
+      "codePoint": 57439
+    },
+    {
+      "name": "handshake-slash",
+      "codePoint": 57440
+    },
+    {
+      "name": "hanukiah",
+      "codePoint": 63206
+    },
+    {
+      "name": "hard-drive",
+      "codePoint": 61600
+    },
+    {
+      "name": "hashtag",
+      "codePoint": 35
+    },
+    {
+      "name": "hat-cowboy",
+      "codePoint": 63680
+    },
+    {
+      "name": "hat-cowboy-side",
+      "codePoint": 63681
+    },
+    {
+      "name": "hat-wizard",
+      "codePoint": 63208
+    },
+    {
+      "name": "head-side-cough",
+      "codePoint": 57441
+    },
+    {
+      "name": "head-side-cough-slash",
+      "codePoint": 57442
+    },
+    {
+      "name": "head-side-mask",
+      "codePoint": 57443
+    },
+    {
+      "name": "head-side-virus",
+      "codePoint": 57444
+    },
+    {
+      "name": "heading",
+      "codePoint": 61916
+    },
+    {
+      "name": "headphones",
+      "codePoint": 61477
+    },
+    {
+      "name": "headphones-simple",
+      "codePoint": 62863
+    },
+    {
+      "name": "headset",
+      "codePoint": 62864
+    },
+    {
+      "name": "heart",
+      "codePoint": 61444
+    },
+    {
+      "name": "heart-circle-bolt",
+      "codePoint": 58620
+    },
+    {
+      "name": "heart-circle-check",
+      "codePoint": 58621
+    },
+    {
+      "name": "heart-circle-exclamation",
+      "codePoint": 58622
+    },
+    {
+      "name": "heart-circle-minus",
+      "codePoint": 58623
+    },
+    {
+      "name": "heart-circle-plus",
+      "codePoint": 58624
+    },
+    {
+      "name": "heart-circle-xmark",
+      "codePoint": 58625
+    },
+    {
+      "name": "heart-crack",
+      "codePoint": 63401
+    },
+    {
+      "name": "heart-pulse",
+      "codePoint": 61982
+    },
+    {
+      "name": "helicopter",
+      "codePoint": 62771
+    },
+    {
+      "name": "helicopter-symbol",
+      "codePoint": 58626
+    },
+    {
+      "name": "helmet-safety",
+      "codePoint": 63495
+    },
+    {
+      "name": "helmet-un",
+      "codePoint": 58627
+    },
+    {
+      "name": "hexagon-nodes",
+      "codePoint": 59033
+    },
+    {
+      "name": "hexagon-nodes-bolt",
+      "codePoint": 59034
+    },
+    {
+      "name": "highlighter",
+      "codePoint": 62865
+    },
+    {
+      "name": "hill-avalanche",
+      "codePoint": 58631
+    },
+    {
+      "name": "hill-rockslide",
+      "codePoint": 58632
+    },
+    {
+      "name": "hippo",
+      "codePoint": 63213
+    },
+    {
+      "name": "hockey-puck",
+      "codePoint": 62547
+    },
+    {
+      "name": "holly-berry",
+      "codePoint": 63402
+    },
+    {
+      "name": "horse",
+      "codePoint": 63216
+    },
+    {
+      "name": "horse-head",
+      "codePoint": 63403
+    },
+    {
+      "name": "hospital",
+      "codePoint": 61688
+    },
+    {
+      "name": "hospital-user",
+      "codePoint": 63501
+    },
+    {
+      "name": "hot-tub-person",
+      "codePoint": 62867
+    },
+    {
+      "name": "hotdog",
+      "codePoint": 63503
+    },
+    {
+      "name": "hotel",
+      "codePoint": 62868
+    },
+    {
+      "name": "hourglass",
+      "codePoint": 62036
+    },
+    {
+      "name": "hourglass-end",
+      "codePoint": 62035
+    },
+    {
+      "name": "hourglass-half",
+      "codePoint": 62034
+    },
+    {
+      "name": "hourglass-start",
+      "codePoint": 62033
+    },
+    {
+      "name": "house",
+      "codePoint": 61461
+    },
+    {
+      "name": "house-chimney",
+      "codePoint": 58287
+    },
+    {
+      "name": "house-chimney-crack",
+      "codePoint": 63217
+    },
+    {
+      "name": "house-chimney-medical",
+      "codePoint": 63474
+    },
+    {
+      "name": "house-chimney-user",
+      "codePoint": 57445
+    },
+    {
+      "name": "house-chimney-window",
+      "codePoint": 57357
+    },
+    {
+      "name": "house-circle-check",
+      "codePoint": 58633
+    },
+    {
+      "name": "house-circle-exclamation",
+      "codePoint": 58634
+    },
+    {
+      "name": "house-circle-xmark",
+      "codePoint": 58635
+    },
+    {
+      "name": "house-crack",
+      "codePoint": 58289
+    },
+    {
+      "name": "house-fire",
+      "codePoint": 58636
+    },
+    {
+      "name": "house-flag",
+      "codePoint": 58637
+    },
+    {
+      "name": "house-flood-water",
+      "codePoint": 58638
+    },
+    {
+      "name": "house-flood-water-circle-arrow-right",
+      "codePoint": 58639
+    },
+    {
+      "name": "house-laptop",
+      "codePoint": 57446
+    },
+    {
+      "name": "house-lock",
+      "codePoint": 58640
+    },
+    {
+      "name": "house-medical",
+      "codePoint": 58290
+    },
+    {
+      "name": "house-medical-circle-check",
+      "codePoint": 58641
+    },
+    {
+      "name": "house-medical-circle-exclamation",
+      "codePoint": 58642
+    },
+    {
+      "name": "house-medical-circle-xmark",
+      "codePoint": 58643
+    },
+    {
+      "name": "house-medical-flag",
+      "codePoint": 58644
+    },
+    {
+      "name": "house-signal",
+      "codePoint": 57362
+    },
+    {
+      "name": "house-tsunami",
+      "codePoint": 58645
+    },
+    {
+      "name": "house-user",
+      "codePoint": 57776
+    },
+    {
+      "name": "hryvnia-sign",
+      "codePoint": 63218
+    },
+    {
+      "name": "hurricane",
+      "codePoint": 63313
+    },
+    {
+      "name": "i",
+      "codePoint": 73
+    },
+    {
+      "name": "i-cursor",
+      "codePoint": 62022
+    },
+    {
+      "name": "ice-cream",
+      "codePoint": 63504
+    },
+    {
+      "name": "icicles",
+      "codePoint": 63405
+    },
+    {
+      "name": "icons",
+      "codePoint": 63597
+    },
+    {
+      "name": "id-badge",
+      "codePoint": 62145
+    },
+    {
+      "name": "id-card",
+      "codePoint": 62146
+    },
+    {
+      "name": "id-card-clip",
+      "codePoint": 62591
+    },
+    {
+      "name": "igloo",
+      "codePoint": 63406
+    },
+    {
+      "name": "image",
+      "codePoint": 61502
+    },
+    {
+      "name": "image-portrait",
+      "codePoint": 62432
+    },
+    {
+      "name": "images",
+      "codePoint": 62210
+    },
+    {
+      "name": "inbox",
+      "codePoint": 61468
+    },
+    {
+      "name": "indent",
+      "codePoint": 61500
+    },
+    {
+      "name": "indian-rupee-sign",
+      "codePoint": 57788
+    },
+    {
+      "name": "industry",
+      "codePoint": 62069
+    },
+    {
+      "name": "infinity",
+      "codePoint": 62772
+    },
+    {
+      "name": "info",
+      "codePoint": 61737
+    },
+    {
+      "name": "italic",
+      "codePoint": 61491
+    },
+    {
+      "name": "j",
+      "codePoint": 74
+    },
+    {
+      "name": "jar",
+      "codePoint": 58646
+    },
+    {
+      "name": "jar-wheat",
+      "codePoint": 58647
+    },
+    {
+      "name": "jedi",
+      "codePoint": 63081
+    },
+    {
+      "name": "jet-fighter",
+      "codePoint": 61691
+    },
+    {
+      "name": "jet-fighter-up",
+      "codePoint": 58648
+    },
+    {
+      "name": "joint",
+      "codePoint": 62869
+    },
+    {
+      "name": "jug-detergent",
+      "codePoint": 58649
+    },
+    {
+      "name": "k",
+      "codePoint": 75
+    },
+    {
+      "name": "kaaba",
+      "codePoint": 63083
+    },
+    {
+      "name": "key",
+      "codePoint": 61572
+    },
+    {
+      "name": "keyboard",
+      "codePoint": 61724
+    },
+    {
+      "name": "khanda",
+      "codePoint": 63085
+    },
+    {
+      "name": "kip-sign",
+      "codePoint": 57796
+    },
+    {
+      "name": "kit-medical",
+      "codePoint": 62585
+    },
+    {
+      "name": "kitchen-set",
+      "codePoint": 58650
+    },
+    {
+      "name": "kiwi-bird",
+      "codePoint": 62773
+    },
+    {
+      "name": "l",
+      "codePoint": 76
+    },
+    {
+      "name": "land-mine-on",
+      "codePoint": 58651
+    },
+    {
+      "name": "landmark",
+      "codePoint": 63087
+    },
+    {
+      "name": "landmark-dome",
+      "codePoint": 63314
+    },
+    {
+      "name": "landmark-flag",
+      "codePoint": 58652
+    },
+    {
+      "name": "language",
+      "codePoint": 61867
+    },
+    {
+      "name": "laptop",
+      "codePoint": 61705
+    },
+    {
+      "name": "laptop-code",
+      "codePoint": 62972
+    },
+    {
+      "name": "laptop-file",
+      "codePoint": 58653
+    },
+    {
+      "name": "laptop-medical",
+      "codePoint": 63506
+    },
+    {
+      "name": "lari-sign",
+      "codePoint": 57800
+    },
+    {
+      "name": "layer-group",
+      "codePoint": 62973
+    },
+    {
+      "name": "leaf",
+      "codePoint": 61548
+    },
+    {
+      "name": "left-long",
+      "codePoint": 62218
+    },
+    {
+      "name": "left-right",
+      "codePoint": 62263
+    },
+    {
+      "name": "lemon",
+      "codePoint": 61588
+    },
+    {
+      "name": "less-than",
+      "codePoint": 60
+    },
+    {
+      "name": "less-than-equal",
+      "codePoint": 62775
+    },
+    {
+      "name": "life-ring",
+      "codePoint": 61901
+    },
+    {
+      "name": "lightbulb",
+      "codePoint": 61675
+    },
+    {
+      "name": "lines-leaning",
+      "codePoint": 58654
+    },
+    {
+      "name": "link",
+      "codePoint": 61633
+    },
+    {
+      "name": "link-slash",
+      "codePoint": 61735
+    },
+    {
+      "name": "lira-sign",
+      "codePoint": 61845
+    },
+    {
+      "name": "list",
+      "codePoint": 61498
+    },
+    {
+      "name": "list-check",
+      "codePoint": 61614
+    },
+    {
+      "name": "list-ol",
+      "codePoint": 61643
+    },
+    {
+      "name": "list-ul",
+      "codePoint": 61642
+    },
+    {
+      "name": "litecoin-sign",
+      "codePoint": 57811
+    },
+    {
+      "name": "location-arrow",
+      "codePoint": 61732
+    },
+    {
+      "name": "location-crosshairs",
+      "codePoint": 62977
+    },
+    {
+      "name": "location-dot",
+      "codePoint": 62405
+    },
+    {
+      "name": "location-pin",
+      "codePoint": 61505
+    },
+    {
+      "name": "location-pin-lock",
+      "codePoint": 58655
+    },
+    {
+      "name": "lock",
+      "codePoint": 61475
+    },
+    {
+      "name": "lock-open",
+      "codePoint": 62401
+    },
+    {
+      "name": "locust",
+      "codePoint": 58656
+    },
+    {
+      "name": "lungs",
+      "codePoint": 62980
+    },
+    {
+      "name": "lungs-virus",
+      "codePoint": 57447
+    },
+    {
+      "name": "m",
+      "codePoint": 77
+    },
+    {
+      "name": "magnet",
+      "codePoint": 61558
+    },
+    {
+      "name": "magnifying-glass",
+      "codePoint": 61442
+    },
+    {
+      "name": "magnifying-glass-arrow-right",
+      "codePoint": 58657
+    },
+    {
+      "name": "magnifying-glass-chart",
+      "codePoint": 58658
+    },
+    {
+      "name": "magnifying-glass-dollar",
+      "codePoint": 63112
+    },
+    {
+      "name": "magnifying-glass-location",
+      "codePoint": 63113
+    },
+    {
+      "name": "magnifying-glass-minus",
+      "codePoint": 61456
+    },
+    {
+      "name": "magnifying-glass-plus",
+      "codePoint": 61454
+    },
+    {
+      "name": "manat-sign",
+      "codePoint": 57813
+    },
+    {
+      "name": "map",
+      "codePoint": 62073
+    },
+    {
+      "name": "map-location",
+      "codePoint": 62879
+    },
+    {
+      "name": "map-location-dot",
+      "codePoint": 62880
+    },
+    {
+      "name": "map-pin",
+      "codePoint": 62070
+    },
+    {
+      "name": "marker",
+      "codePoint": 62881
+    },
+    {
+      "name": "mars",
+      "codePoint": 61986
+    },
+    {
+      "name": "mars-and-venus",
+      "codePoint": 61988
+    },
+    {
+      "name": "mars-and-venus-burst",
+      "codePoint": 58659
+    },
+    {
+      "name": "mars-double",
+      "codePoint": 61991
+    },
+    {
+      "name": "mars-stroke",
+      "codePoint": 61993
+    },
+    {
+      "name": "mars-stroke-right",
+      "codePoint": 61995
+    },
+    {
+      "name": "mars-stroke-up",
+      "codePoint": 61994
+    },
+    {
+      "name": "martini-glass",
+      "codePoint": 62843
+    },
+    {
+      "name": "martini-glass-citrus",
+      "codePoint": 62817
+    },
+    {
+      "name": "martini-glass-empty",
+      "codePoint": 61440
+    },
+    {
+      "name": "mask",
+      "codePoint": 63226
+    },
+    {
+      "name": "mask-face",
+      "codePoint": 57815
+    },
+    {
+      "name": "mask-ventilator",
+      "codePoint": 58660
+    },
+    {
+      "name": "masks-theater",
+      "codePoint": 63024
+    },
+    {
+      "name": "mattress-pillow",
+      "codePoint": 58661
+    },
+    {
+      "name": "maximize",
+      "codePoint": 62238
+    },
+    {
+      "name": "medal",
+      "codePoint": 62882
+    },
+    {
+      "name": "memory",
+      "codePoint": 62776
+    },
+    {
+      "name": "menorah",
+      "codePoint": 63094
+    },
+    {
+      "name": "mercury",
+      "codePoint": 61987
+    },
+    {
+      "name": "message",
+      "codePoint": 62074
+    },
+    {
+      "name": "meteor",
+      "codePoint": 63315
+    },
+    {
+      "name": "microchip",
+      "codePoint": 62171
+    },
+    {
+      "name": "microphone",
+      "codePoint": 61744
+    },
+    {
+      "name": "microphone-lines",
+      "codePoint": 62409
+    },
+    {
+      "name": "microphone-lines-slash",
+      "codePoint": 62777
+    },
+    {
+      "name": "microphone-slash",
+      "codePoint": 61745
+    },
+    {
+      "name": "microscope",
+      "codePoint": 62992
+    },
+    {
+      "name": "mill-sign",
+      "codePoint": 57837
+    },
+    {
+      "name": "minimize",
+      "codePoint": 63372
+    },
+    {
+      "name": "minus",
+      "codePoint": 61544
+    },
+    {
+      "name": "mitten",
+      "codePoint": 63413
+    },
+    {
+      "name": "mobile",
+      "codePoint": 62414
+    },
+    {
+      "name": "mobile-button",
+      "codePoint": 61707
+    },
+    {
+      "name": "mobile-retro",
+      "codePoint": 58663
+    },
+    {
+      "name": "mobile-screen",
+      "codePoint": 62415
+    },
+    {
+      "name": "mobile-screen-button",
+      "codePoint": 62413
+    },
+    {
+      "name": "money-bill",
+      "codePoint": 61654
+    },
+    {
+      "name": "money-bill-1",
+      "codePoint": 62417
+    },
+    {
+      "name": "money-bill-1-wave",
+      "codePoint": 62779
+    },
+    {
+      "name": "money-bill-transfer",
+      "codePoint": 58664
+    },
+    {
+      "name": "money-bill-trend-up",
+      "codePoint": 58665
+    },
+    {
+      "name": "money-bill-wave",
+      "codePoint": 62778
+    },
+    {
+      "name": "money-bill-wheat",
+      "codePoint": 58666
+    },
+    {
+      "name": "money-bills",
+      "codePoint": 57843
+    },
+    {
+      "name": "money-check",
+      "codePoint": 62780
+    },
+    {
+      "name": "money-check-dollar",
+      "codePoint": 62781
+    },
+    {
+      "name": "monument",
+      "codePoint": 62886
+    },
+    {
+      "name": "moon",
+      "codePoint": 61830
+    },
+    {
+      "name": "mortar-pestle",
+      "codePoint": 62887
+    },
+    {
+      "name": "mosque",
+      "codePoint": 63096
+    },
+    {
+      "name": "mosquito",
+      "codePoint": 58667
+    },
+    {
+      "name": "mosquito-net",
+      "codePoint": 58668
+    },
+    {
+      "name": "motorcycle",
+      "codePoint": 61980
+    },
+    {
+      "name": "mound",
+      "codePoint": 58669
+    },
+    {
+      "name": "mountain",
+      "codePoint": 63228
+    },
+    {
+      "name": "mountain-city",
+      "codePoint": 58670
+    },
+    {
+      "name": "mountain-sun",
+      "codePoint": 58671
+    },
+    {
+      "name": "mug-hot",
+      "codePoint": 63414
+    },
+    {
+      "name": "mug-saucer",
+      "codePoint": 61684
+    },
+    {
+      "name": "music",
+      "codePoint": 61441
+    },
+    {
+      "name": "n",
+      "codePoint": 78
+    },
+    {
+      "name": "naira-sign",
+      "codePoint": 57846
+    },
+    {
+      "name": "network-wired",
+      "codePoint": 63231
+    },
+    {
+      "name": "neuter",
+      "codePoint": 61996
+    },
+    {
+      "name": "newspaper",
+      "codePoint": 61930
+    },
+    {
+      "name": "not-equal",
+      "codePoint": 62782
+    },
+    {
+      "name": "notdef",
+      "codePoint": 57854
+    },
+    {
+      "name": "note-sticky",
+      "codePoint": 62025
+    },
+    {
+      "name": "notes-medical",
+      "codePoint": 62593
+    },
+    {
+      "name": "o",
+      "codePoint": 79
+    },
+    {
+      "name": "object-group",
+      "codePoint": 62023
+    },
+    {
+      "name": "object-ungroup",
+      "codePoint": 62024
+    },
+    {
+      "name": "oil-can",
+      "codePoint": 62995
+    },
+    {
+      "name": "oil-well",
+      "codePoint": 58674
+    },
+    {
+      "name": "om",
+      "codePoint": 63097
+    },
+    {
+      "name": "otter",
+      "codePoint": 63232
+    },
+    {
+      "name": "outdent",
+      "codePoint": 61499
+    },
+    {
+      "name": "p",
+      "codePoint": 80
+    },
+    {
+      "name": "pager",
+      "codePoint": 63509
+    },
+    {
+      "name": "paint-roller",
+      "codePoint": 62890
+    },
+    {
+      "name": "paintbrush",
+      "codePoint": 61948
+    },
+    {
+      "name": "palette",
+      "codePoint": 62783
+    },
+    {
+      "name": "pallet",
+      "codePoint": 62594
+    },
+    {
+      "name": "panorama",
+      "codePoint": 57865
+    },
+    {
+      "name": "paper-plane",
+      "codePoint": 61912
+    },
+    {
+      "name": "paperclip",
+      "codePoint": 61638
+    },
+    {
+      "name": "parachute-box",
+      "codePoint": 62669
+    },
+    {
+      "name": "paragraph",
+      "codePoint": 61917
+    },
+    {
+      "name": "passport",
+      "codePoint": 62891
+    },
+    {
+      "name": "paste",
+      "codePoint": 61674
+    },
+    {
+      "name": "pause",
+      "codePoint": 61516
+    },
+    {
+      "name": "paw",
+      "codePoint": 61872
+    },
+    {
+      "name": "peace",
+      "codePoint": 63100
+    },
+    {
+      "name": "pen",
+      "codePoint": 62212
+    },
+    {
+      "name": "pen-clip",
+      "codePoint": 62213
+    },
+    {
+      "name": "pen-fancy",
+      "codePoint": 62892
+    },
+    {
+      "name": "pen-nib",
+      "codePoint": 62893
+    },
+    {
+      "name": "pen-ruler",
+      "codePoint": 62894
+    },
+    {
+      "name": "pen-to-square",
+      "codePoint": 61508
+    },
+    {
+      "name": "pencil",
+      "codePoint": 62211
+    },
+    {
+      "name": "people-arrows",
+      "codePoint": 57448
+    },
+    {
+      "name": "people-carry-box",
+      "codePoint": 62670
+    },
+    {
+      "name": "people-group",
+      "codePoint": 58675
+    },
+    {
+      "name": "people-line",
+      "codePoint": 58676
+    },
+    {
+      "name": "people-pulling",
+      "codePoint": 58677
+    },
+    {
+      "name": "people-robbery",
+      "codePoint": 58678
+    },
+    {
+      "name": "people-roof",
+      "codePoint": 58679
+    },
+    {
+      "name": "pepper-hot",
+      "codePoint": 63510
+    },
+    {
+      "name": "percent",
+      "codePoint": 37
+    },
+    {
+      "name": "person",
+      "codePoint": 61827
+    },
+    {
+      "name": "person-arrow-down-to-line",
+      "codePoint": 58680
+    },
+    {
+      "name": "person-arrow-up-from-line",
+      "codePoint": 58681
+    },
+    {
+      "name": "person-biking",
+      "codePoint": 63562
+    },
+    {
+      "name": "person-booth",
+      "codePoint": 63318
+    },
+    {
+      "name": "person-breastfeeding",
+      "codePoint": 58682
+    },
+    {
+      "name": "person-burst",
+      "codePoint": 58683
+    },
+    {
+      "name": "person-cane",
+      "codePoint": 58684
+    },
+    {
+      "name": "person-chalkboard",
+      "codePoint": 58685
+    },
+    {
+      "name": "person-circle-check",
+      "codePoint": 58686
+    },
+    {
+      "name": "person-circle-exclamation",
+      "codePoint": 58687
+    },
+    {
+      "name": "person-circle-minus",
+      "codePoint": 58688
+    },
+    {
+      "name": "person-circle-plus",
+      "codePoint": 58689
+    },
+    {
+      "name": "person-circle-question",
+      "codePoint": 58690
+    },
+    {
+      "name": "person-circle-xmark",
+      "codePoint": 58691
+    },
+    {
+      "name": "person-digging",
+      "codePoint": 63582
+    },
+    {
+      "name": "person-dots-from-line",
+      "codePoint": 62576
+    },
+    {
+      "name": "person-dress",
+      "codePoint": 61826
+    },
+    {
+      "name": "person-dress-burst",
+      "codePoint": 58692
+    },
+    {
+      "name": "person-drowning",
+      "codePoint": 58693
+    },
+    {
+      "name": "person-falling",
+      "codePoint": 58694
+    },
+    {
+      "name": "person-falling-burst",
+      "codePoint": 58695
+    },
+    {
+      "name": "person-half-dress",
+      "codePoint": 58696
+    },
+    {
+      "name": "person-harassing",
+      "codePoint": 58697
+    },
+    {
+      "name": "person-hiking",
+      "codePoint": 63212
+    },
+    {
+      "name": "person-military-pointing",
+      "codePoint": 58698
+    },
+    {
+      "name": "person-military-rifle",
+      "codePoint": 58699
+    },
+    {
+      "name": "person-military-to-person",
+      "codePoint": 58700
+    },
+    {
+      "name": "person-praying",
+      "codePoint": 63107
+    },
+    {
+      "name": "person-pregnant",
+      "codePoint": 58142
+    },
+    {
+      "name": "person-rays",
+      "codePoint": 58701
+    },
+    {
+      "name": "person-rifle",
+      "codePoint": 58702
+    },
+    {
+      "name": "person-running",
+      "codePoint": 63244
+    },
+    {
+      "name": "person-shelter",
+      "codePoint": 58703
+    },
+    {
+      "name": "person-skating",
+      "codePoint": 63429
+    },
+    {
+      "name": "person-skiing",
+      "codePoint": 63433
+    },
+    {
+      "name": "person-skiing-nordic",
+      "codePoint": 63434
+    },
+    {
+      "name": "person-snowboarding",
+      "codePoint": 63438
+    },
+    {
+      "name": "person-swimming",
+      "codePoint": 62916
+    },
+    {
+      "name": "person-through-window",
+      "codePoint": 58793
+    },
+    {
+      "name": "person-walking",
+      "codePoint": 62804
+    },
+    {
+      "name": "person-walking-arrow-loop-left",
+      "codePoint": 58705
+    },
+    {
+      "name": "person-walking-arrow-right",
+      "codePoint": 58706
+    },
+    {
+      "name": "person-walking-dashed-line-arrow-right",
+      "codePoint": 58707
+    },
+    {
+      "name": "person-walking-luggage",
+      "codePoint": 58708
+    },
+    {
+      "name": "person-walking-with-cane",
+      "codePoint": 62109
+    },
+    {
+      "name": "peseta-sign",
+      "codePoint": 57889
+    },
+    {
+      "name": "peso-sign",
+      "codePoint": 57890
+    },
+    {
+      "name": "phone",
+      "codePoint": 61589
+    },
+    {
+      "name": "phone-flip",
+      "codePoint": 63609
+    },
+    {
+      "name": "phone-slash",
+      "codePoint": 62429
+    },
+    {
+      "name": "phone-volume",
+      "codePoint": 62112
+    },
+    {
+      "name": "photo-film",
+      "codePoint": 63612
+    },
+    {
+      "name": "piggy-bank",
+      "codePoint": 62675
+    },
+    {
+      "name": "pills",
+      "codePoint": 62596
+    },
+    {
+      "name": "pizza-slice",
+      "codePoint": 63512
+    },
+    {
+      "name": "place-of-worship",
+      "codePoint": 63103
+    },
+    {
+      "name": "plane",
+      "codePoint": 61554
+    },
+    {
+      "name": "plane-arrival",
+      "codePoint": 62895
+    },
+    {
+      "name": "plane-circle-check",
+      "codePoint": 58709
+    },
+    {
+      "name": "plane-circle-exclamation",
+      "codePoint": 58710
+    },
+    {
+      "name": "plane-circle-xmark",
+      "codePoint": 58711
+    },
+    {
+      "name": "plane-departure",
+      "codePoint": 62896
+    },
+    {
+      "name": "plane-lock",
+      "codePoint": 58712
+    },
+    {
+      "name": "plane-slash",
+      "codePoint": 57449
+    },
+    {
+      "name": "plane-up",
+      "codePoint": 57901
+    },
+    {
+      "name": "plant-wilt",
+      "codePoint": 58794
+    },
+    {
+      "name": "plate-wheat",
+      "codePoint": 58714
+    },
+    {
+      "name": "play",
+      "codePoint": 61515
+    },
+    {
+      "name": "plug",
+      "codePoint": 61926
+    },
+    {
+      "name": "plug-circle-bolt",
+      "codePoint": 58715
+    },
+    {
+      "name": "plug-circle-check",
+      "codePoint": 58716
+    },
+    {
+      "name": "plug-circle-exclamation",
+      "codePoint": 58717
+    },
+    {
+      "name": "plug-circle-minus",
+      "codePoint": 58718
+    },
+    {
+      "name": "plug-circle-plus",
+      "codePoint": 58719
+    },
+    {
+      "name": "plug-circle-xmark",
+      "codePoint": 58720
+    },
+    {
+      "name": "plus",
+      "codePoint": 43
+    },
+    {
+      "name": "plus-minus",
+      "codePoint": 58428
+    },
+    {
+      "name": "podcast",
+      "codePoint": 62158
+    },
+    {
+      "name": "poo",
+      "codePoint": 62206
+    },
+    {
+      "name": "poo-storm",
+      "codePoint": 63322
+    },
+    {
+      "name": "poop",
+      "codePoint": 63001
+    },
+    {
+      "name": "power-off",
+      "codePoint": 61457
+    },
+    {
+      "name": "prescription",
+      "codePoint": 62897
+    },
+    {
+      "name": "prescription-bottle",
+      "codePoint": 62597
+    },
+    {
+      "name": "prescription-bottle-medical",
+      "codePoint": 62598
+    },
+    {
+      "name": "print",
+      "codePoint": 61487
+    },
+    {
+      "name": "pump-medical",
+      "codePoint": 57450
+    },
+    {
+      "name": "pump-soap",
+      "codePoint": 57451
+    },
+    {
+      "name": "puzzle-piece",
+      "codePoint": 61742
+    },
+    {
+      "name": "q",
+      "codePoint": 81
+    },
+    {
+      "name": "qrcode",
+      "codePoint": 61481
+    },
+    {
+      "name": "question",
+      "codePoint": 63
+    },
+    {
+      "name": "quote-left",
+      "codePoint": 61709
+    },
+    {
+      "name": "quote-right",
+      "codePoint": 61710
+    },
+    {
+      "name": "r",
+      "codePoint": 82
+    },
+    {
+      "name": "radiation",
+      "codePoint": 63417
+    },
+    {
+      "name": "radio",
+      "codePoint": 63703
+    },
+    {
+      "name": "rainbow",
+      "codePoint": 63323
+    },
+    {
+      "name": "ranking-star",
+      "codePoint": 58721
+    },
+    {
+      "name": "receipt",
+      "codePoint": 62787
+    },
+    {
+      "name": "record-vinyl",
+      "codePoint": 63705
+    },
+    {
+      "name": "rectangle-ad",
+      "codePoint": 63041
+    },
+    {
+      "name": "rectangle-list",
+      "codePoint": 61474
+    },
+    {
+      "name": "rectangle-xmark",
+      "codePoint": 62480
+    },
+    {
+      "name": "recycle",
+      "codePoint": 61880
+    },
+    {
+      "name": "registered",
+      "codePoint": 62045
+    },
+    {
+      "name": "repeat",
+      "codePoint": 62307
+    },
+    {
+      "name": "reply",
+      "codePoint": 62437
+    },
+    {
+      "name": "reply-all",
+      "codePoint": 61730
+    },
+    {
+      "name": "republican",
+      "codePoint": 63326
+    },
+    {
+      "name": "restroom",
+      "codePoint": 63421
+    },
+    {
+      "name": "retweet",
+      "codePoint": 61561
+    },
+    {
+      "name": "ribbon",
+      "codePoint": 62678
+    },
+    {
+      "name": "right-from-bracket",
+      "codePoint": 62197
+    },
+    {
+      "name": "right-left",
+      "codePoint": 62306
+    },
+    {
+      "name": "right-long",
+      "codePoint": 62219
+    },
+    {
+      "name": "right-to-bracket",
+      "codePoint": 62198
+    },
+    {
+      "name": "ring",
+      "codePoint": 63243
+    },
+    {
+      "name": "road",
+      "codePoint": 61464
+    },
+    {
+      "name": "road-barrier",
+      "codePoint": 58722
+    },
+    {
+      "name": "road-bridge",
+      "codePoint": 58723
+    },
+    {
+      "name": "road-circle-check",
+      "codePoint": 58724
+    },
+    {
+      "name": "road-circle-exclamation",
+      "codePoint": 58725
+    },
+    {
+      "name": "road-circle-xmark",
+      "codePoint": 58726
+    },
+    {
+      "name": "road-lock",
+      "codePoint": 58727
+    },
+    {
+      "name": "road-spikes",
+      "codePoint": 58728
+    },
+    {
+      "name": "robot",
+      "codePoint": 62788
+    },
+    {
+      "name": "rocket",
+      "codePoint": 61749
+    },
+    {
+      "name": "rotate",
+      "codePoint": 62193
+    },
+    {
+      "name": "rotate-left",
+      "codePoint": 62186
+    },
+    {
+      "name": "rotate-right",
+      "codePoint": 62201
+    },
+    {
+      "name": "route",
+      "codePoint": 62679
+    },
+    {
+      "name": "rss",
+      "codePoint": 61598
+    },
+    {
+      "name": "ruble-sign",
+      "codePoint": 61784
+    },
+    {
+      "name": "rug",
+      "codePoint": 58729
+    },
+    {
+      "name": "ruler",
+      "codePoint": 62789
+    },
+    {
+      "name": "ruler-combined",
+      "codePoint": 62790
+    },
+    {
+      "name": "ruler-horizontal",
+      "codePoint": 62791
+    },
+    {
+      "name": "ruler-vertical",
+      "codePoint": 62792
+    },
+    {
+      "name": "rupee-sign",
+      "codePoint": 61782
+    },
+    {
+      "name": "rupiah-sign",
+      "codePoint": 57917
+    },
+    {
+      "name": "s",
+      "codePoint": 83
+    },
+    {
+      "name": "sack-dollar",
+      "codePoint": 63517
+    },
+    {
+      "name": "sack-xmark",
+      "codePoint": 58730
+    },
+    {
+      "name": "sailboat",
+      "codePoint": 58437
+    },
+    {
+      "name": "satellite",
+      "codePoint": 63423
+    },
+    {
+      "name": "satellite-dish",
+      "codePoint": 63424
+    },
+    {
+      "name": "scale-balanced",
+      "codePoint": 62030
+    },
+    {
+      "name": "scale-unbalanced",
+      "codePoint": 62741
+    },
+    {
+      "name": "scale-unbalanced-flip",
+      "codePoint": 62742
+    },
+    {
+      "name": "school",
+      "codePoint": 62793
+    },
+    {
+      "name": "school-circle-check",
+      "codePoint": 58731
+    },
+    {
+      "name": "school-circle-exclamation",
+      "codePoint": 58732
+    },
+    {
+      "name": "school-circle-xmark",
+      "codePoint": 58733
+    },
+    {
+      "name": "school-flag",
+      "codePoint": 58734
+    },
+    {
+      "name": "school-lock",
+      "codePoint": 58735
+    },
+    {
+      "name": "scissors",
+      "codePoint": 61636
+    },
+    {
+      "name": "screwdriver",
+      "codePoint": 62794
+    },
+    {
+      "name": "screwdriver-wrench",
+      "codePoint": 63449
+    },
+    {
+      "name": "scroll",
+      "codePoint": 63246
+    },
+    {
+      "name": "scroll-torah",
+      "codePoint": 63136
+    },
+    {
+      "name": "sd-card",
+      "codePoint": 63426
+    },
+    {
+      "name": "section",
+      "codePoint": 58439
+    },
+    {
+      "name": "seedling",
+      "codePoint": 62680
+    },
+    {
+      "name": "server",
+      "codePoint": 62003
+    },
+    {
+      "name": "shapes",
+      "codePoint": 63007
+    },
+    {
+      "name": "share",
+      "codePoint": 61540
+    },
+    {
+      "name": "share-from-square",
+      "codePoint": 61773
+    },
+    {
+      "name": "share-nodes",
+      "codePoint": 61920
+    },
+    {
+      "name": "sheet-plastic",
+      "codePoint": 58737
+    },
+    {
+      "name": "shekel-sign",
+      "codePoint": 61963
+    },
+    {
+      "name": "shield",
+      "codePoint": 61746
+    },
+    {
+      "name": "shield-cat",
+      "codePoint": 58738
+    },
+    {
+      "name": "shield-dog",
+      "codePoint": 58739
+    },
+    {
+      "name": "shield-halved",
+      "codePoint": 62445
+    },
+    {
+      "name": "shield-heart",
+      "codePoint": 58740
+    },
+    {
+      "name": "shield-virus",
+      "codePoint": 57452
+    },
+    {
+      "name": "ship",
+      "codePoint": 61978
+    },
+    {
+      "name": "shirt",
+      "codePoint": 62803
+    },
+    {
+      "name": "shoe-prints",
+      "codePoint": 62795
+    },
+    {
+      "name": "shop",
+      "codePoint": 62799
+    },
+    {
+      "name": "shop-lock",
+      "codePoint": 58533
+    },
+    {
+      "name": "shop-slash",
+      "codePoint": 57456
+    },
+    {
+      "name": "shower",
+      "codePoint": 62156
+    },
+    {
+      "name": "shrimp",
+      "codePoint": 58440
+    },
+    {
+      "name": "shuffle",
+      "codePoint": 61556
+    },
+    {
+      "name": "shuttle-space",
+      "codePoint": 61847
+    },
+    {
+      "name": "sign-hanging",
+      "codePoint": 62681
+    },
+    {
+      "name": "signal",
+      "codePoint": 61458
+    },
+    {
+      "name": "signature",
+      "codePoint": 62903
+    },
+    {
+      "name": "signs-post",
+      "codePoint": 62071
+    },
+    {
+      "name": "sim-card",
+      "codePoint": 63428
+    },
+    {
+      "name": "sink",
+      "codePoint": 57453
+    },
+    {
+      "name": "sitemap",
+      "codePoint": 61672
+    },
+    {
+      "name": "skull",
+      "codePoint": 62796
+    },
+    {
+      "name": "skull-crossbones",
+      "codePoint": 63252
+    },
+    {
+      "name": "slash",
+      "codePoint": 63253
+    },
+    {
+      "name": "sleigh",
+      "codePoint": 63436
+    },
+    {
+      "name": "sliders",
+      "codePoint": 61918
+    },
+    {
+      "name": "smog",
+      "codePoint": 63327
+    },
+    {
+      "name": "smoking",
+      "codePoint": 62605
+    },
+    {
+      "name": "snowflake",
+      "codePoint": 62172
+    },
+    {
+      "name": "snowman",
+      "codePoint": 63440
+    },
+    {
+      "name": "snowplow",
+      "codePoint": 63442
+    },
+    {
+      "name": "soap",
+      "codePoint": 57454
+    },
+    {
+      "name": "socks",
+      "codePoint": 63126
+    },
+    {
+      "name": "solar-panel",
+      "codePoint": 62906
+    },
+    {
+      "name": "sort",
+      "codePoint": 61660
+    },
+    {
+      "name": "sort-down",
+      "codePoint": 61661
+    },
+    {
+      "name": "sort-up",
+      "codePoint": 61662
+    },
+    {
+      "name": "spa",
+      "codePoint": 62907
+    },
+    {
+      "name": "spaghetti-monster-flying",
+      "codePoint": 63099
+    },
+    {
+      "name": "spell-check",
+      "codePoint": 63633
+    },
+    {
+      "name": "spider",
+      "codePoint": 63255
+    },
+    {
+      "name": "spinner",
+      "codePoint": 61712
+    },
+    {
+      "name": "splotch",
+      "codePoint": 62908
+    },
+    {
+      "name": "spoon",
+      "codePoint": 62181
+    },
+    {
+      "name": "spray-can",
+      "codePoint": 62909
+    },
+    {
+      "name": "spray-can-sparkles",
+      "codePoint": 62928
+    },
+    {
+      "name": "square",
+      "codePoint": 61640
+    },
+    {
+      "name": "square-arrow-up-right",
+      "codePoint": 61772
+    },
+    {
+      "name": "square-binary",
+      "codePoint": 59035
+    },
+    {
+      "name": "square-caret-down",
+      "codePoint": 61776
+    },
+    {
+      "name": "square-caret-left",
+      "codePoint": 61841
+    },
+    {
+      "name": "square-caret-right",
+      "codePoint": 61778
+    },
+    {
+      "name": "square-caret-up",
+      "codePoint": 61777
+    },
+    {
+      "name": "square-check",
+      "codePoint": 61770
+    },
+    {
+      "name": "square-envelope",
+      "codePoint": 61849
+    },
+    {
+      "name": "square-full",
+      "codePoint": 62556
+    },
+    {
+      "name": "square-h",
+      "codePoint": 61693
+    },
+    {
+      "name": "square-minus",
+      "codePoint": 61766
+    },
+    {
+      "name": "square-nfi",
+      "codePoint": 58742
+    },
+    {
+      "name": "square-parking",
+      "codePoint": 62784
+    },
+    {
+      "name": "square-pen",
+      "codePoint": 61771
+    },
+    {
+      "name": "square-person-confined",
+      "codePoint": 58743
+    },
+    {
+      "name": "square-phone",
+      "codePoint": 61592
+    },
+    {
+      "name": "square-phone-flip",
+      "codePoint": 63611
+    },
+    {
+      "name": "square-plus",
+      "codePoint": 61694
+    },
+    {
+      "name": "square-poll-horizontal",
+      "codePoint": 63106
+    },
+    {
+      "name": "square-poll-vertical",
+      "codePoint": 63105
+    },
+    {
+      "name": "square-root-variable",
+      "codePoint": 63128
+    },
+    {
+      "name": "square-rss",
+      "codePoint": 61763
+    },
+    {
+      "name": "square-share-nodes",
+      "codePoint": 61921
+    },
+    {
+      "name": "square-up-right",
+      "codePoint": 62304
+    },
+    {
+      "name": "square-virus",
+      "codePoint": 58744
+    },
+    {
+      "name": "square-xmark",
+      "codePoint": 62163
+    },
+    {
+      "name": "staff-snake",
+      "codePoint": 58745
+    },
+    {
+      "name": "stairs",
+      "codePoint": 57993
+    },
+    {
+      "name": "stamp",
+      "codePoint": 62911
+    },
+    {
+      "name": "stapler",
+      "codePoint": 58799
+    },
+    {
+      "name": "star",
+      "codePoint": 61445
+    },
+    {
+      "name": "star-and-crescent",
+      "codePoint": 63129
+    },
+    {
+      "name": "star-half",
+      "codePoint": 61577
+    },
+    {
+      "name": "star-half-stroke",
+      "codePoint": 62912
+    },
+    {
+      "name": "star-of-david",
+      "codePoint": 63130
+    },
+    {
+      "name": "star-of-life",
+      "codePoint": 63009
+    },
+    {
+      "name": "sterling-sign",
+      "codePoint": 61780
+    },
+    {
+      "name": "stethoscope",
+      "codePoint": 61681
+    },
+    {
+      "name": "stop",
+      "codePoint": 61517
+    },
+    {
+      "name": "stopwatch",
+      "codePoint": 62194
+    },
+    {
+      "name": "stopwatch-20",
+      "codePoint": 57455
+    },
+    {
+      "name": "store",
+      "codePoint": 62798
+    },
+    {
+      "name": "store-slash",
+      "codePoint": 57457
+    },
+    {
+      "name": "street-view",
+      "codePoint": 61981
+    },
+    {
+      "name": "strikethrough",
+      "codePoint": 61644
+    },
+    {
+      "name": "stroopwafel",
+      "codePoint": 62801
+    },
+    {
+      "name": "subscript",
+      "codePoint": 61740
+    },
+    {
+      "name": "suitcase",
+      "codePoint": 61682
+    },
+    {
+      "name": "suitcase-medical",
+      "codePoint": 61690
+    },
+    {
+      "name": "suitcase-rolling",
+      "codePoint": 62913
+    },
+    {
+      "name": "sun",
+      "codePoint": 61829
+    },
+    {
+      "name": "sun-plant-wilt",
+      "codePoint": 58746
+    },
+    {
+      "name": "superscript",
+      "codePoint": 61739
+    },
+    {
+      "name": "swatchbook",
+      "codePoint": 62915
+    },
+    {
+      "name": "synagogue",
+      "codePoint": 63131
+    },
+    {
+      "name": "syringe",
+      "codePoint": 62606
+    },
+    {
+      "name": "t",
+      "codePoint": 84
+    },
+    {
+      "name": "table",
+      "codePoint": 61646
+    },
+    {
+      "name": "table-cells",
+      "codePoint": 61450
+    },
+    {
+      "name": "table-cells-column-lock",
+      "codePoint": 59000
+    },
+    {
+      "name": "table-cells-large",
+      "codePoint": 61449
+    },
+    {
+      "name": "table-cells-row-lock",
+      "codePoint": 59002
+    },
+    {
+      "name": "table-cells-row-unlock",
+      "codePoint": 59025
+    },
+    {
+      "name": "table-columns",
+      "codePoint": 61659
+    },
+    {
+      "name": "table-list",
+      "codePoint": 61451
+    },
+    {
+      "name": "table-tennis-paddle-ball",
+      "codePoint": 62557
+    },
+    {
+      "name": "tablet",
+      "codePoint": 62459
+    },
+    {
+      "name": "tablet-button",
+      "codePoint": 61706
+    },
+    {
+      "name": "tablet-screen-button",
+      "codePoint": 62458
+    },
+    {
+      "name": "tablets",
+      "codePoint": 62608
+    },
+    {
+      "name": "tachograph-digital",
+      "codePoint": 62822
+    },
+    {
+      "name": "tag",
+      "codePoint": 61483
+    },
+    {
+      "name": "tags",
+      "codePoint": 61484
+    },
+    {
+      "name": "tape",
+      "codePoint": 62683
+    },
+    {
+      "name": "tarp",
+      "codePoint": 58747
+    },
+    {
+      "name": "tarp-droplet",
+      "codePoint": 58748
+    },
+    {
+      "name": "taxi",
+      "codePoint": 61882
+    },
+    {
+      "name": "teeth",
+      "codePoint": 63022
+    },
+    {
+      "name": "teeth-open",
+      "codePoint": 63023
+    },
+    {
+      "name": "temperature-arrow-down",
+      "codePoint": 57407
+    },
+    {
+      "name": "temperature-arrow-up",
+      "codePoint": 57408
+    },
+    {
+      "name": "temperature-empty",
+      "codePoint": 62155
+    },
+    {
+      "name": "temperature-full",
+      "codePoint": 62151
+    },
+    {
+      "name": "temperature-half",
+      "codePoint": 62153
+    },
+    {
+      "name": "temperature-high",
+      "codePoint": 63337
+    },
+    {
+      "name": "temperature-low",
+      "codePoint": 63339
+    },
+    {
+      "name": "temperature-quarter",
+      "codePoint": 62154
+    },
+    {
+      "name": "temperature-three-quarters",
+      "codePoint": 62152
+    },
+    {
+      "name": "tenge-sign",
+      "codePoint": 63447
+    },
+    {
+      "name": "tent",
+      "codePoint": 58749
+    },
+    {
+      "name": "tent-arrow-down-to-line",
+      "codePoint": 58750
+    },
+    {
+      "name": "tent-arrow-left-right",
+      "codePoint": 58751
+    },
+    {
+      "name": "tent-arrow-turn-left",
+      "codePoint": 58752
+    },
+    {
+      "name": "tent-arrows-down",
+      "codePoint": 58753
+    },
+    {
+      "name": "tents",
+      "codePoint": 58754
+    },
+    {
+      "name": "terminal",
+      "codePoint": 61728
+    },
+    {
+      "name": "text-height",
+      "codePoint": 61492
+    },
+    {
+      "name": "text-slash",
+      "codePoint": 63613
+    },
+    {
+      "name": "text-width",
+      "codePoint": 61493
+    },
+    {
+      "name": "thermometer",
+      "codePoint": 62609
+    },
+    {
+      "name": "thumbs-down",
+      "codePoint": 61797
+    },
+    {
+      "name": "thumbs-up",
+      "codePoint": 61796
+    },
+    {
+      "name": "thumbtack",
+      "codePoint": 61581
+    },
+    {
+      "name": "thumbtack-slash",
+      "codePoint": 59023
+    },
+    {
+      "name": "ticket",
+      "codePoint": 61765
+    },
+    {
+      "name": "ticket-simple",
+      "codePoint": 62463
+    },
+    {
+      "name": "timeline",
+      "codePoint": 58012
+    },
+    {
+      "name": "toggle-off",
+      "codePoint": 61956
+    },
+    {
+      "name": "toggle-on",
+      "codePoint": 61957
+    },
+    {
+      "name": "toilet",
+      "codePoint": 63448
+    },
+    {
+      "name": "toilet-paper",
+      "codePoint": 63262
+    },
+    {
+      "name": "toilet-paper-slash",
+      "codePoint": 57458
+    },
+    {
+      "name": "toilet-portable",
+      "codePoint": 58755
+    },
+    {
+      "name": "toilets-portable",
+      "codePoint": 58756
+    },
+    {
+      "name": "toolbox",
+      "codePoint": 62802
+    },
+    {
+      "name": "tooth",
+      "codePoint": 62921
+    },
+    {
+      "name": "torii-gate",
+      "codePoint": 63137
+    },
+    {
+      "name": "tornado",
+      "codePoint": 63343
+    },
+    {
+      "name": "tower-broadcast",
+      "codePoint": 62745
+    },
+    {
+      "name": "tower-cell",
+      "codePoint": 58757
+    },
+    {
+      "name": "tower-observation",
+      "codePoint": 58758
+    },
+    {
+      "name": "tractor",
+      "codePoint": 63266
+    },
+    {
+      "name": "trademark",
+      "codePoint": 62044
+    },
+    {
+      "name": "traffic-light",
+      "codePoint": 63031
+    },
+    {
+      "name": "trailer",
+      "codePoint": 57409
+    },
+    {
+      "name": "train",
+      "codePoint": 62008
+    },
+    {
+      "name": "train-subway",
+      "codePoint": 62009
+    },
+    {
+      "name": "train-tram",
+      "codePoint": 58804
+    },
+    {
+      "name": "transgender",
+      "codePoint": 61989
+    },
+    {
+      "name": "trash",
+      "codePoint": 61944
+    },
+    {
+      "name": "trash-arrow-up",
+      "codePoint": 63529
+    },
+    {
+      "name": "trash-can",
+      "codePoint": 62189
+    },
+    {
+      "name": "trash-can-arrow-up",
+      "codePoint": 63530
+    },
+    {
+      "name": "tree",
+      "codePoint": 61883
+    },
+    {
+      "name": "tree-city",
+      "codePoint": 58759
+    },
+    {
+      "name": "triangle-exclamation",
+      "codePoint": 61553
+    },
+    {
+      "name": "trophy",
+      "codePoint": 61585
+    },
+    {
+      "name": "trowel",
+      "codePoint": 58761
+    },
+    {
+      "name": "trowel-bricks",
+      "codePoint": 58762
+    },
+    {
+      "name": "truck",
+      "codePoint": 61649
+    },
+    {
+      "name": "truck-arrow-right",
+      "codePoint": 58763
+    },
+    {
+      "name": "truck-droplet",
+      "codePoint": 58764
+    },
+    {
+      "name": "truck-fast",
+      "codePoint": 62603
+    },
+    {
+      "name": "truck-field",
+      "codePoint": 58765
+    },
+    {
+      "name": "truck-field-un",
+      "codePoint": 58766
+    },
+    {
+      "name": "truck-front",
+      "codePoint": 58039
+    },
+    {
+      "name": "truck-medical",
+      "codePoint": 61689
+    },
+    {
+      "name": "truck-monster",
+      "codePoint": 63035
+    },
+    {
+      "name": "truck-moving",
+      "codePoint": 62687
+    },
+    {
+      "name": "truck-pickup",
+      "codePoint": 63036
+    },
+    {
+      "name": "truck-plane",
+      "codePoint": 58767
+    },
+    {
+      "name": "truck-ramp-box",
+      "codePoint": 62686
+    },
+    {
+      "name": "tty",
+      "codePoint": 61924
+    },
+    {
+      "name": "turkish-lira-sign",
+      "codePoint": 58043
+    },
+    {
+      "name": "turn-down",
+      "codePoint": 62398
+    },
+    {
+      "name": "turn-up",
+      "codePoint": 62399
+    },
+    {
+      "name": "tv",
+      "codePoint": 62060
+    },
+    {
+      "name": "u",
+      "codePoint": 85
+    },
+    {
+      "name": "umbrella",
+      "codePoint": 61673
+    },
+    {
+      "name": "umbrella-beach",
+      "codePoint": 62922
+    },
+    {
+      "name": "underline",
+      "codePoint": 61645
+    },
+    {
+      "name": "universal-access",
+      "codePoint": 62106
+    },
+    {
+      "name": "unlock",
+      "codePoint": 61596
+    },
+    {
+      "name": "unlock-keyhole",
+      "codePoint": 61758
+    },
+    {
+      "name": "up-down",
+      "codePoint": 62264
+    },
+    {
+      "name": "up-down-left-right",
+      "codePoint": 61618
+    },
+    {
+      "name": "up-long",
+      "codePoint": 62220
+    },
+    {
+      "name": "up-right-and-down-left-from-center",
+      "codePoint": 62500
+    },
+    {
+      "name": "up-right-from-square",
+      "codePoint": 62301
+    },
+    {
+      "name": "upload",
+      "codePoint": 61587
+    },
+    {
+      "name": "user",
+      "codePoint": 61447
+    },
+    {
+      "name": "user-astronaut",
+      "codePoint": 62715
+    },
+    {
+      "name": "user-check",
+      "codePoint": 62716
+    },
+    {
+      "name": "user-clock",
+      "codePoint": 62717
+    },
+    {
+      "name": "user-doctor",
+      "codePoint": 61680
+    },
+    {
+      "name": "user-gear",
+      "codePoint": 62718
+    },
+    {
+      "name": "user-graduate",
+      "codePoint": 62721
+    },
+    {
+      "name": "user-group",
+      "codePoint": 62720
+    },
+    {
+      "name": "user-injured",
+      "codePoint": 63272
+    },
+    {
+      "name": "user-large",
+      "codePoint": 62470
+    },
+    {
+      "name": "user-large-slash",
+      "codePoint": 62714
+    },
+    {
+      "name": "user-lock",
+      "codePoint": 62722
+    },
+    {
+      "name": "user-minus",
+      "codePoint": 62723
+    },
+    {
+      "name": "user-ninja",
+      "codePoint": 62724
+    },
+    {
+      "name": "user-nurse",
+      "codePoint": 63535
+    },
+    {
+      "name": "user-pen",
+      "codePoint": 62719
+    },
+    {
+      "name": "user-plus",
+      "codePoint": 62004
+    },
+    {
+      "name": "user-secret",
+      "codePoint": 61979
+    },
+    {
+      "name": "user-shield",
+      "codePoint": 62725
+    },
+    {
+      "name": "user-slash",
+      "codePoint": 62726
+    },
+    {
+      "name": "user-tag",
+      "codePoint": 62727
+    },
+    {
+      "name": "user-tie",
+      "codePoint": 62728
+    },
+    {
+      "name": "user-xmark",
+      "codePoint": 62005
+    },
+    {
+      "name": "users",
+      "codePoint": 61632
+    },
+    {
+      "name": "users-between-lines",
+      "codePoint": 58769
+    },
+    {
+      "name": "users-gear",
+      "codePoint": 62729
+    },
+    {
+      "name": "users-line",
+      "codePoint": 58770
+    },
+    {
+      "name": "users-rays",
+      "codePoint": 58771
+    },
+    {
+      "name": "users-rectangle",
+      "codePoint": 58772
+    },
+    {
+      "name": "users-slash",
+      "codePoint": 57459
+    },
+    {
+      "name": "users-viewfinder",
+      "codePoint": 58773
+    },
+    {
+      "name": "utensils",
+      "codePoint": 62183
+    },
+    {
+      "name": "v",
+      "codePoint": 86
+    },
+    {
+      "name": "van-shuttle",
+      "codePoint": 62902
+    },
+    {
+      "name": "vault",
+      "codePoint": 58053
+    },
+    {
+      "name": "vector-square",
+      "codePoint": 62923
+    },
+    {
+      "name": "venus",
+      "codePoint": 61985
+    },
+    {
+      "name": "venus-double",
+      "codePoint": 61990
+    },
+    {
+      "name": "venus-mars",
+      "codePoint": 61992
+    },
+    {
+      "name": "vest",
+      "codePoint": 57477
+    },
+    {
+      "name": "vest-patches",
+      "codePoint": 57478
+    },
+    {
+      "name": "vial",
+      "codePoint": 62610
+    },
+    {
+      "name": "vial-circle-check",
+      "codePoint": 58774
+    },
+    {
+      "name": "vial-virus",
+      "codePoint": 58775
+    },
+    {
+      "name": "vials",
+      "codePoint": 62611
+    },
+    {
+      "name": "video",
+      "codePoint": 61501
+    },
+    {
+      "name": "video-slash",
+      "codePoint": 62690
+    },
+    {
+      "name": "vihara",
+      "codePoint": 63143
+    },
+    {
+      "name": "virus",
+      "codePoint": 57460
+    },
+    {
+      "name": "virus-covid",
+      "codePoint": 58536
+    },
+    {
+      "name": "virus-covid-slash",
+      "codePoint": 58537
+    },
+    {
+      "name": "virus-slash",
+      "codePoint": 57461
+    },
+    {
+      "name": "viruses",
+      "codePoint": 57462
+    },
+    {
+      "name": "voicemail",
+      "codePoint": 63639
+    },
+    {
+      "name": "volcano",
+      "codePoint": 63344
+    },
+    {
+      "name": "volleyball",
+      "codePoint": 62559
+    },
+    {
+      "name": "volume-high",
+      "codePoint": 61480
+    },
+    {
+      "name": "volume-low",
+      "codePoint": 61479
+    },
+    {
+      "name": "volume-off",
+      "codePoint": 61478
+    },
+    {
+      "name": "volume-xmark",
+      "codePoint": 63145
+    },
+    {
+      "name": "vr-cardboard",
+      "codePoint": 63273
+    },
+    {
+      "name": "w",
+      "codePoint": 87
+    },
+    {
+      "name": "walkie-talkie",
+      "codePoint": 63727
+    },
+    {
+      "name": "wallet",
+      "codePoint": 62805
+    },
+    {
+      "name": "wand-magic",
+      "codePoint": 61648
+    },
+    {
+      "name": "wand-magic-sparkles",
+      "codePoint": 58058
+    },
+    {
+      "name": "wand-sparkles",
+      "codePoint": 63275
+    },
+    {
+      "name": "warehouse",
+      "codePoint": 62612
+    },
+    {
+      "name": "water",
+      "codePoint": 63347
+    },
+    {
+      "name": "water-ladder",
+      "codePoint": 62917
+    },
+    {
+      "name": "wave-square",
+      "codePoint": 63550
+    },
+    {
+      "name": "web-awesome",
+      "codePoint": 59010
+    },
+    {
+      "name": "weight-hanging",
+      "codePoint": 62925
+    },
+    {
+      "name": "weight-scale",
+      "codePoint": 62614
+    },
+    {
+      "name": "wheat-awn",
+      "codePoint": 58061
+    },
+    {
+      "name": "wheat-awn-circle-exclamation",
+      "codePoint": 58776
+    },
+    {
+      "name": "wheelchair",
+      "codePoint": 61843
+    },
+    {
+      "name": "wheelchair-move",
+      "codePoint": 58062
+    },
+    {
+      "name": "whiskey-glass",
+      "codePoint": 63392
+    },
+    {
+      "name": "wifi",
+      "codePoint": 61931
+    },
+    {
+      "name": "wind",
+      "codePoint": 63278
+    },
+    {
+      "name": "window-maximize",
+      "codePoint": 62160
+    },
+    {
+      "name": "window-minimize",
+      "codePoint": 62161
+    },
+    {
+      "name": "window-restore",
+      "codePoint": 62162
+    },
+    {
+      "name": "wine-bottle",
+      "codePoint": 63279
+    },
+    {
+      "name": "wine-glass",
+      "codePoint": 62691
+    },
+    {
+      "name": "wine-glass-empty",
+      "codePoint": 62926
+    },
+    {
+      "name": "won-sign",
+      "codePoint": 61785
+    },
+    {
+      "name": "worm",
+      "codePoint": 58777
+    },
+    {
+      "name": "wrench",
+      "codePoint": 61613
+    },
+    {
+      "name": "x",
+      "codePoint": 88
+    },
+    {
+      "name": "x-ray",
+      "codePoint": 62615
+    },
+    {
+      "name": "xmark",
+      "codePoint": 61453
+    },
+    {
+      "name": "xmarks-lines",
+      "codePoint": 58778
+    },
+    {
+      "name": "y",
+      "codePoint": 89
+    },
+    {
+      "name": "yen-sign",
+      "codePoint": 61783
+    },
+    {
+      "name": "yin-yang",
+      "codePoint": 63149
+    },
+    {
+      "name": "z",
+      "codePoint": 90
+    }
+  ]
+}

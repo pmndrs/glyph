@@ -700,6 +700,100 @@
       }
     },
     {
+      "fontFixture": "font-awesome-free-6.7.2",
+      "file": "font-awesome-free-6.7.2-mtsdf.font.glb.gz",
+      "transport": "gzip",
+      "configuration": {
+        "emSize": 64,
+        "pixelRange": 8
+      },
+      "uncompressed": {
+        "bytes": 32580900,
+        "sha256": "0780c0f0181adad865420df6e5cbdfddfc0214135ede578101d380a40fd5aded"
+      },
+      "compressed": {
+        "bytes": 6918918,
+        "sha256": "e74282fd81629a1ddaf68a6ed9a4e6f2c9fbf1ac5dff185acbe62b09105a1d67"
+      },
+      "raster": {
+        "kind": "msdf",
+        "metadataBytes": 28060,
+        "serializedBytes": 32543836,
+        "decodedGpuBytes": 32511100,
+        "runtimeTextureArray": {
+          "width": 1024,
+          "height": 986,
+          "layers": 9,
+          "basePaddedGpuBytes": 36347904
+        },
+        "pages": [
+          {
+            "index": 0,
+            "width": 1018,
+            "height": 981,
+            "encodedBytes": 3994828,
+            "decodedGpuBytes": 3994632
+          },
+          {
+            "index": 1,
+            "width": 1016,
+            "height": 976,
+            "encodedBytes": 3966660,
+            "decodedGpuBytes": 3966464
+          },
+          {
+            "index": 2,
+            "width": 1019,
+            "height": 976,
+            "encodedBytes": 3978372,
+            "decodedGpuBytes": 3978176
+          },
+          {
+            "index": 3,
+            "width": 1024,
+            "height": 977,
+            "encodedBytes": 4001988,
+            "decodedGpuBytes": 4001792
+          },
+          {
+            "index": 4,
+            "width": 1024,
+            "height": 980,
+            "encodedBytes": 4014276,
+            "decodedGpuBytes": 4014080
+          },
+          {
+            "index": 5,
+            "width": 1016,
+            "height": 980,
+            "encodedBytes": 3982916,
+            "decodedGpuBytes": 3982720
+          },
+          {
+            "index": 6,
+            "width": 1010,
+            "height": 979,
+            "encodedBytes": 3955356,
+            "decodedGpuBytes": 3955160
+          },
+          {
+            "index": 7,
+            "width": 1024,
+            "height": 986,
+            "encodedBytes": 4038852,
+            "decodedGpuBytes": 4038656
+          },
+          {
+            "index": 8,
+            "width": 999,
+            "height": 145,
+            "encodedBytes": 579616,
+            "decodedGpuBytes": 579420
+          }
+        ]
+      }
+    },
+    {
       "fontFixture": "noto-sans-cjk-showcase",
       "file": "noto-sans-cjk-showcase-mtsdf.font.glb.gz",
       "transport": "gzip",

@@ -118,6 +118,35 @@
       }
     },
     {
+      "fontFixture": "font-awesome-free-6.7.2",
+      "file": "font-awesome-free-6.7.2-slug.font.glb.gz",
+      "transport": "gzip",
+      "uncompressed": {
+        "bytes": 2945412,
+        "sha256": "b796e6feaa965154fae830dce7a748f6c7db1397aaf904c3e5f1434fb1cee477"
+      },
+      "compressed": {
+        "bytes": 658012,
+        "sha256": "dda2ea68d49f45cdfbf48c3a505718eb62931753834e1d175270ae40d2b40b1d"
+      },
+      "raster": {
+        "kind": "slug",
+        "metadataBytes": 56120,
+        "serializedBytes": 2908348,
+        "decodedGpuBytes": 2850816,
+        "pages": [
+          {
+            "index": 0,
+            "width": 4096,
+            "height": 64,
+            "format": "rgba16float",
+            "encodedBytes": 2851012,
+            "decodedGpuBytes": 2850816
+          }
+        ]
+      }
+    },
+    {
       "fontFixture": "noto-sans-cjk-showcase",
       "file": "noto-sans-cjk-showcase-slug.font.glb.gz",
       "transport": "gzip",

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   comparisonWorkloadUpdateKind,
   dynamicLayoutWidths,
+  iconGridLayout,
+  iconGridVirtualWindow,
   ladderCssSizes,
   paintWordHue,
   type ComparisonWorkloadConfiguration,
@@ -99,6 +101,85 @@ describe('text ladder scale selection', () => {
 
   it('rejects invalid viewport inputs', () => {
     expect(() => ladderCssSizes(0)).toThrow('text ladder viewport height must be positive')
+  })
+})
+
+describe('icon grid layout', () => {
+  it('places every item in a bounded row-major grid', () => {
+    const layout = iconGridLayout(1_402, 48, 720)
+    expect(layout.columns).toBe(38)
+    expect(layout.rows).toBe(37)
+    expect(layout.width).toBe(
+      layout.inset * 2 + layout.columns * layout.cellWidth + (layout.columns - 1) * layout.gap,
+    )
+    expect(layout.height).toBe(
+      layout.inset * 2 + layout.rows * layout.cellHeight + (layout.rows - 1) * layout.gap,
+    )
+  })
+
+  it('keeps a stable near-square catalog while scale changes cell dimensions', () => {
+    const large = iconGridLayout(1_402, 1_024, 1_920)
+    const small = iconGridLayout(1_402, 8, 1_920)
+    expect(large.columns).toBe(small.columns)
+    expect(large.rows).toBe(small.rows)
+    expect(small.cellWidth).toBe(112)
+    expect(large.cellWidth).toBe(1_024 * 1.25 + 32)
+    expect(small.cellHeight).toBe((8 + 11) * 1.25 + 8)
+    expect(large.cellHeight).toBe((1_024 + 11) * 1.25 + 8)
+    expect(large.cellHeight - small.cellHeight).toBe((1_024 - 8) * 1.25)
+    expect(large.cellWidth + large.gap).toBeGreaterThan(1_024 * 1.25)
+    expect(large.cellHeight + large.gap).toBeGreaterThan((1_024 + 11) * 1.25)
+  })
+
+  it('keeps the 1024 px icon pool bounded with conservative two-axis spacing', () => {
+    const window = iconGridVirtualWindow(1_402, 1_024, 1_920, 1_080, 0, 0)
+    expect(window.indices).toHaveLength(window.poolCapacity)
+    expect(window.poolCapacity).toBeLessThan(1_402)
+    expect(window.layout.cellWidth).toBeGreaterThanOrEqual(1_024 * 1.25 + 32)
+    expect(window.layout.cellHeight).toBeGreaterThanOrEqual((1_024 + 11) * 1.25 + 8)
+  })
+
+  it('rejects invalid item, size, and viewport inputs', () => {
+    expect(() => iconGridLayout(0, 48, 720)).toThrow('item count')
+    expect(() => iconGridLayout(12, 0, 720)).toThrow('icon size')
+    expect(() => iconGridLayout(12, 48, 0)).toThrow('viewport width')
+  })
+
+  it('keeps a bounded overscanned pool while reaching the complete catalog', () => {
+    const top = iconGridVirtualWindow(1_402, 48, 720, 360, 0, 0)
+    expect(top.firstVisibleIndex).toBe(0)
+    expect(top.indices).toHaveLength(top.poolCapacity)
+    expect(top.poolCapacity).toBeLessThan(1_402)
+    expect(new Set(top.indices).size).toBe(top.indices.length)
+
+    const bottom = iconGridVirtualWindow(
+      1_402,
+      48,
+      720,
+      360,
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER,
+    )
+    expect(bottom.lastVisibleIndex).toBe(1_401)
+    expect(bottom.indices.at(-1)).toBe(1_401)
+    expect(bottom.indices.every((index) => index >= 0 && index < 1_402)).toBe(true)
+  })
+
+  it('recomputes columns and pool capacity after viewport resize', () => {
+    const narrow = iconGridVirtualWindow(1_402, 48, 360, 640, 500, 500)
+    const wide = iconGridVirtualWindow(1_402, 48, 1_200, 360, 500, 500)
+    expect(narrow.layout.columns).toBe(wide.layout.columns)
+    expect(narrow.layout.rows).toBe(wide.layout.rows)
+    expect(narrow.indices).toHaveLength(narrow.poolCapacity)
+    expect(wide.indices).toHaveLength(wide.poolCapacity)
+    expect(narrow.poolCapacity).not.toBe(wide.poolCapacity)
+  })
+
+  it('rejects an invalid virtual viewport or scroll position', () => {
+    expect(() => iconGridVirtualWindow(1_402, 48, 720, 0, 0, 0)).toThrow('viewport height')
+    expect(() => iconGridVirtualWindow(1_402, 48, 720, 360, Number.NaN, 0)).toThrow(
+      'scroll positions',
+    )
   })
 })
 

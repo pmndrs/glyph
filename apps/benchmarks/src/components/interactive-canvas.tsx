@@ -7,7 +7,7 @@ import {
 } from 'react'
 
 export interface CanvasViewController {
-  panBy(deltaX: number, deltaY: number): void
+  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void
   resetView(): void
   zoomBy?(factor: number): void
 }
@@ -49,9 +49,9 @@ export function InteractiveCanvas({
   }
 
   function pan(canvas: HTMLCanvasElement, deltaX: number, deltaY: number): void {
-    panX.current += deltaX
-    panY.current += deltaY
-    controllerRef.current?.panBy(deltaX, deltaY)
+    const applied = controllerRef.current?.panBy(deltaX, deltaY)
+    panX.current += applied?.deltaX ?? deltaX
+    panY.current += applied?.deltaY ?? deltaY
     publishView(canvas)
   }
 

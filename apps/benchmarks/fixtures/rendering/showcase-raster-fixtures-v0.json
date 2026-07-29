@@ -100,6 +100,24 @@
       }
     },
     {
+      "fontFixture": "font-awesome-free-6.7.2",
+      "file": "font-awesome-free-6.7.2-bitmap-16.font.glb",
+      "bytes": 596580,
+      "sha256": "2a0ae9f5d025566f43233c94300f9e59f910b231b40acf61c9a33b96ed81e571",
+      "raster": {
+        "decodedGpuBytes": 530432,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 518,
+            "encodedBytes": 530580,
+            "decodedGpuBytes": 530432
+          }
+        ]
+      }
+    },
+    {
       "fontFixture": "noto-sans-cjk-showcase",
       "file": "noto-sans-cjk-showcase-bitmap-16.font.glb",
       "bytes": 65996,

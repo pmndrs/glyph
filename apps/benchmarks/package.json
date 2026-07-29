@@ -49,6 +49,7 @@
     "sync:devanagari-fixture": "node ./scripts/sync-devanagari-fixture.mts",
     "sync:japanese-showcase-fixture": "node ./scripts/sync-japanese-showcase-fixture.mts",
     "sync:source-serif-fixture": "node ./scripts/sync-source-serif-fixture.mts",
+    "sync:font-awesome-icons": "node ./scripts/sync-font-awesome-icons.mts",
     "provision:harfbuzz": "node ./scripts/provision-harfbuzz.mts",
     "test": "pnpm check:size && pnpm check:autoresearch-baseline && pnpm check:japanese-showcase-subset && pnpm check:paragraph-bidi-contract && pnpm check:paragraph-cjk-contract && pnpm test:unit && pnpm test:headless && pnpm test:packed",
     "test:headless": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --suite conformance --dpr 1 --samples 3 --warmup 1 --port 5181",

@@ -9,6 +9,9 @@ import { bakeFont } from '@pmndrs/text/bake'
 const outputDirectory = resolve('fixtures/rendering')
 await mkdir(outputDirectory, { recursive: true })
 const check = process.argv.includes('--check')
+const requestedFixture = process.argv
+  .find((argument) => argument.startsWith('--fixture='))
+  ?.slice('--fixture='.length)
 const temporaryDirectory = check
   ? await mkdtemp(join(tmpdir(), 'pmndrs-text-showcase-'))
   : undefined
@@ -35,6 +38,11 @@ const fixtures = [
     outputStem: 'dot-gothic-16',
   },
   {
+    fontFixture: 'font-awesome-free-6.7.2',
+    input: resolve('fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf'),
+    outputStem: 'font-awesome-free-6.7.2',
+  },
+  {
     fontFixture: 'noto-sans-cjk-showcase',
     input: resolve('fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf'),
     outputStem: 'noto-sans-cjk-showcase',
@@ -51,6 +59,17 @@ const fixtures = [
   },
 ] as const
 
+const selectedFixtures =
+  requestedFixture === undefined
+    ? fixtures
+    : fixtures.filter(({ fontFixture }) => fontFixture === requestedFixture)
+if (selectedFixtures.length === 0) {
+  throw new TypeError(`Unknown bitmap fixture: ${String(requestedFixture)}`)
+}
+if (check && requestedFixture !== undefined) {
+  throw new TypeError('--fixture cannot weaken the complete bitmap fixture check')
+}
+
 const configurations = [
   {
     strikes: [16] as const,
@@ -66,8 +85,21 @@ const configurations = [
 
 try {
   for (const configuration of configurations) {
-    const artifacts = []
-    for (const fixture of fixtures) {
+    const manifestOutput = resolve(outputDirectory, configuration.manifestFile)
+    const previousManifest = JSON.parse(await readFile(manifestOutput, 'utf8')) as {
+      readonly artifacts: Array<{
+        readonly fontFixture: string
+        readonly [key: string]: unknown
+      }>
+    }
+    const artifacts: Array<{
+      readonly fontFixture: string
+      readonly [key: string]: unknown
+    }> =
+      requestedFixture === undefined
+        ? []
+        : previousManifest.artifacts.filter(({ fontFixture }) => fontFixture !== requestedFixture)
+    for (const fixture of selectedFixtures) {
       const file = `${fixture.outputStem}-${configuration.fileSuffix}`
       const output = resolve(temporaryDirectory ?? outputDirectory, file)
       const report = await bakeFont({
@@ -110,13 +142,17 @@ try {
         }
       }
     }
+    artifacts.sort(
+      (left, right) =>
+        fixtures.findIndex(({ fontFixture }) => fontFixture === left.fontFixture) -
+        fixtures.findIndex(({ fontFixture }) => fontFixture === right.fontFixture),
+    )
     const generatedManifest = {
       schemaVersion: 0,
       strikePpems: configuration.strikes,
       packaging: { artifact: 'embedded', pages: 'embedded' },
       artifacts,
     }
-    const manifestOutput = resolve(outputDirectory, configuration.manifestFile)
     if (check) {
       const canonicalManifest = JSON.parse(await readFile(manifestOutput, 'utf8'))
       if (JSON.stringify(generatedManifest) !== JSON.stringify(canonicalManifest)) {

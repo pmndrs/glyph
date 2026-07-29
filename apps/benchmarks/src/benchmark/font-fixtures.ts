@@ -4,6 +4,7 @@ import { BENCHMARK_IPSUM_CONFORMANCE_TEXT, BENCHMARK_IPSUM_TEXT } from './benchm
 export type BenchmarkFontFixture =
   | AdvancedShapingFontFixture
   | 'dot-gothic-16'
+  | 'font-awesome-free-6.7.2'
   | 'source-serif-4'
   | 'dancing-script'
 
@@ -68,6 +69,7 @@ export const BENCHMARK_FONT_LABELS: Readonly<Record<BenchmarkFontFixture, string
   'noto-sans-devanagari': 'Noto Sans Devanagari',
   'noto-sans-cjk-showcase': 'Noto Sans CJK JP',
   'dot-gothic-16': 'DotGothic16 Japanese',
+  'font-awesome-free-6.7.2': 'Font Awesome Free Solid 6.7.2',
   'source-serif-4': 'Source Serif 4 Regular 4.005',
   'dancing-script': 'Dancing Script Regular 3.000',
 }
@@ -88,6 +90,12 @@ export function conformanceText(): string {
 
 const LATIN_RASTER_CONFORMANCE_SPECIMEN: RasterConformanceSpecimen = {
   text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
+  language: 'en',
+  direction: 'ltr',
+}
+
+const FONT_AWESOME_ICON_SPECIMEN: RasterConformanceSpecimen = {
+  text: '\uf004\uf005\uf015\uf007\uf013\uf0e7\uf164\uf1d8\uf121\uf0f4\uf135\uf02d',
   language: 'en',
   direction: 'ltr',
 }
@@ -122,6 +130,7 @@ const rasterConformanceSpecimens: Readonly<
     language: 'ja',
     direction: 'ltr',
   },
+  'font-awesome-free-6.7.2': FONT_AWESOME_ICON_SPECIMEN,
 }
 
 export function rasterConformanceSpecimen(

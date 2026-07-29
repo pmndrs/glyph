@@ -233,6 +233,38 @@
       }
     },
     {
+      "fontFixture": "font-awesome-free-6.7.2",
+      "file": "font-awesome-free-6.7.2-bitmap-16-32.font.glb",
+      "bytes": 2381732,
+      "sha256": "95550c860396470f8583a990a8e2081289a6a87781836c17b488527c8c4eca45",
+      "raster": {
+        "decodedGpuBytes": 2286592,
+        "pages": [
+          {
+            "index": 0,
+            "width": 1024,
+            "height": 518,
+            "encodedBytes": 530580,
+            "decodedGpuBytes": 530432
+          },
+          {
+            "index": 1,
+            "width": 1024,
+            "height": 998,
+            "encodedBytes": 1022100,
+            "decodedGpuBytes": 1021952
+          },
+          {
+            "index": 2,
+            "width": 1024,
+            "height": 717,
+            "encodedBytes": 734356,
+            "decodedGpuBytes": 734208
+          }
+        ]
+      }
+    },
+    {
       "fontFixture": "noto-sans-cjk-showcase",
       "file": "noto-sans-cjk-showcase-bitmap-16-32.font.glb",
       "bytes": 239120,

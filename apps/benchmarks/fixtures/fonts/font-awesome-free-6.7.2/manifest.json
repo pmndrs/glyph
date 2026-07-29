@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 0,
+  "id": "font-awesome-free-solid-6.7.2-v0",
+  "purpose": "Internal private-use icon-font fixture for the benchmark icon-grid workload; not a selectable prose-font fixture.",
+  "source": {
+    "family": "Font Awesome 6 Free",
+    "style": "Solid 900",
+    "version": "6.7.2",
+    "upstreamTag": "6.7.2",
+    "url": "https://github.com/FortAwesome/Font-Awesome/tree/6.7.2",
+    "historicalSourceCommit": "c3486398dc6cd7cc45bc1e7ad385f9b132635d9b",
+    "historicalSourcePath": "examples/react/slug-text/public/fa-solid-900.ttf",
+    "fontFile": "fa-solid-900.ttf",
+    "fontBytes": 426112,
+    "fontSha256": "af19d135d3a935b3ebfbd80320716ffe1202052c5f68dc2c5f1abc57005ac605",
+    "license": "OFL-1.1",
+    "licenseFile": "LICENSE.txt",
+    "reservedFontName": "Font Awesome",
+    "iconMetadata": {
+      "file": "icons.json",
+      "iconCount": 1402,
+      "upstreamUrl": "https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.7.2/metadata/icons.json",
+      "upstreamSha256": "a3a705d0e03c4fbdf1a61aece3d8fd462024b33794187ef7ee2a0764439170eb"
+    }
+  },
+  "face": { "fontIndex": 0, "variations": {} }
+}

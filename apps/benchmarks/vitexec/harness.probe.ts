@@ -48,6 +48,17 @@ const scene = await waitForElement('[data-testid="scene"]')
 if (!scene.textContent?.includes('Benchmark ipsum')) {
   throw new Error('Default live benchmark workload is not visible')
 }
+const workloadOrder = ['Text ladder', 'Icon grid', 'Off-axis / 3D'].map((label) =>
+  [...document.querySelectorAll<HTMLButtonElement>('button')].findIndex(
+    (candidate) => candidate.textContent?.includes(label) === true,
+  ),
+)
+if (
+  workloadOrder.some((index) => index < 0) ||
+  !(workloadOrder[0]! < workloadOrder[1]! && workloadOrder[1]! < workloadOrder[2]!)
+) {
+  throw new Error('Icon grid is not ordered between Text ladder and Off-axis / 3D')
+}
 
 ;(await waitForEnabledButton('1× DPR')).click()
 

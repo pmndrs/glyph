@@ -24,6 +24,8 @@ import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitma
 import dotGothicBitmapDensityFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb?url'
 import dancingScriptBitmapFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16.font.glb?url'
 import dancingScriptBitmapDensityFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16-32.font.glb?url'
+import fontAwesomeBitmapFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-bitmap-16.font.glb?url'
+import fontAwesomeBitmapDensityFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-bitmap-16-32.font.glb?url'
 import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url'
 import bitmapDensityFontUrl from '../../fixtures/rendering/inter-bitmap-16-32.font.glb?url'
 import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url'
@@ -82,6 +84,7 @@ const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'noto-sans-devanagari': devanagariBitmapFontUrl,
   'noto-sans-cjk-showcase': notoCjkShowcaseBitmapFontUrl,
   'dot-gothic-16': dotGothicBitmapFontUrl,
+  'font-awesome-free-6.7.2': fontAwesomeBitmapFontUrl,
   'source-serif-4': sourceSerifBitmapFontUrl,
   'dancing-script': dancingScriptBitmapFontUrl,
 }
@@ -91,6 +94,7 @@ const bitmapDensityFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'noto-sans-devanagari': devanagariBitmapDensityFontUrl,
   'noto-sans-cjk-showcase': notoCjkShowcaseBitmapDensityFontUrl,
   'dot-gothic-16': dotGothicBitmapDensityFontUrl,
+  'font-awesome-free-6.7.2': fontAwesomeBitmapDensityFontUrl,
   'source-serif-4': sourceSerifBitmapDensityFontUrl,
   'dancing-script': dancingScriptBitmapDensityFontUrl,
 }
@@ -438,6 +442,7 @@ export async function loadBitmapFont(
   delivery: FontDelivery = 'baked',
   density: BitmapFixtureDensity = 'conformance',
   onProgress?: import('@pmndrs/text').BakeProgressListener,
+  registry = new FontRegistry(),
 ): Promise<{
   readonly artifactBytes: number
   readonly font: RegisteredFont
@@ -448,7 +453,7 @@ export async function loadBitmapFont(
   const metrics = createFontDeliveryMetrics(delivery)
   const raster = density === 'live' ? liveBitmapRequest : bitmapRequest
   if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress)
+    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress, registry)
     return {
       artifactBytes: metrics.coreArtifactBytes,
       font: loaded.font,
@@ -466,7 +471,6 @@ export async function loadBitmapFont(
       throw new Error(`Unable to load bitmap font fixture (${fontResponse.status})`)
     const fontBytes = await fontResponse.arrayBuffer()
     signal?.throwIfAborted()
-    const registry = new FontRegistry()
     font = await registry.registerAsset(new Uint8Array(fontBytes))
     signal?.throwIfAborted()
     return { artifactBytes: fontBytes.byteLength, font, metrics, raster }

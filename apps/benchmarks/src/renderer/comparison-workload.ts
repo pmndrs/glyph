@@ -1,4 +1,5 @@
 import {
+  FontRegistry,
   Text,
   type AnyRasterInput,
   type ParagraphLayout,
@@ -8,6 +9,7 @@ import {
 import * as THREE from 'three/webgpu'
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap'
 
+import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json'
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures'
 import { benchmarkIpsumText } from '../benchmark/font-fixtures'
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state'
@@ -32,6 +34,7 @@ import {
 
 export type ComparisonWorkloadId =
   | 'text-ladder'
+  | 'icon-grid'
   | 'off-axis-3d'
   | 'dynamic-layout'
   | 'paragraph-stress'
@@ -61,6 +64,24 @@ export type ComparisonWorkloadStats = (
   readonly paintRevision: number
   readonly lastPaintUpdateMs: number
   readonly sourceTextLength: number
+  readonly iconItemCount: number
+  readonly iconLabelCount: number
+  readonly iconColumnCount: number
+  readonly iconRowCount: number
+  readonly iconGridWidth: number
+  readonly iconGridHeight: number
+  readonly iconLabelSize: number
+  readonly iconPoolCapacity: number
+  readonly iconAssignedCount: number
+  readonly iconFirstVisibleIndex: number
+  readonly iconLastVisibleIndex: number
+  readonly iconRecycleCount: number
+  readonly iconOverscanRows: number
+  readonly iconOverscanColumns: number
+  readonly iconScrollX: number
+  readonly iconScrollY: number
+  readonly iconMaximumScrollX: number
+  readonly iconMaximumScrollY: number
 }
 
 export interface ComparisonWorkloadConfiguration {
@@ -82,7 +103,7 @@ export interface ComparisonWorkloadConfiguration {
 
 export interface ComparisonWorkloadPreview {
   resize(width: number, height: number): void
-  panBy(deltaX: number, deltaY: number): void
+  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void
   resetView(): void
   zoomBy(factor: number): void
   update(configuration: ComparisonWorkloadConfiguration): Promise<void>
@@ -91,10 +112,11 @@ export interface ComparisonWorkloadPreview {
 
 interface WorkloadEntry {
   readonly node: THREE.Object3D
-  readonly sourceText: string
+  sourceText: string
   readonly text: Text
   readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>
   readonly role: 'primary' | 'secondary'
+  virtualIconIndex?: number
   disposed?: boolean
   readonly alignment?: 'start' | 'center' | 'end'
   readonly animationPhase?: number
@@ -135,6 +157,19 @@ const LADDER_CSS_SIZES = [
 const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.'
 const LADDER_GAP_CSS_PX = 10
 const LADDER_INSET_CSS_PX = 20
+const ICON_GRID_LABEL_SIZE = 11
+const ICON_GRID_INSET = 24
+const ICON_GRID_GAP = 18
+const ICON_GRID_MIN_CELL_WIDTH = 112
+const ICON_GRID_ICON_PADDING = 16
+const ICON_GRID_LABEL_GAP = 8
+const ICON_GRID_OVERSCAN_ROWS = 3
+const ICON_GRID_OVERSCAN_COLUMNS = 3
+// Authenticated fa-solid-900.ttf metrics: 512 units/em and a 640-unit maximum advance.
+const ICON_GRID_FONT_UNITS_PER_EM = 512
+const ICON_GRID_MAX_ADVANCE = 640
+const ICON_GRID_MAX_ADVANCE_EM = ICON_GRID_MAX_ADVANCE / ICON_GRID_FONT_UNITS_PER_EM
+const ICON_GRID_ITEMS = fontAwesomeIcons.icons
 const PAINT_EFFECTS_TEXT =
   'Color begins as light, then the human eye turns wavelength into sensation. Our cones negotiate red, green, and blue while the brain invents every violet, amber, and electric cyan between them. Here each word carries its own chromatic phase, flowing through a continuous spectrum while opacity and contour remain live.'
 const PAINT_WORD_RANGES = Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match) => ({
@@ -200,6 +235,7 @@ export async function createComparisonWorkloadPreview(options: {
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid)
   const rendererInitMs = performance.now() - rendererStarted
   let font: LoadedTechniqueFont | undefined
+  let iconFont: LoadedTechniqueFont | undefined
   let entries: readonly WorkloadEntry[] = []
   let revision = 0
   let disposed = false
@@ -222,6 +258,10 @@ export async function createComparisonWorkloadPreview(options: {
 
   try {
     const fontStarted = performance.now()
+    const sharedRegistry =
+      configuration.workload === 'icon-grid'
+        ? new FontRegistry({ maxArtifactBytes: 64 * 1024 * 1024 })
+        : undefined
     font = await loadTechniqueFont(
       technique,
       configuration.fontFixture,
@@ -229,11 +269,35 @@ export async function createComparisonWorkloadPreview(options: {
       signal,
       options.onBakeProgress,
       options.slugBakedArtifact,
+      sharedRegistry,
     )
+    if (configuration.workload === 'icon-grid') {
+      iconFont = await loadTechniqueFont(
+        technique,
+        'font-awesome-free-6.7.2',
+        options.delivery,
+        signal,
+        options.onBakeProgress,
+        undefined,
+        sharedRegistry,
+      )
+    }
     const fontLoadMs = performance.now() - fontStarted
     const activeFont = font
+    const activeIconFont = iconFont
+    const loadedFonts = activeIconFont === undefined ? [activeFont] : [activeFont, activeIconFont]
+    const statsFont = activeIconFont ?? activeFont
+    let iconRecycleCount = 0
+    let pendingIconWindow: IconGridVirtualWindow | undefined
+    let iconWindowDrain: Promise<void> | undefined
+    let iconWindowSuspended = false
+    let iconWindowRefreshDeferred = false
 
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
+      await iconWindowDrain
+      if (next.workload === 'icon-grid') {
+        clampIconGridScene(scene, next.fontSize, width, height)
+      }
       const commitRevision = ++revision
       const readyStarted = performance.now()
       const nextEntries = createEntries(
@@ -246,6 +310,9 @@ export async function createComparisonWorkloadPreview(options: {
         height,
         performance.now() - animationEpoch,
         options.textLadderSpecimen,
+        activeIconFont,
+        -scene.position.x,
+        scene.position.y,
       )
       const scheduledAt = performance.now()
       try {
@@ -276,6 +343,119 @@ export async function createComparisonWorkloadPreview(options: {
       }
     }
 
+    async function applyIconWindow(window: IconGridVirtualWindow): Promise<void> {
+      if (activeIconFont === undefined || configuration.workload !== 'icon-grid') return
+      if (window.poolCapacity !== entries.length) {
+        throw new Error('icon grid pool capacity changed without a scene rebuild')
+      }
+      let recycled = 0
+      const pendingAssignments: {
+        entry: WorkloadEntry
+        iconIndex: number
+        content: string
+      }[] = []
+      const desiredIndices = new Set(window.indices)
+      const retainedIndices = new Set<number>()
+      const availableEntries: WorkloadEntry[] = []
+      for (const entry of entries) {
+        if (
+          entry.virtualIconIndex !== undefined &&
+          desiredIndices.has(entry.virtualIconIndex) &&
+          !retainedIndices.has(entry.virtualIconIndex)
+        ) {
+          retainedIndices.add(entry.virtualIconIndex)
+          entry.node.visible = true
+          continue
+        }
+        availableEntries.push(entry)
+      }
+      const missingIndices = window.indices.filter((index) => !retainedIndices.has(index))
+      if (missingIndices.length > availableEntries.length) {
+        throw new Error('icon grid window exceeds its recyclable tile pool')
+      }
+      for (const [missingIndex, iconIndex] of missingIndices.entries()) {
+        const entry = availableEntries[missingIndex]!
+        const { content, glyph } = iconGridContent(iconIndex)
+        // A Text object retains its previous complete generation while replacement content loads,
+        // but individual Text objects become ready independently. Keep every recyclable slot hidden
+        // until the complete window is ready so the pool publishes one coherent assignment.
+        entry.node.visible = false
+        entry.text.setProperties({
+          text: content,
+          spans: [
+            {
+              start: 0,
+              end: glyph.length,
+              font: activeIconFont.font,
+              fontSize: configuration.fontSize,
+            },
+          ],
+        })
+        recycled += 1
+        pendingAssignments.push({ entry, iconIndex, content })
+      }
+      try {
+        await Promise.all(pendingAssignments.map(({ entry }) => entry.text.ready))
+      } catch (error) {
+        for (const { entry } of pendingAssignments) {
+          entry.node.visible = false
+          delete entry.virtualIconIndex
+        }
+        throw error
+      }
+      if (closing || disposed) return
+      for (const { entry, iconIndex, content } of pendingAssignments) {
+        if (entry.disposed) continue
+        entry.virtualIconIndex = iconIndex
+        entry.sourceText = content
+        const column = iconIndex % window.layout.columns
+        const row = Math.floor(iconIndex / window.layout.columns)
+        entry.text.position.set(
+          window.layout.inset + column * (window.layout.cellWidth + window.layout.gap),
+          -(window.layout.inset + row * (window.layout.cellHeight + window.layout.gap)),
+          0,
+        )
+        entry.node.visible = true
+      }
+      for (const entry of availableEntries.slice(missingIndices.length)) {
+        entry.node.visible = false
+        delete entry.virtualIconIndex
+      }
+      iconRecycleCount += recycled
+    }
+
+    function requestIconWindowRefresh(): void {
+      if (configuration.workload !== 'icon-grid' || closing || disposed) return
+      if (iconWindowSuspended) {
+        iconWindowRefreshDeferred = true
+        return
+      }
+      pendingIconWindow = iconGridVirtualWindow(
+        ICON_GRID_ITEMS.length,
+        configuration.fontSize,
+        width,
+        height,
+        -scene.position.x,
+        scene.position.y,
+      )
+      if (iconWindowDrain !== undefined) return
+      iconWindowDrain = (async () => {
+        while (pendingIconWindow !== undefined) {
+          if (closing || disposed) break
+          const nextWindow = pendingIconWindow
+          pendingIconWindow = undefined
+          await applyIconWindow(nextWindow)
+        }
+      })()
+        .catch(onError)
+        .finally(() => {
+          iconWindowDrain = undefined
+          if (pendingIconWindow !== undefined && !closing && !disposed) {
+            requestIconWindowRefresh()
+          }
+        })
+    }
+
     await commit(configuration)
     signal?.throwIfAborted()
     let pendingUpdate: PendingConfigurationUpdate | undefined
@@ -287,8 +467,8 @@ export async function createComparisonWorkloadPreview(options: {
     ): Promise<void> {
       canvasSurface.setGridVisible(next.showGrid)
       if (comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild') {
+        await commit(next)
         configuration = next
-        await commit(configuration)
         return
       }
       configuration = next
@@ -312,7 +492,17 @@ export async function createComparisonWorkloadPreview(options: {
         }
       })().finally(() => {
         updateDrain = undefined
-        if (pendingUpdate !== undefined && !closing && !disposed) startUpdateDrain()
+        if (pendingUpdate !== undefined && !closing && !disposed) {
+          startUpdateDrain()
+          return
+        }
+        if (iconWindowSuspended) {
+          iconWindowSuspended = false
+          if (iconWindowRefreshDeferred) {
+            iconWindowRefreshDeferred = false
+            requestIconWindowRefresh()
+          }
+        }
       })
     }
 
@@ -322,6 +512,10 @@ export async function createComparisonWorkloadPreview(options: {
     ): Promise<void> {
       if (closing || disposed) {
         return Promise.reject(new DOMException('The comparison preview is disposed', 'AbortError'))
+      }
+      if (comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild') {
+        iconWindowSuspended = true
+        iconWindowRefreshDeferred = true
       }
       return new Promise<void>((resolve, reject) => {
         if (pendingUpdate === undefined) {
@@ -396,7 +590,8 @@ export async function createComparisonWorkloadPreview(options: {
         const snapshot = telemetry.recordSubmit(timestamp, submitMs)
         if (snapshot === undefined) return
         scheduleGpuTimestamp()
-        const layouts = entries.map(({ text }) => committedLayout(text))
+        const activeEntries = entries.filter(({ node }) => node.visible)
+        const layouts = activeEntries.map(({ text }) => committedLayout(text))
         const framebufferGpuBytes =
           rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
         const common = {
@@ -404,25 +599,35 @@ export async function createComparisonWorkloadPreview(options: {
           dpr: rendererViewport.pixelRatio,
           showGrid: configuration.showGrid,
           ...snapshot,
-          glyphCount: entries.reduce((total, { text }) => total + renderedGlyphCount(text), 0),
+          glyphCount: activeEntries.reduce(
+            (total, { text }) => total + renderedGlyphCount(text),
+            0,
+          ),
           missingGlyphCount: layouts.reduce(
             (total, layout) => total + missingGlyphCount(layout),
             0,
           ),
-          drawCount: entries.reduce((total, { text }) => total + drawCount(text), 0),
+          drawCount: activeEntries.reduce((total, { text }) => total + drawCount(text), 0),
           layoutWidth: layouts.reduce((maximum, layout) => Math.max(maximum, layout.width), 0),
           layoutHeight: layouts.reduce((total, layout) => total + layout.height, 0),
           lineCount: layouts.reduce((total, layout) => total + layout.lineGlyphCounts.length, 0),
-          atlasGpuBytes: activeFont.atlasGpuBytes,
+          atlasGpuBytes: sumLoadedFonts(loadedFonts, ({ atlasGpuBytes }) => atlasGpuBytes),
           framebufferGpuBytes,
-          totalGpuBytes: activeFont.atlasGpuBytes + framebufferGpuBytes,
-          artifactBytes: activeFont.artifactBytes,
+          totalGpuBytes:
+            sumLoadedFonts(loadedFonts, ({ atlasGpuBytes }) => atlasGpuBytes) + framebufferGpuBytes,
+          artifactBytes: sumLoadedFonts(loadedFonts, ({ artifactBytes }) => artifactBytes),
           delivery: activeFont.metrics.delivery,
-          sourceFontBytes: activeFont.metrics.sourceFontBytes,
-          coreArtifactBytes: activeFont.metrics.coreArtifactBytes,
-          coreBakeMs: activeFont.metrics.coreBakeMs,
-          rasterArtifactBytes: activeFont.metrics.rasterArtifactBytes,
-          rasterBakeMs: activeFont.metrics.rasterBakeMs,
+          sourceFontBytes: sumLoadedFonts(loadedFonts, ({ metrics }) => metrics.sourceFontBytes),
+          coreArtifactBytes: sumLoadedFonts(
+            loadedFonts,
+            ({ metrics }) => metrics.coreArtifactBytes,
+          ),
+          coreBakeMs: sumLoadedFonts(loadedFonts, ({ metrics }) => metrics.coreBakeMs),
+          rasterArtifactBytes: sumLoadedFonts(
+            loadedFonts,
+            ({ metrics }) => metrics.rasterArtifactBytes,
+          ),
+          rasterBakeMs: sumLoadedFonts(loadedFonts, ({ metrics }) => metrics.rasterBakeMs),
           rendererInitMs,
           fontLoadMs,
           textReadyMs,
@@ -454,11 +659,23 @@ export async function createComparisonWorkloadPreview(options: {
             (maximum, entry) => Math.max(maximum, entry.lastPaintUpdateMs ?? 0),
             0,
           ),
-          sourceTextLength: entries.reduce((total, entry) => total + entry.sourceText.length, 0),
+          sourceTextLength: activeEntries.reduce(
+            (total, entry) => total + entry.sourceText.length,
+            0,
+          ),
+          ...iconGridStats(
+            configuration,
+            width,
+            height,
+            -scene.position.x,
+            scene.position.y,
+            entries,
+            iconRecycleCount,
+          ),
         }
         if (technique === 'bitmap') {
           const strikePpem = selectBitmapStrikePpem(
-            activeFont.bitmapStrikes,
+            statsFont.bitmapStrikes,
             configuration.fontSize,
             rendererViewport.pixelRatio,
           )
@@ -469,10 +686,10 @@ export async function createComparisonWorkloadPreview(options: {
             cssFontSize: configuration.fontSize,
             renderedPpem: configuration.fontSize * rendererViewport.pixelRatio,
             scaleRatio: (configuration.fontSize * rendererViewport.pixelRatio) / strikePpem,
-            atlasPages: activeFont.atlasPages,
+            atlasPages: combineBitmapAtlasPages(loadedFonts),
           })
         } else if (technique === 'mtsdf') {
-          const mtsdfConfiguration = activeFont.mtsdfConfiguration
+          const mtsdfConfiguration = statsFont.mtsdfConfiguration
           if (mtsdfConfiguration === undefined) {
             throw new Error('MTSDF workload is missing its registered raster configuration')
           }
@@ -486,7 +703,13 @@ export async function createComparisonWorkloadPreview(options: {
             scaleRatio: renderedPpem / mtsdfConfiguration.emSize,
           })
         } else {
-          const slugConfiguration = activeFont.slugConfiguration
+          const slugConfigurations = loadedFonts.map(({ slugConfiguration }) => {
+            if (slugConfiguration === undefined) {
+              throw new Error('Slug workload is missing its registered raster configuration')
+            }
+            return slugConfiguration
+          })
+          const slugConfiguration = statsFont.slugConfiguration
           if (slugConfiguration === undefined) {
             throw new Error('Slug workload is missing its registered raster configuration')
           }
@@ -495,14 +718,32 @@ export async function createComparisonWorkloadPreview(options: {
             technique,
             ...common,
             renderedPpem,
-            slugPageCount: slugConfiguration.pageCount,
-            slugCurveTexelCount: slugConfiguration.curveTexelCount,
-            slugCurveGpuBytes: slugConfiguration.curveGpuBytes,
-            slugHeaderCount: slugConfiguration.headerCount,
-            slugHeaderGpuBytes: slugConfiguration.headerGpuBytes,
-            slugReferenceCount: slugConfiguration.referenceCount,
-            slugReferenceGpuBytes: slugConfiguration.referenceGpuBytes,
-            slugGpuBytes: slugConfiguration.gpuBytes,
+            slugPageCount: sumSlugConfigurations(slugConfigurations, ({ pageCount }) => pageCount),
+            slugCurveTexelCount: sumSlugConfigurations(
+              slugConfigurations,
+              ({ curveTexelCount }) => curveTexelCount,
+            ),
+            slugCurveGpuBytes: sumSlugConfigurations(
+              slugConfigurations,
+              ({ curveGpuBytes }) => curveGpuBytes,
+            ),
+            slugHeaderCount: sumSlugConfigurations(
+              slugConfigurations,
+              ({ headerCount }) => headerCount,
+            ),
+            slugHeaderGpuBytes: sumSlugConfigurations(
+              slugConfigurations,
+              ({ headerGpuBytes }) => headerGpuBytes,
+            ),
+            slugReferenceCount: sumSlugConfigurations(
+              slugConfigurations,
+              ({ referenceCount }) => referenceCount,
+            ),
+            slugReferenceGpuBytes: sumSlugConfigurations(
+              slugConfigurations,
+              ({ referenceGpuBytes }) => referenceGpuBytes,
+            ),
+            slugGpuBytes: sumSlugConfigurations(slugConfigurations, ({ gpuBytes }) => gpuBytes),
           })
         }
       } catch (error) {
@@ -527,13 +768,28 @@ export async function createComparisonWorkloadPreview(options: {
       },
       panBy(deltaX, deltaY) {
         if (closing || disposed) return
-        scene.position.x += finite(deltaX, 'workload horizontal pan')
-        scene.position.y -= finite(deltaY, 'workload vertical pan')
+        const horizontal = finite(deltaX, 'workload horizontal pan')
+        const vertical = finite(deltaY, 'workload vertical pan')
+        if (configuration.workload === 'icon-grid') {
+          const previousX = scene.position.x
+          const previousY = scene.position.y
+          scene.position.x += horizontal
+          scene.position.y -= vertical
+          clampIconGridScene(scene, configuration.fontSize, width, height)
+          requestIconWindowRefresh()
+          return {
+            deltaX: scene.position.x - previousX,
+            deltaY: previousY - scene.position.y,
+          }
+        }
+        scene.position.x += horizontal
+        scene.position.y -= vertical
       },
       resetView() {
         scene.position.set(0, 0, 0)
         camera.zoom = 1
         camera.updateProjectionMatrix()
+        requestIconWindowRefresh()
       },
       zoomBy(factor) {
         if (closing || disposed || configuration.workload !== 'off-axis-3d') return
@@ -553,6 +809,7 @@ export async function createComparisonWorkloadPreview(options: {
         if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
         disposal = (async () => {
           await updateDrain
+          await iconWindowDrain
           await gpuTimestampResolution
           disposed = true
           await renderer.setAnimationLoop(null)
@@ -560,7 +817,7 @@ export async function createComparisonWorkloadPreview(options: {
           renderer.clear()
           disposeEntries(entries)
           entries = []
-          activeFont.font.dispose()
+          for (const loadedFont of loadedFonts) loadedFont.font.dispose()
           canvasSurface.dispose()
           await renderer.dispose()
         })()
@@ -569,6 +826,7 @@ export async function createComparisonWorkloadPreview(options: {
     }
   } catch (error) {
     disposeEntries(entries)
+    iconFont?.font.dispose()
     font?.font.dispose()
     canvasSurface.dispose()
     await renderer.dispose()
@@ -586,6 +844,9 @@ function createEntries(
   viewportHeight: number,
   animationElapsedMs: number,
   textLadderSpecimen?: RasterConformanceSpecimen,
+  iconFont?: LoadedTechniqueFont,
+  iconScrollX = 0,
+  iconScrollY = 0,
 ): readonly WorkloadEntry[] {
   const base = {
     font,
@@ -611,6 +872,47 @@ function createEntries(
         color: LIVE_TEXT_COLOR,
       })
       return textEntry('primary', text, content)
+    })
+  }
+  if (configuration.workload === 'icon-grid') {
+    if (iconFont === undefined) throw new Error('icon grid requires its icon font fixture')
+    const window = iconGridVirtualWindow(
+      ICON_GRID_ITEMS.length,
+      configuration.fontSize,
+      viewportWidth,
+      viewportHeight,
+      iconScrollX,
+      iconScrollY,
+    )
+    return Array.from({ length: window.poolCapacity }, (_, poolIndex) => {
+      const iconIndex = window.indices[poolIndex] ?? 0
+      const { content, glyph } = iconGridContent(iconIndex)
+      const text = new Text({
+        ...base,
+        text: content,
+        spans: [
+          {
+            start: 0,
+            end: glyph.length,
+            font: iconFont.font,
+            fontSize: configuration.fontSize,
+          },
+        ],
+        fontSize: ICON_GRID_LABEL_SIZE,
+        color: LIVE_TEXT_COLOR,
+        width: window.layout.cellWidth,
+        maxLines: 2,
+        overflow: 'ellipsis',
+        wrap: 'none',
+        textAlign: 'center',
+      })
+      const entry = textEntry('primary', text, content)
+      if (window.indices[poolIndex] === undefined) {
+        entry.node.visible = false
+      } else {
+        entry.virtualIconIndex = iconIndex
+      }
+      return entry
     })
   }
   if (configuration.workload === 'paint-effects') {
@@ -724,6 +1026,20 @@ function layoutEntries(
     }
     return
   }
+  if (configuration.workload === 'icon-grid') {
+    const grid = iconGridLayout(ICON_GRID_ITEMS.length, configuration.fontSize, width)
+    for (const entry of entries) {
+      if (entry.virtualIconIndex === undefined) continue
+      const column = entry.virtualIconIndex % grid.columns
+      const row = Math.floor(entry.virtualIconIndex / grid.columns)
+      entry.text.position.set(
+        grid.inset + column * (grid.cellWidth + grid.gap),
+        -(grid.inset + row * (grid.cellHeight + grid.gap)),
+        0,
+      )
+    }
+    return
+  }
   if (configuration.workload === 'paint-effects') {
     const entry = entries[0]
     if (entry === undefined) return
@@ -751,6 +1067,16 @@ function layoutEntries(
     entry.text.position.set(-layout.width / 2, layout.height / 2, 0)
     entry.node.position.set(width / 2, -height / 2, 0)
   }
+}
+
+function iconGridContent(iconIndex: number): {
+  readonly content: string
+  readonly glyph: string
+} {
+  const icon = ICON_GRID_ITEMS[iconIndex]
+  if (icon === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`)
+  const glyph = String.fromCodePoint(icon.codePoint)
+  return { content: `${glyph}\n${icon.name}`, glyph }
 }
 
 function animateEntries(
@@ -1078,6 +1404,270 @@ export function ladderCssSizes(viewportHeight: number): readonly number[] {
   return LADDER_CSS_SIZES
 }
 
+export interface IconGridLayout {
+  readonly columns: number
+  readonly rows: number
+  readonly cellWidth: number
+  readonly cellHeight: number
+  readonly gap: number
+  readonly inset: number
+  readonly width: number
+  readonly height: number
+}
+
+export interface IconGridVirtualWindow {
+  readonly layout: IconGridLayout
+  readonly indices: readonly number[]
+  readonly poolCapacity: number
+  readonly firstVisibleIndex: number
+  readonly lastVisibleIndex: number
+  readonly scrollX: number
+  readonly scrollY: number
+  readonly maximumScrollX: number
+  readonly maximumScrollY: number
+}
+
+export function iconGridLayout(
+  itemCount: number,
+  iconSize: number,
+  viewportWidth: number,
+): IconGridLayout {
+  if (!Number.isSafeInteger(itemCount) || itemCount <= 0) {
+    throw new RangeError('icon grid item count must be a positive safe integer')
+  }
+  positive(iconSize, 'icon grid icon size')
+  positive(viewportWidth, 'icon grid viewport width')
+  const cellWidth = Math.max(
+    ICON_GRID_MIN_CELL_WIDTH,
+    iconSize * ICON_GRID_MAX_ADVANCE_EM + ICON_GRID_ICON_PADDING * 2,
+  )
+  const cellHeight = (iconSize + ICON_GRID_LABEL_SIZE) * LIVE_TEXT_LINE_HEIGHT + ICON_GRID_LABEL_GAP
+  const columns = Math.ceil(Math.sqrt(itemCount))
+  const rows = Math.ceil(itemCount / columns)
+  return {
+    columns,
+    rows,
+    cellWidth,
+    cellHeight,
+    gap: ICON_GRID_GAP,
+    inset: ICON_GRID_INSET,
+    width: ICON_GRID_INSET * 2 + columns * cellWidth + Math.max(0, columns - 1) * ICON_GRID_GAP,
+    height: ICON_GRID_INSET * 2 + rows * cellHeight + Math.max(0, rows - 1) * ICON_GRID_GAP,
+  }
+}
+
+export function iconGridVirtualWindow(
+  itemCount: number,
+  iconSize: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  requestedScrollX: number,
+  requestedScrollY: number,
+): IconGridVirtualWindow {
+  positive(viewportHeight, 'icon grid viewport height')
+  if (!Number.isFinite(requestedScrollX) || !Number.isFinite(requestedScrollY)) {
+    throw new TypeError('icon grid scroll positions must be finite')
+  }
+  const layout = iconGridLayout(itemCount, iconSize, viewportWidth)
+  const maximumScrollX = Math.max(0, layout.width - viewportWidth)
+  const maximumScrollY = Math.max(0, layout.height - viewportHeight)
+  const scrollX = Math.min(maximumScrollX, Math.max(0, requestedScrollX))
+  const scrollY = Math.min(maximumScrollY, Math.max(0, requestedScrollY))
+  const pitchX = layout.cellWidth + layout.gap
+  const pitchY = layout.cellHeight + layout.gap
+  const [firstVisibleColumn, lastVisibleColumn] = intersectingGridRange(
+    scrollX,
+    scrollX + viewportWidth,
+    layout.inset,
+    layout.cellWidth,
+    pitchX,
+    layout.columns,
+  )
+  const [firstVisibleRow, lastVisibleRow] = intersectingGridRange(
+    scrollY,
+    scrollY + viewportHeight,
+    layout.inset,
+    layout.cellHeight,
+    pitchY,
+    layout.rows,
+  )
+  const visibleColumnCapacity = Math.ceil(viewportWidth / pitchX) + 1
+  const poolColumns = Math.min(
+    layout.columns,
+    visibleColumnCapacity + ICON_GRID_OVERSCAN_COLUMNS * 2,
+  )
+  const poolStartColumn = Math.min(
+    Math.max(0, layout.columns - poolColumns),
+    Math.max(0, firstVisibleColumn - ICON_GRID_OVERSCAN_COLUMNS),
+  )
+  const visibleRowCapacity = Math.ceil(viewportHeight / pitchY) + 1
+  const poolRows = Math.min(layout.rows, visibleRowCapacity + ICON_GRID_OVERSCAN_ROWS * 2)
+  const poolStartRow = Math.min(
+    Math.max(0, layout.rows - poolRows),
+    Math.max(0, firstVisibleRow - ICON_GRID_OVERSCAN_ROWS),
+  )
+  const poolEndRow = poolStartRow + poolRows
+  const indices: number[] = []
+  for (let row = poolStartRow; row < poolEndRow; row += 1) {
+    for (let column = poolStartColumn; column < poolStartColumn + poolColumns; column += 1) {
+      const index = row * layout.columns + column
+      if (index < itemCount) indices.push(index)
+    }
+  }
+  const visibleIndices: number[] = []
+  for (let row = firstVisibleRow; row <= lastVisibleRow; row += 1) {
+    for (let column = firstVisibleColumn; column <= lastVisibleColumn; column += 1) {
+      const index = row * layout.columns + column
+      if (index < itemCount) visibleIndices.push(index)
+    }
+  }
+  return {
+    layout,
+    indices,
+    poolCapacity: poolRows * poolColumns,
+    firstVisibleIndex: visibleIndices.at(0) ?? -1,
+    lastVisibleIndex: visibleIndices.at(-1) ?? -1,
+    scrollX,
+    scrollY,
+    maximumScrollX,
+    maximumScrollY,
+  }
+}
+
+function intersectingGridRange(
+  minimum: number,
+  maximum: number,
+  origin: number,
+  cellSize: number,
+  pitch: number,
+  count: number,
+): readonly [number, number] {
+  const first = Math.floor((minimum - origin - cellSize) / pitch) + 1
+  const last = Math.ceil((maximum - origin) / pitch) - 1
+  return [Math.min(count - 1, Math.max(0, first)), Math.min(count - 1, Math.max(0, last))]
+}
+
+function clampIconGridScene(
+  scene: THREE.Scene,
+  iconSize: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): void {
+  const layout = iconGridLayout(ICON_GRID_ITEMS.length, iconSize, viewportWidth)
+  const maximumScrollX = Math.max(0, layout.width - viewportWidth)
+  const maximumScrollY = Math.max(0, layout.height - viewportHeight)
+  scene.position.x = Math.min(0, Math.max(-maximumScrollX, scene.position.x))
+  scene.position.y = Math.min(maximumScrollY, Math.max(0, scene.position.y))
+}
+
+function iconGridStats(
+  configuration: Pick<ComparisonWorkloadConfiguration, 'fontSize' | 'workload'>,
+  viewportWidth: number,
+  viewportHeight: number,
+  scrollX: number,
+  scrollY: number,
+  entries: readonly WorkloadEntry[],
+  recycleCount: number,
+): Pick<
+  ComparisonWorkloadStats,
+  | 'iconItemCount'
+  | 'iconLabelCount'
+  | 'iconColumnCount'
+  | 'iconRowCount'
+  | 'iconGridWidth'
+  | 'iconGridHeight'
+  | 'iconLabelSize'
+  | 'iconPoolCapacity'
+  | 'iconAssignedCount'
+  | 'iconFirstVisibleIndex'
+  | 'iconLastVisibleIndex'
+  | 'iconRecycleCount'
+  | 'iconOverscanRows'
+  | 'iconOverscanColumns'
+  | 'iconScrollX'
+  | 'iconScrollY'
+  | 'iconMaximumScrollX'
+  | 'iconMaximumScrollY'
+> {
+  if (configuration.workload !== 'icon-grid') {
+    return {
+      iconItemCount: 0,
+      iconLabelCount: 0,
+      iconColumnCount: 0,
+      iconRowCount: 0,
+      iconGridWidth: 0,
+      iconGridHeight: 0,
+      iconLabelSize: 0,
+      iconPoolCapacity: 0,
+      iconAssignedCount: 0,
+      iconFirstVisibleIndex: -1,
+      iconLastVisibleIndex: -1,
+      iconRecycleCount: 0,
+      iconOverscanRows: 0,
+      iconOverscanColumns: 0,
+      iconScrollX: 0,
+      iconScrollY: 0,
+      iconMaximumScrollX: 0,
+      iconMaximumScrollY: 0,
+    }
+  }
+  const window = iconGridVirtualWindow(
+    ICON_GRID_ITEMS.length,
+    configuration.fontSize,
+    viewportWidth,
+    viewportHeight,
+    scrollX,
+    scrollY,
+  )
+  return {
+    iconItemCount: ICON_GRID_ITEMS.length,
+    iconLabelCount: ICON_GRID_ITEMS.length,
+    iconColumnCount: window.layout.columns,
+    iconRowCount: window.layout.rows,
+    iconGridWidth: window.layout.width,
+    iconGridHeight: window.layout.height,
+    iconLabelSize: ICON_GRID_LABEL_SIZE,
+    iconPoolCapacity: entries.length,
+    iconAssignedCount: entries.filter(({ node }) => node.visible).length,
+    iconFirstVisibleIndex: window.firstVisibleIndex,
+    iconLastVisibleIndex: window.lastVisibleIndex,
+    iconRecycleCount: recycleCount,
+    iconOverscanRows: ICON_GRID_OVERSCAN_ROWS,
+    iconOverscanColumns: ICON_GRID_OVERSCAN_COLUMNS,
+    iconScrollX: window.scrollX,
+    iconScrollY: window.scrollY,
+    iconMaximumScrollX: window.maximumScrollX,
+    iconMaximumScrollY: window.maximumScrollY,
+  }
+}
+
+function sumLoadedFonts(
+  fonts: readonly LoadedTechniqueFont[],
+  select: (font: LoadedTechniqueFont) => number,
+): number {
+  return fonts.reduce((total, loadedFont) => total + select(loadedFont), 0)
+}
+
+function combineBitmapAtlasPages(
+  fonts: readonly LoadedTechniqueFont[],
+): BitmapTextLiveStats['atlasPages'] {
+  const pagesPerStrike = new Map<number, number>()
+  return fonts.flatMap(({ atlasPages }) =>
+    atlasPages.map((page) => {
+      const pageOffset = pagesPerStrike.get(page.strikePpem) ?? 0
+      pagesPerStrike.set(page.strikePpem, pageOffset + 1)
+      return { ...page, pageIndex: pageOffset }
+    }),
+  )
+}
+
+function sumSlugConfigurations(
+  configurations: readonly SlugRasterConfiguration[],
+  select: (configuration: SlugRasterConfiguration) => number,
+): number {
+  return configurations.reduce((total, slugConfiguration) => total + select(slugConfiguration), 0)
+}
+
 async function loadTechniqueFont(
   technique: RasterTechnique,
   fontFixture: BenchmarkFontFixture,
@@ -1085,9 +1675,17 @@ async function loadTechniqueFont(
   signal?: AbortSignal,
   onBakeProgress?: import('@pmndrs/text').BakeProgressListener,
   slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource,
+  registry?: FontRegistry,
 ): Promise<LoadedTechniqueFont> {
   if (technique === 'bitmap') {
-    const loaded = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress)
+    const loaded = await loadBitmapFont(
+      signal,
+      fontFixture,
+      delivery,
+      'live',
+      onBakeProgress,
+      registry,
+    )
     const atlas = await registeredBitmapAtlas(loaded.font, 'live')
     return {
       artifactBytes: loaded.artifactBytes,
@@ -1100,7 +1698,7 @@ async function loadTechniqueFont(
     }
   }
   if (technique === 'mtsdf') {
-    const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress)
+    const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress, registry)
     const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.font, signal)
     return {
       artifactBytes: loaded.compressedBytes,
@@ -1117,8 +1715,8 @@ async function loadTechniqueFont(
     await import('./slug-text')
   const loaded =
     slugBakedArtifact === undefined
-      ? await loadSlugFont(signal, fontFixture, delivery, onBakeProgress)
-      : await loadSlugBakedArtifact(slugBakedArtifact, signal)
+      ? await loadSlugFont(signal, fontFixture, delivery, onBakeProgress, registry)
+      : await loadSlugBakedArtifact(slugBakedArtifact, signal, registry)
   const slugConfiguration = await registeredSlugConfiguration(loaded.font, signal)
   return {
     artifactBytes: loaded.compressedBytes,

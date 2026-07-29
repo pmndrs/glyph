@@ -122,6 +122,7 @@ function scheduleComparisonWorkloadPreload(): () => void {
 function isComparisonWorkload(workload: string): boolean {
   return (
     workload === 'text-ladder' ||
+    workload === 'icon-grid' ||
     workload === 'off-axis-3d' ||
     workload === 'dynamic-layout' ||
     workload === 'paragraph-stress' ||
@@ -215,6 +216,12 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {
+    id: 'icon-grid',
+    label: 'Icon grid',
+    description: 'Tests a labeled icon font across scale, movement, and raster techniques.',
+    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
+  },
+  {
     id: 'off-axis-3d',
     label: 'Off-axis / 3D',
     description: 'Tests text quality and cost at steep, moving viewing angles.',
@@ -266,6 +273,7 @@ const conformanceWorkloads: readonly WorkloadOption[] = [
 function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefined {
   switch (workload) {
     case 'text-ladder':
+    case 'icon-grid':
     case 'off-axis-3d':
     case 'dynamic-layout':
     case 'paragraph-stress':
@@ -305,6 +313,8 @@ function workloadHasLayoutWidth(workload: string): boolean {
 
 function defaultFontSizeForWorkload(workload: string): number {
   switch (workload) {
+    case 'icon-grid':
+      return 48
     case 'off-axis-3d':
       return 64
     case 'paint-effects':
@@ -326,6 +336,8 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
           : 'Slug evaluates the source outlines analytically across the rendered-size range.'
     case 'text-ladder':
       return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.'
+    case 'icon-grid':
+      return 'Scale and pan a labeled Font Awesome icon grid rendered through the selected technique.'
     case 'off-axis-3d':
       return 'Increase perspective to inspect text at steeper viewing angles.'
     case 'dynamic-layout':
@@ -351,6 +363,8 @@ function liveWorkloadSceneDescription(
       return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`
     case 'text-ladder':
       return 'Tests one sentence at every size from 8 through 512 pixels.'
+    case 'icon-grid':
+      return 'Tests a virtualized grid spanning all 1,402 named Font Awesome Solid icons with fixed font-rendered labels.'
     case 'off-axis-3d':
       return 'Tests readability and frame cost as a paragraph leans deep into the scene.'
     case 'dynamic-layout':
@@ -3098,7 +3112,12 @@ function ComparisonWorkloadViewport({
     workload,
   ])
 
-  const rangeLabel = workload === 'text-ladder' ? '8–512 CSS PX' : `${fontSize} CSS PX`
+  const rangeLabel =
+    workload === 'text-ladder'
+      ? '8–512 CSS PX'
+      : workload === 'icon-grid'
+        ? `${fontSize} CSS PX ICONS`
+        : `${fontSize} CSS PX`
   return (
     <div
       className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
@@ -3122,6 +3141,37 @@ function ComparisonWorkloadViewport({
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-layout-width={stats?.layoutWidth}
+      data-icon-item-count={stats?.workload === 'icon-grid' ? stats.iconItemCount : undefined}
+      data-icon-label-count={stats?.workload === 'icon-grid' ? stats.iconLabelCount : undefined}
+      data-icon-column-count={stats?.workload === 'icon-grid' ? stats.iconColumnCount : undefined}
+      data-icon-row-count={stats?.workload === 'icon-grid' ? stats.iconRowCount : undefined}
+      data-icon-size={stats?.workload === 'icon-grid' ? stats.appliedFontSize : undefined}
+      data-icon-grid-width={stats?.workload === 'icon-grid' ? stats.iconGridWidth : undefined}
+      data-icon-grid-height={stats?.workload === 'icon-grid' ? stats.iconGridHeight : undefined}
+      data-icon-label-size={stats?.workload === 'icon-grid' ? stats.iconLabelSize : undefined}
+      data-icon-pool-capacity={stats?.workload === 'icon-grid' ? stats.iconPoolCapacity : undefined}
+      data-icon-assigned-count={
+        stats?.workload === 'icon-grid' ? stats.iconAssignedCount : undefined
+      }
+      data-icon-first-visible-index={
+        stats?.workload === 'icon-grid' ? stats.iconFirstVisibleIndex : undefined
+      }
+      data-icon-last-visible-index={
+        stats?.workload === 'icon-grid' ? stats.iconLastVisibleIndex : undefined
+      }
+      data-icon-recycle-count={stats?.workload === 'icon-grid' ? stats.iconRecycleCount : undefined}
+      data-icon-overscan-rows={stats?.workload === 'icon-grid' ? stats.iconOverscanRows : undefined}
+      data-icon-overscan-columns={
+        stats?.workload === 'icon-grid' ? stats.iconOverscanColumns : undefined
+      }
+      data-icon-scroll-x={stats?.workload === 'icon-grid' ? stats.iconScrollX : undefined}
+      data-icon-scroll-y={stats?.workload === 'icon-grid' ? stats.iconScrollY : undefined}
+      data-icon-maximum-scroll-x={
+        stats?.workload === 'icon-grid' ? stats.iconMaximumScrollX : undefined
+      }
+      data-icon-maximum-scroll-y={
+        stats?.workload === 'icon-grid' ? stats.iconMaximumScrollY : undefined
+      }
       data-line-count={stats?.lineCount}
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
@@ -3661,13 +3711,19 @@ function Controls({
             </p>
           ) : (
             <Field
-              label={`Rendered size · ${fontSize} CSS px`}
-              max={96}
+              label={`${workload === 'icon-grid' ? 'Icon size' : 'Rendered size'} · ${fontSize} CSS px`}
+              max={workload === 'icon-grid' ? 1_024 : 96}
               min={8}
+              rangeScale={workload === 'icon-grid' ? 'logarithmic' : 'linear'}
               step={1}
               type="range"
               value={fontSize}
-              onChange={(event) => onFontSize(event.currentTarget.valueAsNumber)}
+              {...(workload === 'icon-grid' ? { onRangeValueChange: onFontSize } : {})}
+              onChange={
+                workload === 'icon-grid'
+                  ? undefined
+                  : (event) => onFontSize(event.currentTarget.valueAsNumber)
+              }
             />
           )}
           {workloadHasLayoutWidth(workload) && (

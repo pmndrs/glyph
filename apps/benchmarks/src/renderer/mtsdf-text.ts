@@ -16,6 +16,7 @@ import * as THREE from 'three/webgpu'
 import amiriCompressedFontUrl from '../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url'
 import dancingScriptCompressedFontUrl from '../../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url'
 import dotGothicCompressedFontUrl from '../../fixtures/rendering/dot-gothic-16-mtsdf.font.glb.gz?url'
+import fontAwesomeCompressedFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-mtsdf.font.glb.gz?url'
 import interCompressedFontUrl from '../../fixtures/rendering/inter-mtsdf.font.glb.gz?url'
 import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz?url'
 import notoCjkShowcaseCompressedFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-mtsdf.font.glb.gz?url'
@@ -76,6 +77,7 @@ const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'noto-sans-devanagari': devanagariCompressedFontUrl,
   'noto-sans-cjk-showcase': notoCjkShowcaseCompressedFontUrl,
   'dot-gothic-16': dotGothicCompressedFontUrl,
+  'font-awesome-free-6.7.2': fontAwesomeCompressedFontUrl,
   'source-serif-4': sourceSerifCompressedFontUrl,
   'dancing-script': dancingScriptCompressedFontUrl,
 }
@@ -733,6 +735,7 @@ export async function loadMtsdfFont(
   fixture: BenchmarkFontFixture = 'inter',
   delivery: FontDelivery = 'baked',
   onProgress?: import('@pmndrs/text').BakeProgressListener,
+  registry?: FontRegistry,
 ): Promise<{
   readonly artifactBytes: number
   readonly atlasGpuBytes: number
@@ -746,7 +749,13 @@ export async function loadMtsdfFont(
   const manifest = mtsdfFixtureManifests.get(fixture)
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`)
   if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress)
+    const loaded = await loadRuntimeFont(
+      fixture,
+      metrics,
+      signal,
+      onProgress,
+      registry ?? new FontRegistry(),
+    )
     return {
       artifactBytes: metrics.coreArtifactBytes,
       atlasGpuBytes: 0,
@@ -769,12 +778,13 @@ export async function loadMtsdfFont(
       : await decompressFixture(received, manifest)
   await assertFixtureBytes(artifact, manifest.uncompressed, 'uncompressed')
   signal?.throwIfAborted()
-  const registry = new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes })
+  const activeRegistry =
+    registry ?? new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes })
   return {
     artifactBytes: artifact.byteLength,
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
-    font: await registry.registerAsset(artifact),
+    font: await activeRegistry.registerAsset(artifact),
     metrics,
     raster: msdf,
   }

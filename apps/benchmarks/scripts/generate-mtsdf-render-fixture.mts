@@ -39,6 +39,11 @@ const fixtures = [
     output: 'dot-gothic-16-mtsdf.font.glb.gz',
   },
   {
+    fontFixture: 'font-awesome-free-6.7.2',
+    input: resolve('fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf'),
+    output: 'font-awesome-free-6.7.2-mtsdf.font.glb.gz',
+  },
+  {
     fontFixture: 'noto-sans-cjk-showcase',
     input: resolve('fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf'),
     output: 'noto-sans-cjk-showcase-mtsdf.font.glb.gz',
