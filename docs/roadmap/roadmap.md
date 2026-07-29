@@ -685,7 +685,7 @@ Deliver:
 - documented technique recommendations backed by the benchmark corpus;
 - validator, runtime, fixture, and inspector GPU accounting that agrees on the
   exact MTSDF padded base texture-array allocation;
-- interactive comparison scenarios for bitmap, MSDF, and Slug with correctness/visual gates and downloadable raw results;
+- an editable realtime MSDF / Slug comparison that renders equal offscreen targets and a GPU-only signed-delta heatmap, plus interactive comparison scenarios for all three techniques with correctness/visual gates and downloadable raw results;
 - second-font registration and raster-binding smoke fixtures;
 - release-level conformance, browser, GPU, memory, package-size, and malformed-input suites;
 - reviewed public API, migration notes, and versioned extension schemas;
