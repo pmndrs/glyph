@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: '@pmndrs/text-font-baker'
 documentation_type: reference
-source_digest: 'sha256:5e0d471e88910fc1c5f3f2ec1837d65dc261b9f1454707262a4471bcb9c71574'
+source_digest: 'sha256:afbed02ebea19c3d25813c0d85a503913d387b9ab37a7d049f7cbc9332cf9c5d'
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T20:27:06Z'
+  at: '2026-07-29T21:23:04Z'
 ---
 
 # Package reference: `@pmndrs/text-font-baker`

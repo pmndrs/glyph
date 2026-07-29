@@ -10,6 +10,7 @@
     "apps/benchmarks/fixtures/**",
     "apps/benchmarks/vitexec/admission.probe.ts",
     "docs/planning/extensions/**/*.json",
+    "packages/font-baker/src/schemas/**",
     "packages/text/dist/**",
     "packages/text/rust/mtsdf-admission/evidence/**",
     "packages/text/src/bakers/schemas/**",
