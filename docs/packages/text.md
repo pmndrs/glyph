@@ -133,7 +133,7 @@ Status: 🟡 Milestone 9 Slug integration is active
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing runtime values and types resolve through the public `three/webgpu` and `three/tsl` subpaths rather than the legacy root or internal source exports, matching the renderer boundary used by first-party raster work; package lint rejects those forbidden imports. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
 
-Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-validation boundary.[^slug-contract][^slug-validator] The validator layers the pinned Khronos and byte-identical extension schemas over exact 40-byte dense records, exclusive buffer-view ownership, lossless native RGBA16F KTX2 curve pages, R32UI header grids, R16UI reference grids, checked page-relative addressing, authenticated external resources, and bounded GPU residency. Malformed identity, record, address, padding, KTX2 descriptor, integer-grid tail, external hash, and residency cases are named negative controls. Rendering and public package integration remain active work rather than implied by this validation checkpoint.
+Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-validation boundary.[^slug-contract][^slug-validator] The validator layers the pinned Khronos and byte-identical extension schemas over exact 40-byte dense records, exclusive buffer-view ownership, lossless native RGBA16F KTX2 curve pages, R32UI header grids, R16UI reference grids, checked page-relative addressing, authenticated external resources, and bounded GPU residency. Malformed identity, record, address, padding, KTX2 descriptor, integer-grid tail, external hash, and residency cases are named negative controls. That boundary now feeds the package-owned Slug baker, registered-raster loader, analytic runtime, and framework-neutral public `Text` path described below. Milestone 9 remains active for its remaining closure evidence and performance review, not because the renderer or public integration is unavailable.
 
 The package-owned Slug baker now composes the ported outline conversion and exact packing crates into deterministic embedded or independently authenticated external-page artifacts.[^slug-baker] Its Rust-generated V0 ABI drives the same shared direct/segmented host mechanics used by the existing raster bakers, including bounded artifact windows, synchronous progress forwarding, owned-copy-before-release behavior, structured errors, and transactional allocation cleanup.[^slug-baker-host] The serial module-Worker entry remains lazy; neither the baker host nor Wasm enters the initial renderer graph.
 
@@ -237,27 +237,36 @@ The five-line, 120-glyph text above is the bounded conformance specimen. The sep
 
 ## Package scripts
 
-| Script | Purpose |
-| --- | --- |
-| `typecheck` | Type-check package source without emission. |
-| `test` | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, both Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts. |
-| `test:types` | Compile positive and negative public-contract fixtures. |
-| `test:unit` | Run focused Rust bitmap and HarfRust-shaper unit tests. |
-| `test:integration` | Verify pinned Unicode fixture hashes, then run both Rust public boundaries plus Wasm/package, registration, shaping/paragraph goldens, all 861,948 Unicode 17 bidi cases, UAX #14/#29 conformance, and malformed-artifact integration tests. |
-| `test:fuzz-smoke` | Run fixed-seed bitmap, loader-artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations twice and require deterministic, trap-free outcomes. |
-| `build` | Derive portable ABI JSON and typed TypeScript from Rust compiler facts, emit ESM/declarations, compile the no-WASI Bitmap, MTSDF, and shaper Wasm modules, and optimize them with pinned Binaryen. CI checks committed typed contracts for freshness. |
-| `lint` | Run Oxlint with warnings denied over the complete package tree. |
-| `format` | Verify Oxfmt output over the complete package tree. |
+| Script             | Purpose                                                                                                                                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `typecheck`        | Type-check package source without emission.                                                                                                                                                                                                           |
+| `test`             | Build, run compile-only API/Node-host fixtures, discovery and CLI tests, both Rust/Wasm cores, layered validators, goldens, deterministic project bakes, registrations, and malformed artifacts.                                                      |
+| `test:types`       | Compile positive and negative public-contract fixtures.                                                                                                                                                                                               |
+| `test:unit`        | Run focused Rust bitmap and HarfRust-shaper unit tests.                                                                                                                                                                                               |
+| `test:integration` | Verify pinned Unicode fixture hashes, then run both Rust public boundaries plus Wasm/package, registration, shaping/paragraph goldens, all 861,948 Unicode 17 bidi cases, UAX #14/#29 conformance, and malformed-artifact integration tests.          |
+| `test:fuzz-smoke`  | Run fixed-seed bitmap, loader-artifact, raw shaper-request, Unicode paragraph-policy, and CJK boundary mutations twice and require deterministic, trap-free outcomes.                                                                                 |
+| `build`            | Derive portable ABI JSON and typed TypeScript from Rust compiler facts, emit ESM/declarations, compile the no-WASI Bitmap, MTSDF, and shaper Wasm modules, and optimize them with pinned Binaryen. CI checks committed typed contracts for freshness. |
+| `lint`             | Run Oxlint with warnings denied over the complete package tree.                                                                                                                                                                                       |
+| `format`           | Verify Oxfmt output over the complete package tree.                                                                                                                                                                                                   |
 
 The [API contract](../planning/api-shapes.md) remains authoritative for public behavior; this concept explains the package that implements its current loading, baking, shaping, and paragraph surfaces. The [canonical roadmap](../roadmap/roadmap.md) alone owns program-wide completion status.
 
 [^bitmap-identity]: Raster-specific descriptor fields remain owned by this subpath and never enter a closed core union.
+
 [^bitmap-baker]: Artifact generation, validation, and generic composition are complete; GPU resource creation is deliberately deferred to the renderer milestone.
+
 [^node-host]: The Node host trusts selected installed baker code but authenticates every returned artifact; hostile baked assets are independently revalidated at the loader boundary.
+
 [^loader]: Raster-package schema and payload semantics remain in each module's `decode`; the generic registry validates only package-neutral container and reciprocal identity invariants.
+
 [^slug-contract]: Slug V0 identity is fixed independently from the optional baker and renderer modules.
+
 [^slug-validator]: Standalone validation authenticates embedded and external resource forms before runtime ownership begins.
+
 [^slug-baker]: The Rust baker owns outline conversion, exact curve/band packing, and deterministic package construction.
+
 [^slug-baker-host]: The TypeScript host owns direct-memory transfer, progress, errors, and cleanup without entering the renderer graph.
+
 [^slug-runtime]: The public runtime subpath owns resource upload, batching, paint admission, and lifetime.
+
 [^slug-shaders]: The internal shader directory preserves the copied analytic algorithm while adapting its storage and node graph to the package contract and installed Three.js release.

@@ -34,6 +34,15 @@ const evidenceFiles = [
     'slug-performance-matrix',
     'apps/benchmarks/fixtures/results/slug-performance-matrix-chromium149.json',
   ],
+  ['slug-role-scenes', 'apps/benchmarks/fixtures/results/slug-role-scenes-chromium149.json'],
+  [
+    'slug-outline-performance',
+    'apps/benchmarks/fixtures/results/slug-outline-performance-chromium149.json',
+  ],
+  [
+    'slug-outline-conformance',
+    'apps/benchmarks/fixtures/results/slug-outline-conformance-chromium149.json',
+  ],
 ] as const
 
 const [workspaceManifest, nodeVersion, rustToolchain] = await Promise.all([

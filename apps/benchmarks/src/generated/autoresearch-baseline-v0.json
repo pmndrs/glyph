@@ -82,6 +82,24 @@
       "path": "apps/benchmarks/fixtures/results/slug-performance-matrix-chromium149.json",
       "sha256": "a13ee31561a4841bd3885028ca590024f7f5151ad42177495070616bd499f57a",
       "bytes": 174729
+    },
+    {
+      "id": "slug-role-scenes",
+      "path": "apps/benchmarks/fixtures/results/slug-role-scenes-chromium149.json",
+      "sha256": "69aa87ba0fc44af89c8d2e325c147d48f3d62a09e741a35d38e2c2cdf3897134",
+      "bytes": 34328
+    },
+    {
+      "id": "slug-outline-performance",
+      "path": "apps/benchmarks/fixtures/results/slug-outline-performance-chromium149.json",
+      "sha256": "e9bbb41a38215e63b962a773bd0b13f395e6d7c3739832e082fe310f282657b7",
+      "bytes": 72853
+    },
+    {
+      "id": "slug-outline-conformance",
+      "path": "apps/benchmarks/fixtures/results/slug-outline-conformance-chromium149.json",
+      "sha256": "544411e41a2729fba393f74e404e37a1eeac87f4f4da80c9f21b87b62586a513",
+      "bytes": 3404
     }
   ]
 }
