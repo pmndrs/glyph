@@ -103,6 +103,10 @@ const msdfButton = [...document.querySelectorAll<HTMLButtonElement>('button')].f
   (candidate) => candidate.textContent?.trim() === 'MSDF' && !candidate.disabled,
 )
 if (msdfButton === undefined) throw new Error('MSDF technique control is missing')
+const slugButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+  (candidate) => candidate.textContent?.trim() === 'Slug' && !candidate.disabled,
+)
+if (slugButton === undefined) throw new Error('Slug technique control is missing')
 msdfButton.click()
 const mtsdfViewport = await waitForElement('[data-testid="mtsdf-live-viewport"]')
 await waitForAttribute(mtsdfViewport, 'data-rendered-device-px', '96')
@@ -209,6 +213,30 @@ if (strokeControl.disabled) {
 setInputValue.call(strokeControl, '70')
 strokeControl.dispatchEvent(new Event('input', { bubbles: true }))
 await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0.7')
+
+slugButton.click()
+paintViewport = await waitForElementState('[data-testid="comparison-live-viewport"]', {
+  'data-workload': 'paint-effects',
+  'data-technique': 'slug',
+})
+await waitForAttribute(paintViewport, 'data-paint-opacity', '0.65')
+strokeControl = await waitForRangeControl('Stroke width')
+if (strokeControl.disabled) throw new Error('Slug Paint & Effects stroke control must be enabled')
+setInputValue.call(strokeControl, '0')
+strokeControl.dispatchEvent(new Event('input', { bubbles: true }))
+await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0')
+await waitForAttribute(paintViewport, 'data-draw-count', '1')
+setInputValue.call(strokeControl, '65')
+strokeControl.dispatchEvent(new Event('input', { bubbles: true }))
+await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0.65')
+await waitForAttribute(paintViewport, 'data-draw-count', '1')
+const slugShadowControl = [
+  ...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+].find((candidate) => candidate.labels?.[0]?.textContent?.includes('Shadow') === true)
+if (slugShadowControl === undefined || !slugShadowControl.disabled || slugShadowControl.checked) {
+  throw new Error('Slug Paint & Effects must keep shadow disabled')
+}
+
 bitmapButton.click()
 await waitForElementState('[data-testid="comparison-live-viewport"]', {
   'data-workload': 'paint-effects',

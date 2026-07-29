@@ -9,9 +9,11 @@ import * as THREE from 'three/webgpu'
 import type { Node, UniformNode } from 'three/webgpu'
 import {
   Fn,
+  If,
   add,
   attribute,
   bool,
+  float,
   mul,
   positionLocal,
   sub,
@@ -26,7 +28,6 @@ import type { Sha256Hex } from '../identity.js'
 import {
   assertParallelRasterLayout,
   assertParallelRasterPaint,
-  resolvedGlyphColor,
   unitRasterQuadGeometry,
 } from '../internal/raster-batch.js'
 import {
@@ -44,9 +45,26 @@ import {
   SLUG_PLANE_UNITS_PER_EM,
   slugDescriptor,
 } from '../internal/slug-contract.js'
-import { slugDilate, slugRender, type SlugShaderPage } from '../internal/slug-shaders/index.js'
+import {
+  slugDilate,
+  slugRender,
+  slugStroke,
+  type SlugShaderPage,
+} from '../internal/slug-shaders/index.js'
+import {
+  floatAdd,
+  floatDiv,
+  floatLessThan,
+  floatMax,
+  floatMul,
+  floatSub,
+  vec3Add,
+  vec3DivFloat,
+  vec3MulFloat,
+  vec4FromVec3Float,
+} from '../internal/slug-shaders/tsl-compat.js'
 import type { ParagraphLayout } from '../layout.js'
-import type { GlyphPaint } from '../paint.js'
+import type { GlyphPaint, ResolvedPaint } from '../paint.js'
 import {
   defineRaster,
   type JsonValue,
@@ -71,6 +89,7 @@ export {
 const ABSENT_PAGE = 0xffff
 const MAX_TEXTURE_DIMENSION = 16_384
 const MAX_RUNTIME_GPU_BYTES = 256 * 1024 * 1024
+const SLUG_MAX_OUTLINE_EM = 0.05
 const SLUG_FLOAT_INSTANCE_STRIDE = 17
 const SLUG_FLOAT_INSTANCE_OFFSETS = {
   origin: 0,
@@ -81,6 +100,8 @@ const SLUG_FLOAT_INSTANCE_OFFSETS = {
   bandTransform: 9,
   color: 13,
 } as const
+const SLUG_OUTLINE_INSTANCE_STRIDE = 5
+const SLUG_OUTLINE_INSTANCE_OFFSETS = { color: 0, halfWidth: 4 } as const
 const SLUG_UINT_INSTANCE_STRIDE = 6
 const SLUG_UINT_INSTANCE_OFFSETS = {
   curveBase: 0,
@@ -122,8 +143,11 @@ interface SlugBatchRun {
   readonly glyphIndices: Uint32Array
   readonly floatData: THREE.InstancedInterleavedBuffer
   readonly colorAttribute: THREE.InterleavedBufferAttribute
+  outlineData: THREE.InstancedInterleavedBuffer | undefined
   readonly geometry: THREE.InstancedBufferGeometry
-  readonly mesh: THREE.Mesh
+  readonly page: SlugPageResource
+  readonly fillMesh: THREE.Mesh
+  materialState: SlugMaterialState
 }
 
 export interface SlugDrawBatch {
@@ -135,6 +159,7 @@ export interface SlugDrawBatch {
 }
 
 const materialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
+const outlinedMaterialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
 
 const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = defineRaster({
   kind: SLUG_KIND,
@@ -505,6 +530,7 @@ function buildSlugBatches(
 ): SlugDrawBatch {
   assertParallelRasterLayout(layout, paint)
   assertSlugPaint(paint)
+  assertSlugGlyphInputs(layout, resource, fontSlot, paint)
   const records = recordView(resource)
   const group = new THREE.Group()
   group.name = 'pmndrs.text.slug'
@@ -516,29 +542,26 @@ function buildSlugBatches(
     if (pageIndex === undefined || glyphIndices.length === 0) return
     const run = createSlugRun(layout, resource, pageIndex, glyphIndices, paint)
     runs.push(run)
-    group.add(run.mesh)
+    group.add(run.fillMesh)
     glyphIndices = []
   }
 
-  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
-    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue
-    const glyphId = layout.glyphIds[glyphIndex]
-    if (
-      glyphId === undefined ||
-      glyphId >= resource.records.byteLength / SLUG_GLYPH_RECORD_STRIDE
-    ) {
-      throw new TypeError('paragraph layout references a Slug glyph outside the registered font')
+  try {
+    for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+      if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue
+      const glyphId = layout.glyphIds[glyphIndex]!
+      const nextPage = records.getUint16(glyphId * SLUG_GLYPH_RECORD_STRIDE + 8, true)
+      if (nextPage === ABSENT_PAGE) continue
+      if (pageIndex !== undefined && pageIndex !== nextPage) finishRun()
+      pageIndex = nextPage
+      glyphIndices.push(glyphIndex)
     }
-    const nextPage = records.getUint16(glyphId * SLUG_GLYPH_RECORD_STRIDE + 8, true)
-    if (nextPage === ABSENT_PAGE) continue
-    if (resource.pages[nextPage] === undefined) {
-      throw new TypeError('Slug batch references a missing page')
-    }
-    if (pageIndex !== undefined && pageIndex !== nextPage) finishRun()
-    pageIndex = nextPage
-    glyphIndices.push(glyphIndex)
+    finishRun()
+  } catch (error) {
+    group.clear()
+    for (const run of runs) run.geometry.dispose()
+    throw error
   }
-  finishRun()
 
   let disposed = false
   const glyphCount = runs.reduce((count, run) => count + run.glyphIndices.length, 0)
@@ -550,7 +573,8 @@ function buildSlugBatches(
       if (disposed) throw new TypeError('Slug draw batch has been disposed')
       assertParallelRasterPaint(layout, nextPaint)
       assertSlugPaint(nextPaint)
-      for (const run of runs) updateRunPaint(run, nextPaint)
+      for (const run of runs) assertSlugRunPaint(layout, run.glyphIndices, nextPaint)
+      for (const run of runs) updateRunPaint(run, layout, nextPaint)
     },
     dispose() {
       if (disposed) return
@@ -568,8 +592,24 @@ function createSlugRun(
   glyphIndices: readonly number[],
   paint: GlyphPaint,
 ): SlugBatchRun {
-  const count = glyphIndices.length
   const geometry = unitRasterQuadGeometry()
+  try {
+    return populateSlugRun(geometry, layout, resource, pageIndex, glyphIndices, paint)
+  } catch (error) {
+    geometry.dispose()
+    throw error
+  }
+}
+
+function populateSlugRun(
+  geometry: THREE.InstancedBufferGeometry,
+  layout: ParagraphLayout,
+  resource: SlugResource,
+  pageIndex: number,
+  glyphIndices: readonly number[],
+  paint: GlyphPaint,
+): SlugBatchRun {
+  const count = glyphIndices.length
   geometry.instanceCount = count
   const floatData = new THREE.InstancedInterleavedBuffer(
     new Float32Array(count * SLUG_FLOAT_INSTANCE_STRIDE),
@@ -582,6 +622,8 @@ function createSlugRun(
     1,
   )
   const records = recordView(resource)
+  let outlineData: THREE.InstancedInterleavedBuffer | undefined
+  let outlineVisible = false
 
   for (let instance = 0; instance < count; instance += 1) {
     const glyphIndex = glyphIndices[instance]!
@@ -627,12 +669,14 @@ function createSlugRun(
       -normalizedLeft * bandScaleX,
       -normalizedBottom * bandScaleY,
     ])
-    setInstanceValues(
-      floatData,
-      instance,
-      SLUG_FLOAT_INSTANCE_OFFSETS.color,
-      resolvedGlyphColor(paint, glyphIndex),
-    )
+    const resolvedPaint = resolvedSlugPaint(paint, glyphIndex)
+    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.color, resolvedPaint.color)
+    const outline = slugOutlineValues(fontSize, resolvedPaint)
+    if (outline.visible && outlineData === undefined) {
+      outlineData = createSlugOutlineData(geometry, count)
+    }
+    if (outlineData !== undefined) writeSlugOutlineInstance(outlineData, instance, outline)
+    outlineVisible = outline.visible || outlineVisible
     setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.curveBase, [
       records.getUint32(record + 16, true),
     ])
@@ -716,22 +760,26 @@ function createSlugRun(
   )
 
   const page = resource.pages[pageIndex]!
-  const state = slugMaterialState(page)
-  const mesh = new THREE.Mesh(geometry, state.material)
-  mesh.frustumCulled = false
-  mesh.renderOrder = glyphIndices[0] ?? 0
-  mesh.onBeforeRender = (renderer, _scene, camera): void => {
-    renderer.getDrawingBufferSize(drawingBufferSize)
-    state.viewport.value.copy(drawingBufferSize)
-    updateMvpUniforms(state, mesh, camera)
-  }
-  return {
+  const initialState = outlineVisible ? slugOutlinedMaterialState(page) : slugMaterialState(page)
+  const fillMesh = new THREE.Mesh(geometry, initialState.material)
+  fillMesh.frustumCulled = false
+  fillMesh.renderOrder = glyphIndices[0] ?? 0
+  const run: SlugBatchRun = {
     glyphIndices: Uint32Array.from(glyphIndices),
     floatData,
     colorAttribute,
+    outlineData,
     geometry,
-    mesh,
+    page,
+    fillMesh,
+    materialState: initialState,
   }
+  fillMesh.onBeforeRender = (renderer, _scene, camera): void => {
+    renderer.getDrawingBufferSize(drawingBufferSize)
+    run.materialState.viewport.value.copy(drawingBufferSize)
+    updateMvpUniforms(run.materialState, fillMesh, camera)
+  }
+  return run
 }
 
 function instanceAttribute(
@@ -753,6 +801,101 @@ function setInstanceValues(
   values: readonly number[],
 ): void {
   ;(data.array as Float32Array | Uint32Array).set(values, instance * data.stride + offset)
+}
+
+function resolvedSlugPaint(paint: GlyphPaint, glyphIndex: number): ResolvedPaint {
+  const paintIndex = paint.paintIndices[glyphIndex]
+  const resolved = paintIndex === undefined ? undefined : paint.palette[paintIndex]
+  if (resolved === undefined) throw new TypeError('glyph paint references a missing palette entry')
+  return resolved
+}
+
+function assertSlugGlyphInputs(
+  layout: ParagraphLayout,
+  resource: SlugResource,
+  fontSlot: number,
+  paint: GlyphPaint,
+): void {
+  const records = recordView(resource)
+  const recordCount = resource.records.byteLength / SLUG_GLYPH_RECORD_STRIDE
+  const glyphIndices: number[] = []
+  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue
+    const glyphId = layout.glyphIds[glyphIndex]
+    if (glyphId === undefined || glyphId >= recordCount) {
+      throw new TypeError('paragraph layout references a Slug glyph outside the registered font')
+    }
+    const pageIndex = records.getUint16(glyphId * SLUG_GLYPH_RECORD_STRIDE + 8, true)
+    if (pageIndex !== ABSENT_PAGE && resource.pages[pageIndex] === undefined) {
+      throw new TypeError('Slug batch references a missing page')
+    }
+    glyphIndices.push(glyphIndex)
+  }
+  assertSlugRunPaint(layout, glyphIndices, paint)
+}
+
+function assertSlugRunPaint(
+  layout: ParagraphLayout,
+  glyphIndices: ArrayLike<number>,
+  paint: GlyphPaint,
+): void {
+  for (let instance = 0; instance < glyphIndices.length; instance += 1) {
+    const glyphIndex = glyphIndices[instance]!
+    const fontSize = layout.glyphFontSizes[glyphIndex]!
+    if (!Number.isFinite(fontSize) || fontSize <= 0) {
+      throw new TypeError('Slug glyph font sizes must be positive finite values')
+    }
+    slugOutlineValues(fontSize, resolvedSlugPaint(paint, glyphIndex))
+  }
+}
+
+interface SlugOutlineValues {
+  readonly color: readonly number[]
+  readonly halfWidth: number
+  readonly visible: boolean
+}
+
+function slugOutlineValues(fontSize: number, paint: ResolvedPaint): SlugOutlineValues {
+  const outlineWidth = paint.outline?.width ?? 0
+  const halfWidth = outlineWidth / fontSize
+  if (halfWidth > SLUG_MAX_OUTLINE_EM) {
+    throw new RangeError(`Slug outline width exceeds ${SLUG_MAX_OUTLINE_EM} em`)
+  }
+  const visible = outlineWidth > 0 && (paint.outline?.color[3] ?? 0) > 0
+  return {
+    color: visible && paint.outline !== undefined ? paint.outline.color : [0, 0, 0, 0],
+    halfWidth,
+    visible,
+  }
+}
+
+function createSlugOutlineData(
+  geometry: THREE.InstancedBufferGeometry,
+  instanceCount: number,
+): THREE.InstancedInterleavedBuffer {
+  const data = new THREE.InstancedInterleavedBuffer(
+    new Float32Array(instanceCount * SLUG_OUTLINE_INSTANCE_STRIDE),
+    SLUG_OUTLINE_INSTANCE_STRIDE,
+    1,
+  )
+  instanceAttribute(geometry, data, 'slugOutlineColor', 4, SLUG_OUTLINE_INSTANCE_OFFSETS.color)
+  instanceAttribute(
+    geometry,
+    data,
+    'slugOutlineHalfWidth',
+    1,
+    SLUG_OUTLINE_INSTANCE_OFFSETS.halfWidth,
+  )
+  return data
+}
+
+function writeSlugOutlineInstance(
+  data: THREE.InstancedInterleavedBuffer,
+  instance: number,
+  outline: SlugOutlineValues,
+): void {
+  setInstanceValues(data, instance, SLUG_OUTLINE_INSTANCE_OFFSETS.color, outline.color)
+  setInstanceValues(data, instance, SLUG_OUTLINE_INSTANCE_OFFSETS.halfWidth, [outline.halfWidth])
 }
 
 function slugMaterialState(page: SlugPageResource): SlugMaterialState {
@@ -834,6 +977,111 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
   return state
 }
 
+/** Copied analytic stroke, composed with fill in one specialized draw. */
+function slugOutlinedMaterialState(page: SlugPageResource): SlugMaterialState {
+  const existing = outlinedMaterialStateByCurveTexture.get(page.curveTexture)
+  if (existing !== undefined) return existing
+  const material = new THREE.MeshBasicNodeMaterial({
+    blending: THREE.NormalBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    transparent: true,
+  })
+  const viewport: UniformNode<'vec2', THREE.Vector2> = uniform(new THREE.Vector2(1, 1))
+  const mvpRow0: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(1, 0, 0, 0))
+  const mvpRow1: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(0, 1, 0, 0))
+  const mvpRow3: UniformNode<'vec4', THREE.Vector4> = uniform(new THREE.Vector4(0, 0, 0, 1))
+  const renderCoordinate = varyingProperty('vec2', 'slugStrokeRenderCoordinate')
+  const origin: Node<'vec2'> = attribute<'vec2'>('slugOrigin', 'vec2')
+  const size: Node<'vec2'> = attribute<'vec2'>('slugSize', 'vec2')
+  const emOrigin: Node<'vec2'> = attribute<'vec2'>('slugEmOrigin', 'vec2')
+  const emSize: Node<'vec2'> = attribute<'vec2'>('slugEmSize', 'vec2')
+  const inverseScale: Node<'float'> = attribute<'float'>('slugInverseScale', 'float')
+  const bandTransform: Node<'vec4'> = attribute<'vec4'>('slugBandTransform', 'vec4')
+  const curveBaseTexel: Node<'uint'> = attribute<'uint'>('slugCurveBase', 'uint')
+  const horizontalHeaderBase: Node<'uint'> = attribute<'uint'>('slugHorizontalHeaderBase', 'uint')
+  const verticalHeaderBase: Node<'uint'> = attribute<'uint'>('slugVerticalHeaderBase', 'uint')
+  const referenceBase: Node<'uint'> = attribute<'uint'>('slugReferenceBase', 'uint')
+  const horizontalBandCount: Node<'uint'> = attribute<'uint'>('slugHorizontalBandCount', 'uint')
+  const verticalBandCount: Node<'uint'> = attribute<'uint'>('slugVerticalBandCount', 'uint')
+  const color: Node<'vec4'> = attribute<'vec4'>('slugColor', 'vec4')
+  const outlineColor: Node<'vec4'> = attribute<'vec4'>('slugOutlineColor', 'vec4')
+  const outlineHalfWidth: Node<'float'> = attribute<'float'>('slugOutlineHalfWidth', 'float')
+
+  material.positionNode = Fn(() => {
+    const directionX = sub(mul(positionLocal.x, 2), 1)
+    const directionY = sub(mul(positionLocal.y, 2), 1)
+    const objectHalfWidth = floatDiv(outlineHalfWidth, inverseScale)
+    const localPosition = vec2(
+      add(add(origin.x, mul(positionLocal.x, size.x)), mul(directionX, objectHalfWidth)),
+      add(add(origin.y, mul(positionLocal.y, size.y)), mul(directionY, objectHalfWidth)),
+    )
+    const emCoordinate = vec2(
+      add(add(emOrigin.x, mul(positionLocal.x, emSize.x)), mul(directionX, outlineHalfWidth)),
+      add(add(emOrigin.y, mul(positionLocal.y, emSize.y)), mul(directionY, outlineHalfWidth)),
+    )
+    const expandedWidth = add(size.x, mul(objectHalfWidth, 2))
+    const expandedHeight = add(size.y, mul(objectHalfWidth, 2))
+    const outwardNormal = vec2(
+      mul(sub(positionLocal.x, 0.5), expandedWidth),
+      mul(sub(positionLocal.y, 0.5), expandedHeight),
+    )
+    const dilated = slugDilate(
+      localPosition,
+      outwardNormal,
+      emCoordinate,
+      inverseScale,
+      mvpRow0,
+      mvpRow1,
+      mvpRow3,
+      viewport,
+    )
+    renderCoordinate.assign(dilated.textureCoordinate)
+    return vec3(dilated.position.x, dilated.position.y, 0)
+  })()
+  const composedColor = Fn(() => {
+    const glyph = {
+      curveBaseTexel,
+      horizontalHeaderBase,
+      verticalHeaderBase,
+      referenceBase,
+      horizontalBandCount,
+      verticalBandCount,
+      bandTransform,
+    }
+    const fillCoverage = slugRender(page, glyph, renderCoordinate, {
+      evenOdd: bool(false),
+      weightBoost: bool(false),
+    })
+    const fillAlpha = floatMul(color.a, fillCoverage).toVar('slugOutlinedFillAlpha')
+    const outlineAlpha = floatMul(outlineColor.a, float(0)).toVar('slugOutlinedOutlineAlpha')
+    const evaluateStroke = (): void => {
+      const strokeCoverage = slugStroke(page, glyph, renderCoordinate, outlineHalfWidth)
+      outlineAlpha.assign(floatMul(outlineColor.a, strokeCoverage))
+    }
+    If(floatLessThan(fillAlpha, float(1)), evaluateStroke)
+    const outlineContribution = floatMul(outlineAlpha, floatSub(float(1), fillAlpha)).toVar(
+      'slugOutlinedContribution',
+    )
+    const alpha = floatAdd(fillAlpha, outlineContribution).toVar('slugOutlinedAlpha')
+    const premultipliedColor = vec3Add(
+      vec3MulFloat(color.rgb, fillAlpha),
+      vec3MulFloat(outlineColor.rgb, outlineContribution),
+    )
+    return vec4FromVec3Float(
+      vec3DivFloat(premultipliedColor, floatMax(alpha, float(1 / 65_536))),
+      alpha,
+    )
+  })()
+  material.colorNode = composedColor.rgb
+  material.opacityNode = composedColor.a
+
+  const state = { material, viewport, mvpRow0, mvpRow1, mvpRow3 }
+  outlinedMaterialStateByCurveTexture.set(page.curveTexture, state)
+  return state
+}
+
 function updateMvpUniforms(
   state: SlugMaterialState,
   object: THREE.Object3D,
@@ -847,29 +1095,58 @@ function updateMvpUniforms(
   state.mvpRow3.value.set(values[3]!, values[7]!, values[11]!, values[15]!)
 }
 
-function updateRunPaint(run: SlugBatchRun, paint: GlyphPaint): void {
+function updateRunPaint(run: SlugBatchRun, layout: ParagraphLayout, paint: GlyphPaint): void {
+  let outlineVisible = false
   for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+    const glyphIndex = run.glyphIndices[instance]!
+    const resolvedPaint = resolvedSlugPaint(paint, glyphIndex)
     setInstanceValues(
       run.floatData,
       instance,
-      run.colorAttribute.offset,
-      resolvedGlyphColor(paint, run.glyphIndices[instance]!),
+      SLUG_FLOAT_INSTANCE_OFFSETS.color,
+      resolvedPaint.color,
     )
+    const outline = slugOutlineValues(layout.glyphFontSizes[glyphIndex]!, resolvedPaint)
+    if (outline.visible && run.outlineData === undefined) {
+      run.outlineData = createSlugOutlineData(run.geometry, run.glyphIndices.length)
+    }
+    if (run.outlineData !== undefined) {
+      writeSlugOutlineInstance(run.outlineData, instance, outline)
+    }
+    outlineVisible = outline.visible || outlineVisible
   }
   run.floatData.needsUpdate = true
+  if (run.outlineData !== undefined) run.outlineData.needsUpdate = true
+  if (outlineVisible) {
+    run.materialState = slugOutlinedMaterialState(run.page)
+    run.fillMesh.material = run.materialState.material
+  } else {
+    run.materialState = slugMaterialState(run.page)
+    run.fillMesh.material = run.materialState.material
+  }
 }
 
 function assertSlugPaint(paint: GlyphPaint): void {
   for (const entry of paint.palette) {
-    if (entry.outline !== undefined || entry.shadow !== undefined) {
-      throw new TypeError('Slug V0 supports fill paint only; outline and shadow are not supported')
+    assertSlugColor(entry.color, 'Slug fill')
+    if (entry.outline !== undefined) {
+      assertSlugColor(entry.outline.color, 'Slug outline')
+      if (!Number.isFinite(entry.outline.width) || entry.outline.width < 0) {
+        throw new TypeError('Slug outline width must be a non-negative finite value')
+      }
     }
-    if (
-      entry.color.length !== 4 ||
-      entry.color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)
-    ) {
-      throw new TypeError('Slug fill color must contain four finite linear values in [0, 1]')
+    if (entry.shadow !== undefined) {
+      throw new TypeError('Slug V0 does not support shadow paint')
     }
+  }
+}
+
+function assertSlugColor(color: readonly number[], label: string): void {
+  if (
+    color.length !== 4 ||
+    color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)
+  ) {
+    throw new TypeError(`${label} color must contain four finite linear values in [0, 1]`)
   }
 }
 
@@ -879,8 +1156,11 @@ function disposeSlugResource(resource: SlugResource): void {
 
 function disposeSlugPage(page: SlugPageResource): void {
   const state = materialStateByCurveTexture.get(page.curveTexture)
+  const outlinedState = outlinedMaterialStateByCurveTexture.get(page.curveTexture)
   state?.material.dispose()
+  outlinedState?.material.dispose()
   materialStateByCurveTexture.delete(page.curveTexture)
+  outlinedMaterialStateByCurveTexture.delete(page.curveTexture)
   page.curveTexture.dispose()
   page.headerTexture.dispose()
   page.referenceTexture.dispose()

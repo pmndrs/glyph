@@ -5,7 +5,6 @@
  */
 import type { Node } from 'three/webgpu'
 import {
-  Break,
   If,
   abs,
   add,
@@ -31,7 +30,7 @@ import {
   loadReference,
   type SlugShaderPage,
 } from './slug-texture.js'
-import { intLoop, uintAdd, uintBitAnd, vec2Sub } from './tsl-compat.js'
+import { intLessThan, uintAdd, uintBitAnd, vec2Sub, whileLoop } from './tsl-compat.js'
 
 export interface SlugShaderGlyph {
   readonly curveBaseTexel: Node<'uint'>
@@ -124,6 +123,7 @@ function accumulateCurveRoots(
 
 function evaluateBandCurve(
   index: Node<'int'>,
+  curveCount: Node<'int'>,
   page: SlugShaderPage,
   glyph: SlugShaderGlyph,
   renderCoordinate: Node<'vec2'>,
@@ -149,8 +149,12 @@ function evaluateBandCurve(
   const maximum1: Node<'float'> = axis === 'horizontal' ? p1.x : p1.y
   const maximum2: Node<'float'> = axis === 'horizontal' ? p2.x : p2.y
   const maximum: Node<'float'> = mul(max(max(maximum0, maximum1), maximum2), pixelsPerEm)
-  If(lessThan(maximum, -0.5), () => Break())
-  accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight)
+  If(lessThan(maximum, -0.5), () => {
+    index.assign(curveCount)
+  }).Else(() => {
+    accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight)
+    index.addAssign(1)
+  })
 }
 
 export function evaluateBand(
@@ -189,9 +193,13 @@ export function evaluateBand(
     axis === 'horizontal' ? 'slugXWeight' : 'slugYWeight',
   )
   const curveCount: Node<'int'> = int(bandCount(header))
-  intLoop({ start: 0, end: curveCount, type: 'int' }, ({ i }) =>
+  const curveIndex: Node<'int'> = int(0).toVar(
+    axis === 'horizontal' ? 'slugHorizontalCurveIndex' : 'slugVerticalCurveIndex',
+  )
+  whileLoop(intLessThan(curveIndex, curveCount), () =>
     evaluateBandCurve(
-      i,
+      curveIndex,
+      curveCount,
       page,
       glyph,
       renderCoordinate,
