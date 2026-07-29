@@ -11,6 +11,9 @@ sources:
   - id: harfbuzz
     resource: https://github.com/harfbuzz/harfbuzz/releases/tag/13.0.0
     title: HarfBuzz 13.0.0
+  - id: harfbuzz-utilities-build
+    resource: https://github.com/harfbuzz/harfbuzz/blob/a0fc099681a69ae40665fbea74982a2e9d7a5260/util/meson.build
+    title: HarfBuzz 13.0.0 utility build definition
   - id: meson
     resource: https://github.com/mesonbuild/meson/releases/tag/1.11.1
     title: Meson 1.11.1
@@ -107,6 +110,8 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Bitmap outline rasterizer | Zeno `0.3.3` | unhinted grayscale mask generation from Skrifa outline commands |
 | KTX2 Rust model/parser | `ktx2` `0.5.0` | compile-time R8 DFD generation plus native artifact validation |
 | KTX2 JavaScript parser | `ktx-parse` `1.1.0` | package-owned artifact and runtime page validation |
+
+GLib development metadata is a native build-host prerequisite, not a fixture identity input. HarfBuzz 13.0.0 gates its `hb-shape` and `hb-subset` targets on `HAVE_GLIB`; the provisioner therefore requires `-Dglib=enabled`, and the pinned Ubuntu 24.04 CI job installs `libglib2.0-dev` explicitly and prints the resolved `glib-2.0` version. GLib owns the utility frontend, while the authenticated HarfBuzz source and exact generated-byte comparison remain authoritative for fixture semantics.
 
 ## Generated contract
 

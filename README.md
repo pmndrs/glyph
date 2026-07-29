@@ -177,7 +177,7 @@ pnpm install
 pnpm check
 ```
 
-Use mise to install the exact root Node.js, pnpm, stable Rust, Meson, and Ninja pins. Meson and Ninja build the authenticated HarfBuzz oracle utilities used by the clean-checkout fixture gates. Those canonical versions are required; do not substitute merely compatible local toolchains. The optional coverage-guided font-baker fuzzer is isolated
+Use mise to install the exact root Node.js, pnpm, stable Rust, Meson, and Ninja pins. Meson and Ninja build the authenticated HarfBuzz oracle utilities used by the clean-checkout fixture gates. HarfBuzz gates those command-line utilities on GLib development metadata, so the build host must also provide `glib-2.0` through `pkg-config` (`libglib2.0-dev` on Ubuntu or `glib` on macOS with Homebrew). CI declares that native prerequisite and prints the selected GLib version before checks run. The canonical mise versions are required; do not substitute merely compatible local toolchains. The optional coverage-guided font-baker fuzzer is isolated
 under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and
 `cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
 

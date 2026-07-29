@@ -51,6 +51,7 @@ try {
     '-Dtests=disabled',
     '-Ddocs=disabled',
     '-Dutilities=enabled',
+    '-Dglib=enabled',
     '-Dintrospection=disabled',
   ])
   await run('meson', ['compile', '-C', buildDirectory, 'hb-shape', 'hb-subset'])
