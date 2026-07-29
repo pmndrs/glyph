@@ -6,7 +6,11 @@
 import type { Node } from 'three/webgpu'
 import { add, div, float, max, mul, sub } from 'three/tsl'
 import { calcCoverage } from './calc-coverage.js'
-import { evaluateBand, type SlugShaderGlyph } from './slug-band.js'
+import {
+  evaluateBand,
+  type SlugRootContributionVariant,
+  type SlugShaderGlyph,
+} from './slug-band.js'
 import type { SlugShaderPage } from './slug-texture.js'
 import { vec2Fwidth } from './tsl-compat.js'
 
@@ -18,6 +22,8 @@ export interface SlugRenderOptions {
   readonly weightBoost: Node<'bool'>
   readonly stemDarken?: Node<'float'>
   readonly thicken?: Node<'float'>
+  /** Build-time-only root contribution graph choice for the Slug experiment. */
+  readonly rootContributionVariant?: SlugRootContributionVariant
 }
 
 function namedFloat(node: Node<'float'>, name: string): Node<'float'> {
@@ -51,6 +57,7 @@ export function slugRender(
           add(1, mul(options.thicken, max(0, sub(1, div(pixelsPerEm, 24))))),
           'slugThickenFactor',
         )
+  const rootContributionVariant = options.rootContributionVariant ?? 'select'
 
   const horizontal = evaluateBand(
     page,
@@ -59,6 +66,7 @@ export function slugRender(
     'horizontal',
     pixelsPerEmX,
     thickenFactor,
+    rootContributionVariant,
   )
   const vertical = evaluateBand(
     page,
@@ -67,6 +75,7 @@ export function slugRender(
     'vertical',
     pixelsPerEmY,
     thickenFactor,
+    rootContributionVariant,
   )
 
   return calcCoverage(

@@ -55,6 +55,65 @@ export function referenceRootCode(y1: number, y2: number, y3: number): number {
   return (0x2e74 >>> shift) & 0x0101
 }
 
+export interface ReferenceRootContribution {
+  readonly coverageDelta: number
+  readonly curveWeight: number
+}
+
+/** CPU mirror of the baseline select-based root-contribution graph. */
+export function referenceSelectedRootContribution(
+  rootCode: number,
+  firstRoot: number,
+  secondRoot: number,
+  thickenFactor: number,
+  axis: 'horizontal' | 'vertical',
+): ReferenceRootContribution {
+  const hasFirstRoot = (rootCode & 1) !== 0
+  const hasSecondRoot = (rootCode & 0x100) !== 0
+  const firstContribution = hasFirstRoot ? saturate(firstRoot * thickenFactor + 0.5) : 0
+  const secondContribution = hasSecondRoot ? saturate(secondRoot * thickenFactor + 0.5) : 0
+  const coverageDelta =
+    axis === 'horizontal'
+      ? firstContribution - secondContribution
+      : secondContribution - firstContribution
+  const firstWeight = hasFirstRoot ? saturate(1 - Math.abs(firstRoot) * 2) : 0
+  const secondWeight = hasSecondRoot ? saturate(1 - Math.abs(secondRoot) * 2) : 0
+  return { coverageDelta, curveWeight: Math.max(firstWeight, secondWeight) }
+}
+
+/** CPU mirror of the candidate's per-root structural-control-flow graph. */
+export function referenceBranchedRootContribution(
+  rootCode: number,
+  firstRoot: number,
+  secondRoot: number,
+  thickenFactor: number,
+  axis: 'horizontal' | 'vertical',
+): ReferenceRootContribution {
+  const hasFirstRoot = (rootCode & 1) !== 0
+  const hasSecondRoot = (rootCode & 0x100) !== 0
+  let firstContribution = 0
+  let secondContribution = 0
+  let firstWeight = 0
+  let secondWeight = 0
+  if (hasFirstRoot) {
+    firstContribution = saturate(firstRoot * thickenFactor + 0.5)
+    firstWeight = saturate(1 - Math.abs(firstRoot) * 2)
+  }
+  if (hasSecondRoot) {
+    secondContribution = saturate(secondRoot * thickenFactor + 0.5)
+    secondWeight = saturate(1 - Math.abs(secondRoot) * 2)
+  }
+  const coverageDelta =
+    axis === 'horizontal'
+      ? firstContribution - secondContribution
+      : secondContribution - firstContribution
+  return { coverageDelta, curveWeight: Math.max(firstWeight, secondWeight) }
+}
+
+function saturate(value: number): number {
+  return Math.min(Math.max(value, 0), 1)
+}
+
 /** CPU mirror of the shader's stable q-form root solver. */
 function stableRoots(a: number, b: number, c: number): readonly [number, number] {
   const discriminant = b * b - a * c
