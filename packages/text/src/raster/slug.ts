@@ -134,7 +134,10 @@ export interface SlugDrawBatch {
   dispose(): void
 }
 
-const materialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>()
+const materialStateByCurveTexture = new WeakMap<
+  THREE.DataTexture,
+  Map<SlugExperimentVariant, SlugMaterialState>
+>()
 
 const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = defineRaster({
   kind: SLUG_KIND,
@@ -165,8 +168,26 @@ const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = 
 
 export type SlugModule = typeof slugModule
 
+/** Temporary graph-build selector for nonshipping Slug performance experiments. */
+export type SlugExperimentVariant = 'baseline' | 'root-branch'
+
 /** Fixed analytic Slug raster module for `defineFont(source, slug)`. */
 export const slug: SlugModule = slugModule
+
+/**
+ * Create a Slug module whose material graph is selected before pipeline
+ * construction. This deliberately is not a uniform: a same-build A/B needs
+ * two separately compiled graphs rather than a runtime branch in one graph.
+ */
+export function createSlugExperimentRaster(variant: SlugExperimentVariant): SlugModule {
+  if (variant === 'baseline') return slugModule
+  return defineRaster({
+    ...slugModule,
+    buildBatches(layout, resource, fontSlot, paint) {
+      return buildSlugBatches(layout, resource, fontSlot, paint, variant)
+    },
+  })
+}
 
 async function decodeSlugResource(
   font: RegisteredFont,
@@ -502,6 +523,7 @@ function buildSlugBatches(
   resource: SlugResource,
   fontSlot: number,
   paint: GlyphPaint,
+  variant: SlugExperimentVariant = 'baseline',
 ): SlugDrawBatch {
   assertParallelRasterLayout(layout, paint)
   assertSlugPaint(paint)
@@ -514,7 +536,7 @@ function buildSlugBatches(
 
   const finishRun = (): void => {
     if (pageIndex === undefined || glyphIndices.length === 0) return
-    const run = createSlugRun(layout, resource, pageIndex, glyphIndices, paint)
+    const run = createSlugRun(layout, resource, pageIndex, glyphIndices, paint, variant)
     runs.push(run)
     group.add(run.mesh)
     glyphIndices = []
@@ -567,6 +589,7 @@ function createSlugRun(
   pageIndex: number,
   glyphIndices: readonly number[],
   paint: GlyphPaint,
+  variant: SlugExperimentVariant,
 ): SlugBatchRun {
   const count = glyphIndices.length
   const geometry = unitRasterQuadGeometry()
@@ -716,7 +739,7 @@ function createSlugRun(
   )
 
   const page = resource.pages[pageIndex]!
-  const state = slugMaterialState(page)
+  const state = slugMaterialState(page, variant)
   const mesh = new THREE.Mesh(geometry, state.material)
   mesh.frustumCulled = false
   mesh.renderOrder = glyphIndices[0] ?? 0
@@ -755,8 +778,11 @@ function setInstanceValues(
   ;(data.array as Float32Array | Uint32Array).set(values, instance * data.stride + offset)
 }
 
-function slugMaterialState(page: SlugPageResource): SlugMaterialState {
-  const existing = materialStateByCurveTexture.get(page.curveTexture)
+function slugMaterialState(
+  page: SlugPageResource,
+  variant: SlugExperimentVariant,
+): SlugMaterialState {
+  const existing = materialStateByCurveTexture.get(page.curveTexture)?.get(variant)
   if (existing !== undefined) return existing
   const material = new THREE.MeshBasicNodeMaterial({
     blending: THREE.NormalBlending,
@@ -824,13 +850,19 @@ function slugMaterialState(page: SlugPageResource): SlugMaterialState {
         bandTransform,
       },
       renderCoordinate,
-      { evenOdd: bool(false), weightBoost: bool(false) },
+      {
+        evenOdd: bool(false),
+        weightBoost: bool(false),
+        rootContributionVariant: variant === 'root-branch' ? 'structural-branch' : 'select',
+      },
     )
     return mul(color.a, coverage)
   })()
 
   const state = { material, viewport, mvpRow0, mvpRow1, mvpRow3 }
-  materialStateByCurveTexture.set(page.curveTexture, state)
+  const variants = materialStateByCurveTexture.get(page.curveTexture) ?? new Map()
+  variants.set(variant, state)
+  materialStateByCurveTexture.set(page.curveTexture, variants)
   return state
 }
 
@@ -878,8 +910,10 @@ function disposeSlugResource(resource: SlugResource): void {
 }
 
 function disposeSlugPage(page: SlugPageResource): void {
-  const state = materialStateByCurveTexture.get(page.curveTexture)
-  state?.material.dispose()
+  const variants = materialStateByCurveTexture.get(page.curveTexture)
+  if (variants !== undefined) {
+    for (const state of variants.values()) state.material.dispose()
+  }
   materialStateByCurveTexture.delete(page.curveTexture)
   page.curveTexture.dispose()
   page.headerTexture.dispose()

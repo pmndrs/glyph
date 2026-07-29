@@ -18,6 +18,7 @@
     "src/internal/slug-shaders/slug-texture.ts",
     "src/internal/slug-shaders/solve-quadratic.ts",
     "src/internal/slug-shaders/tsl-compat.ts",
-    "tests/types/tsl-scalar-operations.test.ts"
+    "tests/types/tsl-scalar-operations.test.ts",
+    "tests/types/slug-root-branch.test.ts"
   ]
 }

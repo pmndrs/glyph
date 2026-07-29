@@ -48,6 +48,13 @@ interface SlugBandEvaluation {
   readonly weight: Node<'float'>
 }
 
+/**
+ * Graph-build choice for the retained root-contribution experiment. The
+ * baseline keeps the original select-based graph; the candidate emits
+ * per-root control flow around the ramp and weight work.
+ */
+export type SlugRootContributionVariant = 'select' | 'structural-branch'
+
 function namedBool(node: Node<'bool'>, name: string): Node<'bool'> {
   return node.toVar(name)
 }
@@ -73,6 +80,7 @@ function accumulateCurveRoots(
   thickenFactor: Node<'float'>,
   coverage: Node<'float'>,
   weight: Node<'float'>,
+  rootContributionVariant: SlugRootContributionVariant,
 ): void {
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical'
   const polynomial0: Node<'float'> = axis === 'horizontal' ? p0.y : p0.x
@@ -97,27 +105,42 @@ function accumulateCurveRoots(
       greaterThan(float(uintBitAnd(rootCode, uint(0x100))), 0),
       `${namePrefix}HasRoot2`,
     )
-    const firstContribution: Node<'float'> = select(
-      hasFirstRoot,
-      saturate(add(mul(firstRoot, thickenFactor), 0.5)),
-      0,
-    )
-    const secondContribution: Node<'float'> = select(
-      hasSecondRoot,
-      saturate(add(mul(secondRoot, thickenFactor), 0.5)),
-      0,
-    )
+    let firstContribution: Node<'float'>
+    let secondContribution: Node<'float'>
+    let firstWeight: Node<'float'>
+    let secondWeight: Node<'float'>
+    if (rootContributionVariant === 'select') {
+      firstContribution = select(hasFirstRoot, saturate(add(mul(firstRoot, thickenFactor), 0.5)), 0)
+      secondContribution = select(
+        hasSecondRoot,
+        saturate(add(mul(secondRoot, thickenFactor), 0.5)),
+        0,
+      )
+      firstWeight = select(hasFirstRoot, saturate(sub(1, mul(abs(firstRoot), 2))), 0)
+      secondWeight = select(hasSecondRoot, saturate(sub(1, mul(abs(secondRoot), 2))), 0)
+    } else {
+      // Keep root solving and the final coverage subtraction/addition in the
+      // baseline order. Only the expensive ramp/weight work moves behind the
+      // root's actual control-flow branch.
+      firstContribution = namedFloat(float(0), `${namePrefix}Root1Contribution`)
+      secondContribution = namedFloat(float(0), `${namePrefix}Root2Contribution`)
+      firstWeight = namedFloat(float(0), `${namePrefix}Root1Weight`)
+      secondWeight = namedFloat(float(0), `${namePrefix}Root2Weight`)
+      If(hasFirstRoot, () => {
+        firstContribution.assign(saturate(add(mul(firstRoot, thickenFactor), 0.5)))
+        firstWeight.assign(saturate(sub(1, mul(abs(firstRoot), 2))))
+      })
+      If(hasSecondRoot, () => {
+        secondContribution.assign(saturate(add(mul(secondRoot, thickenFactor), 0.5)))
+        secondWeight.assign(saturate(sub(1, mul(abs(secondRoot), 2))))
+      })
+    }
     const coverageDelta: Node<'float'> =
       axis === 'horizontal'
         ? sub(firstContribution, secondContribution)
         : sub(secondContribution, firstContribution)
     coverage.addAssign(coverageDelta)
-    const firstWeight: Node<'float'> = saturate(sub(1, mul(abs(firstRoot), 2)))
-    const secondWeight: Node<'float'> = saturate(sub(1, mul(abs(secondRoot), 2)))
-    const curveWeight: Node<'float'> = max(
-      select(hasFirstRoot, firstWeight, 0),
-      select(hasSecondRoot, secondWeight, 0),
-    )
+    const curveWeight: Node<'float'> = max(firstWeight, secondWeight)
     weight.assign(max(weight, curveWeight))
   })
 }
@@ -133,6 +156,7 @@ function evaluateBandCurve(
   localReferenceOffset: Node<'uint'>,
   coverage: Node<'float'>,
   weight: Node<'float'>,
+  rootContributionVariant: SlugRootContributionVariant,
 ): void {
   const referenceIndex: Node<'uint'> = uintAdd(
     uintAdd(glyph.referenceBase, localReferenceOffset),
@@ -150,7 +174,17 @@ function evaluateBandCurve(
   const maximum2: Node<'float'> = axis === 'horizontal' ? p2.x : p2.y
   const maximum: Node<'float'> = mul(max(max(maximum0, maximum1), maximum2), pixelsPerEm)
   If(lessThan(maximum, -0.5), () => Break())
-  accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight)
+  accumulateCurveRoots(
+    p0,
+    p1,
+    p2,
+    axis,
+    pixelsPerEm,
+    thickenFactor,
+    coverage,
+    weight,
+    rootContributionVariant,
+  )
 }
 
 export function evaluateBand(
@@ -160,6 +194,7 @@ export function evaluateBand(
   axis: 'horizontal' | 'vertical',
   pixelsPerEm: Node<'float'>,
   thickenFactor: Node<'float'>,
+  rootContributionVariant: SlugRootContributionVariant = 'select',
 ): SlugBandEvaluation {
   const coordinate: Node<'float'> = axis === 'horizontal' ? renderCoordinate.y : renderCoordinate.x
   const transformScale: Node<'float'> =
@@ -201,6 +236,7 @@ export function evaluateBand(
       localReferenceOffset,
       coverage,
       weight,
+      rootContributionVariant,
     ),
   )
 

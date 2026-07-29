@@ -16,6 +16,8 @@
     "capture:slug-fixed32-performance": "node ./scripts/capture-slug-fixed32-performance.mts",
     "capture:slug-adaptive32-quality": "node ./scripts/capture-slug-adaptive32-quality.mts",
     "capture:slug-adaptive32-performance": "node ./scripts/capture-slug-adaptive32-performance.mts",
+    "capture:slug-root-branch-quality": "node ./scripts/capture-slug-root-branch-quality.mts",
+    "capture:slug-root-branch-performance": "node ./scripts/capture-slug-root-branch-performance.mts",
     "capture:mtsdf-simd": "node ./scripts/capture-mtsdf-simd.mts",
     "check:autoresearch-baseline": "node ./scripts/generate-autoresearch-baseline.mts --check",
     "check:size": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/measure-package-sizes.mts --check",

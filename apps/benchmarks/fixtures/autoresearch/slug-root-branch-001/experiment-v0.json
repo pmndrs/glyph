@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 0,
+  "experimentId": "slug-root-branch-001",
+  "owner": "autoresearch",
+  "baseCommit": "1ba4c6713579141c661e7cb2b5f089986258651a",
+  "legacyPlanCommit": "2935a89fcd9999e8a8b3d3b733f7f7302285cd60",
+  "target": "raster/slug",
+  "hypothesis": "Structural per-root branches reduce eager ramp and weight work without changing pixels or artifact resources.",
+  "changedVariables": ["root contribution shader control flow"],
+  "primaryWorkloads": ["text-ladder"],
+  "guardWorkloads": [
+    "latin-ui",
+    "arabic-marks",
+    "devanagari",
+    "cjk-dense",
+    "script-cff",
+    "pixel-outline"
+  ],
+  "backends": ["webgpu", "webgl2"],
+  "qualityPolicy": "exact",
+  "performanceGate": {
+    "metric": "median paired GPU frame time",
+    "minimumImprovementPercent": 5,
+    "requiredBackends": ["webgpu", "webgl2"]
+  }
+}
