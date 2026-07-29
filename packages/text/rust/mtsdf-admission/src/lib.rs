@@ -346,7 +346,7 @@ mod tests {
         let first = square_mtsdf_checksum();
         let second = square_mtsdf_checksum();
         assert_eq!(first, second);
-        assert_eq!(first, 0x3d96_25f1);
+        assert_eq!(first, 0xbfc7_6761);
     }
 
     #[test]

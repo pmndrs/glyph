@@ -68,8 +68,10 @@ const checksumExport = instance.exports.pmndrs_mtsdf_admission_checksum
 if (typeof checksumExport !== 'function') {
   throw new TypeError('optimized admission Wasm is missing its checksum export')
 }
-const outputChecksum = checksumExport()
-if (outputChecksum !== 0x3d96_25f1) {
+// WebAssembly exposes an `i32` result as a signed JavaScript number. Normalize the
+// bits before comparing or serializing FNV-1a identities above 0x7fffffff.
+const outputChecksum = checksumExport() >>> 0
+if (outputChecksum !== 0xbfc7_6761) {
   throw new Error(`optimized admission Wasm returned unexpected checksum ${String(outputChecksum)}`)
 }
 

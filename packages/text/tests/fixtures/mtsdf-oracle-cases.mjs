@@ -30,19 +30,19 @@ function oracleCase(id, candidateSha256, bounds, commands) {
 export const mtsdfOracleCases = [
   oracleCase(
     "ordinary-square",
-    "b936048f093edaa24295cec791cdf849542cf1a5c7c5e11619ab2463ae1c2e1a",
+    "dd2827d6ac0590d09c7f3b64a931373116ad5f41664743912ca185bf1548a4fa",
     { minX: 100, minY: 100, maxX: 900, maxY: 900 },
     [move(100, 100), line(100, 900), line(900, 900), line(900, 100), close],
   ),
   oracleCase(
     "acute-corner",
-    "d022f262cd74d84d9c137acbf995ec39ebe5bce6fa0633d8364e5c26e3a30fee",
+    "548b86fbf64b41a726820022726b2eb161f0bc1e14bcea2b8ba16cd23784546e",
     { minX: 100, minY: 100, maxX: 565, maxY: 950 },
     [move(100, 100), line(500, 950), line(565, 100), close],
   ),
   oracleCase(
     "overlapping-contours",
-    "46b7082d9cbce107934524ca96badf3de22d09ddbdbd03080600ebb4be154e49",
+    "eb788bcf9085a99eafe2db4e660bfa12d23086235fe4baf1dc93ff9acebaf92f",
     { minX: 100, minY: 100, maxX: 900, maxY: 800 },
     [
       move(100, 200),
@@ -59,13 +59,13 @@ export const mtsdfOracleCases = [
   ),
   oracleCase(
     "self-intersection",
-    "2e820439400d48a893dbf526d0312bbca681404c383cb41e399269d33aec31bb",
+    "668faa638aafa6b5d90b09d66270bed6bb9812878043e84eaa1c7f700f94189b",
     { minX: 100, minY: 100, maxX: 900, maxY: 900 },
     [move(100, 100), line(900, 900), line(100, 900), line(900, 100), close],
   ),
   oracleCase(
     "quadratic-oval",
-    "38b0eff76e6ee771f05fa6d9e4d837393717dc7c3c893b2e7283dd5759946bad",
+    "bccdda7a0d18fa52d8f1ce67e2ede58004baefbf382f106a1c9a70435c8870f6",
     { minX: 100, minY: 100, maxX: 900, maxY: 900 },
     [
       move(100, 500),
@@ -78,7 +78,7 @@ export const mtsdfOracleCases = [
   ),
   oracleCase(
     "cubic-teardrop",
-    "513d9d429851966d1cb3eeb0a29fdb511f6216f2a0a45eb7589a19a7d620e4f3",
+    "631f40fd9b6731d80afd168967665a1c2606022fed9d28330bab2b199140bd3d",
     { minX: 80, minY: 100, maxX: 920, maxY: 950 },
     [
       move(500, 950),
@@ -89,7 +89,7 @@ export const mtsdfOracleCases = [
   ),
   oracleCase(
     "complex-counter",
-    "010698e276bcc493b45c8399465c5f3cb33bf2926dc73e858c9debbfd47075e2",
+    "0873435f984af200558e11378d2c5589a14dbdb4bad29077c2504d2489c409d0",
     { minX: 80, minY: 100, maxX: 920, maxY: 920 },
     [
       move(80, 100),

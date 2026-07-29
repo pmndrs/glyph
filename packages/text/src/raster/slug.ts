@@ -144,7 +144,7 @@ interface SlugBatchRun {
   readonly floatData: THREE.InstancedInterleavedBuffer
   readonly colorAttribute: THREE.InterleavedBufferAttribute
   outlineData: THREE.InstancedInterleavedBuffer | undefined
-  readonly geometry: THREE.InstancedBufferGeometry
+  geometry: THREE.InstancedBufferGeometry
   readonly page: SlugPageResource
   readonly fillMesh: THREE.Mesh
   materialState: SlugMaterialState
@@ -889,6 +889,29 @@ function createSlugOutlineData(
   return data
 }
 
+function restoreSlugFillOnlyGeometry(run: SlugBatchRun): void {
+  const previous = run.geometry
+  const geometry = unitRasterQuadGeometry()
+  geometry.instanceCount = previous.instanceCount
+  for (const [name, geometryAttribute] of Object.entries(previous.attributes)) {
+    if (
+      name !== 'position' &&
+      name !== 'uv' &&
+      name !== 'slugOutlineColor' &&
+      name !== 'slugOutlineHalfWidth'
+    ) {
+      geometry.setAttribute(name, geometryAttribute)
+    }
+  }
+
+  // Three.js releases attribute buffers only when their owning geometry is disposed. Dispose
+  // while the mesh still points at the outlined geometry, then publish the fill-only replacement.
+  previous.dispose()
+  run.fillMesh.geometry = geometry
+  run.geometry = geometry
+  run.outlineData = undefined
+}
+
 function writeSlugOutlineInstance(
   data: THREE.InstancedInterleavedBuffer,
   instance: number,
@@ -1121,6 +1144,7 @@ function updateRunPaint(run: SlugBatchRun, layout: ParagraphLayout, paint: Glyph
     run.materialState = slugOutlinedMaterialState(run.page)
     run.fillMesh.material = run.materialState.material
   } else {
+    if (run.outlineData !== undefined) restoreSlugFillOnlyGeometry(run)
     run.materialState = slugMaterialState(run.page)
     run.fillMesh.material = run.materialState.material
   }
