@@ -6,10 +6,7 @@ use serde_json::{Value, json};
 use crate::{
     artifact::RasterizedMtsdf,
     error::MtsdfBakeError,
-    model::{
-        MSDF_EXTENSION, MSDF_GENERATOR_LABEL, MTSDF_EM_SIZE, MTSDF_PIXEL_RANGE,
-        MTSDF_PLANE_UNITS_PER_EM, PagePackaging,
-    },
+    model::{MSDF_EXTENSION, MSDF_GENERATOR_LABEL, MtsdfBakeSettingsV0, PagePackaging},
 };
 
 pub(crate) struct BuiltRasterGlb {
@@ -31,6 +28,7 @@ pub(crate) fn build_mtsdf_glb(
     shaping_hash: &str,
     glyph_count: u16,
     page_packaging: PagePackaging,
+    settings: MtsdfBakeSettingsV0,
     rasterized: &RasterizedMtsdf,
 ) -> Result<BuiltRasterGlb, MtsdfBakeError> {
     let mut binary = Vec::<u8>::new();
@@ -98,9 +96,9 @@ pub(crate) fn build_mtsdf_glb(
                 "glyphCount": glyph_count,
                 "glyphIdWidth": 16,
                 "encoding": "mtsdf",
-                "emSize": MTSDF_EM_SIZE,
-                "pixelRange": MTSDF_PIXEL_RANGE,
-                "planeUnitsPerEm": MTSDF_PLANE_UNITS_PER_EM,
+                "emSize": settings.em_size,
+                "pixelRange": settings.pixel_range,
+                "planeUnitsPerEm": settings.em_size,
                 "recordBufferView": record_view,
                 "recordStride": 20,
                 "pages": pages,

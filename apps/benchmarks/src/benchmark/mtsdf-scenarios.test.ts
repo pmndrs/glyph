@@ -7,7 +7,7 @@ const sceneMeasurement: BenchmarkMeasurement = {
   sample: 0,
   durationMs: 1,
   outputBytes: 512 * 320 * 4,
-  hash: '57e86b4b1e299a4574354a6eb46a13be150ac5a627c0dc0042739bd904e5a1e7',
+  hash: '8cbb665b02225219649f36545f42aebcfe4088d38899551adf109228fa6ab912',
   metrics: {
     backendWebGpu: 0,
     backendWebGl2: 1,
@@ -19,7 +19,7 @@ const sceneMeasurement: BenchmarkMeasurement = {
     changedPixels: 14_818,
     distinctRgbColors: 2_800,
     artifactBytes: 39_347_712,
-    compressedArtifactBytes: 6_979_370,
+    compressedArtifactBytes: 6_798_412,
     renderTargetGpuBytes: 512 * 320 * 4,
     fontLoadMs: 1,
     firstDrawMs: 1,

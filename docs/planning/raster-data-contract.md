@@ -21,8 +21,8 @@ sources:
     title: "msdfgen"
 
 generated:
-  by: "openai-codex/gpt-5"
-  at: "2026-07-26T02:40:00Z"
+  by: openai-codex/gpt-5.6
+  at: "2026-07-29T11:22:07Z"
 ---
 
 # Raster data contract V0
@@ -78,7 +78,7 @@ interface RasterReference {
 }
 ```
 
-The package supplies the actual `descriptor`. It MUST include every option that changes required payload content and its generator compatibility version; it MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. Object member order in source code is irrelevant because RFC 8785 defines the hashed serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
+The package supplies the actual `descriptor`. It MUST include every non-default option that changes required payload content and its generator compatibility version; a generator-versioned canonical default may remain implicit only when every producer and consumer resolves it identically. It MUST contain only JSON values and MUST reject non-finite numbers before canonicalization. For bitmap it includes the complete canonical strike tuple. For MTSDF, the legacy fieldless descriptor means 64 px/em with a full eight-pixel range; any non-default descriptor contains both effective `emSize` and `pixelRange` values, including a default filled for an omitted field. Explicit effective 64/8 canonicalizes back to the legacy descriptor. Object member order in source code is irrelevant because RFC 8785 defines the hashed serialization. Callers do not author keys. A baker, runtime module, and static source analyzer given the same definition MUST derive the same key. `kind` is an open module-owned identifier; core does not enumerate first-party or external raster techniques. `extension` names the companion glTF extension that defines that raster's payload, and `version` selects that companion contract. The three companion extensions below are the packages currently planned by this project, not a closed registry.
 
 An external `uri` uses RFC 3986 URI syntax and glTF's relative-URI resolution rules, but remains a custom extension field rather than a core glTF resource property. Every URI-addressed artifact carries a lowercase SHA-256 `artifactHash` over the complete external artifact and is authenticated before registration. If `uri` is absent, the application must provide the raster through its resolver API; a hash may still be supplied to authenticate those bytes. glTF `extensionsRequired`, not a duplicated raster flag, determines whether unsupported embedded extensions invalidate a combined asset.
 
@@ -235,7 +235,9 @@ interface MsdfRasterV0 {
 }
 ```
 
-MSDF glyph records are the same 20-byte plane/atlas/page/flags layout as bitmap records. V0 flags are zero. `pixelRange` is the full encoded signed-distance range in atlas pixels and is authoritative for shader reconstruction and effect limits.
+MSDF glyph records are the same 20-byte plane/atlas/page/flags layout as bitmap records. V0 flags are zero. `emSize` is an integer in `1..=1022`; `pixelRange` is an integer in `1..=1020` and denotes the full encoded signed-distance range in atlas pixels. `planeUnitsPerEm` MUST equal `emSize`. The baker surrounds the quantized outline rectangle with `ceil(pixelRange / 2)` texels on each side, including odd full ranges, and the authenticated `pixelRange` remains authoritative for shader reconstruction and effect limits.
+
+The package default remains 64/8 and preserves its established raster key. These controls permit smaller or larger authored fields without implying that a lower-cost setting is universally preferable. Passing validation at 32/4 and 32/6 establishes format and implementation support; source-outline quality, transport, residency, and rendering evidence must select any future recommended default.
 
 One resource and one batch family serve both ordinary text and distance effects. Fill coverage uses the median of RGB; outline, shadow, glow, or another effect may use alpha where true geometric distance is required. A fill-only shader may ignore alpha, but it consumes the same MTSDF atlas. Paint/material differences may still split draws; field encoding never creates separate MSDF and MTSDF batches. V1 does not generate or attach a second plain-MSDF atlas.
 

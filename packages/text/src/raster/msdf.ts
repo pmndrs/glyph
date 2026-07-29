@@ -30,11 +30,11 @@ import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
   MSDF_KIND,
-  MTSDF_EM_SIZE,
-  MTSDF_MAX_OUTLINE_ATLAS_PIXELS,
-  MTSDF_PIXEL_RANGE,
-  MTSDF_PLANE_UNITS_PER_EM,
+  MTSDF_MAX_EM_SIZE,
+  MTSDF_MAX_PIXEL_RANGE,
   msdfDescriptor,
+  msdfRasterKey,
+  type MsdfOptions,
 } from '../internal/msdf-contract.js'
 import {
   ABSENT_GLYPH_PAGE,
@@ -66,12 +66,17 @@ export {
   MSDF_GENERATOR_VERSION,
   MSDF_KIND,
   MTSDF_EM_SIZE,
+  MTSDF_MAX_EM_SIZE,
   MTSDF_MAX_OUTLINE_ATLAS_PIXELS,
+  MTSDF_MAX_PIXEL_RANGE,
   MTSDF_PIXEL_RANGE,
   MTSDF_PLANE_UNITS_PER_EM,
   msdfDescriptor,
   msdfDescriptorRasterKey,
+  msdfRasterKey,
+  type MsdfConfiguration,
   type MsdfDescriptorV0,
+  type MsdfOptions,
 } from '../internal/msdf-contract.js'
 
 const MAX_RUNTIME_GPU_BYTES = 256 * 1024 * 1024
@@ -148,7 +153,12 @@ const INSTANCE_OFFSETS = {
   pageIndex: 27,
 } as const
 
-const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch> = defineRaster({
+const msdfModule: RasterModule<
+  typeof MSDF_KIND,
+  MsdfResource,
+  MsdfDrawBatch,
+  MsdfOptions | undefined
+> = defineRaster({
   kind: MSDF_KIND,
   extension: MSDF_EXTENSION,
   version: MSDF_FORMAT_VERSION,
@@ -156,7 +166,7 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch> = 
   descriptor: msdfDescriptor,
   async decode(font, raster, signal) {
     signal?.throwIfAborted()
-    const resource = decodeMsdfResource(font, raster)
+    const resource = await decodeMsdfResource(font, raster)
     signal?.throwIfAborted()
     return resource
   },
@@ -177,10 +187,13 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch> = 
 
 export type MsdfModule = typeof msdfModule
 
-/** Fixed MTSDF raster module for `defineFont(source, msdf)`. */
+/** Configurable MTSDF raster module for `defineFont(source, msdf)`. */
 export const msdf: MsdfModule = msdfModule
 
-function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): MsdfResource {
+async function decodeMsdfResource(
+  font: RegisteredFont,
+  raster: RegisteredRaster,
+): Promise<MsdfResource> {
   if (
     raster.font !== font.handle ||
     raster.kind !== MSDF_KIND ||
@@ -197,12 +210,26 @@ function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Msd
     extension.glyphCount !== font.glyphCount ||
     extension.glyphIdWidth !== 16 ||
     extension.encoding !== 'mtsdf' ||
-    extension.emSize !== MTSDF_EM_SIZE ||
-    extension.pixelRange !== MTSDF_PIXEL_RANGE ||
-    extension.planeUnitsPerEm !== MTSDF_PLANE_UNITS_PER_EM ||
     extension.recordStride !== RECORD_STRIDE
   ) {
-    throw new TypeError('MTSDF extension does not match the fixed runtime contract')
+    throw new TypeError('MTSDF extension does not match the runtime contract')
+  }
+  const emSize = configuredInteger(extension.emSize, 'MTSDF emSize', MTSDF_MAX_EM_SIZE)
+  const pixelRange = configuredInteger(
+    extension.pixelRange,
+    'MTSDF pixelRange',
+    MTSDF_MAX_PIXEL_RANGE,
+  )
+  const planeUnitsPerEm = configuredInteger(
+    extension.planeUnitsPerEm,
+    'MTSDF planeUnitsPerEm',
+    MTSDF_MAX_EM_SIZE,
+  )
+  if (planeUnitsPerEm !== emSize) {
+    throw new TypeError('MTSDF planeUnitsPerEm must equal emSize')
+  }
+  if (raster.rasterKey !== (await msdfRasterKey({ emSize, pixelRange }))) {
+    throw new TypeError('MTSDF raster key does not match its generation policy')
   }
   const records = raster.view(
     nonnegativeSafeInteger(extension.recordBufferView, 'MTSDF recordBufferView'),
@@ -243,9 +270,9 @@ function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Msd
     validateDenseGlyphRecords(records, decodedPages, 'MTSDF', true)
     const { atlas, gpuBytes, pages } = createTextureArray(decodedPages)
     return {
-      emSize: MTSDF_EM_SIZE,
-      pixelRange: MTSDF_PIXEL_RANGE,
-      planeUnitsPerEm: MTSDF_PLANE_UNITS_PER_EM,
+      emSize,
+      pixelRange,
+      planeUnitsPerEm,
       records,
       pages,
       atlas,
@@ -254,6 +281,13 @@ function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster): Msd
   } finally {
     for (const page of decodedPages) page.texture.dispose()
   }
+}
+
+function configuredInteger(value: JsonValue | undefined, label: string, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    throw new TypeError(`${label} must be an integer in 1..=${maximum}`)
+  }
+  return value
 }
 
 function validateMtsdfPageDirectory(value: JsonValue, pageIndex: number): void {
@@ -464,7 +498,7 @@ function createMsdfRun(
     1,
     INSTANCE_OFFSETS.pageIndex,
   )
-  const mesh = new THREE.Mesh(geometry, msdfMaterial(resource.atlas))
+  const mesh = new THREE.Mesh(geometry, msdfMaterial(resource.atlas, resource.pixelRange))
   mesh.frustumCulled = false
   mesh.renderOrder = glyphIndices[0] ?? 0
   const run: MsdfBatchRun = {
@@ -563,9 +597,10 @@ function writeMsdfInstance(
   const uvOriginX = baseUvX + (originX - baseOriginX) * uvPerUnitX
   const uvOriginY = baseUvY + (originY - baseOriginY) * uvPerUnitY
   const outlineAtlasPixels = (paint.outline?.width ?? 0) / scale
-  if (outlineAtlasPixels > MTSDF_MAX_OUTLINE_ATLAS_PIXELS) {
+  const maxOutlineAtlasPixels = resource.pixelRange / 2
+  if (outlineAtlasPixels > maxOutlineAtlasPixels) {
     throw new RangeError(
-      `MTSDF outline width exceeds the ${MTSDF_MAX_OUTLINE_ATLAS_PIXELS}-atlas-pixel V0 field limit`,
+      `MTSDF outline width exceeds the ${maxOutlineAtlasPixels}-atlas-pixel field limit`,
     )
   }
   setAttribute(run.originAttribute, instance, [originX, originY])
@@ -631,7 +666,7 @@ function assertLinearColor(color: readonly number[], label: string): void {
   }
 }
 
-function msdfMaterial(atlas: MsdfAtlasResource): THREE.MeshBasicNodeMaterial {
+function msdfMaterial(atlas: MsdfAtlasResource, pixelRange: number): THREE.MeshBasicNodeMaterial {
   const existing = materialByAtlasTexture.get(atlas.texture)
   if (existing !== undefined) return existing.material
   const material = new THREE.MeshBasicNodeMaterial({
@@ -667,7 +702,7 @@ function msdfMaterial(atlas: MsdfAtlasResource): THREE.MeshBasicNodeMaterial {
   )
   const fillDistance: Node<'float'> = sub(median3(baseSample.rgb), 0.5)
   const trueDistance: Node<'float'> = sub(baseSample.a, 0.5)
-  const pixelsPerDistanceUnit: Node<'float'> = screenPixelRange(atlasU, atlasV, atlas)
+  const pixelsPerDistanceUnit: Node<'float'> = screenPixelRange(atlasU, atlasV, atlas, pixelRange)
   const fillCoverage: Node<'float'> = mul(
     distanceCoverage(fillDistance, pixelsPerDistanceUnit),
     baseInside,
@@ -740,14 +775,15 @@ function screenPixelRange(
   atlasU: Node<'float'>,
   atlasV: Node<'float'>,
   atlas: MsdfAtlasResource,
+  pixelRange: number,
 ): Node<'float'> {
   const screenTexelsU: Node<'float'> = div(1, max(fwidth(atlasU), 1e-6))
   const screenTexelsV: Node<'float'> = div(1, max(fwidth(atlasV), 1e-6))
   const projectedRange: Node<'float'> = mul(
     0.5,
     add(
-      mul(MTSDF_PIXEL_RANGE / atlas.width, screenTexelsU),
-      mul(MTSDF_PIXEL_RANGE / atlas.height, screenTexelsV),
+      mul(pixelRange / atlas.width, screenTexelsU),
+      mul(pixelRange / atlas.height, screenTexelsV),
     ),
   )
   return max(projectedRange, 1)

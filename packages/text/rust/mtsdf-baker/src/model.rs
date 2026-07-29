@@ -14,15 +14,38 @@ pub const MSDF_GENERATOR_LABEL: &str =
 pub const MTSDF_EM_SIZE: u16 = 64;
 pub const MTSDF_PIXEL_RANGE: u16 = 8;
 pub const MTSDF_PLANE_UNITS_PER_EM: u16 = MTSDF_EM_SIZE;
+pub const MAX_MTSDF_EM_SIZE: u16 = 1022;
+pub const MAX_MTSDF_PIXEL_RANGE: u16 = 1020;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct MtsdfBakeSettingsV0 {
+    pub(crate) em_size: u16,
+    pub(crate) pixel_range: u16,
+}
+
+impl MtsdfBakeSettingsV0 {
+    pub(crate) const DEFAULT: Self = Self {
+        em_size: MTSDF_EM_SIZE,
+        pixel_range: MTSDF_PIXEL_RANGE,
+    };
+
+    pub(crate) fn field_padding(self) -> usize {
+        usize::from(self.pixel_range / 2 + self.pixel_range % 2)
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MtsdfDescriptorV0 {
     pub generator_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub em_size: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pixel_range: Option<u16>,
 }
 
 impl MtsdfDescriptorV0 {
-    pub(crate) fn validate(&self) -> Result<(), MtsdfBakeError> {
+    pub(crate) fn validate(&self) -> Result<MtsdfBakeSettingsV0, MtsdfBakeError> {
         if self.generator_version != MSDF_GENERATOR_VERSION {
             return Err(MtsdfBakeError::new(
                 MtsdfBakeErrorCode::InvalidDescriptor,
@@ -30,7 +53,42 @@ impl MtsdfDescriptorV0 {
             )
             .at("/descriptor/generatorVersion"));
         }
-        Ok(())
+        let (Some(em_size), Some(pixel_range)) = (self.em_size, self.pixel_range) else {
+            if self.em_size.is_none() && self.pixel_range.is_none() {
+                return Ok(MtsdfBakeSettingsV0::DEFAULT);
+            }
+            return Err(MtsdfBakeError::new(
+                MtsdfBakeErrorCode::InvalidDescriptor,
+                "custom MTSDF descriptors must provide both emSize and pixelRange",
+            )
+            .at("/descriptor"));
+        };
+        if em_size == 0 || em_size > MAX_MTSDF_EM_SIZE {
+            return Err(MtsdfBakeError::new(
+                MtsdfBakeErrorCode::InvalidDescriptor,
+                "MTSDF emSize must be in 1..=1022",
+            )
+            .at("/descriptor/emSize"));
+        }
+        if pixel_range == 0 || pixel_range > MAX_MTSDF_PIXEL_RANGE {
+            return Err(MtsdfBakeError::new(
+                MtsdfBakeErrorCode::InvalidDescriptor,
+                "MTSDF pixelRange must be in 1..=1020",
+            )
+            .at("/descriptor/pixelRange"));
+        }
+        let settings = MtsdfBakeSettingsV0 {
+            em_size,
+            pixel_range,
+        };
+        if settings == MtsdfBakeSettingsV0::DEFAULT {
+            return Err(MtsdfBakeError::new(
+                MtsdfBakeErrorCode::InvalidDescriptor,
+                "the default 64/8 MTSDF settings must use the canonical fieldless descriptor",
+            )
+            .at("/descriptor"));
+        }
+        Ok(settings)
     }
 }
 

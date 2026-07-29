@@ -41,11 +41,9 @@ import {
 import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
-  MSDF_GENERATOR_VERSION,
-  MTSDF_EM_SIZE,
-  MTSDF_PIXEL_RANGE,
-  MTSDF_PLANE_UNITS_PER_EM,
+  msdfDescriptorConfiguration,
   msdfDescriptorRasterKey,
+  type MsdfConfiguration,
   type MsdfDescriptorV0,
 } from '../internal/msdf-contract.js'
 
@@ -142,17 +140,16 @@ async function validateMtsdfSemantics(
   khronos: KhronosValidationReport,
   context: MtsdfArtifactValidationContext,
 ): Promise<ValidatedMtsdfArtifactV0> {
-  const descriptor = requireNonArrayObject(context.descriptor, '/descriptor')
-  if (
-    Object.keys(descriptor).length !== 1 ||
-    !Object.hasOwn(descriptor, 'generatorVersion') ||
-    descriptor.generatorVersion !== MSDF_GENERATOR_VERSION
-  ) {
-    fail('MTSDF_DESCRIPTOR', 'descriptor does not match the fixed MTSDF generator', '/descriptor')
+  requireNonArrayObject(context.descriptor, '/descriptor')
+  let configuration: MsdfConfiguration
+  try {
+    configuration = msdfDescriptorConfiguration(context.descriptor)
+  } catch {
+    fail('MTSDF_DESCRIPTOR', 'descriptor is not a canonical MTSDF generation policy', '/descriptor')
   }
-  const expectedKey = await msdfDescriptorRasterKey()
+  const expectedKey = await msdfDescriptorRasterKey(context.descriptor)
   if (context.rasterKey !== expectedKey) {
-    fail('RASTER_KEY', 'expected raster key does not match the fixed descriptor', '/rasterKey')
+    fail('RASTER_KEY', 'expected raster key does not match the MTSDF descriptor', '/rasterKey')
   }
   if (!isSha256(context.shapingHash)) {
     fail('SHAPING_HASH', 'expected shaping hash must be lowercase SHA-256', '/shapingHash')
@@ -213,12 +210,12 @@ async function validateMtsdfSemantics(
   }
   if (
     extension.encoding !== 'mtsdf' ||
-    extension.emSize !== MTSDF_EM_SIZE ||
-    extension.pixelRange !== MTSDF_PIXEL_RANGE ||
-    extension.planeUnitsPerEm !== MTSDF_PLANE_UNITS_PER_EM ||
+    extension.emSize !== configuration.emSize ||
+    extension.pixelRange !== configuration.pixelRange ||
+    extension.planeUnitsPerEm !== configuration.planeUnitsPerEm ||
     extension.recordStride !== RECORD_STRIDE
   ) {
-    fail('MTSDF_CONSTANTS', 'artifact does not match the fixed V0 MTSDF contract', extensionPath)
+    fail('MTSDF_CONFIGURATION', 'artifact does not match its MTSDF descriptor', extensionPath)
   }
 
   const limits = resolveLimits(context.limits)

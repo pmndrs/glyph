@@ -13,15 +13,14 @@ use crate::{
     error::{MtsdfBakeError, MtsdfBakeErrorCode, overflow},
     glb::build_mtsdf_glb,
     model::{
-        MSDF_EXTENSION, MSDF_FORMAT_VERSION, MSDF_KIND, MTSDF_EM_SIZE, MTSDF_PIXEL_RANGE,
-        MTSDF_PLANE_UNITS_PER_EM, MtsdfBakeArtifactV0, MtsdfBakeRequestV0, MtsdfBakeResultV0,
-        MtsdfDescriptorV0, MtsdfPageReportV0, MtsdfPayloadReportV0,
+        MSDF_EXTENSION, MSDF_FORMAT_VERSION, MSDF_KIND, MtsdfBakeArtifactV0, MtsdfBakeRequestV0,
+        MtsdfBakeResultV0, MtsdfBakeSettingsV0, MtsdfDescriptorV0, MtsdfPageReportV0,
+        MtsdfPayloadReportV0,
     },
 };
 
 const ATLAS_LIMIT: u16 = 1024;
 const ATLAS_GLYPH_GAP: u16 = 1;
-const FIELD_PADDING: usize = (MTSDF_PIXEL_RANGE / 2) as usize;
 const MAX_ATLAS_PAGES: usize = 60;
 
 pub(crate) struct RasterizedMtsdf {
@@ -34,7 +33,7 @@ pub fn bake_mtsdf(
     source: &[u8],
     request: MtsdfBakeRequestV0,
 ) -> Result<MtsdfBakeResultV0, MtsdfBakeError> {
-    request.descriptor.validate()?;
+    let settings = request.descriptor.validate()?;
     validate_hash("shapingHash", &request.shaping_hash)?;
     validate_hash("rasterKey", &request.raster_key)?;
     let expected_raster_key = descriptor_raster_key(&request.descriptor);
@@ -46,13 +45,19 @@ pub fn bake_mtsdf(
         .at("/rasterKey"));
     }
 
-    let rasterized = rasterize_font(source, request.font_face_index, request.glyph_count)?;
+    let rasterized = rasterize_font(
+        source,
+        request.font_face_index,
+        request.glyph_count,
+        settings,
+    )?;
     let metadata_bytes = rasterized.records.len();
     let built = build_mtsdf_glb(
         &request.raster_key,
         &request.shaping_hash,
         request.glyph_count,
         request.packaging.pages,
+        settings,
         &rasterized,
     )?;
     let raster_id = format!("msdf-{}-{}.glb", request.shaping_hash, request.raster_key);
@@ -119,9 +124,27 @@ pub fn bake_mtsdf(
 }
 
 pub fn descriptor_raster_key(descriptor: &MtsdfDescriptorV0) -> String {
+    let descriptor_json = match (descriptor.em_size, descriptor.pixel_range) {
+        (None, None) => format!(
+            "{{\"generatorVersion\":\"{}\"}}",
+            descriptor.generator_version,
+        ),
+        (Some(em_size), Some(pixel_range)) => format!(
+            "{{\"emSize\":{em_size},\"generatorVersion\":\"{}\",\"pixelRange\":{pixel_range}}}",
+            descriptor.generator_version,
+        ),
+        (Some(em_size), None) => format!(
+            "{{\"emSize\":{em_size},\"generatorVersion\":\"{}\"}}",
+            descriptor.generator_version,
+        ),
+        (None, Some(pixel_range)) => format!(
+            "{{\"generatorVersion\":\"{}\",\"pixelRange\":{pixel_range}}}",
+            descriptor.generator_version,
+        ),
+    };
     let canonical = format!(
-        "{{\"descriptor\":{{\"generatorVersion\":\"{}\"}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
-        descriptor.generator_version, MSDF_EXTENSION, MSDF_KIND, MSDF_FORMAT_VERSION,
+        "{{\"descriptor\":{descriptor_json},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
+        MSDF_EXTENSION, MSDF_KIND, MSDF_FORMAT_VERSION,
     );
     pmndrs_text_raster_artifact::sha256_hex(canonical.as_bytes())
 }
@@ -130,6 +153,7 @@ fn rasterize_font(
     source: &[u8],
     face_index: u32,
     expected_glyph_count: u16,
+    settings: MtsdfBakeSettingsV0,
 ) -> Result<RasterizedMtsdf, MtsdfBakeError> {
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
@@ -169,7 +193,8 @@ fn rasterize_font(
             }
             Err(error) => return Err(outline_error(raw_glyph_id, error)),
         };
-        let quantized = QuantizedGlyph::new(outline.bounds(), units_per_em, raw_glyph_id)?;
+        let quantized =
+            QuantizedGlyph::new(outline.bounds(), units_per_em, raw_glyph_id, settings)?;
         let texels = outline
             .generate_mtsdf_with_transform(quantized.region, quantized.transform)
             .map_err(|error| generation_error(raw_glyph_id, error))?;
@@ -226,13 +251,15 @@ impl QuantizedGlyph {
         source_bounds: pmndrs_text_mtsdf_core::Bounds,
         units_per_em: f32,
         glyph_id: u16,
+        settings: MtsdfBakeSettingsV0,
     ) -> Result<Self, MtsdfBakeError> {
-        let scale = f32::from(MTSDF_PLANE_UNITS_PER_EM) / units_per_em;
+        let scale = f32::from(settings.em_size) / units_per_em;
         let left = checked_floor(source_bounds.min_x * scale, glyph_id)?;
         let bottom = checked_floor(source_bounds.min_y * scale, glyph_id)?;
         let right = checked_ceil(source_bounds.max_x * scale, glyph_id)?;
         let top = checked_ceil(source_bounds.max_y * scale, glyph_id)?;
-        let padding = i32::try_from(FIELD_PADDING).map_err(|_| overflow())?;
+        let field_padding = settings.field_padding();
+        let padding = i32::try_from(field_padding).map_err(|_| overflow())?;
         let plane = [
             left - padding,
             bottom - padding,
@@ -248,8 +275,8 @@ impl QuantizedGlyph {
         let region = AtlasRegion {
             inner_width,
             inner_height,
-            padding_x: FIELD_PADDING,
-            padding_y: FIELD_PADDING,
+            padding_x: field_padding,
+            padding_y: field_padding,
         };
         let width = u16::try_from(region.total_width().ok_or_else(overflow)?)
             .map_err(|_| glyph_too_large(glyph_id))?;
@@ -260,7 +287,7 @@ impl QuantizedGlyph {
         {
             return Err(glyph_too_large(glyph_id));
         }
-        let inverse_scale = units_per_em / f32::from(MTSDF_PLANE_UNITS_PER_EM);
+        let inverse_scale = units_per_em / f32::from(settings.em_size);
         let transform_bounds = pmndrs_text_mtsdf_core::Bounds::new(
             left as f32 * inverse_scale,
             bottom as f32 * inverse_scale,
@@ -268,7 +295,7 @@ impl QuantizedGlyph {
             top as f32 * inverse_scale,
         );
         let full_distance_range =
-            units_per_em * f32::from(MTSDF_PIXEL_RANGE) / f32::from(MTSDF_EM_SIZE);
+            units_per_em * f32::from(settings.pixel_range) / f32::from(settings.em_size);
         let transform = MtsdfTransform::new(transform_bounds, full_distance_range)
             .ok_or_else(|| glyph_too_large(glyph_id))?;
         Ok(Self {
@@ -343,18 +370,34 @@ fn glyph_too_large(glyph_id: u16) -> MtsdfBakeError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{MSDF_GENERATOR_VERSION, PagePackaging};
+    use crate::model::{
+        MAX_MTSDF_EM_SIZE, MAX_MTSDF_PIXEL_RANGE, MSDF_GENERATOR_VERSION, MTSDF_EM_SIZE,
+        MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM, PagePackaging,
+    };
 
     const INTER: &[u8] = include_bytes!(
         "../../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
     );
     const SHAPING_HASH: &str = "6a96d9c6f9e59fd6aeb51848413bd4dd8711730a5479a7d004979d80f3b3cd09";
 
+    fn descriptor(em_size: Option<u16>, pixel_range: Option<u16>) -> MtsdfDescriptorV0 {
+        MtsdfDescriptorV0 {
+            generator_version: MSDF_GENERATOR_VERSION.into(),
+            em_size,
+            pixel_range,
+        }
+    }
+
+    fn settings(em_size: u16, pixel_range: u16) -> MtsdfBakeSettingsV0 {
+        MtsdfBakeSettingsV0 {
+            em_size,
+            pixel_range,
+        }
+    }
+
     #[test]
     fn descriptor_key_is_stable() {
-        let descriptor = MtsdfDescriptorV0 {
-            generator_version: MSDF_GENERATOR_VERSION.into(),
-        };
+        let descriptor = descriptor(None, None);
         assert_eq!(
             descriptor_raster_key(&descriptor),
             "e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93"
@@ -362,19 +405,117 @@ mod tests {
     }
 
     #[test]
+    fn custom_descriptor_keys_match_the_typescript_contract() {
+        assert_eq!(
+            descriptor_raster_key(&descriptor(Some(32), Some(4))),
+            "9c8825cc24b9549e9cc923a17a32665770a4ec05be48e7439a0d5ac89f05afa1"
+        );
+        assert_eq!(
+            descriptor_raster_key(&descriptor(Some(32), Some(6))),
+            "fa8f5c03367db3652abb41659835618f989ad00c0dc0c39fac8dcf3e21ee16a8"
+        );
+    }
+
+    #[test]
+    fn descriptor_requires_one_canonical_bounded_settings_pair() {
+        assert_eq!(
+            descriptor(None, None).validate().unwrap(),
+            MtsdfBakeSettingsV0::DEFAULT
+        );
+        assert_eq!(
+            descriptor(Some(32), Some(5)).validate().unwrap(),
+            settings(32, 5)
+        );
+        for invalid in [
+            descriptor(Some(32), None),
+            descriptor(None, Some(4)),
+            descriptor(Some(MTSDF_EM_SIZE), Some(MTSDF_PIXEL_RANGE)),
+            descriptor(Some(0), Some(4)),
+            descriptor(Some(MAX_MTSDF_EM_SIZE + 1), Some(4)),
+            descriptor(Some(32), Some(0)),
+            descriptor(Some(32), Some(MAX_MTSDF_PIXEL_RANGE + 1)),
+        ] {
+            assert_eq!(
+                invalid.validate().unwrap_err().code,
+                MtsdfBakeErrorCode::InvalidDescriptor
+            );
+        }
+    }
+
+    #[test]
+    fn quantized_glyph_uses_configured_scale_range_and_ceil_half_padding() {
+        let bounds = pmndrs_text_mtsdf_core::Bounds::new(0.0, 0.0, 1000.0, 1000.0);
+        for (pixel_range, expected_padding, expected_distance_range) in
+            [(4, 2, 125.0), (5, 3, 156.25), (6, 3, 187.5)]
+        {
+            let quantized =
+                QuantizedGlyph::new(bounds, 1000.0, 0, settings(32, pixel_range)).unwrap();
+            assert_eq!(
+                quantized.plane_bounds,
+                [
+                    -expected_padding,
+                    -expected_padding,
+                    32 + expected_padding,
+                    32 + expected_padding,
+                ]
+            );
+            assert_eq!(
+                quantized.width,
+                u16::try_from(32 + expected_padding * 2).unwrap()
+            );
+            assert_eq!(
+                quantized.height,
+                u16::try_from(32 + expected_padding * 2).unwrap()
+            );
+            assert_eq!(
+                quantized.transform.full_distance_range_font_units(),
+                expected_distance_range
+            );
+        }
+    }
+
+    #[test]
+    fn custom_glb_records_the_authoritative_bake_settings() {
+        let rasterized = RasterizedMtsdf {
+            records: vec![0; 20],
+            pages: vec![RasterizedPage {
+                width: 1,
+                height: 1,
+                texels: vec![0; 4],
+            }],
+        };
+        let built = build_mtsdf_glb(
+            &"1".repeat(64),
+            &"2".repeat(64),
+            1,
+            PagePackaging::Embedded,
+            settings(32, 5),
+            &rasterized,
+        )
+        .unwrap();
+        let json_length = u32::from_le_bytes(built.bytes[12..16].try_into().unwrap()) as usize;
+        let root: serde_json::Value =
+            serde_json::from_slice(&built.bytes[20..20 + json_length]).unwrap();
+        let extension = &root["extensions"][MSDF_EXTENSION];
+        assert_eq!(extension["emSize"], 32);
+        assert_eq!(extension["pixelRange"], 5);
+        assert_eq!(extension["planeUnitsPerEm"], 32);
+    }
+
+    #[test]
     #[ignore = "full Inter generation is the deterministic integration fixture"]
     fn inter_mtsdf_is_deterministic_and_packaging_preserves_records() {
-        let rasterized = rasterize_font(INTER, 0, 2937).expect("rasterize Inter");
+        let settings = MtsdfBakeSettingsV0::DEFAULT;
+        let rasterized = rasterize_font(INTER, 0, 2937, settings).expect("rasterize Inter");
         assert_eq!(rasterized.records.len(), 2937 * 20);
-        let descriptor = MtsdfDescriptorV0 {
-            generator_version: MSDF_GENERATOR_VERSION.into(),
-        };
+        let descriptor = descriptor(None, None);
         let raster_key = descriptor_raster_key(&descriptor);
         let embedded = build_mtsdf_glb(
             &raster_key,
             SHAPING_HASH,
             2937,
             PagePackaging::Embedded,
+            settings,
             &rasterized,
         )
         .expect("embedded");
@@ -383,6 +524,7 @@ mod tests {
             SHAPING_HASH,
             2937,
             PagePackaging::External,
+            settings,
             &rasterized,
         )
         .expect("external");
