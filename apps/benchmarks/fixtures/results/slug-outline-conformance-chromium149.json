@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 0,
+  "kind": "slug-outline-conformance-observation",
+  "capturedAt": "2026-07-29T07:54:26.351Z",
+  "authority": "independent-cpu-slug-stroke-reference",
+  "environment": {
+    "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 10,
+    "webgpu": true,
+    "crossOriginIsolated": false
+  },
+  "gpuAdapter": {
+    "architecture": "metal-3",
+    "description": "",
+    "device": "",
+    "vendor": "apple"
+  },
+  "cases": [
+    {
+      "backend": "webgpu",
+      "dpr": 1,
+      "physicalFontSize": 160,
+      "physicalOutlineWidth": 8,
+      "glyphCount": 4,
+      "fillHash": "cfc9dca2761fbab03849f73f407f0c22292643cbf6fd2846fef08a456524112c",
+      "outlineHash": "7922c68c447a4179f7e254be1835fe503eecda030e03ba1784a0eb888ade012b",
+      "fillInkPixels": 18327,
+      "outlineInkPixels": 38434,
+      "expansion": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "meanAbsoluteError": 0.0027696078431372548,
+      "maximumError": 17,
+      "errorPixels": 17,
+      "severeErrorPixels": 0,
+      "wrongReferenceMeanError": 20.83559640522876,
+      "renderSubmitMs": 16.799999997019768
+    },
+    {
+      "backend": "webgpu",
+      "dpr": 2,
+      "physicalFontSize": 160,
+      "physicalOutlineWidth": 8,
+      "glyphCount": 4,
+      "fillHash": "cfc9dca2761fbab03849f73f407f0c22292643cbf6fd2846fef08a456524112c",
+      "outlineHash": "7922c68c447a4179f7e254be1835fe503eecda030e03ba1784a0eb888ade012b",
+      "fillInkPixels": 18327,
+      "outlineInkPixels": 38434,
+      "expansion": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "meanAbsoluteError": 0.0027696078431372548,
+      "maximumError": 17,
+      "errorPixels": 17,
+      "severeErrorPixels": 0,
+      "wrongReferenceMeanError": 20.83559640522876,
+      "renderSubmitMs": 8.899999998509884
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 1,
+      "physicalFontSize": 160,
+      "physicalOutlineWidth": 8,
+      "glyphCount": 4,
+      "fillHash": "cfc9dca2761fbab03849f73f407f0c22292643cbf6fd2846fef08a456524112c",
+      "outlineHash": "df3c609ec40553e97c4d1bdc39d0a90433cfc6cbebc1c568db1ff7a767ea87df",
+      "fillInkPixels": 18327,
+      "outlineInkPixels": 38434,
+      "expansion": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "meanAbsoluteError": 0.0027696078431372548,
+      "maximumError": 17,
+      "errorPixels": 17,
+      "severeErrorPixels": 0,
+      "wrongReferenceMeanError": 20.835604575163398,
+      "renderSubmitMs": 29.5
+    },
+    {
+      "backend": "webgl2",
+      "dpr": 2,
+      "physicalFontSize": 160,
+      "physicalOutlineWidth": 8,
+      "glyphCount": 4,
+      "fillHash": "cfc9dca2761fbab03849f73f407f0c22292643cbf6fd2846fef08a456524112c",
+      "outlineHash": "df3c609ec40553e97c4d1bdc39d0a90433cfc6cbebc1c568db1ff7a767ea87df",
+      "fillInkPixels": 18327,
+      "outlineInkPixels": 38434,
+      "expansion": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "meanAbsoluteError": 0.0027696078431372548,
+      "maximumError": 17,
+      "errorPixels": 17,
+      "severeErrorPixels": 0,
+      "wrongReferenceMeanError": 20.835604575163398,
+      "renderSubmitMs": 21.899999998509884
+    }
+  ]
+}
