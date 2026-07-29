@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:f5fb45800e8f9424472794e063f3ac48a5723fa62fc48a3e557c32b5ae13929e"
+source_digest: "sha256:d9554f2f5d7b0bae34ec6de40aa109019083c90169cc90134d23a052acaab54b"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -43,14 +43,14 @@ sources:
     title: Retained complete icon-grid traversal evidence
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T10:27:00Z"
+  at: "2026-07-29T10:44:00Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: ✅ Milestone 9 Slug integration is complete
 
-The temporary outline zero-branch A/B compiles two same-build graphs and precommits exact mixed/all framebuffer gates plus 64 paired sessions per backend. Forty-eight mixed pairs cover 16, 40, and 128 CSS pixels evenly; sixteen all-outlined guards cover the same scales. Every run retains at least twelve GPU timestamps, one draw, zero missing glyphs, and exact resource identities. The candidate must improve the mixed median by at least 5% with a paired-bootstrap upper bound below zero on both backends, while no scale or all-outlined guard may regress by more than 2%.
+The retained outline zero-branch experiment accepts a per-instance visibility branch around analytic stroke evaluation. Eight same-build framebuffer cells are byte-exact, four membership negative controls each change 18,937 pixels, and generated WGSL/GLSL proves the two added visibility comparisons enclose the stroke graph. Across 48 mixed pairs per backend, median paired GPU time improves by 30.51% on WebGPU and 23.96% on WebGL2; both deterministic bootstrap upper bounds remain below zero. Sixteen all-outlined guards per backend remain within the precommitted 2% median-regression ceiling. Every one of the 256 runs retains at least twelve GPU timestamps, one draw, zero missing glyphs, and exact artifact and Slug-residency identities.
 
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane; conformance mode is the finite visual correctness inspector. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 

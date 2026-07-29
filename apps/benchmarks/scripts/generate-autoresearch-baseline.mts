@@ -51,6 +51,10 @@ const evidenceFiles = [
     'icon-grid-retained-evidence',
     'apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json',
   ],
+  [
+    'slug-outline-zero-branch-experiment',
+    'apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/environment.json',
+  ],
 ] as const
 
 const [workspaceManifest, nodeVersion, rustToolchain] = await Promise.all([

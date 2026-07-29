@@ -14,7 +14,7 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "bbe42400fdadfd17ec806ebae8c321c412652c299688ef15088c2a101d12625f",
+      "sha256": "3cd6ee3b6a2eec8e82251fb87b194a0163fdefcdc815577ce8e15ae1f41d845a",
       "bytes": 5145
     },
     {
@@ -112,6 +112,12 @@
       "path": "apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json",
       "sha256": "333953b8ef89df40f5ac9aaa7ef1e91377ff18e24bc8124305a1474e8f6f79a5",
       "bytes": 3318
+    },
+    {
+      "id": "slug-outline-zero-branch-experiment",
+      "path": "apps/benchmarks/fixtures/autoresearch/slug-outline-zero-branch-001/environment.json",
+      "sha256": "ecdaa266ca58426ba01be13213e1028b07cc0fdf4b965634b523d4e8cf311399",
+      "bytes": 4738
     }
   ]
 }

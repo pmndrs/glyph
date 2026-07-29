@@ -13,8 +13,6 @@
     "capture:raster-performance": "node ./scripts/capture-raster-performance.mts",
     "capture:slug-performance-matrix": "node ./scripts/capture-slug-performance-matrix.mts",
     "capture:slug-outline-conformance": "node ./scripts/capture-slug-outline-conformance.mts",
-    "capture:slug-outline-zero-branch-quality": "node ./scripts/capture-slug-outline-zero-branch-quality.mts",
-    "capture:slug-outline-zero-branch-performance": "node ./scripts/capture-slug-outline-zero-branch-performance.mts",
     "capture:slug-external-render-parity": "node ./scripts/capture-slug-external-render-parity.mts",
     "capture:slug-outline-performance": "node ./scripts/capture-slug-outline-performance.mts",
     "capture:slug-quality-matrix": "node ./scripts/capture-slug-quality-matrix.mts",
