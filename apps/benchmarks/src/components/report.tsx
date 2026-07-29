@@ -171,10 +171,18 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
           <dd className="font-mono text-[10px] text-muted">{ms(stats.rendererInitMs)}</dd>
           <dt className="text-dim">Font fetch + register</dt>
           <dd className="font-mono text-[10px] text-muted">{ms(stats.fontLoadMs)}</dd>
+          <dt className="text-dim">Core bake</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.coreBakeMs)}</dd>
+          <dt className="text-dim">Raster bake</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.rasterBakeMs)}</dd>
           <dt className="text-dim">Text ready</dt>
           <dd className="font-mono text-[10px] text-muted">{ms(stats.textReadyMs)}</dd>
           <dt className="text-dim">First draw submit</dt>
           <dd className="font-mono text-[10px] text-muted">{ms(stats.firstDrawMs)}</dd>
+          <dt className="text-dim">Upload frame complete</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.uploadFrameCompleteMs)}</dd>
+          <dt className="text-dim">First GPU frame</dt>
+          <dd className="font-mono text-[10px] text-muted">{ms(stats.uploadFrameGpuMs)}</dd>
           <dt className="text-dim">Total startup</dt>
           <dd className="font-mono text-[10px] text-muted">{ms(stats.startupMs)}</dd>
         </dl>

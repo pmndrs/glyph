@@ -151,28 +151,6 @@ button {
   color: var(--dim);
 }
 
-.startup-cost-grid > :nth-child(2n) {
-  border-right: 0;
-}
-.startup-cost-grid > :nth-last-child(-n + 2) {
-  border-bottom: 0;
-}
-
-@media (min-width: 640px) {
-  .startup-cost-grid > :nth-child(2n) {
-    border-right: 1px solid var(--border);
-  }
-  .startup-cost-grid > :nth-child(4n) {
-    border-right: 0;
-  }
-  .startup-cost-grid > :nth-last-child(-n + 2) {
-    grid-column: span 2 / span 2;
-  }
-  .startup-cost-grid > :last-child {
-    border-right: 0;
-  }
-}
-
 @media (min-width: 1400px) {
   .metric-summary-grid {
     grid-template-columns:
