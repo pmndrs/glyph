@@ -159,6 +159,52 @@ button {
   color: var(--dim);
 }
 
+[data-presentation='zen'] [data-testid='canvas-render-status'] {
+  inset: auto auto 0 0;
+  display: flex;
+  max-width: calc(100vw - 24px);
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  overflow: hidden;
+  padding: 24px 12px 8px;
+  background: linear-gradient(to top, rgb(0 0 0 / 70%), transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-presentation='zen'] [data-testid='canvas-render-status'] > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-zen-status {
+  display: none;
+}
+
+[data-presentation='zen'] [data-testid='comparison-live-viewport'] > [data-testid='canvas-render-status'],
+[data-presentation='zen'] [data-testid='comparison-live-viewport'] > [data-testid='canvas-navigation-status'] {
+  display: none;
+}
+
+[data-presentation='zen'] .canvas-zen-status {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  display: block;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  padding: 24px 12px 8px;
+  background: linear-gradient(to top, rgb(0 0 0 / 70%), transparent);
+  color: var(--muted);
+  font-family: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (min-width: 1400px) {
   .metric-summary-grid {
     grid-template-columns:

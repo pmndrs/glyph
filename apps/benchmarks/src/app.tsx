@@ -1164,6 +1164,7 @@ function BenchmarkSurface({
           ? 'grid h-full min-h-0 grid-rows-[0_minmax(0,1fr)] overflow-hidden'
           : 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3'
       }
+      data-presentation={presentation}
       data-testid="benchmark-surface"
     >
       <div
@@ -2290,7 +2291,10 @@ function BitmapTextViewport({
         canvasRef={canvasRef}
         controllerRef={previewRef}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted"
+        data-testid="canvas-render-status"
+      >
         <span>
           {delivery === 'runtime' ? 'RUNTIME' : 'BAKED'} {stats?.strikePpem ?? 16} PPEM · {fontSize} CSS PX /{' '}
           {stats?.renderedPpem ?? fontSize * dpr} DEVICE PX · {(stats?.scaleRatio ?? 1).toFixed(2)}×
@@ -2516,7 +2520,10 @@ function MtsdfTextViewport({
         canvasRef={canvasRef}
         controllerRef={previewRef}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted"
+        data-testid="canvas-render-status"
+      >
         <span>
           MTSDF {stats?.rasterEmSize ?? '—'} PX/EM · {fontSize} CSS PX / {stats?.renderedPpem ?? '—'} DEVICE PX ·{' '}
           {stats?.scaleRatio.toFixed(2) ?? '—'}×
@@ -2742,7 +2749,10 @@ function SlugTextViewport({
         canvasRef={canvasRef}
         controllerRef={previewRef}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted"
+        data-testid="canvas-render-status"
+      >
         <span>
           SLUG ANALYTIC · {stats?.slugPageCount ?? '—'} PAGE
           {stats?.slugPageCount === 1 ? '' : 'S'} · {fontSize} CSS PX / {stats?.renderedPpem ?? '—'} DEVICE PX
@@ -3071,7 +3081,10 @@ function ComparisonWorkloadViewport({
         pan={workload !== 'zoom-text'}
         zoom={workload === 'off-axis-3d'}
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted"
+        data-testid="canvas-render-status"
+      >
         <span>
           {stats?.technique === 'mtsdf'
             ? `MTSDF ${String(stats.rasterEmSize)} PX/EM`
@@ -3086,10 +3099,29 @@ function ComparisonWorkloadViewport({
                     : 'BITMAP — PX STRIKE'}{' '}
           · {rangeLabel}
         </span>
-        <span>
-          {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} ·{' '}
-          {dpr}× DPR
-        </span>
+      </div>
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 font-mono text-[9px] text-muted"
+        data-testid="canvas-navigation-status"
+      >
+        {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} · {dpr}×
+        DPR
+      </div>
+      <div className="canvas-zen-status" data-testid="canvas-zen-status">
+        {stats?.technique === 'mtsdf'
+          ? 'MTSDF ' + String(stats.rasterEmSize) + ' PX/EM'
+          : stats?.technique === 'slug'
+            ? 'SLUG ANALYTIC · ' + String(stats.slugPageCount) + ' PAGE' + (stats.slugPageCount === 1 ? '' : 'S')
+            : stats?.technique === 'bitmap'
+              ? 'BITMAP ' + String(stats.strikePpem) + ' PX STRIKE'
+              : technique === 'mtsdf'
+                ? 'MTSDF — PX/EM'
+                : technique === 'slug'
+                  ? 'SLUG ANALYTIC · — PAGES'
+                  : 'BITMAP — PX STRIKE'}{' '}
+        · {rangeLabel} ·{' '}
+        {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} · {dpr}×
+        DPR
       </div>
       {(publishedStats === undefined || bakeProgressActive) && error === undefined && (
         <BakeProgressOverlay
