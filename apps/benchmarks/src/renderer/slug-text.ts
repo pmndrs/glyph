@@ -1,4 +1,5 @@
 import {
+  FontLoader,
   FontRegistry,
   Text,
   defineRaster,
@@ -220,7 +221,30 @@ interface FlatSlugConformanceResources {
   readonly font: RegisteredFont
   readonly line: Text
   readonly resource: SlugResource
+  readonly sourceTypes?: SlugRasterSourceTypes
   readonly outlineWidth?: number
+}
+
+export interface SlugRasterSourceTypes {
+  readonly raster: 'embedded' | 'external'
+  readonly curve: 'bufferView' | 'external'
+  readonly headers: 'bufferView' | 'external'
+  readonly references: 'bufferView' | 'external'
+}
+
+export interface SlugExternalRenderParityCapture {
+  readonly backend: RendererBackend
+  readonly width: number
+  readonly height: number
+  readonly embedded: Uint8Array
+  readonly external: Uint8Array
+  readonly externalSourceTypes: SlugRasterSourceTypes
+  readonly embeddedGlyphCount: number
+  readonly externalGlyphCount: number
+  readonly embeddedEvaluatedCurves: number
+  readonly externalEvaluatedCurves: number
+  readonly embeddedRenderSubmitMs: number
+  readonly externalRenderSubmitMs: number
 }
 
 export interface SlugTextLiveStats {
@@ -907,6 +931,59 @@ export async function captureSlugOutlineConformance(options: {
   }
 }
 
+export async function captureSlugExternalRenderParity(options: {
+  readonly backend: RendererBackend
+  readonly externalArtifactUrl: string
+  readonly fetch: typeof fetch
+  readonly signal?: AbortSignal
+}): Promise<SlugExternalRenderParityCapture> {
+  const embeddedResources = await createFlatSlugConformanceResources(
+    options.backend,
+    1,
+    'inter',
+    options.signal,
+  )
+  let externalResources: FlatSlugConformanceResources | undefined
+  try {
+    externalResources = await createFlatSlugConformanceResources(
+      options.backend,
+      1,
+      'inter',
+      options.signal,
+      'baked',
+      undefined,
+      undefined,
+      (signal) => loadExternalSlugFont(options.externalArtifactUrl, options.fetch, signal),
+    )
+    const [embedded, external] = await Promise.all([
+      captureFlatSlugConformance(embeddedResources),
+      captureFlatSlugConformance(externalResources),
+    ])
+    if (embedded.width !== external.width || embedded.height !== external.height) {
+      throw new Error('Embedded and external Slug parity scenes have different dimensions')
+    }
+    return {
+      backend: options.backend,
+      width: embedded.width,
+      height: embedded.height,
+      embedded: embedded.candidate,
+      external: external.candidate,
+      externalSourceTypes: requireExternalSlugSources(externalResources.sourceTypes),
+      embeddedGlyphCount: embedded.glyphCount,
+      externalGlyphCount: external.glyphCount,
+      embeddedEvaluatedCurves: embedded.evaluatedCurves,
+      externalEvaluatedCurves: external.evaluatedCurves,
+      embeddedRenderSubmitMs: embedded.renderSubmitMs,
+      externalRenderSubmitMs: external.renderSubmitMs,
+    }
+  } finally {
+    if (externalResources !== undefined) {
+      await disposeFlatSlugConformanceResources(externalResources)
+    }
+    await disposeFlatSlugConformanceResources(embeddedResources)
+  }
+}
+
 export async function captureSlugSourceOutlineFidelity(options: {
   readonly backend: RendererBackend
   readonly bakedArtifact?: SlugBakedArtifactSource
@@ -1218,6 +1295,10 @@ async function createFlatSlugConformanceResources(
   delivery: FontDelivery = 'baked',
   bakedArtifact?: SlugBakedArtifactSource,
   sceneOptions?: FlatSlugSceneOptions,
+  loadFont?: (signal?: AbortSignal) => Promise<{
+    readonly font: RegisteredFont
+    readonly raster: SlugModule
+  }>,
 ): Promise<FlatSlugConformanceResources> {
   signal?.throwIfAborted()
   const canvas = document.createElement('canvas')
@@ -1234,9 +1315,11 @@ async function createFlatSlugConformanceResources(
   let resource: SlugResource | undefined
   try {
     const loaded =
-      bakedArtifact === undefined
-        ? await loadSlugFont(signal, fontFixture, delivery)
-        : await loadSlugBakedArtifact(bakedArtifact, signal)
+      loadFont === undefined
+        ? bakedArtifact === undefined
+          ? await loadSlugFont(signal, fontFixture, delivery)
+          : await loadSlugBakedArtifact(bakedArtifact, signal)
+        : await loadFont(signal)
     font = loaded.font
     const rasterKey = await slugDescriptorRasterKey()
     const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture)
@@ -1271,6 +1354,10 @@ async function createFlatSlugConformanceResources(
       { rasterKey, kind: slug.kind },
       signal === undefined ? undefined : { signal },
     )
+    const sourceTypes =
+      loadFont === undefined
+        ? undefined
+        : slugRasterSourceTypes(font, rasterKey, raster.extensionData)
     resource = await loaded.raster.decode(font, raster, signal)
     signal?.throwIfAborted()
     line.position.set(sceneOptions?.originX ?? 18, sceneOptions?.originY ?? -18, 0)
@@ -1306,6 +1393,7 @@ async function createFlatSlugConformanceResources(
       font,
       line,
       resource,
+      ...(sourceTypes === undefined ? {} : { sourceTypes }),
       ...(sceneOptions?.outlineWidth === undefined
         ? {}
         : { outlineWidth: sceneOptions.outlineWidth }),
@@ -1318,6 +1406,77 @@ async function createFlatSlugConformanceResources(
     await renderer.dispose()
     throw error
   }
+}
+
+async function loadExternalSlugFont(
+  artifactUrl: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+): Promise<{ readonly font: RegisteredFont; readonly raster: SlugModule }> {
+  signal?.throwIfAborted()
+  const loader = new FontLoader({ fetch: fetcher })
+  const font = await loader.load(
+    { baked: artifactUrl },
+    signal === undefined ? undefined : { signal },
+  )
+  return { font, raster: slug }
+}
+
+function slugRasterSourceTypes(
+  font: RegisteredFont,
+  rasterKey: string,
+  extensionData: unknown,
+): SlugRasterSourceTypes {
+  const reference = font.rasterReferences.find((candidate) => candidate.rasterKey === rasterKey)
+  if (reference === undefined) throw new Error('Slug raster reference disappeared after loading')
+  const extension = nonArrayObject(extensionData, 'Slug extension')
+  if (!Array.isArray(extension.pages) || extension.pages.length !== 1) {
+    throw new TypeError('Slug external parity requires exactly one Inter page')
+  }
+  const page = nonArrayObject(extension.pages[0], 'Slug page')
+  const curve = nonArrayObject(page.curve, 'Slug curve')
+  if (!Array.isArray(curve.variants) || curve.variants.length !== 1) {
+    throw new TypeError('Slug external parity requires exactly one curve variant')
+  }
+  const curveVariant = nonArrayObject(curve.variants[0], 'Slug curve variant')
+  const headerResource = nonArrayObject(page.headerResource, 'Slug header resource')
+  const referenceResource = nonArrayObject(page.referenceResource, 'Slug reference resource')
+  return {
+    raster: reference.source.type,
+    curve: resourceSourceType(curveVariant.source, 'Slug curve source'),
+    headers: resourceSourceType(headerResource.source, 'Slug header source'),
+    references: resourceSourceType(referenceResource.source, 'Slug reference source'),
+  }
+}
+
+function requireExternalSlugSources(
+  sourceTypes: SlugRasterSourceTypes | undefined,
+): SlugRasterSourceTypes {
+  if (
+    sourceTypes === undefined ||
+    sourceTypes.raster !== 'external' ||
+    sourceTypes.curve !== 'external' ||
+    sourceTypes.headers !== 'external' ||
+    sourceTypes.references !== 'external'
+  ) {
+    throw new Error(`Slug parity resource was not fully external: ${JSON.stringify(sourceTypes)}`)
+  }
+  return sourceTypes
+}
+
+function resourceSourceType(value: unknown, label: string): 'bufferView' | 'external' {
+  const source = nonArrayObject(value, label)
+  if (source.type !== 'bufferView' && source.type !== 'external') {
+    throw new TypeError(`${label} has an invalid type`)
+  }
+  return source.type
+}
+
+function nonArrayObject(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`)
+  }
+  return value as Record<string, unknown>
 }
 
 async function captureFlatSlugConformance(

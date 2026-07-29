@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T04:55:53Z"
+  at: "2026-07-29T08:04:57Z"
 ---
 
 # Canonical implementation roadmap
@@ -52,10 +52,10 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     6 |   🟡   | Prove rendering with bitmap inside the benchmark harness              | L      | 3, 5                | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload.                |
 |     7 |   ✅   | Harden the integration proof                                          | L      | 1–6                 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review.                |
 |     8 |   🟡   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
-|     9 |   ⬜   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
+|     9 |   ✅   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
 |    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–5 and 7 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.6. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
+Milestones 0–5, 7, and 9 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.6. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -108,14 +108,17 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 6.4  |   🟡   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                   |  M   | 6.1–6.3    |
 | 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
 | 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
-| 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                  |  L   | 7.2        |
+| 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                   |  L   | 7.2        |
 | 8.2  |   ✅   | Implement the fixed MTSDF baker, canonical 20-byte records, linear RGBA8 KTX2 payload, and embedded/external parity.                                                                     |  XL  | 8.1        |
 | 8.3  |   ✅   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
-| 8.4  |   ✅   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, mip, and effects scenes.                                                                      |  L   | 8.3        |
+| 8.4  |   ✅   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, base-level minification, and effects scenes.                                                 |  L   | 8.3        |
 | 8.5  |   ✅   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state rendering evidence.                                                                                       |  XL  | 8.4        |
 | 8.6  |   🟡   | Add bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                                               |  XL  | 8.5        |
-| 9.x  |   ⬜   | Split Slug conversion, packing, shaders, quality, and perf work.                                                                                                                         |  XL  | 7.2        |
-| 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.x, 9.x   |
+| 9.1  |   ✅   | Port Slug outline conversion, exact normalization/bands, compact packing, deterministic baker, validator, and embedded/external resources.                                               |  XL  | 7.2        |
+| 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL runtime, batching, lifecycle, centered one-draw outline, and public `Text` integration.                                                  |  XL  | 9.1        |
+| 9.3  |   ✅   | Integrate Slug into the shared benchmark/conformance product, release-role scenes, source-outline matrix, and complete two-axis icon-font grid.                                          |  XL  | 9.2        |
+| 9.4  |   ✅   | Reproduce the applicable prior-fork performance baseline, evaluate retained challengers, and close payload, residency, frame-time, and bundle-isolation gates.                           |  XL  | 9.3        |
+| 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.6, 9.4   |
 | 10.2 |   ⬜   | Complete release validation, guidance, and migration material.                                                                                                                           |  M   | 10.1       |
 
 ## Milestone 0 — accept contracts and versions
@@ -650,12 +653,27 @@ Deliver:
 - independently packaged and embedded raster parity;
 - large-size, extreme-zoom, complex-outline, clipping, and transform scenes;
 - a two-axis virtualized icon-font grid spanning the complete named catalog through Bitmap, MTSDF, and Slug;
-- quality-preserving comparisons to source outlines and the reviewed Three Flatland prior art;
+- quality-preserving comparisons to source outlines plus reviewed and adapted implementation invariants from Three Flatland prior art, without treating its rendered pixels as an oracle;
 - centered analytic outline through one specialized draw whose unused and all-zero paths retain the original fill material and resource cost;
 - payload, upload, GPU-memory, and frame-time reports;
 - bundle assertions proving bitmap- and MSDF-only consumers do not import Slug code.
 
 Exit only when Slug satisfies its outline-accurate large/zoomed-text role without quality regression.
+
+### Milestone 9 closure checklist
+
+- [x] Port Fontations outline conversion, exact quadratic normalization and bounds, dynamic band construction, complete equal-list deduplication, deterministic paging, and exact glyph-local records into repository-owned Rust crates.
+- [x] Emit and validate native RGBA16F curve pages, R32UI headers, and exact R16UI references in embedded or independently authenticated external packaging, with byte-identical resources between forms.
+- [x] Load a freshly baked external core GLB, external Slug companion, and external curve/header/reference resources through public `FontLoader`; public `Text` renders byte-identically to the embedded fixture on WebGPU and forced WebGL2 while exact fetch counts prove every URL-aware path was exercised.
+- [x] Copy and adapt the reviewed Three Flatland coverage graph to the installed Three.js/TSL version, preserving bounded dynamic traversal, stable quadratic solving, loop-invariant hoists, direct integer addressing, page runs, transactional GPU ownership, and non-Slug import isolation.
+- [x] Render fill and centered per-glyph analytic outline in one draw. Fill-only and restored all-zero batches retain the original material and resource cost; explicit zero width is framebuffer-identical to fill-only, while positive outline has an independent CPU authority and separately retained performance evidence. Slug shadow remains explicitly unsupported.
+- [x] Retain 36 dual-backend/DPR release-role cells for large text, 1,024-ppem magnification, Arabic, Devanagari, CJK, clipping, affine transform, and projection zoom, with source outlines as the quality authority and historical prior-art transforms as labeled invariants only.
+- [x] Retain the seven-source, 28-cell source-quality matrix and the complete 1,402-icon Font Awesome grid through Bitmap, MTSDF, and Slug with two-axis panning, overscan virtualization, fixed labels, logarithmic scaling, and zero missing glyphs through the final catalog entry.
+- [x] Reproduce the applicable prior-fork baseline improvements: dynamic curve loops, generated-shader hoisting, compact exact band storage, complete band-list deduplication, and exact quadratic bounds. Measure structural root branching instead of assuming it; retain and reject the candidate when the existing generated control flow wins overall.
+- [x] Retain fixed-32, adaptive `{16,32,64}`, capped `{16,32}`, packed-hull, and per-root challengers with exact-quality gates and complete dual-backend decisions. Rejected candidates remain in auditable evidence/commits and do not add shipping format or shader branches.
+- [x] Publish Slug payload, upload-frame, first-draw, steady CPU/GPU, exact curve/header/reference residency, isolated runtime/baker sizes, and seven-source performance matrices; assert Bitmap- and MTSDF-only graphs exclude Slug runtime, shaders, workers, and baker code.
+
+Milestone 9 is closed. Additional Slug optimization hypotheses are future measured research and do not reopen the accepted V0 renderer unless they change a checked contract.
 
 ## Milestone 10 — harden the first shippable release
 
@@ -679,9 +697,9 @@ The project cannot ship before this gate passes.
 
 The order below preserves lanes without pretending the work is part of V1:
 
-| Order | Workstream                                  | Effort  | Why next                                                                                                                                                    |
-| ----: | ------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|    11 | Editorial flow regions and mixed-raster composition | XL      | Add responsive columns and exclusions, then prove bitmap, MTSDF, and Slug over one positioned layout in a live editorial benchmark.                          |
+| Order | Workstream                                          | Effort  | Why next                                                                                                                                                    |
+| ----: | --------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    11 | Editorial flow regions and mixed-raster composition | XL      | Add responsive columns and exclusions, then prove bitmap, MTSDF, and Slug over one positioned layout in a live editorial benchmark.                         |
 |    12 | Mixed-font spans and explicit font fallback         | XL      | Extend the multi-font identity smoke proof into paragraph behavior.                                                                                         |
 |    13 | Large-coverage CJK raster paging and icons          | XL      | Add content-aware paging, independently resident resources, and paired CJK/icon correctness and payload gates without reopening item 5.4 shaping semantics. |
 |    14 | Color emoji                                         | XL      | Extend Slug vector paint/layers and bitmap color resources without changing shaping or layout.                                                              |
