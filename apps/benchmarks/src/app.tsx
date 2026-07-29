@@ -1353,7 +1353,7 @@ function Scene({
               paintStrokePercent={paintStrokePercent}
               showLayoutBounds={showLayoutBounds}
               workloadAmount={workloadAmount}
-              key={`${location.backend}-${location.delivery}-${String(dpr)}`}
+              key={`${location.mode}-${location.backend}-${location.delivery}-${String(dpr)}`}
               showcaseFrame={showcaseFrame}
               stats={liveStats}
               technique={location.technique}
@@ -1379,7 +1379,7 @@ function Scene({
               dpr={dpr}
               event={event}
               fontFixture={fontFixture}
-              key={`${location.backend}-${String(dpr)}-${fontFixture}-${conformanceWorkload.id === 'mtsdf-slug-compare' ? 'paired' : location.technique}-${conformanceWorkload.id}`}
+              key={`${location.mode}-${location.backend}-${String(dpr)}-${fontFixture}-${conformanceWorkload.id === 'mtsdf-slug-compare' ? 'paired' : location.technique}-${conformanceWorkload.id}`}
               summary={summary}
               technique={location.technique}
               workload={conformanceWorkload.id}
