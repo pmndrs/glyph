@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: "@pmndrs/text-benchmarks"
 documentation_type: reference
-source_digest: "sha256:4fe65a8e5309c3e0e7641dfd2dd611dbb6ce9c40459ea7c3850f478536a6d310"
+source_digest: "sha256:ff4d39000e4940240a51660434bd4051541834198df2e7b51ef6ae3b0200e004"
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -46,7 +46,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T16:18:15Z"
+  at: "2026-07-29T16:49:27Z"
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -130,6 +130,8 @@ The separate live performance observation runs the human WebGPU surface at expli
 The package-size lane measures the item 8.1 MTSDF kernel separately from the item 8.2 fixed baker and every initial browser or unrelated raster graph. The validated generator host is 11,543 raw, 8,466 minified, 2,658 gzip, and 2,364 Brotli bytes; the corrected optimized scalar kernel is 52,633 raw, 23,116 gzip, and 19,744 Brotli bytes. The complete fixed baker adds Fontations and artifact packaging behind the optional subpath and measures 531,933 raw, 207,333 gzip, and 162,596 Brotli Wasm bytes plus a 19,661 raw / 14,115 minified / 4,333 gzip / 3,860 Brotli host. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. A package-owned command additionally reports compile, initialization, cold-corpus, and five warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. The local `capture:mtsdf-simd` command builds isolated scalar, auto-vectorized, and explicit-SIMD evidence modules, executes exact-hash-gated calls in GPU-enabled Chromium, and does not publish the two experimental variants.
 
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the Indic lane without weakening the baker's explicit variable-font rejection. Advanced Shaping recommends a script-appropriate font for each case but exposes every baked fixture so a human can inspect coverage failures instead of having the selection silently locked. The CJK default is a reproducible HarfBuzz 13 subset of the authored Noto Sans CJK JP case; DotGothic16 remains available and explicitly labeled as pixel style. The subset is showcase evidence, not an answer to complete CJK distribution: the full 65,535-glyph Noto face remains the authoritative shaping/paragraph oracle and Milestone 13 owns chunked raster paging.
+
+The Japanese showcase freshness check is self-contained on a clean checkout: it first provisions both pinned HarfBuzz 13.0.0 utilities through the source-archive hash and executable-version gate, then rebuilds the subset in temporary storage and compares the font, license, and manifest exactly. An ignored developer cache may accelerate the check but is never an undeclared prerequisite.
 
 The browser product also carries the React 19 subpath proofs. A shared registry target mounts public nested `<Text>` through a real React Three Fiber root backed by `WebGPURenderer`, retains one forwarded core object through width reflow and canonical restoration, matches pinned natural/narrow paragraph oracles, verifies two span paints in one draw, and submits a real renderer frame over three deterministic samples. The live pending-resource probe intercepts the exact composed Inter request behind a manually released promise, observes the Suspense fallback before publication, releases the request without a timer, then proves the registered font key and all 2,937 glyphs before deterministic cleanup. The test renderer remains confined to package integration evidence and does not enter the product registry or application dependencies.
 

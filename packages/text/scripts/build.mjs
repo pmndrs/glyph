@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
+import { captureCommand } from '../../font-baker/scripts/capture-command.mjs'
 import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs'
 import { writeGeneratedTypescriptAbi } from '../../font-baker/scripts/generated-typescript-abi.mjs'
 
@@ -227,14 +228,5 @@ function run(command, args, environment = process.env) {
 }
 
 function runCapture(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: packageRoot, stdio: ['ignore', 'pipe', 'inherit'] })
-    const chunks = []
-    child.stdout.on('data', (chunk) => chunks.push(chunk))
-    child.once('error', reject)
-    child.once('exit', (code, signal) => {
-      if (code === 0) resolve(Buffer.concat(chunks))
-      else reject(new Error(`${command} exited with ${code ?? signal}`))
-    })
-  })
+  return captureCommand(command, args, { cwd: packageRoot })
 }

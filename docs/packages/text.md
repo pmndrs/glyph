@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: "@pmndrs/text"
 documentation_type: reference
-source_digest: "sha256:e6188e679853b48b92ddb44c5aee15aeb5191fbd61b1fe0e0cb7f386dd9e16e6"
+source_digest: "sha256:ed08a0858417016a5c444a4badbbbb131f84f6c8632defced6130235ebd6ff04"
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -133,7 +133,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: "2026-07-29T16:18:15Z"
+  at: "2026-07-29T16:49:27Z"
 ---
 
 # Package reference: `@pmndrs/text`
@@ -217,6 +217,8 @@ The `@pmndrs/text/runtime-bake` boundary closes item 3.2. It is dynamically impo
 Milestone 3 closes with browser-executed parity and cancellation. The benchmark product's public loader target first hashes the real module-Worker artifact against the canonical Node artifact, validates and registers it, then runs the complete missing-sibling fallback in Chromium. Shared loads now reference-count consumers: one abort detaches safely, the final abort reaches fetch/stream/Worker work, and an otherwise-idle Worker terminates immediately after the final success, failure, or cancellation and recreates on demand without timers. Stale events from a terminated Worker cannot settle requests owned by its replacement. The explicit queue keeps one active post under concurrent integration tests; two live Chromium evidence runs preserved the canonical hash while a three-font burst completed in 30.8–32.0 ms versus 68.3–88.6 ms for three separately initialized sequential Workers. These observations are recorded without a timing threshold. Shaping-identity deduplication retains source bytes only when their source hash matches the registered primary provenance; alternate URLs remain hash-qualified candidates.
 
 Milestone 4 closes the package-owned HarfRust runtime. The Rust 1.97.1 module uses HarfRust 0.12.0 and matching `read-fonts` 0.41.0 under `no_std + alloc`, exposes a compiler-described direct-memory C ABI, and keeps its allocator private. Build-only output publishes JSON for tools and typed TypeScript for the host without embedding either representation in Wasm. Its request registry owns zero-initialized, caller-sized buffers capped at 64 MiB and accepts only exact live pointer/length pairs, eliminating reconstructed raw ownership. The TypeScript bridge releases earlier allocations if a later registration copy fails. Canonical Inter contributes 147,192 SFNT bytes, 23,496 dense-extents bytes, and 368 availability bytes, or exactly 171,056 retained bytes. Registration is registry-scoped and idempotent; font/shaper disposal releases owned data and plans.
+
+The four parallel Bitmap, shaper, MTSDF, and Slug ABI producers share the font-baker package's causal command-capture boundary. Their successful process exit is not enough to publish a contract; the build waits for stdout EOF before validating and freshness-checking the complete compiler-generated JSON.
 
 One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, language, and range records through offsets from the generated ABI. It returns aligned borrowed SoA views with absolute UTF-16 clusters, glyph IDs, four positions, and mapped flags. Result layout and arena publication reserve fallibly before writing, so allocation exhaustion returns `RESULT_TOO_LARGE` rather than trapping after shaping. Every pinned Inter case passes bit-for-bit through the complete source → baker GLB → validator → registry extraction → Wasm chain for both calls; multi-run batching, plan reuse/disposal, surrogate boundaries, extents conversion, malformed records, and forged release metadata are executable. The fixed-seed raw-ABI mutation lane registers real validated Inter views first, so seed and surviving mutated requests reach HarfRust while malformed variants remain deterministic. The browser product batches all eight cases into one 97-glyph call with exact output hash `dc30c21c`. The hardened dynamic-Talc optimized module is 680,312 bytes raw, 253,568 bytes gzip, and 199,365 bytes Brotli; its JavaScript bridge is 32,778 bytes minified, 9,288 bytes gzip, and 8,257 bytes Brotli.
 

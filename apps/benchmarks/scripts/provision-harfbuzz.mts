@@ -84,7 +84,7 @@ async function capture(command: string, arguments_: readonly string[]): Promise<
     child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
     child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
     child.once('error', reject)
-    child.once('exit', (code) => {
+    child.once('close', (code) => {
       if (code === 0) resolveOutput(stdout)
       else reject(new Error(`${command} exited with ${String(code)}: ${stderr}`))
     })
@@ -95,7 +95,7 @@ async function run(command: string, arguments_: readonly string[]): Promise<void
   await new Promise<void>((resolveRun, reject) => {
     const child = spawn(command, arguments_, { stdio: 'inherit' })
     child.once('error', reject)
-    child.once('exit', (code) => {
+    child.once('close', (code) => {
       if (code === 0) resolveRun()
       else reject(new Error(`${command} exited with ${String(code)}`))
     })
