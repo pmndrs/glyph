@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import type { Browser } from 'playwright'
 import { createServer, type ViteDevServer } from 'vite'
 
 import { createFontBaker } from '@pmndrs/text-font-baker'
 import { median } from '../src/benchmark/statistics.ts'
+import { launchProjectChromium } from './support/project-chromium.mts'
 
 interface PhaseSample {
   readonly coldMs: number
@@ -52,7 +53,7 @@ for (let sample = 0; sample < sampleCount; sample += 1) {
 }
 
 let server: ViteDevServer | undefined
-let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+let browser: Browser | undefined
 try {
   server = await createServer({
     root: appDirectory,
@@ -60,7 +61,7 @@ try {
     server: { host: '127.0.0.1', port: 5184, strictPort: true },
   })
   await server.listen()
-  browser = await chromium.launch({ headless: true })
+  browser = await launchProjectChromium({ headless: true })
   const workerSamples: PhaseSample[] = []
   for (let sample = 0; sample < sampleCount; sample += 1) {
     const context = await browser.newContext()

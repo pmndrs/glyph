@@ -3,8 +3,10 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { chromium } from 'playwright'
+import type { Browser } from 'playwright'
 import { createServer, type ViteDevServer } from 'vite'
+
+import { launchProjectChromium } from './support/project-chromium.mts'
 
 interface PackedResult {
   readonly hash?: string
@@ -26,7 +28,7 @@ await Promise.all([
 ])
 
 let server: ViteDevServer | undefined
-let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+let browser: Browser | undefined
 try {
   await Promise.all([
     packAndExtract('packages/font-baker', 'pmndrs-text-font-baker-0.0.0.tgz', 'text-font-baker'),
@@ -70,7 +72,7 @@ try {
     throw new Error('packed-consumer Vite server did not expose a TCP port')
   }
 
-  browser = await chromium.launch({ headless: true })
+  browser = await launchProjectChromium({ headless: true })
   const page = await browser.newPage()
   const completion = Promise.withResolvers<PackedResult>()
   const errors: string[] = []

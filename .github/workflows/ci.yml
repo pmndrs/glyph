@@ -34,8 +34,22 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install headless Chromium
-        run: pnpm --filter @pmndrs/text-benchmarks exec playwright install --with-deps chromium
+      - name: Select rolling runner Chromium
+        shell: bash
+        run: |
+          chromium_executable=''
+          for candidate in google-chrome-stable google-chrome chromium chromium-browser; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              chromium_executable="$(command -v "$candidate")"
+              break
+            fi
+          done
+          if [[ -z "$chromium_executable" ]]; then
+            echo 'No system Chromium executable is available on this runner.' >&2
+            exit 1
+          fi
+          "$chromium_executable" --version
+          printf 'PMNDRS_TEXT_CHROMIUM_EXECUTABLE_PATH=%s\n' "$chromium_executable" >> "$GITHUB_ENV"
 
       - name: Run deterministic repository checks
         run: pnpm check

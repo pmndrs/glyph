@@ -12,6 +12,7 @@ export type TargetStatus = 'ready' | 'needs-fixture' | 'unavailable'
 
 export interface BenchmarkEnvironment {
   readonly browser: string
+  readonly browserVersion?: string
   readonly hardwareConcurrency: number
   readonly webgpu: boolean
   readonly crossOriginIsolated: boolean

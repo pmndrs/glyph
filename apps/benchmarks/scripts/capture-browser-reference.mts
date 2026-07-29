@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
-import { chromium } from 'playwright'
+import { launchProjectChromium } from './support/project-chromium.mts'
 
 declare global {
   interface Window {
@@ -35,7 +35,7 @@ const ready = new Promise<void>((resolve, reject) => {
 
 await ready
 await mkdir(outputDirectory, { recursive: true })
-const browser = await chromium.launch({ headless: true })
+const browser = await launchProjectChromium({ headless: true })
 const errors: string[] = []
 
 try {

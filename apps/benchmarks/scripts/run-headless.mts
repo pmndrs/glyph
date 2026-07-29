@@ -1,7 +1,9 @@
 import { writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import type { Browser } from 'playwright'
 import { createServer, type ViteDevServer } from 'vite'
+
+import { launchProjectChromium } from './support/project-chromium.mts'
 
 interface Arguments {
   readonly cases: readonly BenchmarkCase[]
@@ -108,7 +110,7 @@ async function withinDeadline<T>(label: string, timeoutMs: number, task: Promise
   }
 }
 
-let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+let browser: Browser | undefined
 let server: ViteDevServer | undefined
 
 try {
@@ -122,7 +124,7 @@ try {
   browser = await withinDeadline(
     'Chromium launch',
     browserLaunchTimeoutMs,
-    chromium.launch({ headless: true }),
+    launchProjectChromium({ headless: true }),
   )
 
   const summaries = []
@@ -160,10 +162,16 @@ try {
               scenarioId: request.scenarioId,
               input: {},
               controls: { dpr: request.dpr, samples: request.samples, warmup: request.warmup },
-              environment: await environmentResource(),
+              environment: await environmentResource(request.browserVersion),
             })
           },
-          { ...benchmarkCase, dpr: options.dpr, samples: options.samples, warmup: options.warmup },
+          {
+            ...benchmarkCase,
+            dpr: options.dpr,
+            samples: options.samples,
+            warmup: options.warmup,
+            browserVersion: browser.version(),
+          },
         ),
       )
       if (errors.length > 0) throw new Error(`Headless browser errors: ${errors.join(' | ')}`)

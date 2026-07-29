@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url'
-import { chromium, type Page } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { createServer } from 'vite'
+
+import { launchProjectChromium } from './support/project-chromium.mts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 process.chdir(root)
@@ -20,10 +22,10 @@ if (address === null || address === undefined || typeof address === 'string') {
 const mobilePort = address.port
 const errors: string[] = []
 let step = 'launch'
-let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+let browser: Browser | undefined
 
 try {
-  browser = await chromium.launch({
+  browser = await launchProjectChromium({
     headless: false,
     args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
   })
