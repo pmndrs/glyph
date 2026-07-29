@@ -754,7 +754,7 @@ function Harness() {
           payload={<ZenPayloadPills summary={zenPayload} />}
           techniqueControl={
             <TechniqueSwitcher
-              className="w-[180px]"
+              className="w-52"
               presentation="zen"
               technique={location.technique}
               onTechnique={selectTechnique}
