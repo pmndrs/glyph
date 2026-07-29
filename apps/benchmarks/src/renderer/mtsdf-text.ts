@@ -32,6 +32,7 @@ import type { FontDelivery } from '../benchmark/url-state'
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum'
 import { createCanvasSurface } from './canvas-surface'
 import { finiteCanvasDelta } from './canvas-view'
+import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer'
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry'
 import {
@@ -112,6 +113,8 @@ export interface MtsdfTextLiveStats {
   readonly showGrid: boolean
   readonly frameCount: number
   readonly framesPerSecond: number
+  readonly refreshRateHz: number
+  readonly frameBudgetMs: number
   readonly medianSubmitMs: number
   readonly p95SubmitMs: number
   readonly minimumSubmitMs: number
@@ -216,7 +219,7 @@ export function createMtsdfTextTarget(backend: RendererBackend): BenchmarkTarget
   let state: MtsdfTextState = { kind: 'empty' }
   return {
     id: `mtsdf-text-${backend}`,
-    label: backend === 'webgpu' ? 'MTSDF text · WebGPU' : 'MTSDF text · WebGL2 fallback',
+    label: backend === 'webgpu' ? 'MTSDF text · WebGPU' : 'MTSDF text · WebGL',
     detail: 'Inter GLB · HarfRust layout · RGBA8 KTX2 · shared TSL graph',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -256,7 +259,7 @@ export function createMtsdfConformanceTarget(backend: RendererBackend): Benchmar
     label:
       backend === 'webgpu'
         ? 'MTSDF sampling conformance · WebGPU'
-        : 'MTSDF sampling conformance · WebGL2 fallback',
+        : 'MTSDF sampling conformance · WebGL',
     detail: 'GPU TSL candidate · independent scalar CPU reconstruction · visual difference',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -354,7 +357,7 @@ export async function createMtsdfTextPreview(options: {
     canvas,
     dpr,
     height,
-    trackGpuTimestamps: true,
+    trackGpuTimestamps: backend === 'webgpu',
     width,
   })
   let rendererViewport = readRendererViewportState(renderer)
@@ -364,6 +367,7 @@ export async function createMtsdfTextPreview(options: {
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: Text | undefined
+  let gpuFrameTimer: GpuFrameTimer | undefined
   try {
     const fontStarted = performance.now()
     const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress)
@@ -409,59 +413,40 @@ export async function createMtsdfTextPreview(options: {
     const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000)
     camera.position.z = 500
     camera.updateProjectionMatrix()
-    const telemetry = createLiveFrameTelemetry()
-    const gpuTimingSupported = renderer.hasFeature('timestamp-query')
+    gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError })
+    const activeGpuFrameTimer = gpuFrameTimer
+    const gpuTimingSupported = activeGpuFrameTimer.supported
+    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported })
     let firstDrawMs = 0
     let firstDrawRecorded = false
-    let gpuTimestampRequest: number | undefined
-    let gpuTimestampResolution: Promise<void> | undefined
     let closing = false
     let disposed = false
     let disposal: Promise<void> | undefined
     let updateRevision = 0
 
-    const scheduleGpuTimestamp = (): void => {
-      if (
-        !gpuTimingSupported ||
-        gpuTimestampRequest !== undefined ||
-        gpuTimestampResolution !== undefined ||
-        closing ||
-        disposed
-      ) {
-        return
-      }
-      gpuTimestampRequest = requestAnimationFrame(() => {
-        gpuTimestampRequest = undefined
-        if (closing || disposed) return
-        gpuTimestampResolution = renderer
-          .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
-          .then((duration) => {
-            if (closing || disposed || duration === undefined) return
-            telemetry.recordGpu(duration)
-          })
-          .catch((error: unknown) => {
-            if (!closing && !disposed) onError(error)
-          })
-          .finally(() => {
-            gpuTimestampResolution = undefined
-          })
-      })
-    }
-
     const renderFrame = (timestamp: number): void => {
       if (disposed) return
       try {
+        for (const measurement of activeGpuFrameTimer.poll()) {
+          if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId)
+          else telemetry.recordGpu(measurement.frameId, measurement.durationMs)
+        }
+        const frame = telemetry.beginFrame(timestamp)
+        if (frame.measureGpu) activeGpuFrameTimer.beginFrame(frame.frameId)
         const started = performance.now()
-        canvasSurface.render(scene, camera)
+        try {
+          canvasSurface.render(scene, camera)
+        } finally {
+          if (frame.measureGpu) activeGpuFrameTimer.endFrame()
+        }
         const submitMs = performance.now() - started
         if (!firstDrawRecorded) {
           firstDrawMs = submitMs
           firstDrawRecorded = true
         }
         if (closing) return
-        const telemetrySnapshot = telemetry.recordSubmit(timestamp, submitMs)
+        const telemetrySnapshot = telemetry.endFrame(frame, submitMs)
         if (telemetrySnapshot === undefined) return
-        scheduleGpuTimestamp()
         const layout = committedLayout(activeLine)
         const framebufferGpuBytes =
           rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
@@ -587,11 +572,10 @@ export async function createMtsdfTextPreview(options: {
       dispose() {
         if (disposal !== undefined) return disposal
         closing = true
-        if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
         disposal = (async () => {
-          await gpuTimestampResolution
           disposed = true
           await renderer.setAnimationLoop(null)
+          activeGpuFrameTimer.dispose()
           activeLine.dispose()
           activeFont.dispose()
           canvasSurface.dispose()
@@ -601,6 +585,7 @@ export async function createMtsdfTextPreview(options: {
       },
     }
   } catch (error) {
+    gpuFrameTimer?.dispose()
     line?.dispose()
     font?.dispose()
     canvasSurface.dispose()

@@ -817,7 +817,7 @@ function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined
   return {
     id: `tsl-${backend}-baseline`,
-    label: backend === 'webgpu' ? 'TSL WebGPU baseline' : 'TSL WebGL2 fallback baseline',
+    label: backend === 'webgpu' ? 'TSL WebGPU baseline' : 'TSL WebGL baseline',
     detail: 'WebGPURenderer · TSL · deterministic readback',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'raster']),
@@ -843,7 +843,7 @@ function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let configuredInput: BenchmarkInput = {}
   return {
     id: `bitmap-text-${backend}`,
-    label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL2 fallback',
+    label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL',
     detail: 'Selected font GLB · HarfRust layout · R8 KTX2 · instanced TSL',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -939,7 +939,7 @@ function mtsdfTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined
   return {
     id: `mtsdf-text-${backend}`,
-    label: backend === 'webgpu' ? 'MTSDF text · WebGPU' : 'MTSDF text · WebGL2 fallback',
+    label: backend === 'webgpu' ? 'MTSDF text · WebGPU' : 'MTSDF text · WebGL',
     detail: 'Inter GLB · RGBA8 KTX2 · shared TSL graph',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -975,7 +975,7 @@ function mtsdfConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
     label:
       backend === 'webgpu'
         ? 'MTSDF sampling conformance · WebGPU'
-        : 'MTSDF sampling conformance · WebGL2 fallback',
+        : 'MTSDF sampling conformance · WebGL',
     detail: 'GPU TSL candidate · independent scalar CPU reconstruction',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -1012,7 +1012,7 @@ function slugTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined
   return {
     id: `slug-text-${backend}`,
-    label: backend === 'webgpu' ? 'Slug text · WebGPU' : 'Slug text · WebGL2 fallback',
+    label: backend === 'webgpu' ? 'Slug text · WebGPU' : 'Slug text · WebGL',
     detail: 'Inter GLB · analytic curves · shared TSL graph',
     color: backend === 'webgpu' ? 'green' : 'amber',
     capabilities: new Set([
@@ -1048,7 +1048,7 @@ function slugConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
     label:
       backend === 'webgpu'
         ? 'Slug sampling conformance · WebGPU'
-        : 'Slug sampling conformance · WebGL2 fallback',
+        : 'Slug sampling conformance · WebGL',
     detail: 'GPU TSL candidate · independent scalar CPU reconstruction',
     color: backend === 'webgpu' ? 'green' : 'amber',
     capabilities: new Set([
@@ -1088,7 +1088,7 @@ function sourceOutlineFidelityTarget(
   let configuredInput: BenchmarkInput = {}
   return {
     id: `source-outline-${technique}-${backend}`,
-    label: `${technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'} source-outline fidelity · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
+    label: `${technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'} source-outline fidelity · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL'}`,
     detail: 'GPU candidate · pinned source font · browser Canvas2D reference',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -1162,7 +1162,7 @@ function runtimeFallbackTarget(
   let configuredInput: BenchmarkInput = {}
   return {
     id: `runtime-fallback-${technique}-${backend}`,
-    label: `${technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'} runtime fallback · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}`,
+    label: `${technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap'} runtime fallback · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL'}`,
     detail: 'checked-in baked frame · source-font Worker bake · exact comparison',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([

@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
   useTransition,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
   type ReactNode,
 } from 'react'
 
@@ -55,7 +56,12 @@ import {
 import { ExportPanel } from './components/export-panel'
 import { InteractiveCanvas } from './components/interactive-canvas'
 import { Report } from './components/report'
-import { sparklineCanvasMetrics, sparklineSampleX } from './components/sparkline'
+import {
+  sparklineAnimatedSampleX,
+  sparklineCanvasMetrics,
+  sparklineMotionProgress,
+  sparklineSampleY,
+} from './components/sparkline'
 import { Button, Chip, Field, Metric, SelectField, TextareaField, Toggle } from './components/ui'
 import packageSizes from './generated/package-sizes.json'
 import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json'
@@ -84,7 +90,6 @@ import type {
   ComparisonWorkloadPreview,
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload'
-import type { LiveFrameHistoryCursor } from './renderer/live-frame-telemetry'
 import { createExclusiveLifecycleCoordinator } from './renderer/exclusive-lifecycle'
 import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference'
 import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance'
@@ -782,7 +787,7 @@ function Harness() {
   )
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-dvh overflow-hidden bg-background text-foreground">
       <TopBar
         compact={!desktop}
         phone={phone}
@@ -816,10 +821,10 @@ function Harness() {
       <div
         className={
           desktop
-            ? 'grid h-[calc(100vh-52px)] min-h-[680px] transition-[grid-template-columns] duration-200'
+            ? 'grid h-[calc(100dvh-52px)] transition-[grid-template-columns] duration-200'
             : phone
-              ? 'pb-[58px]'
-              : undefined
+              ? 'h-[calc(100dvh-52px)] pb-[58px]'
+              : 'h-[calc(100dvh-52px)]'
         }
         style={
           desktop
@@ -850,17 +855,13 @@ function Harness() {
         <main
           className={
             desktop
-              ? 'min-w-0 overflow-auto border-r border-border bg-background p-4'
-              : 'min-h-[calc(100vh-52px)] p-3'
+              ? 'min-w-0 overflow-hidden border-r border-border bg-background p-4'
+              : 'h-full min-h-0 overflow-hidden p-3'
           }
         >
           <div
             className={
-              location.view === 'report' || location.view === 'export'
-                ? 'hidden'
-                : desktop
-                  ? 'h-full'
-                  : undefined
+              location.view === 'report' || location.view === 'export' ? 'hidden' : 'h-full'
             }
           >
             {scene}
@@ -874,12 +875,20 @@ function Harness() {
               {controls}
             </CompactSheet>
           )}
-          {location.view === 'report' && <Report liveCapture={liveCapture} summary={summary} />}
+          {location.view === 'report' && (
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <Report liveCapture={liveCapture} summary={summary} />
+            </div>
+          )}
           {location.view === 'export' && (
-            <ExportPanel liveCapture={liveCapture} summary={summary} />
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <ExportPanel liveCapture={liveCapture} summary={summary} />
+            </div>
           )}
         </main>
-        <aside className={desktop ? 'overflow-auto bg-chrome p-4' : 'hidden'}>{controls}</aside>
+        <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>
+          {controls}
+        </aside>
         {!desktop && workloadPanelOpen && (
           <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
             <WorkloadRail
@@ -1146,7 +1155,9 @@ function WorkloadRail({
         ? `${selectedMtsdfFixture.configuration.emSize} px/em MTSDF · ${selectedMtsdfFixture.configuration.pixelRange} px range · ${selectedMtsdfFixture.raster.pages.length} pages`
         : '16 px grayscale bitmap strike'
   return (
-    <aside className={`overflow-auto border-r border-border bg-chrome p-3 ${className}`}>
+    <aside
+      className={`overflow-auto overscroll-contain border-r border-border bg-chrome p-3 ${className}`}
+    >
       {showTechnique && (
         <>
           <p className="eyebrow">Technique</p>
@@ -1326,7 +1337,7 @@ function Scene({
   const conformanceStatus = conformanceWorkload.techniques[location.technique]
   return (
     <section
-      className="grid min-h-full min-w-0 grid-rows-[auto_minmax(520px,1fr)_auto] gap-3"
+      className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3"
       data-captured-at={liveCapture?.capturedAt}
       data-execution-id={summary?.executionId}
       data-testid="scene"
@@ -1341,7 +1352,7 @@ function Scene({
         </div>
         <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
           <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
-          <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 fallback'}</Chip>
+          <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL'}</Chip>
           <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
           <Chip>{dpr}× DPR</Chip>
         </div>
@@ -1519,71 +1530,23 @@ function BenchmarkSurface({
       }
   return (
     <div
-      className="grid min-h-0 grid-rows-[auto_auto_minmax(360px,1fr)] gap-3"
+      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3"
       data-testid="benchmark-surface"
     >
-      <div className="metric-summary-grid grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface md:grid-cols-5">
-        <Metric
-          label="Live FPS"
-          value={stats === undefined ? '—' : stats.framesPerSecond.toFixed(1)}
-        />
-        <Metric label="CPU frame submit" value={formatMs(stats?.medianSubmitMs)} />
-        <Metric
-          label="GPU frame"
-          value={
-            stats?.medianGpuMs === undefined
-              ? stats?.gpuTimingSupported === true
-                ? 'resolving'
-                : 'unavailable'
-              : formatMs(stats.medianGpuMs)
-          }
-        />
-        <Metric
-          label="Glyphs / draws"
-          value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
-        />
-        <Metric
-          label="Missing glyphs"
-          value={stats === undefined ? '—' : String(stats.missingGlyphCount)}
-        />
-      </div>
-      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-border bg-border">
-        <Sparkline
-          id="fps"
-          label="FPS"
-          length={stats?.fpsHistoryLength ?? 0}
-          maximum={stats?.maximumFramesPerSecond}
-          minimum={stats?.minimumFramesPerSecond}
-          cursor={stats?.fpsHistoryCursor}
-          tone="success"
-          unit="fps"
-          values={stats?.fpsHistory}
-        />
-        <Sparkline
-          id="cpu"
-          label="CPU frame ms"
-          length={stats?.submitHistoryLength ?? 0}
-          maximum={stats?.maximumSubmitMs}
-          minimum={stats?.minimumSubmitMs}
-          cursor={stats?.submitHistoryCursor}
-          tone="cyan"
-          unit="ms"
-          values={stats?.submitHistory}
-        />
-        <Sparkline
-          emptyLabel={
-            stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
-          }
-          label="GPU frame ms"
-          id="gpu"
-          length={stats?.gpuHistoryLength ?? 0}
-          maximum={stats?.maximumGpuMs}
-          minimum={stats?.minimumGpuMs}
-          cursor={stats?.gpuHistoryCursor}
-          tone="warning"
-          unit="ms"
-          values={stats?.gpuHistory}
-        />
+      <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,0.55fr))] gap-px overflow-hidden rounded-md border border-border bg-border">
+        <TelemetryCharts stats={stats} />
+        <div className="metric-summary-grid bg-surface">
+          <Metric
+            label="Glyphs / draws"
+            value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
+          />
+        </div>
+        <div className="metric-summary-grid bg-surface">
+          <Metric
+            label="Missing glyphs"
+            value={stats === undefined ? '—' : String(stats.missingGlyphCount)}
+          />
+        </div>
       </div>
       <div className="flex min-h-0 flex-col rounded-md border border-border bg-surface p-3">
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -2697,7 +2660,7 @@ function BitmapTextViewport({
 
   return (
     <div
-      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
       data-canvas-grid={String(grid)}
       data-anchor={anchor}
       data-layout-width={stats?.layoutWidth}
@@ -2939,7 +2902,7 @@ function MtsdfTextViewport({
 
   return (
     <div
-      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
       data-canvas-grid={String(grid)}
       data-anchor={anchor}
       data-artifact-bytes={stats?.artifactBytes}
@@ -3166,7 +3129,7 @@ function SlugTextViewport({
 
   return (
     <div
-      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
       data-canvas-grid={String(grid)}
       data-anchor={anchor}
       data-artifact-bytes={stats?.artifactBytes}
@@ -3433,7 +3396,7 @@ function ComparisonWorkloadViewport({
         : `${fontSize} CSS PX`
   return (
     <div
-      className="relative min-h-[360px] flex-1 overflow-hidden rounded border border-border bg-background"
+      className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
       data-canvas-grid={String(grid)}
       data-artifact-bytes={stats?.artifactBytes}
       data-atlas-gpu-bytes={stats?.atlasGpuBytes}
@@ -3689,44 +3652,33 @@ function bakeProgressPercentage(progress: BakeProgress | undefined): number {
   return 20
 }
 
-function Sparkline({
-  cursor,
-  emptyLabel,
-  id,
-  label,
-  length,
-  maximum,
-  minimum,
-  tone,
-  unit,
-  values,
-}: {
-  readonly cursor: LiveFrameHistoryCursor | undefined
-  readonly emptyLabel?: string
-  readonly id: 'cpu' | 'fps' | 'gpu'
-  readonly label: string
-  readonly length: number
-  readonly maximum: number | undefined
-  readonly minimum: number | undefined
-  readonly tone: 'cyan' | 'success' | 'warning'
-  readonly unit: 'fps' | 'ms'
-  readonly values: Float32Array | undefined
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+const TELEMETRY_CHART_TRANSITION_MS = 250
+
+function TelemetryCharts({ stats }: { readonly stats: LiveTextStats | undefined }) {
+  const fpsCanvasRef = useRef<HTMLCanvasElement>(null)
+  const cpuCanvasRef = useRef<HTMLCanvasElement>(null)
+  const gpuCanvasRef = useRef<HTMLCanvasElement>(null)
+  const readStats = useEffectEvent(() => stats)
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas === null || cursor === undefined || values === undefined) return
-    const context = canvas.getContext('2d')
-    if (context === null) return
-    let width = 1
-    let height = 1
-    let pixelRatio = 0
-    const resize = (): void => {
+    const charts = [
+      { id: 'fps', canvas: fpsCanvasRef.current, tone: 'success' },
+      { id: 'cpu', canvas: cpuCanvasRef.current, tone: 'cyan' },
+      { id: 'gpu', canvas: gpuCanvasRef.current, tone: 'warning' },
+    ] as const
+    if (charts.some(({ canvas }) => canvas === null)) return
+    const drawing = charts.map(({ canvas, id, tone }) => {
+      if (canvas === null) throw new TypeError(`missing ${id} telemetry canvas`)
+      const context = canvas.getContext('2d')
+      if (context === null) throw new TypeError(`missing ${id} telemetry context`)
+      return { canvas, context, height: 1, id, pixelRatio: 0, tone, width: 1 }
+    })
+    const resize = (chart: (typeof drawing)[number]): void => {
+      const { canvas, context, tone } = chart
       const bounds = canvas.getBoundingClientRect()
       const metrics = sparklineCanvasMetrics(bounds.width, bounds.height, window.devicePixelRatio)
-      width = metrics.cssWidth
-      height = metrics.cssHeight
-      pixelRatio = metrics.pixelRatio
+      chart.width = metrics.cssWidth
+      chart.height = metrics.cssHeight
+      chart.pixelRatio = metrics.pixelRatio
       if (canvas.width !== metrics.backingWidth || canvas.height !== metrics.backingHeight) {
         canvas.width = metrics.backingWidth
         canvas.height = metrics.backingHeight
@@ -3740,28 +3692,48 @@ function Sparkline({
       canvas.dataset.cssWidth = String(metrics.cssWidth)
       canvas.dataset.pixelRatio = String(metrics.pixelRatio)
     }
-    const resizeObserver = new ResizeObserver(resize)
-    resizeObserver.observe(canvas)
-    resize()
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const chart = drawing.find(({ canvas }) => canvas === entry.target)
+        if (chart !== undefined) resize(chart)
+      }
+    })
+    for (const chart of drawing) {
+      resizeObserver.observe(chart.canvas)
+      resize(chart)
+    }
     let animationFrame = 0
-    const draw = (): void => {
-      if (pixelRatio !== Math.max(1, window.devicePixelRatio)) resize()
-      const historyLength = cursor.length
-      let chartMaximum = 1
-      const start = historyLength === values.length ? cursor.nextIndex : 0
-      for (let index = 0; index < historyLength; index += 1) {
-        chartMaximum = Math.max(chartMaximum, values[(start + index) % values.length] ?? 0)
+    let transitionStartedAt = performance.now() - TELEMETRY_CHART_TRANSITION_MS
+    let historySignature = ''
+    const draw = (timestamp: number): void => {
+      for (const chart of drawing) {
+        if (chart.pixelRatio !== Math.max(1, window.devicePixelRatio)) resize(chart)
       }
-      context.clearRect(0, 0, width, height)
-      context.beginPath()
-      for (let index = 0; index < historyLength; index += 1) {
-        const value = values[(start + index) % values.length] ?? 0
-        const x = sparklineSampleX(index, historyLength, values.length, width)
-        const y = height - (value / chartMaximum) * (height - 4) - 2
-        if (index === 0) context.moveTo(x, y)
-        else context.lineTo(x, y)
+      const current = readStats()
+      if (current !== undefined) {
+        const signature = `${current.fpsHistoryCursor.length}:${current.fpsHistoryCursor.nextIndex}`
+        if (signature !== historySignature) {
+          historySignature = signature
+          transitionStartedAt = timestamp
+        }
+        const progress = sparklineMotionProgress(
+          timestamp - transitionStartedAt,
+          TELEMETRY_CHART_TRANSITION_MS,
+        )
+        for (const chart of drawing) {
+          const series = telemetryChartSeries(current, chart.id)
+          drawTelemetrySeries(
+            chart,
+            series.values,
+            series.length,
+            series.nextIndex,
+            series.maximum,
+            progress,
+          )
+        }
+      } else {
+        for (const { context, width, height } of drawing) context.clearRect(0, 0, width, height)
       }
-      context.stroke()
       animationFrame = requestAnimationFrame(draw)
     }
     animationFrame = requestAnimationFrame(draw)
@@ -3769,24 +3741,97 @@ function Sparkline({
       cancelAnimationFrame(animationFrame)
       resizeObserver.disconnect()
     }
-  }, [cursor, tone, values])
+  }, [])
   return (
-    <div className="bg-surface p-3" data-testid={`sparkline-${id}`} data-tone={tone}>
+    <>
+      <TelemetryChartPanel
+        canvasRef={fpsCanvasRef}
+        current={latestHistoryValue(stats?.fpsHistory, stats?.fpsHistoryCursor)}
+        id="fps"
+        label="FPS"
+        maximum={stats?.maximumFramesPerSecond}
+        minimum={stats?.minimumFramesPerSecond}
+        scaleMaximum={stats?.refreshRateHz}
+        tone="success"
+        unit="fps"
+      />
+      <TelemetryChartPanel
+        canvasRef={cpuCanvasRef}
+        current={latestHistoryValue(stats?.submitHistory, stats?.submitHistoryCursor)}
+        id="cpu"
+        label="CPU"
+        maximum={stats?.maximumSubmitMs}
+        minimum={stats?.minimumSubmitMs}
+        scaleMaximum={stats?.frameBudgetMs}
+        tone="cyan"
+        unit="ms"
+      />
+      <TelemetryChartPanel
+        canvasRef={gpuCanvasRef}
+        current={latestHistoryValue(stats?.gpuHistory, stats?.gpuHistoryCursor)}
+        emptyLabel={
+          stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'
+        }
+        id="gpu"
+        label="GPU"
+        maximum={stats?.maximumGpuMs}
+        minimum={stats?.minimumGpuMs}
+        scaleMaximum={stats?.frameBudgetMs}
+        tone="warning"
+        unit="ms"
+      />
+    </>
+  )
+}
+
+function TelemetryChartPanel({
+  canvasRef,
+  current,
+  emptyLabel,
+  id,
+  label,
+  maximum,
+  minimum,
+  scaleMaximum,
+  tone,
+  unit,
+}: {
+  readonly canvasRef: RefObject<HTMLCanvasElement | null>
+  readonly current: number | undefined
+  readonly emptyLabel?: string
+  readonly id: 'cpu' | 'fps' | 'gpu'
+  readonly label: string
+  readonly maximum: number | undefined
+  readonly minimum: number | undefined
+  readonly scaleMaximum: number | undefined
+  readonly tone: 'cyan' | 'success' | 'warning'
+  readonly unit: 'fps' | 'ms'
+}) {
+  return (
+    <div
+      className="flex min-h-0 flex-col bg-surface p-2"
+      data-scale-maximum={scaleMaximum}
+      data-testid={`sparkline-${id}`}
+      data-tone={tone}
+    >
       <div
         className={`flex items-baseline justify-between gap-2 font-mono text-[8px] uppercase tracking-wider ${sparklineToneClass(tone)}`}
       >
-        <p>{label}</p>
+        <div className="flex items-baseline gap-2">
+          <p>{label}</p>
+          <p className="tabular-nums">{formatSparklineValue(current, unit)}</p>
+        </div>
         <p className="text-right tabular-nums">
-          LOW {formatSparklineValue(minimum, unit)} · HIGH {formatSparklineValue(maximum, unit)}
+          {formatSparklineValue(minimum, unit)} – {formatSparklineValue(maximum, unit)}
         </p>
       </div>
-      <div className="relative mt-2 h-[42px] w-full">
+      <div className="relative mt-1 min-h-4 w-full flex-1">
         <canvas
           aria-label={`${label} history`}
           className="absolute inset-0 size-full"
           ref={canvasRef}
         />
-        {length === 0 && emptyLabel !== undefined && (
+        {current === undefined && emptyLabel !== undefined && (
           <span className="absolute inset-0 grid place-items-center font-mono text-[8px] text-dim">
             {emptyLabel}
           </span>
@@ -3796,9 +3841,78 @@ function Sparkline({
   )
 }
 
+function drawTelemetrySeries(
+  chart: {
+    readonly context: CanvasRenderingContext2D
+    readonly height: number
+    readonly width: number
+  },
+  values: Float32Array,
+  length: number,
+  nextIndex: number,
+  maximum: number,
+  progress: number,
+): void {
+  const { context, height, width } = chart
+  context.clearRect(0, 0, width, height)
+  context.beginPath()
+  const start = length === values.length ? nextIndex : 0
+  let drawing = false
+  for (let index = 0; index < length; index += 1) {
+    const value = values[(start + index) % values.length] ?? Number.NaN
+    if (!Number.isFinite(value)) {
+      drawing = false
+      continue
+    }
+    const x = sparklineAnimatedSampleX(index, length, values.length, width, progress)
+    const y = sparklineSampleY(value, maximum, height)
+    if (!drawing) context.moveTo(x, y)
+    else context.lineTo(x, y)
+    drawing = true
+  }
+  context.stroke()
+}
+
+function telemetryChartSeries(stats: LiveTextStats, id: 'cpu' | 'fps' | 'gpu') {
+  switch (id) {
+    case 'fps':
+      return {
+        length: stats.fpsHistoryLength,
+        maximum: stats.refreshRateHz,
+        nextIndex: stats.fpsHistoryCursor.nextIndex,
+        values: stats.fpsHistory,
+      }
+    case 'cpu':
+      return {
+        length: stats.submitHistoryLength,
+        maximum: stats.frameBudgetMs,
+        nextIndex: stats.submitHistoryCursor.nextIndex,
+        values: stats.submitHistory,
+      }
+    case 'gpu':
+      return {
+        length: stats.gpuHistoryLength,
+        maximum: stats.frameBudgetMs,
+        nextIndex: stats.gpuHistoryCursor.nextIndex,
+        values: stats.gpuHistory,
+      }
+  }
+}
+
+function latestHistoryValue(
+  values: Float32Array | undefined,
+  cursor: { readonly length: number; readonly nextIndex: number } | undefined,
+): number | undefined {
+  if (values === undefined || cursor === undefined || cursor.length === 0) return undefined
+  const value = values[(cursor.nextIndex + values.length - 1) % values.length]
+  return value !== undefined && Number.isFinite(value) ? value : undefined
+}
+
 function formatSparklineValue(value: number | undefined, unit: 'fps' | 'ms'): string {
   if (value === undefined) return '—'
-  return unit === 'fps' ? value.toFixed(1) : `${value.toFixed(2)} ms`
+  if (unit === 'fps') return value.toFixed(1)
+  if (value > 0 && value < 0.01) return '<0.01 ms'
+  return `${value.toFixed(2)} ms`
 }
 
 function sparklineToneClass(tone: 'cyan' | 'success' | 'warning'): string {
@@ -3958,7 +4072,7 @@ function Controls({
             variant={backend === 'webgl2' ? 'primary' : 'secondary'}
             onClick={() => onBackend('webgl2')}
           >
-            WebGL2
+            WebGL
           </Button>
         </div>
       </div>

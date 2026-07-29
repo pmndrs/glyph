@@ -31,7 +31,7 @@ export function createTslBaselineTarget(backend: RendererBackend): BenchmarkTarg
   let state: BaselineState = { kind: 'empty' }
   return {
     id: `tsl-${backend}-baseline`,
-    label: backend === 'webgpu' ? 'TSL WebGPU baseline' : 'TSL WebGL2 fallback baseline',
+    label: backend === 'webgpu' ? 'TSL WebGPU baseline' : 'TSL WebGL baseline',
     detail: 'WebGPURenderer · TSL · deterministic readback',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'raster']),

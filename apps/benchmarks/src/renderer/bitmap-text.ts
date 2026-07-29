@@ -44,6 +44,7 @@ import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts'
 import { compactRgba8Readback } from './tsl-baseline'
 import { createCanvasSurface } from './canvas-surface'
 import { finiteCanvasDelta } from './canvas-view'
+import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer'
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry'
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry'
 import {
@@ -154,6 +155,8 @@ export interface BitmapTextLiveStats {
   readonly showGrid: boolean
   readonly frameCount: number
   readonly framesPerSecond: number
+  readonly refreshRateHz: number
+  readonly frameBudgetMs: number
   readonly medianSubmitMs: number
   readonly p95SubmitMs: number
   readonly minimumSubmitMs: number
@@ -315,7 +318,7 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
   let fontFixture: BenchmarkFontFixture = 'inter'
   return {
     id: `bitmap-text-${backend}`,
-    label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL2 fallback',
+    label: backend === 'webgpu' ? 'Bitmap text · WebGPU' : 'Bitmap text · WebGL',
     detail: 'Selected font GLB · HarfRust layout · R8 KTX2 · instanced TSL',
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set([
@@ -736,7 +739,7 @@ export async function createBitmapTextPreview(
     canvas,
     dpr,
     height: viewportHeight,
-    trackGpuTimestamps: true,
+    trackGpuTimestamps: backend === 'webgpu',
     width,
   })
   let rendererViewport = readRendererViewportState(renderer)
@@ -746,6 +749,7 @@ export async function createBitmapTextPreview(
   const rendererInitMs = performance.now() - rendererStarted
   let font: RegisteredFont | undefined
   let line: BitmapLine | undefined
+  let gpuFrameTimer: GpuFrameTimer | undefined
   try {
     const fontStarted = performance.now()
     const loadedFont = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress)
@@ -792,10 +796,10 @@ export async function createBitmapTextPreview(
     const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10)
     camera.position.z = 1
     camera.updateProjectionMatrix()
-    const telemetry = createLiveFrameTelemetry()
-    let gpuTimestampRequest: number | undefined
-    let gpuTimestampResolution: Promise<void> | undefined
-    const gpuTimingSupported = renderer.hasFeature('timestamp-query')
+    gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError })
+    const activeGpuFrameTimer = gpuFrameTimer
+    const gpuTimingSupported = activeGpuFrameTimer.supported
+    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported })
     let closing = false
     let disposed = false
     let disposal: Promise<void> | undefined
@@ -939,48 +943,28 @@ export async function createBitmapTextPreview(
         return presentationSnapshot()
       })
     }
-    const scheduleGpuTimestamp = (): void => {
-      if (
-        !gpuTimingSupported ||
-        gpuTimestampRequest !== undefined ||
-        gpuTimestampResolution !== undefined ||
-        closing ||
-        disposed
-      ) {
-        return
-      }
-      gpuTimestampRequest = requestAnimationFrame(() => {
-        gpuTimestampRequest = undefined
-        if (disposed) return
-        gpuTimestampResolution = renderer
-          .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
-          .then((duration) => {
-            if (disposed || duration === undefined || !Number.isFinite(duration) || duration < 0) {
-              return
-            }
-            telemetry.recordGpu(duration)
-          })
-          .catch((error: unknown) => {
-            if (!closing && !disposed) onError(error)
-          })
-          .finally(() => {
-            gpuTimestampResolution = undefined
-          })
-      })
-    }
     const renderPreviewFrame = (timestamp: number): void => {
       if (disposed) return
       try {
+        for (const measurement of activeGpuFrameTimer.poll()) {
+          if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId)
+          else telemetry.recordGpu(measurement.frameId, measurement.durationMs)
+        }
+        const frame = telemetry.beginFrame(timestamp)
+        if (frame.measureGpu) activeGpuFrameTimer.beginFrame(frame.frameId)
         const started = performance.now()
-        canvasSurface.render(scene, camera)
+        try {
+          canvasSurface.render(scene, camera)
+        } finally {
+          if (frame.measureGpu) activeGpuFrameTimer.endFrame()
+        }
         if (closing) return
         const submitMs = performance.now() - started
         if (firstDrawMs === 0) firstDrawMs = submitMs
-        const telemetrySnapshot = telemetry.recordSubmit(timestamp, submitMs)
+        const telemetrySnapshot = telemetry.endFrame(frame, submitMs)
         if (telemetrySnapshot === undefined) return
         const framebufferGpuBytes =
           rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4
-        scheduleGpuTimestamp()
         const layout = activeLine.object.layout
         if (layout === undefined) throw new Error('live bitmap Text lost its committed layout')
         onStats({
@@ -1093,11 +1077,10 @@ export async function createBitmapTextPreview(
       dispose() {
         if (disposal !== undefined) return disposal
         closing = true
-        if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
         disposal = (async () => {
-          await gpuTimestampResolution
           disposed = true
           await renderer.setAnimationLoop(null)
+          activeGpuFrameTimer.dispose()
           disposePresentation()
           disposeBitmapLine(activeLine)
           activeFont.dispose()
@@ -1108,6 +1091,7 @@ export async function createBitmapTextPreview(
       },
     }
   } catch (error) {
+    gpuFrameTimer?.dispose()
     if (line !== undefined) disposeBitmapLine(line)
     font?.dispose()
     canvasSurface.dispose()

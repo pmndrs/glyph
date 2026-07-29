@@ -15,6 +15,7 @@ import { benchmarkIpsumText, ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fi
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state'
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text'
 import { createCanvasSurface } from './canvas-surface'
+import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer'
 import { createLiveFrameTelemetry } from './live-frame-telemetry'
 import { createTextUpdateTelemetry } from './text-update-telemetry'
 import type { FontDeliveryMetrics } from './font-delivery'
@@ -227,11 +228,12 @@ export async function createComparisonWorkloadPreview(options: {
     canvas,
     dpr,
     height,
-    trackGpuTimestamps: true,
+    trackGpuTimestamps: backend === 'webgpu',
     width,
   })
   let rendererViewport = readRendererViewportState(renderer)
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid)
+  let gpuFrameTimer: GpuFrameTimer | undefined
   const rendererInitMs = performance.now() - rendererStarted
   let font: LoadedTechniqueFont | undefined
   let iconFont: LoadedTechniqueFont | undefined
@@ -243,15 +245,14 @@ export async function createComparisonWorkloadPreview(options: {
   let uploadFrameGpuMs: number | undefined
   let uploadFrameCompleteMs: number | undefined
   let textReadyMs = 0
-  let gpuTimestampRequest: number | undefined
-  let gpuTimestampResolution: Promise<void> | undefined
   let disposal: Promise<void> | undefined
   let reflowCount = 0
   let lastReflowMs = 0
   const animationEpoch = performance.now()
   const scene = new THREE.Scene()
   const camera = createWorkloadCamera(configuration.workload, width, height)
-  const telemetry = createLiveFrameTelemetry()
+  gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError })
+  const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: gpuFrameTimer.supported })
   const textUpdateTelemetry = createTextUpdateTelemetry()
   const gpuTimingSupported = renderer.hasFeature('timestamp-query')
 
@@ -603,43 +604,20 @@ export async function createComparisonWorkloadPreview(options: {
     const uploadFrameStarted = performance.now()
     canvasSurface.render(scene, camera)
     firstDrawMs = performance.now() - uploadFrameStarted
-    if (gpuTimingSupported) {
+    if (backend === 'webgpu' && gpuTimingSupported) {
       uploadFrameGpuMs = await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
       uploadFrameCompleteMs = performance.now() - uploadFrameStarted
     }
     const startupMs = performance.now() - startupStarted
 
-    const scheduleGpuTimestamp = (): void => {
-      if (
-        !gpuTimingSupported ||
-        gpuTimestampRequest !== undefined ||
-        gpuTimestampResolution !== undefined ||
-        closing ||
-        disposed
-      ) {
-        return
-      }
-      gpuTimestampRequest = requestAnimationFrame(() => {
-        gpuTimestampRequest = undefined
-        if (closing || disposed) return
-        gpuTimestampResolution = renderer
-          .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
-          .then((duration) => {
-            if (closing || disposed || duration === undefined) return
-            telemetry.recordGpu(duration)
-          })
-          .catch((error: unknown) => {
-            if (!closing && !disposed) onError(error)
-          })
-          .finally(() => {
-            gpuTimestampResolution = undefined
-          })
-      })
-    }
-
     const renderFrame = (timestamp: number): void => {
       if (closing || disposed) return
       try {
+        for (const measurement of gpuFrameTimer?.poll() ?? []) {
+          if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId)
+          else telemetry.recordGpu(measurement.frameId, measurement.durationMs)
+        }
+        const frame = telemetry.beginFrame(timestamp)
         animateEntries(
           entries,
           configuration,
@@ -653,12 +631,16 @@ export async function createComparisonWorkloadPreview(options: {
           },
         )
         const started = performance.now()
-        canvasSurface.render(scene, camera)
+        if (frame.measureGpu) gpuFrameTimer?.beginFrame(frame.frameId)
+        try {
+          canvasSurface.render(scene, camera)
+        } finally {
+          if (frame.measureGpu) gpuFrameTimer?.endFrame()
+        }
         const submitMs = performance.now() - started
         if (firstDrawMs === 0) firstDrawMs = submitMs
-        const snapshot = telemetry.recordSubmit(timestamp, submitMs)
+        const snapshot = telemetry.endFrame(frame, submitMs)
         if (snapshot === undefined) return
-        scheduleGpuTimestamp()
         const activeEntries = entries.filter(({ node }) => node.visible)
         const layouts = activeEntries.flatMap(entryLayouts)
         const framebufferGpuBytes =
@@ -878,13 +860,12 @@ export async function createComparisonWorkloadPreview(options: {
         const disposalReason = new DOMException('The comparison preview is disposed', 'AbortError')
         for (const waiter of pendingUpdate?.waiters ?? []) waiter.reject(disposalReason)
         pendingUpdate = undefined
-        if (gpuTimestampRequest !== undefined) cancelAnimationFrame(gpuTimestampRequest)
         disposal = (async () => {
           await stopRendering
           await updateDrain
           await iconWindowDrain
-          await gpuTimestampResolution
           disposed = true
+          gpuFrameTimer?.dispose()
           renderer.setRenderTarget(null)
           renderer.clear()
           disposeEntries(entries)
@@ -897,6 +878,7 @@ export async function createComparisonWorkloadPreview(options: {
       },
     }
   } catch (error) {
+    gpuFrameTimer?.dispose()
     disposeEntries(entries)
     iconFont?.font.dispose()
     font?.font.dispose()

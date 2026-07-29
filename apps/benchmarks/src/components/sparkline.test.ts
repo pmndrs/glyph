@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { sparklineCanvasMetrics, sparklineSampleX } from './sparkline'
+import {
+  sparklineAnimatedSampleX,
+  sparklineCanvasMetrics,
+  sparklineMotionProgress,
+  sparklineSampleX,
+  sparklineSampleY,
+} from './sparkline'
 
 describe('sparklineCanvasMetrics', () => {
   it('maps a fractional CSS box exactly onto its physical backing store', () => {
@@ -36,5 +42,24 @@ describe('sparklineSampleX', () => {
     expect(sparklineSampleX(0, 4, 4, 300)).toBe(0)
     expect(sparklineSampleX(1, 4, 4, 300)).toBe(100)
     expect(sparklineSampleX(3, 4, 4, 300)).toBe(300)
+  })
+})
+
+describe('sparkline animation', () => {
+  it('eases every series through the same normalized phase', () => {
+    expect(sparklineMotionProgress(0, 250)).toBe(0)
+    expect(sparklineMotionProgress(125, 250)).toBe(0.5)
+    expect(sparklineMotionProgress(250, 250)).toBe(1)
+  })
+
+  it('slides a newly aligned row in by exactly one history slot', () => {
+    expect(sparklineAnimatedSampleX(2, 4, 4, 300, 0)).toBe(300)
+    expect(sparklineAnimatedSampleX(2, 4, 4, 300, 1)).toBe(200)
+  })
+
+  it('uses a fixed domain and clips missed budgets to the chart ceiling', () => {
+    expect(sparklineSampleY(0, 16, 42)).toBe(40)
+    expect(sparklineSampleY(8, 16, 42)).toBe(21)
+    expect(sparklineSampleY(32, 16, 42)).toBe(2)
   })
 })

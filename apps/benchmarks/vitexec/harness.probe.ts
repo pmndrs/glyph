@@ -174,9 +174,9 @@ captureWindow.click()
 await waitForText(scene, 'Captured the current rolling window')
 
 const webglButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-  (candidate) => candidate.textContent?.trim() === 'WebGL2' && !candidate.disabled,
+  (candidate) => candidate.textContent?.trim() === 'WebGL' && !candidate.disabled,
 )
-if (webglButton === undefined) throw new Error('WebGL2 live backend control is missing')
+if (webglButton === undefined) throw new Error('WebGL live backend control is missing')
 webglButton.click()
 const webglViewport = await waitForReplacement(viewport, '[data-testid="bitmap-live-viewport"]')
 await verifyGpuTiming(webglViewport, 'webgl2')
