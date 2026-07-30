@@ -7,7 +7,7 @@ describe('live frame telemetry', () => {
     const telemetry = createLiveFrameTelemetry({ capacity: 4, refreshRateHz: 60, reportIntervalMs: 100 });
     const first = recordCpuFrame(telemetry, 1_000, 0.25);
     const secondToken = telemetry.beginFrame(1_016);
-    expect(secondToken.measureGpu).toBe(false);
+    expect(secondToken.measureGpu).toBe(true);
     expect(telemetry.endFrame(secondToken, 0.5)).toBe(first);
     const thirdToken = telemetry.beginFrame(1_032);
     telemetry.endFrame(thirdToken, 0.75);
@@ -38,8 +38,22 @@ describe('live frame telemetry', () => {
       maximumGpuMs: 0.75,
       gpuHistoryLength: 3,
     });
-    expect(reported?.gpuHistory[0]).toBe(0.75);
-    expect(Number.isNaN(reported?.gpuHistory[1])).toBe(true);
+    expect([...reported!.gpuHistory.slice(0, 3)]).toEqual([0.75, 0.75, 0.75]);
+  });
+
+  it('forward-fills every later frame with the most recently resolved GPU duration', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 4, refreshRateHz: 60, reportIntervalMs: 100 });
+    const firstToken = telemetry.beginFrame(1_000);
+    const first = telemetry.endFrame(firstToken, 0.25);
+    telemetry.recordGpu(firstToken.frameId, 0.75);
+    const secondToken = telemetry.beginFrame(1_016);
+    telemetry.endFrame(secondToken, 0.5);
+    const thirdToken = telemetry.beginFrame(1_032);
+    telemetry.endFrame(thirdToken, 0.75);
+
+    expect([...first!.gpuHistory.slice(0, 3)]).toEqual([0.75, 0.75, 0.75]);
+    telemetry.recordGpu(thirdToken.frameId, 1.25);
+    expect([...first!.gpuHistory.slice(0, 3)]).toEqual([0.75, 1.25, 1.25]);
   });
 
   it('forgets delayed measurements after their frame slot is overwritten', () => {

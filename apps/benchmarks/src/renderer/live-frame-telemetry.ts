@@ -1,4 +1,4 @@
-const DEFAULT_CAPACITY = 240;
+const DEFAULT_CAPACITY = 1_024;
 const DEFAULT_REPORT_INTERVAL_MS = 250;
 
 export interface LiveFrameHistoryCursor {
@@ -73,6 +73,7 @@ export function createLiveFrameTelemetry(options?: {
   const frameTimestampHistory = new Float64Array(capacity);
   const frameIds = new Array<number>(capacity).fill(0);
   const frameSlots = new Map<number, number>();
+  const pendingGpuFrames = new Set<number>();
   const submitHistory = new Float32Array(capacity).fill(Number.NaN);
   const submitQuantileScratch = new Float32Array(capacity);
   const fpsHistory = new Float32Array(capacity).fill(Number.NaN);
@@ -94,7 +95,10 @@ export function createLiveFrameTelemetry(options?: {
       const frameId = frameCount;
       const historyIndex = historyCursor.nextIndex;
       const overwrittenFrameId = frameIds[historyIndex] ?? 0;
-      if (overwrittenFrameId !== 0) frameSlots.delete(overwrittenFrameId);
+      if (overwrittenFrameId !== 0) {
+        frameSlots.delete(overwrittenFrameId);
+        pendingGpuFrames.delete(overwrittenFrameId);
+      }
 
       const instantaneousFps =
         lastFrameTimestamp === undefined || timestampMs <= lastFrameTimestamp
@@ -105,7 +109,8 @@ export function createLiveFrameTelemetry(options?: {
       frameSlots.set(frameId, historyIndex);
       fpsHistory[historyIndex] = instantaneousFps;
       submitHistory[historyIndex] = Number.NaN;
-      gpuHistory[historyIndex] = Number.NaN;
+      gpuHistory[historyIndex] = latestGpuMs ?? Number.NaN;
+      if (gpuTimingSupported) pendingGpuFrames.add(frameId);
       historyCursor.nextIndex = (historyIndex + 1) % capacity;
       historyCursor.length = Math.min(historyCursor.length + 1, capacity);
       lastFrameTimestamp = timestampMs;
@@ -125,7 +130,7 @@ export function createLiveFrameTelemetry(options?: {
         frameId,
         framesPerSecond,
         historyIndex,
-        measureGpu: gpuTimingSupported && report,
+        measureGpu: gpuTimingSupported,
         report,
         snapshot: latestSnapshot,
       };
@@ -161,7 +166,11 @@ export function createLiveFrameTelemetry(options?: {
       }
       const historyIndex = frameSlots.get(frameId);
       if (historyIndex === undefined) return false;
-      gpuHistory[historyIndex] = durationMs;
+      for (const pendingFrameId of pendingGpuFrames) {
+        const pendingIndex = frameSlots.get(pendingFrameId);
+        if (pendingIndex !== undefined) gpuHistory[pendingIndex] = durationMs;
+        if (pendingFrameId <= frameId) pendingGpuFrames.delete(pendingFrameId);
+      }
       latestGpuMs = durationMs;
       return true;
     },
@@ -169,7 +178,6 @@ export function createLiveFrameTelemetry(options?: {
       assertGpuFrameId(frameId);
       const historyIndex = frameSlots.get(frameId);
       if (historyIndex === undefined) return false;
-      gpuHistory[historyIndex] = Number.NaN;
       return true;
     },
   };

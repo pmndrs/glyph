@@ -16,6 +16,10 @@ export interface GpuFrameTimer {
 }
 
 interface TimestampResolver {
+  readonly backend?: object;
+  readonly info?: {
+    frame?: number;
+  };
   resolveTimestampsAsync(type: THREE.TimestampQuery): Promise<number | undefined>;
 }
 
@@ -48,6 +52,19 @@ export function createWebGpuFrameTimer(
   let resolution: Promise<void> | undefined;
   let disposed = false;
   let completed: GpuFrameMeasurement[] = [];
+  const rendererFrameIds = new Map<number, number>();
+
+  const resolvedFrameId = (fallbackFrameId: number): number => {
+    const backend = resolver.backend as { getTimestampFrames?(type: THREE.TimestampQuery): number[] } | undefined;
+    const frames = backend?.getTimestampFrames?.(THREE.TimestampQuery.RENDER);
+    const rendererFrameId = frames?.at(-1);
+    if (rendererFrameId === undefined) return fallbackFrameId;
+    const frameId = rendererFrameIds.get(rendererFrameId) ?? fallbackFrameId;
+    for (const trackedRendererFrameId of rendererFrameIds.keys()) {
+      if (trackedRendererFrameId <= rendererFrameId) rendererFrameIds.delete(trackedRendererFrameId);
+    }
+    return frameId;
+  };
 
   return {
     supported: options.supported,
@@ -62,22 +79,25 @@ export function createWebGpuFrameTimer(
       if (activeFrameId === undefined) throw new Error('no GPU frame measurement is active');
       const frameId = activeFrameId;
       activeFrameId = undefined;
+      const rendererFrameId = resolver.info?.frame;
+      if (rendererFrameId !== undefined) rendererFrameIds.set(rendererFrameId, frameId);
       if (!options.supported || resolution !== undefined) return;
 
       resolution = resolver
         .resolveTimestampsAsync(THREE.TimestampQuery.RENDER)
         .then((durationMs) => {
           if (disposed) return;
+          const frameIdForDuration = resolvedFrameId(frameId);
           if (durationMs === undefined) {
-            completed.push({ frameId, durationMs: undefined });
+            completed.push({ frameId: frameIdForDuration, durationMs: undefined });
             return;
           }
           if (!Number.isFinite(durationMs) || durationMs < 0) {
             options.onError(new RangeError('GPU frame duration must be finite and nonnegative'));
-            completed.push({ frameId, durationMs: undefined });
+            completed.push({ frameId: frameIdForDuration, durationMs: undefined });
             return;
           }
-          completed.push({ frameId, durationMs });
+          completed.push({ frameId: frameIdForDuration, durationMs });
         })
         .catch((error: unknown) => {
           if (!disposed) {
@@ -99,6 +119,7 @@ export function createWebGpuFrameTimer(
       disposed = true;
       activeFrameId = undefined;
       completed = [];
+      rendererFrameIds.clear();
     },
   };
 }

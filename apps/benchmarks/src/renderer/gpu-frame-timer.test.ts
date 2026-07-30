@@ -44,6 +44,31 @@ describe('WebGPU frame timer', () => {
     expect(timer.poll()).toEqual([]);
   });
 
+  it("attributes a coalesced timestamp to Three.js's latest resolved renderer frame", async () => {
+    const resolution = deferred<number | undefined>();
+    const info = { frame: 10 };
+    const timestampFrames = [10, 11];
+    const timer = createWebGpuFrameTimer(
+      {
+        backend: { getTimestampFrames: () => timestampFrames },
+        info,
+        resolveTimestampsAsync: () => resolution.promise,
+      },
+      { onError: vi.fn<(error: unknown) => void>(), supported: true },
+    );
+
+    timer.beginFrame(101);
+    timer.endFrame();
+    info.frame = 11;
+    timer.beginFrame(102);
+    timer.endFrame();
+    resolution.resolve(0.75);
+    await resolution.promise;
+    await Promise.resolve();
+
+    expect(timer.poll()).toEqual([{ frameId: 102, durationMs: 0.75 }]);
+  });
+
   it('turns an invalid resolved duration into an explicit discarded sample', async () => {
     const onError = vi.fn<(error: unknown) => void>();
     const timer = createWebGpuFrameTimer(

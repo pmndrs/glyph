@@ -12,6 +12,8 @@ export interface TelemetryChartsProps {
   readonly stats: TelemetryChartStats | undefined;
 }
 
+const TELEMETRY_CHART_WINDOW_MS = 8_000;
+
 export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChartsProps) {
   const fpsCanvasRef = useRef<HTMLCanvasElement>(null);
   const cpuCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,7 +79,7 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
             series.nextIndex,
             series.maximum,
             timestamp,
-            current.frameBudgetMs * series.values.length,
+            TELEMETRY_CHART_WINDOW_MS,
           );
         }
       } else {
@@ -257,7 +259,7 @@ function latestHistoryValue(
 
 function formatSparklineValue(value: number | undefined, unit: 'fps' | 'ms'): string {
   if (value === undefined) return '—';
-  if (unit === 'fps') return value.toFixed(1);
+  if (unit === 'fps') return String(Math.round(value));
   if (value > 0 && value < 0.01) return '<0.01 ms';
   return `${value.toFixed(2)} ms`;
 }
