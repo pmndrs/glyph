@@ -3018,6 +3018,7 @@ function ComparisonWorkloadViewport({
       data-icon-label-size={stats?.workload === 'icon-grid' ? stats.iconLabelSize : undefined}
       data-icon-pool-capacity={stats?.workload === 'icon-grid' ? stats.iconPoolCapacity : undefined}
       data-icon-assigned-count={stats?.workload === 'icon-grid' ? stats.iconAssignedCount : undefined}
+      data-icon-render-visible-count={stats?.workload === 'icon-grid' ? stats.iconRenderVisibleCount : undefined}
       data-icon-assignment-signature={stats?.workload === 'icon-grid' ? stats.iconAssignmentSignature : undefined}
       data-icon-first-visible-index={stats?.workload === 'icon-grid' ? stats.iconFirstVisibleIndex : undefined}
       data-icon-last-visible-index={stats?.workload === 'icon-grid' ? stats.iconLastVisibleIndex : undefined}

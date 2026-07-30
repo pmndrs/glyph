@@ -239,7 +239,11 @@ function readAndValidateAssignments(viewport: HTMLElement, technique: Technique)
     previousIndex = index;
   }
   if (assignments.length !== numberAttribute(viewport, 'data-icon-assigned-count')) {
-    throw new Error(`${technique} assignment signature and visible pool count disagree`);
+    throw new Error(`${technique} assignment signature and assigned pool count disagree`);
+  }
+  const renderVisibleCount = numberAttribute(viewport, 'data-icon-render-visible-count');
+  if (renderVisibleCount <= 0 || renderVisibleCount > assignments.length) {
+    throw new Error(`${technique} render-visible tile count is outside the assigned pool`);
   }
   assertZeroMissingGlyphs(viewport, `${technique} settled window`);
   return assignments;

@@ -69,6 +69,7 @@ export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats 
   readonly iconLabelSize: number;
   readonly iconPoolCapacity: number;
   readonly iconAssignedCount: number;
+  readonly iconRenderVisibleCount: number;
   readonly iconAssignmentSignature: string;
   readonly iconFirstVisibleIndex: number;
   readonly iconLastVisibleIndex: number;
@@ -402,7 +403,6 @@ export async function createComparisonWorkloadPreview(options: {
           !retainedIndices.has(entry.virtualIconIndex)
         ) {
           retainedIndices.add(entry.virtualIconIndex);
-          entry.node.visible = true;
           continue;
         }
         availableEntries.push(entry);
@@ -440,7 +440,6 @@ export async function createComparisonWorkloadPreview(options: {
         const column = iconIndex % window.layout.columns;
         const row = Math.floor(iconIndex / window.layout.columns);
         positionIconGridEntry(entry, window.layout, column, row, configuration.fontSize);
-        entry.node.visible = true;
       }
       for (const entry of availableEntries.slice(missingIndices.length)) {
         entry.node.visible = false;
@@ -489,6 +488,10 @@ export async function createComparisonWorkloadPreview(options: {
         assignments.some(({ index }, assignmentIndex) => index !== window.indices[assignmentIndex])
       ) {
         throw new Error('icon grid cannot publish a window before every assignment is coherent');
+      }
+      const visibleIndices = new Set(window.visibleIndices);
+      for (const entry of entries) {
+        entry.node.visible = entry.virtualIconIndex !== undefined && visibleIndices.has(entry.virtualIconIndex);
       }
       settledIconWindow = window;
       iconAssignmentSignature = JSON.stringify(assignments);
@@ -1159,6 +1162,14 @@ function positionIconGridEntry(
     -(iconSize * LIVE_TEXT_LINE_HEIGHT + ICON_GRID_LABEL_GAP),
     0,
   );
+  freezeLocalMatrices(entry.node);
+}
+
+function freezeLocalMatrices(root: THREE.Object3D): void {
+  root.traverse((object) => {
+    object.updateMatrix();
+    object.matrixAutoUpdate = false;
+  });
 }
 
 function layoutEntries(
@@ -1602,6 +1613,7 @@ export interface IconGridLayout {
 export interface IconGridVirtualWindow {
   readonly layout: IconGridLayout;
   readonly indices: readonly number[];
+  readonly visibleIndices: readonly number[];
   readonly poolCapacity: number;
   readonly firstVisibleIndex: number;
   readonly lastVisibleIndex: number;
@@ -1659,7 +1671,6 @@ export function iconGridViewportUpdateKind(
 
 export function iconGridAssignmentSignature(
   entries: readonly {
-    readonly node: { readonly visible: boolean };
     readonly sourceText: string;
     readonly virtualIconIndex?: number;
   }[],
@@ -1669,15 +1680,13 @@ export function iconGridAssignmentSignature(
 
 function iconGridAssignments(
   entries: readonly {
-    readonly node: { readonly visible: boolean };
     readonly sourceText: string;
     readonly virtualIconIndex?: number;
   }[],
 ): readonly IconGridAssignment[] {
   const assignments = entries
     .filter(
-      (entry): entry is typeof entry & { readonly virtualIconIndex: number } =>
-        entry.node.visible && entry.virtualIconIndex !== undefined,
+      (entry): entry is typeof entry & { readonly virtualIconIndex: number } => entry.virtualIconIndex !== undefined,
     )
     .map(({ sourceText, virtualIconIndex }) => ({ index: virtualIconIndex, content: sourceText }))
     .sort((left, right) => left.index - right.index);
@@ -1779,6 +1788,7 @@ export function iconGridVirtualWindow(
   return {
     layout,
     indices,
+    visibleIndices,
     poolCapacity: poolRows * poolColumns,
     firstVisibleIndex: visibleIndices.at(0) ?? -1,
     lastVisibleIndex: visibleIndices.at(-1) ?? -1,
@@ -1832,6 +1842,7 @@ function iconGridStats(
   | 'iconLabelSize'
   | 'iconPoolCapacity'
   | 'iconAssignedCount'
+  | 'iconRenderVisibleCount'
   | 'iconAssignmentSignature'
   | 'iconFirstVisibleIndex'
   | 'iconLastVisibleIndex'
@@ -1855,6 +1866,7 @@ function iconGridStats(
       iconLabelSize: 0,
       iconPoolCapacity: 0,
       iconAssignedCount: 0,
+      iconRenderVisibleCount: 0,
       iconAssignmentSignature: '[]',
       iconFirstVisibleIndex: -1,
       iconLastVisibleIndex: -1,
@@ -1887,7 +1899,8 @@ function iconGridStats(
     iconGridHeight: window.layout.height,
     iconLabelSize: ICON_GRID_LABEL_SIZE,
     iconPoolCapacity: entries.length,
-    iconAssignedCount: entries.filter(({ node }) => node.visible).length,
+    iconAssignedCount: entries.filter(({ virtualIconIndex }) => virtualIconIndex !== undefined).length,
+    iconRenderVisibleCount: entries.filter(({ node }) => node.visible).length,
     iconAssignmentSignature: assignmentSignature,
     iconFirstVisibleIndex: window.firstVisibleIndex,
     iconLastVisibleIndex: window.lastVisibleIndex,

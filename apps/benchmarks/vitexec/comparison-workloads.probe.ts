@@ -103,6 +103,16 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       if (poolCapacity <= 0 || poolCapacity >= itemCount) {
         throw new Error(`${techniqueLabel(technique)} icon grid did not virtualize its tile pool`);
       }
+      const assignedCount = numericAttribute(viewport, 'data-icon-assigned-count');
+      const renderVisibleCount = numericAttribute(viewport, 'data-icon-render-visible-count');
+      if (
+        assignedCount <= 0 ||
+        assignedCount > poolCapacity ||
+        renderVisibleCount <= 0 ||
+        renderVisibleCount > assignedCount
+      ) {
+        throw new Error(`${techniqueLabel(technique)} icon grid published invalid pool visibility`);
+      }
       if (numericAttribute(viewport, 'data-icon-first-visible-index') !== 0) {
         throw new Error(`${techniqueLabel(technique)} icon grid did not begin at the first icon`);
       }

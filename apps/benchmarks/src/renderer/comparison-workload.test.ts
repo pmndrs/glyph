@@ -243,26 +243,27 @@ describe('icon grid layout', () => {
     expect(scrollY).toBe(next.height - viewportHeight);
   });
 
-  it('publishes exact visible index/content assignments in catalog order', () => {
+  it('publishes exact assigned index/content pairs in catalog order independent of render visibility', () => {
     expect(
       iconGridAssignmentSignature([
-        { node: { visible: true }, sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
-        { node: { visible: false }, sourceText: '\uf00d\nxmark', virtualIconIndex: 12 },
-        { node: { visible: true }, sourceText: '\uf007\nuser', virtualIconIndex: 7 },
+        { sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
+        { sourceText: '\uf00d\nxmark', virtualIconIndex: 12 },
+        { sourceText: '\uf007\nuser', virtualIconIndex: 7 },
       ]),
     ).toBe(
       JSON.stringify([
         { index: 7, content: '\uf007\nuser' },
+        { index: 12, content: '\uf00d\nxmark' },
         { index: 41, content: '\uf002\nsearch' },
       ]),
     );
   });
 
-  it('rejects duplicate visible catalog assignments', () => {
+  it('rejects duplicate catalog assignments independent of render visibility', () => {
     expect(() =>
       iconGridAssignmentSignature([
-        { node: { visible: true }, sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
-        { node: { visible: true }, sourceText: '\uf003\nenvelope', virtualIconIndex: 41 },
+        { sourceText: '\uf002\nsearch', virtualIconIndex: 41 },
+        { sourceText: '\uf003\nenvelope', virtualIconIndex: 41 },
       ]),
     ).toThrow('assigned catalog index 41 twice');
   });
@@ -307,6 +308,10 @@ describe('icon grid layout', () => {
     const top = iconGridVirtualWindow(1_402, 48, 720, 360, 0, 0);
     expect(top.firstVisibleIndex).toBe(0);
     expect(top.indices).toHaveLength(top.poolCapacity);
+    expect(top.visibleIndices.length).toBeLessThan(top.indices.length);
+    expect(top.visibleIndices.every((index) => top.indices.includes(index))).toBe(true);
+    expect(top.visibleIndices.at(0)).toBe(top.firstVisibleIndex);
+    expect(top.visibleIndices.at(-1)).toBe(top.lastVisibleIndex);
     expect(top.poolCapacity).toBeLessThan(1_402);
     expect(new Set(top.indices).size).toBe(top.indices.length);
 
