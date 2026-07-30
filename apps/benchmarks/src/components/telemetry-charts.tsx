@@ -4,6 +4,7 @@ import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
 import {
+  formatSparklineValue,
   sparklineCanvasMetrics,
   sparklinePresentationTimestamp,
   sparklineSampleY,
@@ -276,13 +277,6 @@ function latestHistoryValue(
   if (values === undefined || cursor === undefined || cursor.length === 0) return undefined;
   const value = values[(cursor.nextIndex + values.length - 1) % values.length];
   return value !== undefined && Number.isFinite(value) ? value : undefined;
-}
-
-function formatSparklineValue(value: number | undefined, unit: 'fps' | 'ms'): string {
-  if (value === undefined) return '—';
-  if (unit === 'fps') return String(Math.round(value));
-  if (value > 0 && value < 0.01) return '<0.01 ms';
-  return `${value.toFixed(2)} ms`;
 }
 
 function sparklineToneClass(tone: 'cyan' | 'success' | 'warning'): string {

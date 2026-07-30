@@ -1,11 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatSparklineValue,
   sparklineCanvasMetrics,
   sparklinePresentationTimestamp,
   sparklineSampleY,
   sparklineTimestampX,
 } from './sparkline';
+
+describe('formatSparklineValue', () => {
+  it('does not invent fractional precision for integer timing samples', () => {
+    expect(formatSparklineValue(0, 'ms')).toBe('0 ms');
+    expect(formatSparklineValue(3, 'ms')).toBe('3 ms');
+  });
+
+  it('preserves reported sub-millisecond timing and whole-frame FPS', () => {
+    expect(formatSparklineValue(0.8, 'ms')).toBe('0.80 ms');
+    expect(formatSparklineValue(0.001, 'ms')).toBe('<0.01 ms');
+    expect(formatSparklineValue(59.7, 'fps')).toBe('60');
+  });
+});
 
 describe('sparklineCanvasMetrics', () => {
   it('maps a fractional CSS box exactly onto its physical backing store', () => {
