@@ -902,19 +902,19 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
           if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
           else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
         }
-        const frame = telemetry.beginFrame(timestamp);
-        if (frame.measureGpu) activeGpuFrameTimer.beginFrame(frame.frameId);
+        const frameId = telemetry.beginFrame(timestamp);
+        if (telemetry.gpuTimingSupported) activeGpuFrameTimer.beginFrame(frameId);
         const started = performance.now();
         try {
           canvasSurface.render(scene, camera);
         } finally {
-          if (frame.measureGpu) activeGpuFrameTimer.endFrame();
+          if (telemetry.gpuTimingSupported) activeGpuFrameTimer.endFrame();
         }
         if (closing) return;
         const submitMs = performance.now() - started;
         if (firstDrawMs === 0) firstDrawMs = submitMs;
         const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const telemetrySnapshot = telemetry.endFrame(frame, cpuFrameMs);
+        const telemetrySnapshot = telemetry.endFrame(frameId, cpuFrameMs);
         if (telemetrySnapshot === undefined) return;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const layout = activeLine.object.layout;
@@ -1026,7 +1026,7 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
         disposal = (async () => {
           disposed = true;
           await renderer.setAnimationLoop(null);
-          activeGpuFrameTimer.dispose();
+          await activeGpuFrameTimer.dispose();
           disposePresentation();
           disposeBitmapLine(activeLine);
           activeFont.dispose();
@@ -1037,7 +1037,7 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
       },
     };
   } catch (error) {
-    gpuFrameTimer?.dispose();
+    await gpuFrameTimer?.dispose();
     if (line !== undefined) disposeBitmapLine(line);
     font?.dispose();
     canvasSurface.dispose();

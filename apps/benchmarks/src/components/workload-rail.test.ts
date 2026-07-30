@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workloadScrollEdges } from './workload-rail';
+import { workloadScrollEdges } from '../benchmark/workloads';
 
 describe('workload rail scroll edges', () => {
   it('marks only the edges with additional content', () => {

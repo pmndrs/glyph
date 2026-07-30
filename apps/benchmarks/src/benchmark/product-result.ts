@@ -87,10 +87,6 @@ export interface LiveBenchmarkCapture {
   readonly stats: CapturedLiveTextStats;
 }
 
-export function captureBitmapTextStats(stats: BitmapTextLiveStats): CapturedBitmapTextLiveStats {
-  return captureLiveTextStats(stats);
-}
-
 export function captureLiveTextStats(stats: BitmapTextLiveStats): CapturedBitmapTextLiveStats;
 export function captureLiveTextStats(stats: MtsdfTextLiveStats): CapturedMtsdfTextLiveStats;
 export function captureLiveTextStats(stats: SlugTextLiveStats): CapturedSlugTextLiveStats;

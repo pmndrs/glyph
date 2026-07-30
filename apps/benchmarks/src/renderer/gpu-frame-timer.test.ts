@@ -23,7 +23,7 @@ describe('WebGPU frame timer', () => {
     expect(timer.poll()).toEqual([]);
   });
 
-  it('does not start overlapping resolutions and drops results after disposal', async () => {
+  it('waits for an outstanding resolution during disposal and drops its result', async () => {
     const resolution = deferred<number | undefined>();
     const resolveTimestampsAsync = vi.fn<() => Promise<number | undefined>>(() => resolution.promise);
     const timer = createWebGpuFrameTimer(
@@ -35,12 +35,17 @@ describe('WebGPU frame timer', () => {
     timer.endFrame();
     timer.beginFrame(2);
     timer.endFrame();
-    timer.dispose();
-    resolution.resolve(0.5);
-    await resolution.promise;
+    let disposed = false;
+    const disposal = timer.dispose().then(() => {
+      disposed = true;
+    });
     await Promise.resolve();
+    expect(disposed).toBe(false);
+    resolution.resolve(0.5);
+    await disposal;
 
     expect(resolveTimestampsAsync).toHaveBeenCalledOnce();
+    expect(disposed).toBe(true);
     expect(timer.poll()).toEqual([]);
   });
 

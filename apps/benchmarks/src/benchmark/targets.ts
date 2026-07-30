@@ -1096,7 +1096,3 @@ export const targets: readonly BenchmarkTarget[] = [
   runtimeFallbackTarget('slug', 'webgpu'),
   reactTextTarget(),
 ];
-
-export function targetById(id: string): BenchmarkTarget {
-  return targets.find((target) => target.id === id) ?? syntheticTarget;
-}

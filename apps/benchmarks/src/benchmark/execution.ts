@@ -9,12 +9,6 @@ import { runBenchmark } from './runner';
 import { scenarios } from './scenarios';
 import { targets } from './targets';
 
-export const defaultControls: BenchmarkControls = {
-  dpr: 1,
-  samples: 32,
-  warmup: 4,
-};
-
 export interface RegisteredBenchmarkRequest {
   readonly targetId: string;
   readonly scenarioId: string;

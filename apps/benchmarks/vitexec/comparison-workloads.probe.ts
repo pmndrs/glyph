@@ -17,6 +17,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   for (const workload of WORKLOADS) {
     await clickButton(workload.label, false);
     let viewport = await waitForReadyViewport(technique, workload.id);
+    assertSingleConfiguredRenderer(technique, workload.id);
     verifyCanvasNavigation(
       viewport,
       workload.id !== 'zoom-text',
@@ -339,7 +340,39 @@ if (getComputedStyle(benchmarkActivity).display === 'none') {
 }
 console.log('activity-lifecycle-ready');
 
+await clickAriaButton('Enter Zen Mode');
+await waitForElement('[data-testid="zen-layout"]');
+if (document.querySelector('[data-testid="workload-scroll"]') !== null) {
+  throw new Error('Zen route retained the Main workload rail');
+}
+if (document.querySelector('[data-testid="font-fixture-panel"]') !== null) {
+  throw new Error('Zen route retained the Main font-fixture panel');
+}
+for (const technique of ['slug', 'bitmap', 'mtsdf'] as const) {
+  await clickButton(techniqueLabel(technique), true);
+  await waitForReadyViewport(technique, 'paint-effects');
+  assertSingleConfiguredRenderer(technique, 'paint-effects');
+}
+console.log('zen-exclusive-renderer-ready');
+
 console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 7 }));
+
+function assertSingleConfiguredRenderer(technique: RasterTechnique, workload: string): void {
+  const activeCount = Number(document.documentElement.dataset.activeConfiguredRenderers);
+  if (activeCount !== 1) {
+    throw new Error(`${techniqueLabel(technique)} ${workload} retained ${String(activeCount)} configured renderers`);
+  }
+  const peakActiveCount = Number(document.documentElement.dataset.peakConfiguredRenderers);
+  if (peakActiveCount !== 1) {
+    throw new Error(
+      `${techniqueLabel(technique)} ${workload} overlapped configured renderers; peak ${String(peakActiveCount)}`,
+    );
+  }
+  const activeCanvases = document.querySelectorAll('canvas[data-configured-renderer-active="true"]');
+  if (activeCanvases.length !== 1) {
+    throw new Error(`${techniqueLabel(technique)} ${workload} exposed ${activeCanvases.length} active canvases`);
+  }
+}
 
 function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   const surface = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"]');
@@ -406,6 +439,20 @@ async function clickButton(label: string, exact: boolean): Promise<void> {
     });
   const button = find() ?? (await observeDocument(find));
   button.click();
+}
+
+async function clickAriaButton(label: string): Promise<void> {
+  const find = (): HTMLButtonElement | undefined =>
+    document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? undefined;
+  const button = find() ?? (await observeDocument(find));
+  if (button.disabled) throw new Error(`${label} button is disabled`);
+  button.click();
+}
+
+function waitForElement(selector: string): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined => document.querySelector<HTMLElement>(selector) ?? undefined;
+  const current = find();
+  return current === undefined ? observeDocument(find) : Promise.resolve(current);
 }
 
 function rangeControl(label: string): HTMLInputElement {

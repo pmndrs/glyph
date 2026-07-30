@@ -171,15 +171,16 @@ export function renderFlatMtsdfCpuReference(
         0.5 *
         ((right - left) / (atlasRight - atlasLeft) + (bottom - top) / (atlasBottom - atlasTop)),
     );
+    const atlasHeight = resource.atlas.height;
     const sampleBounds = {
       minX: atlasLeft,
-      minY: resource.atlas.height - atlasBottom,
+      minY: atlasHeight - atlasBottom,
       maxX: atlasRight - 1,
-      maxY: resource.atlas.height - atlasTop - 1,
+      maxY: atlasHeight - atlasTop - 1,
     };
     for (let y = pixelBounds.minY; y <= pixelBounds.maxY; y += 1) {
       const unitY = (y + 0.5 - top) / (bottom - top);
-      const atlasY = resource.atlas.height - atlasTop - unitY * (atlasBottom - atlasTop) - 0.5;
+      const atlasY = atlasHeight - atlasTop - unitY * (atlasBottom - atlasTop) - 0.5;
       for (let x = pixelBounds.minX; x <= pixelBounds.maxX; x += 1) {
         const unitX = (x + 0.5 - left) / (right - left);
         const atlasX = atlasLeft + unitX * (atlasRight - atlasLeft) - 0.5;

@@ -12,7 +12,7 @@ export interface GpuFrameTimer {
   beginFrame(frameId: number): void;
   endFrame(): void;
   poll(): readonly GpuFrameMeasurement[];
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 interface TimestampResolver {
@@ -26,6 +26,8 @@ interface TimestampResolver {
 interface FrameTimerOptions {
   readonly onError: (error: unknown) => void;
 }
+
+const EMPTY_GPU_FRAME_MEASUREMENTS: readonly GpuFrameMeasurement[] = Object.freeze([]);
 
 export function createGpuFrameTimer(options: {
   readonly backend: RendererBackend;
@@ -110,15 +112,16 @@ export function createWebGpuFrameTimer(
         });
     },
     poll() {
-      if (disposed || completed.length === 0) return [];
+      if (disposed || completed.length === 0) return EMPTY_GPU_FRAME_MEASUREMENTS;
       const measurements = completed;
       completed = [];
       return measurements;
     },
-    dispose() {
+    async dispose() {
       disposed = true;
       activeFrameId = undefined;
       completed = [];
+      await resolution;
       rendererFrameIds.clear();
     },
   };
@@ -169,43 +172,55 @@ export function createWebGl2FrameTimer(context: WebGL2RenderingContext, options:
       }
     },
     poll() {
-      if (disposed) return [];
-      const rejected = failed;
-      failed = [];
+      if (disposed) return EMPTY_GPU_FRAME_MEASUREMENTS;
+      const rejected = failed.length === 0 ? EMPTY_GPU_FRAME_MEASUREMENTS : failed;
+      if (failed.length !== 0) failed = [];
       if (pending.length === 0) return rejected;
       if (context.getParameter(extension.GPU_DISJOINT_EXT) === true) {
-        const discarded = pending.map(({ frameId }) => ({ frameId, durationMs: undefined }));
-        for (const { query } of pending) context.deleteQuery(query);
+        const discarded: GpuFrameMeasurement[] = [];
+        for (const { frameId, query } of pending) {
+          discarded.push({ frameId, durationMs: undefined });
+          context.deleteQuery(query);
+        }
         pending = [];
-        return [...rejected, ...discarded];
+        if (rejected.length === 0) return discarded;
+        failed.push(...rejected, ...discarded);
+        const measurements = failed;
+        failed = [];
+        return measurements;
       }
 
-      const completed: GpuFrameMeasurement[] = [];
-      const waiting: typeof pending = [];
-      for (const measurement of pending) {
+      let completed: GpuFrameMeasurement[] | undefined;
+      let waitingCount = 0;
+      for (let index = 0; index < pending.length; index += 1) {
+        const measurement = pending[index]!;
         try {
           if (context.getQueryParameter(measurement.query, context.QUERY_RESULT_AVAILABLE) !== true) {
-            waiting.push(measurement);
+            pending[waitingCount] = measurement;
+            waitingCount += 1;
             continue;
           }
           const nanoseconds: unknown = context.getQueryParameter(measurement.query, context.QUERY_RESULT);
           context.deleteQuery(measurement.query);
           if (typeof nanoseconds !== 'number' || !Number.isFinite(nanoseconds) || nanoseconds < 0) {
             options.onError(new RangeError('WebGL GPU timer result must be finite and nonnegative'));
-            completed.push({ frameId: measurement.frameId, durationMs: undefined });
+            (completed ??= []).push({ frameId: measurement.frameId, durationMs: undefined });
             continue;
           }
-          completed.push({ frameId: measurement.frameId, durationMs: nanoseconds / 1e6 });
+          (completed ??= []).push({ frameId: measurement.frameId, durationMs: nanoseconds / 1e6 });
         } catch (error) {
           context.deleteQuery(measurement.query);
           options.onError(error);
-          completed.push({ frameId: measurement.frameId, durationMs: undefined });
+          (completed ??= []).push({ frameId: measurement.frameId, durationMs: undefined });
         }
       }
-      pending = waiting;
-      return [...rejected, ...completed];
+      pending.length = waitingCount;
+      if (completed === undefined) return rejected;
+      if (rejected.length === 0) return completed;
+      completed.unshift(...rejected);
+      return completed;
     },
-    dispose() {
+    async dispose() {
       if (disposed) return;
       disposed = true;
       if (active !== undefined) {
@@ -231,8 +246,8 @@ function unsupportedFrameTimer(): GpuFrameTimer {
       assertFrameId(frameId);
     },
     endFrame() {},
-    poll: () => [],
-    dispose() {},
+    poll: () => EMPTY_GPU_FRAME_MEASUREMENTS,
+    async dispose() {},
   };
 }
 

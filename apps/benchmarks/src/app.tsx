@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
   useTransition,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react';
 
 import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum';
@@ -58,7 +59,8 @@ import { CompactSheet, CompactWorkloadPanel, MobileNavigation } from './componen
 import { TechniqueSwitcher } from './components/technique-switcher';
 import { TelemetryCharts } from './components/telemetry-charts';
 import { TopBar } from './components/top-bar';
-import { WorkloadRail, workloadById, workloadsFor, type WorkloadOption } from './components/workload-rail';
+import { workloadById, workloadsFor, type WorkloadOption } from './benchmark/workloads';
+import { WorkloadRail } from './components/workload-rail';
 import { ZenLayout } from './components/zen-layout';
 import { ZenPayloadPills } from './components/zen-payload-pills';
 import { Chip, Metric } from './components/ui';
@@ -161,6 +163,10 @@ function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefine
   }
 }
 
+function isComparisonWorkloadStats(stats: LiveTextStats | undefined): stats is ComparisonWorkloadStats {
+  return stats !== undefined && 'workload' in stats;
+}
+
 function workloadAmountLabel(workload: string, amount: number): string | undefined {
   switch (workload) {
     case 'off-axis-3d':
@@ -247,6 +253,10 @@ export function App() {
 }
 
 function Harness() {
+  return useHarnessController();
+}
+
+function useHarnessController(): ReactNode {
   const environment = use(environmentResource());
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true);
   const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false);
@@ -603,164 +613,111 @@ function Harness() {
     />
   );
 
-  const zenFontOptions = zen
-    ? location.workload === 'icon-grid'
-      ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
-      : location.workload === 'zoom-text'
-        ? [{ label: BENCHMARK_FONT_LABELS.inter, value: 'inter' }]
-        : location.workload === 'advanced-shaping'
-          ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
-          : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
-    : [];
-  const zenPayload = zen
-    ? createPayloadSummary({
-        delivery: location.delivery,
-        fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
-        fontFixture: activeFontFixture,
-        ...(liveStats === undefined ? {} : { liveStats }),
-        packageSizes,
-        technique: location.technique,
-        workload: location.workload,
-      })
-    : undefined;
-
   return (
-    <div className="relative h-dvh overflow-hidden bg-background text-foreground">
-      {!zen && (
-        <TopBar
-          compact={!desktop}
-          phone={phone}
-          location={location}
-          mode={location.mode}
-          liveTechniqueComparison={liveTechniqueComparison}
-          pending={isPending}
-          ready={Boolean(actionReady)}
-          webgpu={environment.webgpu}
-          onAction={
-            location.mode === 'benchmark'
-              ? location.view === 'report'
-                ? () => setLocation({ view: 'scene' })
-                : captureWindow
-              : runConformance
-          }
-          onControls={() => {
-            setWorkloadPanelOpen(false);
-            setLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
-          }}
-          onMenu={() => {
-            if (!workloadPanelOpen && location.view === 'controls') {
-              setLocation({ view: 'scene' });
-            }
-            setWorkloadPanelOpen((open) => !open);
-          }}
-          onMode={selectMode}
-          onTechnique={selectTechnique}
-          onZenMode={() => setLocation({ layout: 'zen', mode: 'benchmark', view: 'scene' })}
-          workloadPanelOpen={workloadPanelOpen}
-        />
-      )}
-      <div
-        className={
-          zen
-            ? 'absolute inset-0 grid min-h-0 min-w-0 grid-cols-[0_minmax(0,1fr)_0] overflow-hidden'
-            : desktop
-              ? 'grid h-[calc(100dvh-52px)] transition-[grid-template-columns] duration-200'
-              : phone
-                ? 'h-[calc(100dvh-52px)] pb-[58px]'
-                : 'h-[calc(100dvh-52px)]'
-        }
-        style={
-          !zen && desktop
-            ? {
-                gridTemplateColumns: workloadPanelOpen
-                  ? '224px minmax(640px, 1fr) 288px'
-                  : '0 minmax(640px, 1fr) 288px',
-              }
-            : undefined
-        }
-      >
-        <div className={zen ? 'invisible min-w-0 overflow-hidden' : desktop ? 'min-w-0 overflow-hidden' : 'hidden'}>
-          {!zen && (
-            <WorkloadRail
-              activeFontFixture={activeFontFixture}
-              className="h-full w-56"
-              fontFixture={fontFixture}
-              location={location}
-              showcaseFrame={showcaseFrame}
-              onFontFixture={(value) => setLocation({ fontFixture: value })}
-              onAdvancedFontFixture={(value) => {
-                setAdvancedFontFixture(value);
-                invalidateLiveCapture();
-              }}
-              onLocation={setLocation}
-              onTechnique={selectTechnique}
-            />
-          )}
-        </div>
-        <main
-          className={
-            zen
-              ? 'h-full min-h-0 min-w-0 overflow-hidden'
-              : desktop
-                ? 'min-w-0 overflow-hidden border-r border-border bg-background p-4'
-                : 'h-full min-h-0 overflow-hidden p-3'
-          }
-        >
-          <div className={zen || (location.view !== 'report' && location.view !== 'export') ? 'h-full' : 'hidden'}>
-            {scene}
-          </div>
-          {!zen && !desktop && location.view === 'controls' && (
-            <CompactSheet phone={phone} title="Controls" onClose={() => setLocation({ view: 'scene' })}>
-              {controls}
-            </CompactSheet>
-          )}
-          {!zen && location.view === 'report' && (
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <Report liveCapture={liveCapture} summary={summary} />
-            </div>
-          )}
-          {!zen && location.view === 'export' && (
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <ExportPanel liveCapture={liveCapture} summary={summary} />
-            </div>
-          )}
-        </main>
-        <aside
-          className={
-            zen
-              ? 'invisible min-w-0 overflow-hidden'
-              : desktop
-                ? 'overflow-auto overscroll-contain bg-chrome p-4'
-                : 'hidden'
-          }
-        >
-          {!zen && controls}
-        </aside>
-        {!zen && !desktop && workloadPanelOpen && (
-          <CompactWorkloadPanel phone={phone} onClose={() => setWorkloadPanelOpen(false)}>
-            <WorkloadRail
-              activeFontFixture={activeFontFixture}
-              className="h-full w-full border-r-0"
-              fontFixture={fontFixture}
-              location={location}
-              showcaseFrame={showcaseFrame}
-              showTechnique={false}
-              onFontFixture={(value) => setLocation({ fontFixture: value })}
-              onAdvancedFontFixture={(value) => {
-                setAdvancedFontFixture(value);
-                invalidateLiveCapture();
-              }}
-              onLocation={(value) => {
-                setLocation({ ...value, view: 'scene' });
-                setWorkloadPanelOpen(false);
-              }}
-              onTechnique={selectTechnique}
-            />
-          </CompactWorkloadPanel>
-        )}
-        {!zen && !desktop && phone && <MobileNavigation location={location} onLocation={setLocation} />}
-      </div>
-      {zen && zenPayload !== undefined && (
+    <HarnessLayout
+      actionReady={Boolean(actionReady)}
+      activeFontFixture={activeFontFixture}
+      controls={controls}
+      desktop={desktop}
+      fontFixture={fontFixture}
+      fontNoticesOpen={fontNoticesOpen}
+      isPending={isPending}
+      liveCapture={liveCapture}
+      liveStats={liveStats}
+      liveTechniqueComparison={liveTechniqueComparison}
+      location={location}
+      phone={phone}
+      scene={scene}
+      showcaseFrame={showcaseFrame}
+      summary={summary}
+      webgpu={environment.webgpu}
+      workloadPanelOpen={workloadPanelOpen}
+      onAction={location.mode === 'benchmark' ? captureWindow : runConformance}
+      onAdvancedFontFixture={(value) => {
+        setAdvancedFontFixture(value);
+        invalidateLiveCapture();
+      }}
+      onCloseFontNotices={() => setFontNoticesOpen(false)}
+      onLocation={setLocation}
+      onMode={selectMode}
+      onTechnique={selectTechnique}
+      onWorkloadPanelOpen={setWorkloadPanelOpen}
+    />
+  );
+}
+
+function HarnessLayout({
+  actionReady,
+  activeFontFixture,
+  controls,
+  desktop,
+  fontFixture,
+  fontNoticesOpen,
+  isPending,
+  liveCapture,
+  liveStats,
+  liveTechniqueComparison,
+  location,
+  phone,
+  scene,
+  showcaseFrame,
+  summary,
+  webgpu,
+  workloadPanelOpen,
+  onAction,
+  onAdvancedFontFixture,
+  onCloseFontNotices,
+  onLocation,
+  onMode,
+  onTechnique,
+  onWorkloadPanelOpen,
+}: {
+  readonly actionReady: boolean;
+  readonly activeFontFixture: BenchmarkFontFixture;
+  readonly controls: ReactNode;
+  readonly desktop: boolean;
+  readonly fontFixture: SelectableFontFixture;
+  readonly fontNoticesOpen: boolean;
+  readonly isPending: boolean;
+  readonly liveCapture: LiveBenchmarkCapture | undefined;
+  readonly liveStats: LiveTextStats | undefined;
+  readonly liveTechniqueComparison: boolean;
+  readonly location: HarnessLocation;
+  readonly phone: boolean;
+  readonly scene: ReactNode;
+  readonly showcaseFrame: AdvancedShapingFrame;
+  readonly summary: BenchmarkSummary | undefined;
+  readonly webgpu: boolean;
+  readonly workloadPanelOpen: boolean;
+  readonly onAction: () => void;
+  readonly onAdvancedFontFixture: (value: BenchmarkFontFixture) => void;
+  readonly onCloseFontNotices: () => void;
+  readonly onLocation: (value: Partial<HarnessLocation>) => void;
+  readonly onMode: (mode: HarnessMode) => void;
+  readonly onTechnique: (technique: RasterTechnique) => void;
+  readonly onWorkloadPanelOpen: (open: boolean | ((current: boolean) => boolean)) => void;
+}) {
+  const zen = location.layout === 'zen' && location.mode === 'benchmark';
+  if (zen) {
+    const zenFontOptions =
+      location.workload === 'icon-grid'
+        ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
+        : location.workload === 'zoom-text'
+          ? [{ label: BENCHMARK_FONT_LABELS.inter, value: 'inter' }]
+          : location.workload === 'advanced-shaping'
+            ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
+            : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
+    const zenPayload = createPayloadSummary({
+      delivery: location.delivery,
+      fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
+      fontFixture: activeFontFixture,
+      ...(liveStats === undefined ? {} : { liveStats }),
+      packageSizes,
+      technique: location.technique,
+      workload: location.workload,
+    });
+    return (
+      <>
         <ZenLayout
           controls={controls}
           fontOptions={zenFontOptions}
@@ -772,12 +729,13 @@ function Harness() {
                 : activeFontFixture
           }
           payload={<ZenPayloadPills summary={zenPayload} />}
+          scene={scene}
           techniqueControl={
             <TechniqueSwitcher
               className="w-44"
               presentation="zen"
               technique={location.technique}
-              onTechnique={selectTechnique}
+              onTechnique={onTechnique}
             />
           }
           telemetry={<TelemetryCharts presentation="zen" stats={liveStats} />}
@@ -787,22 +745,139 @@ function Harness() {
             value: option.id,
           }))}
           workloadValue={location.workload}
-          onExit={() => setLocation({ layout: 'main' })}
+          onExit={() => onLocation({ layout: 'main' })}
           onFont={(value) => {
             if (location.workload === 'icon-grid' || location.workload === 'zoom-text') return;
             if (location.workload === 'advanced-shaping') {
-              setAdvancedFontFixture(value as BenchmarkFontFixture);
-              invalidateLiveCapture();
+              onAdvancedFontFixture(value as BenchmarkFontFixture);
               return;
             }
-            setLocation({ fontFixture: selectableFontFixture(value) });
+            onLocation({ fontFixture: selectableFontFixture(value) });
           }}
-          onWorkload={(workloadId) => setLocation({ workload: workloadId, view: 'scene' })}
+          onWorkload={(workloadId) => onLocation({ workload: workloadId, view: 'scene' })}
         />
-      )}
+        {fontNoticesOpen && (
+          <Suspense fallback={null}>
+            <FontNoticesDialog onClose={onCloseFontNotices} />
+          </Suspense>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="relative h-dvh overflow-hidden bg-background text-foreground">
+      <TopBar
+        compact={!desktop}
+        phone={phone}
+        location={location}
+        mode={location.mode}
+        liveTechniqueComparison={liveTechniqueComparison}
+        pending={isPending}
+        ready={Boolean(actionReady)}
+        webgpu={webgpu}
+        onAction={
+          location.mode === 'benchmark'
+            ? location.view === 'report'
+              ? () => onLocation({ view: 'scene' })
+              : onAction
+            : onAction
+        }
+        onControls={() => {
+          onWorkloadPanelOpen(false);
+          onLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
+        }}
+        onMenu={() => {
+          if (!workloadPanelOpen && location.view === 'controls') {
+            onLocation({ view: 'scene' });
+          }
+          onWorkloadPanelOpen((open) => !open);
+        }}
+        onMode={onMode}
+        onTechnique={onTechnique}
+        onZenMode={() => onLocation({ layout: 'zen', mode: 'benchmark', view: 'scene' })}
+        workloadPanelOpen={workloadPanelOpen}
+      />
+      <div
+        className={
+          desktop
+            ? 'grid h-[calc(100dvh-52px)] transition-[grid-template-columns] duration-200'
+            : phone
+              ? 'h-[calc(100dvh-52px)] pb-[58px]'
+              : 'h-[calc(100dvh-52px)]'
+        }
+        style={
+          desktop
+            ? {
+                gridTemplateColumns: workloadPanelOpen
+                  ? '224px minmax(640px, 1fr) 288px'
+                  : '0 minmax(640px, 1fr) 288px',
+              }
+            : undefined
+        }
+      >
+        <div className={desktop ? 'min-w-0 overflow-hidden' : 'hidden'}>
+          <WorkloadRail
+            activeFontFixture={activeFontFixture}
+            className="h-full w-56"
+            fontFixture={fontFixture}
+            location={location}
+            showcaseFrame={showcaseFrame}
+            onFontFixture={(value) => onLocation({ fontFixture: value })}
+            onAdvancedFontFixture={onAdvancedFontFixture}
+            onLocation={onLocation}
+            onTechnique={onTechnique}
+          />
+        </div>
+        <main
+          className={
+            desktop
+              ? 'min-w-0 overflow-hidden border-r border-border bg-background p-4'
+              : 'h-full min-h-0 overflow-hidden p-3'
+          }
+        >
+          <div className={location.view !== 'report' && location.view !== 'export' ? 'h-full' : 'hidden'}>{scene}</div>
+          {!desktop && location.view === 'controls' && (
+            <CompactSheet phone={phone} title="Controls" onClose={() => onLocation({ view: 'scene' })}>
+              {controls}
+            </CompactSheet>
+          )}
+          {location.view === 'report' && (
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <Report liveCapture={liveCapture} summary={summary} />
+            </div>
+          )}
+          {location.view === 'export' && (
+            <div className="h-full overflow-y-auto overscroll-contain">
+              <ExportPanel liveCapture={liveCapture} summary={summary} />
+            </div>
+          )}
+        </main>
+        <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>{controls}</aside>
+        {!desktop && workloadPanelOpen && (
+          <CompactWorkloadPanel phone={phone} onClose={() => onWorkloadPanelOpen(false)}>
+            <WorkloadRail
+              activeFontFixture={activeFontFixture}
+              className="h-full w-full border-r-0"
+              fontFixture={fontFixture}
+              location={location}
+              showcaseFrame={showcaseFrame}
+              showTechnique={false}
+              onFontFixture={(value) => onLocation({ fontFixture: value })}
+              onAdvancedFontFixture={onAdvancedFontFixture}
+              onLocation={(value) => {
+                onLocation({ ...value, view: 'scene' });
+                onWorkloadPanelOpen(false);
+              }}
+              onTechnique={onTechnique}
+            />
+          </CompactWorkloadPanel>
+        )}
+        {!desktop && phone && <MobileNavigation location={location} onLocation={onLocation} />}
+      </div>
       {fontNoticesOpen && (
         <Suspense fallback={null}>
-          <FontNoticesDialog onClose={() => setFontNoticesOpen(false)} />
+          <FontNoticesDialog onClose={onCloseFontNotices} />
         </Suspense>
       )}
     </div>
@@ -901,65 +976,75 @@ function Scene({
   const benchmarkStatus = benchmarkWorkload.techniques[location.technique];
   const conformanceWorkload = workloadById('conformance', activityWorkloads.conformance);
   const conformanceStatus = conformanceWorkload.techniques[location.technique];
+  const benchmarkSurface =
+    benchmarkStatus.kind === 'planned' ? (
+      <PlannedWorkloadSurface
+        milestone={benchmarkStatus.milestone}
+        technique={location.technique}
+        workload={benchmarkWorkload}
+      />
+    ) : (
+      <BenchmarkSurface
+        animationEnabled={animationEnabled}
+        animationSpeed={animationSpeed}
+        backend={location.backend}
+        delivery={location.delivery}
+        dpr={dpr}
+        fontSize={fontSize}
+        fontFixture={activeFontFixture}
+        grid={grid}
+        layoutWidthPercent={layoutWidthPercent}
+        paintOpacityPercent={paintOpacityPercent}
+        paintShadowEnabled={paintShadowEnabled}
+        paintStrokePercent={paintStrokePercent}
+        presentation={presentation}
+        showLayoutBounds={showLayoutBounds}
+        workloadAmount={workloadAmount}
+        key={`${location.mode}-${location.backend}-${location.delivery}-${String(dpr)}`}
+        showcaseFrame={showcaseFrame}
+        stats={liveStats}
+        technique={location.technique}
+        workload={benchmarkWorkload.id}
+        onStats={onLiveStats}
+      />
+    );
+
+  if (presentation === 'zen') {
+    return (
+      <section className="relative grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)]" data-testid="scene">
+        {benchmarkSurface}
+        {error !== undefined && (
+          <div className="absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger bg-black/80 p-3 text-xs text-danger">
+            {error}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section
-      className={
-        presentation === 'zen'
-          ? 'relative grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)]'
-          : 'grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3'
-      }
+      className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3"
       data-captured-at={liveCapture?.capturedAt}
       data-execution-id={summary?.executionId}
       data-testid="scene"
     >
-      {presentation === 'main' && (
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div>
-            <p className="eyebrow">{location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
-            <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
-            <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
-            <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL'}</Chip>
-            <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
-            <Chip>{dpr}× DPR</Chip>
-          </div>
-        </header>
-      )}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div>
+          <p className="eyebrow">{location.mode === 'benchmark' ? 'Live benchmark' : 'Correctness inspection'}</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{workload.label}</h1>
+          <p className="mt-1 max-w-3xl text-xs text-muted">{workload.description}</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5 sm:justify-end sm:gap-2">
+          <Chip tone="accent">{techniqueLabel(location.technique)}</Chip>
+          <Chip>{location.backend === 'webgpu' ? 'WebGPU' : 'WebGL'}</Chip>
+          <Chip>{location.delivery === 'runtime' ? 'Runtime bake' : 'Baked asset'}</Chip>
+          <Chip>{dpr}× DPR</Chip>
+        </div>
+      </header>
       <Activity name="benchmark" mode={location.mode === 'benchmark' ? 'visible' : 'hidden'}>
         <div className="contents" data-activity="benchmark">
-          {benchmarkStatus.kind === 'planned' ? (
-            <PlannedWorkloadSurface
-              milestone={benchmarkStatus.milestone}
-              technique={location.technique}
-              workload={benchmarkWorkload}
-            />
-          ) : (
-            <BenchmarkSurface
-              animationEnabled={animationEnabled}
-              animationSpeed={animationSpeed}
-              backend={location.backend}
-              delivery={location.delivery}
-              dpr={dpr}
-              fontSize={fontSize}
-              fontFixture={activeFontFixture}
-              grid={grid}
-              layoutWidthPercent={layoutWidthPercent}
-              paintOpacityPercent={paintOpacityPercent}
-              paintShadowEnabled={paintShadowEnabled}
-              paintStrokePercent={paintStrokePercent}
-              presentation={presentation}
-              showLayoutBounds={showLayoutBounds}
-              workloadAmount={workloadAmount}
-              key={`${location.mode}-${location.backend}-${location.delivery}-${String(dpr)}`}
-              showcaseFrame={showcaseFrame}
-              stats={liveStats}
-              technique={location.technique}
-              workload={benchmarkWorkload.id}
-              onStats={onLiveStats}
-            />
-          )}
+          {benchmarkSurface}
         </div>
       </Activity>
       <Activity name="conformance" mode={location.mode === 'conformance' ? 'visible' : 'hidden'}>
@@ -989,17 +1074,9 @@ function Scene({
         </div>
       </Activity>
       {error !== undefined && (
-        <div
-          className={
-            presentation === 'zen'
-              ? 'absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger bg-black/80 p-3 text-xs text-danger'
-              : 'rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger'
-          }
-        >
-          {error}
-        </div>
+        <div className="rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger">{error}</div>
       )}
-      {presentation === 'main' && location.mode === 'benchmark' && liveCapture !== undefined && (
+      {location.mode === 'benchmark' && liveCapture !== undefined && (
         <div className="rounded-md border border-success/40 bg-success/5 px-3 py-2 text-xs text-muted">
           Captured the current rolling window at {liveCapture.capturedAt} ·{' '}
           {liveCapture.stats.framesPerSecond.toFixed(1)} FPS · {formatMs(liveCapture.stats.medianSubmitMs)} CPU frame
@@ -1079,6 +1156,10 @@ function BenchmarkSurface({
   }, []);
   const advanced = workload === 'advanced-shaping';
   const comparisonWorkload = comparisonWorkloadId(workload);
+  const bitmapStats = stats?.technique === 'bitmap' ? stats : undefined;
+  const mtsdfStats = stats?.technique === 'mtsdf' ? stats : undefined;
+  const slugStats = stats?.technique === 'slug' ? stats : undefined;
+  const comparisonStats = isComparisonWorkloadStats(stats) ? stats : undefined;
   const textConfiguration: LiveTextConfiguration = advanced
     ? {
         anchor: 'measure-center',
@@ -1123,6 +1204,7 @@ function BenchmarkSurface({
         paintShadowEnabled={paintShadowEnabled}
         paintStrokeWidth={paintStrokePercent / 100}
         showLayoutBounds={showLayoutBounds}
+        stats={comparisonStats}
         technique={technique}
         workload={comparisonWorkload}
         key={`${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${comparisonWorkload}`}
@@ -1136,6 +1218,7 @@ function BenchmarkSurface({
         fontSize={fontSize}
         grid={grid}
         key={textConfiguration.fontFixture}
+        stats={slugStats}
         textConfiguration={textConfiguration}
         onStats={onStats}
       />
@@ -1147,6 +1230,7 @@ function BenchmarkSurface({
         fontSize={fontSize}
         grid={grid}
         key={textConfiguration.fontFixture}
+        stats={mtsdfStats}
         textConfiguration={textConfiguration}
         onStats={onStats}
       />
@@ -1158,6 +1242,7 @@ function BenchmarkSurface({
         fontSize={fontSize}
         grid={grid}
         key={textConfiguration.fontFixture}
+        stats={bitmapStats}
         textConfiguration={textConfiguration}
         onStats={onStats}
       />
@@ -1707,128 +1792,17 @@ function FiniteConformanceSurface({
         <Metric label="Render submit (diagnostic)" value={formatMs(capture?.value.renderSubmitMs)} />
         <Metric label="Suite duration" value={formatMs(summary?.medianMs ?? event?.medianMs)} />
       </div>
-      {isRuntimeFallback ? (
-        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
-          <PixelBytesPanel
-            bytes={runtimeFallbackCapture?.baked}
-            conformanceView={conformanceView}
-            height={runtimeFallbackCapture?.height}
-            label="Checked-in baked asset"
-            width={runtimeFallbackCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelBytesPanel
-            bytes={runtimeFallbackCapture?.runtime}
-            conformanceView={conformanceView}
-            height={runtimeFallbackCapture?.height}
-            label="Source font · runtime bake"
-            width={runtimeFallbackCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelBytesPanel
-            bytes={runtimeFallbackCapture?.difference}
-            className="md:col-span-2"
-            conformanceView={conformanceView}
-            height={runtimeFallbackCapture?.height}
-            label="Baked / runtime difference heatmap ×8"
-            width={runtimeFallbackCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-        </div>
-      ) : isSourceOutline ? (
-        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
-          <PixelBytesPanel
-            bytes={sourceOutlineCapture?.candidate}
-            conformanceView={conformanceView}
-            height={sourceOutlineCapture?.height}
-            label={`${techniqueLabel(technique)} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
-            width={sourceOutlineCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelBytesPanel
-            bytes={sourceOutlineCapture?.reference}
-            conformanceView={conformanceView}
-            height={sourceOutlineCapture?.height}
-            label="Browser Canvas2D · pinned source font"
-            width={sourceOutlineCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelBytesPanel
-            bytes={sourceOutlineCapture?.difference}
-            className="md:col-span-2"
-            conformanceView={conformanceView}
-            height={sourceOutlineCapture?.height}
-            label="Source-outline difference heatmap ×8"
-            width={sourceOutlineCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-        </div>
-      ) : technique !== 'bitmap' ? (
-        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
-          <PixelBytesPanel
-            bytes={analyticCapture?.candidate}
-            conformanceView={conformanceView}
-            height={analyticCapture?.height}
-            label={`${techniqueLabel(technique)} candidate`}
-            width={analyticCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelBytesPanel
-            bytes={analyticCapture?.reference}
-            conformanceView={conformanceView}
-            height={analyticCapture?.height}
-            label="CPU sampling reference"
-            width={analyticCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelBytesPanel
-            bytes={analyticCapture?.difference}
-            className="md:col-span-2"
-            conformanceView={conformanceView}
-            height={analyticCapture?.height}
-            label="Difference heatmap ×8"
-            width={analyticCapture?.width}
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-        </div>
-      ) : (
-        <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
-          <PixelPanel
-            capture={bitmapCapture}
-            conformanceView={conformanceView}
-            kind="candidate"
-            label="Candidate"
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelPanel
-            capture={bitmapCapture}
-            conformanceView={conformanceView}
-            kind="reference"
-            label="CPU reference"
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-          <PixelPanel
-            capture={bitmapCapture}
-            className="md:col-span-2"
-            conformanceView={conformanceView}
-            kind="difference"
-            label="Difference ×1"
-            onPan={onPan}
-            onZoom={onZoom}
-          />
-        </div>
-      )}
+      <FiniteConformancePanels
+        analyticCapture={analyticCapture}
+        bitmapCapture={bitmapCapture}
+        conformanceView={conformanceView}
+        runtimeFallbackCapture={runtimeFallbackCapture}
+        sourceOutlineCapture={sourceOutlineCapture}
+        technique={technique}
+        workload={workload}
+        onPan={onPan}
+        onZoom={onZoom}
+      />
       <div className="rounded-md border border-border bg-surface p-3">
         <div className="flex items-center gap-2 text-xs">
           <span className={`size-2 rounded-full ${summary?.status === 'passed' ? 'bg-success' : 'bg-dim'}`} />
@@ -1851,6 +1825,160 @@ function FiniteConformanceSurface({
         </p>
       </div>
       {error !== undefined && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+function FiniteConformancePanels({
+  analyticCapture,
+  bitmapCapture,
+  conformanceView,
+  runtimeFallbackCapture,
+  sourceOutlineCapture,
+  technique,
+  workload,
+  onPan,
+  onZoom,
+}: {
+  readonly analyticCapture: MtsdfTextConformanceCapture | SlugTextConformanceCapture | undefined;
+  readonly bitmapCapture: BitmapTextConformanceCapture | undefined;
+  readonly conformanceView: ConformanceView;
+  readonly runtimeFallbackCapture: RuntimeFallbackCapture | undefined;
+  readonly sourceOutlineCapture: SourceOutlineFidelityCapture | undefined;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+  readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
+  readonly onZoom: (zoom: number) => void;
+}) {
+  if (workload === 'runtime-fallback') {
+    return (
+      <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+        <PixelBytesPanel
+          bytes={runtimeFallbackCapture?.baked}
+          conformanceView={conformanceView}
+          height={runtimeFallbackCapture?.height}
+          label="Checked-in baked asset"
+          width={runtimeFallbackCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+        <PixelBytesPanel
+          bytes={runtimeFallbackCapture?.runtime}
+          conformanceView={conformanceView}
+          height={runtimeFallbackCapture?.height}
+          label="Source font · runtime bake"
+          width={runtimeFallbackCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+        <PixelBytesPanel
+          bytes={runtimeFallbackCapture?.difference}
+          className="md:col-span-2"
+          conformanceView={conformanceView}
+          height={runtimeFallbackCapture?.height}
+          label="Baked / runtime difference heatmap ×8"
+          width={runtimeFallbackCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+      </div>
+    );
+  }
+  if (workload === 'cross-technique-fidelity') {
+    return (
+      <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+        <PixelBytesPanel
+          bytes={sourceOutlineCapture?.candidate}
+          conformanceView={conformanceView}
+          height={sourceOutlineCapture?.height}
+          label={`${techniqueLabel(technique)} candidate · ${sourceOutlineCapture?.physicalPpem ?? '—'} device px`}
+          width={sourceOutlineCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+        <PixelBytesPanel
+          bytes={sourceOutlineCapture?.reference}
+          conformanceView={conformanceView}
+          height={sourceOutlineCapture?.height}
+          label="Browser Canvas2D · pinned source font"
+          width={sourceOutlineCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+        <PixelBytesPanel
+          bytes={sourceOutlineCapture?.difference}
+          className="md:col-span-2"
+          conformanceView={conformanceView}
+          height={sourceOutlineCapture?.height}
+          label="Source-outline difference heatmap ×8"
+          width={sourceOutlineCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+      </div>
+    );
+  }
+  if (technique !== 'bitmap') {
+    return (
+      <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+        <PixelBytesPanel
+          bytes={analyticCapture?.candidate}
+          conformanceView={conformanceView}
+          height={analyticCapture?.height}
+          label={`${techniqueLabel(technique)} candidate`}
+          width={analyticCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+        <PixelBytesPanel
+          bytes={analyticCapture?.reference}
+          conformanceView={conformanceView}
+          height={analyticCapture?.height}
+          label="CPU sampling reference"
+          width={analyticCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+        <PixelBytesPanel
+          bytes={analyticCapture?.difference}
+          className="md:col-span-2"
+          conformanceView={conformanceView}
+          height={analyticCapture?.height}
+          label="Difference heatmap ×8"
+          width={analyticCapture?.width}
+          onPan={onPan}
+          onZoom={onZoom}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2">
+      <PixelPanel
+        capture={bitmapCapture}
+        conformanceView={conformanceView}
+        kind="candidate"
+        label="Candidate"
+        onPan={onPan}
+        onZoom={onZoom}
+      />
+      <PixelPanel
+        capture={bitmapCapture}
+        conformanceView={conformanceView}
+        kind="reference"
+        label="CPU reference"
+        onPan={onPan}
+        onZoom={onZoom}
+      />
+      <PixelPanel
+        capture={bitmapCapture}
+        className="md:col-span-2"
+        conformanceView={conformanceView}
+        kind="difference"
+        label="Difference ×1"
+        onPan={onPan}
+        onZoom={onZoom}
+      />
     </div>
   );
 }
@@ -1984,12 +2112,96 @@ function PixelPanel({
   );
 }
 
+function bitmapViewportEvidence({
+  anchor,
+  fontFixture,
+  grid,
+  layoutWidthRatio,
+  presentationEvidence,
+  settledRevision,
+  settledTextLength,
+  settledTimelineTick,
+  stats,
+  text,
+  textAlign,
+}: {
+  readonly anchor: LiveTextConfiguration['anchor'];
+  readonly fontFixture: BenchmarkFontFixture;
+  readonly grid: boolean;
+  readonly layoutWidthRatio: number;
+  readonly presentationEvidence: PresentationEvidence;
+  readonly settledRevision: number;
+  readonly settledTextLength: number;
+  readonly settledTimelineTick: number | undefined;
+  readonly stats: BitmapTextLiveStats | undefined;
+  readonly text: string;
+  readonly textAlign: LiveTextConfiguration['textAlign'];
+}): Record<`data-${string}`, string | number | boolean | undefined> {
+  return {
+    'data-canvas-grid': String(grid),
+    'data-anchor': anchor,
+    'data-layout-width': stats?.layoutWidth,
+    'data-layout-width-ratio': layoutWidthRatio,
+    'data-content-inset': BENCHMARK_CONTENT_INSET,
+    'data-content-min-width': BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH * layoutWidthRatio,
+    'data-content-policy': 'bounded-pan',
+    'data-line-count': stats?.lineCount,
+    'data-frame-count': stats?.frameCount,
+    'data-frames-per-second': stats?.framesPerSecond,
+    'data-font-fixture': fontFixture,
+    'data-median-submit-ms': stats?.medianSubmitMs,
+    'data-p95-submit-ms': stats?.p95SubmitMs,
+    'data-gpu-frame-ms': stats?.gpuFrameMs,
+    'data-median-gpu-ms': stats?.medianGpuMs,
+    'data-p95-gpu-ms': stats?.p95GpuMs,
+    'data-submit-history-length': stats?.submitHistoryLength,
+    'data-fps-history-length': stats?.fpsHistoryLength,
+    'data-glyph-count': stats?.glyphCount,
+    'data-missing-glyph-count': stats?.missingGlyphCount,
+    'data-draw-count': stats?.drawCount,
+    'data-renderer-init-ms': stats?.rendererInitMs,
+    'data-strike-ppem': stats?.strikePpem,
+    'data-css-font-size': stats?.cssFontSize,
+    'data-rendered-device-px': stats?.renderedPpem,
+    'data-scale-ratio': stats?.scaleRatio,
+    'data-font-load-ms': stats?.fontLoadMs,
+    'data-text-ready-ms': stats?.textReadyMs,
+    'data-first-draw-ms': stats?.firstDrawMs,
+    'data-upload-frame-gpu-ms': stats?.uploadFrameGpuMs,
+    'data-upload-frame-complete-ms': stats?.uploadFrameCompleteMs,
+    'data-startup-ms': stats?.startupMs,
+    'data-source-text-length': text.length,
+    'data-text-align': textAlign,
+    'data-artifact-bytes': stats?.artifactBytes,
+    'data-atlas-gpu-bytes': stats?.atlasGpuBytes,
+    'data-total-gpu-bytes': stats?.totalGpuBytes,
+    'data-settled-revision': settledRevision,
+    'data-settled-text-length': settledTextLength,
+    'data-settled-tick': settledTimelineTick,
+    'data-presentation-matched-glyphs': presentationEvidence.matchedGlyphs,
+    'data-presentation-progress': presentationEvidence.progress,
+    'data-presentation-revision': presentationEvidence.revision,
+    'data-presentation-target-glyphs': presentationEvidence.targetGlyphs,
+    'data-backend': stats?.backend,
+    'data-dpr': stats?.dpr,
+    'data-font-delivery': stats?.delivery,
+    'data-core-bake-ms': stats?.coreBakeMs,
+    'data-raster-bake-ms': stats?.rasterBakeMs,
+    'data-source-font-bytes': stats?.sourceFontBytes,
+    'data-core-artifact-bytes': stats?.coreArtifactBytes,
+    'data-raster-artifact-bytes': stats?.rasterArtifactBytes,
+    'data-gpu-history-length': stats?.gpuHistoryLength,
+    'data-gpu-timing-supported': stats?.gpuTimingSupported,
+  };
+}
+
 function BitmapTextViewport({
   backend,
   delivery,
   dpr,
   fontSize,
   grid,
+  stats,
   textConfiguration,
   onStats,
 }: {
@@ -1998,13 +2210,13 @@ function BitmapTextViewport({
   readonly dpr: 1 | 2;
   readonly fontSize: number;
   readonly grid: boolean;
+  readonly stats: BitmapTextLiveStats | undefined;
   readonly textConfiguration: LiveTextConfiguration;
   readonly onStats: (stats: BitmapTextLiveStats) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<BitmapTextPreview>(undefined);
-  const [stats, setStats] = useState<BitmapTextLiveStats>();
   const [settledRevision, setSettledRevision] = useState(0);
   const [settledTextLength, setSettledTextLength] = useState(0);
   const [settledTimelineTick, setSettledTimelineTick] = useState<number>();
@@ -2019,7 +2231,6 @@ function BitmapTextViewport({
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
-    reset: resetBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('bitmap');
   const {
@@ -2037,7 +2248,6 @@ function BitmapTextViewport({
   } = textConfiguration;
   const publishStats = useEffectEvent((next: BitmapTextLiveStats) => {
     finishBakeProgress();
-    setStats(next);
     onStats(next);
     setError(undefined);
   });
@@ -2083,7 +2293,6 @@ function BitmapTextViewport({
     const container = containerRef.current;
     if (canvas === null || container === null) return;
     const controller = new AbortController();
-    resetBakeProgress();
     const configuration = previewConfiguration();
     let preview: Awaited<ReturnType<(typeof import('./renderer/bitmap-text'))['createBitmapTextPreview']>> | undefined;
     let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
@@ -2164,7 +2373,7 @@ function BitmapTextViewport({
         },
       );
     };
-  }, [backend, delivery, dpr, publishBakeProgress, resetBakeProgress]);
+  }, [backend, delivery, dpr, publishBakeProgress]);
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid);
@@ -2236,60 +2445,19 @@ function BitmapTextViewport({
   return (
     <div
       className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
-      data-canvas-grid={String(grid)}
-      data-anchor={anchor}
-      data-layout-width={stats?.layoutWidth}
-      data-layout-width-ratio={layoutWidthRatio}
-      data-content-inset={BENCHMARK_CONTENT_INSET}
-      data-content-min-width={BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH * layoutWidthRatio}
-      data-content-policy="bounded-pan"
-      data-line-count={stats?.lineCount}
-      data-frame-count={stats?.frameCount}
-      data-frames-per-second={stats?.framesPerSecond}
-      data-font-fixture={fontFixture}
-      data-median-submit-ms={stats?.medianSubmitMs}
-      data-p95-submit-ms={stats?.p95SubmitMs}
-      data-gpu-frame-ms={stats?.gpuFrameMs}
-      data-median-gpu-ms={stats?.medianGpuMs}
-      data-p95-gpu-ms={stats?.p95GpuMs}
-      data-submit-history-length={stats?.submitHistoryLength}
-      data-fps-history-length={stats?.fpsHistoryLength}
-      data-glyph-count={stats?.glyphCount}
-      data-missing-glyph-count={stats?.missingGlyphCount}
-      data-draw-count={stats?.drawCount}
-      data-renderer-init-ms={stats?.rendererInitMs}
-      data-strike-ppem={stats?.strikePpem}
-      data-css-font-size={stats?.cssFontSize}
-      data-rendered-device-px={stats?.renderedPpem}
-      data-scale-ratio={stats?.scaleRatio}
-      data-font-load-ms={stats?.fontLoadMs}
-      data-text-ready-ms={stats?.textReadyMs}
-      data-first-draw-ms={stats?.firstDrawMs}
-      data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
-      data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
-      data-startup-ms={stats?.startupMs}
-      data-source-text-length={text.length}
-      data-text-align={textAlign}
-      data-artifact-bytes={stats?.artifactBytes}
-      data-atlas-gpu-bytes={stats?.atlasGpuBytes}
-      data-total-gpu-bytes={stats?.totalGpuBytes}
-      data-settled-revision={settledRevision}
-      data-settled-text-length={settledTextLength}
-      data-settled-tick={settledTimelineTick}
-      data-presentation-matched-glyphs={presentationEvidence.matchedGlyphs}
-      data-presentation-progress={presentationEvidence.progress}
-      data-presentation-revision={presentationEvidence.revision}
-      data-presentation-target-glyphs={presentationEvidence.targetGlyphs}
-      data-backend={stats?.backend}
-      data-dpr={stats?.dpr}
-      data-font-delivery={stats?.delivery}
-      data-core-bake-ms={stats?.coreBakeMs}
-      data-raster-bake-ms={stats?.rasterBakeMs}
-      data-source-font-bytes={stats?.sourceFontBytes}
-      data-core-artifact-bytes={stats?.coreArtifactBytes}
-      data-raster-artifact-bytes={stats?.rasterArtifactBytes}
-      data-gpu-history-length={stats?.gpuHistoryLength}
-      data-gpu-timing-supported={stats?.gpuTimingSupported}
+      {...bitmapViewportEvidence({
+        anchor,
+        fontFixture,
+        grid,
+        layoutWidthRatio,
+        presentationEvidence,
+        settledRevision,
+        settledTextLength,
+        settledTimelineTick,
+        stats,
+        text,
+        textAlign,
+      })}
       data-testid="bitmap-live-viewport"
       ref={containerRef}
     >
@@ -2326,6 +2494,7 @@ function MtsdfTextViewport({
   dpr,
   fontSize,
   grid,
+  stats,
   textConfiguration,
   onStats,
 }: {
@@ -2334,25 +2503,23 @@ function MtsdfTextViewport({
   readonly dpr: 1 | 2;
   readonly fontSize: number;
   readonly grid: boolean;
+  readonly stats: MtsdfTextLiveStats | undefined;
   readonly textConfiguration: LiveTextConfiguration;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<MtsdfTextPreview>(undefined);
-  const [stats, setStats] = useState<MtsdfTextLiveStats>();
   const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
-    reset: resetBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('MSDF');
   const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } = textConfiguration;
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
     finishBakeProgress();
-    setStats(next);
     onStats(next);
     setError(undefined);
   });
@@ -2378,7 +2545,6 @@ function MtsdfTextViewport({
     const container = containerRef.current;
     if (canvas === null || container === null) return;
     const controller = new AbortController();
-    resetBakeProgress();
     const configuration = previewConfiguration();
     let preview: MtsdfTextPreview | undefined;
     let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
@@ -2455,7 +2621,7 @@ function MtsdfTextViewport({
         },
       );
     };
-  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress]);
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress]);
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid);
@@ -2557,6 +2723,7 @@ function SlugTextViewport({
   dpr,
   fontSize,
   grid,
+  stats,
   textConfiguration,
   onStats,
 }: {
@@ -2565,25 +2732,23 @@ function SlugTextViewport({
   readonly dpr: 1 | 2;
   readonly fontSize: number;
   readonly grid: boolean;
+  readonly stats: SlugTextLiveStats | undefined;
   readonly textConfiguration: LiveTextConfiguration;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<SlugTextPreview>(undefined);
-  const [stats, setStats] = useState<SlugTextLiveStats>();
   const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
-    reset: resetBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('Slug');
   const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } = textConfiguration;
   const publishStats = useEffectEvent((next: SlugTextLiveStats) => {
     finishBakeProgress();
-    setStats(next);
     onStats(next);
     setError(undefined);
   });
@@ -2609,7 +2774,6 @@ function SlugTextViewport({
     const container = containerRef.current;
     if (canvas === null || container === null) return;
     const controller = new AbortController();
-    resetBakeProgress();
     const configuration = previewConfiguration();
     let preview: SlugTextPreview | undefined;
     let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
@@ -2686,7 +2850,7 @@ function SlugTextViewport({
         },
       );
     };
-  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress]);
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress]);
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid);
@@ -2782,6 +2946,134 @@ function SlugTextViewport({
   );
 }
 
+function comparisonViewportEvidence({
+  grid,
+  layoutWidthRatio,
+  stats,
+  technique,
+  workload,
+  workloadFonts,
+}: {
+  readonly grid: boolean;
+  readonly layoutWidthRatio: number;
+  readonly stats: ComparisonWorkloadStats | undefined;
+  readonly technique: RasterTechnique;
+  readonly workload: ComparisonWorkloadId;
+  readonly workloadFonts: ReturnType<typeof liveWorkloadFontFixtures>;
+}): Record<`data-${string}`, string | number | boolean | undefined> {
+  const iconStats = stats?.workload === 'icon-grid' ? stats : undefined;
+  const paintStats = stats?.workload === 'paint-effects' ? stats : undefined;
+  const zoomStats = stats?.workload === 'zoom-text' ? stats : undefined;
+  const animatedStats =
+    stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects' || stats?.workload === 'zoom-text'
+      ? stats
+      : undefined;
+  return {
+    'data-canvas-grid': String(grid),
+    'data-artifact-bytes': stats?.artifactBytes,
+    'data-atlas-gpu-bytes': stats?.atlasGpuBytes,
+    'data-backend': stats?.backend,
+    'data-dpr': stats?.dpr,
+    'data-font-delivery': stats?.delivery,
+    'data-core-bake-ms': stats?.coreBakeMs,
+    'data-raster-bake-ms': stats?.rasterBakeMs,
+    'data-source-font-bytes': stats?.sourceFontBytes,
+    'data-core-artifact-bytes': stats?.coreArtifactBytes,
+    'data-raster-artifact-bytes': stats?.rasterArtifactBytes,
+    'data-draw-count': stats?.drawCount,
+    'data-first-draw-ms': stats?.firstDrawMs,
+    'data-font-fixture': workloadFonts.primary,
+    'data-label-font-fixture': workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : undefined,
+    'data-font-load-ms': stats?.fontLoadMs,
+    'data-frames-per-second': stats?.framesPerSecond,
+    'data-glyph-count': stats?.glyphCount,
+    'data-gpu-history-length': stats?.gpuHistoryLength,
+    'data-gpu-timing-supported': stats?.gpuTimingSupported,
+    'data-layout-width': stats?.layoutWidth,
+    'data-content-inset': BENCHMARK_CONTENT_INSET,
+    'data-content-min-width':
+      workload === 'text-ladder' || workload === 'icon-grid' || workload === 'zoom-text'
+        ? undefined
+        : (workload === 'dynamic-layout' ? 1_000 : BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH) * layoutWidthRatio,
+    'data-content-policy':
+      workload === 'text-ladder' || workload === 'icon-grid' ? 'pan' : workload === 'zoom-text' ? 'fit' : 'bounded-pan',
+    'data-icon-item-count': iconStats?.iconItemCount,
+    'data-icon-label-count': iconStats?.iconLabelCount,
+    'data-icon-column-count': iconStats?.iconColumnCount,
+    'data-icon-row-count': iconStats?.iconRowCount,
+    'data-icon-size': iconStats?.appliedFontSize,
+    'data-icon-grid-width': iconStats?.iconGridWidth,
+    'data-icon-grid-height': iconStats?.iconGridHeight,
+    'data-icon-label-size': iconStats?.iconLabelSize,
+    'data-icon-pool-capacity': iconStats?.iconPoolCapacity,
+    'data-icon-assigned-count': iconStats?.iconAssignedCount,
+    'data-icon-render-visible-count': iconStats?.iconRenderVisibleCount,
+    'data-icon-assignment-signature': iconStats?.iconAssignmentSignature,
+    'data-icon-first-visible-index': iconStats?.iconFirstVisibleIndex,
+    'data-icon-last-visible-index': iconStats?.iconLastVisibleIndex,
+    'data-icon-recycle-count': iconStats?.iconRecycleCount,
+    'data-icon-window-revision': iconStats?.iconWindowRevision,
+    'data-icon-overscan-rows': iconStats?.iconOverscanRows,
+    'data-icon-overscan-columns': iconStats?.iconOverscanColumns,
+    'data-icon-scroll-x': iconStats?.iconScrollX,
+    'data-icon-scroll-y': iconStats?.iconScrollY,
+    'data-icon-maximum-scroll-x': iconStats?.iconMaximumScrollX,
+    'data-icon-maximum-scroll-y': iconStats?.iconMaximumScrollY,
+    'data-line-count': stats?.lineCount,
+    'data-median-gpu-ms': stats?.medianGpuMs,
+    'data-median-submit-ms': stats?.medianSubmitMs,
+    'data-missing-glyph-count': stats?.missingGlyphCount,
+    'data-p95-gpu-ms': stats?.p95GpuMs,
+    'data-p95-submit-ms': stats?.p95SubmitMs,
+    'data-renderer-init-ms': stats?.rendererInitMs,
+    'data-configuration-revision': stats?.configurationRevision,
+    'data-paint-opacity': paintStats?.appliedPaintOpacity,
+    'data-paint-shadow-enabled': paintStats === undefined ? undefined : String(paintStats.appliedPaintShadowEnabled),
+    'data-paint-stroke-width': paintStats?.appliedPaintStrokeWidth,
+    'data-paint-revision': paintStats?.paintRevision,
+    'data-paint-update-ms': paintStats?.lastPaintUpdateMs,
+    'data-presentation-pending': stats !== undefined && (stats.technique !== technique || stats.workload !== workload),
+    'data-layout-bounds-visible':
+      stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined,
+    'data-reflow-count': stats?.reflowCount,
+    'data-reflow-ms': stats?.lastReflowMs,
+    'data-rendered-device-px': stats?.renderedPpem,
+    'data-raster-em-size': stats?.technique === 'mtsdf' ? stats.rasterEmSize : undefined,
+    'data-raster-pixel-range': stats?.technique === 'mtsdf' ? stats.rasterPixelRange : undefined,
+    'data-scale-ratio': stats?.technique === 'slug' ? undefined : stats?.scaleRatio,
+    'data-slug-curve-gpu-bytes': stats?.technique === 'slug' ? stats.slugCurveGpuBytes : undefined,
+    'data-slug-header-gpu-bytes': stats?.technique === 'slug' ? stats.slugHeaderGpuBytes : undefined,
+    'data-slug-page-count': stats?.technique === 'slug' ? stats.slugPageCount : undefined,
+    'data-slug-reference-gpu-bytes': stats?.technique === 'slug' ? stats.slugReferenceGpuBytes : undefined,
+    'data-slug-gpu-bytes': stats?.technique === 'slug' ? stats.slugGpuBytes : undefined,
+    'data-startup-ms': stats?.startupMs,
+    'data-source-text-length': stats?.sourceTextLength,
+    'data-submit-history-length': stats?.submitHistoryLength,
+    'data-text-ready-ms': stats?.textReadyMs,
+    'data-text-update-sample-count': stats?.textUpdateTimings.sampleCount,
+    'data-technique': technique,
+    'data-total-gpu-bytes': stats?.totalGpuBytes,
+    'data-upload-frame-gpu-ms': stats?.uploadFrameGpuMs,
+    'data-upload-frame-complete-ms': stats?.uploadFrameCompleteMs,
+    'data-workload': stats?.workload,
+    'data-zoom-text': zoomStats?.zoomText,
+    'data-zoom-language': zoomStats?.zoomLanguage,
+    'data-zoom-phrase-index': zoomStats?.zoomPhraseIndex,
+    'data-zoom-phrase-revision': zoomStats?.zoomPhraseRevision,
+    'data-zoom-base-css-px': zoomStats?.zoomBaseCssPx,
+    'data-zoom-effective-css-px': zoomStats?.zoomEffectiveCssPx,
+    'data-zoom-maximum-css-px': zoomStats?.zoomMaximumCssPx,
+    'data-zoom-scale': zoomStats?.zoomScale,
+    'data-zoom-maximum-scale': zoomStats?.zoomMaximumScale,
+    'data-workload-amount':
+      stats === undefined || workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
+        ? undefined
+        : stats.appliedAmount,
+    'data-animation-enabled': animatedStats === undefined ? undefined : String(animatedStats.appliedAnimationEnabled),
+    'data-animation-speed': animatedStats?.appliedAnimationSpeed,
+  };
+}
+
 function ComparisonWorkloadViewport({
   amount,
   animationEnabled,
@@ -2797,6 +3089,7 @@ function ComparisonWorkloadViewport({
   paintShadowEnabled,
   paintStrokeWidth,
   showLayoutBounds,
+  stats,
   technique,
   workload,
   onStats,
@@ -2815,6 +3108,7 @@ function ComparisonWorkloadViewport({
   readonly paintShadowEnabled: boolean;
   readonly paintStrokeWidth: number;
   readonly showLayoutBounds: boolean;
+  readonly stats: ComparisonWorkloadStats | undefined;
   readonly technique: RasterTechnique;
   readonly workload: ComparisonWorkloadId;
   readonly onStats: (stats: LiveTextStats) => void;
@@ -2823,27 +3117,17 @@ function ComparisonWorkloadViewport({
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<ComparisonWorkloadPreview>(undefined);
   const surfaceKey = `${backend}:${delivery}:${String(dpr)}:${fontFixture}:${technique}:${workload}`;
-  const [publishedStats, setPublishedStats] = useState<
-    Readonly<{
-      fontFixture: BenchmarkFontFixture;
-      key: string;
-      value: ComparisonWorkloadStats;
-    }>
-  >();
-  const stats = publishedStats?.value;
   const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture);
   const [error, setError] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
-    reset: resetBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress(techniqueLabel(technique));
   const publishStats = useEffectEvent((key: string, next: ComparisonWorkloadStats) => {
     if (key !== surfaceKey) return;
     finishBakeProgress();
-    setPublishedStats({ fontFixture, key, value: next });
     onStats(next);
     setError(undefined);
   });
@@ -2872,7 +3156,6 @@ function ComparisonWorkloadViewport({
     const container = containerRef.current;
     if (canvas === null || container === null) return;
     const controller = new AbortController();
-    resetBakeProgress();
     const effectSurfaceKey = surfaceKey;
     let preview: ComparisonWorkloadPreview | undefined;
     let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
@@ -2941,7 +3224,7 @@ function ComparisonWorkloadViewport({
         },
       );
     };
-  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, resetBakeProgress, surfaceKey, technique, workload]);
+  }, [backend, delivery, dpr, fontFixture, publishBakeProgress, surfaceKey, technique, workload]);
 
   useEffect(() => {
     const preview = previewRef.current;
@@ -2974,127 +3257,8 @@ function ComparisonWorkloadViewport({
   return (
     <div
       className="relative min-h-0 flex-1 overflow-hidden rounded border border-border bg-background"
-      data-canvas-grid={String(grid)}
-      data-artifact-bytes={stats?.artifactBytes}
-      data-atlas-gpu-bytes={stats?.atlasGpuBytes}
-      data-backend={stats?.backend}
-      data-dpr={stats?.dpr}
-      data-font-delivery={stats?.delivery}
-      data-core-bake-ms={stats?.coreBakeMs}
-      data-raster-bake-ms={stats?.rasterBakeMs}
-      data-source-font-bytes={stats?.sourceFontBytes}
-      data-core-artifact-bytes={stats?.coreArtifactBytes}
-      data-raster-artifact-bytes={stats?.rasterArtifactBytes}
-      data-draw-count={stats?.drawCount}
-      data-first-draw-ms={stats?.firstDrawMs}
-      data-font-fixture={workloadFonts.primary}
-      data-label-font-fixture={workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : undefined}
-      data-font-load-ms={stats?.fontLoadMs}
-      data-frames-per-second={stats?.framesPerSecond}
-      data-glyph-count={stats?.glyphCount}
-      data-gpu-history-length={stats?.gpuHistoryLength}
-      data-gpu-timing-supported={stats?.gpuTimingSupported}
-      data-layout-width={stats?.layoutWidth}
-      data-content-inset={BENCHMARK_CONTENT_INSET}
-      data-content-min-width={
-        workload === 'text-ladder' || workload === 'icon-grid' || workload === 'zoom-text'
-          ? undefined
-          : (workload === 'dynamic-layout' ? 1_000 : BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH) * layoutWidthRatio
-      }
-      data-content-policy={
-        workload === 'text-ladder' || workload === 'icon-grid'
-          ? 'pan'
-          : workload === 'zoom-text'
-            ? 'fit'
-            : 'bounded-pan'
-      }
-      data-icon-item-count={stats?.workload === 'icon-grid' ? stats.iconItemCount : undefined}
-      data-icon-label-count={stats?.workload === 'icon-grid' ? stats.iconLabelCount : undefined}
-      data-icon-column-count={stats?.workload === 'icon-grid' ? stats.iconColumnCount : undefined}
-      data-icon-row-count={stats?.workload === 'icon-grid' ? stats.iconRowCount : undefined}
-      data-icon-size={stats?.workload === 'icon-grid' ? stats.appliedFontSize : undefined}
-      data-icon-grid-width={stats?.workload === 'icon-grid' ? stats.iconGridWidth : undefined}
-      data-icon-grid-height={stats?.workload === 'icon-grid' ? stats.iconGridHeight : undefined}
-      data-icon-label-size={stats?.workload === 'icon-grid' ? stats.iconLabelSize : undefined}
-      data-icon-pool-capacity={stats?.workload === 'icon-grid' ? stats.iconPoolCapacity : undefined}
-      data-icon-assigned-count={stats?.workload === 'icon-grid' ? stats.iconAssignedCount : undefined}
-      data-icon-render-visible-count={stats?.workload === 'icon-grid' ? stats.iconRenderVisibleCount : undefined}
-      data-icon-assignment-signature={stats?.workload === 'icon-grid' ? stats.iconAssignmentSignature : undefined}
-      data-icon-first-visible-index={stats?.workload === 'icon-grid' ? stats.iconFirstVisibleIndex : undefined}
-      data-icon-last-visible-index={stats?.workload === 'icon-grid' ? stats.iconLastVisibleIndex : undefined}
-      data-icon-recycle-count={stats?.workload === 'icon-grid' ? stats.iconRecycleCount : undefined}
-      data-icon-window-revision={stats?.workload === 'icon-grid' ? stats.iconWindowRevision : undefined}
-      data-icon-overscan-rows={stats?.workload === 'icon-grid' ? stats.iconOverscanRows : undefined}
-      data-icon-overscan-columns={stats?.workload === 'icon-grid' ? stats.iconOverscanColumns : undefined}
-      data-icon-scroll-x={stats?.workload === 'icon-grid' ? stats.iconScrollX : undefined}
-      data-icon-scroll-y={stats?.workload === 'icon-grid' ? stats.iconScrollY : undefined}
-      data-icon-maximum-scroll-x={stats?.workload === 'icon-grid' ? stats.iconMaximumScrollX : undefined}
-      data-icon-maximum-scroll-y={stats?.workload === 'icon-grid' ? stats.iconMaximumScrollY : undefined}
-      data-line-count={stats?.lineCount}
-      data-median-gpu-ms={stats?.medianGpuMs}
-      data-median-submit-ms={stats?.medianSubmitMs}
-      data-missing-glyph-count={stats?.missingGlyphCount}
-      data-p95-gpu-ms={stats?.p95GpuMs}
-      data-p95-submit-ms={stats?.p95SubmitMs}
-      data-renderer-init-ms={stats?.rendererInitMs}
-      data-configuration-revision={stats?.configurationRevision}
-      data-paint-opacity={stats?.workload === 'paint-effects' ? stats.appliedPaintOpacity : undefined}
-      data-paint-shadow-enabled={
-        stats?.workload === 'paint-effects' ? String(stats.appliedPaintShadowEnabled) : undefined
-      }
-      data-paint-stroke-width={stats?.workload === 'paint-effects' ? stats.appliedPaintStrokeWidth : undefined}
-      data-paint-revision={stats?.workload === 'paint-effects' ? stats.paintRevision : undefined}
-      data-paint-update-ms={stats?.workload === 'paint-effects' ? stats.lastPaintUpdateMs : undefined}
-      data-presentation-pending={publishedStats !== undefined && publishedStats.key !== surfaceKey}
-      data-layout-bounds-visible={
-        stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined
-      }
-      data-reflow-count={stats?.reflowCount}
-      data-reflow-ms={stats?.lastReflowMs}
-      data-rendered-device-px={stats?.renderedPpem}
-      data-raster-em-size={stats?.technique === 'mtsdf' ? stats.rasterEmSize : undefined}
-      data-raster-pixel-range={stats?.technique === 'mtsdf' ? stats.rasterPixelRange : undefined}
-      data-scale-ratio={stats?.technique === 'slug' ? undefined : stats?.scaleRatio}
-      data-slug-curve-gpu-bytes={stats?.technique === 'slug' ? stats.slugCurveGpuBytes : undefined}
-      data-slug-header-gpu-bytes={stats?.technique === 'slug' ? stats.slugHeaderGpuBytes : undefined}
-      data-slug-page-count={stats?.technique === 'slug' ? stats.slugPageCount : undefined}
-      data-slug-reference-gpu-bytes={stats?.technique === 'slug' ? stats.slugReferenceGpuBytes : undefined}
-      data-slug-gpu-bytes={stats?.technique === 'slug' ? stats.slugGpuBytes : undefined}
-      data-startup-ms={stats?.startupMs}
-      data-source-text-length={stats?.sourceTextLength}
-      data-submit-history-length={stats?.submitHistoryLength}
-      data-text-ready-ms={stats?.textReadyMs}
-      data-text-update-sample-count={stats?.textUpdateTimings.sampleCount}
-      data-technique={technique}
+      {...comparisonViewportEvidence({ grid, stats, technique, workload, workloadFonts, layoutWidthRatio })}
       data-testid="comparison-live-viewport"
-      data-total-gpu-bytes={stats?.totalGpuBytes}
-      data-upload-frame-gpu-ms={stats?.uploadFrameGpuMs}
-      data-upload-frame-complete-ms={stats?.uploadFrameCompleteMs}
-      data-workload={stats?.workload}
-      data-zoom-text={stats?.workload === 'zoom-text' ? stats.zoomText : undefined}
-      data-zoom-language={stats?.workload === 'zoom-text' ? stats.zoomLanguage : undefined}
-      data-zoom-phrase-index={stats?.workload === 'zoom-text' ? stats.zoomPhraseIndex : undefined}
-      data-zoom-phrase-revision={stats?.workload === 'zoom-text' ? stats.zoomPhraseRevision : undefined}
-      data-zoom-base-css-px={stats?.workload === 'zoom-text' ? stats.zoomBaseCssPx : undefined}
-      data-zoom-effective-css-px={stats?.workload === 'zoom-text' ? stats.zoomEffectiveCssPx : undefined}
-      data-zoom-maximum-css-px={stats?.workload === 'zoom-text' ? stats.zoomMaximumCssPx : undefined}
-      data-zoom-scale={stats?.workload === 'zoom-text' ? stats.zoomScale : undefined}
-      data-zoom-maximum-scale={stats?.workload === 'zoom-text' ? stats.zoomMaximumScale : undefined}
-      data-workload-amount={
-        stats === undefined || workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
-          ? undefined
-          : stats.appliedAmount
-      }
-      data-animation-enabled={
-        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects' || stats?.workload === 'zoom-text'
-          ? String(stats.appliedAnimationEnabled)
-          : undefined
-      }
-      data-animation-speed={
-        stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects' || stats?.workload === 'zoom-text'
-          ? stats.appliedAnimationSpeed
-          : undefined
-      }
       ref={containerRef}
     >
       <InteractiveCanvas
@@ -3130,7 +3294,7 @@ function ComparisonWorkloadViewport({
         {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} · {dpr}×
         DPR
       </div>
-      {(publishedStats === undefined || bakeProgressActive) && error === undefined && (
+      {(stats === undefined || bakeProgressActive) && error === undefined && (
         <BakeProgressOverlay
           backend={backend}
           progress={bakeProgressValue}
@@ -3151,7 +3315,6 @@ function useBakeProgress(label: string): {
   readonly active: boolean;
   readonly publish: (progress: BakeProgress) => void;
   readonly finish: () => void;
-  readonly reset: () => void;
 } {
   const [value, setValue] = useState<BakeProgress>();
   const [active, setActive] = useState(false);
@@ -3171,12 +3334,7 @@ function useBakeProgress(label: string): {
     [label],
   );
   const finish = useCallback(() => setActive(false), []);
-  const reset = useCallback(() => {
-    setValue(undefined);
-    setActive(false);
-    lastConsoleKey.current = '';
-  }, []);
-  return { value, active, publish, finish, reset };
+  return { value, active, publish, finish };
 }
 
 function BakeProgressOverlay({

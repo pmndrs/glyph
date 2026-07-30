@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-07-30
+
+- **Benchmark isolation and allocation hardening** — Made Zen an exclusive root presentation with no hidden Main or Conformance subtree, added one-renderer lifecycle diagnostics and rapid-switch coverage, removed duplicate React live-stat ownership, eliminated common telemetry ring and empty-poll allocations, retained Paint & Effects source spans and dynamic-workload scratch storage, reused `Text` glyph-paint topology, added an MTSDF color-only update path, and made renderer teardown await outstanding WebGPU timestamps.
+
 ## 2026-07-29
 
 - **Buffered telemetry presentation** — Moved the shared FPS/CPU/GPU chart head 250 milliseconds behind the renderer RAF clock so asynchronously polled GPU measurements normally settle into their original timestamped slots before display rather than visibly catching up. The delay affects presentation only: rendering, measurement, polling, and the eight-second history remain unchanged. FPS history now smooths frame duration with a 250-millisecond time-based exponential average before converting to a rate, while CPU/GPU timings and the observed refresh-rate ceiling stay unsmoothed. CPU timing now begins at renderer callback entry and includes completed-query polling plus workload animation/update before render submission; it explicitly excludes external React/browser work, presentation, compositing, and RAF wait time.

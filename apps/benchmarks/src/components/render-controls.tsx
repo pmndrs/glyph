@@ -226,41 +226,11 @@ export function Controls({
         </div>
       )}
       {!minimal && workload !== 'advanced-shaping' && (
-        <div className="min-[1200px]:hidden">
-          {workload === 'icon-grid' ? (
-            <div className="grid gap-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
-              <div
-                className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
-                data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
-              >
-                {BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}
-              </div>
-            </div>
-          ) : workload === 'zoom-text' ? (
-            <div className="grid gap-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
-              <div
-                className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
-                data-zoom-font-fixture="inter"
-              >
-                {BENCHMARK_FONT_LABELS.inter}
-              </div>
-            </div>
-          ) : (
-            <SelectField
-              label="Font fixture"
-              value={selectedFontFixture}
-              onChange={(value) => onSelectedFontFixture(selectableFontFixture(value))}
-            >
-              {SELECTABLE_FONT_FIXTURES.map((fixture) => (
-                <option key={fixture.id} value={fixture.id}>
-                  {fixture.label} · {fixture.metadata}
-                </option>
-              ))}
-            </SelectField>
-          )}
-        </div>
+        <CompactFontFixtureControl
+          selectedFontFixture={selectedFontFixture}
+          workload={workload}
+          onSelectedFontFixture={onSelectedFontFixture}
+        />
       )}
       <div>
         <p className="mb-2 font-mono text-[9px] uppercase text-dim">Backend</p>
@@ -377,156 +347,31 @@ export function Controls({
         </div>
       )}
       {mode === 'benchmark' && (
-        <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
-          <p className="eyebrow">Live workload</p>
-          {workload === 'text-ladder' ? (
-            <p className="font-mono text-[9px] uppercase text-muted">Rendered range · 8–512 CSS px</p>
-          ) : workload !== 'zoom-text' ? (
-            <Field
-              label={`${workload === 'icon-grid' ? 'Icon size' : 'Rendered size'} · ${fontSize} CSS px`}
-              max={workload === 'icon-grid' ? 1_024 : 96}
-              min={8}
-              rangeScale={workload === 'icon-grid' ? 'logarithmic' : 'linear'}
-              step={1}
-              type="range"
-              value={fontSize}
-              {...(workload === 'icon-grid' ? { onRangeValueChange: onFontSize } : {})}
-              onChange={workload === 'icon-grid' ? undefined : (event) => onFontSize(event.currentTarget.valueAsNumber)}
-            />
-          ) : null}
-          {workloadHasLayoutWidth(workload) && (
-            <Field
-              label={`Layout width · ${layoutWidthPercent}%`}
-              max={100}
-              min={40}
-              step={2}
-              type="range"
-              value={layoutWidthPercent}
-              onChange={(event) => onLayoutWidthPercent(event.currentTarget.valueAsNumber)}
-            />
-          )}
-          {workloadAmountLabel(workload, workloadAmount) !== undefined && (
-            <Field
-              label={workloadAmountLabel(workload, workloadAmount)!}
-              max={100}
-              min={0}
-              step={1}
-              type="range"
-              value={workloadAmount}
-              onChange={(event) => onWorkloadAmount(event.currentTarget.valueAsNumber)}
-            />
-          )}
-          {(workload === 'dynamic-layout' || workload === 'paint-effects' || workload === 'zoom-text') && (
-            <>
-              <Toggle checked={animationEnabled} label="Animate" onChange={onAnimationEnabled} />
-              <Field
-                label={`Animation speed · ${animationSpeed}%`}
-                max={100}
-                min={0}
-                step={1}
-                type="range"
-                value={animationSpeed}
-                onChange={(event) => onAnimationSpeed(event.currentTarget.valueAsNumber)}
-              />
-            </>
-          )}
-          {workload === 'dynamic-layout' && (
-            <Toggle checked={showLayoutBounds} label="Show layout bounds" onChange={onShowLayoutBounds} />
-          )}
-          {workload === 'paint-effects' && (
-            <>
-              <Field
-                label={`Opacity · ${paintOpacityPercent}%`}
-                max={100}
-                min={0}
-                step={1}
-                type="range"
-                value={paintOpacityPercent}
-                onChange={(event) => onPaintOpacityPercent(event.currentTarget.valueAsNumber)}
-              />
-              <Field
-                disabled={technique !== 'mtsdf'}
-                label={
-                  technique === 'mtsdf'
-                    ? `Stroke width · ${paintStrokePercent}%`
-                    : technique === 'slug'
-                      ? 'Stroke width · unavailable for Slug V0'
-                      : 'Stroke width · unavailable for bitmap'
-                }
-                max={100}
-                min={0}
-                step={1}
-                type="range"
-                value={technique === 'mtsdf' ? paintStrokePercent : 0}
-                onChange={(event) => onPaintStrokePercent(event.currentTarget.valueAsNumber)}
-              />
-              <Toggle
-                checked={technique === 'mtsdf' && paintShadowEnabled}
-                disabled={technique !== 'mtsdf'}
-                label={
-                  technique === 'mtsdf'
-                    ? 'Shadow'
-                    : technique === 'slug'
-                      ? 'Shadow · unavailable for Slug V0'
-                      : 'Shadow · unavailable for bitmap'
-                }
-                onChange={onPaintShadowEnabled}
-              />
-            </>
-          )}
-          <p className="min-h-[30px] text-[10px] leading-relaxed text-muted">
-            {liveWorkloadControlDescription(workload, technique)}
-          </p>
-        </div>
+        <LiveWorkloadControls
+          animationEnabled={animationEnabled}
+          animationSpeed={animationSpeed}
+          fontSize={fontSize}
+          layoutWidthPercent={layoutWidthPercent}
+          paintOpacityPercent={paintOpacityPercent}
+          paintShadowEnabled={paintShadowEnabled}
+          paintStrokePercent={paintStrokePercent}
+          showLayoutBounds={showLayoutBounds}
+          technique={technique}
+          workload={workload}
+          workloadAmount={workloadAmount}
+          onAnimationEnabled={onAnimationEnabled}
+          onAnimationSpeed={onAnimationSpeed}
+          onFontSize={onFontSize}
+          onLayoutWidthPercent={onLayoutWidthPercent}
+          onPaintOpacityPercent={onPaintOpacityPercent}
+          onPaintShadowEnabled={onPaintShadowEnabled}
+          onPaintStrokePercent={onPaintStrokePercent}
+          onShowLayoutBounds={onShowLayoutBounds}
+          onWorkloadAmount={onWorkloadAmount}
+        />
       )}
       {mode === 'benchmark' && workload === 'advanced-shaping' && (
-        <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
-          <p className="eyebrow">Shaping timeline</p>
-          <SelectField
-            label="Case"
-            value={showcaseState.caseId}
-            onChange={(caseId) => {
-              const definition = ADVANCED_SHAPING_CASES.find((entry) => entry.id === caseId);
-              if (definition !== undefined) {
-                onShowcase({ kind: 'select-case', caseId: definition.id });
-              }
-            }}
-          >
-            {ADVANCED_SHAPING_CASES.map((definition) => (
-              <option key={definition.id} value={definition.id}>
-                {definition.label}
-              </option>
-            ))}
-          </SelectField>
-          <TextareaField
-            label="Live text"
-            value={showcaseFrame.text}
-            onChange={(event) => onShowcase({ kind: 'edit', text: event.currentTarget.value })}
-          />
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button
-              variant={showcaseState.playing ? 'primary' : 'secondary'}
-              onClick={() => onShowcase({ kind: showcaseState.playing ? 'pause' : 'play' })}
-            >
-              {showcaseState.playing ? 'Pause' : 'Play'}
-            </Button>
-            <Button onClick={() => onShowcase({ kind: 'reset' })}>Reset</Button>
-          </div>
-          <Field
-            label={`Timeline · ${showcaseFrame.tick} / ${showcaseFrame.tickCount}`}
-            max={showcaseFrame.tickCount}
-            min={0}
-            step={1}
-            type="range"
-            value={showcaseFrame.tick}
-            onChange={(event) => onShowcase({ kind: 'seek', tick: event.currentTarget.valueAsNumber })}
-          />
-          <p className="font-mono text-[9px] leading-relaxed text-muted">
-            {showcaseFrame.caseDefinition.language.toUpperCase()} ·{' '}
-            {showcaseFrame.caseDefinition.direction.toUpperCase()} · WIDTH{' '}
-            {(showcaseFrame.widthPermille / 10).toFixed(0)}%
-          </p>
-        </div>
+        <AdvancedShapingControls showcaseFrame={showcaseFrame} showcaseState={showcaseState} onShowcase={onShowcase} />
       )}
       {mode === 'conformance' && (
         <div className="grid grid-cols-2 gap-2">
@@ -568,7 +413,263 @@ export function Controls({
   );
 }
 
-export function PayloadInspector({
+function CompactFontFixtureControl({
+  selectedFontFixture,
+  workload,
+  onSelectedFontFixture,
+}: {
+  readonly selectedFontFixture: SelectableFontFixture;
+  readonly workload: string;
+  readonly onSelectedFontFixture: (value: SelectableFontFixture) => void;
+}) {
+  return (
+    <div className="min-[1200px]:hidden">
+      {workload === 'icon-grid' ? (
+        <div className="grid gap-1.5">
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
+          <div
+            className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+            data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
+          >
+            {BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}
+          </div>
+        </div>
+      ) : workload === 'zoom-text' ? (
+        <div className="grid gap-1.5">
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
+          <div
+            className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+            data-zoom-font-fixture="inter"
+          >
+            {BENCHMARK_FONT_LABELS.inter}
+          </div>
+        </div>
+      ) : (
+        <SelectField
+          label="Font fixture"
+          value={selectedFontFixture}
+          onChange={(value) => onSelectedFontFixture(selectableFontFixture(value))}
+        >
+          {SELECTABLE_FONT_FIXTURES.map((fixture) => (
+            <option key={fixture.id} value={fixture.id}>
+              {fixture.label} · {fixture.metadata}
+            </option>
+          ))}
+        </SelectField>
+      )}
+    </div>
+  );
+}
+
+function LiveWorkloadControls({
+  animationEnabled,
+  animationSpeed,
+  fontSize,
+  layoutWidthPercent,
+  paintOpacityPercent,
+  paintShadowEnabled,
+  paintStrokePercent,
+  showLayoutBounds,
+  technique,
+  workload,
+  workloadAmount,
+  onAnimationEnabled,
+  onAnimationSpeed,
+  onFontSize,
+  onLayoutWidthPercent,
+  onPaintOpacityPercent,
+  onPaintShadowEnabled,
+  onPaintStrokePercent,
+  onShowLayoutBounds,
+  onWorkloadAmount,
+}: {
+  readonly animationEnabled: boolean;
+  readonly animationSpeed: number;
+  readonly fontSize: number;
+  readonly layoutWidthPercent: number;
+  readonly paintOpacityPercent: number;
+  readonly paintShadowEnabled: boolean;
+  readonly paintStrokePercent: number;
+  readonly showLayoutBounds: boolean;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+  readonly workloadAmount: number;
+  readonly onAnimationEnabled: (value: boolean) => void;
+  readonly onAnimationSpeed: (value: number) => void;
+  readonly onFontSize: (value: number) => void;
+  readonly onLayoutWidthPercent: (value: number) => void;
+  readonly onPaintOpacityPercent: (value: number) => void;
+  readonly onPaintShadowEnabled: (value: boolean) => void;
+  readonly onPaintStrokePercent: (value: number) => void;
+  readonly onShowLayoutBounds: (value: boolean) => void;
+  readonly onWorkloadAmount: (value: number) => void;
+}) {
+  const amountLabel = workloadAmountLabel(workload, workloadAmount);
+  return (
+    <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
+      <p className="eyebrow">Live workload</p>
+      {workload === 'text-ladder' ? (
+        <p className="font-mono text-[9px] uppercase text-muted">Rendered range · 8–512 CSS px</p>
+      ) : workload !== 'zoom-text' ? (
+        <Field
+          label={`${workload === 'icon-grid' ? 'Icon size' : 'Rendered size'} · ${fontSize} CSS px`}
+          max={workload === 'icon-grid' ? 1_024 : 96}
+          min={8}
+          rangeScale={workload === 'icon-grid' ? 'logarithmic' : 'linear'}
+          step={1}
+          type="range"
+          value={fontSize}
+          {...(workload === 'icon-grid' ? { onRangeValueChange: onFontSize } : {})}
+          onChange={workload === 'icon-grid' ? undefined : (event) => onFontSize(event.currentTarget.valueAsNumber)}
+        />
+      ) : null}
+      {workloadHasLayoutWidth(workload) && (
+        <Field
+          label={`Layout width · ${layoutWidthPercent}%`}
+          max={100}
+          min={40}
+          step={2}
+          type="range"
+          value={layoutWidthPercent}
+          onChange={(event) => onLayoutWidthPercent(event.currentTarget.valueAsNumber)}
+        />
+      )}
+      {amountLabel !== undefined && (
+        <Field
+          label={amountLabel}
+          max={100}
+          min={0}
+          step={1}
+          type="range"
+          value={workloadAmount}
+          onChange={(event) => onWorkloadAmount(event.currentTarget.valueAsNumber)}
+        />
+      )}
+      {(workload === 'dynamic-layout' || workload === 'paint-effects' || workload === 'zoom-text') && (
+        <>
+          <Toggle checked={animationEnabled} label="Animate" onChange={onAnimationEnabled} />
+          <Field
+            label={`Animation speed · ${animationSpeed}%`}
+            max={100}
+            min={0}
+            step={1}
+            type="range"
+            value={animationSpeed}
+            onChange={(event) => onAnimationSpeed(event.currentTarget.valueAsNumber)}
+          />
+        </>
+      )}
+      {workload === 'dynamic-layout' && (
+        <Toggle checked={showLayoutBounds} label="Show layout bounds" onChange={onShowLayoutBounds} />
+      )}
+      {workload === 'paint-effects' && (
+        <>
+          <Field
+            label={`Opacity · ${paintOpacityPercent}%`}
+            max={100}
+            min={0}
+            step={1}
+            type="range"
+            value={paintOpacityPercent}
+            onChange={(event) => onPaintOpacityPercent(event.currentTarget.valueAsNumber)}
+          />
+          <Field
+            disabled={technique !== 'mtsdf'}
+            label={
+              technique === 'mtsdf'
+                ? `Stroke width · ${paintStrokePercent}%`
+                : technique === 'slug'
+                  ? 'Stroke width · unavailable for Slug V0'
+                  : 'Stroke width · unavailable for bitmap'
+            }
+            max={100}
+            min={0}
+            step={1}
+            type="range"
+            value={technique === 'mtsdf' ? paintStrokePercent : 0}
+            onChange={(event) => onPaintStrokePercent(event.currentTarget.valueAsNumber)}
+          />
+          <Toggle
+            checked={technique === 'mtsdf' && paintShadowEnabled}
+            disabled={technique !== 'mtsdf'}
+            label={
+              technique === 'mtsdf'
+                ? 'Shadow'
+                : technique === 'slug'
+                  ? 'Shadow · unavailable for Slug V0'
+                  : 'Shadow · unavailable for bitmap'
+            }
+            onChange={onPaintShadowEnabled}
+          />
+        </>
+      )}
+      <p className="min-h-[30px] text-[10px] leading-relaxed text-muted">
+        {liveWorkloadControlDescription(workload, technique)}
+      </p>
+    </div>
+  );
+}
+
+function AdvancedShapingControls({
+  showcaseFrame,
+  showcaseState,
+  onShowcase,
+}: {
+  readonly showcaseFrame: AdvancedShapingFrame;
+  readonly showcaseState: AdvancedShapingState;
+  readonly onShowcase: (command: AdvancedShapingCommand) => void;
+}) {
+  return (
+    <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
+      <p className="eyebrow">Shaping timeline</p>
+      <SelectField
+        label="Case"
+        value={showcaseState.caseId}
+        onChange={(caseId) => {
+          const definition = ADVANCED_SHAPING_CASES.find((entry) => entry.id === caseId);
+          if (definition !== undefined) {
+            onShowcase({ kind: 'select-case', caseId: definition.id });
+          }
+        }}
+      >
+        {ADVANCED_SHAPING_CASES.map((definition) => (
+          <option key={definition.id} value={definition.id}>
+            {definition.label}
+          </option>
+        ))}
+      </SelectField>
+      <TextareaField
+        label="Live text"
+        value={showcaseFrame.text}
+        onChange={(event) => onShowcase({ kind: 'edit', text: event.currentTarget.value })}
+      />
+      <div className="grid grid-cols-2 gap-1.5">
+        <Button
+          variant={showcaseState.playing ? 'primary' : 'secondary'}
+          onClick={() => onShowcase({ kind: showcaseState.playing ? 'pause' : 'play' })}
+        >
+          {showcaseState.playing ? 'Pause' : 'Play'}
+        </Button>
+        <Button onClick={() => onShowcase({ kind: 'reset' })}>Reset</Button>
+      </div>
+      <Field
+        label={`Timeline · ${showcaseFrame.tick} / ${showcaseFrame.tickCount}`}
+        max={showcaseFrame.tickCount}
+        min={0}
+        step={1}
+        type="range"
+        value={showcaseFrame.tick}
+        onChange={(event) => onShowcase({ kind: 'seek', tick: event.currentTarget.valueAsNumber })}
+      />
+      <p className="font-mono text-[9px] leading-relaxed text-muted">
+        {showcaseFrame.caseDefinition.language.toUpperCase()} · {showcaseFrame.caseDefinition.direction.toUpperCase()} ·
+        WIDTH {(showcaseFrame.widthPermille / 10).toFixed(0)}%
+      </p>
+    </div>
+  );
+}
+
+function PayloadInspector({
   delivery,
   fontFixture,
   liveStats,

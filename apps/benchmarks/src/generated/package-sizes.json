@@ -10,10 +10,10 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 322612,
-      "minifiedBytes": 246050,
-      "gzipBytes": 71800,
-      "brotliBytes": 55000
+      "rawBytes": 322736,
+      "minifiedBytes": 246091,
+      "gzipBytes": 71809,
+      "brotliBytes": 55082
     },
     {
       "id": "font-validator-js",
@@ -70,30 +70,30 @@
       "label": "Bitmap runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 356055,
-      "minifiedBytes": 267440,
-      "gzipBytes": 77756,
-      "brotliBytes": 60140
+      "rawBytes": 356179,
+      "minifiedBytes": 267474,
+      "gzipBytes": 77765,
+      "brotliBytes": 60174
     },
     {
       "id": "mtsdf-runtime-js",
       "label": "MTSDF runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 366429,
-      "minifiedBytes": 273040,
-      "gzipBytes": 79396,
-      "brotliBytes": 61604
+      "rawBytes": 368722,
+      "minifiedBytes": 274157,
+      "gzipBytes": 79688,
+      "brotliBytes": 61907
     },
     {
       "id": "slug-runtime-js",
       "label": "Slug runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 377775,
-      "minifiedBytes": 278805,
-      "gzipBytes": 81090,
-      "brotliBytes": 62972
+      "rawBytes": 377899,
+      "minifiedBytes": 278842,
+      "gzipBytes": 81084,
+      "brotliBytes": 62982
     },
     {
       "id": "bitmap-baker-wasm",

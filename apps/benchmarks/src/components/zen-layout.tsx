@@ -11,6 +11,7 @@ export interface ZenLayoutProps {
   readonly fontOptions: readonly ZenSelectOption[];
   readonly fontValue: string;
   readonly payload: ReactNode;
+  readonly scene: ReactNode;
   readonly techniqueControl: ReactNode;
   readonly telemetry: ReactNode;
   readonly workloadOptions: readonly ZenSelectOption[];
@@ -25,6 +26,7 @@ export function ZenLayout({
   fontOptions,
   fontValue,
   payload,
+  scene,
   techniqueControl,
   telemetry,
   workloadOptions,
@@ -46,7 +48,11 @@ export function ZenLayout({
   }, []);
 
   return (
-    <div className="zen-layout pointer-events-none absolute inset-0 z-20" data-testid="zen-layout">
+    <div
+      className="zen-layout relative h-dvh min-h-0 min-w-0 overflow-hidden bg-background text-foreground"
+      data-testid="zen-layout"
+    >
+      <main className="absolute inset-0 min-h-0 min-w-0 overflow-hidden">{scene}</main>
       <header className="pointer-events-none absolute left-6 top-6 z-30 sm:left-8 sm:top-8">
         <div className="zen-top-chrome pointer-events-auto flex min-w-0 flex-wrap items-center gap-1.5">
           {techniqueControl}

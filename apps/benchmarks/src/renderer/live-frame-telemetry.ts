@@ -7,15 +7,6 @@ export interface LiveFrameHistoryCursor {
   nextIndex: number;
 }
 
-export interface LiveFrameToken {
-  readonly frameId: number;
-  readonly historyIndex: number;
-  readonly measureGpu: boolean;
-  readonly report: boolean;
-  readonly framesPerSecond: number;
-  readonly snapshot: LiveFrameTelemetrySnapshot | undefined;
-}
-
 export interface LiveFrameTelemetrySnapshot {
   readonly frameCount: number;
   readonly framesPerSecond: number;
@@ -48,8 +39,9 @@ export interface LiveFrameTelemetrySnapshot {
 }
 
 export interface LiveFrameTelemetry {
-  beginFrame(timestampMs: number): LiveFrameToken;
-  endFrame(token: LiveFrameToken, durationMs: number): LiveFrameTelemetrySnapshot | undefined;
+  readonly gpuTimingSupported: boolean;
+  beginFrame(timestampMs: number): number;
+  endFrame(frameId: number, durationMs: number): LiveFrameTelemetrySnapshot | undefined;
   recordGpu(frameId: number, durationMs: number): boolean;
   discardGpu(frameId: number): boolean;
 }
@@ -73,9 +65,10 @@ export function createLiveFrameTelemetry(options?: {
 
   const frameTimestampHistory = new Float64Array(capacity);
   const frameIds = new Array<number>(capacity).fill(0);
-  const frameSlots = new Map<number, number>();
-  const pendingGpuFrames = new Set<number>();
+  const pendingGpuFrames = new Uint8Array(capacity);
   const submitHistory = new Float32Array(capacity).fill(Number.NaN);
+  const reportFrames = new Uint8Array(capacity);
+  const reportFramesPerSecond = new Float32Array(capacity);
   const submitQuantileScratch = new Float32Array(capacity);
   const fpsHistory = new Float32Array(capacity).fill(Number.NaN);
   const gpuHistory = new Float32Array(capacity).fill(Number.NaN);
@@ -91,6 +84,7 @@ export function createLiveFrameTelemetry(options?: {
   let observedRefreshRateHz = 0;
 
   return {
+    gpuTimingSupported,
     beginFrame(timestampMs) {
       if (!Number.isFinite(timestampMs)) throw new RangeError('frame timestamp must be finite');
       frameCount += 1;
@@ -98,8 +92,7 @@ export function createLiveFrameTelemetry(options?: {
       const historyIndex = historyCursor.nextIndex;
       const overwrittenFrameId = frameIds[historyIndex] ?? 0;
       if (overwrittenFrameId !== 0) {
-        frameSlots.delete(overwrittenFrameId);
-        pendingGpuFrames.delete(overwrittenFrameId);
+        pendingGpuFrames[historyIndex] = 0;
       }
 
       const frameDurationMs =
@@ -116,11 +109,10 @@ export function createLiveFrameTelemetry(options?: {
       const smoothedFps = smoothedFrameDurationMs === undefined ? Number.NaN : 1_000 / smoothedFrameDurationMs;
       frameTimestampHistory[historyIndex] = timestampMs;
       frameIds[historyIndex] = frameId;
-      frameSlots.set(frameId, historyIndex);
       fpsHistory[historyIndex] = smoothedFps;
       submitHistory[historyIndex] = Number.NaN;
       gpuHistory[historyIndex] = latestGpuMs ?? Number.NaN;
-      if (gpuTimingSupported) pendingGpuFrames.add(frameId);
+      pendingGpuFrames[historyIndex] = gpuTimingSupported ? 1 : 0;
       historyCursor.nextIndex = (historyIndex + 1) % capacity;
       historyCursor.length = Math.min(historyCursor.length + 1, capacity);
       lastFrameTimestamp = timestampMs;
@@ -133,31 +125,28 @@ export function createLiveFrameTelemetry(options?: {
         reportedAt = timestampMs;
         reportedFrame = frameCount;
       }
+      reportFrames[historyIndex] = report ? 1 : 0;
+      reportFramesPerSecond[historyIndex] = framesPerSecond;
       if (Number.isFinite(frameDurationMs)) {
         observedRefreshRateHz = Math.max(observedRefreshRateHz, 1_000 / frameDurationMs);
       }
-      return {
-        frameId,
-        framesPerSecond,
-        historyIndex,
-        measureGpu: gpuTimingSupported,
-        report,
-        snapshot: latestSnapshot,
-      };
+      return frameId;
     },
-    endFrame(token, durationMs) {
+    endFrame(frameId, durationMs) {
       if (!Number.isFinite(durationMs) || durationMs < 0) {
         throw new RangeError('CPU frame duration must be finite and nonnegative');
       }
-      if (frameSlots.get(token.frameId) !== token.historyIndex) return token.snapshot;
-      submitHistory[token.historyIndex] = durationMs;
-      if (!token.report) return token.snapshot;
+      assertGpuFrameId(frameId);
+      const historyIndex = frameHistoryIndex(frameIds, frameId);
+      if (historyIndex === undefined) return latestSnapshot;
+      submitHistory[historyIndex] = durationMs;
+      if (reportFrames[historyIndex] !== 1) return latestSnapshot;
       const refreshRateHz = explicitRefreshRateHz ?? (observedRefreshRateHz || 60);
       latestSnapshot = snapshot({
         cursor: historyCursor,
         frameCount,
         frameTimestampHistory,
-        framesPerSecond: token.framesPerSecond || refreshRateHz,
+        framesPerSecond: reportFramesPerSecond[historyIndex] || refreshRateHz,
         fpsHistory,
         gpuHistory,
         gpuQuantileScratch,
@@ -174,20 +163,23 @@ export function createLiveFrameTelemetry(options?: {
       if (!Number.isFinite(durationMs) || durationMs < 0) {
         throw new RangeError('GPU frame duration must be finite and nonnegative');
       }
-      const historyIndex = frameSlots.get(frameId);
+      const historyIndex = frameHistoryIndex(frameIds, frameId);
       if (historyIndex === undefined) return false;
-      for (const pendingFrameId of pendingGpuFrames) {
-        const pendingIndex = frameSlots.get(pendingFrameId);
-        if (pendingIndex !== undefined) gpuHistory[pendingIndex] = durationMs;
-        if (pendingFrameId <= frameId) pendingGpuFrames.delete(pendingFrameId);
+      for (let pendingIndex = 0; pendingIndex < capacity; pendingIndex += 1) {
+        if (pendingGpuFrames[pendingIndex] !== 1) continue;
+        const pendingFrameId = frameIds[pendingIndex] ?? 0;
+        if (pendingFrameId === 0) continue;
+        gpuHistory[pendingIndex] = durationMs;
+        if (pendingFrameId <= frameId) pendingGpuFrames[pendingIndex] = 0;
       }
       latestGpuMs = durationMs;
       return true;
     },
     discardGpu(frameId) {
       assertGpuFrameId(frameId);
-      const historyIndex = frameSlots.get(frameId);
+      const historyIndex = frameHistoryIndex(frameIds, frameId);
       if (historyIndex === undefined) return false;
+      pendingGpuFrames[historyIndex] = 0;
       return true;
     },
   };
@@ -312,4 +304,9 @@ function assertGpuFrameId(frameId: number): void {
   if (!Number.isSafeInteger(frameId) || frameId <= 0) {
     throw new RangeError('GPU frame id must be a positive safe integer');
   }
+}
+
+function frameHistoryIndex(frameIds: readonly number[], frameId: number): number | undefined {
+  const index = (frameId - 1) % frameIds.length;
+  return frameIds[index] === frameId ? index : undefined;
 }

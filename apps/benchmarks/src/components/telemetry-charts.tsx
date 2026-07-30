@@ -77,17 +77,7 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
       if (current !== undefined) {
         const presentationTimestamp = sparklinePresentationTimestamp(timestamp, TELEMETRY_PRESENTATION_DELAY_MS);
         for (const chart of drawing) {
-          const series = telemetryChartSeries(current, chart.id);
-          drawTelemetrySeries(
-            chart,
-            current.frameTimestampHistory,
-            series.values,
-            series.length,
-            series.nextIndex,
-            series.maximum,
-            presentationTimestamp,
-            TELEMETRY_CHART_WINDOW_MS,
-          );
+          drawTelemetryChart(chart, current, presentationTimestamp);
         }
       } else {
         for (const { context, width, height } of drawing) context.clearRect(0, 0, width, height);
@@ -229,29 +219,53 @@ function drawTelemetrySeries(
   context.stroke();
 }
 
-function telemetryChartSeries(stats: TelemetryChartStats, id: 'cpu' | 'fps' | 'gpu') {
-  switch (id) {
+function drawTelemetryChart(
+  chart: {
+    readonly context: CanvasRenderingContext2D;
+    readonly height: number;
+    readonly id: 'cpu' | 'fps' | 'gpu';
+    readonly width: number;
+  },
+  stats: TelemetryChartStats,
+  presentationTimestamp: number,
+): void {
+  switch (chart.id) {
     case 'fps':
-      return {
-        length: stats.fpsHistoryLength,
-        maximum: stats.refreshRateHz,
-        nextIndex: stats.fpsHistoryCursor.nextIndex,
-        values: stats.fpsHistory,
-      };
+      drawTelemetrySeries(
+        chart,
+        stats.frameTimestampHistory,
+        stats.fpsHistory,
+        stats.fpsHistoryLength,
+        stats.fpsHistoryCursor.nextIndex,
+        stats.refreshRateHz,
+        presentationTimestamp,
+        TELEMETRY_CHART_WINDOW_MS,
+      );
+      return;
     case 'cpu':
-      return {
-        length: stats.submitHistoryLength,
-        maximum: stats.frameBudgetMs,
-        nextIndex: stats.submitHistoryCursor.nextIndex,
-        values: stats.submitHistory,
-      };
+      drawTelemetrySeries(
+        chart,
+        stats.frameTimestampHistory,
+        stats.submitHistory,
+        stats.submitHistoryLength,
+        stats.submitHistoryCursor.nextIndex,
+        stats.frameBudgetMs,
+        presentationTimestamp,
+        TELEMETRY_CHART_WINDOW_MS,
+      );
+      return;
     case 'gpu':
-      return {
-        length: stats.gpuHistoryLength,
-        maximum: stats.frameBudgetMs,
-        nextIndex: stats.gpuHistoryCursor.nextIndex,
-        values: stats.gpuHistory,
-      };
+      drawTelemetrySeries(
+        chart,
+        stats.frameTimestampHistory,
+        stats.gpuHistory,
+        stats.gpuHistoryLength,
+        stats.gpuHistoryCursor.nextIndex,
+        stats.frameBudgetMs,
+        presentationTimestamp,
+        TELEMETRY_CHART_WINDOW_MS,
+      );
+      return;
   }
 }
 

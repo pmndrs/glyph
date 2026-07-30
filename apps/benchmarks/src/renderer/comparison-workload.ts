@@ -133,12 +133,29 @@ interface WorkloadEntry {
   lastPaintUpdateMs?: number;
   paintOutlineWidth?: number;
   paintShadowOffset?: readonly [number, number];
+  readonly paintSpans?: MutablePaintSpan[];
+  readonly paintUpdate?: { text: string; spans: readonly TextSpan[] };
   lastWidth?: number;
+  readonly widthUpdate?: { width: number };
   reflowPending?: boolean;
   zoomLanguage?: string;
   zoomMaximumScale?: number;
   zoomPhraseIndex?: number;
   zoomPhraseRevision?: number;
+}
+
+interface MutablePaintSpan {
+  color: number;
+  readonly end: number;
+  outline?: { color: number; width: number };
+  shadow?: { color: number; offset: readonly [number, number] };
+  readonly start: number;
+}
+
+interface ZoomTextAnimationState {
+  phraseIndex: number;
+  phraseRevision: number;
+  progress: number;
 }
 
 interface LoadedTechniqueFont {
@@ -274,6 +291,9 @@ export async function createComparisonWorkloadPreview(options: {
   let reflowCount = 0;
   let lastReflowMs = 0;
   const animationEpoch = performance.now();
+  const zoomAnimationState: ZoomTextAnimationState = { phraseIndex: 0, phraseRevision: 0, progress: 0 };
+  const dynamicWidthsScratch = new Float64Array(DYNAMIC_LAYOUT_TEXT.length);
+  const dynamicReadyScratch = new Array<Promise<void>>(DYNAMIC_LAYOUT_TEXT.length);
   const scene = new THREE.Scene();
   const camera = createWorkloadCamera(configuration.workload, width, height);
   gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError });
@@ -647,6 +667,10 @@ export async function createComparisonWorkloadPreview(options: {
       uploadFrameCompleteMs = performance.now() - uploadFrameStarted;
     }
     const startupMs = performance.now() - startupStarted;
+    const recordReflow = (duration: number): void => {
+      reflowCount += 1;
+      lastReflowMs = duration;
+    };
 
     const renderFrame = (timestamp: number): void => {
       if (closing || disposed) return;
@@ -656,30 +680,30 @@ export async function createComparisonWorkloadPreview(options: {
           if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
           else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
         }
-        const frame = telemetry.beginFrame(timestamp);
+        const frameId = telemetry.beginFrame(timestamp);
         animateEntries(
           entries,
           configuration,
           Math.max(0, timestamp - animationEpoch),
+          zoomAnimationState,
+          dynamicWidthsScratch,
+          dynamicReadyScratch,
           width,
           height,
           onError,
-          (duration) => {
-            reflowCount += 1;
-            lastReflowMs = duration;
-          },
+          recordReflow,
         );
         const started = performance.now();
-        if (frame.measureGpu) gpuFrameTimer?.beginFrame(frame.frameId);
+        if (telemetry.gpuTimingSupported) gpuFrameTimer?.beginFrame(frameId);
         try {
           canvasSurface.render(scene, camera);
         } finally {
-          if (frame.measureGpu) gpuFrameTimer?.endFrame();
+          if (telemetry.gpuTimingSupported) gpuFrameTimer?.endFrame();
         }
         const submitMs = performance.now() - started;
         if (firstDrawMs === 0) firstDrawMs = submitMs;
         const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const snapshot = telemetry.endFrame(frame, cpuFrameMs);
+        const snapshot = telemetry.endFrame(frameId, cpuFrameMs);
         if (snapshot === undefined) return;
         const activeEntries = entries.filter(({ node }) => node.visible);
         const layouts = activeEntries.flatMap(entryLayouts);
@@ -883,7 +907,7 @@ export async function createComparisonWorkloadPreview(options: {
           await updateDrain;
           await iconWindowDrain;
           disposed = true;
-          gpuFrameTimer?.dispose();
+          await gpuFrameTimer?.dispose();
           renderer.setRenderTarget(null);
           renderer.clear();
           disposeEntries(entries);
@@ -896,7 +920,7 @@ export async function createComparisonWorkloadPreview(options: {
       },
     };
   } catch (error) {
-    gpuFrameTimer?.dispose();
+    await gpuFrameTimer?.dispose();
     disposeEntries(entries);
     iconFont?.font.dispose();
     font?.font.dispose();
@@ -995,10 +1019,12 @@ function createEntries(
       technique === 'mtsdf' && configuration.paintShadowEnabled
         ? ([Math.max(3, configuration.fontSize / 10), Math.max(3, configuration.fontSize / 10)] as const)
         : undefined;
+    const spans = createPaintSpans(0, configuration.amount, paintOutlineWidth, paintShadowOffset);
+    const paintUpdate = { text: PAINT_EFFECTS_TEXT, spans };
     const text = new Text({
       ...base,
       text: PAINT_EFFECTS_TEXT,
-      spans: paintSpans(0, configuration.amount, paintOutlineWidth, paintShadowOffset),
+      spans,
       fontSize: configuration.fontSize,
       opacity: configuration.paintOpacity,
       width: benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio),
@@ -1007,6 +1033,8 @@ function createEntries(
     return [
       {
         ...textEntry('primary', text, PAINT_EFFECTS_TEXT),
+        paintSpans: spans,
+        paintUpdate,
         ...(paintOutlineWidth === undefined ? {} : { paintOutlineWidth }),
         ...(paintShadowOffset === undefined ? {} : { paintShadowOffset }),
       },
@@ -1038,6 +1066,7 @@ function createEntries(
         alignment,
         animationPhase,
         lastWidth: initialWidth,
+        widthUpdate: { width: initialWidth },
       };
     });
   }
@@ -1257,7 +1286,18 @@ export function zoomTextAnimationState(
   elapsedMs: number,
   animationSpeed: number,
   phraseCount: number = ZOOM_TEXT_PHRASES.length,
-): { readonly phraseIndex: number; readonly phraseRevision: number; readonly progress: number } {
+): Readonly<ZoomTextAnimationState> {
+  const state: ZoomTextAnimationState = { phraseIndex: 0, phraseRevision: 0, progress: 0 };
+  updateZoomTextAnimationState(state, elapsedMs, animationSpeed, phraseCount);
+  return state;
+}
+
+function updateZoomTextAnimationState(
+  state: ZoomTextAnimationState,
+  elapsedMs: number,
+  animationSpeed: number,
+  phraseCount: number,
+): void {
   if (!Number.isFinite(elapsedMs) || elapsedMs < 0) throw new RangeError('zoom text elapsed time must be nonnegative');
   if (!Number.isSafeInteger(phraseCount) || phraseCount <= 0) {
     throw new RangeError('zoom text phrase count must be a positive safe integer');
@@ -1268,11 +1308,9 @@ export function zoomTextAnimationState(
   const cycle = elapsedMs * ZOOM_TEXT_CYCLES_PER_MS * animationRate({ animationSpeed });
   const phraseRevision = Math.floor(cycle);
   const phase = cycle - phraseRevision;
-  return {
-    phraseIndex: phraseRevision % phraseCount,
-    phraseRevision,
-    progress: (1 - Math.cos(phase * Math.PI * 2)) / 2,
-  };
+  state.phraseIndex = phraseRevision % phraseCount;
+  state.phraseRevision = phraseRevision;
+  state.progress = (1 - Math.cos(phase * Math.PI * 2)) / 2;
 }
 
 function iconGridContent(iconIndex: number): {
@@ -1295,13 +1333,16 @@ function animateEntries(
   entries: readonly WorkloadEntry[],
   configuration: ComparisonWorkloadConfiguration,
   timestamp: number,
+  zoomAnimationState: ZoomTextAnimationState,
+  dynamicWidthsScratch: Float64Array,
+  dynamicReadyScratch: Promise<void>[],
   width: number,
   height: number,
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
   if (configuration.workload === 'zoom-text') {
-    animateZoomText(entries, configuration, timestamp);
+    animateZoomText(entries, configuration, timestamp, zoomAnimationState);
     return;
   }
   if (configuration.workload === 'paint-effects') {
@@ -1309,7 +1350,17 @@ function animateEntries(
     return;
   }
   if (configuration.workload === 'dynamic-layout') {
-    animateDynamicLayout(entries, configuration, timestamp, width, height, onError, onReflow);
+    animateDynamicLayout(
+      entries,
+      configuration,
+      timestamp,
+      width,
+      height,
+      dynamicWidthsScratch,
+      dynamicReadyScratch,
+      onError,
+      onReflow,
+    );
     return;
   }
   if (configuration.workload !== 'off-axis-3d') return;
@@ -1329,9 +1380,10 @@ function animateZoomText(
   entries: readonly WorkloadEntry[],
   configuration: ComparisonWorkloadConfiguration,
   timestamp: number,
+  state: ZoomTextAnimationState,
 ): void {
   if (!configuration.animationEnabled) return;
-  const state = zoomTextAnimationState(timestamp, configuration.animationSpeed, entries.length);
+  updateZoomTextAnimationState(state, timestamp, configuration.animationSpeed, entries.length);
   for (const entry of entries) {
     const visible = entry.zoomPhraseIndex === state.phraseIndex;
     entry.node.visible = visible;
@@ -1356,10 +1408,11 @@ function animatePaint(
   // Identical text and shaping-span ranges keep Text on its synchronous paint-only batch path.
   const phase = timestamp * 0.0002 * animationRate(configuration);
   entry.paintPhase = phase;
-  entry.text.setProperties({
-    text: PAINT_EFFECTS_TEXT,
-    spans: paintSpans(phase, configuration.amount, entry.paintOutlineWidth, entry.paintShadowOffset),
-  });
+  if (entry.paintSpans === undefined || entry.paintUpdate === undefined) {
+    throw new Error('paint effects entry is missing its retained span buffer');
+  }
+  updatePaintSpans(entry.paintSpans, phase, configuration.amount, entry.paintOutlineWidth, entry.paintShadowOffset);
+  entry.text.setProperties(entry.paintUpdate);
   entry.paintRevision = (entry.paintRevision ?? 0) + 1;
   entry.lastPaintUpdateMs = performance.now() - started;
 }
@@ -1384,10 +1437,18 @@ function applyRetainedConfiguration(
     else entry.paintOutlineWidth = paintOutlineWidth;
     if (paintShadowOffset === undefined) delete entry.paintShadowOffset;
     else entry.paintShadowOffset = paintShadowOffset;
+    if (entry.paintSpans === undefined) throw new Error('paint effects entry is missing its retained span buffer');
+    updatePaintSpans(
+      entry.paintSpans,
+      entry.paintPhase ?? 0,
+      configuration.amount,
+      paintOutlineWidth,
+      paintShadowOffset,
+    );
     entry.text.setProperties({
       opacity: configuration.paintOpacity,
       text: PAINT_EFFECTS_TEXT,
-      spans: paintSpans(entry.paintPhase ?? 0, configuration.amount, paintOutlineWidth, paintShadowOffset),
+      spans: entry.paintSpans,
     });
   }
 }
@@ -1432,11 +1493,13 @@ function animateDynamicLayout(
   timestamp: number,
   viewportWidth: number,
   viewportHeight: number,
+  widthsScratch: Float64Array,
+  readyScratch: Promise<void>[],
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
   if (!configuration.animationEnabled || entries.some(({ reflowPending }) => reflowPending === true)) return;
-  const nextWidths = dynamicLayoutWidths(configuration, viewportWidth, timestamp);
+  const nextWidths = dynamicLayoutWidths(configuration, viewportWidth, timestamp, widthsScratch);
   if (
     entries.every((entry, index) => entry.lastWidth !== undefined && Math.abs(nextWidths[index]! - entry.lastWidth) < 1)
   ) {
@@ -1446,9 +1509,12 @@ function animateDynamicLayout(
   for (const [index, entry] of entries.entries()) {
     entry.reflowPending = true;
     entry.lastWidth = nextWidths[index]!;
-    entry.text.setProperties({ width: nextWidths[index]! });
+    if (entry.widthUpdate === undefined) throw new Error('dynamic layout entry is missing its retained width update');
+    entry.widthUpdate.width = nextWidths[index]!;
+    entry.text.setProperties(entry.widthUpdate);
+    readyScratch[index] = entry.text.ready;
   }
-  void Promise.all(entries.map(({ text }) => text.ready)).then(
+  void Promise.all(readyScratch).then(
     () => {
       if (entries.some(({ disposed }) => disposed === true)) return;
       for (const entry of entries) entry.reflowPending = false;
@@ -1467,13 +1533,18 @@ export function dynamicLayoutWidths(
   configuration: Pick<ComparisonWorkloadConfiguration, 'amount' | 'animationSpeed' | 'layoutWidthRatio'>,
   viewportWidth: number,
   animationElapsedMs: number,
-): readonly number[] {
+  target: Float64Array = new Float64Array(DYNAMIC_LAYOUT_TEXT.length),
+): Float64Array {
   const phase = animationElapsedMs * 0.00045 * animationRate(configuration);
   const amplitude = 0.08 + (configuration.amount / 100) * 0.28;
   const baseWidth = benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio, 1_000);
-  return DYNAMIC_LAYOUT_TEXT.map((_, index) =>
-    Math.max(160, baseWidth * (0.72 + Math.sin(phase + index * ((Math.PI * 2) / 3)) * amplitude)),
-  );
+  if (target.length !== DYNAMIC_LAYOUT_TEXT.length) {
+    throw new RangeError(`dynamic layout width target must contain ${String(DYNAMIC_LAYOUT_TEXT.length)} values`);
+  }
+  for (let index = 0; index < DYNAMIC_LAYOUT_TEXT.length; index += 1) {
+    target[index] = Math.max(160, baseWidth * (0.72 + Math.sin(phase + index * ((Math.PI * 2) / 3)) * amplitude));
+  }
+  return target;
 }
 
 function layoutDynamicEntries(entries: readonly WorkloadEntry[], viewportWidth: number, viewportHeight: number): void {
@@ -1551,23 +1622,44 @@ function updateLayoutBounds(
   bounds.geometry.computeBoundingSphere();
 }
 
-function paintSpans(
+function createPaintSpans(
   phase: number,
   amount: number,
   outlineWidth?: number,
   shadowOffset?: readonly [number, number],
-): readonly TextSpan[] {
-  return PAINT_WORD_RANGES.map((range, index) => {
+): MutablePaintSpan[] {
+  const spans = PAINT_WORD_RANGES.map((range) => ({ ...range, color: 0 }));
+  updatePaintSpans(spans, phase, amount, outlineWidth, shadowOffset);
+  return spans;
+}
+
+function updatePaintSpans(
+  spans: MutablePaintSpan[],
+  phase: number,
+  amount: number,
+  outlineWidth?: number,
+  shadowOffset?: readonly [number, number],
+): void {
+  for (let index = 0; index < spans.length; index += 1) {
+    const span = spans[index]!;
     const hue = paintWordHue(index, PAINT_WORD_RANGES.length, phase, amount);
-    return {
-      ...range,
-      color: hslColor(hue, 0.88, 0.53),
-      ...(outlineWidth === undefined || outlineWidth === 0
-        ? {}
-        : { outline: { color: 0xffffff, width: outlineWidth } }),
-      ...(shadowOffset === undefined ? {} : { shadow: { color: hslColor(hue, 0.68, 0.28), offset: shadowOffset } }),
-    };
-  });
+    span.color = hslColor(hue, 0.88, 0.53);
+    if (outlineWidth === undefined || outlineWidth === 0) {
+      delete span.outline;
+    } else if (span.outline === undefined) {
+      span.outline = { color: 0xffffff, width: outlineWidth };
+    } else {
+      span.outline.width = outlineWidth;
+    }
+    if (shadowOffset === undefined) {
+      delete span.shadow;
+    } else if (span.shadow === undefined) {
+      span.shadow = { color: hslColor(hue, 0.68, 0.28), offset: shadowOffset };
+    } else {
+      span.shadow.color = hslColor(hue, 0.68, 0.28);
+      span.shadow.offset = shadowOffset;
+    }
+  }
 }
 
 export function paintWordHue(wordIndex: number, wordCount: number, phase: number, amount: number): number {

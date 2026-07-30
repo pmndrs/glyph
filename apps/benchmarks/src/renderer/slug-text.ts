@@ -527,13 +527,13 @@ export async function createSlugTextPreview(options: {
           if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
           else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
         }
-        const frame = telemetry.beginFrame(timestamp);
-        if (frame.measureGpu) activeGpuFrameTimer.beginFrame(frame.frameId);
+        const frameId = telemetry.beginFrame(timestamp);
+        if (telemetry.gpuTimingSupported) activeGpuFrameTimer.beginFrame(frameId);
         const started = performance.now();
         try {
           canvasSurface.render(scene, camera);
         } finally {
-          if (frame.measureGpu) activeGpuFrameTimer.endFrame();
+          if (telemetry.gpuTimingSupported) activeGpuFrameTimer.endFrame();
         }
         const submitMs = performance.now() - started;
         if (!firstDrawRecorded) {
@@ -542,7 +542,7 @@ export async function createSlugTextPreview(options: {
         }
         if (closing) return;
         const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const telemetrySnapshot = telemetry.endFrame(frame, cpuFrameMs);
+        const telemetrySnapshot = telemetry.endFrame(frameId, cpuFrameMs);
         if (telemetrySnapshot === undefined) return;
         const layout = committedLayout(activeLine);
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
@@ -683,7 +683,7 @@ export async function createSlugTextPreview(options: {
         disposal = (async () => {
           disposed = true;
           await renderer.setAnimationLoop(null);
-          activeGpuFrameTimer.dispose();
+          await activeGpuFrameTimer.dispose();
           activeLine.dispose();
           activeFont.dispose();
           canvasSurface.dispose();
@@ -693,7 +693,7 @@ export async function createSlugTextPreview(options: {
       },
     };
   } catch (error) {
-    gpuFrameTimer?.dispose();
+    await gpuFrameTimer?.dispose();
     line?.dispose();
     font?.dispose();
     canvasSurface.dispose();

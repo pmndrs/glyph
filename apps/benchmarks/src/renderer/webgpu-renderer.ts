@@ -19,6 +19,27 @@ export interface RendererViewportState {
   readonly drawingBufferHeight: number;
 }
 
+export interface ConfiguredRendererDiagnostics {
+  readonly activeCount: number;
+  readonly createdCount: number;
+  readonly disposedCount: number;
+  readonly peakActiveCount: number;
+  readonly active: readonly {
+    readonly backend: RendererBackend;
+    readonly id: number;
+  }[];
+}
+
+interface ActiveRenderer {
+  readonly backend: RendererBackend;
+  readonly id: number;
+}
+
+const activeRenderers = new Map<THREE.WebGPURenderer, ActiveRenderer>();
+let createdRendererCount = 0;
+let disposedRendererCount = 0;
+let peakActiveRendererCount = 0;
+
 export async function createConfiguredRenderer(options: RendererOptions): Promise<THREE.WebGPURenderer> {
   const renderer = new THREE.WebGPURenderer({
     canvas: options.canvas,
@@ -38,6 +59,7 @@ export async function createConfiguredRenderer(options: RendererOptions): Promis
     initialized = true;
     assertRendererBackend(renderer, options.backend);
     renderer.clear();
+    registerConfiguredRenderer(renderer, options.backend);
     return renderer;
   } catch (error) {
     if (initialized) {
@@ -61,9 +83,47 @@ export async function disposeConfiguredRenderer(renderer: THREE.WebGPURenderer):
     renderer.dispose();
   } catch (error) {
     contextLoss.cancel();
+    unregisterConfiguredRenderer(renderer);
     throw error;
   }
-  await contextLoss.completion;
+  try {
+    await contextLoss.completion;
+  } finally {
+    unregisterConfiguredRenderer(renderer);
+  }
+}
+
+export function configuredRendererDiagnostics(): ConfiguredRendererDiagnostics {
+  return {
+    activeCount: activeRenderers.size,
+    createdCount: createdRendererCount,
+    disposedCount: disposedRendererCount,
+    peakActiveCount: peakActiveRendererCount,
+    active: [...activeRenderers.values()],
+  };
+}
+
+function registerConfiguredRenderer(renderer: THREE.WebGPURenderer, backend: RendererBackend): void {
+  const id = ++createdRendererCount;
+  activeRenderers.set(renderer, { backend, id });
+  peakActiveRendererCount = Math.max(peakActiveRendererCount, activeRenderers.size);
+  renderer.domElement.dataset.configuredRendererId = String(id);
+  renderer.domElement.dataset.configuredRendererActive = 'true';
+  publishConfiguredRendererDiagnostics();
+}
+
+function unregisterConfiguredRenderer(renderer: THREE.WebGPURenderer): void {
+  if (!activeRenderers.delete(renderer)) return;
+  disposedRendererCount += 1;
+  renderer.domElement.dataset.configuredRendererActive = 'false';
+  publishConfiguredRendererDiagnostics();
+}
+
+function publishConfiguredRendererDiagnostics(): void {
+  if (typeof document === 'undefined') return;
+  const diagnostics = configuredRendererDiagnostics();
+  document.documentElement.dataset.activeConfiguredRenderers = String(diagnostics.activeCount);
+  document.documentElement.dataset.peakConfiguredRenderers = String(diagnostics.peakActiveCount);
 }
 
 interface ContextLossMonitor {

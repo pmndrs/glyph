@@ -555,14 +555,6 @@ export const scenarios: readonly BenchmarkScenario[] = [
   },
 ];
 
-export const plannedScenarios = [
-  'Screen-space ladder',
-  'Off-axis / 3D',
-  'Dynamic layout',
-  'Paragraph stress',
-  'Glyph coverage',
-] as const;
-
 export function scenarioById(id: string): BenchmarkScenario {
   return scenarios.find((scenario) => scenario.id === id) ?? scenarios[0]!;
 }

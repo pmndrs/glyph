@@ -2,7 +2,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { Field, logarithmicRangePosition, logarithmicRangeValue } from './ui';
+import { logarithmicRangePosition, logarithmicRangeValue } from './range-values';
+import { Field } from './ui';
 
 describe('Field', () => {
   it('gives range controls a full-width unpadded travel surface', () => {
