@@ -7,6 +7,10 @@ import { fontNotices } from './scripts/font-notices.mts';
 
 const FONT_NOTICES_MODULE = 'virtual:font-notices';
 const RESOLVED_FONT_NOTICES_MODULE = `\0${FONT_NOTICES_MODULE}`;
+const CROSS_ORIGIN_ISOLATION_HEADERS = {
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+} as const;
 
 export default defineConfig({
   plugins: [
@@ -28,4 +32,6 @@ export default defineConfig({
     },
   ],
   build: { target: 'es2022' },
+  preview: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
+  server: { headers: CROSS_ORIGIN_ISOLATION_HEADERS },
 });

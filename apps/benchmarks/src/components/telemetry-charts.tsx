@@ -169,11 +169,11 @@ function TelemetryChartPanel({
       <div
         className={`flex items-baseline justify-between gap-2 font-mono text-[8px] uppercase tracking-wider ${sparklineToneClass(tone)}`}
       >
-        <div className="flex items-baseline gap-2">
-          <p>{label}</p>
-          <p className="tabular-nums">{formatSparklineValue(current, unit)}</p>
+        <div className="flex items-baseline gap-2 font-mono">
+          <p className="font-mono">{label}</p>
+          <p className="font-mono tabular-nums">{formatSparklineValue(current, unit)}</p>
         </div>
-        <p className="text-right tabular-nums">
+        <p className="text-right font-mono tabular-nums">
           {formatSparklineValue(minimum, unit)} – {formatSparklineValue(maximum, unit)}
         </p>
       </div>

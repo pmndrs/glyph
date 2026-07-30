@@ -19,7 +19,6 @@ export function sparklineSampleY(value: number, maximum: number, height: number)
 export function formatSparklineValue(value: number | undefined, unit: 'fps' | 'ms'): string {
   if (value === undefined) return '—';
   if (unit === 'fps') return String(Math.round(value));
-  if (Number.isInteger(value)) return `${value.toFixed(0)} ms`;
   if (value > 0 && value < 0.01) return '<0.01 ms';
   return `${value.toFixed(2)} ms`;
 }

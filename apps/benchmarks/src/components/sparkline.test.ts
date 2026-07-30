@@ -9,9 +9,9 @@ import {
 } from './sparkline';
 
 describe('formatSparklineValue', () => {
-  it('does not invent fractional precision for integer timing samples', () => {
-    expect(formatSparklineValue(0, 'ms')).toBe('0 ms');
-    expect(formatSparklineValue(3, 'ms')).toBe('3 ms');
+  it('keeps fixed decimal places for isolated high-resolution timing samples', () => {
+    expect(formatSparklineValue(0, 'ms')).toBe('0.00 ms');
+    expect(formatSparklineValue(3, 'ms')).toBe('3.00 ms');
   });
 
   it('preserves reported sub-millisecond timing and whole-frame FPS', () => {
