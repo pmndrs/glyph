@@ -359,11 +359,12 @@ test('Text skips semantic no-op paint uploads and bitmap rejects unsupported eff
       retainedPaintIndices,
       'same-range paint updates retain glyph paint indices',
     );
+    const versionBeforeRejectedOutline = colors.version;
     assert.throws(
       () => text.setProperties({ outline: { color: '#fff', width: 1 } }),
       /bitmap raster does not support outline or shadow/,
     );
-    assert.equal(colors.version, initialVersion);
+    assert.equal(colors.version, versionBeforeRejectedOutline);
   } finally {
     text.dispose();
     font.dispose();
