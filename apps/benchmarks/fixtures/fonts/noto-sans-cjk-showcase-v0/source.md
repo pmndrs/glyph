@@ -10,6 +10,6 @@ face without pretending to solve complete CJK raster distribution. The full
 Noto Sans CJK JP fixture remains the authoritative shaping and paragraph
 oracle; complete raster coverage uses the roadmap's chunked paging design.
 
-Run `pnpm --filter @pmndrs/text-benchmarks generate:japanese-showcase-subset`
+Run `pnpm benchmarks:generate:japanese-showcase-subset`
 after changing the CJK showcase corpus, then regenerate the checked bitmap and
 MTSDF rendering fixtures.

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:bb553b1cf5318bc384a39963b388b32d273ae82e1412de7cbf2f147725b5322d'
+source_digest: 'sha256:439f3f4819f97d6ddb4014842adf9be3ba95c94d3f01fdc9f17ec783867129f1'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -50,6 +50,12 @@ sources:
   - id: comparison-workload
     resource: ../../apps/benchmarks/src/renderer/comparison-workload.ts
     title: Retained comparison-workload renderer
+  - id: paragraph-layout-profile
+    resource: ../../apps/benchmarks/vitexec/paragraph-layout-profile.probe.ts
+    title: Retained paragraph-layout performance probe
+  - id: zen-framerate-sweep
+    resource: ../../apps/benchmarks/vitexec/zen-framerate-sweep.probe.ts
+    title: Complete Zen workload performance sweep
   - id: raster-technique-compare-probe
     resource: ../../apps/benchmarks/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
@@ -67,6 +73,8 @@ The primary product surface is organized for humans by mode, technique, backend,
 The MSDF / Slug comparison workload owns one renderer, two equal RGBA8 render targets, and one fullscreen TSL composition graph. Both candidates share authored text, layout dimensions, camera, physical target size, zoom, and pan. The heatmap samples both candidate textures directly with no readback or CPU composition: black agrees, red marks extra MSDF coverage, cyan marks extra Slug coverage, and intensity is amplified eight times. Editable comparison text updates both retained `Text` objects and publishes a new comparison only after both layouts are ready. The permanent hardware-browser probe proves custom text, 4× zoom, responsive tab switching, zero automatic finite capture, exact WebGPU backend initialization, and a live canvas; forced WebGL2 also initializes without shader or validation errors.[^raster-technique-compare-probe]
 
 Font delivery is an explicit benchmark axis. **Baked asset** exercises the normal sibling asset, while **Runtime bake** passes `{ source, baked: null }`, downloads the source font, builds the core font in the serial core-baker Worker, then builds the selected Bitmap or MSDF raster in its serial lazy Worker. The inspector distinguishes the always-loaded runtime/shaper graph from the conditional core and raster baker host, Worker, and Wasm graphs; it reports source download bytes, generated core/raster CPU bytes, bake durations, and atlas GPU memory. The runtime-fallback conformance workload renders both delivery paths through the same public pipeline and requires an exact RGBA frame match. Canonical Inter matched with zero differing bytes for Bitmap and MSDF on the admitted WebGPU product probe; the observed cold MSDF raster bake was roughly 114 seconds on this host and remains an observation, not a portability threshold.
+
+Maintainer workflows are package-owned and exposed from the workspace root. `pnpm benchmarks` starts the application, `pnpm benchmarks:check` runs its deterministic local verification, `pnpm benchmarks:test:live` runs the hardware-GPU product lane, and the two `pnpm benchmarks:profile:*` commands reproduce the Paragraph Stress retained-layout measurement and complete Zen workload sweep. New repeatable benchmark workflows belong behind a package script and short root alias rather than a temporary probe or undocumented shell recipe.[^paragraph-layout-profile][^zen-framerate-sweep]
 
 The Benchmark and Conformance tabs are named React 19.2 Activities. Each remembers its last selected workload and preserves its React state, while React disconnects effects for the hidden tree. Hiding Benchmark therefore runs the renderer cleanup that stops its animation loop, drains any active GPU timestamp query, and releases its renderer; hiding Conformance aborts any in-flight finite capture. Three's WebGL fallback deliberately loses its context during `renderer.dispose()`. Because an Activity preserves DOM while reconnecting effects, each mode transition changes the renderer-surface key and replaces the preserved canvas before a renderer can initialize again; reusing the lost canvas makes WebKit return `null` for `SCISSOR_BOX` and `VIEWPORT`, which Three passes to `Vector4.fromArray`. The exclusive lifecycle also waits for the actual `webglcontextlost` event before admitting the replacement renderer. Failed initialization releases any acquired WebGL context directly instead of calling Three's `dispose()`, whose internal async `setAnimationLoop(null)` would otherwise retry the rejected initialization promise and surface an unhandled rejection. Advanced-shaping playback is gated by the visible Benchmark mode because its coordinator lives above the Activity boundary.
 

@@ -190,7 +190,14 @@ pnpm benchmarks
 The pinned [GitHub Actions workflow](.github/workflows/ci.yml) runs the ordinary `pnpm check` path on pull requests and `main`. This deterministic CI-safe lane includes headless Chromium product scenarios but makes no hardware-GPU claim. The maintainer-local browser lane is intentionally explicit because it starts real GPU-enabled browsers:
 
 ```sh
-pnpm --filter @pmndrs/text-benchmarks test:live
+pnpm benchmarks:test:live
+```
+
+The benchmark app also owns reproducible performance probes for the retained Paragraph Stress layout path and the complete Zen workload matrix:
+
+```sh
+pnpm benchmarks:profile:paragraph-layout
+pnpm benchmarks:profile:zen-sweep
 ```
 
 Run the package-owned coverage-guided Rust fuzzer locally with:

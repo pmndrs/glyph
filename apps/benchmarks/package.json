@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm size && vite build && node ./scripts/check-font-notices.mts",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test:unit && pnpm build",
     "admit:live": "node ./scripts/run-admission.mts",
     "capture:browser-reference": "node ./scripts/capture-browser-reference.mts",
     "capture:icon-grid-retained-evidence": "node ./scripts/capture-icon-grid-retained-evidence.mts",
@@ -52,6 +53,8 @@
     "sync:source-serif-fixture": "node ./scripts/sync-source-serif-fixture.mts",
     "sync:font-awesome-icons": "node ./scripts/sync-font-awesome-icons.mts",
     "provision:harfbuzz": "node ./scripts/provision-harfbuzz.mts",
+    "profile:paragraph-layout": "vitexec --gpu --path '/?mode=benchmark&layout=zen&technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=paragraph-stress' ./vitexec/paragraph-layout-profile.probe.ts",
+    "profile:zen-sweep": "vitexec --gpu --path '/?mode=benchmark&layout=zen&technique=bitmap&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=benchmark-ipsum' ./vitexec/zen-framerate-sweep.probe.ts",
     "test": "pnpm check:size && pnpm check:autoresearch-baseline && pnpm check:japanese-showcase-subset && pnpm check:paragraph-bidi-contract && pnpm check:paragraph-cjk-contract && pnpm test:unit && pnpm test:headless && pnpm test:packed",
     "test:headless": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --suite conformance --dpr 1 --samples 3 --warmup 1 --port 5181",
     "test:packed": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-packed-consumer.mts",

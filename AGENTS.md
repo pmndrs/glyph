@@ -21,6 +21,8 @@ Update affected canonical documentation in the same change as source. Package so
 
 Use the exact root toolchain pins through mise. The dated nightly under `packages/font-baker/fuzz` is isolated to cargo-fuzz. Verify narrowly first, then run the relevant package and repository checks. Keep tests deterministic; do not use sleeps, timer cushions, arbitrary retries, or regenerated goldens as correctness mechanisms.
 
+Exercise repository workflows through named `pnpm` scripts from the workspace root. Prefer a short root alias for a maintainer-facing application workflow. When a repeatable build, test, profile, capture, generation, or development command is missing, add the package-owned script and root alias before running it; do not leave the working procedure as an agent-only shell recipe or temporary probe.
+
 TypeScript checks use the repository-pinned compiler and the patched `@types/three` declaration graph. For TSL typing changes, begin with the focused regression fixture before running a package or application project.
 
 Create small Conventional Commits that each preserve one coherent invariant. Finish completed work with a clean worktree.
