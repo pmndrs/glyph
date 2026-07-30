@@ -3,12 +3,7 @@ import { useEffect, useEffectEvent, useRef, type RefObject } from 'react';
 import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
-import {
-  sparklineAnimatedSampleX,
-  sparklineCanvasMetrics,
-  sparklineMotionProgress,
-  sparklineSampleY,
-} from './sparkline';
+import { sparklineCanvasMetrics, sparklineSampleY, sparklineTimestampX } from './sparkline';
 
 export type TelemetryChartStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
@@ -16,8 +11,6 @@ export interface TelemetryChartsProps {
   readonly presentation?: 'main' | 'zen';
   readonly stats: TelemetryChartStats | undefined;
 }
-
-const TELEMETRY_CHART_TRANSITION_MS = 250;
 
 export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChartsProps) {
   const fpsCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -68,23 +61,24 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
       resize(chart);
     }
     let animationFrame = 0;
-    let transitionStartedAt = performance.now() - TELEMETRY_CHART_TRANSITION_MS;
-    let historySignature = '';
     const draw = (timestamp: number): void => {
       for (const chart of drawing) {
         if (chart.pixelRatio !== Math.max(1, window.devicePixelRatio)) resize(chart);
       }
       const current = readStats();
       if (current !== undefined) {
-        const signature = `${current.fpsHistoryCursor.length}:${current.fpsHistoryCursor.nextIndex}`;
-        if (signature !== historySignature) {
-          historySignature = signature;
-          transitionStartedAt = timestamp;
-        }
-        const progress = sparklineMotionProgress(timestamp - transitionStartedAt, TELEMETRY_CHART_TRANSITION_MS);
         for (const chart of drawing) {
           const series = telemetryChartSeries(current, chart.id);
-          drawTelemetrySeries(chart, series.values, series.length, series.nextIndex, series.maximum, progress);
+          drawTelemetrySeries(
+            chart,
+            current.frameTimestampHistory,
+            series.values,
+            series.length,
+            series.nextIndex,
+            series.maximum,
+            timestamp,
+            current.frameBudgetMs * series.values.length,
+          );
         }
       } else {
         for (const { context, width, height } of drawing) context.clearRect(0, 0, width, height);
@@ -125,7 +119,7 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
       />
       <TelemetryChartPanel
         canvasRef={gpuCanvasRef}
-        current={latestHistoryValue(stats?.gpuHistory, stats?.gpuHistoryCursor)}
+        current={stats?.gpuFrameMs}
         emptyLabel={stats?.gpuTimingSupported === true ? 'Resolving GPU timing' : 'GPU timing unavailable'}
         id="gpu"
         label="GPU"
@@ -167,7 +161,7 @@ function TelemetryChartPanel({
 }) {
   return (
     <div
-      className={`flex min-h-0 flex-col p-2 ${presentation === 'zen' ? 'bg-black/70' : 'bg-surface'}`}
+      className={`flex min-h-0 flex-col p-2 ${presentation === 'zen' ? 'bg-transparent' : 'bg-surface'}`}
       data-scale-maximum={scaleMaximum}
       data-testid={`sparkline-${id}`}
       data-tone={tone}
@@ -199,11 +193,13 @@ function drawTelemetrySeries(
     readonly height: number;
     readonly width: number;
   },
+  timestamps: Float64Array,
   values: Float32Array,
   length: number,
   nextIndex: number,
   maximum: number,
-  progress: number,
+  nowMs: number,
+  windowMs: number,
 ): void {
   const { context, height, width } = chart;
   context.clearRect(0, 0, width, height);
@@ -212,11 +208,10 @@ function drawTelemetrySeries(
   let drawing = false;
   for (let index = 0; index < length; index += 1) {
     const value = values[(start + index) % values.length] ?? Number.NaN;
-    if (!Number.isFinite(value)) {
-      drawing = false;
-      continue;
-    }
-    const x = sparklineAnimatedSampleX(index, length, values.length, width, progress);
+    const timestamp = timestamps[(start + index) % timestamps.length] ?? Number.NaN;
+    if (!Number.isFinite(value) || !Number.isFinite(timestamp)) continue;
+    const x = sparklineTimestampX(timestamp, nowMs, windowMs, width);
+    if (!Number.isFinite(x) || x < 0 || x > width) continue;
     const y = sparklineSampleY(value, maximum, height);
     if (!drawing) context.moveTo(x, y);
     else context.lineTo(x, y);

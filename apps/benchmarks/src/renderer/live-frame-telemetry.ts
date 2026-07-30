@@ -8,7 +8,10 @@ export interface LiveFrameHistoryCursor {
 
 export interface LiveFrameToken {
   readonly frameId: number;
+  readonly historyIndex: number;
   readonly measureGpu: boolean;
+  readonly report: boolean;
+  readonly framesPerSecond: number;
   readonly snapshot: LiveFrameTelemetrySnapshot | undefined;
 }
 
@@ -28,6 +31,7 @@ export interface LiveFrameTelemetrySnapshot {
   readonly p95GpuMs: number | undefined;
   readonly minimumGpuMs: number | undefined;
   readonly maximumGpuMs: number | undefined;
+  readonly frameTimestampHistory: Float64Array;
   readonly submitHistory: Float32Array;
   readonly submitHistoryLength: number;
   readonly submitHistoryNextIndex: number;
@@ -49,14 +53,6 @@ export interface LiveFrameTelemetry {
   discardGpu(frameId: number): boolean;
 }
 
-interface PendingSample {
-  readonly frameId: number;
-  readonly frameCount: number;
-  readonly framesPerSecond: number;
-  submitMs?: number;
-  gpuMs?: number;
-}
-
 export function createLiveFrameTelemetry(options?: {
   readonly capacity?: number;
   readonly gpuTimingSupported?: boolean;
@@ -74,136 +70,160 @@ export function createLiveFrameTelemetry(options?: {
     throw new RangeError('live telemetry report interval must be positive');
   }
 
-  const submitHistory = new Float32Array(capacity);
+  const frameTimestampHistory = new Float64Array(capacity);
+  const frameIds = new Array<number>(capacity).fill(0);
+  const frameSlots = new Map<number, number>();
+  const submitHistory = new Float32Array(capacity).fill(Number.NaN);
   const submitQuantileScratch = new Float32Array(capacity);
-  const fpsHistory = new Float32Array(capacity);
-  const gpuHistory = new Float32Array(capacity);
+  const fpsHistory = new Float32Array(capacity).fill(Number.NaN);
+  const gpuHistory = new Float32Array(capacity).fill(Number.NaN);
   const gpuQuantileScratch = new Float32Array(capacity);
   const historyCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 };
   let frameCount = 0;
-  let reportedAt = performance.now();
+  let lastFrameTimestamp: number | undefined;
+  let reportedAt: number | undefined;
   let reportedFrame = 0;
-  let pendingSample: PendingSample | undefined;
-  let readySample: PendingSample | undefined;
   let latestSnapshot: LiveFrameTelemetrySnapshot | undefined;
+  let latestGpuMs: number | undefined;
   let observedRefreshRateHz = 0;
-
-  const publishReadySample = (): LiveFrameTelemetrySnapshot | undefined => {
-    const sample = readySample;
-    if (sample === undefined || sample.submitMs === undefined) return undefined;
-    if (gpuTimingSupported && sample.gpuMs === undefined) return undefined;
-    const index = historyCursor.nextIndex;
-    fpsHistory[index] = sample.framesPerSecond;
-    submitHistory[index] = sample.submitMs;
-    gpuHistory[index] = sample.gpuMs ?? Number.NaN;
-    historyCursor.nextIndex = (index + 1) % capacity;
-    historyCursor.length = Math.min(historyCursor.length + 1, capacity);
-    observedRefreshRateHz = Math.max(observedRefreshRateHz, sample.framesPerSecond);
-    readySample = undefined;
-    latestSnapshot = snapshot(
-      sample,
-      explicitRefreshRateHz ?? observedRefreshRateHz,
-      historyCursor,
-      submitHistory,
-      submitQuantileScratch,
-      fpsHistory,
-      gpuHistory,
-      gpuQuantileScratch,
-      gpuTimingSupported,
-    );
-    return latestSnapshot;
-  };
 
   return {
     beginFrame(timestampMs) {
       if (!Number.isFinite(timestampMs)) throw new RangeError('frame timestamp must be finite');
-      const published = publishReadySample();
       frameCount += 1;
       const frameId = frameCount;
-      if (pendingSample !== undefined) {
-        return { frameId, measureGpu: false, snapshot: published };
+      const historyIndex = historyCursor.nextIndex;
+      const overwrittenFrameId = frameIds[historyIndex] ?? 0;
+      if (overwrittenFrameId !== 0) frameSlots.delete(overwrittenFrameId);
+
+      const instantaneousFps =
+        lastFrameTimestamp === undefined || timestampMs <= lastFrameTimestamp
+          ? Number.NaN
+          : 1_000 / (timestampMs - lastFrameTimestamp);
+      frameTimestampHistory[historyIndex] = timestampMs;
+      frameIds[historyIndex] = frameId;
+      frameSlots.set(frameId, historyIndex);
+      fpsHistory[historyIndex] = instantaneousFps;
+      submitHistory[historyIndex] = Number.NaN;
+      gpuHistory[historyIndex] = Number.NaN;
+      historyCursor.nextIndex = (historyIndex + 1) % capacity;
+      historyCursor.length = Math.min(historyCursor.length + 1, capacity);
+      lastFrameTimestamp = timestampMs;
+
+      const elapsedMs = reportedAt === undefined ? 0 : timestampMs - reportedAt;
+      const report = reportedAt === undefined || elapsedMs >= reportIntervalMs;
+      const framesPerSecond =
+        reportedAt === undefined || elapsedMs <= 0 ? 0 : ((frameCount - reportedFrame) * 1_000) / elapsedMs;
+      if (report) {
+        reportedAt = timestampMs;
+        reportedFrame = frameCount;
       }
-      const elapsedMs = timestampMs - reportedAt;
-      if (elapsedMs < reportIntervalMs) {
-        return { frameId, measureGpu: false, snapshot: published };
+      if (Number.isFinite(instantaneousFps)) {
+        observedRefreshRateHz = Math.max(observedRefreshRateHz, instantaneousFps);
       }
-      const framesPerSecond = elapsedMs <= 0 ? 0 : ((frameCount - reportedFrame) * 1_000) / elapsedMs;
-      pendingSample = { frameId, frameCount, framesPerSecond };
-      reportedAt = timestampMs;
-      reportedFrame = frameCount;
-      return { frameId, measureGpu: gpuTimingSupported, snapshot: published };
+      return {
+        frameId,
+        framesPerSecond,
+        historyIndex,
+        measureGpu: gpuTimingSupported && report,
+        report,
+        snapshot: latestSnapshot,
+      };
     },
     endFrame(token, durationMs) {
       if (!Number.isFinite(durationMs) || durationMs < 0) {
         throw new RangeError('CPU submit duration must be finite and nonnegative');
       }
-      const pending = pendingSample;
-      if (pending === undefined || pending.frameId !== token.frameId) return token.snapshot;
-      pending.submitMs = durationMs;
-      if (!gpuTimingSupported) {
-        readySample = pending;
-        pendingSample = undefined;
-        return publishReadySample() ?? token.snapshot;
-      }
-      return token.snapshot;
+      if (frameSlots.get(token.frameId) !== token.historyIndex) return token.snapshot;
+      submitHistory[token.historyIndex] = durationMs;
+      if (!token.report) return token.snapshot;
+      const refreshRateHz = explicitRefreshRateHz ?? (observedRefreshRateHz || 60);
+      latestSnapshot = snapshot({
+        cursor: historyCursor,
+        frameCount,
+        frameTimestampHistory,
+        framesPerSecond: token.framesPerSecond || refreshRateHz,
+        fpsHistory,
+        gpuHistory,
+        gpuQuantileScratch,
+        gpuTimingSupported,
+        latestGpuMs,
+        refreshRateHz,
+        submitHistory,
+        submitQuantileScratch,
+      });
+      return latestSnapshot;
     },
     recordGpu(frameId, durationMs) {
-      if (!Number.isSafeInteger(frameId) || frameId <= 0) {
-        throw new RangeError('GPU frame id must be a positive safe integer');
-      }
+      assertGpuFrameId(frameId);
       if (!Number.isFinite(durationMs) || durationMs < 0) {
         throw new RangeError('GPU frame duration must be finite and nonnegative');
       }
-      const pending = pendingSample;
-      if (pending === undefined || pending.frameId !== frameId) return false;
-      pending.gpuMs = durationMs;
-      readySample = pending;
-      pendingSample = undefined;
+      const historyIndex = frameSlots.get(frameId);
+      if (historyIndex === undefined) return false;
+      gpuHistory[historyIndex] = durationMs;
+      latestGpuMs = durationMs;
       return true;
     },
     discardGpu(frameId) {
-      if (!Number.isSafeInteger(frameId) || frameId <= 0) {
-        throw new RangeError('GPU frame id must be a positive safe integer');
-      }
-      if (pendingSample?.frameId !== frameId) return false;
-      pendingSample = undefined;
+      assertGpuFrameId(frameId);
+      const historyIndex = frameSlots.get(frameId);
+      if (historyIndex === undefined) return false;
+      gpuHistory[historyIndex] = Number.NaN;
       return true;
     },
   };
 }
 
-function snapshot(
-  sample: PendingSample,
-  refreshRateHz: number,
-  cursor: LiveFrameHistoryCursor,
-  submitHistory: Float32Array,
-  submitScratch: Float32Array,
-  fpsHistory: Float32Array,
-  gpuHistory: Float32Array,
-  gpuScratch: Float32Array,
-  gpuTimingSupported: boolean,
-): LiveFrameTelemetrySnapshot {
+function snapshot(options: {
+  readonly cursor: LiveFrameHistoryCursor;
+  readonly frameCount: number;
+  readonly frameTimestampHistory: Float64Array;
+  readonly framesPerSecond: number;
+  readonly fpsHistory: Float32Array;
+  readonly gpuHistory: Float32Array;
+  readonly gpuQuantileScratch: Float32Array;
+  readonly gpuTimingSupported: boolean;
+  readonly latestGpuMs: number | undefined;
+  readonly refreshRateHz: number;
+  readonly submitHistory: Float32Array;
+  readonly submitQuantileScratch: Float32Array;
+}): LiveFrameTelemetrySnapshot {
+  const {
+    cursor,
+    frameCount,
+    frameTimestampHistory,
+    framesPerSecond,
+    fpsHistory,
+    gpuHistory,
+    gpuQuantileScratch,
+    gpuTimingSupported,
+    latestGpuMs,
+    refreshRateHz,
+    submitHistory,
+    submitQuantileScratch,
+  } = options;
   const length = cursor.length;
-  copyAndSort(submitHistory, submitScratch, length, cursor.nextIndex, false);
-  copyAndSort(gpuHistory, gpuScratch, length, cursor.nextIndex, true);
-  const gpuLength = gpuTimingSupported ? length : 0;
+  const submitLength = copyAndSort(submitHistory, submitQuantileScratch, length, cursor.nextIndex);
+  const gpuLength = gpuTimingSupported ? copyAndSort(gpuHistory, gpuQuantileScratch, length, cursor.nextIndex) : 0;
   const normalizedRefreshRate = Math.max(Number.EPSILON, refreshRateHz);
   return {
-    frameCount: sample.frameCount,
-    framesPerSecond: sample.framesPerSecond,
+    frameCount,
+    framesPerSecond,
     refreshRateHz: normalizedRefreshRate,
     frameBudgetMs: 1_000 / normalizedRefreshRate,
-    medianSubmitMs: quantile(submitScratch, length, 0.5),
-    p95SubmitMs: quantile(submitScratch, length, 0.95),
-    minimumSubmitMs: historyMinimum(submitHistory, length, cursor.nextIndex, false),
-    maximumSubmitMs: historyMaximum(submitHistory, length, cursor.nextIndex, false),
-    minimumFramesPerSecond: historyMinimum(fpsHistory, length, cursor.nextIndex, false),
-    maximumFramesPerSecond: historyMaximum(fpsHistory, length, cursor.nextIndex, false),
-    gpuFrameMs: gpuTimingSupported ? sample.gpuMs : undefined,
-    medianGpuMs: gpuLength === 0 ? undefined : quantile(gpuScratch, gpuLength, 0.5),
-    p95GpuMs: gpuLength === 0 ? undefined : quantile(gpuScratch, gpuLength, 0.95),
-    minimumGpuMs: gpuLength === 0 ? undefined : historyMinimum(gpuHistory, length, cursor.nextIndex, true),
-    maximumGpuMs: gpuLength === 0 ? undefined : historyMaximum(gpuHistory, length, cursor.nextIndex, true),
+    medianSubmitMs: quantile(submitQuantileScratch, submitLength, 0.5),
+    p95SubmitMs: quantile(submitQuantileScratch, submitLength, 0.95),
+    minimumSubmitMs: historyMinimum(submitHistory, length, cursor.nextIndex),
+    maximumSubmitMs: historyMaximum(submitHistory, length, cursor.nextIndex),
+    minimumFramesPerSecond: historyMinimum(fpsHistory, length, cursor.nextIndex),
+    maximumFramesPerSecond: historyMaximum(fpsHistory, length, cursor.nextIndex),
+    gpuFrameMs: gpuTimingSupported ? latestGpuMs : undefined,
+    medianGpuMs: gpuLength === 0 ? undefined : quantile(gpuQuantileScratch, gpuLength, 0.5),
+    p95GpuMs: gpuLength === 0 ? undefined : quantile(gpuQuantileScratch, gpuLength, 0.95),
+    minimumGpuMs: gpuLength === 0 ? undefined : historyMinimum(gpuHistory, length, cursor.nextIndex),
+    maximumGpuMs: gpuLength === 0 ? undefined : historyMaximum(gpuHistory, length, cursor.nextIndex),
+    frameTimestampHistory,
     submitHistory,
     submitHistoryLength: length,
     submitHistoryNextIndex: cursor.nextIndex,
@@ -213,45 +233,37 @@ function snapshot(
     fpsHistoryNextIndex: cursor.nextIndex,
     fpsHistoryCursor: cursor,
     gpuHistory,
-    gpuHistoryLength: gpuLength,
+    gpuHistoryLength: gpuTimingSupported ? length : 0,
     gpuHistoryNextIndex: cursor.nextIndex,
     gpuHistoryCursor: cursor,
   };
 }
 
-function historyMinimum(history: Float32Array, length: number, nextIndex: number, skipNonfinite: boolean): number {
+function historyMinimum(history: Float32Array, length: number, nextIndex: number): number {
   let minimum = Number.POSITIVE_INFINITY;
   forEachHistoryValue(history, length, nextIndex, (value) => {
-    if (!skipNonfinite || Number.isFinite(value)) minimum = Math.min(minimum, value);
+    if (Number.isFinite(value)) minimum = Math.min(minimum, value);
   });
   return minimum === Number.POSITIVE_INFINITY ? 0 : minimum;
 }
 
-function historyMaximum(history: Float32Array, length: number, nextIndex: number, skipNonfinite: boolean): number {
+function historyMaximum(history: Float32Array, length: number, nextIndex: number): number {
   let maximum = Number.NEGATIVE_INFINITY;
   forEachHistoryValue(history, length, nextIndex, (value) => {
-    if (!skipNonfinite || Number.isFinite(value)) maximum = Math.max(maximum, value);
+    if (Number.isFinite(value)) maximum = Math.max(maximum, value);
   });
   return maximum === Number.NEGATIVE_INFINITY ? 0 : maximum;
 }
 
-function copyAndSort(
-  source: Float32Array,
-  target: Float32Array,
-  length: number,
-  nextIndex: number,
-  skipNonfinite: boolean,
-): void {
+function copyAndSort(source: Float32Array, target: Float32Array, length: number, nextIndex: number): number {
   let copied = 0;
   forEachHistoryValue(source, length, nextIndex, (value) => {
-    if (skipNonfinite && !Number.isFinite(value)) return;
+    if (!Number.isFinite(value)) return;
     target[copied] = value;
     copied += 1;
   });
-  for (let index = copied; index < target.length; index += 1) {
-    target[index] = Number.POSITIVE_INFINITY;
-  }
-  target.sort();
+  target.subarray(0, copied).sort();
+  return copied;
 }
 
 function forEachHistoryValue(
@@ -276,4 +288,10 @@ function optionalPositive(value: number | undefined, label: string): number | un
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${label} must be positive`);
   return value;
+}
+
+function assertGpuFrameId(frameId: number): void {
+  if (!Number.isSafeInteger(frameId) || frameId <= 0) {
+    throw new RangeError('GPU frame id must be a positive safe integer');
+  }
 }

@@ -192,6 +192,7 @@ export interface BitmapTextLiveStats {
   readonly minimumGpuMs: number | undefined;
   readonly maximumGpuMs: number | undefined;
   readonly textUpdateTimings: TextUpdateTimingSummary;
+  readonly frameTimestampHistory: Float64Array;
   readonly submitHistory: Float32Array;
   readonly submitHistoryLength: number;
   readonly submitHistoryNextIndex: number;

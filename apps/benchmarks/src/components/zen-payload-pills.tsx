@@ -14,7 +14,7 @@ export function ZenPayloadPills({ summary }: { readonly summary: PayloadSummary 
 function ZenPayloadPill({ metric }: { readonly metric: PayloadSummaryMetric }) {
   const formatted = formatPayloadMetric(metric);
   return (
-    <div className="rounded-full border border-border/80 bg-black/70 px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wide text-accent-hover">
+    <div className="rounded-full border border-border bg-black/80 px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wide text-accent-hover">
       {metric.label}{' '}
       <span className="ml-1 text-foreground tracking-normal">
         {formatted.value}

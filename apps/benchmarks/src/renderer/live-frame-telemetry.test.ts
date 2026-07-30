@@ -1,92 +1,100 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  createLiveFrameTelemetry,
-  type LiveFrameTelemetry,
-  type LiveFrameTelemetrySnapshot,
-} from './live-frame-telemetry';
+import { createLiveFrameTelemetry, type LiveFrameTelemetry } from './live-frame-telemetry';
 
 describe('live frame telemetry', () => {
-  it('publishes CPU, FPS, and delayed GPU timing through one shared cursor', () => {
-    const telemetry = createLiveFrameTelemetry({
-      capacity: 3,
-      refreshRateHz: 60,
-      reportIntervalMs: 5,
-    });
-    const startedAt = performance.now();
-    const first = recordGpuSample(telemetry, startedAt + 10, 0.25, 0.75);
-    expect(first).toMatchObject({
-      frameCount: 1,
-      refreshRateHz: 60,
-      frameBudgetMs: 1_000 / 60,
-      medianSubmitMs: 0.25,
-      gpuFrameMs: 0.75,
-      submitHistoryLength: 1,
-      fpsHistoryLength: 1,
-      gpuHistoryLength: 1,
-    });
-    expect(first.submitHistoryCursor).toBe(first.fpsHistoryCursor);
-    expect(first.submitHistoryCursor).toBe(first.gpuHistoryCursor);
+  it('advances timestamped CPU and FPS histories without waiting for delayed GPU timing', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 4, refreshRateHz: 60, reportIntervalMs: 100 });
+    const first = recordCpuFrame(telemetry, 1_000, 0.25);
+    const secondToken = telemetry.beginFrame(1_016);
+    expect(secondToken.measureGpu).toBe(false);
+    expect(telemetry.endFrame(secondToken, 0.5)).toBe(first);
+    const thirdToken = telemetry.beginFrame(1_032);
+    telemetry.endFrame(thirdToken, 0.75);
 
-    recordGpuSample(telemetry, startedAt + 20, 0.5, 1.25);
-    recordGpuSample(telemetry, startedAt + 30, 0.75, 1);
-    const wrapped = recordGpuSample(telemetry, startedAt + 40, 1, 1.5);
-    expect(wrapped).toMatchObject({
-      medianSubmitMs: 0.75,
-      p95SubmitMs: 1,
-      minimumSubmitMs: 0.5,
-      maximumSubmitMs: 1,
-      medianGpuMs: 1.25,
-      p95GpuMs: 1.5,
-      minimumGpuMs: 1,
-      maximumGpuMs: 1.5,
-      submitHistoryLength: 3,
-      fpsHistoryLength: 3,
+    expect(first.submitHistoryCursor).toEqual({ length: 3, nextIndex: 3 });
+    expect([...first.frameTimestampHistory.slice(0, 3)]).toEqual([1_000, 1_016, 1_032]);
+    expect([...first.submitHistory.slice(0, 3)]).toEqual([0.25, 0.5, 0.75]);
+    expect(first.fpsHistory[1]).toBeCloseTo(62.5);
+    expect(Number.isNaN(first.gpuHistory[0])).toBe(true);
+  });
+
+  it('backfills delayed GPU timing into the original RAF slot', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 4, refreshRateHz: 60, reportIntervalMs: 100 });
+    const firstToken = telemetry.beginFrame(1_000);
+    telemetry.endFrame(firstToken, 0.25);
+    const secondToken = telemetry.beginFrame(1_016);
+    telemetry.endFrame(secondToken, 0.5);
+
+    expect(telemetry.recordGpu(firstToken.frameId, 0.75)).toBe(true);
+    expect(telemetry.recordGpu(firstToken.frameId + 20, 2)).toBe(false);
+    const reportToken = telemetry.beginFrame(1_112);
+    const reported = telemetry.endFrame(reportToken, 1);
+
+    expect(reported).toMatchObject({
+      gpuFrameMs: 0.75,
+      medianGpuMs: 0.75,
+      minimumGpuMs: 0.75,
+      maximumGpuMs: 0.75,
       gpuHistoryLength: 3,
     });
-    expect(wrapped.submitHistory).toBe(first.submitHistory);
-    expect(wrapped.fpsHistory).toBe(first.fpsHistory);
-    expect(wrapped.gpuHistory).toBe(first.gpuHistory);
-    expect(wrapped.submitHistoryCursor).toEqual({ length: 3, nextIndex: 1 });
+    expect(reported?.gpuHistory[0]).toBe(0.75);
+    expect(Number.isNaN(reported?.gpuHistory[1])).toBe(true);
   });
 
-  it('waits for the exact delayed GPU frame and discards stale identities', () => {
-    const telemetry = createLiveFrameTelemetry({ reportIntervalMs: 1 });
-    const token = telemetry.beginFrame(performance.now() + 10);
-    expect(token.measureGpu).toBe(true);
-    expect(telemetry.endFrame(token, 0.5)).toBeUndefined();
-    expect(telemetry.recordGpu(token.frameId + 1, 2)).toBe(false);
-    expect(telemetry.beginFrame(performance.now() + 20).snapshot).toBeUndefined();
-    expect(telemetry.recordGpu(token.frameId, 0.75)).toBe(true);
-    const published = telemetry.beginFrame(performance.now() + 30).snapshot;
-    expect(published?.gpuFrameMs).toBe(0.75);
-    expect(telemetry.discardGpu(token.frameId)).toBe(false);
+  it('forgets delayed measurements after their frame slot is overwritten', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 2, reportIntervalMs: 100 });
+    const first = telemetry.beginFrame(1_000);
+    telemetry.endFrame(first, 0.25);
+    const second = telemetry.beginFrame(1_016);
+    telemetry.endFrame(second, 0.5);
+    const third = telemetry.beginFrame(1_032);
+    telemetry.endFrame(third, 0.75);
+
+    expect(telemetry.recordGpu(first.frameId, 1)).toBe(false);
+    expect(telemetry.recordGpu(second.frameId, 1.25)).toBe(true);
+    expect(third.snapshot?.submitHistoryCursor).toEqual({ length: 2, nextIndex: 1 });
   });
 
-  it('publishes aligned CPU/FPS rows without GPU timing', () => {
-    const telemetry = createLiveFrameTelemetry({
-      gpuTimingSupported: false,
-      reportIntervalMs: 1,
-    });
-    const token = telemetry.beginFrame(performance.now() + 10);
-    expect(token.measureGpu).toBe(false);
-    const published = telemetry.endFrame(token, 0.5);
-    expect(published).toMatchObject({
+  it('keeps GPU history empty when timing is unsupported', () => {
+    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 100 });
+    const first = telemetry.beginFrame(1_000);
+    expect(first.measureGpu).toBe(false);
+    const reported = telemetry.endFrame(first, 0.5);
+    const second = telemetry.beginFrame(1_016);
+    telemetry.endFrame(second, 0.75);
+
+    expect(reported).toMatchObject({
       gpuFrameMs: undefined,
       gpuHistoryLength: 0,
       submitHistoryLength: 1,
       fpsHistoryLength: 1,
     });
-    expect(Number.isNaN(published?.gpuHistory[0])).toBe(true);
+    expect(reported?.submitHistoryCursor.length).toBe(2);
+    expect(Number.isNaN(reported?.gpuHistory[0])).toBe(true);
+  });
+
+  it('rate-limits React snapshots while their typed histories continue to update every frame', () => {
+    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 100 });
+    const first = recordCpuFrame(telemetry, 1_000, 0.25);
+    const secondToken = telemetry.beginFrame(1_050);
+    const sameSnapshot = telemetry.endFrame(secondToken, 0.5);
+    expect(sameSnapshot).toBe(first);
+    expect(first.submitHistoryCursor.length).toBe(2);
+
+    const thirdToken = telemetry.beginFrame(1_100);
+    const nextSnapshot = telemetry.endFrame(thirdToken, 0.75);
+    expect(nextSnapshot).not.toBe(first);
+    expect(nextSnapshot?.framesPerSecond).toBe(20);
   });
 
   it('uses a monotonic observed refresh-rate high water when no API value exists', () => {
     const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 5 });
-    const startedAt = performance.now();
-    const first = recordCpuSample(telemetry, startedAt + 10, 0.5);
-    const second = recordCpuSample(telemetry, startedAt + 30, 0.5);
-    expect(second.refreshRateHz).toBe(first.refreshRateHz);
-    expect(second.frameBudgetMs).toBe(1_000 / first.refreshRateHz);
+    recordCpuFrame(telemetry, 1_000, 0.5);
+    const fast = recordCpuFrame(telemetry, 1_010, 0.5);
+    const slow = recordCpuFrame(telemetry, 1_030, 0.5);
+    expect(slow.refreshRateHz).toBe(fast.refreshRateHz);
+    expect(slow.frameBudgetMs).toBe(1_000 / fast.refreshRateHz);
   });
 
   it('rejects invalid configuration and measurements', () => {
@@ -95,7 +103,7 @@ describe('live frame telemetry', () => {
     expect(() => createLiveFrameTelemetry({ refreshRateHz: 0 })).toThrow(RangeError);
     const telemetry = createLiveFrameTelemetry({ reportIntervalMs: 1 });
     expect(() => telemetry.beginFrame(Number.NaN)).toThrow(RangeError);
-    const token = telemetry.beginFrame(performance.now() + 10);
+    const token = telemetry.beginFrame(1_000);
     expect(() => telemetry.endFrame(token, -1)).toThrow(RangeError);
     expect(() => telemetry.recordGpu(0, 1)).toThrow(RangeError);
     expect(() => telemetry.recordGpu(token.frameId, -1)).toThrow(RangeError);
@@ -103,28 +111,9 @@ describe('live frame telemetry', () => {
   });
 });
 
-function recordGpuSample(
-  telemetry: LiveFrameTelemetry,
-  timestamp: number,
-  submitMs: number,
-  gpuMs: number,
-): LiveFrameTelemetrySnapshot {
+function recordCpuFrame(telemetry: LiveFrameTelemetry, timestamp: number, submitMs: number) {
   const token = telemetry.beginFrame(timestamp);
-  if (!token.measureGpu) throw new Error('expected a GPU sample');
-  telemetry.endFrame(token, submitMs);
-  telemetry.recordGpu(token.frameId, gpuMs);
-  const published = telemetry.beginFrame(timestamp + 0.1).snapshot;
-  if (published === undefined) throw new Error('GPU sample did not publish');
-  return published;
-}
-
-function recordCpuSample(
-  telemetry: LiveFrameTelemetry,
-  timestamp: number,
-  submitMs: number,
-): LiveFrameTelemetrySnapshot {
-  const token = telemetry.beginFrame(timestamp);
-  const published = telemetry.endFrame(token, submitMs);
-  if (published === undefined) throw new Error('CPU sample did not publish');
-  return published;
+  const snapshot = telemetry.endFrame(token, submitMs);
+  if (snapshot === undefined) throw new Error('CPU sample did not publish');
+  return snapshot;
 }

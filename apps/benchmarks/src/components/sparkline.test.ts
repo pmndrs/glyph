@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  sparklineAnimatedSampleX,
-  sparklineCanvasMetrics,
-  sparklineMotionProgress,
-  sparklineSampleX,
-  sparklineSampleY,
-} from './sparkline';
+import { sparklineCanvasMetrics, sparklineSampleY, sparklineTimestampX } from './sparkline';
 
 describe('sparklineCanvasMetrics', () => {
   it('maps a fractional CSS box exactly onto its physical backing store', () => {
@@ -31,32 +25,20 @@ describe('sparklineCanvasMetrics', () => {
   });
 });
 
-describe('sparklineSampleX', () => {
-  it('streams partial history in from the right without rescaling its width', () => {
-    expect(sparklineSampleX(0, 1, 4, 300)).toBe(300);
-    expect(sparklineSampleX(0, 2, 4, 300)).toBe(200);
-    expect(sparklineSampleX(1, 2, 4, 300)).toBe(300);
+describe('sparklineTimestampX', () => {
+  it('places samples on a fixed timestamp window', () => {
+    expect(sparklineTimestampX(1_000, 1_000, 300, 300)).toBe(300);
+    expect(sparklineTimestampX(850, 1_000, 300, 300)).toBe(150);
+    expect(sparklineTimestampX(700, 1_000, 300, 300)).toBe(0);
   });
 
-  it('uses the full fixed domain once the history window is full', () => {
-    expect(sparklineSampleX(0, 4, 4, 300)).toBe(0);
-    expect(sparklineSampleX(1, 4, 4, 300)).toBe(100);
-    expect(sparklineSampleX(3, 4, 4, 300)).toBe(300);
+  it('moves the same sample continuously as RAF time advances', () => {
+    expect(sparklineTimestampX(1_000, 1_010, 300, 300)).toBe(290);
+    expect(sparklineTimestampX(1_000, 1_020, 300, 300)).toBe(280);
   });
 });
 
-describe('sparkline animation', () => {
-  it('eases every series through the same normalized phase', () => {
-    expect(sparklineMotionProgress(0, 250)).toBe(0);
-    expect(sparklineMotionProgress(125, 250)).toBe(0.5);
-    expect(sparklineMotionProgress(250, 250)).toBe(1);
-  });
-
-  it('slides a newly aligned row in by exactly one history slot', () => {
-    expect(sparklineAnimatedSampleX(2, 4, 4, 300, 0)).toBe(300);
-    expect(sparklineAnimatedSampleX(2, 4, 4, 300, 1)).toBe(200);
-  });
-
+describe('sparklineSampleY', () => {
   it('uses a fixed domain and clips missed budgets to the chart ceiling', () => {
     expect(sparklineSampleY(0, 16, 42)).toBe(40);
     expect(sparklineSampleY(8, 16, 42)).toBe(21);

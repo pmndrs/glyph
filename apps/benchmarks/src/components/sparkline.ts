@@ -1,25 +1,7 @@
-export function sparklineSampleX(sampleIndex: number, sampleCount: number, capacity: number, width: number): number {
-  const emptySlots = capacity - sampleCount;
-  return ((emptySlots + sampleIndex) / Math.max(1, capacity - 1)) * width;
-}
-
-export function sparklineMotionProgress(elapsedMs: number, durationMs: number): number {
-  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return 0;
-  if (!Number.isFinite(durationMs) || durationMs <= 0) return 1;
-  const progress = Math.min(1, elapsedMs / durationMs);
-  return progress * progress * (3 - 2 * progress);
-}
-
-export function sparklineAnimatedSampleX(
-  sampleIndex: number,
-  sampleCount: number,
-  capacity: number,
-  width: number,
-  progress: number,
-): number {
-  const target = sparklineSampleX(sampleIndex, sampleCount, capacity, width);
-  const slotWidth = width / Math.max(1, capacity - 1);
-  return target + (1 - Math.min(1, Math.max(0, progress))) * slotWidth;
+export function sparklineTimestampX(timestampMs: number, nowMs: number, windowMs: number, width: number): number {
+  if (!Number.isFinite(timestampMs) || !Number.isFinite(nowMs)) return Number.NaN;
+  const normalizedWindow = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 1;
+  return ((timestampMs - (nowMs - normalizedWindow)) / normalizedWindow) * width;
 }
 
 export function sparklineSampleY(value: number, maximum: number, height: number): number {

@@ -992,7 +992,7 @@ function Scene({
         <div
           className={
             presentation === 'zen'
-              ? 'absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger/50 bg-black/80 p-3 text-xs text-danger'
+              ? 'absolute bottom-4 left-4 z-30 max-w-md rounded-md border border-danger bg-black/80 p-3 text-xs text-danger'
               : 'rounded-md border border-danger/50 bg-danger/10 p-3 text-xs text-danger'
           }
         >

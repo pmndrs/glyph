@@ -7,6 +7,7 @@ import type { GraphicsBackend, RasterTechnique } from './url-state';
 
 export type CapturedBitmapTextLiveStats = Omit<
   BitmapTextLiveStats,
+  | 'frameTimestampHistory'
   | 'submitHistory'
   | 'submitHistoryLength'
   | 'submitHistoryNextIndex'
@@ -27,6 +28,7 @@ export type CapturedBitmapTextLiveStats = Omit<
 
 export type CapturedMtsdfTextLiveStats = Omit<
   MtsdfTextLiveStats,
+  | 'frameTimestampHistory'
   | 'submitHistory'
   | 'submitHistoryLength'
   | 'submitHistoryNextIndex'
@@ -47,6 +49,7 @@ export type CapturedMtsdfTextLiveStats = Omit<
 
 export type CapturedSlugTextLiveStats = Omit<
   SlugTextLiveStats,
+  | 'frameTimestampHistory'
   | 'submitHistory'
   | 'submitHistoryLength'
   | 'submitHistoryNextIndex'
@@ -110,6 +113,7 @@ export function captureLiveTextStats(
     gpuHistoryLength: _gpuHistoryLength,
     gpuHistoryNextIndex: _gpuHistoryNextIndex,
     gpuHistoryCursor,
+    frameTimestampHistory: _frameTimestampHistory,
     ...scalars
   } = stats;
   const capturedSubmitHistory = snapshotCircularSeries(
@@ -117,8 +121,16 @@ export function captureLiveTextStats(
     submitHistoryCursor.length,
     submitHistoryCursor.nextIndex,
   );
-  const capturedFpsHistory = snapshotCircularSeries(fpsHistory, fpsHistoryCursor.length, fpsHistoryCursor.nextIndex);
-  const capturedGpuHistory = snapshotCircularSeries(gpuHistory, gpuHistoryCursor.length, gpuHistoryCursor.nextIndex);
+  const capturedFpsHistory = snapshotCircularSeries(
+    fpsHistory,
+    fpsHistoryCursor.length,
+    fpsHistoryCursor.nextIndex,
+  ).filter(Number.isFinite);
+  const capturedGpuHistory = snapshotCircularSeries(
+    gpuHistory,
+    gpuHistoryCursor.length,
+    gpuHistoryCursor.nextIndex,
+  ).filter(Number.isFinite);
   return {
     ...scalars,
     medianSubmitMs: capturedPercentile(capturedSubmitHistory, 0.5),

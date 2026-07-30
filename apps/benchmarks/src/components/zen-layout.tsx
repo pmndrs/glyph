@@ -56,10 +56,10 @@ export function ZenLayout({
       </header>
 
       <aside className="zen-side-chrome pointer-events-none absolute right-6 top-28 z-20 flex flex-col gap-2 sm:right-8 min-[1120px]:top-8">
-        <div className="pointer-events-auto grid h-36 grid-rows-3 gap-px overflow-hidden rounded-xl border border-border/80 bg-border/70 sm:h-40">
+        <div className="pointer-events-auto grid h-36 grid-rows-3 divide-y divide-border overflow-hidden rounded-xl border border-border bg-black/80 sm:h-40">
           {telemetry}
         </div>
-        <div className="pointer-events-auto overflow-hidden rounded-xl border border-border/80 bg-black/70">
+        <div className="pointer-events-auto overflow-hidden rounded-xl border border-border bg-black/80">
           <button
             aria-expanded={controlsOpen}
             className="flex min-h-8 w-full items-center justify-between gap-3 px-2.5 text-left text-[10px] font-medium text-foreground hover:bg-surface/80"
@@ -77,7 +77,7 @@ export function ZenLayout({
             </svg>
           </button>
           {controlsOpen && (
-            <div className="max-h-[min(28rem,calc(100dvh-15rem))] overflow-y-auto overscroll-contain border-t border-border/80 p-3">
+            <div className="max-h-[min(28rem,calc(100dvh-15rem))] overflow-y-auto overscroll-contain border-t border-border p-3">
               {controls}
             </div>
           )}
@@ -106,7 +106,7 @@ function ZenSelect({
     <div className="relative max-w-[min(11rem,32vw)]">
       <select
         aria-label={ariaLabel}
-        className="h-8 w-full cursor-pointer appearance-none rounded-lg border border-border/80 bg-black/70 px-2.5 pr-7 text-[10px] text-foreground hover:border-accent focus:border-accent focus:outline-none"
+        className="h-8 w-full cursor-pointer appearance-none rounded-lg border border-border bg-black/80 px-2.5 pr-7 text-[10px] text-foreground hover:border-accent focus:border-accent focus:outline-none"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
       >
