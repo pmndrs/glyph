@@ -82,7 +82,7 @@ export function CustomSelect({
 
   return (
     <div
-      className={`relative min-w-0 ${variant === 'zen' ? 'max-w-[min(11rem,32vw)]' : ''}`}
+      className={`relative min-w-0 ${variant === 'zen' ? 'w-[min(11rem,32vw)] shrink-0' : ''}`}
       data-custom-select={ariaLabel}
       onBlur={(event) => {
         if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
