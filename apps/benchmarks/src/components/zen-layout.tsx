@@ -46,16 +46,16 @@ export function ZenLayout({
   }, []);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20" data-testid="zen-layout">
-      <header className="pointer-events-none absolute left-0 top-0 z-30 p-3 sm:p-4">
-        <div className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-1.5">
+    <div className="zen-layout pointer-events-none absolute inset-0 z-20" data-testid="zen-layout">
+      <header className="pointer-events-none absolute left-6 top-6 z-30 sm:left-8 sm:top-8">
+        <div className="zen-top-chrome pointer-events-auto flex min-w-0 flex-wrap items-center gap-1.5">
           {techniqueControl}
           <ZenSelect ariaLabel="Live workload" options={workloadOptions} value={workloadValue} onChange={onWorkload} />
           <ZenSelect ariaLabel="Font fixture" options={fontOptions} value={fontValue} onChange={onFont} />
         </div>
       </header>
 
-      <aside className="pointer-events-none absolute right-3 top-32 z-20 flex w-[min(18rem,calc(100vw-1.5rem))] flex-col gap-2 sm:right-4 sm:top-4">
+      <aside className="zen-side-chrome pointer-events-none absolute right-6 top-28 z-20 flex flex-col gap-2 sm:right-8 min-[1120px]:top-8">
         <div className="pointer-events-auto grid h-36 grid-rows-3 gap-px overflow-hidden rounded-xl border border-border/80 bg-border/70 sm:h-40">
           {telemetry}
         </div>
@@ -84,7 +84,7 @@ export function ZenLayout({
         </div>
       </aside>
 
-      <div className="pointer-events-none absolute bottom-3 right-3 z-20 flex max-w-[calc(100vw-1.5rem)] flex-wrap justify-end gap-2 sm:bottom-4 sm:right-4">
+      <div className="zen-payload-chrome pointer-events-none absolute bottom-6 right-6 z-20 flex flex-wrap justify-end gap-2 sm:bottom-8 sm:right-8">
         {payload}
       </div>
     </div>

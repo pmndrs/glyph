@@ -12,7 +12,7 @@
       "format": "javascript",
       "rawBytes": 322612,
       "minifiedBytes": 246050,
-      "gzipBytes": 71799,
+      "gzipBytes": 71800,
       "brotliBytes": 55000
     },
     {
@@ -32,8 +32,8 @@
       "format": "javascript",
       "rawBytes": 11437,
       "minifiedBytes": 9524,
-      "gzipBytes": 3819,
-      "brotliBytes": 3428
+      "gzipBytes": 3826,
+      "brotliBytes": 3435
     },
     {
       "id": "runtime-baker-worker-js",
@@ -73,7 +73,7 @@
       "rawBytes": 356055,
       "minifiedBytes": 267440,
       "gzipBytes": 77756,
-      "brotliBytes": 60181
+      "brotliBytes": 60140
     },
     {
       "id": "mtsdf-runtime-js",
@@ -83,17 +83,17 @@
       "rawBytes": 366429,
       "minifiedBytes": 273040,
       "gzipBytes": 79396,
-      "brotliBytes": 61592
+      "brotliBytes": 61604
     },
     {
       "id": "slug-runtime-js",
       "label": "Slug runtime JS graph",
       "status": "measured",
       "format": "javascript",
-      "rawBytes": 378760,
-      "minifiedBytes": 279145,
-      "gzipBytes": 81179,
-      "brotliBytes": 62985
+      "rawBytes": 377775,
+      "minifiedBytes": 278805,
+      "gzipBytes": 81090,
+      "brotliBytes": 62972
     },
     {
       "id": "bitmap-baker-wasm",
@@ -102,8 +102,8 @@
       "format": "wasm",
       "rawBytes": 606995,
       "minifiedBytes": 606995,
-      "gzipBytes": 226695,
-      "brotliBytes": 174100
+      "gzipBytes": 226687,
+      "brotliBytes": 173909
     },
     {
       "id": "bitmap-baker-js",
@@ -142,8 +142,8 @@
       "format": "wasm",
       "rawBytes": 534709,
       "minifiedBytes": 534709,
-      "gzipBytes": 208473,
-      "brotliBytes": 163470
+      "gzipBytes": 208474,
+      "brotliBytes": 163570
     },
     {
       "id": "mtsdf-baker-js",
@@ -160,10 +160,10 @@
       "label": "Slug fixed baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "rawBytes": 465369,
-      "minifiedBytes": 465369,
-      "gzipBytes": 186718,
-      "brotliBytes": 146609
+      "rawBytes": 465354,
+      "minifiedBytes": 465354,
+      "gzipBytes": 186710,
+      "brotliBytes": 146737
     },
     {
       "id": "slug-baker-js",

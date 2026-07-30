@@ -3107,22 +3107,6 @@ function ComparisonWorkloadViewport({
         {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} · {dpr}×
         DPR
       </div>
-      <div className="canvas-zen-status" data-testid="canvas-zen-status">
-        {stats?.technique === 'mtsdf'
-          ? 'MTSDF ' + String(stats.rasterEmSize) + ' PX/EM'
-          : stats?.technique === 'slug'
-            ? 'SLUG ANALYTIC · ' + String(stats.slugPageCount) + ' PAGE' + (stats.slugPageCount === 1 ? '' : 'S')
-            : stats?.technique === 'bitmap'
-              ? 'BITMAP ' + String(stats.strikePpem) + ' PX STRIKE'
-              : technique === 'mtsdf'
-                ? 'MTSDF — PX/EM'
-                : technique === 'slug'
-                  ? 'SLUG ANALYTIC · — PAGES'
-                  : 'BITMAP — PX STRIKE'}{' '}
-        · {rangeLabel} ·{' '}
-        {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} · {dpr}×
-        DPR
-      </div>
       {(publishedStats === undefined || bakeProgressActive) && error === undefined && (
         <BakeProgressOverlay
           backend={backend}
