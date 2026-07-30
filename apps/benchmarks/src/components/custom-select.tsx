@@ -82,7 +82,7 @@ export function CustomSelect({
 
   return (
     <div
-      className={`relative min-w-0 ${variant === 'zen' ? 'w-[min(11rem,32vw)] shrink-0' : ''}`}
+      className={`relative min-w-0 ${variant === 'zen' ? 'w-fit max-w-[32vw] shrink-0' : ''}`}
       data-custom-select={ariaLabel}
       onBlur={(event) => {
         if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
@@ -95,16 +95,30 @@ export function CustomSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
-        className={`flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-md border px-2.5 text-left outline-none focus:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+        className={`flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md border px-2.5 text-left outline-none focus:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
           variant === 'zen'
-            ? 'rounded-lg border-border bg-black/80 text-[10px] text-foreground hover:border-accent'
-            : 'border-border bg-background text-xs text-foreground hover:bg-surface'
+            ? 'w-max max-w-full rounded-lg border-border bg-black/80 text-[10px] text-foreground hover:border-accent'
+            : 'w-full border-border bg-background text-xs text-foreground hover:bg-surface'
         }`}
         type="button"
         onClick={() => (open ? closeListbox() : openListbox())}
         onKeyDown={handleKeyDown}
       >
-        <span className="min-w-0 truncate">{selected?.label ?? value}</span>
+        <span className={variant === 'zen' ? 'grid min-w-0 overflow-hidden' : 'min-w-0 truncate'}>
+          <span className={variant === 'zen' ? 'col-start-1 row-start-1 min-w-0 truncate' : ''}>
+            {selected?.label ?? value}
+          </span>
+          {variant === 'zen' &&
+            options.map((option) => (
+              <span
+                aria-hidden="true"
+                className="invisible col-start-1 row-start-1 whitespace-nowrap"
+                key={`select-width-${option.value}`}
+              >
+                {option.label}
+              </span>
+            ))}
+        </span>
         <svg
           aria-hidden="true"
           className={`size-3 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
