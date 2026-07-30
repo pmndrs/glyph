@@ -32,7 +32,13 @@ import { finiteCanvasDelta } from './canvas-view';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createFontDeliveryMetrics, loadRuntimeFont, type FontDeliveryMetrics } from './font-delivery';
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry';
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT, liveTextPosition, type LiveTextAnchor } from './live-text-style';
+import {
+  benchmarkContentWidth,
+  LIVE_TEXT_COLOR,
+  LIVE_TEXT_LINE_HEIGHT,
+  liveTextPosition,
+  type LiveTextAnchor,
+} from './live-text-style';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
 import { compareRgba8Coverage } from './mtsdf-cpu-reference';
 import { renderFlatSlugCpuReference } from './slug-cpu-reference';
@@ -405,6 +411,7 @@ export async function createSlugTextPreview(options: {
   readonly showGrid: boolean;
   readonly language?: string;
   readonly layoutWidth: number;
+  readonly layoutWidthRatio?: number;
   readonly signal?: AbortSignal;
   readonly text: string;
   readonly textAlign?: 'start' | 'center';
@@ -435,7 +442,8 @@ export async function createSlugTextPreview(options: {
   let height = positiveViewportSize(options.height, 'Slug preview height');
   let fontSize = positiveViewportSize(options.fontSize, 'Slug preview font size');
   let anchor = options.anchor ?? 'center';
-  let layoutWidthRatio = options.layoutWidth / width;
+  let layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
+  let committedContentWidth = options.layoutWidth;
   assertLayoutWidthRatio(layoutWidthRatio);
   const rendererStarted = performance.now();
   const renderer = await createConfiguredRenderer({
@@ -470,7 +478,7 @@ export async function createSlugTextPreview(options: {
       fontSize,
       rasterPixelRatio: rendererViewport.pixelRatio,
       lineHeight: LIVE_TEXT_LINE_HEIGHT,
-      width: Math.max(120, width * layoutWidthRatio),
+      width: benchmarkContentWidth(width, layoutWidthRatio),
       wrap: 'word',
       language,
       direction,
@@ -591,13 +599,19 @@ export async function createSlugTextPreview(options: {
         camera.right = width;
         camera.bottom = -height;
         camera.updateProjectionMatrix();
+        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
+        if (nextContentWidth === committedContentWidth) {
+          positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+          return;
+        }
         const updateStartedAt = performance.now();
         const revision = ++updateRevision;
-        activeLine.setProperties({ width: Math.max(120, width * layoutWidthRatio) });
+        activeLine.setProperties({ width: nextContentWidth });
         const resizeScheduledAt = performance.now();
         void activeLine.ready
           .then(() => {
             if (closing || disposed || revision !== updateRevision) return;
+            committedContentWidth = nextContentWidth;
             const resizeSceneStartedAt = performance.now();
             positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
             const finishedAt = performance.now();
@@ -634,10 +648,11 @@ export async function createSlugTextPreview(options: {
         assertLayoutWidthRatio(next.layoutWidthRatio);
         layoutWidthRatio = next.layoutWidthRatio;
         const revision = ++updateRevision;
+        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
         activeLine.setProperties({
           text: next.text,
           fontSize,
-          width: Math.max(120, width * layoutWidthRatio),
+          width: nextContentWidth,
           language: next.language,
           direction: next.direction,
           features: next.features,
@@ -648,6 +663,7 @@ export async function createSlugTextPreview(options: {
         if (closing || disposed || revision !== updateRevision) {
           throw new DOMException('The Slug preview update was superseded', 'AbortError');
         }
+        committedContentWidth = nextContentWidth;
         const updateSceneStartedAt = performance.now();
         positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
         const finishedAt = performance.now();
@@ -1683,7 +1699,7 @@ function positionLiveLine(
   layoutWidthRatio = 1,
 ): void {
   const layout = committedLayout(line);
-  const positionedWidth = anchor === 'center' ? layout.width : Math.max(120, viewportWidth * layoutWidthRatio);
+  const positionedWidth = anchor === 'center' ? layout.width : benchmarkContentWidth(viewportWidth, layoutWidthRatio);
   const [x, y] = liveTextPosition(anchor, viewportWidth, viewportHeight, positionedWidth, layout.height);
   line.position.set(x, y, 0);
 }

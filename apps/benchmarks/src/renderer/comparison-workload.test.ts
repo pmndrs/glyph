@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  comparisonWorkloadContentWidth,
   comparisonWorkloadUpdateKind,
   dynamicLayoutWidths,
   iconGridAssignmentSignature,
+  iconGridCenteredScroll,
   iconGridLayout,
   iconGridVirtualWindow,
   iconGridViewportUpdateKind,
@@ -32,6 +34,18 @@ const baseConfiguration: ComparisonWorkloadConfiguration = {
 };
 
 describe('comparison workload updates', () => {
+  it('holds bounded content steady below its minimum and expands in a larger viewport', () => {
+    expect(comparisonWorkloadContentWidth(baseConfiguration, 390)).toBe(576);
+    expect(comparisonWorkloadContentWidth(baseConfiguration, 768)).toBe(576);
+    expect(comparisonWorkloadContentWidth(baseConfiguration, 1_280)).toBeCloseTo(985.6);
+  });
+
+  it('keeps pan-only and specialized-fit workloads independent of content width', () => {
+    for (const workload of ['text-ladder', 'icon-grid', 'zoom-text'] as const) {
+      expect(comparisonWorkloadContentWidth({ ...baseConfiguration, workload }, 1_280)).toBeUndefined();
+    }
+  });
+
   it('retains the scene for animation and paint controls', () => {
     for (const update of [
       { animationEnabled: false },
@@ -85,7 +99,6 @@ describe('comparison workload updates', () => {
 
     expect(comparisonWorkloadUpdateKind(zoomText, { ...zoomText, animationSpeed: 80 })).toBe('retained');
     expect(comparisonWorkloadUpdateKind(zoomText, { ...zoomText, fontSize: 48 })).toBe('retained');
-    expect(comparisonWorkloadUpdateKind(zoomText, zoomText, true)).toBe('retained');
   });
 });
 
@@ -183,6 +196,53 @@ describe('text ladder scale selection', () => {
 });
 
 describe('icon grid layout', () => {
+  it('keeps the grid coordinate at viewport center stable while icon size changes', () => {
+    const viewportWidth = 720;
+    const viewportHeight = 640;
+    const previousSize = 48;
+    const nextSize = 256;
+    const previousScrollX = 1_800;
+    const previousScrollY = 1_200;
+    const previous = iconGridLayout(1_402, previousSize, viewportWidth);
+    const next = iconGridLayout(1_402, nextSize, viewportWidth);
+    const [nextScrollX, nextScrollY] = iconGridCenteredScroll(
+      1_402,
+      previousSize,
+      nextSize,
+      viewportWidth,
+      viewportHeight,
+      previousScrollX,
+      previousScrollY,
+    );
+    const previousCenterColumn =
+      (previousScrollX + viewportWidth / 2 - previous.inset) / (previous.cellWidth + previous.gap);
+    const previousCenterRow =
+      (previousScrollY + viewportHeight / 2 - previous.inset) / (previous.cellHeight + previous.gap);
+    const nextCenterColumn = (nextScrollX + viewportWidth / 2 - next.inset) / (next.cellWidth + next.gap);
+    const nextCenterRow = (nextScrollY + viewportHeight / 2 - next.inset) / (next.cellHeight + next.gap);
+
+    expect(nextCenterColumn).toBeCloseTo(previousCenterColumn);
+    expect(nextCenterRow).toBeCloseTo(previousCenterRow);
+  });
+
+  it('clamps the centered anchor when a smaller grid reaches its outer edges', () => {
+    const viewportWidth = 720;
+    const viewportHeight = 640;
+    const next = iconGridLayout(1_402, 48, viewportWidth);
+    const [scrollX, scrollY] = iconGridCenteredScroll(
+      1_402,
+      1_024,
+      48,
+      viewportWidth,
+      viewportHeight,
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER,
+    );
+
+    expect(scrollX).toBe(next.width - viewportWidth);
+    expect(scrollY).toBe(next.height - viewportHeight);
+  });
+
   it('publishes exact visible index/content assignments in catalog order', () => {
     expect(
       iconGridAssignmentSignature([

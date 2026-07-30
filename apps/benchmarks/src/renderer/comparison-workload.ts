@@ -19,7 +19,7 @@ import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry } from './live-frame-telemetry';
 import { createTextUpdateTelemetry } from './text-update-telemetry';
 import type { FontDeliveryMetrics } from './font-delivery';
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style';
+import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style';
 import {
   loadMtsdfFont,
   registeredMtsdfConfiguration,
@@ -317,6 +317,7 @@ export async function createComparisonWorkloadPreview(options: {
     let iconWindowDrain: Promise<void> | undefined;
     let iconWindowSuspended = false;
     let iconWindowRefreshDeferred = false;
+    let committedContentWidth = comparisonWorkloadContentWidth(configuration, width);
 
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
       await iconWindowDrain;
@@ -535,6 +536,7 @@ export async function createComparisonWorkloadPreview(options: {
       canvasSurface.setGridVisible(next.showGrid);
       if (next.workload === 'zoom-text' && viewportChanged) {
         configuration = next;
+        committedContentWidth = undefined;
         revision += 1;
         layoutZoomTextEntries(entries, width, height);
         applyRetainedConfiguration(entries, technique, configuration);
@@ -542,28 +544,45 @@ export async function createComparisonWorkloadPreview(options: {
       }
       if (next.workload === 'icon-grid' && (viewportChanged || next.fontSize !== configuration.fontSize)) {
         await iconWindowDrain;
-        clampIconGridScene(scene, next.fontSize, width, height);
+        const [requestedScrollX, requestedScrollY] =
+          next.fontSize === configuration.fontSize
+            ? [-scene.position.x, scene.position.y]
+            : iconGridCenteredScroll(
+                ICON_GRID_ITEMS.length,
+                configuration.fontSize,
+                next.fontSize,
+                width,
+                height,
+                -scene.position.x,
+                scene.position.y,
+              );
         const nextWindow = iconGridVirtualWindow(
           ICON_GRID_ITEMS.length,
           next.fontSize,
           width,
           height,
-          -scene.position.x,
-          scene.position.y,
+          requestedScrollX,
+          requestedScrollY,
         );
+        scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
         await resizeIconPool(nextWindow.poolCapacity, next.fontSize, nextWindow.layout);
         configuration = next;
+        committedContentWidth = undefined;
         revision += 1;
         applyRetainedConfiguration(entries, technique, configuration);
         await applyIconWindow(nextWindow);
         return;
       }
-      if (comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild') {
+      const nextContentWidth = comparisonWorkloadContentWidth(next, width);
+      const contentWidthChanged = nextContentWidth !== committedContentWidth;
+      if (comparisonWorkloadUpdateKind(configuration, next, contentWidthChanged) === 'rebuild') {
         await commit(next);
         configuration = next;
+        committedContentWidth = nextContentWidth;
         return;
       }
       configuration = next;
+      committedContentWidth = nextContentWidth;
       revision += 1;
       applyRetainedConfiguration(entries, technique, configuration);
     }
@@ -977,7 +996,7 @@ function createEntries(
       spans: paintSpans(0, configuration.amount, paintOutlineWidth, paintShadowOffset),
       fontSize: configuration.fontSize,
       opacity: configuration.paintOpacity,
-      width: Math.max(160, viewportWidth * configuration.layoutWidthRatio),
+      width: benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio),
       wrap: 'word',
     });
     return [
@@ -1030,7 +1049,7 @@ function createEntries(
     text,
     fontSize: configuration.fontSize,
     color: LIVE_TEXT_COLOR,
-    width: Math.max(120, viewportWidth * configuration.layoutWidthRatio),
+    width: benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio),
     wrap: 'word',
     ...(configuration.workload === 'off-axis-3d' ? { textAlign: 'center' as const } : {}),
   });
@@ -1363,18 +1382,35 @@ function applyRetainedConfiguration(
 export function comparisonWorkloadUpdateKind(
   previous: ComparisonWorkloadConfiguration,
   next: ComparisonWorkloadConfiguration,
-  viewportChanged = false,
+  contentWidthChanged = false,
 ): 'rebuild' | 'retained' {
   const paragraphVolumeChanged = next.workload === 'paragraph-stress' && previous.amount !== next.amount;
   const fontSizeRebuild =
     previous.fontSize !== next.fontSize && next.workload !== 'icon-grid' && next.workload !== 'zoom-text';
-  const viewportRebuild = viewportChanged && next.workload !== 'zoom-text';
-  return viewportRebuild ||
+  return contentWidthChanged ||
     fontSizeRebuild ||
     previous.layoutWidthRatio !== next.layoutWidthRatio ||
     paragraphVolumeChanged
     ? 'rebuild'
     : 'retained';
+}
+
+export function comparisonWorkloadContentWidth(
+  configuration: Pick<ComparisonWorkloadConfiguration, 'layoutWidthRatio' | 'workload'>,
+  viewportWidth: number,
+): number | undefined {
+  if (
+    configuration.workload === 'text-ladder' ||
+    configuration.workload === 'zoom-text' ||
+    configuration.workload === 'icon-grid'
+  ) {
+    return undefined;
+  }
+  return benchmarkContentWidth(
+    viewportWidth,
+    configuration.layoutWidthRatio,
+    configuration.workload === 'dynamic-layout' ? 1_000 : undefined,
+  );
 }
 
 function animateDynamicLayout(
@@ -1421,7 +1457,7 @@ export function dynamicLayoutWidths(
 ): readonly number[] {
   const phase = animationElapsedMs * 0.00045 * animationRate(configuration);
   const amplitude = 0.08 + (configuration.amount / 100) * 0.28;
-  const baseWidth = viewportWidth * configuration.layoutWidthRatio;
+  const baseWidth = benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio, 1_000);
   return DYNAMIC_LAYOUT_TEXT.map((_, index) =>
     Math.max(160, baseWidth * (0.72 + Math.sin(phase + index * ((Math.PI * 2) / 3)) * amplitude)),
   );
@@ -1578,6 +1614,37 @@ export interface IconGridVirtualWindow {
 export interface IconGridAssignment {
   readonly index: number;
   readonly content: string;
+}
+
+export function iconGridCenteredScroll(
+  itemCount: number,
+  previousIconSize: number,
+  nextIconSize: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  scrollX: number,
+  scrollY: number,
+): readonly [number, number] {
+  positive(viewportHeight, 'icon grid viewport height');
+  if (!Number.isFinite(scrollX) || !Number.isFinite(scrollY)) {
+    throw new TypeError('icon grid scroll positions must be finite');
+  }
+  const previous = iconGridLayout(itemCount, previousIconSize, viewportWidth);
+  const next = iconGridLayout(itemCount, nextIconSize, viewportWidth);
+  const previousPitchX = previous.cellWidth + previous.gap;
+  const previousPitchY = previous.cellHeight + previous.gap;
+  const nextPitchX = next.cellWidth + next.gap;
+  const nextPitchY = next.cellHeight + next.gap;
+  const anchorColumn = (scrollX + viewportWidth / 2 - previous.inset) / previousPitchX;
+  const anchorRow = (scrollY + viewportHeight / 2 - previous.inset) / previousPitchY;
+  const requestedScrollX = next.inset + anchorColumn * nextPitchX - viewportWidth / 2;
+  const requestedScrollY = next.inset + anchorRow * nextPitchY - viewportHeight / 2;
+  const maximumScrollX = Math.max(0, next.width - viewportWidth);
+  const maximumScrollY = Math.max(0, next.height - viewportHeight);
+  return [
+    Math.min(maximumScrollX, Math.max(0, requestedScrollX)),
+    Math.min(maximumScrollY, Math.max(0, requestedScrollY)),
+  ];
 }
 
 export function iconGridViewportUpdateKind(

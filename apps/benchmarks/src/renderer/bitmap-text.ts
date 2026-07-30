@@ -43,7 +43,13 @@ import { finiteCanvasDelta } from './canvas-view';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT, liveTextPosition, type LiveTextAnchor } from './live-text-style';
+import {
+  benchmarkContentWidth,
+  LIVE_TEXT_COLOR,
+  LIVE_TEXT_LINE_HEIGHT,
+  liveTextPosition,
+  type LiveTextAnchor,
+} from './live-text-style';
 import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
 import {
   createConfiguredRenderer,
@@ -282,6 +288,7 @@ export interface BitmapTextPreviewOptions {
   readonly height: number;
   readonly showGrid: boolean;
   readonly layoutWidth: number;
+  readonly layoutWidthRatio?: number;
   readonly expectedGlyphCount?: number;
   readonly fontFixture?: BenchmarkFontFixture;
   readonly delivery?: FontDelivery;
@@ -694,7 +701,8 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
   let width = positiveViewportSize(options.width, 'bitmap preview width');
   let viewportHeight = positiveViewportSize(height, 'bitmap preview height');
   let currentFontSize = fontSize;
-  let layoutWidthRatio = layoutWidth / width;
+  let layoutWidthRatio = options.layoutWidthRatio ?? layoutWidth / width;
+  let committedContentWidth = layoutWidth;
   const rendererStarted = performance.now();
   const renderer = await createConfiguredRenderer({
     backend,
@@ -760,7 +768,7 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
     const targetLinePosition = (): readonly [number, number] => {
       const layout = activeLine.object.layout;
       const currentLayoutWidth =
-        anchor === 'center' ? (layout?.width ?? activeLine.width) : Math.max(120, width * layoutWidthRatio);
+        anchor === 'center' ? (layout?.width ?? activeLine.width) : benchmarkContentWidth(width, layoutWidthRatio);
       const layoutHeight = layout?.height ?? activeLine.height;
       return liveTextPosition(anchor, width, viewportHeight, currentLayoutWidth, layoutHeight);
     };
@@ -834,7 +842,7 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
       disposePresentation();
       const dimensions = {
         fontSize: currentFontSize,
-        width: Math.max(120, width * layoutWidthRatio),
+        width: benchmarkContentWidth(width, layoutWidthRatio),
       };
       if (update === undefined) activeLine.object.setProperties(dimensions);
       else activeLine.object.setProperties({ ...dimensions, ...update });
@@ -845,6 +853,7 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
         }
         const layout = activeLine.object.layout;
         if (layout === undefined) throw new Error('bitmap preview update did not commit a layout');
+        committedContentWidth = dimensions.width;
         const reflowSceneStartedAt = performance.now();
         const targetPosition = targetLinePosition();
         const controllers: BitmapGlyphPositionTransition[] = [];
@@ -960,6 +969,12 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
         camera.right = width;
         camera.bottom = -viewportHeight;
         camera.updateProjectionMatrix();
+        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
+        if (nextContentWidth === committedContentWidth) {
+          const targetPosition = targetLinePosition();
+          activeLine.object.position.set(targetPosition[0], targetPosition[1], 0);
+          return;
+        }
         void reflowToViewport()
           .then((snapshot) => setPresentationProgress(snapshot.revision, 1))
           .catch((error: unknown) => {

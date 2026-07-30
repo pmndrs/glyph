@@ -82,6 +82,11 @@ import type {
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload';
 import { createExclusiveLifecycleCoordinator } from './renderer/exclusive-lifecycle';
+import {
+  benchmarkContentWidth,
+  BENCHMARK_CONTENT_INSET,
+  BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH,
+} from './renderer/live-text-style';
 import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference';
 import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance';
 import type { BakeProgress } from '@pmndrs/text';
@@ -2085,8 +2090,7 @@ function BitmapTextViewport({
     let cancelled = false;
     const resize = (): void => {
       if (preview === undefined) return;
-      const bounds = container.getBoundingClientRect();
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+      preview.resize(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight));
     };
     const observer = new ResizeObserver(resize);
     observer.observe(container);
@@ -2096,7 +2100,6 @@ function BitmapTextViewport({
         if (cancelled) return;
         const { createBitmapTextPreview } = await import('./renderer/bitmap-text');
         if (cancelled) return;
-        const bounds = container.getBoundingClientRect();
         const created = await createBitmapTextPreview({
           anchor: configuration.anchor,
           backend,
@@ -2108,14 +2111,15 @@ function BitmapTextViewport({
             : { expectedGlyphCount: configuration.expectedGlyphCount }),
           fontFixture: configuration.fontFixture,
           fontSize: configuration.fontSize,
-          height: Math.max(1, bounds.height),
+          height: Math.max(1, container.clientHeight),
           showGrid: configuration.showGrid,
-          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+          layoutWidth: benchmarkContentWidth(container.clientWidth, configuration.layoutWidthRatio),
+          layoutWidthRatio: configuration.layoutWidthRatio,
           text: configuration.text,
           language: configuration.language,
           direction: configuration.direction,
           features: configuration.features,
-          width: Math.max(1, bounds.width),
+          width: Math.max(1, container.clientWidth),
           signal: controller.signal,
           onError: publishError,
           onStats: publishStats,
@@ -2236,6 +2240,9 @@ function BitmapTextViewport({
       data-anchor={anchor}
       data-layout-width={stats?.layoutWidth}
       data-layout-width-ratio={layoutWidthRatio}
+      data-content-inset={BENCHMARK_CONTENT_INSET}
+      data-content-min-width={BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH * layoutWidthRatio}
+      data-content-policy="bounded-pan"
       data-line-count={stats?.lineCount}
       data-frame-count={stats?.frameCount}
       data-frames-per-second={stats?.framesPerSecond}
@@ -2378,8 +2385,7 @@ function MtsdfTextViewport({
     let cancelled = false;
     const resize = (): void => {
       if (preview === undefined) return;
-      const bounds = container.getBoundingClientRect();
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+      preview.resize(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight));
     };
     const observer = new ResizeObserver(resize);
     observer.observe(container);
@@ -2389,7 +2395,6 @@ function MtsdfTextViewport({
         if (cancelled) return;
         const { createMtsdfTextPreview } = await import('./renderer/mtsdf-text');
         if (cancelled) return;
-        const bounds = container.getBoundingClientRect();
         const created = await createMtsdfTextPreview({
           anchor: configuration.anchor,
           backend,
@@ -2398,15 +2403,16 @@ function MtsdfTextViewport({
           dpr,
           fontSize: configuration.fontSize,
           fontFixture,
-          height: Math.max(1, bounds.height),
+          height: Math.max(1, container.clientHeight),
           showGrid: configuration.showGrid,
-          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+          layoutWidth: benchmarkContentWidth(container.clientWidth, configuration.layoutWidthRatio),
+          layoutWidthRatio: configuration.layoutWidthRatio,
           text: configuration.text,
           textAlign: configuration.textAlign,
           language: configuration.language,
           direction: configuration.direction,
           features: configuration.features,
-          width: Math.max(1, bounds.width),
+          width: Math.max(1, container.clientWidth),
           signal: controller.signal,
           onError: publishError,
           onStats: publishStats,
@@ -2497,6 +2503,9 @@ function MtsdfTextViewport({
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-layout-width={stats?.layoutWidth}
       data-layout-width-ratio={layoutWidthRatio}
+      data-content-inset={BENCHMARK_CONTENT_INSET}
+      data-content-min-width={BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH * layoutWidthRatio}
+      data-content-policy="bounded-pan"
       data-line-count={stats?.lineCount}
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
@@ -2607,8 +2616,7 @@ function SlugTextViewport({
     let cancelled = false;
     const resize = (): void => {
       if (preview === undefined) return;
-      const bounds = container.getBoundingClientRect();
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+      preview.resize(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight));
     };
     const observer = new ResizeObserver(resize);
     observer.observe(container);
@@ -2618,7 +2626,6 @@ function SlugTextViewport({
         if (cancelled) return;
         const { createSlugTextPreview } = await import('./renderer/slug-text');
         if (cancelled) return;
-        const bounds = container.getBoundingClientRect();
         const created = await createSlugTextPreview({
           anchor: configuration.anchor,
           backend,
@@ -2627,15 +2634,16 @@ function SlugTextViewport({
           dpr,
           fontSize: configuration.fontSize,
           fontFixture,
-          height: Math.max(1, bounds.height),
+          height: Math.max(1, container.clientHeight),
           showGrid: configuration.showGrid,
-          layoutWidth: Math.max(120, bounds.width * configuration.layoutWidthRatio),
+          layoutWidth: benchmarkContentWidth(container.clientWidth, configuration.layoutWidthRatio),
+          layoutWidthRatio: configuration.layoutWidthRatio,
           text: configuration.text,
           textAlign: configuration.textAlign,
           language: configuration.language,
           direction: configuration.direction,
           features: configuration.features,
-          width: Math.max(1, bounds.width),
+          width: Math.max(1, container.clientWidth),
           signal: controller.signal,
           onError: publishError,
           onStats: publishStats,
@@ -2724,6 +2732,9 @@ function SlugTextViewport({
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-layout-width={stats?.layoutWidth}
       data-layout-width-ratio={layoutWidthRatio}
+      data-content-inset={BENCHMARK_CONTENT_INSET}
+      data-content-min-width={BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH * layoutWidthRatio}
+      data-content-policy="bounded-pan"
       data-line-count={stats?.lineCount}
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
@@ -2868,8 +2879,7 @@ function ComparisonWorkloadViewport({
     let cancelled = false;
     const resize = (): void => {
       if (preview === undefined) return;
-      const bounds = container.getBoundingClientRect();
-      preview.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
+      preview.resize(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight));
     };
     const observer = new ResizeObserver(resize);
     observer.observe(container);
@@ -2879,7 +2889,6 @@ function ComparisonWorkloadViewport({
         if (cancelled) return;
         const { createComparisonWorkloadPreview } = await preloadComparisonWorkload();
         if (cancelled) return;
-        const bounds = container.getBoundingClientRect();
         const configuration = currentConfiguration();
         const created = await createComparisonWorkloadPreview({
           ...configuration,
@@ -2887,10 +2896,10 @@ function ComparisonWorkloadViewport({
           canvas,
           delivery,
           dpr,
-          height: Math.max(1, bounds.height),
+          height: Math.max(1, container.clientHeight),
           signal: controller.signal,
           technique,
-          width: Math.max(1, bounds.width),
+          width: Math.max(1, container.clientWidth),
           onError: publishError,
           onStats: (next) => publishStats(effectSurfaceKey, next),
           onBakeProgress: publishBakeProgress,
@@ -2986,6 +2995,19 @@ function ComparisonWorkloadViewport({
       data-gpu-history-length={stats?.gpuHistoryLength}
       data-gpu-timing-supported={stats?.gpuTimingSupported}
       data-layout-width={stats?.layoutWidth}
+      data-content-inset={BENCHMARK_CONTENT_INSET}
+      data-content-min-width={
+        workload === 'text-ladder' || workload === 'icon-grid' || workload === 'zoom-text'
+          ? undefined
+          : (workload === 'dynamic-layout' ? 1_000 : BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH) * layoutWidthRatio
+      }
+      data-content-policy={
+        workload === 'text-ladder' || workload === 'icon-grid'
+          ? 'pan'
+          : workload === 'zoom-text'
+            ? 'fit'
+            : 'bounded-pan'
+      }
       data-icon-item-count={stats?.workload === 'icon-grid' ? stats.iconItemCount : undefined}
       data-icon-label-count={stats?.workload === 'icon-grid' ? stats.iconLabelCount : undefined}
       data-icon-column-count={stats?.workload === 'icon-grid' ? stats.iconColumnCount : undefined}

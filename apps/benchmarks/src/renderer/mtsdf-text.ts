@@ -20,7 +20,13 @@ import { finiteCanvasDelta } from './canvas-view';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT, liveTextPosition, type LiveTextAnchor } from './live-text-style';
+import {
+  benchmarkContentWidth,
+  LIVE_TEXT_COLOR,
+  LIVE_TEXT_LINE_HEIGHT,
+  liveTextPosition,
+  type LiveTextAnchor,
+} from './live-text-style';
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';
 import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
 import { compactRgba8Readback } from './tsl-baseline';
@@ -277,6 +283,7 @@ export async function createMtsdfTextPreview(options: {
   readonly showGrid: boolean;
   readonly language?: string;
   readonly layoutWidth: number;
+  readonly layoutWidthRatio?: number;
   readonly signal?: AbortSignal;
   readonly text: string;
   readonly textAlign?: 'start' | 'center';
@@ -307,7 +314,8 @@ export async function createMtsdfTextPreview(options: {
   let height = positiveViewportSize(options.height, 'MSDF preview height');
   let fontSize = positiveViewportSize(options.fontSize, 'MSDF preview font size');
   let anchor = options.anchor ?? 'center';
-  let layoutWidthRatio = options.layoutWidth / width;
+  let layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
+  let committedContentWidth = options.layoutWidth;
   assertLayoutWidthRatio(layoutWidthRatio);
   const rendererStarted = performance.now();
   const renderer = await createConfiguredRenderer({
@@ -342,7 +350,7 @@ export async function createMtsdfTextPreview(options: {
       fontSize,
       rasterPixelRatio: rendererViewport.pixelRatio,
       lineHeight: LIVE_TEXT_LINE_HEIGHT,
-      width: Math.max(120, width * layoutWidthRatio),
+      width: benchmarkContentWidth(width, layoutWidthRatio),
       wrap: 'word',
       language,
       direction,
@@ -459,13 +467,19 @@ export async function createMtsdfTextPreview(options: {
         camera.right = width;
         camera.bottom = -height;
         camera.updateProjectionMatrix();
+        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
+        if (nextContentWidth === committedContentWidth) {
+          positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+          return;
+        }
         const updateStartedAt = performance.now();
         const revision = ++updateRevision;
-        activeLine.setProperties({ width: Math.max(120, width * layoutWidthRatio) });
+        activeLine.setProperties({ width: nextContentWidth });
         const resizeScheduledAt = performance.now();
         void activeLine.ready
           .then(() => {
             if (closing || disposed || revision !== updateRevision) return;
+            committedContentWidth = nextContentWidth;
             const resizeSceneStartedAt = performance.now();
             positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
             const finishedAt = performance.now();
@@ -502,10 +516,11 @@ export async function createMtsdfTextPreview(options: {
         assertLayoutWidthRatio(next.layoutWidthRatio);
         layoutWidthRatio = next.layoutWidthRatio;
         const revision = ++updateRevision;
+        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
         activeLine.setProperties({
           text: next.text,
           fontSize,
-          width: Math.max(120, width * layoutWidthRatio),
+          width: nextContentWidth,
           language: next.language,
           direction: next.direction,
           features: next.features,
@@ -516,6 +531,7 @@ export async function createMtsdfTextPreview(options: {
         if (closing || disposed || revision !== updateRevision) {
           throw new DOMException('The MSDF preview update was superseded', 'AbortError');
         }
+        committedContentWidth = nextContentWidth;
         const updateSceneStartedAt = performance.now();
         positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
         const finishedAt = performance.now();
@@ -760,7 +776,7 @@ function positionLiveLine(
   layoutWidthRatio = 1,
 ): void {
   const layout = committedLayout(line);
-  const positionedWidth = anchor === 'center' ? layout.width : Math.max(120, viewportWidth * layoutWidthRatio);
+  const positionedWidth = anchor === 'center' ? layout.width : benchmarkContentWidth(viewportWidth, layoutWidthRatio);
   const [x, y] = liveTextPosition(anchor, viewportWidth, viewportHeight, positionedWidth, layout.height);
   line.position.set(x, y, 0);
 }
