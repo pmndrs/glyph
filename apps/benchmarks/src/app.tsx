@@ -619,7 +619,6 @@ function useHarnessController(): ReactNode {
       activeFontFixture={activeFontFixture}
       controls={controls}
       desktop={desktop}
-      fontFixture={fontFixture}
       fontNoticesOpen={fontNoticesOpen}
       isPending={isPending}
       liveCapture={liveCapture}
@@ -651,7 +650,6 @@ function HarnessLayout({
   activeFontFixture,
   controls,
   desktop,
-  fontFixture,
   fontNoticesOpen,
   isPending,
   liveCapture,
@@ -676,7 +674,6 @@ function HarnessLayout({
   readonly activeFontFixture: BenchmarkFontFixture;
   readonly controls: ReactNode;
   readonly desktop: boolean;
-  readonly fontFixture: SelectableFontFixture;
   readonly fontNoticesOpen: boolean;
   readonly isPending: boolean;
   readonly liveCapture: LiveBenchmarkCapture | undefined;
@@ -820,7 +817,6 @@ function HarnessLayout({
           <WorkloadRail
             activeFontFixture={activeFontFixture}
             className="h-full w-56"
-            fontFixture={fontFixture}
             location={location}
             showcaseFrame={showcaseFrame}
             onFontFixture={(value) => onLocation({ fontFixture: value })}
@@ -859,7 +855,6 @@ function HarnessLayout({
             <WorkloadRail
               activeFontFixture={activeFontFixture}
               className="h-full w-full border-r-0"
-              fontFixture={fontFixture}
               location={location}
               showcaseFrame={showcaseFrame}
               showTechnique={false}

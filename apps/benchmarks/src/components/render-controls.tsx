@@ -20,6 +20,7 @@ import packageSizes from '../generated/package-sizes.json';
 import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
+import { FontFixtureButtons } from './font-fixture-buttons';
 import { Button, Field, SelectField, TextareaField, Toggle } from './ui';
 import bitmapFixtures from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
@@ -422,41 +423,40 @@ function CompactFontFixtureControl({
   readonly workload: string;
   readonly onSelectedFontFixture: (value: SelectableFontFixture) => void;
 }) {
+  const options =
+    workload === 'icon-grid'
+      ? [
+          {
+            id: ICON_GRID_FONT_FIXTURE,
+            label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE],
+            metadata: '1,402 packed solid icons',
+            dataAttribute: 'icon' as const,
+          },
+        ]
+      : workload === 'zoom-text'
+        ? [
+            {
+              id: 'inter' as const,
+              label: BENCHMARK_FONT_LABELS.inter,
+              metadata: 'Fixed multilingual zoom fixture',
+              dataAttribute: 'zoom' as const,
+            },
+          ]
+        : SELECTABLE_FONT_FIXTURES;
+  const value =
+    workload === 'icon-grid' ? ICON_GRID_FONT_FIXTURE : workload === 'zoom-text' ? 'inter' : selectedFontFixture;
+  const readOnly = workload === 'icon-grid' || workload === 'zoom-text';
   return (
-    <div className="min-[1200px]:hidden">
-      {workload === 'icon-grid' ? (
-        <div className="grid gap-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
-          <div
-            className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
-            data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
-          >
-            {BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}
-          </div>
-        </div>
-      ) : workload === 'zoom-text' ? (
-        <div className="grid gap-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
-          <div
-            className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground"
-            data-zoom-font-fixture="inter"
-          >
-            {BENCHMARK_FONT_LABELS.inter}
-          </div>
-        </div>
-      ) : (
-        <SelectField
-          label="Font fixture"
-          value={selectedFontFixture}
-          onChange={(value) => onSelectedFontFixture(selectableFontFixture(value))}
-        >
-          {SELECTABLE_FONT_FIXTURES.map((fixture) => (
-            <option key={fixture.id} value={fixture.id}>
-              {fixture.label} · {fixture.metadata}
-            </option>
-          ))}
-        </SelectField>
-      )}
+    <div className="grid gap-1.5 min-[1200px]:hidden">
+      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">Font fixture</span>
+      <FontFixtureButtons
+        options={options}
+        readOnly={readOnly}
+        value={value}
+        onChange={(next) => {
+          if (!readOnly) onSelectedFontFixture(selectableFontFixture(next));
+        }}
+      />
     </div>
   );
 }
@@ -624,6 +624,10 @@ function AdvancedShapingControls({
       <p className="eyebrow">Shaping timeline</p>
       <SelectField
         label="Case"
+        options={ADVANCED_SHAPING_CASES.map((definition) => ({
+          label: definition.label,
+          value: definition.id,
+        }))}
         value={showcaseState.caseId}
         onChange={(caseId) => {
           const definition = ADVANCED_SHAPING_CASES.find((entry) => entry.id === caseId);
@@ -631,13 +635,7 @@ function AdvancedShapingControls({
             onShowcase({ kind: 'select-case', caseId: definition.id });
           }
         }}
-      >
-        {ADVANCED_SHAPING_CASES.map((definition) => (
-          <option key={definition.id} value={definition.id}>
-            {definition.label}
-          </option>
-        ))}
-      </SelectField>
+      />
       <TextareaField
         label="Live text"
         value={showcaseFrame.text}

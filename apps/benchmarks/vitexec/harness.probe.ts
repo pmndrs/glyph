@@ -238,7 +238,7 @@ const advancedShapingButton = [...document.querySelectorAll<HTMLButtonElement>('
 );
 if (advancedShapingButton === undefined) throw new Error('Advanced-shaping workload is missing');
 advancedShapingButton.click();
-const caseSelector = await waitForSelect('Case');
+const caseSelector = await waitForCustomSelect('Case');
 await waitForLiveViewportState({
   'data-backend': 'webgpu',
   'data-presentation-progress': '1',
@@ -250,15 +250,12 @@ if (initialPause === undefined) throw new Error('Advanced shaping did not load p
 initialPause.click();
 await waitForButtonText('Play');
 console.log('advanced-shaping-start');
-const setSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-if (setSelectValue === undefined) throw new Error('Native select value setter is unavailable');
 const setTextareaValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
 if (setTextareaValue === undefined) throw new Error('Native textarea value setter is unavailable');
 
 for (const definition of ADVANCED_SHAPING_CASES) {
   console.log('advanced-shaping-select', definition.id);
-  setSelectValue.call(caseSelector, definition.id);
-  caseSelector.dispatchEvent(new Event('change', { bubbles: true }));
+  await selectCustomOption(caseSelector, definition.label);
   const authoredText = definition.showcaseRevealUnits.join('');
   const timeline = await waitForRangeMaximum('Timeline', String(definition.showcaseRevealUnits.length));
   setInputValue.call(timeline, String(definition.showcaseRevealUnits.length));
@@ -422,19 +419,46 @@ function waitForButtonText(label: string): Promise<HTMLButtonElement> {
   });
 }
 
-function waitForSelect(label: string): Promise<HTMLSelectElement> {
-  const current = [...document.querySelectorAll<HTMLSelectElement>('select')].find(
-    (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
-  );
+function waitForCustomSelect(label: string): Promise<HTMLButtonElement> {
+  const find = (): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find(
+      (candidate) => candidate.getAttribute('aria-label') === label,
+    );
+  const current = find();
   if (current !== undefined) return Promise.resolve(current);
   return new Promise((resolve) => {
     const observer = new MutationObserver(() => {
-      const select = [...document.querySelectorAll<HTMLSelectElement>('select')].find(
-        (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
-      );
+      const select = find();
       if (select === undefined) return;
       observer.disconnect();
       resolve(select);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  });
+}
+
+async function selectCustomOption(control: HTMLButtonElement, label: string): Promise<void> {
+  control.click();
+  const option = await waitForMatchingElement(
+    `button[role="option"]`,
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  option.click();
+}
+
+function waitForMatchingElement(
+  selector: string,
+  predicate: (candidate: HTMLElement) => boolean,
+): Promise<HTMLElement> {
+  const find = (): HTMLElement | undefined => [...document.querySelectorAll<HTMLElement>(selector)].find(predicate);
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      const candidate = find();
+      if (candidate === undefined) return;
+      observer.disconnect();
+      resolve(candidate);
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });

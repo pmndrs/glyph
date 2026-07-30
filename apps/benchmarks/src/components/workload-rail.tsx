@@ -18,6 +18,7 @@ import {
 } from '../benchmark/workloads';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
+import { FontFixtureButtons, type FontFixtureButtonOption } from './font-fixture-buttons';
 import { TechniqueSwitcher } from './technique-switcher';
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
@@ -74,7 +75,6 @@ function workloadRailDescription(workload: WorkloadOption, technique: RasterTech
 export function WorkloadRail({
   activeFontFixture,
   className = '',
-  fontFixture,
   location,
   showcaseFrame,
   showTechnique = true,
@@ -85,7 +85,6 @@ export function WorkloadRail({
 }: {
   readonly activeFontFixture: BenchmarkFontFixture;
   readonly className?: string;
-  readonly fontFixture: SelectableFontFixture;
   readonly location: HarnessLocation;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly showTechnique?: boolean;
@@ -111,9 +110,17 @@ export function WorkloadRail({
         : '16 px grayscale bitmap strike';
   const workloadScrollRef = useRef<HTMLDivElement>(null);
   const [scrollEdges, setScrollEdges] = useState<WorkloadScrollEdges>({ before: false, after: false });
+  const fixtureScrollRef = useRef<HTMLDivElement>(null);
+  const [fixtureScrollEdges, setFixtureScrollEdges] = useState<WorkloadScrollEdges>({ before: false, after: false });
   const syncScrollEdges = useCallback((element: HTMLDivElement) => {
     const next = workloadScrollEdges(element);
     setScrollEdges((current) => (current.before === next.before && current.after === next.after ? current : next));
+  }, []);
+  const syncFixtureScrollEdges = useCallback((element: HTMLDivElement) => {
+    const next = workloadScrollEdges(element);
+    setFixtureScrollEdges((current) =>
+      current.before === next.before && current.after === next.after ? current : next,
+    );
   }, []);
 
   useEffect(() => {
@@ -127,6 +134,45 @@ export function WorkloadRail({
     return () => observer.disconnect();
   }, [location.mode, syncScrollEdges]);
 
+  useEffect(() => {
+    const element = fixtureScrollRef.current;
+    if (element === null) return;
+    const observer = new ResizeObserver(() => syncFixtureScrollEdges(element));
+    observer.observe(element);
+    const content = element.firstElementChild;
+    if (content !== null) observer.observe(content);
+    syncFixtureScrollEdges(element);
+    return () => observer.disconnect();
+  }, [activeFontFixture, location.technique, location.workload, syncFixtureScrollEdges]);
+
+  const fixtureOptions: readonly FontFixtureButtonOption<BenchmarkFontFixture>[] =
+    location.workload === 'icon-grid'
+      ? [
+          {
+            id: ICON_GRID_FONT_FIXTURE,
+            label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE],
+            metadata: '1,402 packed solid icons',
+            dataAttribute: 'icon',
+          },
+        ]
+      : location.workload === 'zoom-text'
+        ? [
+            {
+              id: 'inter',
+              label: BENCHMARK_FONT_LABELS.inter,
+              metadata: 'Fixed multilingual zoom fixture',
+              dataAttribute: 'zoom',
+            },
+          ]
+        : location.workload === 'advanced-shaping'
+          ? ADVANCED_FONT_FIXTURES.map((fixture) => ({
+              id: fixture.id,
+              label: fixture.label,
+              metadata: `${fixture.metadata}${showcaseFrame.caseDefinition.fontFixture === fixture.id ? ' · recommended' : ''}`,
+            }))
+          : SELECTABLE_FONT_FIXTURES;
+  const fixtureReadOnly = location.workload === 'icon-grid' || location.workload === 'zoom-text';
+
   return (
     <aside className={`flex min-h-0 flex-col overflow-hidden border-r border-border bg-chrome ${className}`}>
       {showTechnique && (
@@ -135,110 +181,96 @@ export function WorkloadRail({
           <TechniqueSwitcher className="mt-2" technique={location.technique} onTechnique={onTechnique} />
         </div>
       )}
-      <p className={`eyebrow shrink-0 px-3 pb-2 ${showTechnique ? 'pt-5' : 'pt-3'}`}>
-        {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
-      </p>
-      <div className="relative min-h-0 flex-1">
-        <div
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-7 bg-gradient-to-b from-chrome to-transparent transition-opacity ${scrollEdges.before ? 'opacity-100' : 'opacity-0'}`}
-          data-testid="workload-scroll-start-fade"
-        />
-        <div
-          className="h-full overflow-y-auto overscroll-contain px-3 pb-3"
-          data-scroll-after={String(scrollEdges.after)}
-          data-scroll-before={String(scrollEdges.before)}
-          data-testid="workload-scroll"
-          ref={workloadScrollRef}
-          onScroll={(event) => syncScrollEdges(event.currentTarget)}
-        >
-          <nav className="grid gap-1">
-            {workloads.map((workload) => (
-              <button
-                className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-foreground hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
-                disabled={workload.techniques[location.technique].kind !== 'ready'}
-                key={workload.id}
-                type="button"
-                onClick={() => onLocation({ workload: workload.id })}
-                onFocus={() => {
-                  if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
-                }}
-                onPointerEnter={() => {
-                  if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
-                }}
-              >
-                <span
-                  className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-transparent'}`}
-                />
-                <span className="block text-xs">{workload.label}</span>
-                <span className="mt-1 block font-mono text-[8px] leading-relaxed text-muted">
-                  {workloadRailDescription(workload, location.technique)}
-                </span>
-              </button>
-            ))}
-          </nav>
+      <div className="flex min-h-0 flex-1 flex-col" data-testid="workload-fixture-region">
+        <p className={`eyebrow shrink-0 px-3 pb-2 ${showTechnique ? 'pt-5' : 'pt-3'}`}>
+          {location.mode === 'benchmark' ? 'Live workloads' : 'Conformance checks'}
+        </p>
+        <div className="relative min-h-0 flex-1">
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-7 bg-gradient-to-b from-chrome to-transparent transition-opacity ${scrollEdges.before ? 'opacity-100' : 'opacity-0'}`}
+            data-testid="workload-scroll-start-fade"
+          />
+          <div
+            className="h-full overflow-y-auto overscroll-contain px-3 pb-3"
+            data-scroll-after={String(scrollEdges.after)}
+            data-scroll-before={String(scrollEdges.before)}
+            data-testid="workload-scroll"
+            ref={workloadScrollRef}
+            onScroll={(event) => syncScrollEdges(event.currentTarget)}
+          >
+            <nav className="grid gap-1">
+              {workloads.map((workload) => (
+                <button
+                  className={`relative rounded-md px-4 py-3 text-left ${location.workload === workload.id ? 'bg-surface-active text-foreground' : 'text-foreground hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-40`}
+                  disabled={workload.techniques[location.technique].kind !== 'ready'}
+                  key={workload.id}
+                  type="button"
+                  onClick={() => onLocation({ workload: workload.id })}
+                  onFocus={() => {
+                    if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
+                  }}
+                  onPointerEnter={() => {
+                    if (isComparisonWorkload(workload.id)) void preloadComparisonWorkload();
+                  }}
+                >
+                  <span
+                    className={`absolute left-1.5 top-3 h-4 w-[3px] rounded-full ${location.workload === workload.id ? 'bg-accent' : 'bg-transparent'}`}
+                  />
+                  <span className="block text-xs">{workload.label}</span>
+                  <span className="mt-1 block font-mono text-[8px] leading-relaxed text-muted">
+                    {workloadRailDescription(workload, location.technique)}
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </div>
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 bg-gradient-to-t from-chrome to-transparent transition-opacity ${scrollEdges.after ? 'opacity-100' : 'opacity-0'}`}
+            data-testid="workload-scroll-end-fade"
+          />
         </div>
         <div
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 bg-gradient-to-t from-chrome to-transparent transition-opacity ${scrollEdges.after ? 'opacity-100' : 'opacity-0'}`}
-          data-testid="workload-scroll-end-fade"
-        />
-      </div>
-      <div
-        className="relative z-20 shrink-0 border-t border-border bg-chrome px-3 py-2.5"
-        data-testid="font-fixture-panel"
-      >
-        <p className="eyebrow mb-1.5">Font fixture</p>
-        {location.workload === 'icon-grid' ? (
-          <div
-            className="rounded-md border border-accent bg-surface-active px-2.5 py-1.5"
-            data-icon-font-fixture={ICON_GRID_FONT_FIXTURE}
-          >
-            <span className="block text-xs">{BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE]}</span>
-            <span className="mt-1 block font-mono text-[8px] text-dim">1,402 packed solid icons</span>
+          className="relative z-20 flex max-h-[50%] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border bg-chrome"
+          data-testid="font-fixture-panel"
+        >
+          <p className="eyebrow shrink-0 px-3 pb-1.5 pt-2.5">Font fixture</p>
+          <div className="relative min-h-0 flex-1">
+            <div
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-7 bg-gradient-to-b from-chrome to-transparent transition-opacity ${fixtureScrollEdges.before ? 'opacity-100' : 'opacity-0'}`}
+              data-testid="font-fixture-scroll-start-fade"
+            />
+            <div
+              className="max-h-full overflow-y-auto overscroll-contain px-3 pb-2.5"
+              data-scroll-after={String(fixtureScrollEdges.after)}
+              data-scroll-before={String(fixtureScrollEdges.before)}
+              data-testid="font-fixture-scroll"
+              ref={fixtureScrollRef}
+              onScroll={(event) => syncFixtureScrollEdges(event.currentTarget)}
+            >
+              <FontFixtureButtons
+                options={fixtureOptions}
+                readOnly={fixtureReadOnly}
+                value={displayedFontFixture}
+                onChange={(value) => {
+                  if (location.workload === 'advanced-shaping') {
+                    onAdvancedFontFixture(value);
+                  } else if (!fixtureReadOnly) {
+                    onFontFixture(selectableFontFixture(value));
+                  }
+                }}
+              />
+            </div>
+            <div
+              aria-hidden="true"
+              className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 bg-gradient-to-t from-chrome to-transparent transition-opacity ${fixtureScrollEdges.after ? 'opacity-100' : 'opacity-0'}`}
+              data-testid="font-fixture-scroll-end-fade"
+            />
           </div>
-        ) : location.workload === 'zoom-text' ? (
-          <div
-            className="rounded-md border border-accent bg-surface-active px-2.5 py-1.5"
-            data-zoom-font-fixture="inter"
-          >
-            <span className="block text-xs">{BENCHMARK_FONT_LABELS.inter}</span>
-            <span className="mt-1 block font-mono text-[8px] text-dim">Fixed multilingual zoom fixture</span>
-          </div>
-        ) : location.workload === 'advanced-shaping' ? (
-          <select
-            aria-label="Font fixture"
-            className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-accent"
-            value={activeFontFixture}
-            onChange={(event) => {
-              const fixture = ADVANCED_FONT_FIXTURES.find((candidate) => candidate.id === event.currentTarget.value);
-              if (fixture === undefined)
-                throw new TypeError(`Unknown advanced font fixture: ${event.currentTarget.value}`);
-              onAdvancedFontFixture(fixture.id);
-            }}
-          >
-            {ADVANCED_FONT_FIXTURES.map((fixture) => (
-              <option key={fixture.id} value={fixture.id}>
-                {fixture.label}
-                {showcaseFrame.caseDefinition.fontFixture === fixture.id ? ' · recommended' : ''}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            aria-label="Font fixture"
-            className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-accent"
-            value={fontFixture}
-            onChange={(event) => onFontFixture(selectableFontFixture(event.currentTarget.value))}
-          >
-            {SELECTABLE_FONT_FIXTURES.map((fixture) => (
-              <option key={fixture.id} value={fixture.id}>
-                {fixture.label}
-              </option>
-            ))}
-          </select>
-        )}
-        <p className="mt-1.5 font-mono text-[8px] leading-tight text-dim">{rasterDescription}</p>
+          <p className="shrink-0 px-3 pb-2.5 pt-1.5 font-mono text-[8px] leading-tight text-dim">{rasterDescription}</p>
+        </div>
       </div>
     </aside>
   );

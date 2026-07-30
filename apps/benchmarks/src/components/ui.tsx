@@ -7,6 +7,7 @@ import type {
   TextareaHTMLAttributes,
 } from 'react';
 import { logarithmicRangePosition, logarithmicRangeValue } from './range-values';
+import { CustomSelect, type CustomSelectOption } from './custom-select';
 
 function classes(...values: readonly (string | false | undefined)[]): string {
   return values.filter(Boolean).join(' ');
@@ -136,26 +137,20 @@ function finiteNumber(value: unknown, fallback: number): number {
 
 export function SelectField({
   label,
-  children,
+  options,
   value,
   onChange,
 }: {
   readonly label: string;
-  readonly children: ReactNode;
+  readonly options: readonly CustomSelectOption[];
   readonly value: string;
   readonly onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid min-w-0 gap-1.5">
+    <div className="grid min-w-0 gap-1.5">
       <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-dim">{label}</span>
-      <select
-        className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-accent"
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      >
-        {children}
-      </select>
-    </label>
+      <CustomSelect ariaLabel={label} options={options} value={value} onChange={onChange} />
+    </div>
   );
 }
 

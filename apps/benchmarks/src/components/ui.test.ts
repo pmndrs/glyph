@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { logarithmicRangePosition, logarithmicRangeValue } from './range-values';
-import { Field } from './ui';
+import { Field, SelectField } from './ui';
 
 describe('Field', () => {
   it('gives range controls a full-width unpadded travel surface', () => {
@@ -59,5 +59,26 @@ describe('Field', () => {
 
     expect(markup).not.toContain('range-control');
     expect(markup).toContain('px-2.5');
+  });
+});
+
+describe('SelectField', () => {
+  it('renders the shared custom listbox trigger instead of a native select', () => {
+    const markup = renderToStaticMarkup(
+      createElement(SelectField, {
+        label: 'Case',
+        options: [
+          { label: 'Latin ligatures', value: 'latin' },
+          { label: 'Arabic joining', value: 'arabic' },
+        ],
+        value: 'latin',
+        onChange: () => undefined,
+      }),
+    );
+
+    expect(markup).toContain('data-custom-select="Case"');
+    expect(markup).toContain('aria-haspopup="listbox"');
+    expect(markup).toContain('Latin ligatures');
+    expect(markup).not.toContain('<select');
   });
 });

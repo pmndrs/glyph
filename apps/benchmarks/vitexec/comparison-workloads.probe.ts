@@ -297,6 +297,38 @@ async function verifyIconVirtualization(viewport: HTMLElement, technique: Raster
   await waitForAttribute(viewport, 'data-icon-scroll-y', '0');
 }
 
+await clickButton('Advanced shaping', false);
+await waitForElement('[data-font-fixture-option="noto-sans-cjk-showcase"]');
+await nextPaint();
+const fixturePanel = document.querySelector<HTMLElement>('[data-testid="font-fixture-panel"]');
+const fixtureRegion = document.querySelector<HTMLElement>('[data-testid="workload-fixture-region"]');
+const fixtureScroll = document.querySelector<HTMLElement>('[data-testid="font-fixture-scroll"]');
+if (fixturePanel === null || fixtureRegion === null || fixtureScroll === null) {
+  throw new Error('Font-fixture rail sizing boundaries are unavailable');
+}
+if (fixturePanel.querySelectorAll('[data-font-fixture-option]').length !== 7) {
+  throw new Error('Advanced shaping did not expose all seven font-fixture buttons');
+}
+if (fixturePanel.querySelector('select') !== null) {
+  throw new Error('Main font fixtures regressed to a native select');
+}
+const fixturePanelRatio = fixturePanel.getBoundingClientRect().height / fixtureRegion.getBoundingClientRect().height;
+if (fixturePanelRatio > 0.505 || fixtureScroll.scrollHeight <= fixtureScroll.clientHeight) {
+  throw new Error(`Advanced font fixtures exceeded their half-region scroll boundary: ${String(fixturePanelRatio)}`);
+}
+await clickButton('Icon grid', false);
+await waitForElement('[data-icon-font-fixture="font-awesome-free-6.7.2"]');
+await nextPaint();
+const singleFixtureRatio = fixturePanel.getBoundingClientRect().height / fixtureRegion.getBoundingClientRect().height;
+if (
+  fixturePanel.querySelectorAll('[data-font-fixture-option]').length !== 1 ||
+  singleFixtureRatio >= 0.3 ||
+  fixtureScroll.scrollHeight > fixtureScroll.clientHeight
+) {
+  throw new Error(`The single icon fixture did not retain intrinsic panel height: ${String(singleFixtureRatio)}`);
+}
+console.log('font-fixture-rail-ready', JSON.stringify({ fixturePanelRatio, singleFixtureRatio }));
+
 await clickButton('MSDF', true);
 await clickButton('Paragraph stress', false);
 await waitForReadyViewport('mtsdf', 'paragraph-stress');
@@ -346,6 +378,26 @@ if (document.querySelector('[data-testid="workload-scroll"]') !== null) {
 if (document.querySelector('[data-testid="font-fixture-panel"]') !== null) {
   throw new Error('Zen route retained the Main font-fixture panel');
 }
+if (document.querySelector('.zen-layout select') !== null) {
+  throw new Error('Zen route retained a native select');
+}
+for (const label of ['Live workload', 'Font fixture']) {
+  const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"][aria-haspopup="listbox"]`);
+  if (trigger === null) throw new Error(`${label} custom listbox trigger is unavailable`);
+  trigger.click();
+  await waitForElement(`[role="listbox"][aria-label="${label}"]`);
+  if (document.querySelectorAll(`[role="listbox"][aria-label="${label}"] [role="option"]`).length === 0) {
+    throw new Error(`${label} custom listbox has no options`);
+  }
+  trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+  await nextPaint();
+  if (document.querySelector(`[role="listbox"][aria-label="${label}"]`) !== null) {
+    throw new Error(`${label} custom listbox did not close on Escape`);
+  }
+  if (document.querySelector('[data-testid="zen-layout"]') === null) {
+    throw new Error(`${label} listbox Escape incorrectly exited Zen`);
+  }
+}
 for (const technique of ['slug', 'bitmap', 'mtsdf'] as const) {
   await clickButton(techniqueLabel(technique), true);
   await waitForReadyViewport(technique, 'paint-effects');
@@ -354,6 +406,10 @@ for (const technique of ['slug', 'bitmap', 'mtsdf'] as const) {
 console.log('zen-exclusive-renderer-ready');
 
 console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 7 }));
+
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}
 
 function assertSingleConfiguredRenderer(technique: RasterTechnique, workload: string): void {
   const activeCount = Number(document.documentElement.dataset.activeConfiguredRenderers);
@@ -523,6 +579,13 @@ function setCheckbox(label: string, checked: boolean): void {
 }
 
 function selectFontFixture(value: string): void {
+  const button = [...document.querySelectorAll<HTMLButtonElement>(`button[data-font-fixture-option="${value}"]`)].find(
+    (candidate) => candidate.offsetParent !== null && !candidate.disabled,
+  );
+  if (button !== undefined) {
+    button.click();
+    return;
+  }
   const candidates = [...document.querySelectorAll<HTMLSelectElement>('select')].filter(
     (candidate) =>
       candidate.labels?.[0]?.textContent?.includes('Font fixture') === true &&

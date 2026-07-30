@@ -11,15 +11,12 @@ const [{ ADVANCED_SHAPING_CASES }, { environmentResource }] = await Promise.all(
 (await waitForEnabledButton('Advanced shaping', true)).click();
 console.log('advanced-shaping-performance-start');
 
-const caseSelector = await waitForSelect('Case');
-const setSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-if (setSelectValue === undefined) throw new Error('Native select value setter is unavailable');
+const caseSelector = await waitForCustomSelect('Case');
 
 const cases: Array<Record<string, number | string>> = [];
 for (const definition of ADVANCED_SHAPING_CASES) {
   console.log('advanced-shaping-performance-select', definition.id);
-  setSelectValue.call(caseSelector, definition.id);
-  caseSelector.dispatchEvent(new Event('change', { bubbles: true }));
+  await selectCustomOption(caseSelector, definition.label);
   const authoredText = definition.showcaseRevealUnits.join('');
   const viewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
@@ -98,14 +95,24 @@ function waitForEnabledButton(label: string, includes = false): Promise<HTMLButt
   return observeUntil(document.documentElement, find);
 }
 
-function waitForSelect(label: string): Promise<HTMLSelectElement> {
-  const find = (): HTMLSelectElement | undefined =>
-    [...document.querySelectorAll<HTMLSelectElement>('select')].find(
-      (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
+function waitForCustomSelect(label: string): Promise<HTMLButtonElement> {
+  const find = (): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find(
+      (candidate) => candidate.getAttribute('aria-label') === label,
     );
   const current = find();
   if (current !== undefined) return Promise.resolve(current);
   return observeUntil(document.documentElement, find);
+}
+
+async function selectCustomOption(control: HTMLButtonElement, label: string): Promise<void> {
+  control.click();
+  const option = await observeUntil(document.documentElement, () =>
+    [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')].find(
+      (candidate) => candidate.textContent?.trim() === label,
+    ),
+  );
+  option.click();
 }
 
 function waitForLiveViewportState(attributes: Readonly<Record<string, string>>): Promise<HTMLElement> {
