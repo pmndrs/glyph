@@ -604,6 +604,52 @@ export async function createComparisonWorkloadPreview(options: {
         committedContentWidth = nextContentWidth;
         return;
       }
+      if (contentWidthChanged) {
+        const readyStarted = performance.now();
+        if (next.workload === 'dynamic-layout' && entries.some(({ reflowPending }) => reflowPending === true)) {
+          await Promise.all(entries.map(({ text }) => text.ready));
+        }
+        const widths =
+          next.workload === 'dynamic-layout'
+            ? dynamicLayoutWidths(next, width, performance.now() - animationEpoch)
+            : nextContentWidth === undefined
+              ? []
+              : [nextContentWidth];
+        const retainedWidths = next.workload === 'dynamic-layout' ? widths : entries.map(() => widths[0]!);
+        if (next.workload === 'dynamic-layout') {
+          for (const [index, entry] of entries.entries()) {
+            entry.reflowPending = true;
+            entry.lastWidth = retainedWidths[index]!;
+            if (entry.widthUpdate === undefined) {
+              throw new Error('dynamic layout entry is missing its retained width update');
+            }
+            entry.widthUpdate.width = retainedWidths[index]!;
+          }
+        }
+        const scheduledAt = performance.now();
+        try {
+          await applyRetainedTextWidths(
+            entries.map(({ text }) => text),
+            retainedWidths,
+          );
+        } finally {
+          for (const entry of entries) entry.reflowPending = false;
+        }
+        const readyAt = performance.now();
+        const sceneStartedAt = performance.now();
+        layoutEntries(entries, next, width, height);
+        const finishedAt = performance.now();
+        textReadyMs = finishedAt - readyStarted;
+        textUpdateTelemetry.record({
+          scheduleMs: scheduledAt - readyStarted,
+          readyMs: readyAt - scheduledAt,
+          sceneMs: finishedAt - sceneStartedAt,
+          totalMs: finishedAt - readyStarted,
+        });
+        recordReflow(finishedAt - readyStarted);
+      } else if (viewportChanged) {
+        layoutEntries(entries, next, width, height);
+      }
       configuration = next;
       committedContentWidth = nextContentWidth;
       revision += 1;
@@ -1456,17 +1502,28 @@ function applyRetainedConfiguration(
 export function comparisonWorkloadUpdateKind(
   previous: ComparisonWorkloadConfiguration,
   next: ComparisonWorkloadConfiguration,
-  contentWidthChanged = false,
+  _contentWidthChanged = false,
 ): 'rebuild' | 'retained' {
   const paragraphVolumeChanged = next.workload === 'paragraph-stress' && previous.amount !== next.amount;
   const fontSizeRebuild =
     previous.fontSize !== next.fontSize && next.workload !== 'icon-grid' && next.workload !== 'zoom-text';
-  return contentWidthChanged ||
-    fontSizeRebuild ||
-    previous.layoutWidthRatio !== next.layoutWidthRatio ||
-    paragraphVolumeChanged
-    ? 'rebuild'
-    : 'retained';
+  return fontSizeRebuild || paragraphVolumeChanged ? 'rebuild' : 'retained';
+}
+
+interface RetainedWidthText {
+  readonly ready: Promise<void>;
+  setProperties(properties: { readonly width: number }): void;
+}
+
+export async function applyRetainedTextWidths(
+  texts: readonly RetainedWidthText[],
+  widths: ArrayLike<number>,
+): Promise<void> {
+  if (texts.length !== widths.length) {
+    throw new RangeError('retained text widths must match the text entry count');
+  }
+  for (const [index, text] of texts.entries()) text.setProperties({ width: widths[index]! });
+  await Promise.all(texts.map((text) => text.ready));
 }
 
 export function comparisonWorkloadContentWidth(

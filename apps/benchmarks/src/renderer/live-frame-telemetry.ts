@@ -138,9 +138,9 @@ export function createLiveFrameTelemetry(options?: {
       }
       assertGpuFrameId(frameId);
       const historyIndex = frameHistoryIndex(frameIds, frameId);
-      if (historyIndex === undefined) return latestSnapshot;
+      if (historyIndex === undefined) return undefined;
       submitHistory[historyIndex] = durationMs;
-      if (reportFrames[historyIndex] !== 1) return latestSnapshot;
+      if (reportFrames[historyIndex] !== 1) return undefined;
       const refreshRateHz = explicitRefreshRateHz ?? (observedRefreshRateHz || 60);
       latestSnapshot = snapshot({
         cursor: historyCursor,

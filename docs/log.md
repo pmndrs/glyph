@@ -2,6 +2,8 @@
 
 ## 2026-07-30
 
+- **Benchmark runtime state** — Moved live controls and React-facing telemetry from the root harness into coherent Koota world traits while keeping Koota app-local. A dedicated world-instance module preserves identity across component Fast Refresh, the prop-free application child no longer subscribes to hot state, and typed telemetry histories remain renderer-owned while React summaries publish four times per second.
+- **Retained paragraph width** — Changed compatible layout-width and viewport-width updates from complete scene/Text replacement to retained `Text.setProperties({ width })`, latest-value queue coalescing, and committed-entry repositioning. The same six-second Paragraph Stress sweep improved from 26.82 to 113.97 RAF FPS, reduced p95 frame time from 43.1 to 9.8 milliseconds, and produced no long tasks in the uninstrumented post-change run.
 - **Benchmark selection controls** — Restored button-based font fixtures in Main and compact controls, kept their rail content-height until a half-region cap requires contained scrolling, and replaced Zen's native workload/font selects with compact application-owned listbox popovers shared with the controls panel.
 - **Benchmark isolation and allocation hardening** — Made Zen an exclusive root presentation with no hidden Main or Conformance subtree, added one-renderer lifecycle diagnostics and rapid-switch coverage, removed duplicate React live-stat ownership, eliminated common telemetry ring and empty-poll allocations, retained Paint & Effects source spans and dynamic-workload scratch storage, reused `Text` glyph-paint topology, added an MTSDF color-only update path, and made renderer teardown await outstanding WebGPU timestamps.
 

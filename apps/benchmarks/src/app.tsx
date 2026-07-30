@@ -11,6 +11,7 @@ import {
   useState,
   useSyncExternalStore,
   useTransition,
+  type ComponentProps,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -28,6 +29,22 @@ import {
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts';
 import { environmentResource } from './benchmark/environment';
 import { runRegisteredBenchmark } from './benchmark/execution';
+import {
+  RuntimeAnimationControls,
+  defaultRuntimeFontSizeForWorkload,
+  RuntimeLayoutControls,
+  RuntimePaintControls,
+  RuntimeTelemetry,
+  RuntimeViewControls,
+  useRuntimeAnimationControls,
+  useRuntimeLayoutControls,
+  useRuntimePaintControls,
+  useRuntimeTelemetry,
+  useRuntimeViewControls,
+  useRuntimeWorld,
+  type RuntimeLiveStats,
+} from './benchmark/runtime-world';
+import { RuntimeWorldProvider } from './benchmark/runtime-world-provider';
 import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result';
 import { createPayloadSummary } from './benchmark/payload-summary';
 import {
@@ -93,7 +110,7 @@ import type { SourceOutlineFidelityCapture } from './renderer/source-outline-ref
 import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance';
 import type { BakeProgress } from '@pmndrs/text';
 
-type LiveTextStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
+type LiveTextStats = RuntimeLiveStats;
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 
@@ -183,18 +200,7 @@ function workloadAmountLabel(workload: string, amount: number): string | undefin
 }
 
 function defaultFontSizeForWorkload(workload: string): number {
-  switch (workload) {
-    case 'icon-grid':
-      return 48;
-    case 'off-axis-3d':
-      return 64;
-    case 'paint-effects':
-      return 40;
-    case 'dynamic-layout':
-      return 24;
-    default:
-      return 16;
-  }
+  return defaultRuntimeFontSizeForWorkload(workload);
 }
 
 function liveWorkloadSceneDescription(
@@ -253,11 +259,20 @@ export function App() {
 }
 
 function Harness() {
+  return (
+    <RuntimeWorldProvider>
+      <HarnessApplication />
+    </RuntimeWorldProvider>
+  );
+}
+
+function HarnessApplication() {
   return useHarnessController();
 }
 
 function useHarnessController(): ReactNode {
   const environment = use(environmentResource());
+  const runtimeWorld = useRuntimeWorld();
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, () => true);
   const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false);
   const [location, setLocationState] = useState(() => {
@@ -276,22 +291,11 @@ function useHarnessController(): ReactNode {
   });
   const [summary, setSummary] = useState<BenchmarkSummary>();
   const [event, setEvent] = useState<RunnerEvent>();
-  const [liveStats, setLiveStats] = useState<LiveTextStats>();
   const [liveCapture, setLiveCapture] = useState<LiveBenchmarkCapture>();
   const [error, setError] = useState<string>();
   const [dpr, setDpr] = useState<1 | 2>(location.dpr);
   const [samples, setSamples] = useState(3);
   const [warmup, setWarmup] = useState(1);
-  const [showGrid, setShowGrid] = useState(true);
-  const [showLayoutBounds, setShowLayoutBounds] = useState(true);
-  const [fontSize, setFontSize] = useState(() => defaultFontSizeForWorkload(location.workload));
-  const [layoutWidthPercent, setLayoutWidthPercent] = useState(82);
-  const [workloadAmount, setWorkloadAmount] = useState(50);
-  const [animationEnabled, setAnimationEnabled] = useState(true);
-  const [animationSpeed, setAnimationSpeed] = useState(50);
-  const [paintOpacityPercent, setPaintOpacityPercent] = useState(100);
-  const [paintShadowEnabled, setPaintShadowEnabled] = useState(true);
-  const [paintStrokePercent, setPaintStrokePercent] = useState(50);
   const [conformanceView, setConformanceView] = useState(INITIAL_CONFORMANCE_VIEW);
   const [comparisonText, setComparisonText] = useState(() => rasterConformanceSpecimen(location.fontFixture).text);
   const [showcaseState, setShowcaseState] = useState(initialAdvancedShapingState);
@@ -322,7 +326,7 @@ function useHarnessController(): ReactNode {
       setActivityWorkloads((current) => ({ ...current, [value.mode]: value.workload }));
     }
     if (next.workload !== undefined && next.workload !== location.workload) {
-      setFontSize(defaultFontSizeForWorkload(next.workload));
+      runtimeWorld.set(RuntimeLayoutControls, { fontSize: defaultFontSizeForWorkload(next.workload) });
     }
     const replacesLiveSurface =
       next.mode !== undefined ||
@@ -331,7 +335,7 @@ function useHarnessController(): ReactNode {
       next.delivery !== undefined ||
       next.dpr !== undefined ||
       next.workload !== undefined;
-    if (replacesLiveSurface) setLiveStats(undefined);
+    if (replacesLiveSurface) runtimeWorld.set(RuntimeTelemetry, { stats: undefined });
     if (replacesLiveSurface || next.fontFixture !== undefined) {
       conformanceRunRevision.current += 1;
       setSummary(undefined);
@@ -426,17 +430,18 @@ function useHarnessController(): ReactNode {
   }
 
   function captureWindow(): void {
+    const liveStats = runtimeWorld.get(RuntimeTelemetry)?.stats;
     if (liveStats === undefined) return;
-    if (showGrid || liveStats.showGrid) {
+    if (runtimeWorld.get(RuntimeViewControls)?.showGrid || liveStats.showGrid) {
       reportCaptureRequested.current = true;
-      setShowGrid(false);
+      runtimeWorld.set(RuntimeViewControls, { showGrid: false });
       return;
     }
     completeLiveCapture(liveStats);
   }
 
   function publishLiveStats(stats: LiveTextStats): void {
-    setLiveStats(stats);
+    runtimeWorld.set(RuntimeTelemetry, { stats });
     if (!reportCaptureRequested.current || stats.showGrid) return;
     reportCaptureRequested.current = false;
     completeLiveCapture(stats);
@@ -479,7 +484,7 @@ function useHarnessController(): ReactNode {
   }, [location.mode, location.workload, showcaseState.editedText, showcaseState.playing]);
 
   const controls = (
-    <Controls
+    <RuntimeControls
       minimal={zen}
       backend={location.backend}
       delivery={location.delivery}
@@ -487,24 +492,13 @@ function useHarnessController(): ReactNode {
       conformanceView={conformanceView}
       comparisonText={comparisonText}
       fontFixture={activeFontFixture}
-      liveStats={liveStats}
       mode={location.mode}
       technique={location.technique}
       workload={location.workload}
       showcaseFrame={showcaseFrame}
       showcaseState={showcaseState}
-      fontSize={fontSize}
-      layoutWidthPercent={layoutWidthPercent}
-      workloadAmount={workloadAmount}
-      animationEnabled={animationEnabled}
-      animationSpeed={animationSpeed}
-      paintOpacityPercent={paintOpacityPercent}
-      paintShadowEnabled={paintShadowEnabled}
-      paintStrokePercent={paintStrokePercent}
       selectedFontFixture={fontFixture}
       samples={samples}
-      showGrid={showGrid}
-      showLayoutBounds={showLayoutBounds}
       warmup={warmup}
       webgpu={environment.webgpu}
       onBackend={(backend) => setLocation({ backend })}
@@ -517,63 +511,21 @@ function useHarnessController(): ReactNode {
       onConformanceReset={() => setConformanceView(INITIAL_CONFORMANCE_VIEW)}
       onConformanceZoom={(zoom) => setConformanceView((view) => ({ ...view, zoom }))}
       onComparisonText={setComparisonText}
-      onFontSize={(value) => {
-        setFontSize(value);
-        invalidateLiveCapture();
-      }}
-      onLayoutWidthPercent={(value) => {
-        setLayoutWidthPercent(value);
-        invalidateLiveCapture();
-      }}
-      onWorkloadAmount={(value) => {
-        setWorkloadAmount(value);
-        invalidateLiveCapture();
-      }}
-      onAnimationEnabled={(value) => {
-        setAnimationEnabled(value);
-        invalidateLiveCapture();
-      }}
-      onAnimationSpeed={(value) => {
-        setAnimationSpeed(value);
-        invalidateLiveCapture();
-      }}
-      onPaintOpacityPercent={(value) => {
-        setPaintOpacityPercent(value);
-        invalidateLiveCapture();
-      }}
-      onPaintShadowEnabled={(value) => {
-        setPaintShadowEnabled(value);
-        invalidateLiveCapture();
-      }}
-      onPaintStrokePercent={(value) => {
-        setPaintStrokePercent(value);
-        invalidateLiveCapture();
-      }}
+      onRuntimeControl={invalidateLiveCapture}
       onSelectedFontFixture={(value) => {
         setLocation({ fontFixture: value });
       }}
       onSamples={setSamples}
       onShowcase={dispatchShowcase}
-      onShowGrid={(value) => {
+      onBeforeShowGrid={() => {
         reportCaptureRequested.current = false;
-        setShowGrid(value);
-        invalidateLiveCapture();
-      }}
-      onShowLayoutBounds={(value) => {
-        setShowLayoutBounds(value);
-        invalidateLiveCapture();
       }}
       onWarmup={setWarmup}
     />
   );
 
   const liveTechniqueComparison = location.mode === 'conformance' && location.workload === 'mtsdf-slug-compare';
-  const actionReady =
-    available &&
-    backendAvailable &&
-    !isPending &&
-    !liveTechniqueComparison &&
-    (location.mode === 'conformance' || liveStats);
+  const actionEligible = available && backendAvailable && !isPending && !liveTechniqueComparison;
 
   const scene = (
     <Scene
@@ -584,21 +536,10 @@ function useHarnessController(): ReactNode {
       comparisonText={comparisonText}
       error={error}
       event={event}
-      grid={showGrid}
       liveCapture={liveCapture}
-      liveStats={liveStats}
       location={location}
       presentation={zen ? 'zen' : 'main'}
       activityWorkloads={activityWorkloads}
-      fontSize={fontSize}
-      layoutWidthPercent={layoutWidthPercent}
-      workloadAmount={workloadAmount}
-      animationEnabled={animationEnabled}
-      animationSpeed={animationSpeed}
-      paintOpacityPercent={paintOpacityPercent}
-      paintShadowEnabled={paintShadowEnabled}
-      paintStrokePercent={paintStrokePercent}
-      showLayoutBounds={showLayoutBounds}
       summary={summary}
       showcaseFrame={showcaseFrame}
       onConformancePan={(deltaXPercent, deltaYPercent) =>
@@ -615,14 +556,13 @@ function useHarnessController(): ReactNode {
 
   return (
     <HarnessLayout
-      actionReady={Boolean(actionReady)}
+      actionEligible={actionEligible}
       activeFontFixture={activeFontFixture}
       controls={controls}
       desktop={desktop}
       fontNoticesOpen={fontNoticesOpen}
       isPending={isPending}
       liveCapture={liveCapture}
-      liveStats={liveStats}
       liveTechniqueComparison={liveTechniqueComparison}
       location={location}
       phone={phone}
@@ -645,15 +585,88 @@ function useHarnessController(): ReactNode {
   );
 }
 
+type RuntimeControlsProps = Omit<
+  ComponentProps<typeof Controls>,
+  | 'animationEnabled'
+  | 'animationSpeed'
+  | 'fontSize'
+  | 'layoutWidthPercent'
+  | 'liveStats'
+  | 'onAnimationEnabled'
+  | 'onAnimationSpeed'
+  | 'onFontSize'
+  | 'onLayoutWidthPercent'
+  | 'onPaintOpacityPercent'
+  | 'onPaintShadowEnabled'
+  | 'onPaintStrokePercent'
+  | 'onShowGrid'
+  | 'onShowLayoutBounds'
+  | 'onWorkloadAmount'
+  | 'paintOpacityPercent'
+  | 'paintShadowEnabled'
+  | 'paintStrokePercent'
+  | 'showGrid'
+  | 'showLayoutBounds'
+  | 'workloadAmount'
+> & {
+  readonly onBeforeShowGrid: () => void;
+  readonly onRuntimeControl: () => void;
+};
+
+function RuntimeControls({ onBeforeShowGrid, onRuntimeControl, ...props }: RuntimeControlsProps) {
+  const world = useRuntimeWorld();
+  const view = useRuntimeViewControls();
+  const layout = useRuntimeLayoutControls();
+  const animation = useRuntimeAnimationControls();
+  const paint = useRuntimePaintControls();
+  const { stats: liveStats } = useRuntimeTelemetry();
+  const changed = (change: () => void): void => {
+    change();
+    onRuntimeControl();
+  };
+  return (
+    <Controls
+      {...props}
+      {...view}
+      {...layout}
+      {...animation}
+      {...paint}
+      liveStats={liveStats}
+      onAnimationEnabled={(animationEnabled) =>
+        changed(() => world.set(RuntimeAnimationControls, { animationEnabled }))
+      }
+      onAnimationSpeed={(animationSpeed) => changed(() => world.set(RuntimeAnimationControls, { animationSpeed }))}
+      onFontSize={(fontSize) => changed(() => world.set(RuntimeLayoutControls, { fontSize }))}
+      onLayoutWidthPercent={(layoutWidthPercent) =>
+        changed(() => world.set(RuntimeLayoutControls, { layoutWidthPercent }))
+      }
+      onPaintOpacityPercent={(paintOpacityPercent) =>
+        changed(() => world.set(RuntimePaintControls, { paintOpacityPercent }))
+      }
+      onPaintShadowEnabled={(paintShadowEnabled) =>
+        changed(() => world.set(RuntimePaintControls, { paintShadowEnabled }))
+      }
+      onPaintStrokePercent={(paintStrokePercent) =>
+        changed(() => world.set(RuntimePaintControls, { paintStrokePercent }))
+      }
+      onShowGrid={(showGrid) => {
+        onBeforeShowGrid();
+        changed(() => world.set(RuntimeViewControls, { showGrid }));
+      }}
+      onShowLayoutBounds={(showLayoutBounds) => changed(() => world.set(RuntimeViewControls, { showLayoutBounds }))}
+      onWorkloadAmount={(workloadAmount) => changed(() => world.set(RuntimeLayoutControls, { workloadAmount }))}
+    />
+  );
+}
+
 function HarnessLayout({
-  actionReady,
+  actionEligible,
   activeFontFixture,
   controls,
   desktop,
   fontNoticesOpen,
   isPending,
   liveCapture,
-  liveStats,
   liveTechniqueComparison,
   location,
   phone,
@@ -670,14 +683,13 @@ function HarnessLayout({
   onTechnique,
   onWorkloadPanelOpen,
 }: {
-  readonly actionReady: boolean;
+  readonly actionEligible: boolean;
   readonly activeFontFixture: BenchmarkFontFixture;
   readonly controls: ReactNode;
   readonly desktop: boolean;
   readonly fontNoticesOpen: boolean;
   readonly isPending: boolean;
   readonly liveCapture: LiveBenchmarkCapture | undefined;
-  readonly liveStats: LiveTextStats | undefined;
   readonly liveTechniqueComparison: boolean;
   readonly location: HarnessLocation;
   readonly phone: boolean;
@@ -694,6 +706,8 @@ function HarnessLayout({
   readonly onTechnique: (technique: RasterTechnique) => void;
   readonly onWorkloadPanelOpen: (open: boolean | ((current: boolean) => boolean)) => void;
 }) {
+  const { stats: liveStats } = useRuntimeTelemetry();
+  const actionReady = actionEligible && (location.mode === 'conformance' || liveStats !== undefined);
   const zen = location.layout === 'zen' && location.mode === 'benchmark';
   if (zen) {
     const zenFontOptions =
@@ -912,24 +926,13 @@ function defaultDeviceDpr(): 1 | 2 {
 function Scene({
   activeFontFixture,
   activityWorkloads,
-  animationEnabled,
-  animationSpeed,
   comparisonText,
   conformanceView,
   dpr,
   error,
   event,
   fontFixture,
-  fontSize,
-  grid,
-  layoutWidthPercent,
-  paintOpacityPercent,
-  paintShadowEnabled,
-  paintStrokePercent,
-  showLayoutBounds,
-  workloadAmount,
   liveCapture,
-  liveStats,
   location,
   presentation,
   showcaseFrame,
@@ -940,24 +943,13 @@ function Scene({
 }: {
   readonly activeFontFixture: BenchmarkFontFixture;
   readonly activityWorkloads: ActivityWorkloads;
-  readonly animationEnabled: boolean;
-  readonly animationSpeed: number;
   readonly comparisonText: string;
   readonly conformanceView: ConformanceView;
   readonly dpr: 1 | 2;
   readonly error: string | undefined;
   readonly event: RunnerEvent | undefined;
   readonly fontFixture: SelectableFontFixture;
-  readonly fontSize: number;
-  readonly grid: boolean;
-  readonly layoutWidthPercent: number;
-  readonly paintOpacityPercent: number;
-  readonly paintShadowEnabled: boolean;
-  readonly paintStrokePercent: number;
-  readonly showLayoutBounds: boolean;
-  readonly workloadAmount: number;
   readonly liveCapture: LiveBenchmarkCapture | undefined;
-  readonly liveStats: LiveTextStats | undefined;
   readonly location: HarnessLocation;
   readonly presentation: 'main' | 'zen';
   readonly showcaseFrame: AdvancedShapingFrame;
@@ -966,6 +958,11 @@ function Scene({
   readonly onConformanceZoom: (zoom: number) => void;
   readonly onLiveStats: (stats: LiveTextStats) => void;
 }) {
+  const { showGrid: grid, showLayoutBounds } = useRuntimeViewControls();
+  const { fontSize, layoutWidthPercent, workloadAmount } = useRuntimeLayoutControls();
+  const { animationEnabled, animationSpeed } = useRuntimeAnimationControls();
+  const { paintOpacityPercent, paintShadowEnabled, paintStrokePercent } = useRuntimePaintControls();
+  const { stats: liveStats } = useRuntimeTelemetry();
   const workload = workloadById(location.mode, location.workload);
   const benchmarkWorkload = workloadById('benchmark', activityWorkloads.benchmark);
   const benchmarkStatus = benchmarkWorkload.techniques[location.technique];

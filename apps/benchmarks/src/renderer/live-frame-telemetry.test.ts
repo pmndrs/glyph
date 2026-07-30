@@ -8,7 +8,7 @@ describe('live frame telemetry', () => {
     const first = recordCpuFrame(telemetry, 1_000, 0.25);
     const secondFrameId = telemetry.beginFrame(1_016);
     expect(telemetry.gpuTimingSupported).toBe(true);
-    expect(telemetry.endFrame(secondFrameId, 0.5)).toBe(first);
+    expect(telemetry.endFrame(secondFrameId, 0.5)).toBeUndefined();
     const thirdFrameId = telemetry.beginFrame(1_032);
     telemetry.endFrame(thirdFrameId, 0.75);
 
@@ -59,15 +59,15 @@ describe('live frame telemetry', () => {
   it('forgets delayed measurements after their frame slot is overwritten', () => {
     const telemetry = createLiveFrameTelemetry({ capacity: 2, reportIntervalMs: 100 });
     const first = telemetry.beginFrame(1_000);
-    telemetry.endFrame(first, 0.25);
+    const snapshot = telemetry.endFrame(first, 0.25);
     const second = telemetry.beginFrame(1_016);
     telemetry.endFrame(second, 0.5);
     const third = telemetry.beginFrame(1_032);
-    const current = telemetry.endFrame(third, 0.75);
+    telemetry.endFrame(third, 0.75);
 
     expect(telemetry.recordGpu(first, 1)).toBe(false);
     expect(telemetry.recordGpu(second, 1.25)).toBe(true);
-    expect(current?.submitHistoryCursor).toEqual({ length: 2, nextIndex: 1 });
+    expect(snapshot?.submitHistoryCursor).toEqual({ length: 2, nextIndex: 1 });
   });
 
   it('keeps GPU history empty when timing is unsupported', () => {
@@ -92,8 +92,8 @@ describe('live frame telemetry', () => {
     const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 100 });
     const first = recordCpuFrame(telemetry, 1_000, 0.25);
     const secondToken = telemetry.beginFrame(1_050);
-    const sameSnapshot = telemetry.endFrame(secondToken, 0.5);
-    expect(sameSnapshot).toBe(first);
+    const withheldSnapshot = telemetry.endFrame(secondToken, 0.5);
+    expect(withheldSnapshot).toBeUndefined();
     expect(first.submitHistoryCursor.length).toBe(2);
 
     const thirdToken = telemetry.beginFrame(1_100);

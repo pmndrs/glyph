@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyRetainedTextWidths,
   comparisonWorkloadContentWidth,
   comparisonWorkloadUpdateKind,
   dynamicLayoutWidths,
@@ -42,7 +43,9 @@ describe('comparison workload updates', () => {
 
   it('keeps pan-only and specialized-fit workloads independent of content width', () => {
     for (const workload of ['text-ladder', 'icon-grid', 'zoom-text'] as const) {
-      expect(comparisonWorkloadContentWidth({ ...baseConfiguration, workload }, 1_280)).toBeUndefined();
+      const configuration = { ...baseConfiguration, workload };
+      expect(comparisonWorkloadContentWidth(configuration, 1_280)).toBeUndefined();
+      expect(comparisonWorkloadUpdateKind(configuration, configuration, true)).toBe('retained');
     }
   });
 
@@ -61,15 +64,38 @@ describe('comparison workload updates', () => {
     }
   });
 
-  it('rebuilds only for dimensions that change text layout', () => {
+  it('retains width-only layout changes and rebuilds ordinary font-size changes', () => {
     expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, fontSize: 32 })).toBe('rebuild');
     expect(
       comparisonWorkloadUpdateKind(baseConfiguration, {
         ...baseConfiguration,
         layoutWidthRatio: 0.6,
       }),
-    ).toBe('rebuild');
-    expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('rebuild');
+    ).toBe('retained');
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('retained');
+  });
+
+  it('updates retained Text objects in place and waits for every replacement layout', async () => {
+    const releases: Array<() => void> = [];
+    const updates: number[][] = [[], [], []];
+    const texts = updates.map((entryUpdates) => ({
+      ready: new Promise<void>((resolve) => releases.push(resolve)),
+      setProperties: ({ width }: { readonly width: number }) => entryUpdates.push(width),
+    }));
+    let settled = false;
+    const update = applyRetainedTextWidths(texts, new Float64Array([320, 480, 640])).then(() => {
+      settled = true;
+    });
+
+    expect(updates).toEqual([[320], [480], [640]]);
+    expect(settled).toBe(false);
+    releases[0]!();
+    releases[1]!();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    releases[2]!();
+    await update;
+    expect(settled).toBe(true);
   });
 
   it('rebuilds paragraph stress when its text volume changes', () => {
