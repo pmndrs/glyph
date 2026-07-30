@@ -578,10 +578,41 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   for (let pageIndex = 0; pageIndex < resource.pages.length; pageIndex += 1) {
     assert.equal(geometry.getAttribute('msdfPageIndex').getX(pageIndex), pageIndex);
   }
+  const origin = geometry.getAttribute('msdfOrigin');
+  origin.setXY(0, 123, 456);
+  batch.updatePaint({
+    paintIndices: new Uint16Array(glyphIds.length),
+    palette: [
+      {
+        color: [0.25, 0.5, 1, 0.75],
+        outline: { color: [1, 0.5, 0.25, 1], width: 2 },
+        shadow: { color: [0.25, 0.5, 0.75, 0.5], offset: [3, 4] },
+      },
+    ],
+  });
+  assert.deepEqual(
+    [origin.getX(0), origin.getY(0)],
+    [123, 456],
+    'color-only paint updates preserve structural instance attributes',
+  );
+  assert.deepEqual(
+    [
+      geometry.getAttribute('msdfFillColor').getX(0),
+      geometry.getAttribute('msdfFillColor').getY(0),
+      geometry.getAttribute('msdfFillColor').getZ(0),
+      geometry.getAttribute('msdfFillColor').getW(0),
+    ],
+    [0.25, 0.5, 1, 0.75],
+  );
   batch.updatePaint({
     paintIndices: new Uint16Array(glyphIds.length),
     palette: [{ color: [0.25, 0.5, 1, 0.75] }],
   });
+  assert.notDeepEqual(
+    [origin.getX(0), origin.getY(0)],
+    [123, 456],
+    'a structural paint change recomputes instance geometry',
+  );
   assert.equal(geometry.getAttribute('msdfOutlineWidth').getX(0), 0);
   batch.dispose();
   assert.throws(() => batch.updatePaint(paint), /disposed/);

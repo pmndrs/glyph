@@ -317,10 +317,24 @@ test('Text skips semantic no-op paint uploads and bitmap rejects unsupported eff
   const restoreFetch = installFileFetch();
   const registry = new FontRegistry();
   const font = await registry.registerAsset(await readFile(fixtureUrl));
+  const bitmapRequest = bitmap({ strikes: [16] });
+  let validatedPaint;
+  let updatedPaint;
+  const raster = defineRaster({
+    ...bitmapRequest.module,
+    validatePaint(paint) {
+      bitmapRequest.module.validatePaint?.(paint);
+      validatedPaint = paint;
+    },
+    updatePaint(batch, paint, fontSlot) {
+      updatedPaint = paint;
+      bitmapRequest.module.updatePaint(batch, paint, fontSlot);
+    },
+  });
   const text = new Text({
     text: 'office',
     font,
-    raster: bitmap({ strikes: [16] }),
+    raster: { module: raster, options: bitmapRequest.options },
     fontSize: 16,
     features: [{ tag: 'liga' }],
   });
@@ -334,6 +348,17 @@ test('Text skips semantic no-op paint uploads and bitmap rejects unsupported eff
     text.setProperties({ features: [{ tag: 'liga' }], onLayout: () => undefined });
     await text.ready;
     assert.equal(colors.version, initialVersion);
+    text.setProperties({ opacity: 0.5 });
+    await text.ready;
+    assert.equal(updatedPaint, validatedPaint, 'paint validation and upload reuse one resolved glyph-paint value');
+    const retainedPaintIndices = updatedPaint.paintIndices;
+    text.setProperties({ opacity: 0.75 });
+    await text.ready;
+    assert.equal(
+      updatedPaint.paintIndices,
+      retainedPaintIndices,
+      'same-range paint updates retain glyph paint indices',
+    );
     assert.throws(
       () => text.setProperties({ outline: { color: '#fff', width: 1 } }),
       /bitmap raster does not support outline or shadow/,

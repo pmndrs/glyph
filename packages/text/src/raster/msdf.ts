@@ -104,6 +104,7 @@ export interface MsdfResource {
 interface MsdfBatchRun {
   readonly glyphIndices: Uint32Array;
   readonly instanceData: THREE.InstancedInterleavedBuffer;
+  readonly paintStructure: Float64Array;
   readonly originAttribute: THREE.InterleavedBufferAttribute;
   readonly sizeAttribute: THREE.InterleavedBufferAttribute;
   readonly uvOriginAttribute: THREE.InterleavedBufferAttribute;
@@ -363,7 +364,10 @@ function buildMsdfBatches(
       if (disposed) throw new TypeError('MTSDF draw batch has been disposed');
       assertParallelRasterPaint(layout, nextPaint);
       assertMsdfPaint(nextPaint);
-      if (run !== undefined) updateMsdfRun(layout, resource, run, nextPaint);
+      if (run !== undefined) {
+        if (sameMsdfPaintStructure(run, nextPaint)) updateMsdfRunColors(run, nextPaint);
+        else updateMsdfRun(layout, resource, run, nextPaint);
+      }
     },
     dispose() {
       if (disposed) return;
@@ -429,6 +433,7 @@ function createMsdfRun(
   const run: MsdfBatchRun = {
     glyphIndices: Uint32Array.from(glyphIndices),
     instanceData,
+    paintStructure: new Float64Array(count * PAINT_STRUCTURE_STRIDE),
     originAttribute,
     sizeAttribute,
     uvOriginAttribute,
@@ -469,6 +474,30 @@ function updateMsdfRun(layout: ParagraphLayout, resource: MsdfResource, run: Msd
   run.instanceData.needsUpdate = true;
 }
 
+const PAINT_STRUCTURE_STRIDE = 3;
+
+function sameMsdfPaintStructure(run: MsdfBatchRun, next: GlyphPaint): boolean {
+  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+    const glyphIndex = run.glyphIndices[instance]!;
+    const nextPaint = resolvedPaint(next, glyphIndex);
+    const offset = instance * PAINT_STRUCTURE_STRIDE;
+    if (run.paintStructure[offset] !== (nextPaint.outline?.width ?? 0)) return false;
+    if (run.paintStructure[offset + 1] !== (nextPaint.shadow?.offset[0] ?? 0)) return false;
+    if (run.paintStructure[offset + 2] !== (nextPaint.shadow?.offset[1] ?? 0)) return false;
+  }
+  return true;
+}
+
+function updateMsdfRunColors(run: MsdfBatchRun, paint: GlyphPaint): void {
+  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+    const paintEntry = resolvedPaint(paint, run.glyphIndices[instance]!);
+    setAttribute4(run.fillColorAttribute, instance, ...paintEntry.color);
+    setAttribute4(run.outlineColorAttribute, instance, ...(paintEntry.outline?.color ?? TRANSPARENT_LINEAR_RGBA));
+    setAttribute4(run.shadowColorAttribute, instance, ...(paintEntry.shadow?.color ?? TRANSPARENT_LINEAR_RGBA));
+  }
+  run.instanceData.needsUpdate = true;
+}
+
 function writeMsdfInstance(
   layout: ParagraphLayout,
   resource: MsdfResource,
@@ -499,7 +528,8 @@ function writeMsdfInstance(
   const baseWidth = (planeRight - planeLeft) * scale;
   const baseHeight = (planeTop - planeBottom) * scale;
   const shadowX = paint.shadow?.offset[0] ?? 0;
-  const shadowY = -(paint.shadow?.offset[1] ?? 0);
+  const sourceShadowY = paint.shadow?.offset[1] ?? 0;
+  const shadowY = -sourceShadowY;
   const originX = baseOriginX + Math.min(0, shadowX);
   const originY = baseOriginY + Math.min(0, shadowY);
   const width = baseWidth + Math.abs(shadowX);
@@ -517,21 +547,55 @@ function writeMsdfInstance(
   if (outlineAtlasPixels > maxOutlineAtlasPixels) {
     throw new RangeError(`MTSDF outline width exceeds the ${maxOutlineAtlasPixels}-atlas-pixel field limit`);
   }
-  setAttribute(run.originAttribute, instance, [originX, originY]);
-  setAttribute(run.sizeAttribute, instance, [width, height]);
-  setAttribute(run.uvOriginAttribute, instance, [uvOriginX, uvOriginY]);
-  setAttribute(run.uvSizeAttribute, instance, [width * uvPerUnitX, height * uvPerUnitY]);
-  setAttribute(run.uvBoundsAttribute, instance, [baseUvX, baseUvY, baseUvX + baseUvWidth, baseUvY + baseUvHeight]);
-  setAttribute(run.shadowOffsetAttribute, instance, [shadowX * uvPerUnitX, shadowY * uvPerUnitY]);
-  setAttribute(run.fillColorAttribute, instance, paint.color);
-  setAttribute(run.outlineColorAttribute, instance, paint.outline?.color ?? [0, 0, 0, 0]);
-  setAttribute(run.outlineWidthAttribute, instance, [outlineAtlasPixels / resource.pixelRange]);
-  setAttribute(run.shadowColorAttribute, instance, paint.shadow?.color ?? [0, 0, 0, 0]);
-  setAttribute(run.pageIndexAttribute, instance, [pageIndex]);
+  setAttribute2(run.originAttribute, instance, originX, originY);
+  setAttribute2(run.sizeAttribute, instance, width, height);
+  setAttribute2(run.uvOriginAttribute, instance, uvOriginX, uvOriginY);
+  setAttribute2(run.uvSizeAttribute, instance, width * uvPerUnitX, height * uvPerUnitY);
+  setAttribute4(run.uvBoundsAttribute, instance, baseUvX, baseUvY, baseUvX + baseUvWidth, baseUvY + baseUvHeight);
+  setAttribute2(run.shadowOffsetAttribute, instance, shadowX * uvPerUnitX, shadowY * uvPerUnitY);
+  setAttribute4(run.fillColorAttribute, instance, ...paint.color);
+  setAttribute4(run.outlineColorAttribute, instance, ...(paint.outline?.color ?? TRANSPARENT_LINEAR_RGBA));
+  setAttribute1(run.outlineWidthAttribute, instance, outlineAtlasPixels / resource.pixelRange);
+  setAttribute4(run.shadowColorAttribute, instance, ...(paint.shadow?.color ?? TRANSPARENT_LINEAR_RGBA));
+  setAttribute1(run.pageIndexAttribute, instance, pageIndex);
+  const paintStructureOffset = instance * PAINT_STRUCTURE_STRIDE;
+  run.paintStructure[paintStructureOffset] = paint.outline?.width ?? 0;
+  run.paintStructure[paintStructureOffset + 1] = shadowX;
+  run.paintStructure[paintStructureOffset + 2] = sourceShadowY;
 }
 
-function setAttribute(attribute: THREE.InterleavedBufferAttribute, instance: number, values: readonly number[]): void {
-  (attribute.data.array as Float32Array).set(values, instance * attribute.data.stride + attribute.offset);
+const TRANSPARENT_LINEAR_RGBA = [0, 0, 0, 0] as const;
+
+function attributeArrayOffset(attribute: THREE.InterleavedBufferAttribute, instance: number): number {
+  return instance * attribute.data.stride + attribute.offset;
+}
+
+function setAttribute1(attribute: THREE.InterleavedBufferAttribute, instance: number, x: number): void {
+  const array = attribute.data.array as Float32Array;
+  array[attributeArrayOffset(attribute, instance)] = x;
+}
+
+function setAttribute2(attribute: THREE.InterleavedBufferAttribute, instance: number, x: number, y: number): void {
+  const array = attribute.data.array as Float32Array;
+  const offset = attributeArrayOffset(attribute, instance);
+  array[offset] = x;
+  array[offset + 1] = y;
+}
+
+function setAttribute4(
+  attribute: THREE.InterleavedBufferAttribute,
+  instance: number,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+): void {
+  const array = attribute.data.array as Float32Array;
+  const offset = attributeArrayOffset(attribute, instance);
+  array[offset] = x;
+  array[offset + 1] = y;
+  array[offset + 2] = z;
+  array[offset + 3] = w;
 }
 
 function resolvedPaint(paint: GlyphPaint, glyphIndex: number): ResolvedPaint {

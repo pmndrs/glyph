@@ -158,8 +158,14 @@ interface TextGeneration {
   /** True only when this uncommitted generation acquired the paragraph it carries. */
   readonly createdParagraph: boolean;
   readonly layout: ParagraphLayout;
+  readonly paintPlan: GlyphPaintPlan;
   readonly batches: readonly OwnedBatch[];
   readonly releaseFontDisposal: () => void;
+}
+
+interface GlyphPaintPlan {
+  readonly paintIndices: Uint16Array;
+  readonly spanCount: number;
 }
 
 interface ResolvedParagraphInput {
@@ -196,12 +202,13 @@ export class Text extends THREE.Group {
   setProperties(properties: TextUpdateProperties): void {
     this.#assertActive();
     const next = normalizeTextState(this.#state, properties, false);
+    let prevalidatedPaint: GlyphPaint | undefined;
     if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, next)) {
-      const paint = resolveGlyphPaint(this.#generation.layout, next);
-      for (const owned of this.#generation.batches) owned.module.validatePaint?.(paint);
+      prevalidatedPaint = resolveGlyphPaint(next, this.#generation.paintPlan);
+      for (const owned of this.#generation.batches) owned.module.validatePaint?.(prevalidatedPaint);
     }
     this.#state = next;
-    this.#schedule();
+    this.#schedule(prevalidatedPaint);
   }
 
   dispose(): void {
@@ -216,7 +223,7 @@ export class Text extends THREE.Group {
     this.#setCancelledReady(reason);
   }
 
-  #schedule(): void {
+  #schedule(prevalidatedPaint?: GlyphPaint): void {
     this.#revision += 1;
     const revision = this.#revision;
     this.#pending?.abort();
@@ -231,7 +238,7 @@ export class Text extends THREE.Group {
 
     if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, this.#state)) {
       if (!samePaintInput(this.#generation.state, this.#state)) {
-        const paint = resolveGlyphPaint(this.#generation.layout, this.#state);
+        const paint = prevalidatedPaint ?? resolveGlyphPaint(this.#state, this.#generation.paintPlan);
         for (const owned of this.#generation.batches) {
           owned.module.updatePaint(owned.batch, paint, owned.fontSlot);
         }
@@ -299,7 +306,8 @@ export class Text extends THREE.Group {
       }
 
       const layout = paragraph.layout(paragraphConstraints(state));
-      const paint = resolveGlyphPaint(layout, state);
+      const paintPlan = createGlyphPaintPlan(layout, state);
+      const paint = resolveGlyphPaint(state, paintPlan);
       for (let slot = 0; slot < layout.fontHandles.length; slot += 1) {
         const handle = layout.fontHandles[slot] as FontHandle | undefined;
         if (handle === undefined) throw new Error('paragraph layout has an incomplete font table');
@@ -333,6 +341,7 @@ export class Text extends THREE.Group {
         paragraph,
         createdParagraph: ownsParagraph,
         layout,
+        paintPlan,
         batches,
         releaseFontDisposal,
       };
@@ -463,23 +472,12 @@ function paragraphConstraints(state: TextState): ParagraphConstraints {
   };
 }
 
-function resolveGlyphPaint(layout: ParagraphLayout, state: TextState): GlyphPaint {
-  const palette: ResolvedPaint[] = [];
-  const paletteKeys = new Map<string, number>();
+function createGlyphPaintPlan(layout: ParagraphLayout, state: TextState): GlyphPaintPlan {
   const paintByCodeUnit = new Uint16Array(state.text.length + 1);
-  const assignPaint = (paint: ResolvedPaint): number => {
-    const key = resolvedPaintKey(paint);
-    const existing = paletteKeys.get(key);
-    if (existing !== undefined) return existing;
-    const index = palette.length;
-    if (index > 0xffff) throw new RangeError('text paint palette exceeds uint16 capacity');
-    paletteKeys.set(key, index);
-    palette.push(paint);
-    return index;
-  };
-  assignPaint(resolvedPaint(state, undefined));
-  for (const span of state.spans) {
-    const paintIndex = assignPaint(resolvedPaint(state, span));
+  if (state.spans.length > 0xffff) throw new RangeError('text paint palette exceeds uint16 capacity');
+  for (let spanIndex = 0; spanIndex < state.spans.length; spanIndex += 1) {
+    const span = state.spans[spanIndex]!;
+    const paintIndex = spanIndex + 1;
     paintByCodeUnit.fill(paintIndex, span.start, span.end);
   }
   const paintIndices = new Uint16Array(layout.glyphIds.length);
@@ -490,15 +488,19 @@ function resolveGlyphPaint(layout: ParagraphLayout, state: TextState): GlyphPain
     if (paintIndex === undefined) throw new Error('paragraph layout cluster exceeds its source text');
     paintIndices[glyph] = paintIndex;
   }
-  return { paintIndices, palette };
+  return { paintIndices, spanCount: state.spans.length };
 }
 
-function resolvedPaintKey(paint: ResolvedPaint): string {
-  const outline = paint.outline;
-  const shadow = paint.shadow;
-  return `${paint.color.join(',')}|${
-    outline === undefined ? '' : `${outline.color.join(',')},${outline.width}`
-  }|${shadow === undefined ? '' : `${shadow.color.join(',')},${shadow.offset.join(',')}`}`;
+function resolveGlyphPaint(state: TextState, plan: GlyphPaintPlan): GlyphPaint {
+  if (state.spans.length !== plan.spanCount) {
+    throw new Error('glyph paint plan does not match the normalized text spans');
+  }
+  const palette = new Array<ResolvedPaint>(state.spans.length + 1);
+  palette[0] = resolvedPaint(state, undefined);
+  for (let spanIndex = 0; spanIndex < state.spans.length; spanIndex += 1) {
+    palette[spanIndex + 1] = resolvedPaint(state, state.spans[spanIndex]!);
+  }
+  return { paintIndices: plan.paintIndices, palette };
 }
 
 function resolvedPaint(state: TextState, span: TextSpan | undefined): ResolvedPaint {
@@ -512,7 +514,9 @@ function resolvedPaint(state: TextState, span: TextSpan | undefined): ResolvedPa
   };
 }
 
+const paintColorScratch = new THREE.Color();
+
 function color(value: THREE.ColorRepresentation, alpha: number): LinearRgba {
-  const resolved = new THREE.Color(value);
-  return [resolved.r, resolved.g, resolved.b, alpha];
+  paintColorScratch.set(value);
+  return [paintColorScratch.r, paintColorScratch.g, paintColorScratch.b, alpha];
 }
