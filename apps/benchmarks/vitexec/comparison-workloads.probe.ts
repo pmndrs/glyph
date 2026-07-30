@@ -17,6 +17,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   for (const workload of WORKLOADS) {
     await clickButton(workload.label, false);
     let viewport = await waitForReadyViewport(technique, workload.id);
+    console.log('comparison-workload-viewport-ready', technique, workload.id);
     assertSingleConfiguredRenderer(technique, workload.id);
     verifyCanvasNavigation(
       viewport,
@@ -137,7 +138,9 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       const revision = numericAttribute(viewport, 'data-configuration-revision');
       const amount = setDifferentRange(workload.amountLabel, 72);
       await waitForAttribute(viewport, 'data-workload-amount', String(amount));
+      console.log('comparison-workload-amount-ready', technique, workload.id, amount);
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', revision);
+      console.log('comparison-workload-revision-ready', technique, workload.id);
     }
 
     if (workload.id === 'dynamic-layout') {
@@ -193,9 +196,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
         const paintRevisionBeforeShadow = numericAttribute(viewport, 'data-paint-revision');
         setCheckbox('Shadow', false);
         await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false');
-        if (numericAttribute(viewport, 'data-paint-revision') <= paintRevisionBeforeShadow) {
-          throw new Error('MSDF shadow control replaced or reset the retained paint batch');
-        }
+        await waitForGreaterAttribute(viewport, 'data-paint-revision', paintRevisionBeforeShadow);
         setCheckbox('Shadow', true);
         await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'true');
       }
@@ -301,12 +302,8 @@ await clickButton('Paragraph stress', false);
 await waitForReadyViewport('mtsdf', 'paragraph-stress');
 const fontSwitchContinuity = monitorLivePresentationContinuity();
 let paragraphStressTextLength: number | undefined;
-for (const fixture of [
-  { button: 'Inter Regular', id: 'inter' },
-  { button: 'Source Serif 4', id: 'source-serif-4' },
-  { button: 'Dancing Script', id: 'dancing-script' },
-] as const) {
-  await clickButton(fixture.button, false);
+for (const fixture of [{ id: 'inter' }, { id: 'source-serif-4' }, { id: 'dancing-script' }] as const) {
+  selectFontFixture(fixture.id);
   const viewport = await waitForRenderedFixture('mtsdf', 'paragraph-stress', fixture.id);
   const sourceTextLength = numericAttribute(viewport, 'data-source-text-length');
   paragraphStressTextLength ??= sourceTextLength;
@@ -317,12 +314,13 @@ for (const fixture of [
 fontSwitchContinuity.assertContinuous();
 console.log('font-fixture-corpus-ready', paragraphStressTextLength);
 
-await clickButton('Inter Regular', false);
+selectFontFixture('inter');
 await clickButton('Paint & effects', false);
 const activePaintViewport = await waitForReadyViewport('mtsdf', 'paint-effects');
 await clickButton('conformance', true);
 const benchmarkActivity = await waitForActivityVisibility('benchmark', false);
 const hiddenPaintRevision = numericAttribute(activePaintViewport, 'data-paint-revision');
+await clickAriaButton('Run conformance');
 await waitForConformanceCapture();
 if (numericAttribute(activePaintViewport, 'data-paint-revision') !== hiddenPaintRevision) {
   throw new Error('Hidden Benchmark Activity continued its paint animation loop');
@@ -377,7 +375,7 @@ function assertSingleConfiguredRenderer(technique: RasterTechnique, workload: st
 function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   const surface = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"]');
   if (surface === null) throw new Error('Benchmark surface is unavailable for continuity checks');
-  const labels = ['CPU frame ms history', 'FPS history', 'GPU frame ms history'] as const;
+  const labels = ['CPU history', 'FPS history', 'GPU history'] as const;
   const canvases = labels.map((label) => document.querySelector<HTMLCanvasElement>(`canvas[aria-label="${label}"]`));
   if (canvases.some((canvas) => canvas === null)) {
     throw new Error('Benchmark graph canvas is unavailable for continuity checks');
@@ -386,7 +384,7 @@ function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   let loadingOverlayTransitions = 0;
   let replacedCanvases = 0;
   const observer = new MutationObserver(() => {
-    if (liveMetricValue('CPU frame') === '—') emptyMetricTransitions += 1;
+    if (liveMetricValue('CPU') === '—') emptyMetricTransitions += 1;
     if (surface.textContent?.includes('LOADING MSDF')) loadingOverlayTransitions += 1;
     for (let index = 0; index < labels.length; index += 1) {
       const current = document.querySelector<HTMLCanvasElement>(`canvas[aria-label="${labels[index]}"]`);
@@ -491,14 +489,29 @@ function setRange(label: string, value: number): void {
   const control = rangeControl(label);
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   if (setter === undefined) throw new Error('Native input value setter is unavailable');
-  setter.call(control, String(value));
+  const semanticMinimum = Number(control.getAttribute('aria-valuemin'));
+  const semanticMaximum = Number(control.getAttribute('aria-valuemax'));
+  const logarithmic =
+    Number.isFinite(semanticMinimum) &&
+    semanticMinimum > 0 &&
+    Number.isFinite(semanticMaximum) &&
+    semanticMaximum > semanticMinimum;
+  const inputValue = logarithmic
+    ? (Math.log(value) - Math.log(semanticMinimum)) / (Math.log(semanticMaximum) - Math.log(semanticMinimum))
+    : value;
+  setter.call(control, String(inputValue));
   control.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 function setDifferentRange(label: string, preferred: number): number {
   const control = rangeControl(label);
-  const current = control.valueAsNumber;
-  const alternative = preferred < Number(control.max) ? preferred + 1 : preferred - 1;
+  const semanticValueAttribute = control.getAttribute('aria-valuenow');
+  const semanticMaximumAttribute = control.getAttribute('aria-valuemax');
+  const semanticValue = semanticValueAttribute === null ? Number.NaN : Number(semanticValueAttribute);
+  const semanticMaximum = semanticMaximumAttribute === null ? Number.NaN : Number(semanticMaximumAttribute);
+  const current = Number.isFinite(semanticValue) ? semanticValue : control.valueAsNumber;
+  const maximum = Number.isFinite(semanticMaximum) ? semanticMaximum : Number(control.max);
+  const alternative = preferred < maximum ? preferred + 1 : preferred - 1;
   const value = current === preferred ? alternative : preferred;
   setRange(label, value);
   return value;
@@ -507,6 +520,20 @@ function setDifferentRange(label: string, preferred: number): number {
 function setCheckbox(label: string, checked: boolean): void {
   const control = checkboxControl(label);
   if (control.checked !== checked) control.click();
+}
+
+function selectFontFixture(value: string): void {
+  const candidates = [...document.querySelectorAll<HTMLSelectElement>('select')].filter(
+    (candidate) =>
+      candidate.labels?.[0]?.textContent?.includes('Font fixture') === true &&
+      [...candidate.options].some((option) => option.value === value),
+  );
+  const control = candidates.find((candidate) => candidate.offsetParent !== null) ?? candidates[0];
+  if (control === undefined) throw new Error('Font fixture select is unavailable');
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+  if (setter === undefined) throw new Error('Native select value setter is unavailable');
+  setter.call(control, value);
+  control.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function setPressedButton(label: string, pressed: boolean): void {
