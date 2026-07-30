@@ -1,6 +1,7 @@
 import type {
   BenchmarkControls,
   BenchmarkEnvironment,
+  BenchmarkExecutionContext,
   BenchmarkInput,
   BenchmarkSummary,
   RunnerEvent,
@@ -15,6 +16,7 @@ export interface RegisteredBenchmarkRequest {
   readonly input: BenchmarkInput;
   readonly controls: BenchmarkControls;
   readonly environment: BenchmarkEnvironment;
+  readonly executionContext?: BenchmarkExecutionContext;
   readonly onEvent?: (event: RunnerEvent) => void;
 }
 
@@ -30,6 +32,7 @@ export async function runRegisteredBenchmark(request: RegisteredBenchmarkRequest
     input: request.input,
     controls: request.controls,
     environment: request.environment,
+    ...(request.executionContext === undefined ? {} : { executionContext: request.executionContext }),
     ...(request.onEvent === undefined ? {} : { onEvent: request.onEvent }),
   });
 }

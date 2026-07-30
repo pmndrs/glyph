@@ -43,8 +43,10 @@ import { compareRgba8Coverage } from './mtsdf-cpu-reference';
 import {
   createPersistentRenderHost,
   type PersistentRenderScene,
+  type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from './persistent-render-host';
+import { withRendererStateRestored } from './renderer-state-transaction';
 import {
   createRetainedFontFixtureController,
   type LiveFontFixtureUpdate,
@@ -221,7 +223,8 @@ interface FlatSlugConformanceResources {
   readonly backend: RendererBackend;
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
-  readonly renderer: THREE.WebGPURenderer;
+  readonly renderer: PersistentRenderSceneRenderer;
+  readonly ownedRenderer?: THREE.WebGPURenderer;
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
@@ -386,10 +389,21 @@ export function createSlugConformanceTarget(backend: RendererBackend): Benchmark
       fontFixture = input.fontFixture ?? 'inter';
     },
     status: () => 'ready',
-    load: async (controls) => {
-      resources ??= await createFlatSlugConformanceResources(backend, controls.dpr, fontFixture);
+    load: async (controls, context) => {
+      resources ??= await createFlatSlugConformanceResources(
+        backend,
+        controls.dpr,
+        fontFixture,
+        context?.signal,
+        'baked',
+        undefined,
+        undefined,
+        undefined,
+        context?.renderer,
+      );
     },
-    run: async () => {
+    run: async (_input, _sampleIndex, _controls, context) => {
+      context?.signal?.throwIfAborted();
       if (resources === undefined) throw new Error('Slug conformance target was not loaded');
       const capture = await captureFlatSlugConformance(resources);
       return {
@@ -966,6 +980,7 @@ export async function captureSlugTextConformance(options: {
   readonly delivery?: FontDelivery;
   readonly dpr: number;
   readonly fontFixture?: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }): Promise<SlugTextConformanceCapture> {
   options.signal?.throwIfAborted();
@@ -976,6 +991,9 @@ export async function captureSlugTextConformance(options: {
     options.signal,
     options.delivery,
     options.bakedArtifact,
+    undefined,
+    undefined,
+    options.renderer,
   );
   try {
     options.signal?.throwIfAborted();
@@ -1040,6 +1058,7 @@ export async function captureSlugSourceOutlineFidelity(options: {
   readonly bakedArtifact?: SlugBakedArtifactSource;
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }): Promise<SourceOutlineFidelityCapture> {
   options.signal?.throwIfAborted();
@@ -1050,6 +1069,9 @@ export async function captureSlugSourceOutlineFidelity(options: {
     options.signal,
     'baked',
     options.bakedArtifact,
+    undefined,
+    undefined,
+    options.renderer,
   );
   try {
     const capture = await captureFlatSlugConformance(resources);
@@ -1343,16 +1365,20 @@ async function createFlatSlugConformanceResources(
     readonly font: RegisteredFont;
     readonly raster: SlugModule;
   }>,
+  borrowedRenderer?: PersistentRenderSceneRenderer,
 ): Promise<FlatSlugConformanceResources> {
   signal?.throwIfAborted();
-  const canvas = document.createElement('canvas');
-  const renderer = await createConfiguredRenderer({
-    canvas,
-    width: sceneOptions?.width ?? WIDTH,
-    height: sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT,
-    backend,
-    dpr,
-  });
+  const ownedRenderer =
+    borrowedRenderer === undefined
+      ? await createConfiguredRenderer({
+          canvas: document.createElement('canvas'),
+          width: sceneOptions?.width ?? WIDTH,
+          height: sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT,
+          backend,
+          dpr,
+        })
+      : undefined;
+  const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
   let font: RegisteredFont | undefined;
   let line: Text | undefined;
@@ -1420,6 +1446,7 @@ async function createFlatSlugConformanceResources(
       dpr,
       fontFixture,
       renderer,
+      ...(ownedRenderer === undefined ? {} : { ownedRenderer }),
       target,
       scene,
       camera,
@@ -1433,7 +1460,7 @@ async function createFlatSlugConformanceResources(
     if (resource !== undefined) slug.dispose(resource);
     font?.dispose();
     target?.dispose();
-    await disposeConfiguredRenderer(renderer);
+    if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
     throw error;
   }
 }
@@ -1544,33 +1571,36 @@ interface FlatSlugCandidateCapture {
 }
 
 async function captureFlatSlugCandidate(resources: FlatSlugConformanceResources): Promise<FlatSlugCandidateCapture> {
-  const rendererViewport = readRendererViewportState(resources.renderer);
   const width = resources.target.width;
   const height = resources.target.height;
-  if (rendererViewport.drawingBufferWidth !== width || rendererViewport.drawingBufferHeight !== height) {
-    throw new Error(
-      `Slug render target ${String(width)}x${String(height)} does not match drawing buffer ${String(rendererViewport.drawingBufferWidth)}x${String(rendererViewport.drawingBufferHeight)}`,
-    );
+  if (resources.ownedRenderer !== undefined) {
+    const rendererViewport = readRendererViewportState(resources.ownedRenderer);
+    if (rendererViewport.drawingBufferWidth !== width || rendererViewport.drawingBufferHeight !== height) {
+      throw new Error(
+        `Slug render target ${String(width)}x${String(height)} does not match drawing buffer ${String(rendererViewport.drawingBufferWidth)}x${String(rendererViewport.drawingBufferHeight)}`,
+      );
+    }
   }
-  resources.renderer.setRenderTarget(resources.target);
-  resources.renderer.setClearColor(0x000000, 1);
-  resources.renderer.clear();
-  const started = performance.now();
-  resources.renderer.render(resources.scene, resources.camera);
-  const renderSubmitMs = performance.now() - started;
-  const readback = await resources.renderer.readRenderTargetPixelsAsync(resources.target, 0, 0, width, height);
-  resources.renderer.setRenderTarget(null);
-  return {
-    candidate: compactRgba8Readback(
-      new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
+  return withRendererStateRestored(resources.renderer, async () => {
+    resources.renderer.setRenderTarget(resources.target);
+    resources.renderer.setClearColor(0x000000, 1);
+    resources.renderer.clear();
+    const started = performance.now();
+    resources.renderer.render(resources.scene, resources.camera);
+    const renderSubmitMs = performance.now() - started;
+    const readback = await resources.renderer.readRenderTargetPixelsAsync(resources.target, 0, 0, width, height);
+    return {
+      candidate: compactRgba8Readback(
+        new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
+        width,
+        height,
+        resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+      ),
       width,
       height,
-      resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-    ),
-    width,
-    height,
-    renderSubmitMs,
-  };
+      renderSubmitMs,
+    };
+  });
 }
 
 function countBoundaryInkPixels(bytes: Uint8Array, width: number, height: number): number {
@@ -1655,7 +1685,7 @@ async function disposeFlatSlugConformanceResources(resources: FlatSlugConformanc
   slug.dispose(resources.resource);
   resources.font.dispose();
   resources.target.dispose();
-  await disposeConfiguredRenderer(resources.renderer);
+  if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
 }
 
 export async function loadSlugFont(

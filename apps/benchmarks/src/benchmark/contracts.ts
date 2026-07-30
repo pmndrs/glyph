@@ -24,6 +24,12 @@ export interface BenchmarkControls {
   readonly warmup: number;
 }
 
+/** Optional application-owned resources borrowed by a benchmark target for one serialized execution. */
+export interface BenchmarkExecutionContext {
+  readonly renderer?: PersistentRenderSceneRenderer;
+  readonly signal?: AbortSignal;
+}
+
 export interface BenchmarkInput {
   readonly fontBytes?: Uint8Array;
   readonly fontFixture?: BenchmarkFontFixture;
@@ -69,8 +75,13 @@ export interface BenchmarkTarget {
   readonly capabilities: ReadonlySet<Capability>;
   configure?(input: BenchmarkInput): void;
   status(input: BenchmarkInput): TargetStatus;
-  load(controls: BenchmarkControls): Promise<void>;
-  run(input: BenchmarkInput, sampleIndex: number, controls: BenchmarkControls): Promise<TargetRunOutput>;
+  load(controls: BenchmarkControls, context?: BenchmarkExecutionContext): Promise<void>;
+  run(
+    input: BenchmarkInput,
+    sampleIndex: number,
+    controls: BenchmarkControls,
+    context?: BenchmarkExecutionContext,
+  ): Promise<TargetRunOutput>;
   dispose(): Promise<void>;
 }
 
@@ -91,3 +102,4 @@ export interface RunnerEvent {
   readonly p95Ms?: number;
 }
 import type { BenchmarkFontFixture } from './font-fixtures';
+import type { PersistentRenderSceneRenderer } from '../renderer/persistent-render-host';

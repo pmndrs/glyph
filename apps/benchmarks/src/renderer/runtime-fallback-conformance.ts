@@ -2,6 +2,7 @@ import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { RasterTechnique } from '../benchmark/url-state';
 import { captureBitmapTextConformance } from './bitmap-text';
 import { captureMtsdfTextConformance } from './mtsdf-text';
+import type { PersistentRenderSceneRenderer } from './persistent-render-host';
 import type { RendererBackend } from './webgpu-renderer';
 
 export interface RuntimeFallbackCapture {
@@ -20,6 +21,7 @@ export async function captureRuntimeFallbackConformance(options: {
   readonly backend: RendererBackend;
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
   readonly technique: RasterTechnique;
 }): Promise<RuntimeFallbackCapture> {
@@ -51,6 +53,7 @@ async function captureBitmap(options: {
   readonly delivery: 'baked' | 'runtime';
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }) {
   return captureBitmapTextConformance(options);
@@ -61,6 +64,7 @@ async function captureMtsdf(options: {
   readonly delivery: 'baked' | 'runtime';
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }) {
   return captureMtsdfTextConformance(options);
@@ -71,6 +75,7 @@ async function captureSlug(options: {
   readonly delivery: 'baked' | 'runtime';
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }) {
   const { captureSlugTextConformance } = await import('./slug-text');

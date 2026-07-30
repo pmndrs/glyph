@@ -41,6 +41,7 @@ import {
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from './persistent-render-host';
+import { withRendererStateRestored } from './renderer-state-transaction';
 import {
   createFontDeliveryMetrics,
   loadRuntimeFont,
@@ -266,7 +267,8 @@ interface FlatMtsdfConformanceResources {
   readonly backend: RendererBackend;
   readonly dpr: number;
   readonly fontFixture: BenchmarkFontFixture;
-  readonly renderer: THREE.WebGPURenderer;
+  readonly renderer: PersistentRenderSceneRenderer;
+  readonly ownedRenderer?: THREE.WebGPURenderer;
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
@@ -319,10 +321,18 @@ export function createMtsdfConformanceTarget(backend: RendererBackend): Benchmar
       fontFixture = input.fontFixture ?? 'inter';
     },
     status: () => 'ready',
-    load: async (controls) => {
-      resources ??= await createFlatMtsdfConformanceResources(backend, controls.dpr, fontFixture);
+    load: async (controls, context) => {
+      resources ??= await createFlatMtsdfConformanceResources(
+        backend,
+        controls.dpr,
+        fontFixture,
+        context?.signal,
+        'baked',
+        context?.renderer,
+      );
     },
-    run: async () => {
+    run: async (_input, _sampleIndex, _controls, context) => {
+      context?.signal?.throwIfAborted();
       if (resources === undefined) throw new Error('MTSDF conformance target was not loaded');
       const capture = await captureFlatMtsdfConformance(resources);
       return {
@@ -1003,6 +1013,7 @@ export async function captureMtsdfTextConformance(options: {
   readonly delivery?: FontDelivery;
   readonly dpr: number;
   readonly fontFixture?: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }): Promise<MtsdfTextConformanceCapture> {
   options.signal?.throwIfAborted();
@@ -1012,6 +1023,7 @@ export async function captureMtsdfTextConformance(options: {
     options.fontFixture,
     options.signal,
     options.delivery,
+    options.renderer,
   );
   try {
     options.signal?.throwIfAborted();
@@ -1027,6 +1039,7 @@ export async function captureMtsdfSourceOutlineFidelity(options: {
   readonly backend: RendererBackend;
   readonly dpr: number;
   readonly fontFixture: SelectableFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }): Promise<SourceOutlineFidelityCapture> {
   options.signal?.throwIfAborted();
@@ -1035,6 +1048,8 @@ export async function captureMtsdfSourceOutlineFidelity(options: {
     options.dpr,
     options.fontFixture,
     options.signal,
+    'baked',
+    options.renderer,
   );
   try {
     const capture = await captureFlatMtsdfConformance(resources);
@@ -1064,16 +1079,20 @@ async function createFlatMtsdfConformanceResources(
   fontFixture: BenchmarkFontFixture = 'inter',
   signal?: AbortSignal,
   delivery: FontDelivery = 'baked',
+  borrowedRenderer?: PersistentRenderSceneRenderer,
 ): Promise<FlatMtsdfConformanceResources> {
   signal?.throwIfAborted();
-  const canvas = document.createElement('canvas');
-  const renderer = await createConfiguredRenderer({
-    canvas,
-    width: WIDTH,
-    height: FLAT_CONFORMANCE_HEIGHT,
-    backend,
-    dpr,
-  });
+  const ownedRenderer =
+    borrowedRenderer === undefined
+      ? await createConfiguredRenderer({
+          canvas: document.createElement('canvas'),
+          width: WIDTH,
+          height: FLAT_CONFORMANCE_HEIGHT,
+          backend,
+          dpr,
+        })
+      : undefined;
+  const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
   let font: RegisteredFont | undefined;
   let line: Text | undefined;
@@ -1115,13 +1134,25 @@ async function createFlatMtsdfConformanceResources(
     });
     target.texture.colorSpace = THREE.NoColorSpace;
     target.texture.generateMipmaps = false;
-    return { backend, dpr, fontFixture, renderer, target, scene, camera, font, line, resource };
+    return {
+      backend,
+      dpr,
+      fontFixture,
+      renderer,
+      ...(ownedRenderer === undefined ? {} : { ownedRenderer }),
+      target,
+      scene,
+      camera,
+      font,
+      line,
+      resource,
+    };
   } catch (error) {
     line?.dispose();
     if (resource !== undefined) msdf.dispose(resource);
     font?.dispose();
     target?.dispose();
-    await disposeConfiguredRenderer(renderer);
+    if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
     throw error;
   }
 }
@@ -1131,16 +1162,21 @@ async function captureFlatMtsdfConformance(
 ): Promise<MtsdfTextConformanceCapture> {
   const width = Math.round(WIDTH * resources.dpr);
   const height = Math.round(FLAT_CONFORMANCE_HEIGHT * resources.dpr);
-  resources.renderer.setRenderTarget(resources.target);
-  resources.renderer.setClearColor(0x000000, 1);
-  resources.renderer.clear();
-  const started = performance.now();
-  resources.renderer.render(resources.scene, resources.camera);
-  const renderSubmitMs = performance.now() - started;
-  const readback = await resources.renderer.readRenderTargetPixelsAsync(resources.target, 0, 0, width, height);
-  resources.renderer.setRenderTarget(null);
+  const { bytes, renderSubmitMs } = await withRendererStateRestored(resources.renderer, async () => {
+    resources.renderer.setRenderTarget(resources.target);
+    resources.renderer.setClearColor(0x000000, 1);
+    resources.renderer.clear();
+    const started = performance.now();
+    resources.renderer.render(resources.scene, resources.camera);
+    const submittedIn = performance.now() - started;
+    const readback = await resources.renderer.readRenderTargetPixelsAsync(resources.target, 0, 0, width, height);
+    return {
+      bytes: new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
+      renderSubmitMs: submittedIn,
+    };
+  });
   const candidate = compactRgba8Readback(
-    new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
+    bytes,
     width,
     height,
     resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
@@ -1173,7 +1209,7 @@ async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConforma
   msdf.dispose(resources.resource);
   resources.font.dispose();
   resources.target.dispose();
-  await disposeConfiguredRenderer(resources.renderer);
+  if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
 }
 
 async function renderMtsdfFrame(resources: MtsdfTextResources): Promise<{

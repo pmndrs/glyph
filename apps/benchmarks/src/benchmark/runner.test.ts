@@ -67,6 +67,37 @@ describe('shared benchmark runner', () => {
     expect(sampleIndexes).toEqual([0, 0, 1, 2]);
   });
 
+  it('forwards one borrowed execution context through load, warmup, and measured samples', async () => {
+    const controller = new AbortController();
+    const executionContext = { signal: controller.signal };
+    const observed: unknown[] = [];
+
+    await runBenchmark({
+      target: {
+        ...target,
+        load: async (_controls, context) => {
+          observed.push(context);
+        },
+        run: async (_input, _sampleIndex, _controls, context) => {
+          observed.push(context);
+          return { bytes: 12, hash: 'stable' };
+        },
+      },
+      scenario,
+      input: {},
+      controls: { dpr: 1, warmup: 1, samples: 2 },
+      environment: {
+        browser: 'vitest',
+        hardwareConcurrency: 1,
+        webgpu: false,
+        crossOriginIsolated: false,
+      },
+      executionContext,
+    });
+
+    expect(observed).toEqual([executionContext, executionContext, executionContext, executionContext]);
+  });
+
   it('rejects invalid controls before loading a target', async () => {
     await expect(
       runBenchmark({

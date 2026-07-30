@@ -1,6 +1,7 @@
 import type {
   BenchmarkControls,
   BenchmarkEnvironment,
+  BenchmarkExecutionContext,
   BenchmarkInput,
   BenchmarkMeasurement,
   BenchmarkScenario,
@@ -18,6 +19,7 @@ export interface RunBenchmarkOptions {
   readonly input: BenchmarkInput;
   readonly controls: BenchmarkControls;
   readonly environment: BenchmarkEnvironment;
+  readonly executionContext?: BenchmarkExecutionContext;
   readonly onEvent?: (event: RunnerEvent) => void;
 }
 
@@ -26,28 +28,32 @@ export function missingCapabilities(target: BenchmarkTarget, scenario: Benchmark
 }
 
 export async function runBenchmark(options: RunBenchmarkOptions): Promise<BenchmarkSummary> {
-  const { target, scenario, input, controls, environment, onEvent } = options;
+  const { target, scenario, input, controls, environment, executionContext, onEvent } = options;
   assertControls(controls);
   const missing = missingCapabilities(target, scenario);
   if (missing.length > 0) throw new Error(`Target lacks: ${missing.join(', ')}`);
   if (target.status(input) !== 'ready') throw new Error('Target is not ready for this input');
+  executionContext?.signal?.throwIfAborted();
   target.configure?.(input);
   executionSequence += 1;
   const executionId = `run:${String(executionSequence)}`;
 
   onEvent?.({ phase: 'loading', completed: 0, total: 1 });
   try {
-    await target.load(controls);
+    await target.load(controls, executionContext);
+    executionContext?.signal?.throwIfAborted();
     for (let sample = 0; sample < controls.warmup; sample += 1) {
       onEvent?.({ phase: 'warming', completed: sample, total: controls.warmup });
-      await target.run(input, 0, controls);
+      await target.run(input, 0, controls, executionContext);
+      executionContext?.signal?.throwIfAborted();
     }
 
     const measurements: BenchmarkMeasurement[] = [];
     for (let sample = 0; sample < controls.samples; sample += 1) {
       onEvent?.({ phase: 'sampling', completed: sample, total: controls.samples });
       const start = performance.now();
-      const output = await target.run(input, sample, controls);
+      const output = await target.run(input, sample, controls, executionContext);
+      executionContext?.signal?.throwIfAborted();
       const measurement: BenchmarkMeasurement = {
         sample,
         durationMs: performance.now() - start,

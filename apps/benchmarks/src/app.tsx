@@ -103,13 +103,12 @@ import type {
 } from './renderer/bitmap-text';
 import type { MtsdfTextConformanceCapture, MtsdfTextLiveStats, MtsdfTextPersistentScene } from './renderer/mtsdf-text';
 import type { SlugTextConformanceCapture, SlugTextLiveStats, SlugTextPersistentScene } from './renderer/slug-text';
-import type { RasterTechniqueComparison } from './renderer/raster-technique-compare';
+import type { RasterTechniqueComparisonPersistentScene } from './renderer/raster-technique-compare';
 import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPersistentScene,
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload';
-import { createExclusiveLifecycleCoordinator } from './renderer/exclusive-lifecycle';
 import {
   benchmarkContentWidth,
   BENCHMARK_CONTENT_INSET,
@@ -228,7 +227,6 @@ const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
 
 const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = [];
 const GLYPH_POSITION_TRANSITION_MS = 110;
-const liveRendererLifecycle = createExclusiveLifecycleCoordinator();
 const FontNoticesDialog = lazy(() => import('./components/font-notices-dialog'));
 function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
@@ -1599,7 +1597,6 @@ function ConformanceSurface({
       backend={properties.backend}
       comparisonText={properties.comparisonText}
       conformanceView={properties.conformanceView}
-      dpr={properties.dpr}
       fontFixture={properties.fontFixture}
       onPan={properties.onPan}
       onZoom={properties.onZoom}
@@ -1613,7 +1610,6 @@ function RasterTechniqueComparisonSurface({
   backend,
   comparisonText,
   conformanceView,
-  dpr,
   fontFixture,
   onPan,
   onZoom,
@@ -1621,14 +1617,13 @@ function RasterTechniqueComparisonSurface({
   readonly backend: GraphicsBackend;
   readonly comparisonText: string;
   readonly conformanceView: ConformanceView;
-  readonly dpr: 1 | 2;
   readonly fontFixture: SelectableFontFixture;
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
   readonly onZoom: (zoom: number) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { activateSurface } = usePersistentRenderHost();
   const containerRef = useRef<HTMLDivElement>(null);
-  const comparisonRef = useRef<RasterTechniqueComparison>(undefined);
+  const comparisonRef = useRef<RasterTechniqueComparisonPersistentScene>(undefined);
   const [ready, setReady] = useState(false);
   const [committedText, setCommittedText] = useState('');
   const [error, setError] = useState<string>();
@@ -1638,46 +1633,51 @@ function RasterTechniqueComparisonSurface({
   });
   const initialView = useEffectEvent(() => conformanceView);
   const initialText = useEffectEvent(() => comparisonText);
+  const publishPan = useEffectEvent((deltaXPercent: number, deltaYPercent: number) => {
+    onPan(deltaXPercent, deltaYPercent);
+  });
+  const publishZoom = useEffectEvent((zoom: number) => {
+    onZoom(zoom);
+  });
 
   useEffect(() => {
-    const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (canvas === null || container === null) return;
+    if (container === null) return;
     const controller = new AbortController();
-    let comparison: RasterTechniqueComparison | undefined;
-    let lifecycleLease: Awaited<ReturnType<typeof liveRendererLifecycle.acquire>> | undefined;
+    let comparison: RasterTechniqueComparisonPersistentScene | undefined;
+    let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
-    const resize = (): void => {
-      if (comparison === undefined) return;
-      const bounds = container.getBoundingClientRect();
-      comparison.resize(Math.max(1, bounds.width), Math.max(1, bounds.height));
-    };
-    const observer = new ResizeObserver(resize);
-    observer.observe(container);
     const initialization = (async () => {
-      lifecycleLease = await liveRendererLifecycle.acquire(controller.signal);
       try {
         if (cancelled) return;
-        const { createRasterTechniqueComparison } = await import('./renderer/raster-technique-compare');
+        const { createRasterTechniqueComparisonPersistentScene } = await import('./renderer/raster-technique-compare');
         if (cancelled) return;
-        const bounds = container.getBoundingClientRect();
         const optionsText = initialText();
-        const created = await createRasterTechniqueComparison({
+        const created = createRasterTechniqueComparisonPersistentScene({
           backend,
-          canvas,
-          dpr,
           fontFixture,
-          height: Math.max(1, bounds.height),
           onError: publishError,
-          signal: controller.signal,
+          onPan: publishPan,
+          onZoom: publishZoom,
           text: optionsText,
-          width: Math.max(1, bounds.width),
         });
+        comparison = created;
+        comparisonRef.current = created;
+        surfaceLease = await activateSurface(
+          {
+            anchor: container,
+            controller: comparisonRef,
+            label: 'Live MSDF and Slug GPU comparison',
+            pan: true,
+            scene: created,
+            zoom: true,
+          },
+          controller.signal,
+        );
         if (cancelled) {
-          await created.dispose();
+          await surfaceLease.release();
           return;
         }
-        comparison = created;
         let text = optionsText;
         let latestText = initialText();
         while (latestText !== text) {
@@ -1688,8 +1688,6 @@ function RasterTechniqueComparisonSurface({
         if (cancelled) return;
         const view = initialView();
         created.setView(view.zoom, view.panXPercent, view.panYPercent);
-        resize();
-        comparisonRef.current = created;
         setCommittedText(text);
         setReady(true);
         setError(undefined);
@@ -1697,12 +1695,8 @@ function RasterTechniqueComparisonSurface({
         const failedComparison = comparison;
         comparison = undefined;
         if (comparisonRef.current === failedComparison) comparisonRef.current = undefined;
-        try {
-          await failedComparison?.dispose();
-        } finally {
-          lifecycleLease.release();
-          lifecycleLease = undefined;
-        }
+        await surfaceLease?.release();
+        surfaceLease = undefined;
         throw caught;
       }
     })();
@@ -1710,27 +1704,18 @@ function RasterTechniqueComparisonSurface({
     return () => {
       cancelled = true;
       controller.abort();
-      observer.disconnect();
       void initialization.then(
         async () => {
-          try {
-            if (comparison === undefined) return;
-            const current = comparison;
-            comparison = undefined;
-            if (comparisonRef.current === current) comparisonRef.current = undefined;
-            await current.dispose();
-          } finally {
-            lifecycleLease?.release();
-            lifecycleLease = undefined;
-          }
+          const current = comparison;
+          comparison = undefined;
+          if (comparisonRef.current === current) comparisonRef.current = undefined;
+          await surfaceLease?.release();
+          surfaceLease = undefined;
         },
-        () => {
-          lifecycleLease?.release();
-          lifecycleLease = undefined;
-        },
+        () => undefined,
       );
     };
-  }, [backend, dpr, fontFixture]);
+  }, [activateSurface, backend, fontFixture]);
 
   useEffect(() => {
     comparisonRef.current?.setView(conformanceView.zoom, conformanceView.panXPercent, conformanceView.panYPercent);
@@ -1752,27 +1737,6 @@ function RasterTechniqueComparisonSurface({
     };
   }, [comparisonText]);
 
-  const zoomFromWheel = useEffectEvent((deltaY: number) => {
-    const direction = deltaY < 0 ? 0.25 : -0.25;
-    onZoom(Math.min(8, Math.max(1, conformanceView.zoom + direction)));
-  });
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas === null) return;
-    const handleWheel = (event: WheelEvent): void => {
-      event.preventDefault();
-      zoomFromWheel(event.deltaY);
-    };
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
-  }, []);
-
-  function moveView(event: ReactPointerEvent<HTMLCanvasElement>): void {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId) || conformanceView.zoom <= 1) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    onPan((event.movementX / bounds.width) * 300, (event.movementY / bounds.height) * 100);
-  }
-
   return (
     <div
       className="grid min-h-0 grid-rows-[auto_minmax(420px,1fr)_auto] gap-3"
@@ -1788,28 +1752,10 @@ function RasterTechniqueComparisonSurface({
       <div
         ref={containerRef}
         className="relative min-h-[420px] overflow-hidden rounded-md border border-border bg-background"
+        data-pan-x={conformanceView.panXPercent}
+        data-pan-y={conformanceView.panYPercent}
+        data-zoom={conformanceView.zoom}
       >
-        <canvas
-          ref={canvasRef}
-          aria-label="Live MSDF and Slug GPU comparison"
-          className={`absolute inset-0 size-full touch-none bg-background ${conformanceView.zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
-          data-pan-x={conformanceView.panXPercent}
-          data-pan-y={conformanceView.panYPercent}
-          data-zoom={conformanceView.zoom}
-          onDoubleClick={() => onZoom(conformanceView.zoom === 1 ? 2 : 1)}
-          onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
-          onPointerMove={moveView}
-          onPointerCancel={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-          }}
-          onPointerUp={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-          }}
-        />
         <div className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-3 border-b border-border bg-black/70 font-mono text-[9px] uppercase tracking-wider text-muted">
           <span className="border-r border-border px-3 py-2">MSDF</span>
           <span className="border-r border-border px-3 py-2">Slug</span>

@@ -66,8 +66,10 @@ import {
   type PersistentRenderFrameContext,
   type PersistentRenderScene,
   type PersistentRenderSceneContext,
+  type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from './persistent-render-host';
+import { withRendererStateRestored } from './renderer-state-transaction';
 import {
   createFontDeliveryMetrics,
   loadRuntimeFont,
@@ -119,7 +121,8 @@ export async function preloadBitmapFontAssets(
 interface BitmapTextResources {
   readonly backend: RendererBackend;
   readonly dpr: number;
-  readonly renderer: THREE.WebGPURenderer;
+  readonly renderer: PersistentRenderSceneRenderer;
+  readonly ownedRenderer?: THREE.WebGPURenderer;
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
@@ -357,14 +360,22 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
       fontFixture = input.fontFixture ?? 'inter';
     },
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       if (state.kind === 'ready') return;
       state = {
         kind: 'ready',
-        resources: await createResources(backend, controls.dpr, fontFixture),
+        resources: await createResources(
+          backend,
+          controls.dpr,
+          fontFixture,
+          'baked',
+          context?.signal,
+          context?.renderer,
+        ),
       };
     },
-    run: async () => {
+    run: async (_input, _sampleIndex, _controls, context) => {
+      context?.signal?.throwIfAborted();
       if (state.kind !== 'ready') throw new Error('bitmap text target was not loaded');
       return renderBitmapText(state.resources);
     },
@@ -372,10 +383,7 @@ export function createBitmapTextTarget(backend: RendererBackend): BenchmarkTarge
       if (state.kind !== 'ready') return;
       const resources = state.resources;
       state = { kind: 'empty' };
-      disposeBitmapLine(resources.line);
-      resources.font.dispose();
-      resources.target.dispose();
-      await disposeConfiguredRenderer(resources.renderer);
+      await disposeBitmapTextResources(resources);
     },
   };
 }
@@ -385,23 +393,27 @@ async function createResources(
   dpr: number,
   fontFixture: BenchmarkFontFixture = 'inter',
   delivery: FontDelivery = 'baked',
+  signal?: AbortSignal,
+  borrowedRenderer?: PersistentRenderSceneRenderer,
 ): Promise<BitmapTextResources> {
-  const canvas = document.createElement('canvas');
-  canvas.width = WIDTH;
-  canvas.height = HEIGHT;
-  const renderer = await createConfiguredRenderer({
-    canvas,
-    width: WIDTH,
-    height: HEIGHT,
-    backend,
-    dpr,
-  });
-  let rendererViewport = readRendererViewportState(renderer);
+  signal?.throwIfAborted();
+  const ownedRenderer =
+    borrowedRenderer === undefined
+      ? await createConfiguredRenderer({
+          canvas: document.createElement('canvas'),
+          width: WIDTH,
+          height: HEIGHT,
+          backend,
+          dpr,
+        })
+      : undefined;
+  const renderer = borrowedRenderer ?? ownedRenderer!;
+  const rendererViewport = readRendererViewportState(renderer as THREE.WebGPURenderer);
   let target: THREE.RenderTarget | undefined;
   let font: RegisteredFont | undefined;
   let line: BitmapLine | undefined;
   try {
-    const loadedFont = await loadBitmapFont(undefined, fontFixture, delivery);
+    const loadedFont = await loadBitmapFont(signal, fontFixture, delivery);
     font = loadedFont.font;
     line = await createBitmapLine(
       font,
@@ -409,6 +421,7 @@ async function createResources(
       conformanceText(),
       BITMAP_FONT_SIZE / dpr,
       rendererViewport.pixelRatio,
+      signal,
     );
     line.object.position.set(
       quarterDevicePosition(Math.max(4, (WIDTH - line.width) / 2), dpr),
@@ -431,19 +444,22 @@ async function createResources(
     });
     target.texture.colorSpace = THREE.NoColorSpace;
     target.texture.generateMipmaps = false;
-    renderer.setRenderTarget(target);
-    renderer.setClearColor(0x000000, 1);
-    renderer.clear();
-    const firstDrawStarted = performance.now();
-    renderer.render(scene, camera);
-    const firstDrawMs = performance.now() - firstDrawStarted;
-    renderer.setRenderTarget(null);
-    const { atlasGpuBytes, reference } = await loadBitmapReferenceSnapshot(font);
+    const firstDrawTarget = target;
+    const firstDrawMs = await withRendererStateRestored(renderer, () => {
+      renderer.setRenderTarget(firstDrawTarget);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+      const firstDrawStarted = performance.now();
+      renderer.render(scene, camera);
+      return performance.now() - firstDrawStarted;
+    });
+    const { atlasGpuBytes, reference } = await loadBitmapReferenceSnapshot(font, signal);
     const referencePixels = composeBitmapReference(line, reference, dpr, WIDTH, HEIGHT);
     return {
       backend,
       dpr,
       renderer,
+      ...(ownedRenderer === undefined ? {} : { ownedRenderer }),
       target,
       scene,
       camera,
@@ -459,7 +475,7 @@ async function createResources(
     if (line !== undefined) disposeBitmapLine(line);
     font?.dispose();
     target?.dispose();
-    await disposeConfiguredRenderer(renderer);
+    if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
     throw error;
   }
 }
@@ -1561,10 +1577,18 @@ export async function captureBitmapTextConformance(options: {
   readonly delivery?: FontDelivery;
   readonly dpr: number;
   readonly fontFixture?: BenchmarkFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }): Promise<BitmapTextConformanceCapture> {
   options.signal?.throwIfAborted();
-  const resources = await createResources(options.backend, options.dpr, options.fontFixture, options.delivery);
+  const resources = await createResources(
+    options.backend,
+    options.dpr,
+    options.fontFixture,
+    options.delivery,
+    options.signal,
+    options.renderer,
+  );
   try {
     options.signal?.throwIfAborted();
     const width = Math.round(WIDTH * options.dpr);
@@ -1585,10 +1609,7 @@ export async function captureBitmapTextConformance(options: {
       renderSubmitMs: rendered.renderMs,
     };
   } finally {
-    disposeBitmapLine(resources.line);
-    resources.font.dispose();
-    resources.target.dispose();
-    await disposeConfiguredRenderer(resources.renderer);
+    await disposeBitmapTextResources(resources);
   }
 }
 
@@ -1596,10 +1617,18 @@ export async function captureBitmapSourceOutlineFidelity(options: {
   readonly backend: RendererBackend;
   readonly dpr: number;
   readonly fontFixture: SelectableFontFixture;
+  readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }): Promise<SourceOutlineFidelityCapture> {
   options.signal?.throwIfAborted();
-  const resources = await createResources(options.backend, options.dpr, options.fontFixture);
+  const resources = await createResources(
+    options.backend,
+    options.dpr,
+    options.fontFixture,
+    'baked',
+    options.signal,
+    options.renderer,
+  );
   try {
     const width = Math.round(WIDTH * options.dpr);
     const height = Math.round(HEIGHT * options.dpr);
@@ -1620,10 +1649,7 @@ export async function captureBitmapSourceOutlineFidelity(options: {
       renderSubmitMs: rendered.renderMs,
     });
   } finally {
-    disposeBitmapLine(resources.line);
-    resources.font.dispose();
-    resources.target.dispose();
-    await disposeConfiguredRenderer(resources.renderer);
+    await disposeBitmapTextResources(resources);
   }
 }
 
@@ -1657,7 +1683,7 @@ function positiveViewportSize(value: number, name: string): number {
 }
 
 async function renderBitmapText(resources: BitmapTextResources): Promise<TargetRunOutput> {
-  const { renderer, target, camera, line } = resources;
+  const { target, camera, line } = resources;
   const physicalWidth = Math.round(WIDTH * resources.dpr);
   const physicalHeight = Math.round(HEIGHT * resources.dpr);
   const originalPosition = line.object.position.clone();
@@ -1672,7 +1698,6 @@ async function renderBitmapText(resources: BitmapTextResources): Promise<TargetR
   let clipped: Awaited<ReturnType<typeof renderFrame>>;
   let clippedQuality: ReturnType<typeof assertBitmapTextPixels>;
   try {
-    renderer.setSize(CLIPPED_WIDTH, CLIPPED_HEIGHT, false);
     target.setSize(clippedPhysicalWidth, clippedPhysicalHeight);
     camera.right = CLIPPED_WIDTH;
     camera.bottom = -CLIPPED_HEIGHT;
@@ -1699,7 +1724,6 @@ async function renderBitmapText(resources: BitmapTextResources): Promise<TargetR
     }
   } finally {
     line.object.position.copy(originalPosition);
-    renderer.setSize(WIDTH, HEIGHT, false);
     target.setSize(physicalWidth, physicalHeight);
     camera.right = WIDTH;
     camera.bottom = -HEIGHT;
@@ -1748,23 +1772,31 @@ async function renderFrame(
   physicalHeight: number,
 ): Promise<{ readonly bytes: Uint8Array; readonly renderMs: number }> {
   const { renderer, target, scene, camera } = resources;
-  renderer.setRenderTarget(target);
-  renderer.setClearColor(0x000000, 1);
-  renderer.clear();
-  const renderStarted = performance.now();
-  renderer.render(scene, camera);
-  const renderMs = performance.now() - renderStarted;
-  const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, physicalWidth, physicalHeight);
-  renderer.setRenderTarget(null);
-  return {
-    bytes: compactRgba8Readback(
-      new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
-      physicalWidth,
-      physicalHeight,
-      resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-    ),
-    renderMs,
-  };
+  return withRendererStateRestored(renderer, async () => {
+    renderer.setRenderTarget(target);
+    renderer.setClearColor(0x000000, 1);
+    renderer.clear();
+    const renderStarted = performance.now();
+    renderer.render(scene, camera);
+    const renderMs = performance.now() - renderStarted;
+    const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, physicalWidth, physicalHeight);
+    return {
+      bytes: compactRgba8Readback(
+        new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
+        physicalWidth,
+        physicalHeight,
+        resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+      ),
+      renderMs,
+    };
+  });
+}
+
+async function disposeBitmapTextResources(resources: BitmapTextResources): Promise<void> {
+  disposeBitmapLine(resources.line);
+  resources.font.dispose();
+  resources.target.dispose();
+  if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
 }
 
 export function assertBitmapTextPixels(

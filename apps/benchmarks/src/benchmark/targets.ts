@@ -748,13 +748,13 @@ function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'raster']),
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/tsl-baseline')).createTslBaselineTarget(backend);
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('TSL baseline target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -778,14 +778,14 @@ function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
       loaded?.configure?.(input);
     },
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/bitmap-text')).createBitmapTextTarget(backend);
       loaded.configure?.(configuredInput);
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('bitmap text target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -804,13 +804,13 @@ function advancedShapingConformanceTarget(): BenchmarkTarget {
     color: 'violet',
     capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/advanced-shaping-conformance')).createAdvancedShapingConformanceTarget();
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('advanced-shaping target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -829,13 +829,13 @@ function reactTextTarget(): BenchmarkTarget {
     color: 'violet',
     capabilities: new Set(['deterministic', 'loader', 'shaping', 'paragraph', 'raster']),
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/react-text')).createReactTextTarget();
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('React Text target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -854,13 +854,13 @@ function mtsdfTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
     color: backend === 'webgpu' ? 'cyan' : 'amber',
     capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/mtsdf-text')).createMtsdfTextTarget(backend);
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('MTSDF text target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -884,14 +884,14 @@ function mtsdfConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
       loaded?.configure?.(input);
     },
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/mtsdf-text')).createMtsdfConformanceTarget(backend);
       loaded.configure?.(configuredInput);
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('MTSDF conformance target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -910,13 +910,13 @@ function slugTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
     color: backend === 'webgpu' ? 'green' : 'amber',
     capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/slug-text')).createSlugTextTarget(backend);
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('Slug text target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
@@ -940,14 +940,14 @@ function slugConformanceTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
       loaded?.configure?.(input);
     },
     status: () => 'ready',
-    load: async (controls) => {
+    load: async (controls, context) => {
       loaded ??= (await import('../renderer/slug-text')).createSlugConformanceTarget(backend);
       loaded.configure?.(configuredInput);
-      await loaded.load(controls);
+      await loaded.load(controls, context);
     },
-    run: async (input, sampleIndex, controls) => {
+    run: async (input, sampleIndex, controls, context) => {
       if (loaded === undefined) throw new Error('Slug conformance target was not loaded');
-      return loaded.run(input, sampleIndex, controls);
+      return loaded.run(input, sampleIndex, controls, context);
     },
     dispose: async () => {
       const target = loaded;
