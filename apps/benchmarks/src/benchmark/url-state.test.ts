@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SELECTABLE_FONT_FIXTURE_IDS } from './font-fixtures';
-import { readHarnessLocation, writeHarnessLocation } from './url-state';
+import { readHarnessLocation, writeHarnessLocation, writeHarnessUrl } from './url-state';
 
 describe('harness URL state', () => {
   it('round-trips a reproducible selection', () => {
     const value = {
       mode: 'conformance',
-      layout: 'zen',
+      layout: 'presentation',
       technique: 'bitmap',
       backend: 'webgl2',
       delivery: 'runtime',
@@ -15,20 +15,22 @@ describe('harness URL state', () => {
       workload: 'text-accuracy',
       view: 'report',
     } as const;
-    expect(readHarnessLocation(writeHarnessLocation(value))).toEqual(value);
+    expect(readHarnessLocation(writeHarnessLocation(value), 1, 'presentation')).toEqual(value);
+    expect(writeHarnessUrl(value)).toMatch(/^\/presentation\?/);
   });
 
-  it('omits the default main layout from canonical links', () => {
+  it('keeps layout in the route instead of the query string', () => {
     const search = writeHarnessLocation({ ...readHarnessLocation(''), layout: 'main' });
 
     expect(new URLSearchParams(search).has('layout')).toBe(false);
     expect(readHarnessLocation(search).layout).toBe('main');
+    expect(writeHarnessUrl({ ...readHarnessLocation(''), layout: 'main' })).toMatch(/^\/\?/);
   });
 
   it('rejects unknown axes without losing the human-facing workload', () => {
     expect(
       readHarnessLocation(
-        '?mode=unknown&layout=unknown&technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown',
+        '?mode=unknown&technique=unknown&backend=unknown&font=unknown&workload=text-ladder&view=unknown',
       ),
     ).toEqual({
       mode: 'benchmark',

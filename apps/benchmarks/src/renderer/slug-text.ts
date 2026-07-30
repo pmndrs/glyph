@@ -29,9 +29,8 @@ import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../benchma
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
-import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createFontDeliveryMetrics, loadRuntimeFont, type FontDeliveryMetrics } from './font-delivery';
-import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry';
+import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
 import {
   benchmarkContentWidth,
   LIVE_TEXT_COLOR,
@@ -41,6 +40,16 @@ import {
 } from './live-text-style';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
 import { compareRgba8Coverage } from './mtsdf-cpu-reference';
+import {
+  createPersistentRenderHost,
+  type PersistentRenderScene,
+  type PersistentRenderViewport,
+} from './persistent-render-host';
+import {
+  createRetainedFontFixtureController,
+  type LiveFontFixtureUpdate,
+  type RetainedFontFixtureController,
+} from './retained-font-fixture';
 import { renderFlatSlugCpuReference } from './slug-cpu-reference';
 import type {
   SlugAffineRoleSceneDefinition,
@@ -82,6 +91,19 @@ const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'source-serif-4': sourceSerifCompressedFontUrl,
   'dancing-script': dancingScriptCompressedFontUrl,
 };
+
+export async function preloadSlugFontAssets(
+  fixtures: readonly BenchmarkFontFixture[],
+  signal?: AbortSignal,
+): Promise<void> {
+  await Promise.all(
+    fixtures.map(async (fixture) => {
+      const response = await fetch(compressedFontUrls[fixture], signal === undefined ? undefined : { signal });
+      if (!response.ok) throw new Error(`Unable to preload Slug font fixture (${response.status})`);
+      await response.arrayBuffer();
+    }),
+  );
+}
 
 const slugFixtureManifests = new Map(
   (showcaseManifest as { readonly artifacts: readonly SlugFixtureManifest[] }).artifacts.map((artifact) => [
@@ -300,7 +322,7 @@ export interface SlugTextLiveStats {
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
 }
 
-export interface SlugTextPreviewUpdate {
+export interface SlugTextPreviewUpdate extends LiveFontFixtureUpdate {
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -398,6 +420,343 @@ export function createSlugConformanceTarget(backend: RendererBackend): Benchmark
   };
 }
 
+interface SlugTextPersistentSceneOptions {
+  readonly anchor?: LiveTextAnchor;
+  readonly backend: RendererBackend;
+  readonly direction?: 'ltr' | 'rtl';
+  readonly features?: readonly FontFeature[];
+  readonly fontSize: number;
+  readonly fontFixture?: BenchmarkFontFixture;
+  readonly delivery?: FontDelivery;
+  readonly showGrid: boolean;
+  readonly language?: string;
+  readonly layoutWidthRatio: number;
+  readonly text: string;
+  readonly textAlign?: 'start' | 'center';
+  readonly onError: (error: unknown) => void;
+  readonly onStats: (stats: SlugTextLiveStats) => void;
+  readonly onBakeProgress?: BakeProgressListener;
+}
+
+interface SlugPersistentFontFixture {
+  readonly font: RegisteredFont;
+  readonly fontLoadMs: number;
+  readonly loaded: Awaited<ReturnType<typeof loadSlugFont>>;
+  readonly rasterConfiguration: SlugRasterConfiguration;
+}
+
+export interface SlugTextPersistentScene extends PersistentRenderScene {
+  panBy(deltaX: number, deltaY: number): void;
+  resetView(): void;
+  setGridVisible(visible: boolean): void;
+  update(update: SlugTextPreviewUpdate): Promise<void>;
+}
+
+export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOptions): SlugTextPersistentScene {
+  const {
+    backend,
+    onError,
+    onStats,
+    onBakeProgress,
+    text,
+    language = 'en',
+    direction = 'ltr',
+    features = [],
+    textAlign = 'start',
+    fontFixture: initialFontFixture = 'inter',
+    delivery = 'baked',
+  } = options;
+  assertLayoutWidthRatio(options.layoutWidthRatio);
+  const startupStarted = performance.now();
+  let width = 0;
+  let height = 0;
+  let fontSize = positiveViewportSize(options.fontSize, 'Slug preview font size');
+  let anchor = options.anchor ?? 'center';
+  let layoutWidthRatio = options.layoutWidthRatio;
+  let committedContentWidth = 0;
+  let committedRasterPixelRatio = 0;
+  let gridVisible = options.showGrid;
+  const textUpdateTelemetry = createTextUpdateTelemetry();
+  let rendererInitMs = 0;
+  let textReadyMs = 0;
+  let startupMs = 0;
+  let firstDrawMs = 0;
+  let firstDrawRecorded = false;
+  const registry = new FontRegistry();
+  let fontFixture: RetainedFontFixtureController<SlugPersistentFontFixture> | undefined;
+  let activationSignal: AbortSignal | undefined;
+  let canvasSurface: ReturnType<typeof createCanvasSurface> | undefined;
+  let scene: THREE.Scene | undefined;
+  let camera: THREE.OrthographicCamera | undefined;
+  let font: RegisteredFont | undefined;
+  let line: Text | undefined;
+  let closing = false;
+  let disposed = false;
+  let updateRevision = 0;
+
+  const activeResources = (): {
+    readonly canvasSurface: ReturnType<typeof createCanvasSurface>;
+    readonly camera: THREE.OrthographicCamera;
+    readonly line: Text;
+    readonly scene: THREE.Scene;
+  } => {
+    if (canvasSurface === undefined || camera === undefined || line === undefined || scene === undefined) {
+      throw new DOMException('The Slug preview scene is not active', 'InvalidStateError');
+    }
+    return { canvasSurface, camera, line, scene };
+  };
+
+  const resizeScene = (viewport: PersistentRenderViewport): void => {
+    if (closing || disposed || line === undefined || camera === undefined || canvasSurface === undefined) return;
+    width = positiveViewportSize(viewport.width, 'Slug preview width');
+    height = positiveViewportSize(viewport.height, 'Slug preview height');
+    canvasSurface.resize(width, height);
+    camera.right = width;
+    camera.bottom = -height;
+    camera.updateProjectionMatrix();
+    const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
+    if (nextContentWidth === committedContentWidth && viewport.dpr === committedRasterPixelRatio) {
+      positionLiveLine(line, width, height, anchor, layoutWidthRatio);
+      return;
+    }
+    const updateStartedAt = performance.now();
+    const revision = ++updateRevision;
+    line.setProperties({ width: nextContentWidth, rasterPixelRatio: viewport.dpr });
+    const resizeScheduledAt = performance.now();
+    void line.ready
+      .then(() => {
+        if (closing || disposed || revision !== updateRevision || line === undefined) return;
+        committedContentWidth = nextContentWidth;
+        committedRasterPixelRatio = viewport.dpr;
+        const resizeSceneStartedAt = performance.now();
+        positionLiveLine(line, width, height, anchor, layoutWidthRatio);
+        const finishedAt = performance.now();
+        textUpdateTelemetry.record({
+          scheduleMs: resizeScheduledAt - updateStartedAt,
+          readyMs: resizeSceneStartedAt - resizeScheduledAt,
+          sceneMs: finishedAt - resizeSceneStartedAt,
+          totalMs: finishedAt - updateStartedAt,
+        });
+      })
+      .catch((error: unknown) => {
+        if (!closing && !disposed) onError(error);
+      });
+  };
+
+  return {
+    id: `slug-text-preview-${backend}`,
+    async activate(context) {
+      if (disposed) throw new DOMException('The Slug preview scene is disposed', 'InvalidStateError');
+      if (scene !== undefined) throw new DOMException('The Slug preview scene is already active', 'InvalidStateError');
+      context.signal.throwIfAborted();
+      activationSignal = context.signal;
+      rendererInitMs = context.rendererInitMs;
+      width = positiveViewportSize(context.viewport.width, 'Slug preview width');
+      height = positiveViewportSize(context.viewport.height, 'Slug preview height');
+      committedContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
+      committedRasterPixelRatio = context.viewport.dpr;
+      scene = new THREE.Scene();
+      camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);
+      camera.position.z = 500;
+      camera.updateProjectionMatrix();
+      // CanvasSurface consumes only render-state methods; the host still withholds renderer lifecycle ownership.
+      canvasSurface = createCanvasSurface(context.renderer as THREE.WebGPURenderer, width, height, gridVisible);
+      const fontStarted = performance.now();
+      const loaded = await loadSlugFont(context.signal, initialFontFixture, delivery, onBakeProgress, registry);
+      font = loaded.font;
+      const fontLoadMs = performance.now() - fontStarted;
+      context.signal.throwIfAborted();
+      const rasterConfiguration = await registeredSlugConfiguration(font, context.signal);
+      fontFixture = createRetainedFontFixtureController(registry, {
+        fixture: initialFontFixture,
+        asset: { font, fontLoadMs, loaded, rasterConfiguration },
+      });
+      const textStarted = performance.now();
+      line = new Text({
+        text,
+        font,
+        raster: loaded.raster,
+        fontSize,
+        rasterPixelRatio: context.viewport.dpr,
+        lineHeight: LIVE_TEXT_LINE_HEIGHT,
+        width: committedContentWidth,
+        wrap: 'word',
+        language,
+        direction,
+        features,
+        textAlign,
+        color: LIVE_TEXT_COLOR,
+      });
+      const scheduledAt = performance.now();
+      await line.ready;
+      const readyAt = performance.now();
+      context.signal.throwIfAborted();
+      textReadyMs = performance.now() - textStarted;
+      const sceneStartedAt = performance.now();
+      positionLiveLine(line, width, height, anchor, layoutWidthRatio);
+      scene.add(line);
+      const sceneFinishedAt = performance.now();
+      textUpdateTelemetry.record({
+        scheduleMs: scheduledAt - textStarted,
+        readyMs: readyAt - scheduledAt,
+        sceneMs: sceneFinishedAt - sceneStartedAt,
+        totalMs: sceneFinishedAt - textStarted,
+      });
+      startupMs = performance.now() - startupStarted;
+    },
+    frame() {
+      if (closing || disposed) return;
+      const active = activeResources();
+      const startedAt = performance.now();
+      active.canvasSurface.render(active.scene, active.camera);
+      if (!firstDrawRecorded) {
+        firstDrawMs = performance.now() - startedAt;
+        firstDrawRecorded = true;
+      }
+    },
+    telemetry(snapshot, viewport) {
+      if (closing || disposed || fontFixture === undefined || line === undefined) return;
+      const currentFontFixture = fontFixture.current.asset;
+      const layout = committedLayout(line);
+      const framebufferGpuBytes = viewport.drawingBufferWidth * viewport.drawingBufferHeight * 4;
+      onStats({
+        technique: 'slug',
+        backend,
+        dpr: viewport.dpr,
+        renderedPpem: fontSize * viewport.dpr,
+        showGrid: gridVisible,
+        ...snapshot,
+        glyphCount: renderedGlyphCount(line),
+        missingGlyphCount: missingGlyphCount(layout),
+        drawCount: drawCount(line),
+        layoutWidth: layout.width,
+        layoutHeight: layout.height,
+        lineCount: layout.lineGlyphCounts.length,
+        slugPageCount: currentFontFixture.rasterConfiguration.pageCount,
+        slugCurveTexelCount: currentFontFixture.rasterConfiguration.curveTexelCount,
+        slugCurveGpuBytes: currentFontFixture.rasterConfiguration.curveGpuBytes,
+        slugHeaderCount: currentFontFixture.rasterConfiguration.headerCount,
+        slugHeaderGpuBytes: currentFontFixture.rasterConfiguration.headerGpuBytes,
+        slugReferenceCount: currentFontFixture.rasterConfiguration.referenceCount,
+        slugReferenceGpuBytes: currentFontFixture.rasterConfiguration.referenceGpuBytes,
+        slugGpuBytes: currentFontFixture.rasterConfiguration.gpuBytes,
+        atlasGpuBytes: currentFontFixture.rasterConfiguration.gpuBytes,
+        framebufferGpuBytes,
+        totalGpuBytes: currentFontFixture.rasterConfiguration.gpuBytes + framebufferGpuBytes,
+        artifactBytes: currentFontFixture.loaded.compressedBytes,
+        delivery,
+        sourceFontBytes: currentFontFixture.loaded.metrics.sourceFontBytes,
+        coreArtifactBytes: currentFontFixture.loaded.metrics.coreArtifactBytes,
+        coreBakeMs: currentFontFixture.loaded.metrics.coreBakeMs,
+        rasterArtifactBytes: currentFontFixture.loaded.metrics.rasterArtifactBytes,
+        rasterBakeMs: currentFontFixture.loaded.metrics.rasterBakeMs,
+        rendererInitMs,
+        fontLoadMs: currentFontFixture.fontLoadMs,
+        textReadyMs,
+        firstDrawMs,
+        startupMs,
+        gpuTimingSupported: snapshot.gpuHistoryLength > 0,
+        textUpdateTimings: textUpdateTelemetry.summary(),
+      });
+    },
+    resize: resizeScene,
+    panBy(deltaX, deltaY) {
+      if (closing || disposed) return;
+      const activeScene = activeResources().scene;
+      activeScene.position.x += finiteCanvasDelta(deltaX, 'Slug preview horizontal pan');
+      activeScene.position.y -= finiteCanvasDelta(deltaY, 'Slug preview vertical pan');
+    },
+    resetView() {
+      if (closing || disposed) return;
+      activeResources().scene.position.set(0, 0, 0);
+    },
+    setGridVisible(visible) {
+      if (closing || disposed) return;
+      gridVisible = visible;
+      activeResources().canvasSurface.setGridVisible(visible);
+    },
+    async update(next) {
+      if (closing || disposed) throw new DOMException('The Slug preview is disposed', 'AbortError');
+      const activeLine = activeResources().line;
+      const activeFontFixture = fontFixture;
+      const signal = activationSignal;
+      if (activeFontFixture === undefined || signal === undefined) {
+        throw new DOMException('The Slug preview scene is not active', 'InvalidStateError');
+      }
+      const updateStartedAt = performance.now();
+      const nextFontSize = positiveViewportSize(next.fontSize, 'Slug preview font size');
+      assertLayoutWidthRatio(next.layoutWidthRatio);
+      const revision = ++updateRevision;
+      const nextContentWidth = benchmarkContentWidth(width, next.layoutWidthRatio);
+      let updateScheduledAt = updateStartedAt;
+      await activeFontFixture.update({
+        fixture: next.fontFixture ?? activeFontFixture.current.fixture,
+        isCurrent: () => !closing && !disposed && revision === updateRevision,
+        load: async (fixture, fixtureRegistry) => {
+          const fontStartedAt = performance.now();
+          const loaded = await loadSlugFont(signal, fixture, delivery, onBakeProgress, fixtureRegistry);
+          try {
+            const rasterConfiguration = await registeredSlugConfiguration(loaded.font, signal);
+            return { font: loaded.font, fontLoadMs: performance.now() - fontStartedAt, loaded, rasterConfiguration };
+          } catch (error) {
+            if (loaded.font !== activeFontFixture.current.asset.font) loaded.font.dispose();
+            throw error;
+          }
+        },
+        commit: async (fixture) => {
+          updateScheduledAt = performance.now();
+          activeLine.setProperties({
+            text: next.text,
+            font: fixture.font,
+            raster: fixture.loaded.raster,
+            fontSize: nextFontSize,
+            width: nextContentWidth,
+            language: next.language,
+            direction: next.direction,
+            features: next.features,
+            textAlign: next.textAlign,
+          });
+          await activeLine.ready;
+          fontSize = nextFontSize;
+          anchor = next.anchor;
+          layoutWidthRatio = next.layoutWidthRatio;
+          committedContentWidth = nextContentWidth;
+          positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+        },
+      });
+      if (closing || disposed || revision !== updateRevision) {
+        throw new DOMException('The Slug preview update was superseded', 'AbortError');
+      }
+      const updateSceneStartedAt = performance.now();
+      positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+      const finishedAt = performance.now();
+      textUpdateTelemetry.record({
+        scheduleMs: updateScheduledAt - updateStartedAt,
+        readyMs: updateSceneStartedAt - updateScheduledAt,
+        sceneMs: finishedAt - updateSceneStartedAt,
+        totalMs: finishedAt - updateStartedAt,
+      });
+    },
+    deactivate() {
+      if (disposed) return;
+      closing = true;
+      disposed = true;
+      updateRevision += 1;
+      line?.dispose();
+      if (fontFixture === undefined) font?.dispose();
+      else fontFixture.dispose();
+      canvasSurface?.dispose();
+      line = undefined;
+      font = undefined;
+      fontFixture = undefined;
+      activationSignal = undefined;
+      canvasSurface = undefined;
+      camera = undefined;
+      scene = undefined;
+    },
+  };
+}
+
 export async function createSlugTextPreview(options: {
   readonly anchor?: LiveTextAnchor;
   readonly backend: RendererBackend;
@@ -421,283 +780,60 @@ export async function createSlugTextPreview(options: {
   readonly onStats: (stats: SlugTextLiveStats) => void;
   readonly onBakeProgress?: BakeProgressListener;
 }): Promise<SlugTextPreview> {
-  const {
-    backend,
-    canvas,
-    dpr,
-    onError,
-    onStats,
-    onBakeProgress,
-    signal,
-    text,
-    language = 'en',
-    direction = 'ltr',
-    features = [],
-    textAlign = 'start',
-    fontFixture = 'inter',
-    delivery = 'baked',
-  } = options;
-  signal?.throwIfAborted();
-  const startupStarted = performance.now();
-  let width = positiveViewportSize(options.width, 'Slug preview width');
-  let height = positiveViewportSize(options.height, 'Slug preview height');
-  let fontSize = positiveViewportSize(options.fontSize, 'Slug preview font size');
-  let anchor = options.anchor ?? 'center';
-  let layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
-  let committedContentWidth = options.layoutWidth;
+  options.signal?.throwIfAborted();
+  const width = positiveViewportSize(options.width, 'Slug preview width');
+  const height = positiveViewportSize(options.height, 'Slug preview height');
+  const layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
   assertLayoutWidthRatio(layoutWidthRatio);
-  const rendererStarted = performance.now();
-  const renderer = await createConfiguredRenderer({
-    backend,
-    canvas,
-    dpr,
-    height,
-    trackGpuTimestamps: backend === 'webgpu',
-    width,
+  const scene = createSlugTextPersistentScene({
+    anchor: options.anchor ?? 'center',
+    backend: options.backend,
+    direction: options.direction ?? 'ltr',
+    features: options.features ?? [],
+    fontSize: options.fontSize,
+    fontFixture: options.fontFixture ?? 'inter',
+    delivery: options.delivery ?? 'baked',
+    showGrid: options.showGrid,
+    language: options.language ?? 'en',
+    layoutWidthRatio,
+    text: options.text,
+    textAlign: options.textAlign ?? 'start',
+    onError: options.onError,
+    onStats: options.onStats,
+    ...(options.onBakeProgress === undefined ? {} : { onBakeProgress: options.onBakeProgress }),
   });
-  let rendererViewport = readRendererViewportState(renderer);
-  const canvasSurface = createCanvasSurface(renderer, width, height, options.showGrid);
-  let gridVisible = options.showGrid;
-  const textUpdateTelemetry = createTextUpdateTelemetry();
-  const rendererInitMs = performance.now() - rendererStarted;
-  let font: RegisteredFont | undefined;
-  let line: Text | undefined;
-  let gpuFrameTimer: GpuFrameTimer | undefined;
+  const host = await createPersistentRenderHost({
+    backend: options.backend,
+    canvas: options.canvas,
+    dpr: options.dpr,
+    height,
+    width,
+    onError: options.onError,
+  });
   try {
-    const fontStarted = performance.now();
-    const loaded = await loadSlugFont(signal, fontFixture, delivery, onBakeProgress);
-    font = loaded.font;
-    const fontLoadMs = performance.now() - fontStarted;
-    signal?.throwIfAborted();
-    const activeFont = font;
-    const scene = new THREE.Scene();
-    const textStarted = performance.now();
-    line = new Text({
-      text,
-      font: activeFont,
-      raster: loaded.raster,
-      fontSize,
-      rasterPixelRatio: rendererViewport.pixelRatio,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
-      width: benchmarkContentWidth(width, layoutWidthRatio),
-      wrap: 'word',
-      language,
-      direction,
-      features,
-      textAlign,
-      color: LIVE_TEXT_COLOR,
-    });
-    const scheduledAt = performance.now();
-    await line.ready;
-    const readyAt = performance.now();
-    signal?.throwIfAborted();
-    const activeLine = line;
-    const rasterConfiguration = await registeredSlugConfiguration(activeFont, signal);
-    const textReadyMs = performance.now() - textStarted;
-    const startupMs = performance.now() - startupStarted;
-    const sceneStartedAt = performance.now();
-    positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-    scene.add(activeLine);
-    const sceneFinishedAt = performance.now();
-    textUpdateTelemetry.record({
-      scheduleMs: scheduledAt - textStarted,
-      readyMs: readyAt - scheduledAt,
-      sceneMs: sceneFinishedAt - sceneStartedAt,
-      totalMs: sceneFinishedAt - textStarted,
-    });
-    const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);
-    camera.position.z = 500;
-    camera.updateProjectionMatrix();
-    gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError });
-    const activeGpuFrameTimer = gpuFrameTimer;
-    const gpuTimingSupported = activeGpuFrameTimer.supported;
-    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported });
-    let firstDrawMs = 0;
-    let firstDrawRecorded = false;
-    let closing = false;
-    let disposed = false;
+    const lease = await host.replaceScene(scene, options.signal);
     let disposal: Promise<void> | undefined;
-    let updateRevision = 0;
-
-    const renderFrame = (timestamp: number): void => {
-      if (disposed) return;
-      try {
-        const cpuFrameStarted = performance.now();
-        for (const measurement of activeGpuFrameTimer.poll()) {
-          if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
-          else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
-        }
-        const frameId = telemetry.beginFrame(timestamp);
-        if (telemetry.gpuTimingSupported) activeGpuFrameTimer.beginFrame(frameId);
-        const started = performance.now();
-        try {
-          canvasSurface.render(scene, camera);
-        } finally {
-          if (telemetry.gpuTimingSupported) activeGpuFrameTimer.endFrame();
-        }
-        const submitMs = performance.now() - started;
-        if (!firstDrawRecorded) {
-          firstDrawMs = submitMs;
-          firstDrawRecorded = true;
-        }
-        if (closing) return;
-        const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const telemetrySnapshot = telemetry.endFrame(frameId, cpuFrameMs);
-        if (telemetrySnapshot === undefined) return;
-        const layout = committedLayout(activeLine);
-        const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
-        onStats({
-          technique: 'slug',
-          backend,
-          dpr: rendererViewport.pixelRatio,
-          renderedPpem: fontSize * rendererViewport.pixelRatio,
-          showGrid: gridVisible,
-          ...telemetrySnapshot,
-          glyphCount: renderedGlyphCount(activeLine),
-          missingGlyphCount: missingGlyphCount(layout),
-          drawCount: drawCount(activeLine),
-          layoutWidth: layout.width,
-          layoutHeight: layout.height,
-          lineCount: layout.lineGlyphCounts.length,
-          slugPageCount: rasterConfiguration.pageCount,
-          slugCurveTexelCount: rasterConfiguration.curveTexelCount,
-          slugCurveGpuBytes: rasterConfiguration.curveGpuBytes,
-          slugHeaderCount: rasterConfiguration.headerCount,
-          slugHeaderGpuBytes: rasterConfiguration.headerGpuBytes,
-          slugReferenceCount: rasterConfiguration.referenceCount,
-          slugReferenceGpuBytes: rasterConfiguration.referenceGpuBytes,
-          slugGpuBytes: rasterConfiguration.gpuBytes,
-          atlasGpuBytes: rasterConfiguration.gpuBytes,
-          framebufferGpuBytes,
-          totalGpuBytes: rasterConfiguration.gpuBytes + framebufferGpuBytes,
-          artifactBytes: loaded.compressedBytes,
-          delivery,
-          sourceFontBytes: loaded.metrics.sourceFontBytes,
-          coreArtifactBytes: loaded.metrics.coreArtifactBytes,
-          coreBakeMs: loaded.metrics.coreBakeMs,
-          rasterArtifactBytes: loaded.metrics.rasterArtifactBytes,
-          rasterBakeMs: loaded.metrics.rasterBakeMs,
-          rendererInitMs,
-          fontLoadMs,
-          textReadyMs,
-          firstDrawMs,
-          startupMs,
-          gpuTimingSupported,
-          textUpdateTimings: textUpdateTelemetry.summary(),
-        });
-      } catch (error) {
-        onError(error);
-      }
-    };
-    await renderer.setAnimationLoop(renderFrame);
-
     return {
       resize(nextWidth, nextHeight) {
-        if (closing || disposed) return;
-        width = positiveViewportSize(nextWidth, 'Slug preview width');
-        height = positiveViewportSize(nextHeight, 'Slug preview height');
-        renderer.setSize(width, height, false);
-        rendererViewport = readRendererViewportState(renderer);
-        canvasSurface.resize(width, height);
-        camera.right = width;
-        camera.bottom = -height;
-        camera.updateProjectionMatrix();
-        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
-        if (nextContentWidth === committedContentWidth) {
-          positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-          return;
-        }
-        const updateStartedAt = performance.now();
-        const revision = ++updateRevision;
-        activeLine.setProperties({ width: nextContentWidth });
-        const resizeScheduledAt = performance.now();
-        void activeLine.ready
-          .then(() => {
-            if (closing || disposed || revision !== updateRevision) return;
-            committedContentWidth = nextContentWidth;
-            const resizeSceneStartedAt = performance.now();
-            positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-            const finishedAt = performance.now();
-            textUpdateTelemetry.record({
-              scheduleMs: resizeScheduledAt - updateStartedAt,
-              readyMs: resizeSceneStartedAt - resizeScheduledAt,
-              sceneMs: finishedAt - resizeSceneStartedAt,
-              totalMs: finishedAt - updateStartedAt,
-            });
-          })
-          .catch((error: unknown) => {
-            if (!closing && !disposed) onError(error);
-          });
+        host.resize(nextWidth, nextHeight);
       },
-      panBy(deltaX, deltaY) {
-        if (closing || disposed) return;
-        scene.position.x += finiteCanvasDelta(deltaX, 'Slug preview horizontal pan');
-        scene.position.y -= finiteCanvasDelta(deltaY, 'Slug preview vertical pan');
-      },
-      resetView() {
-        scene.position.set(0, 0, 0);
-      },
-      setGridVisible(visible) {
-        gridVisible = visible;
-        canvasSurface.setGridVisible(visible);
-      },
-      async update(next) {
-        if (closing || disposed) {
-          throw new DOMException('The Slug preview is disposed', 'AbortError');
-        }
-        const updateStartedAt = performance.now();
-        fontSize = positiveViewportSize(next.fontSize, 'Slug preview font size');
-        anchor = next.anchor;
-        assertLayoutWidthRatio(next.layoutWidthRatio);
-        layoutWidthRatio = next.layoutWidthRatio;
-        const revision = ++updateRevision;
-        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
-        activeLine.setProperties({
-          text: next.text,
-          fontSize,
-          width: nextContentWidth,
-          language: next.language,
-          direction: next.direction,
-          features: next.features,
-          textAlign: next.textAlign,
-        });
-        const updateScheduledAt = performance.now();
-        await activeLine.ready;
-        if (closing || disposed || revision !== updateRevision) {
-          throw new DOMException('The Slug preview update was superseded', 'AbortError');
-        }
-        committedContentWidth = nextContentWidth;
-        const updateSceneStartedAt = performance.now();
-        positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-        const finishedAt = performance.now();
-        textUpdateTelemetry.record({
-          scheduleMs: updateScheduledAt - updateStartedAt,
-          readyMs: updateSceneStartedAt - updateScheduledAt,
-          sceneMs: finishedAt - updateSceneStartedAt,
-          totalMs: finishedAt - updateStartedAt,
-        });
-      },
+      panBy: (deltaX, deltaY) => scene.panBy(deltaX, deltaY),
+      resetView: () => scene.resetView(),
+      setGridVisible: (visible) => scene.setGridVisible(visible),
+      update: (update) => scene.update(update),
       dispose() {
-        if (disposal !== undefined) return disposal;
-        closing = true;
-        disposal = (async () => {
-          disposed = true;
-          await renderer.setAnimationLoop(null);
-          await activeGpuFrameTimer.dispose();
-          activeLine.dispose();
-          activeFont.dispose();
-          canvasSurface.dispose();
-          await disposeConfiguredRenderer(renderer);
+        disposal ??= (async () => {
+          try {
+            await lease.release();
+          } finally {
+            await host.dispose();
+          }
         })();
         return disposal;
       },
     };
   } catch (error) {
-    await gpuFrameTimer?.dispose();
-    line?.dispose();
-    font?.dispose();
-    canvasSurface.dispose();
-    await disposeConfiguredRenderer(renderer);
+    await host.dispose();
     throw error;
   }
 }
@@ -1123,8 +1259,7 @@ export async function captureSlugProjectionZoomRoleScene(options: {
     const originX = (scene.physicalWidth / 2 - (bounds.minX + bounds.maxX + 1) / 2) / dpr;
     const originY = -((scene.physicalHeight / 2 - (bounds.minY + bounds.maxY + 1) / 2) / dpr);
     resources.line.position.set(originX, originY, 0);
-    const captures: SlugProjectionZoomCapture[] = [];
-    for (const zoom of scene.zooms) {
+    const captureAtZoom = async (zoom: 1 | 8): Promise<SlugProjectionZoomCapture> => {
       resources.camera.zoom = zoom;
       resources.camera.updateProjectionMatrix();
       const capture = await captureFlatSlugCandidate(resources);
@@ -1151,7 +1286,7 @@ export async function captureSlugProjectionZoomRoleScene(options: {
         },
       });
       const fringe = horizontalFringeAtCenter(capture.candidate, capture.width, capture.height);
-      captures.push({
+      return {
         zoom,
         candidate: capture.candidate,
         sourceReference: source.reference,
@@ -1166,13 +1301,11 @@ export async function captureSlugProjectionZoomRoleScene(options: {
         rightFringeWidth: fringe.rightPartialCoverageWidth,
         inkPixels: countInkPixels(capture.candidate),
         renderSubmitMs: capture.renderSubmitMs,
-      });
-    }
-    const one = captures[0];
-    const eight = captures[1];
-    if (one === undefined || eight === undefined) {
-      throw new Error('Slug projection zoom scene omitted a required zoom');
-    }
+      };
+    };
+    // Both captures share one camera, render target, and renderer; the first readback must finish before changing zoom.
+    const one = await captureAtZoom(scene.zooms[0]);
+    const eight = await captureAtZoom(scene.zooms[1]);
     return {
       scene,
       dpr,

@@ -166,10 +166,14 @@ export async function createRasterTechniqueComparison(options: {
     renderer.setRenderTarget(slugTarget);
     await renderer.compileAsync(slugScene, camera);
     renderer.setRenderTarget(null);
-    for (const material of [mtsdfMaterial, slugMaterial, heatmapMaterial]) {
-      quad.material = material;
-      await renderer.compileAsync(quad, quad.camera);
-    }
+    // compileAsync mutates renderer compilation state, and the quad exposes only one mutable material slot.
+    // Keep these passes serialized so each pipeline is compiled for the material assigned to the quad.
+    quad.material = mtsdfMaterial;
+    await renderer.compileAsync(quad, quad.camera);
+    quad.material = slugMaterial;
+    await renderer.compileAsync(quad, quad.camera);
+    quad.material = heatmapMaterial;
+    await renderer.compileAsync(quad, quad.camera);
     signal?.throwIfAborted();
     const activeResources = resources;
     const activeMtsdfLine = activeResources.mtsdfLine;

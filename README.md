@@ -193,12 +193,12 @@ The pinned [GitHub Actions workflow](.github/workflows/ci.yml) runs the ordinary
 pnpm benchmarks:test:live
 ```
 
-The benchmark app also owns reproducible performance probes for the retained Paragraph Stress layout path and the complete Zen workload matrix:
+The benchmark app also owns reproducible performance probes for the retained Paragraph Stress layout path and the complete Presentation workload matrix:
 
 ```sh
 pnpm benchmarks:profile:paragraph-layout
 pnpm benchmarks:profile:paragraph-font-size:bitmap
-pnpm benchmarks:profile:zen-sweep
+pnpm benchmarks:profile:presentation-sweep
 ```
 
 Run the package-owned coverage-guided Rust fuzzer locally with:

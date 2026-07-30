@@ -16,7 +16,7 @@ export interface TopBarProps {
   readonly onMenu: () => void;
   readonly onMode: (mode: HarnessMode) => void;
   readonly onTechnique: (technique: RasterTechnique) => void;
-  readonly onZenMode: () => void;
+  readonly onPresentationMode: () => void;
   readonly workloadPanelOpen: boolean;
 }
 
@@ -34,7 +34,7 @@ export function TopBar({
   onMenu,
   onMode,
   onTechnique,
-  onZenMode,
+  onPresentationMode,
   workloadPanelOpen,
 }: TopBarProps) {
   return (
@@ -100,11 +100,11 @@ export function TopBar({
         )}
         {mode === 'benchmark' && (
           <Button
-            aria-label="Enter Zen Mode"
+            aria-label="Enter Presentation Mode"
             className="size-8 p-0"
-            title="Enter Zen Mode"
+            title="Enter Presentation Mode"
             variant="secondary"
-            onClick={onZenMode}
+            onClick={onPresentationMode}
           >
             <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 16 16">
               <path

@@ -73,7 +73,13 @@ describe('sparklinePresentationTimestamp', () => {
 });
 
 describe('sparklineSampleY', () => {
-  it('uses a fixed domain and clips missed budgets to the chart ceiling', () => {
+  it('maps zero to the floor and the refresh ceiling to the top of the FPS chart', () => {
+    expect(sparklineSampleY(0, 60, 42)).toBe(40);
+    expect(sparklineSampleY(30, 60, 42)).toBe(21);
+    expect(sparklineSampleY(60, 60, 42)).toBe(2);
+  });
+
+  it('uses the same ascending fixed domain for frame-time charts', () => {
     expect(sparklineSampleY(0, 16, 42)).toBe(40);
     expect(sparklineSampleY(8, 16, 42)).toBe(21);
     expect(sparklineSampleY(32, 16, 42)).toBe(2);

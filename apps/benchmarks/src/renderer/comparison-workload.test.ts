@@ -1,10 +1,14 @@
+import type { AnyRasterInput, RegisteredFont } from '@pmndrs/text';
 import { describe, expect, it } from 'vitest';
 
 import {
+  advanceIconGridAutoPan,
+  applyRetainedTextFontFixture,
   applyRetainedTextFontSize,
   applyRetainedTextWidths,
   comparisonWorkloadContentWidth,
   comparisonWorkloadUpdateKind,
+  createComparisonWorkloadPersistentScene,
   dynamicLayoutWidths,
   iconGridAssignmentSignature,
   iconGridCenteredScroll,
@@ -12,12 +16,17 @@ import {
   iconGridVirtualWindow,
   iconGridViewportUpdateKind,
   ladderCssSizes,
+  OFF_AXIS_SPANS,
+  OFF_AXIS_TEXT,
   paintWordHue,
   ZOOM_TEXT_BASE_CSS_PX,
   ZOOM_TEXT_PHRASES,
+  ZOOM_TEXT_CORPUS,
+  shuffleZoomTextPhrases,
   zoomTextAnimationState,
   zoomTextMaximumScale,
   type ComparisonWorkloadConfiguration,
+  type IconGridAutoPanState,
 } from './comparison-workload';
 
 const baseConfiguration: ComparisonWorkloadConfiguration = {
@@ -36,10 +45,49 @@ const baseConfiguration: ComparisonWorkloadConfiguration = {
 };
 
 describe('comparison workload updates', () => {
+  it('creates an inert persistent scene before the host activates it', async () => {
+    const scene = createComparisonWorkloadPersistentScene({
+      ...baseConfiguration,
+      backend: 'webgpu',
+      delivery: 'baked',
+      technique: 'bitmap',
+      onError: () => undefined,
+      onStats: () => undefined,
+    });
+
+    expect(scene.id).toBe('comparison-bitmap-paint-effects');
+    expect(() => scene.panBy(1, 1)).toThrow('not active');
+    await scene.deactivate?.('released');
+    await scene.deactivate?.('released');
+  });
+
+  it('keeps the off-axis callout on one Inter-safe paragraph with reviewed color spans', () => {
+    expect(OFF_AXIS_TEXT).toBe(
+      'Render shaped text directly in your canvas, without the DOM. It reflows at runtime and uses the scene camera and depth. Bitmap, MSDF, Slug.',
+    );
+    expect(OFF_AXIS_SPANS.map(({ color, end, start }) => ({ color, word: OFF_AXIS_TEXT.slice(start, end) }))).toEqual([
+      { color: 0xa855f7, word: 'shaped' },
+      { color: 0x22d3ee, word: 'canvas' },
+      { color: 0x34d399, word: 'reflows' },
+      { color: 0xf59e0b, word: 'Bitmap' },
+      { color: 0xfb7185, word: 'MSDF' },
+      { color: 0xff4dc4, word: 'Slug' },
+    ]);
+  });
+
   it('holds bounded content steady below its minimum and expands in a larger viewport', () => {
     expect(comparisonWorkloadContentWidth(baseConfiguration, 390)).toBe(576);
     expect(comparisonWorkloadContentWidth(baseConfiguration, 768)).toBe(576);
     expect(comparisonWorkloadContentWidth(baseConfiguration, 1_280)).toBeCloseTo(985.6);
+  });
+
+  it('lets off-axis content extend beyond the viewport', () => {
+    expect(
+      comparisonWorkloadContentWidth({ ...baseConfiguration, workload: 'off-axis-3d', layoutWidthRatio: 1.5 }, 1_280),
+    ).toBeCloseTo(1_848);
+    expect(() =>
+      comparisonWorkloadContentWidth({ ...baseConfiguration, workload: 'off-axis-3d', layoutWidthRatio: 2.1 }, 1_280),
+    ).toThrow('layout width ratio');
   });
 
   it('keeps pan-only and specialized-fit workloads independent of content width', () => {
@@ -63,6 +111,15 @@ describe('comparison workload updates', () => {
     ] satisfies readonly Partial<ComparisonWorkloadConfiguration>[]) {
       expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, ...update })).toBe('retained');
     }
+  });
+
+  it('rebuilds workload-specific Text entries inside the retained scene', () => {
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, workload: 'off-axis-3d' })).toBe(
+      'rebuild',
+    );
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, workload: 'icon-grid' })).toBe(
+      'rebuild',
+    );
   });
 
   it('retains width and font-size layout changes', () => {
@@ -111,6 +168,33 @@ describe('comparison workload updates', () => {
     expect(updates).toEqual([{ fontSize: 72 }]);
   });
 
+  it('rolls every retained Text back before a failed candidate font can be released', async () => {
+    const previous = fakeFontFixture();
+    const next = fakeFontFixture();
+    const updates: Array<Array<RegisteredFont>> = [[], []];
+    const texts = updates.map((fontUpdates, index) => {
+      let ready = Promise.resolve();
+      return {
+        get ready() {
+          return ready;
+        },
+        setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }) {
+          fontUpdates.push(properties.font);
+          ready =
+            properties.font === next.font && index === 1
+              ? Promise.reject(new Error('candidate failed'))
+              : Promise.resolve();
+        },
+      };
+    });
+
+    await expect(applyRetainedTextFontFixture(texts, previous, next)).rejects.toThrow('rolled back');
+    expect(updates).toEqual([
+      [next.font, previous.font],
+      [next.font, previous.font],
+    ]);
+  });
+
   it('rebuilds paragraph stress when its text volume changes', () => {
     const paragraphStress = {
       ...baseConfiguration,
@@ -141,21 +225,49 @@ describe('comparison workload updates', () => {
   });
 });
 
+function fakeFontFixture(): { readonly font: RegisteredFont; readonly raster: AnyRasterInput } {
+  return {
+    font: {} as RegisteredFont,
+    raster: {} as AnyRasterInput,
+  };
+}
+
 describe('Zoom text scale and language cycle', () => {
   it('retains the reviewed multilingual Shape corpus', () => {
-    expect(ZOOM_TEXT_PHRASES).toEqual([
+    expect(ZOOM_TEXT_CORPUS).toEqual([
       { language: 'en', text: 'Shape' },
       { language: 'fr', text: 'Forme' },
-      { language: 'es', text: 'Forma' },
+      { language: 'es', text: 'Figura' },
       { language: 'de', text: 'Form' },
-      { language: 'pt', text: 'Forma' },
+      { language: 'pt', text: 'Formato' },
       { language: 'pl', text: 'Kształt' },
       { language: 'tr', text: 'Şekil' },
       { language: 'el', text: 'Σχήμα' },
       { language: 'ru', text: 'Форма' },
-      { language: 'uk', text: 'Форма' },
+      { language: 'uk', text: 'Обрис' },
       { language: 'vi', text: 'Hình dạng' },
+      { language: 'is', text: 'Lögun' },
+      { language: 'ro', text: 'Formă' },
+      { language: 'cy', text: 'Siâp' },
+      { language: 'sr', text: 'Облик' },
+      { language: 'kk', text: 'Пішін' },
     ]);
+  });
+
+  it('starts with Shape and shuffles every other phrase once without replacement', () => {
+    const shuffled = shuffleZoomTextPhrases(ZOOM_TEXT_CORPUS, () => 0);
+
+    expect(shuffled[0]).toEqual({ language: 'en', text: 'Shape' });
+    expect(shuffled).not.toEqual(ZOOM_TEXT_CORPUS);
+    expect(new Set(shuffled)).toEqual(new Set(ZOOM_TEXT_CORPUS));
+    expect(new Set(shuffled.map(({ text }) => text)).size).toBe(shuffled.length);
+    expect(ZOOM_TEXT_CORPUS[1]).toEqual({ language: 'fr', text: 'Forme' });
+  });
+
+  it('rejects an invalid shuffle source instead of creating a biased order', () => {
+    expect(() => shuffleZoomTextPhrases(ZOOM_TEXT_CORPUS, () => 1)).toThrow(
+      'zoom text shuffle source must return a value in [0, 1)',
+    );
   });
 
   it('converts the 8 point floor to CSS pixels exactly', () => {
@@ -168,29 +280,29 @@ describe('Zoom text scale and language cycle', () => {
     expect(zoomTextMaximumScale(500, 200, 200, 100)).toBe(1);
   });
 
-  it('changes phrase only at the minimum-scale boundary', () => {
+  it('advances each phrase monotonically before the two-slot handoff', () => {
     const start = zoomTextAnimationState(0, 50, 3);
-    const maximum = zoomTextAnimationState(2_222.222_222, 50, 3);
-    const next = zoomTextAnimationState(4_444.444_445, 50, 3);
+    const maximum = zoomTextAnimationState(1_555.555_556, 50, 3);
+    const next = zoomTextAnimationState(3_111.111_112, 50, 3);
 
     expect(start).toEqual({ phraseIndex: 0, phraseRevision: 0, progress: 0 });
     expect(maximum.phraseIndex).toBe(0);
-    expect(maximum.progress).toBeCloseTo(1);
+    expect(maximum.progress).toBeCloseTo(0.5);
     expect(next.phraseIndex).toBe(1);
     expect(next.progress).toBeCloseTo(0);
   });
 
-  it('eases retained scale with a cosine curve', () => {
-    const oneEighth = zoomTextAnimationState(312.5, 100, 1);
-    const oneQuarter = zoomTextAnimationState(625, 100, 1);
+  it('keeps timeline progress linear so scale and crossfade can apply independent easing', () => {
+    const oneEighth = zoomTextAnimationState(218.75, 100, 1);
+    const oneQuarter = zoomTextAnimationState(437.5, 100, 1);
 
-    expect(oneEighth.progress).toBeCloseTo((1 - Math.cos(Math.PI / 4)) / 2);
-    expect(oneEighth.progress).toBeGreaterThan(0.125);
-    expect(oneQuarter.progress).toBeCloseTo(0.5);
+    expect(oneEighth.progress).toBeCloseTo(0.125);
+    expect(oneQuarter.progress).toBeCloseTo(0.25);
   });
 
   it('keeps every authenticated Inter phrase explicitly tagged', () => {
-    expect(new Set(ZOOM_TEXT_PHRASES.map(({ language }) => language)).size).toBe(ZOOM_TEXT_PHRASES.length);
+    expect(new Set(ZOOM_TEXT_CORPUS.map(({ language }) => language)).size).toBe(ZOOM_TEXT_CORPUS.length);
+    expect(new Set(ZOOM_TEXT_CORPUS.map(({ text }) => text)).size).toBe(ZOOM_TEXT_CORPUS.length);
     expect(ZOOM_TEXT_PHRASES.every(({ text }) => text.length > 0)).toBe(true);
   });
 
@@ -237,6 +349,46 @@ describe('text ladder scale selection', () => {
 });
 
 describe('icon grid layout', () => {
+  it('starts at the top-left and advances both axes at a constant rate', () => {
+    const state: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
+
+    advanceIconGridAutoPan(state, 0, 0, 500, 500, 250, 160);
+
+    expect(state).toEqual({ directionX: 1, directionY: 1, scrollX: 40, scrollY: 40 });
+  });
+
+  it('reverses each axis independently at its grid boundary', () => {
+    const state: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
+
+    advanceIconGridAutoPan(state, 0, 0, 100, 200, 1_250, 100);
+
+    expect(state).toEqual({ directionX: -1, directionY: 1, scrollX: 75, scrollY: 125 });
+  });
+
+  it('preserves reflected linear motion across multiple complete loops', () => {
+    const state: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
+
+    advanceIconGridAutoPan(state, 0, 0, 100, 50, 4_500, 100);
+
+    expect(state).toEqual({ directionX: 1, directionY: -1, scrollX: 50, scrollY: 50 });
+  });
+
+  it('continues from a manually panned position without resetting the view', () => {
+    const state: IconGridAutoPanState = { directionX: -1, directionY: 1, scrollX: 80, scrollY: 20 };
+
+    advanceIconGridAutoPan(state, 30, 120, 500, 500, 100, 100);
+
+    expect(state).toEqual({ directionX: -1, directionY: 1, scrollX: 20, scrollY: 130 });
+  });
+
+  it('holds its position at zero speed and collapses motion on a viewport-sized axis', () => {
+    const state: IconGridAutoPanState = { directionX: -1, directionY: -1, scrollX: 40, scrollY: 40 };
+
+    advanceIconGridAutoPan(state, 40, 40, 0, 500, 500, 0);
+
+    expect(state).toEqual({ directionX: 1, directionY: -1, scrollX: 0, scrollY: 40 });
+  });
+
   it('keeps the grid coordinate at viewport center stable while icon size changes', () => {
     const viewportWidth = 720;
     const viewportHeight = 640;

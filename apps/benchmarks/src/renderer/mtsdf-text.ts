@@ -15,11 +15,15 @@ import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture 
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
 import type { FontDelivery } from '../benchmark/url-state';
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum';
-import { createCanvasSurface } from './canvas-surface';
+import { createCanvasSurface, type CanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
-import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
-import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry';
+import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
+import {
+  createRetainedFontFixtureController,
+  type LiveFontFixtureUpdate,
+  type RetainedFontFixtureController,
+} from './retained-font-fixture';
 import {
   benchmarkContentWidth,
   LIVE_TEXT_COLOR,
@@ -30,12 +34,13 @@ import {
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';
 import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
 import { compactRgba8Readback } from './tsl-baseline';
+import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
 import {
-  createConfiguredRenderer,
-  disposeConfiguredRenderer,
-  readRendererViewportState,
-  type RendererBackend,
-} from './webgpu-renderer';
+  createPersistentRenderHost,
+  type PersistentRenderScene,
+  type PersistentRenderSceneRenderer,
+  type PersistentRenderViewport,
+} from './persistent-render-host';
 import {
   createFontDeliveryMetrics,
   loadRuntimeFont,
@@ -66,6 +71,19 @@ const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   'source-serif-4': sourceSerifCompressedFontUrl,
   'dancing-script': dancingScriptCompressedFontUrl,
 };
+
+export async function preloadMtsdfFontAssets(
+  fixtures: readonly BenchmarkFontFixture[],
+  signal?: AbortSignal,
+): Promise<void> {
+  await Promise.all(
+    fixtures.map(async (fixture) => {
+      const response = await fetch(compressedFontUrls[fixture], signal === undefined ? undefined : { signal });
+      if (!response.ok) throw new Error(`Unable to preload MTSDF font fixture (${response.status})`);
+      await response.arrayBuffer();
+    }),
+  );
+}
 const mtsdfFixtureManifests = new Map(
   showcaseManifest.artifacts.map((artifact) => [artifact.fontFixture, artifact]),
 ) as ReadonlyMap<BenchmarkFontFixture, MtsdfFixtureManifest>;
@@ -149,7 +167,7 @@ export interface MtsdfTextLiveStats {
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
 }
 
-export interface MtsdfTextPreviewUpdate {
+export interface MtsdfTextPreviewUpdate extends LiveFontFixtureUpdate {
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -167,6 +185,68 @@ export interface MtsdfTextPreview {
   setGridVisible(visible: boolean): void;
   update(update: MtsdfTextPreviewUpdate): Promise<void>;
   dispose(): Promise<void>;
+}
+
+export interface MtsdfTextPreviewOptions {
+  readonly anchor?: LiveTextAnchor;
+  readonly backend: RendererBackend;
+  readonly canvas: HTMLCanvasElement;
+  readonly direction?: 'ltr' | 'rtl';
+  readonly dpr: number;
+  readonly features?: readonly FontFeature[];
+  readonly fontSize: number;
+  readonly fontFixture?: BenchmarkFontFixture;
+  readonly delivery?: FontDelivery;
+  readonly height: number;
+  readonly showGrid: boolean;
+  readonly language?: string;
+  readonly layoutWidth: number;
+  readonly layoutWidthRatio?: number;
+  readonly signal?: AbortSignal;
+  readonly text: string;
+  readonly textAlign?: 'start' | 'center';
+  readonly width: number;
+  readonly onError: (error: unknown) => void;
+  readonly onStats: (stats: MtsdfTextLiveStats) => void;
+  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
+}
+
+export type MtsdfTextPersistentSceneOptions = Omit<
+  MtsdfTextPreviewOptions,
+  'canvas' | 'dpr' | 'height' | 'signal' | 'width'
+> & {
+  readonly id?: string;
+};
+
+export interface MtsdfTextPersistentScene extends PersistentRenderScene {
+  panBy(deltaX: number, deltaY: number): void;
+  resetView(): void;
+  setGridVisible(visible: boolean): void;
+  update(update: MtsdfTextPreviewUpdate): Promise<void>;
+}
+
+interface MtsdfPersistentActivation {
+  readonly camera: THREE.OrthographicCamera;
+  readonly canvasSurface: CanvasSurface;
+  committedContentWidth: number;
+  committedDpr: number;
+  firstDrawMs: number;
+  readonly fontFixture: RetainedFontFixtureController<MtsdfPersistentFontFixture>;
+  readonly gpuTimingSupported: boolean;
+  readonly line: Text;
+  readonly rendererInitMs: number;
+  readonly scene: THREE.Scene;
+  readonly signal: AbortSignal;
+  readonly startupMs: number;
+  readonly textReadyMs: number;
+  viewport: PersistentRenderViewport;
+}
+
+interface MtsdfPersistentFontFixture {
+  readonly font: RegisteredFont;
+  readonly fontLoadMs: number;
+  readonly loaded: Awaited<ReturnType<typeof loadMtsdfFont>>;
+  readonly rasterConfiguration: MtsdfRasterConfiguration;
 }
 
 export interface MtsdfTextConformanceCapture {
@@ -270,304 +350,366 @@ export function createMtsdfConformanceTarget(backend: RendererBackend): Benchmar
   };
 }
 
-export async function createMtsdfTextPreview(options: {
-  readonly anchor?: LiveTextAnchor;
-  readonly backend: RendererBackend;
-  readonly canvas: HTMLCanvasElement;
-  readonly direction?: 'ltr' | 'rtl';
-  readonly dpr: number;
-  readonly features?: readonly FontFeature[];
-  readonly fontSize: number;
-  readonly fontFixture?: BenchmarkFontFixture;
-  readonly delivery?: FontDelivery;
-  readonly height: number;
-  readonly showGrid: boolean;
-  readonly language?: string;
-  readonly layoutWidth: number;
-  readonly layoutWidthRatio?: number;
-  readonly signal?: AbortSignal;
-  readonly text: string;
-  readonly textAlign?: 'start' | 'center';
-  readonly width: number;
-  readonly onError: (error: unknown) => void;
-  readonly onStats: (stats: MtsdfTextLiveStats) => void;
-  readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
-}): Promise<MtsdfTextPreview> {
-  const {
-    backend,
-    canvas,
-    dpr,
-    onError,
-    onStats,
-    onBakeProgress,
-    signal,
-    text,
-    language = 'en',
-    direction = 'ltr',
-    features = [],
-    textAlign = 'start',
-    fontFixture = 'inter',
-    delivery = 'baked',
-  } = options;
-  signal?.throwIfAborted();
-  const startupStarted = performance.now();
-  let width = positiveViewportSize(options.width, 'MSDF preview width');
-  let height = positiveViewportSize(options.height, 'MSDF preview height');
+export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentSceneOptions): MtsdfTextPersistentScene {
   let fontSize = positiveViewportSize(options.fontSize, 'MSDF preview font size');
   let anchor = options.anchor ?? 'center';
-  let layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
-  let committedContentWidth = options.layoutWidth;
-  assertLayoutWidthRatio(layoutWidthRatio);
-  const rendererStarted = performance.now();
-  const renderer = await createConfiguredRenderer({
-    backend,
-    canvas,
-    dpr,
-    height,
-    trackGpuTimestamps: backend === 'webgpu',
-    width,
-  });
-  let rendererViewport = readRendererViewportState(renderer);
-  const canvasSurface = createCanvasSurface(renderer, width, height, options.showGrid);
+  let layoutWidthRatio = options.layoutWidthRatio ?? 1;
+  if (options.layoutWidthRatio !== undefined) assertLayoutWidthRatio(options.layoutWidthRatio);
   let gridVisible = options.showGrid;
+  let updateRevision = 0;
+  let disposed = false;
+  let activation: MtsdfPersistentActivation | undefined;
   const textUpdateTelemetry = createTextUpdateTelemetry();
-  const rendererInitMs = performance.now() - rendererStarted;
-  let font: RegisteredFont | undefined;
-  let line: Text | undefined;
-  let gpuFrameTimer: GpuFrameTimer | undefined;
-  try {
-    const fontStarted = performance.now();
-    const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress);
-    font = loaded.font;
-    const fontLoadMs = performance.now() - fontStarted;
-    signal?.throwIfAborted();
-    const activeFont = font;
-    const scene = new THREE.Scene();
-    const textStarted = performance.now();
-    line = new Text({
-      text,
-      font: activeFont,
-      raster: loaded.raster,
-      fontSize,
-      rasterPixelRatio: rendererViewport.pixelRatio,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
-      width: benchmarkContentWidth(width, layoutWidthRatio),
-      wrap: 'word',
-      language,
-      direction,
-      features,
-      textAlign,
-      color: LIVE_TEXT_COLOR,
-    });
+
+  const active = (): MtsdfPersistentActivation => {
+    if (disposed || activation === undefined) {
+      throw new DOMException('The MSDF scene is not active', 'InvalidStateError');
+    }
+    return activation;
+  };
+
+  const applyViewport = (viewport: PersistentRenderViewport): void => {
+    const resources = active();
+    resources.viewport = viewport;
+    resources.canvasSurface.resize(viewport.width, viewport.height);
+    resources.camera.right = viewport.width;
+    resources.camera.bottom = -viewport.height;
+    resources.camera.updateProjectionMatrix();
+    const nextContentWidth = benchmarkContentWidth(viewport.width, layoutWidthRatio);
+    const pixelRatioChanged = viewport.dpr !== resources.committedDpr;
+    if (nextContentWidth === resources.committedContentWidth && !pixelRatioChanged) {
+      positionLiveLine(resources.line, viewport.width, viewport.height, anchor, layoutWidthRatio);
+      return;
+    }
+    const updateStartedAt = performance.now();
+    const revision = ++updateRevision;
+    resources.line.setProperties({ width: nextContentWidth, rasterPixelRatio: viewport.dpr });
     const scheduledAt = performance.now();
-    await line.ready;
-    const readyAt = performance.now();
-    signal?.throwIfAborted();
-    const activeLine = line;
-    const rasterConfiguration = await registeredMtsdfConfiguration(activeFont, signal);
-    const textReadyMs = performance.now() - textStarted;
-    const startupMs = performance.now() - startupStarted;
-    const sceneStartedAt = performance.now();
-    positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-    scene.add(activeLine);
-    const sceneFinishedAt = performance.now();
-    textUpdateTelemetry.record({
-      scheduleMs: scheduledAt - textStarted,
-      readyMs: readyAt - scheduledAt,
-      sceneMs: sceneFinishedAt - sceneStartedAt,
-      totalMs: sceneFinishedAt - textStarted,
-    });
-    const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);
-    camera.position.z = 500;
-    camera.updateProjectionMatrix();
-    gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError });
-    const activeGpuFrameTimer = gpuFrameTimer;
-    const gpuTimingSupported = activeGpuFrameTimer.supported;
-    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported });
-    let firstDrawMs = 0;
-    let firstDrawRecorded = false;
-    let closing = false;
-    let disposed = false;
-    let disposal: Promise<void> | undefined;
-    let updateRevision = 0;
-
-    const renderFrame = (timestamp: number): void => {
-      if (disposed) return;
-      try {
-        const cpuFrameStarted = performance.now();
-        for (const measurement of activeGpuFrameTimer.poll()) {
-          if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
-          else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
-        }
-        const frameId = telemetry.beginFrame(timestamp);
-        if (telemetry.gpuTimingSupported) activeGpuFrameTimer.beginFrame(frameId);
-        const started = performance.now();
-        try {
-          canvasSurface.render(scene, camera);
-        } finally {
-          if (telemetry.gpuTimingSupported) activeGpuFrameTimer.endFrame();
-        }
-        const submitMs = performance.now() - started;
-        if (!firstDrawRecorded) {
-          firstDrawMs = submitMs;
-          firstDrawRecorded = true;
-        }
-        if (closing) return;
-        const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const telemetrySnapshot = telemetry.endFrame(frameId, cpuFrameMs);
-        if (telemetrySnapshot === undefined) return;
-        const layout = committedLayout(activeLine);
-        const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
-        const atlasGpuBytes = loaded.metrics.rasterGpuBytes || loaded.atlasGpuBytes;
-        onStats({
-          technique: 'mtsdf',
-          backend,
-          dpr: rendererViewport.pixelRatio,
-          rasterEmSize: rasterConfiguration.emSize,
-          rasterPixelRange: rasterConfiguration.pixelRange,
-          renderedPpem: fontSize * rendererViewport.pixelRatio,
-          scaleRatio: (fontSize * rendererViewport.pixelRatio) / rasterConfiguration.emSize,
-          showGrid: gridVisible,
-          ...telemetrySnapshot,
-          glyphCount: renderedGlyphCount(activeLine),
-          missingGlyphCount: missingGlyphCount(layout),
-          drawCount: drawCount(activeLine),
-          layoutWidth: layout.width,
-          layoutHeight: layout.height,
-          lineCount: layout.lineGlyphCounts.length,
-          atlasGpuBytes,
-          framebufferGpuBytes,
-          totalGpuBytes: atlasGpuBytes + framebufferGpuBytes,
-          artifactBytes: loaded.compressedBytes,
-          delivery,
-          sourceFontBytes: loaded.metrics.sourceFontBytes,
-          coreArtifactBytes: loaded.metrics.coreArtifactBytes,
-          coreBakeMs: loaded.metrics.coreBakeMs,
-          rasterArtifactBytes: loaded.metrics.rasterArtifactBytes,
-          rasterBakeMs: loaded.metrics.rasterBakeMs,
-          rendererInitMs,
-          fontLoadMs,
-          textReadyMs,
-          firstDrawMs,
-          startupMs,
-          gpuTimingSupported,
-          textUpdateTimings: textUpdateTelemetry.summary(),
-        });
-      } catch (error) {
-        onError(error);
-      }
-    };
-    await renderer.setAnimationLoop(renderFrame);
-
-    return {
-      resize(nextWidth, nextHeight) {
-        if (closing || disposed) return;
-        width = positiveViewportSize(nextWidth, 'MSDF preview width');
-        height = positiveViewportSize(nextHeight, 'MSDF preview height');
-        renderer.setSize(width, height, false);
-        rendererViewport = readRendererViewportState(renderer);
-        canvasSurface.resize(width, height);
-        camera.right = width;
-        camera.bottom = -height;
-        camera.updateProjectionMatrix();
-        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
-        if (nextContentWidth === committedContentWidth) {
-          positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-          return;
-        }
-        const updateStartedAt = performance.now();
-        const revision = ++updateRevision;
-        activeLine.setProperties({ width: nextContentWidth });
-        const resizeScheduledAt = performance.now();
-        void activeLine.ready
-          .then(() => {
-            if (closing || disposed || revision !== updateRevision) return;
-            committedContentWidth = nextContentWidth;
-            const resizeSceneStartedAt = performance.now();
-            positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
-            const finishedAt = performance.now();
-            textUpdateTelemetry.record({
-              scheduleMs: resizeScheduledAt - updateStartedAt,
-              readyMs: resizeSceneStartedAt - resizeScheduledAt,
-              sceneMs: finishedAt - resizeSceneStartedAt,
-              totalMs: finishedAt - updateStartedAt,
-            });
-          })
-          .catch((error: unknown) => {
-            if (!closing && !disposed) onError(error);
-          });
-      },
-      panBy(deltaX, deltaY) {
-        if (closing || disposed) return;
-        scene.position.x += finiteCanvasDelta(deltaX, 'MSDF preview horizontal pan');
-        scene.position.y -= finiteCanvasDelta(deltaY, 'MSDF preview vertical pan');
-      },
-      resetView() {
-        scene.position.set(0, 0, 0);
-      },
-      setGridVisible(visible) {
-        gridVisible = visible;
-        canvasSurface.setGridVisible(visible);
-      },
-      async update(next) {
-        if (closing || disposed) {
-          throw new DOMException('The MSDF preview is disposed', 'AbortError');
-        }
-        const updateStartedAt = performance.now();
-        fontSize = positiveViewportSize(next.fontSize, 'MSDF preview font size');
-        anchor = next.anchor;
-        assertLayoutWidthRatio(next.layoutWidthRatio);
-        layoutWidthRatio = next.layoutWidthRatio;
-        const revision = ++updateRevision;
-        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
-        activeLine.setProperties({
-          text: next.text,
-          fontSize,
-          width: nextContentWidth,
-          language: next.language,
-          direction: next.direction,
-          features: next.features,
-          textAlign: next.textAlign,
-        });
-        const updateScheduledAt = performance.now();
-        await activeLine.ready;
-        if (closing || disposed || revision !== updateRevision) {
-          throw new DOMException('The MSDF preview update was superseded', 'AbortError');
-        }
-        committedContentWidth = nextContentWidth;
-        const updateSceneStartedAt = performance.now();
-        positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+    void resources.line.ready
+      .then(() => {
+        if (disposed || activation !== resources || revision !== updateRevision) return;
+        resources.committedContentWidth = nextContentWidth;
+        resources.committedDpr = viewport.dpr;
+        const sceneStartedAt = performance.now();
+        positionLiveLine(resources.line, viewport.width, viewport.height, anchor, layoutWidthRatio);
         const finishedAt = performance.now();
         textUpdateTelemetry.record({
-          scheduleMs: updateScheduledAt - updateStartedAt,
-          readyMs: updateSceneStartedAt - updateScheduledAt,
-          sceneMs: finishedAt - updateSceneStartedAt,
+          scheduleMs: scheduledAt - updateStartedAt,
+          readyMs: sceneStartedAt - scheduledAt,
+          sceneMs: finishedAt - sceneStartedAt,
           totalMs: finishedAt - updateStartedAt,
         });
+      })
+      .catch((error: unknown) => {
+        if (!disposed && activation === resources) options.onError(error);
+      });
+  };
+
+  return {
+    id: options.id ?? 'mtsdf-text',
+    async activate(context) {
+      if (disposed) throw new DOMException('The MSDF scene is disposed', 'InvalidStateError');
+      if (activation !== undefined) throw new DOMException('The MSDF scene is already active', 'InvalidStateError');
+      context.signal.throwIfAborted();
+      layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / context.viewport.width;
+      assertLayoutWidthRatio(layoutWidthRatio);
+      const activationStartedAt = performance.now();
+      const canvasSurface = createBorrowedCanvasSurface(
+        context.renderer,
+        context.viewport.width,
+        context.viewport.height,
+        gridVisible,
+      );
+      const registry = new FontRegistry();
+      let font: RegisteredFont | undefined;
+      let fontFixtureController: RetainedFontFixtureController<MtsdfPersistentFontFixture> | undefined;
+      let line: Text | undefined;
+      try {
+        const fontStartedAt = performance.now();
+        const loaded = await loadMtsdfFont(
+          context.signal,
+          options.fontFixture ?? 'inter',
+          options.delivery ?? 'baked',
+          options.onBakeProgress,
+          registry,
+        );
+        font = loaded.font;
+        const fontLoadMs = performance.now() - fontStartedAt;
+        context.signal.throwIfAborted();
+        const rasterConfiguration = await registeredMtsdfConfiguration(font, context.signal);
+        fontFixtureController = createRetainedFontFixtureController(registry, {
+          fixture: options.fontFixture ?? 'inter',
+          asset: { font, fontLoadMs, loaded, rasterConfiguration },
+        });
+        const textStartedAt = performance.now();
+        line = new Text({
+          text: options.text,
+          font,
+          raster: loaded.raster,
+          fontSize,
+          rasterPixelRatio: context.viewport.dpr,
+          lineHeight: LIVE_TEXT_LINE_HEIGHT,
+          width: benchmarkContentWidth(context.viewport.width, layoutWidthRatio),
+          wrap: 'word',
+          language: options.language ?? 'en',
+          direction: options.direction ?? 'ltr',
+          features: options.features ?? [],
+          textAlign: options.textAlign ?? 'start',
+          color: LIVE_TEXT_COLOR,
+        });
+        const scheduledAt = performance.now();
+        await line.ready;
+        const readyAt = performance.now();
+        context.signal.throwIfAborted();
+        const textReadyMs = performance.now() - textStartedAt;
+        const sceneStartedAt = performance.now();
+        positionLiveLine(line, context.viewport.width, context.viewport.height, anchor, layoutWidthRatio);
+        const scene = new THREE.Scene();
+        scene.add(line);
+        const sceneFinishedAt = performance.now();
+        textUpdateTelemetry.record({
+          scheduleMs: scheduledAt - textStartedAt,
+          readyMs: readyAt - scheduledAt,
+          sceneMs: sceneFinishedAt - sceneStartedAt,
+          totalMs: sceneFinishedAt - textStartedAt,
+        });
+        const camera = new THREE.OrthographicCamera(0, context.viewport.width, 0, -context.viewport.height, 0.1, 1_000);
+        camera.position.z = 500;
+        camera.updateProjectionMatrix();
+        activation = {
+          camera,
+          canvasSurface,
+          committedContentWidth: benchmarkContentWidth(context.viewport.width, layoutWidthRatio),
+          committedDpr: context.viewport.dpr,
+          firstDrawMs: 0,
+          fontFixture: fontFixtureController,
+          gpuTimingSupported: persistentGpuTimingSupported(options.backend, context.renderer),
+          line,
+          rendererInitMs: context.rendererInitMs,
+          scene,
+          signal: context.signal,
+          startupMs: context.rendererInitMs + (performance.now() - activationStartedAt),
+          textReadyMs,
+          viewport: context.viewport,
+        };
+      } catch (error) {
+        line?.dispose();
+        if (fontFixtureController === undefined) font?.dispose();
+        else fontFixtureController.dispose();
+        canvasSurface.dispose();
+        throw error;
+      }
+    },
+    frame() {
+      const resources = active();
+      const startedAt = performance.now();
+      resources.canvasSurface.render(resources.scene, resources.camera);
+      if (resources.firstDrawMs === 0) resources.firstDrawMs = performance.now() - startedAt;
+    },
+    telemetry(snapshot, viewport) {
+      const resources = active();
+      const fontFixture = resources.fontFixture.current.asset;
+      const layout = committedLayout(resources.line);
+      const framebufferGpuBytes = viewport.drawingBufferWidth * viewport.drawingBufferHeight * 4;
+      const atlasGpuBytes = fontFixture.loaded.metrics.rasterGpuBytes || fontFixture.loaded.atlasGpuBytes;
+      options.onStats({
+        technique: 'mtsdf',
+        backend: options.backend,
+        dpr: viewport.dpr,
+        rasterEmSize: fontFixture.rasterConfiguration.emSize,
+        rasterPixelRange: fontFixture.rasterConfiguration.pixelRange,
+        renderedPpem: fontSize * viewport.dpr,
+        scaleRatio: (fontSize * viewport.dpr) / fontFixture.rasterConfiguration.emSize,
+        showGrid: gridVisible,
+        ...snapshot,
+        glyphCount: renderedGlyphCount(resources.line),
+        missingGlyphCount: missingGlyphCount(layout),
+        drawCount: drawCount(resources.line),
+        layoutWidth: layout.width,
+        layoutHeight: layout.height,
+        lineCount: layout.lineGlyphCounts.length,
+        atlasGpuBytes,
+        framebufferGpuBytes,
+        totalGpuBytes: atlasGpuBytes + framebufferGpuBytes,
+        artifactBytes: fontFixture.loaded.compressedBytes,
+        delivery: options.delivery ?? 'baked',
+        sourceFontBytes: fontFixture.loaded.metrics.sourceFontBytes,
+        coreArtifactBytes: fontFixture.loaded.metrics.coreArtifactBytes,
+        coreBakeMs: fontFixture.loaded.metrics.coreBakeMs,
+        rasterArtifactBytes: fontFixture.loaded.metrics.rasterArtifactBytes,
+        rasterBakeMs: fontFixture.loaded.metrics.rasterBakeMs,
+        rendererInitMs: resources.rendererInitMs,
+        fontLoadMs: fontFixture.fontLoadMs,
+        textReadyMs: resources.textReadyMs,
+        firstDrawMs: resources.firstDrawMs,
+        startupMs: resources.startupMs,
+        gpuTimingSupported: resources.gpuTimingSupported,
+        textUpdateTimings: textUpdateTelemetry.summary(),
+      });
+    },
+    resize(viewport) {
+      applyViewport(viewport);
+    },
+    panBy(deltaX, deltaY) {
+      const resources = active();
+      resources.scene.position.x += finiteCanvasDelta(deltaX, 'MSDF preview horizontal pan');
+      resources.scene.position.y -= finiteCanvasDelta(deltaY, 'MSDF preview vertical pan');
+    },
+    resetView() {
+      active().scene.position.set(0, 0, 0);
+    },
+    setGridVisible(visible) {
+      gridVisible = visible;
+      activation?.canvasSurface.setGridVisible(visible);
+    },
+    async update(next) {
+      const resources = active();
+      const updateStartedAt = performance.now();
+      const nextFontSize = positiveViewportSize(next.fontSize, 'MSDF preview font size');
+      assertLayoutWidthRatio(next.layoutWidthRatio);
+      const revision = ++updateRevision;
+      const nextContentWidth = benchmarkContentWidth(resources.viewport.width, next.layoutWidthRatio);
+      let scheduledAt = updateStartedAt;
+      await resources.fontFixture.update({
+        fixture: next.fontFixture ?? resources.fontFixture.current.fixture,
+        isCurrent: () => !disposed && activation === resources && revision === updateRevision,
+        load: async (fixture, registry) => {
+          const fontStartedAt = performance.now();
+          const loaded = await loadMtsdfFont(
+            resources.signal,
+            fixture,
+            options.delivery ?? 'baked',
+            options.onBakeProgress,
+            registry,
+          );
+          try {
+            const rasterConfiguration = await registeredMtsdfConfiguration(loaded.font, resources.signal);
+            return { font: loaded.font, fontLoadMs: performance.now() - fontStartedAt, loaded, rasterConfiguration };
+          } catch (error) {
+            if (loaded.font !== resources.fontFixture.current.asset.font) loaded.font.dispose();
+            throw error;
+          }
+        },
+        commit: async (fontFixture) => {
+          scheduledAt = performance.now();
+          resources.line.setProperties({
+            text: next.text,
+            font: fontFixture.font,
+            raster: fontFixture.loaded.raster,
+            fontSize: nextFontSize,
+            width: nextContentWidth,
+            language: next.language,
+            direction: next.direction,
+            features: next.features,
+            textAlign: next.textAlign,
+          });
+          await resources.line.ready;
+          fontSize = nextFontSize;
+          anchor = next.anchor;
+          layoutWidthRatio = next.layoutWidthRatio;
+          resources.committedContentWidth = nextContentWidth;
+          positionLiveLine(
+            resources.line,
+            resources.viewport.width,
+            resources.viewport.height,
+            anchor,
+            layoutWidthRatio,
+          );
+        },
+      });
+      if (disposed || activation !== resources || revision !== updateRevision) {
+        throw new DOMException('The MSDF preview update was superseded', 'AbortError');
+      }
+      const sceneStartedAt = performance.now();
+      positionLiveLine(resources.line, resources.viewport.width, resources.viewport.height, anchor, layoutWidthRatio);
+      const finishedAt = performance.now();
+      textUpdateTelemetry.record({
+        scheduleMs: scheduledAt - updateStartedAt,
+        readyMs: sceneStartedAt - scheduledAt,
+        sceneMs: finishedAt - sceneStartedAt,
+        totalMs: finishedAt - updateStartedAt,
+      });
+    },
+    deactivate() {
+      if (disposed) return;
+      disposed = true;
+      updateRevision += 1;
+      const resources = activation;
+      activation = undefined;
+      if (resources === undefined) return;
+      resources.line.dispose();
+      resources.fontFixture.dispose();
+      resources.canvasSurface.dispose();
+    },
+  };
+}
+
+export async function createMtsdfTextPreview(options: MtsdfTextPreviewOptions): Promise<MtsdfTextPreview> {
+  options.signal?.throwIfAborted();
+  const width = positiveViewportSize(options.width, 'MSDF preview width');
+  const height = positiveViewportSize(options.height, 'MSDF preview height');
+  const layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
+  assertLayoutWidthRatio(layoutWidthRatio);
+  const host = await createPersistentRenderHost({
+    backend: options.backend,
+    canvas: options.canvas,
+    dpr: options.dpr,
+    height,
+    width,
+    onError: options.onError,
+  });
+  const scene = createMtsdfTextPersistentScene({
+    ...options,
+    layoutWidthRatio,
+  });
+  try {
+    const lease = await host.replaceScene(scene, options.signal);
+    let disposal: Promise<void> | undefined;
+    return {
+      resize(nextWidth, nextHeight) {
+        host.resize(nextWidth, nextHeight);
+      },
+      panBy(deltaX, deltaY) {
+        scene.panBy(deltaX, deltaY);
+      },
+      resetView() {
+        scene.resetView();
+      },
+      setGridVisible(visible) {
+        scene.setGridVisible(visible);
+      },
+      update(next) {
+        return scene.update(next);
       },
       dispose() {
-        if (disposal !== undefined) return disposal;
-        closing = true;
-        disposal = (async () => {
-          disposed = true;
-          await renderer.setAnimationLoop(null);
-          await activeGpuFrameTimer.dispose();
-          activeLine.dispose();
-          activeFont.dispose();
-          canvasSurface.dispose();
-          await disposeConfiguredRenderer(renderer);
+        disposal ??= (async () => {
+          await lease.release();
+          await host.dispose();
         })();
         return disposal;
       },
     };
   } catch (error) {
-    await gpuFrameTimer?.dispose();
-    line?.dispose();
-    font?.dispose();
-    canvasSurface.dispose();
-    await disposeConfiguredRenderer(renderer);
+    await host.dispose();
     throw error;
   }
+}
+
+function createBorrowedCanvasSurface(
+  renderer: PersistentRenderSceneRenderer,
+  width: number,
+  height: number,
+  gridVisible: boolean,
+): CanvasSurface {
+  // CanvasSurface's implementation only renders, clears, and configures shared frame state. Its public parameter is
+  // broader than that contract, so keep the borrowed-renderer compatibility cast at this single adapter boundary.
+  return createCanvasSurface(renderer as THREE.WebGPURenderer, width, height, gridVisible);
+}
+
+function persistentGpuTimingSupported(backend: RendererBackend, renderer: PersistentRenderSceneRenderer): boolean {
+  if (backend === 'webgpu') return renderer.hasFeature('timestamp-query');
+  const context = renderer.domElement.getContext('webgl2');
+  return context !== null && context.getExtension('EXT_disjoint_timer_query_webgl2') !== null;
 }
 
 async function createResources(backend: RendererBackend, dpr: number): Promise<MtsdfTextResources> {

@@ -1,8 +1,17 @@
-import { createRuntimeWorld, defaultRuntimeFontSizeForWorkload } from './runtime-world';
+import {
+  createRuntimeWorld,
+  defaultRuntimeFontSizeForWorkload,
+  defaultRuntimeLayoutWidthPercentForWorkload,
+  defaultRuntimeWorkloadAmountForWorkload,
+} from './runtime-world';
 
-const workload =
-  typeof globalThis.location === 'undefined'
-    ? 'benchmark-ipsum'
-    : (new URLSearchParams(globalThis.location.search).get('workload') ?? 'benchmark-ipsum');
+const locationParameters =
+  typeof globalThis.location === 'undefined' ? undefined : new URLSearchParams(globalThis.location.search);
+const workload = locationParameters?.get('workload') ?? 'benchmark-ipsum';
+const layout = globalThis.location?.pathname === '/presentation' ? 'presentation' : 'main';
 
-export const runtimeWorld = createRuntimeWorld({ initialFontSize: defaultRuntimeFontSizeForWorkload(workload) });
+export const runtimeWorld = createRuntimeWorld({
+  initialFontSize: defaultRuntimeFontSizeForWorkload(workload, layout),
+  initialLayoutWidthPercent: defaultRuntimeLayoutWidthPercentForWorkload(workload),
+  initialWorkloadAmount: defaultRuntimeWorkloadAmountForWorkload(workload),
+});

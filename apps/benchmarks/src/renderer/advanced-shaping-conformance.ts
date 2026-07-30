@@ -46,15 +46,22 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
       const registry = new FontRegistry();
       const fonts = new Map<AdvancedShapingFontFixture, RegisteredFont>();
       try {
-        for (const definition of ADVANCED_SHAPING_CASES) {
-          if (fonts.has(definition.fontFixture)) continue;
-          const url = fontUrlByFixture[definition.fontFixture];
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(`Unable to load ${definition.fontFixture} bitmap fixture (${response.status})`);
-          }
-          fonts.set(definition.fontFixture, await registry.registerAsset(new Uint8Array(await response.arrayBuffer())));
+        const fixtures = [...new Set(ADVANCED_SHAPING_CASES.map((definition) => definition.fontFixture))];
+        const results = await Promise.allSettled(
+          fixtures.map(async (fixture) => {
+            const response = await fetch(fontUrlByFixture[fixture]);
+            if (!response.ok) {
+              throw new Error(`Unable to load ${fixture} bitmap fixture (${response.status})`);
+            }
+            const font = await registry.registerAsset(new Uint8Array(await response.arrayBuffer()));
+            return [fixture, font] as const;
+          }),
+        );
+        for (const result of results) {
+          if (result.status === 'fulfilled') fonts.set(...result.value);
         }
+        const failure = results.find((result) => result.status === 'rejected');
+        if (failure !== undefined) throw failure.reason;
         state = { kind: 'ready', fonts };
       } catch (error) {
         for (const font of fonts.values()) font.dispose();

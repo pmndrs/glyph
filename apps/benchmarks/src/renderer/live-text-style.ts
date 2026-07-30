@@ -10,12 +10,19 @@ export function benchmarkContentWidth(
   viewportWidth: number,
   layoutWidthRatio: number,
   minimumViewportWidth = BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH,
+  maximumLayoutWidthRatio = 1,
 ): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) {
     throw new RangeError('benchmark viewport width must be positive');
   }
-  if (!Number.isFinite(layoutWidthRatio) || layoutWidthRatio <= 0 || layoutWidthRatio > 1) {
-    throw new RangeError('benchmark layout width ratio must be in (0, 1]');
+  if (
+    !Number.isFinite(maximumLayoutWidthRatio) ||
+    maximumLayoutWidthRatio <= 0 ||
+    !Number.isFinite(layoutWidthRatio) ||
+    layoutWidthRatio <= 0 ||
+    layoutWidthRatio > maximumLayoutWidthRatio
+  ) {
+    throw new RangeError(`benchmark layout width ratio must be in (0, ${String(maximumLayoutWidthRatio)}]`);
   }
   if (!Number.isFinite(minimumViewportWidth) || minimumViewportWidth <= 0) {
     throw new RangeError('benchmark minimum viewport width must be positive');

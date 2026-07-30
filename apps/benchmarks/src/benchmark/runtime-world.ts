@@ -4,6 +4,8 @@ import { useTrait, useWorld } from 'koota/react';
 import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
+import type { CanvasViewController } from '../renderer/canvas-view-controller';
+import type { HarnessLayout } from './url-state';
 
 export type RuntimeLiveStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
@@ -25,37 +27,76 @@ export const RuntimeAnimationControls = trait({
 
 export const RuntimePaintControls = trait({
   paintOpacityPercent: 100,
-  paintShadowEnabled: true,
-  paintStrokePercent: 50,
+  paintShadowEnabled: false,
+  paintStrokePercent: 0,
 });
 
 export const RuntimeTelemetry = trait(() => ({ stats: undefined as RuntimeLiveStats | undefined }));
 
+export const RuntimeCanvasSettings = trait(() => ({
+  controller: undefined as CanvasViewController | undefined,
+  label: 'Text rendering canvas',
+  panEnabled: false,
+  zoomEnabled: false,
+}));
+
 export interface RuntimeWorldOptions {
   readonly initialFontSize?: number;
+  readonly initialLayoutWidthPercent?: number;
+  readonly initialWorkloadAmount?: number;
 }
 
-export function defaultRuntimeFontSizeForWorkload(workload: string): number {
+export function defaultRuntimeFontSizeForWorkload(workload: string, layout: HarnessLayout = 'main'): number {
+  if (workload === 'off-axis-3d') return 96;
+  if (layout === 'presentation') {
+    switch (workload) {
+      case 'advanced-shaping':
+        return 48;
+      case 'icon-grid':
+        return 64;
+      case 'paint-effects':
+        return 52;
+      case 'dynamic-layout':
+        return 32;
+      default:
+        return 24;
+    }
+  }
   switch (workload) {
     case 'icon-grid':
-      return 48;
-    case 'off-axis-3d':
-      return 64;
+      return 56;
     case 'paint-effects':
-      return 40;
+      return 44;
     case 'dynamic-layout':
-      return 24;
+      return 28;
     default:
-      return 16;
+      return 20;
   }
 }
 
-export function createRuntimeWorld({ initialFontSize = 16 }: RuntimeWorldOptions = {}): World {
+export function defaultRuntimeLayoutWidthPercentForWorkload(workload: string): number {
+  return workload === 'off-axis-3d' ? 120 : 82;
+}
+
+export function defaultRuntimeWorkloadAmountForWorkload(workload: string): number {
+  return workload === 'off-axis-3d' || workload === 'paragraph-stress' ? 100 : 50;
+}
+
+export function createRuntimeWorld({
+  initialFontSize = 16,
+  initialLayoutWidthPercent = 82,
+  initialWorkloadAmount = 50,
+}: RuntimeWorldOptions = {}): World {
   return createWorld(
     RuntimeViewControls,
-    RuntimeLayoutControls({ fontSize: initialFontSize }),
+    RuntimeLayoutControls({
+      fontSize: initialFontSize,
+      layoutWidthPercent: initialLayoutWidthPercent,
+      workloadAmount: initialWorkloadAmount,
+    }),
     RuntimeAnimationControls,
     RuntimePaintControls,
+    RuntimeCanvasSettings,
     RuntimeTelemetry,
   );
 }
@@ -93,4 +134,9 @@ export function useRuntimePaintControls() {
 export function useRuntimeTelemetry() {
   const world = useRuntimeWorld();
   return useRequiredWorldTrait(world, RuntimeTelemetry);
+}
+
+export function useRuntimeCanvasSettings() {
+  const world = useRuntimeWorld();
+  return useRequiredWorldTrait(world, RuntimeCanvasSettings);
 }

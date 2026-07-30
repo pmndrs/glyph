@@ -22,6 +22,7 @@ import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
 import { FontFixtureButtons } from './font-fixture-buttons';
 import { Button, Field, SelectField, TextareaField, Toggle } from './ui';
+import { PresentationControlDock } from './presentation-control-dock';
 import bitmapFixtures from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
 import mtsdfFixtures from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import slugFixtures from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
@@ -57,6 +58,7 @@ function workloadHasLayoutWidth(workload: string): boolean {
   switch (workload) {
     case 'benchmark-ipsum':
     case 'dynamic-layout':
+    case 'off-axis-3d':
     case 'paint-effects':
     case 'paragraph-stress':
       return true;
@@ -119,56 +121,7 @@ function slugFixtureFor(fontFixture: BenchmarkFontFixture) {
   return fixture;
 }
 
-export function Controls({
-  animationEnabled,
-  animationSpeed,
-  backend,
-  delivery,
-  comparisonText,
-  conformanceView,
-  dpr,
-  fontFixture,
-  liveStats,
-  minimal = false,
-  fontSize,
-  layoutWidthPercent,
-  paintOpacityPercent,
-  paintShadowEnabled,
-  paintStrokePercent,
-  selectedFontFixture,
-  workloadAmount,
-  mode,
-  technique,
-  workload,
-  samples,
-  showcaseFrame,
-  showcaseState,
-  showGrid,
-  showLayoutBounds,
-  warmup,
-  webgpu,
-  onBackend,
-  onDelivery,
-  onAnimationEnabled,
-  onAnimationSpeed,
-  onComparisonText,
-  onConformanceReset,
-  onConformanceZoom,
-  onDpr,
-  onFontSize,
-  onFontNotices,
-  onLayoutWidthPercent,
-  onPaintOpacityPercent,
-  onPaintShadowEnabled,
-  onPaintStrokePercent,
-  onSelectedFontFixture,
-  onWorkloadAmount,
-  onSamples,
-  onShowcase,
-  onShowGrid,
-  onShowLayoutBounds,
-  onWarmup,
-}: {
+export interface ControlsProps {
   readonly animationEnabled: boolean;
   readonly animationSpeed: number;
   readonly backend: GraphicsBackend;
@@ -217,200 +170,229 @@ export function Controls({
   readonly onShowGrid: (value: boolean) => void;
   readonly onShowLayoutBounds: (value: boolean) => void;
   readonly onWarmup: (value: number) => void;
-}) {
+}
+
+export function Controls(props: ControlsProps) {
+  if (props.minimal === true) {
+    return (
+      <PresentationControlDock
+        animationEnabled={props.animationEnabled}
+        animationSpeed={props.animationSpeed}
+        backend={props.backend}
+        dpr={props.dpr}
+        fontSize={props.fontSize}
+        layoutWidthPercent={props.layoutWidthPercent}
+        paintOpacityPercent={props.paintOpacityPercent}
+        paintShadowEnabled={props.paintShadowEnabled}
+        paintStrokePercent={props.paintStrokePercent}
+        showcaseFrame={props.showcaseFrame}
+        showcaseState={props.showcaseState}
+        showLayoutBounds={props.showLayoutBounds}
+        technique={props.technique}
+        webgpu={props.webgpu}
+        workload={props.workload}
+        workloadAmount={props.workloadAmount}
+        onAnimationEnabled={props.onAnimationEnabled}
+        onAnimationSpeed={props.onAnimationSpeed}
+        onBackend={props.onBackend}
+        onDpr={props.onDpr}
+        onFontSize={props.onFontSize}
+        onLayoutWidthPercent={props.onLayoutWidthPercent}
+        onPaintOpacityPercent={props.onPaintOpacityPercent}
+        onPaintShadowEnabled={props.onPaintShadowEnabled}
+        onPaintStrokePercent={props.onPaintStrokePercent}
+        onShowcase={props.onShowcase}
+        onShowLayoutBounds={props.onShowLayoutBounds}
+        onWorkloadAmount={props.onWorkloadAmount}
+      />
+    );
+  }
+  return <StandardControls {...props} />;
+}
+
+function StandardControls(props: ControlsProps) {
   return (
     <section className="grid min-w-0 gap-4 [&>*]:min-w-0" data-testid="controls">
-      {!minimal && (
-        <div>
-          <p className="eyebrow">Inspection controls</p>
-          <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
-        </div>
-      )}
-      {!minimal && workload !== 'advanced-shaping' && (
+      <div>
+        <p className="eyebrow">Inspection controls</p>
+        <h2 className="mt-1 text-base font-semibold">Render configuration</h2>
+      </div>
+      {props.workload !== 'advanced-shaping' && (
         <CompactFontFixtureControl
-          selectedFontFixture={selectedFontFixture}
-          workload={workload}
-          onSelectedFontFixture={onSelectedFontFixture}
+          selectedFontFixture={props.selectedFontFixture}
+          workload={props.workload}
+          onSelectedFontFixture={props.onSelectedFontFixture}
         />
       )}
+      <RenderConfigurationControls {...props} />
+      {props.mode === 'conformance' && <ConformanceControls {...props} />}
+      {props.mode === 'benchmark' && (
+        <LiveWorkloadControls
+          animationEnabled={props.animationEnabled}
+          animationSpeed={props.animationSpeed}
+          fontSize={props.fontSize}
+          layoutWidthPercent={props.layoutWidthPercent}
+          paintOpacityPercent={props.paintOpacityPercent}
+          paintShadowEnabled={props.paintShadowEnabled}
+          paintStrokePercent={props.paintStrokePercent}
+          showLayoutBounds={props.showLayoutBounds}
+          technique={props.technique}
+          workload={props.workload}
+          workloadAmount={props.workloadAmount}
+          onAnimationEnabled={props.onAnimationEnabled}
+          onAnimationSpeed={props.onAnimationSpeed}
+          onFontSize={props.onFontSize}
+          onLayoutWidthPercent={props.onLayoutWidthPercent}
+          onPaintOpacityPercent={props.onPaintOpacityPercent}
+          onPaintShadowEnabled={props.onPaintShadowEnabled}
+          onPaintStrokePercent={props.onPaintStrokePercent}
+          onShowLayoutBounds={props.onShowLayoutBounds}
+          onWorkloadAmount={props.onWorkloadAmount}
+        />
+      )}
+      {props.mode === 'benchmark' && props.workload === 'advanced-shaping' && (
+        <AdvancedShapingControls
+          showcaseFrame={props.showcaseFrame}
+          showcaseState={props.showcaseState}
+          onShowcase={props.onShowcase}
+        />
+      )}
+      <PayloadInspector
+        delivery={props.delivery}
+        fontFixture={props.fontFixture}
+        liveStats={props.liveStats}
+        technique={props.technique}
+        workload={props.workload}
+      />
+      <button
+        className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
+        type="button"
+        onClick={props.onFontNotices}
+      >
+        Font licenses &amp; notices
+      </button>
+    </section>
+  );
+}
+
+function RenderConfigurationControls(props: ControlsProps) {
+  return (
+    <>
       <div>
         <p className="mb-2 font-mono text-[9px] uppercase text-dim">Backend</p>
         <div className="grid grid-cols-2 gap-2">
           <Button
-            disabled={!webgpu}
-            variant={backend === 'webgpu' ? 'primary' : 'secondary'}
-            onClick={() => onBackend('webgpu')}
+            disabled={!props.webgpu}
+            variant={props.backend === 'webgpu' ? 'primary' : 'secondary'}
+            onClick={() => props.onBackend('webgpu')}
           >
             WebGPU
           </Button>
-          <Button variant={backend === 'webgl2' ? 'primary' : 'secondary'} onClick={() => onBackend('webgl2')}>
+          <Button
+            variant={props.backend === 'webgl2' ? 'primary' : 'secondary'}
+            onClick={() => props.onBackend('webgl2')}
+          >
             WebGL
           </Button>
         </div>
       </div>
-      {minimal ? (
-        <fieldset className="grid min-w-0 gap-1.5">
-          <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
-          <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
-            {([1, 2] as const).map((value) => (
-              <button
-                aria-pressed={dpr === value}
-                className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === value ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
-                key={value}
-                type="button"
-                onClick={() => onDpr(value)}
-              >
-                {value}×
-              </button>
-            ))}
+      <div data-testid="font-delivery-switcher">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
+          <fieldset className="grid min-w-0 gap-1.5">
+            <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
+            <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
+              {([1, 2] as const).map((value) => (
+                <button
+                  aria-pressed={props.dpr === value}
+                  className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${props.dpr === value ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
+                  key={value}
+                  type="button"
+                  onClick={() => props.onDpr(value)}
+                >
+                  {value}×
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <div className="grid gap-1.5">
+            <p className="font-mono text-[9px] uppercase text-dim">Source</p>
+            <Button
+              aria-pressed={props.delivery === 'baked'}
+              className="min-w-[84px] gap-1.5"
+              variant={props.delivery === 'baked' ? 'primary' : 'secondary'}
+              onClick={() => props.onDelivery(props.delivery === 'baked' ? 'runtime' : 'baked')}
+            >
+              <span aria-hidden="true" className="inline-block w-3 text-center">
+                {props.delivery === 'baked' ? '✓' : ''}
+              </span>
+              Baked
+            </Button>
           </div>
-        </fieldset>
-      ) : (
-        <div data-testid="font-delivery-switcher">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
-            <fieldset className="grid min-w-0 gap-1.5">
-              <legend className="font-mono text-[9px] uppercase text-dim">DPR</legend>
-              <div className="grid grid-cols-2 rounded-md border border-border bg-background p-0.5">
-                <button
-                  aria-pressed={dpr === 1}
-                  className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 1 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
-                  type="button"
-                  onClick={() => onDpr(1)}
-                >
-                  1×
-                </button>
-                <button
-                  aria-pressed={dpr === 2}
-                  className={`min-h-7 rounded px-3 text-[11px] font-medium transition-colors ${dpr === 2 ? 'bg-accent text-white' : 'text-muted hover:bg-surface hover:text-foreground'}`}
-                  type="button"
-                  onClick={() => onDpr(2)}
-                >
-                  2×
-                </button>
-              </div>
-            </fieldset>
-            <div className="grid gap-1.5">
-              <p className="font-mono text-[9px] uppercase text-dim">Source</p>
-              <Button
-                aria-pressed={delivery === 'baked'}
-                className="min-w-[84px] gap-1.5"
-                variant={delivery === 'baked' ? 'primary' : 'secondary'}
-                onClick={() => onDelivery(delivery === 'baked' ? 'runtime' : 'baked')}
-              >
-                <span aria-hidden="true" className="inline-block w-3 text-center">
-                  {delivery === 'baked' ? '✓' : ''}
-                </span>
-                Baked
-              </Button>
-            </div>
-            <div className="grid gap-1.5">
-              <p className="font-mono text-[9px] uppercase text-dim">Grid</p>
-              <Button
-                aria-label="Show canvas grid"
-                aria-pressed={showGrid}
-                className="w-8 px-0"
-                title="Show canvas grid"
-                variant={showGrid ? 'primary' : 'secondary'}
-                onClick={() => onShowGrid(!showGrid)}
-              >
-                <svg aria-hidden="true" className="size-3.5" fill="none" viewBox="0 0 16 16">
-                  <path d="M1.5 5.5h13m-13 5h13m-9-9v13m5-13v13" stroke="currentColor" />
-                  <rect height="13" rx="1" stroke="currentColor" width="13" x="1.5" y="1.5" />
-                </svg>
-              </Button>
-            </div>
+          <div className="grid gap-1.5">
+            <p className="font-mono text-[9px] uppercase text-dim">Grid</p>
+            <Button
+              aria-label="Show canvas grid"
+              aria-pressed={props.showGrid}
+              className="w-8 px-0"
+              title="Show canvas grid"
+              variant={props.showGrid ? 'primary' : 'secondary'}
+              onClick={() => props.onShowGrid(!props.showGrid)}
+            >
+              <svg aria-hidden="true" className="size-3.5" fill="none" viewBox="0 0 16 16">
+                <path d="M1.5 5.5h13m-13 5h13m-9-9v13m5-13v13" stroke="currentColor" />
+                <rect height="13" rx="1" stroke="currentColor" width="13" x="1.5" y="1.5" />
+              </svg>
+            </Button>
           </div>
         </div>
-      )}
-      {mode === 'conformance' && (
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-md border border-border bg-surface p-3">
-          <Field
-            label={`Zoom · ${conformanceView.zoom.toFixed(2)}×`}
-            max={8}
-            min={1}
-            step={0.25}
-            type="range"
-            value={conformanceView.zoom}
-            onChange={(event) => onConformanceZoom(event.currentTarget.valueAsNumber)}
-          />
-          <Button variant="secondary" onClick={onConformanceReset}>
-            Reset zoom
-          </Button>
-        </div>
-      )}
-      {mode === 'conformance' && workload === 'mtsdf-slug-compare' && (
+      </div>
+    </>
+  );
+}
+
+function ConformanceControls(props: ControlsProps) {
+  return (
+    <>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-md border border-border bg-surface p-3">
+        <Field
+          label={`Zoom · ${props.conformanceView.zoom.toFixed(2)}×`}
+          max={8}
+          min={1}
+          step={0.25}
+          type="range"
+          value={props.conformanceView.zoom}
+          onChange={(event) => props.onConformanceZoom(event.currentTarget.valueAsNumber)}
+        />
+        <Button variant="secondary" onClick={props.onConformanceReset}>
+          Reset zoom
+        </Button>
+      </div>
+      {props.workload === 'mtsdf-slug-compare' && (
         <div className="rounded-md border border-border bg-surface p-3">
           <TextareaField
             label="Comparison text"
-            value={comparisonText}
-            onChange={(event) => onComparisonText(event.currentTarget.value)}
+            value={props.comparisonText}
+            onChange={(event) => props.onComparisonText(event.currentTarget.value)}
           />
         </div>
       )}
-      {mode === 'benchmark' && (
-        <LiveWorkloadControls
-          animationEnabled={animationEnabled}
-          animationSpeed={animationSpeed}
-          fontSize={fontSize}
-          layoutWidthPercent={layoutWidthPercent}
-          paintOpacityPercent={paintOpacityPercent}
-          paintShadowEnabled={paintShadowEnabled}
-          paintStrokePercent={paintStrokePercent}
-          showLayoutBounds={showLayoutBounds}
-          technique={technique}
-          workload={workload}
-          workloadAmount={workloadAmount}
-          onAnimationEnabled={onAnimationEnabled}
-          onAnimationSpeed={onAnimationSpeed}
-          onFontSize={onFontSize}
-          onLayoutWidthPercent={onLayoutWidthPercent}
-          onPaintOpacityPercent={onPaintOpacityPercent}
-          onPaintShadowEnabled={onPaintShadowEnabled}
-          onPaintStrokePercent={onPaintStrokePercent}
-          onShowLayoutBounds={onShowLayoutBounds}
-          onWorkloadAmount={onWorkloadAmount}
+      <div className="grid grid-cols-2 gap-2">
+        <Field
+          label="Warmup"
+          min={0}
+          type="number"
+          value={props.warmup}
+          onChange={(event) => props.onWarmup(event.currentTarget.valueAsNumber)}
         />
-      )}
-      {mode === 'benchmark' && workload === 'advanced-shaping' && (
-        <AdvancedShapingControls showcaseFrame={showcaseFrame} showcaseState={showcaseState} onShowcase={onShowcase} />
-      )}
-      {mode === 'conformance' && (
-        <div className="grid grid-cols-2 gap-2">
-          <Field
-            label="Warmup"
-            min={0}
-            type="number"
-            value={warmup}
-            onChange={(event) => onWarmup(event.currentTarget.valueAsNumber)}
-          />
-          <Field
-            label="Samples"
-            min={1}
-            type="number"
-            value={samples}
-            onChange={(event) => onSamples(event.currentTarget.valueAsNumber)}
-          />
-        </div>
-      )}
-      {!minimal && (
-        <>
-          <PayloadInspector
-            delivery={delivery}
-            fontFixture={fontFixture}
-            liveStats={liveStats}
-            technique={technique}
-            workload={workload}
-          />
-          <button
-            className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
-            type="button"
-            onClick={onFontNotices}
-          >
-            Font licenses &amp; notices
-          </button>
-        </>
-      )}
-    </section>
+        <Field
+          label="Samples"
+          min={1}
+          type="number"
+          value={props.samples}
+          onChange={(event) => props.onSamples(event.currentTarget.valueAsNumber)}
+        />
+      </div>
+    </>
   );
 }
 
@@ -526,7 +508,7 @@ function LiveWorkloadControls({
       {workloadHasLayoutWidth(workload) && (
         <Field
           label={`Layout width · ${layoutWidthPercent}%`}
-          max={100}
+          max={workload === 'off-axis-3d' ? 200 : 100}
           min={40}
           step={2}
           type="range"
@@ -545,7 +527,13 @@ function LiveWorkloadControls({
           onChange={(event) => onWorkloadAmount(event.currentTarget.valueAsNumber)}
         />
       )}
-      {(workload === 'dynamic-layout' || workload === 'paint-effects' || workload === 'zoom-text') && (
+      {(workload === 'off-axis-3d' ||
+        workload === 'icon-grid' ||
+        workload === 'paint-effects' ||
+        workload === 'zoom-text' ||
+        workload === 'text-ladder' ||
+        workload === 'dynamic-layout' ||
+        workload === 'paragraph-stress') && (
         <>
           <Toggle checked={animationEnabled} label="Animate" onChange={onAnimationEnabled} />
           <Field
@@ -635,6 +623,20 @@ function AdvancedShapingControls({
             onShowcase({ kind: 'select-case', caseId: definition.id });
           }
         }}
+      />
+      <Toggle
+        checked={showcaseState.auto}
+        label="Auto case cycle"
+        onChange={(enabled) => onShowcase({ kind: 'set-auto', enabled })}
+      />
+      <Field
+        label={`Reveal speed · ${showcaseState.revealUnitsPerSecond.toFixed(0)}/s`}
+        max={240}
+        min={10}
+        step={1}
+        type="range"
+        value={showcaseState.revealUnitsPerSecond}
+        onChange={(event) => onShowcase({ kind: 'set-speed', revealUnitsPerSecond: event.currentTarget.valueAsNumber })}
       />
       <TextareaField
         label="Live text"

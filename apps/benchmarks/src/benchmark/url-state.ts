@@ -1,5 +1,5 @@
 export type HarnessMode = 'benchmark' | 'conformance';
-export type HarnessLayout = 'main' | 'zen';
+export type HarnessLayout = 'main' | 'presentation';
 export type RasterTechnique = 'bitmap' | 'mtsdf' | 'slug';
 export type GraphicsBackend = 'webgpu' | 'webgl2';
 export type FontDelivery = 'baked' | 'runtime';
@@ -28,7 +28,11 @@ export const defaultLocation: HarnessLocation = {
   view: 'scene',
 };
 
-export function readHarnessLocation(search: string, defaultDpr: 1 | 2 = defaultLocation.dpr): HarnessLocation {
+export function readHarnessLocation(
+  search: string,
+  defaultDpr: 1 | 2 = defaultLocation.dpr,
+  layout: HarnessLayout = defaultLocation.layout,
+): HarnessLocation {
   const values = new URLSearchParams(search);
   const view = values.get('view');
   const legacyTarget = values.get('target');
@@ -40,7 +44,7 @@ export function readHarnessLocation(search: string, defaultDpr: 1 | 2 = defaultL
       ['benchmark', 'conformance'],
       hasLegacySelection ? 'conformance' : defaultLocation.mode,
     ),
-    layout: enumValue(values.get('layout'), ['main', 'zen'], defaultLocation.layout),
+    layout,
     technique: enumValue(values.get('technique'), ['bitmap', 'mtsdf', 'slug'], 'bitmap'),
     backend: enumValue(
       values.get('backend'),
@@ -59,7 +63,6 @@ export function readHarnessLocation(search: string, defaultDpr: 1 | 2 = defaultL
 export function writeHarnessLocation(value: HarnessLocation): string {
   const values = new URLSearchParams();
   values.set('mode', value.mode);
-  if (value.layout === 'zen') values.set('layout', value.layout);
   values.set('technique', value.technique);
   values.set('backend', value.backend);
   values.set('delivery', value.delivery);
@@ -68,6 +71,11 @@ export function writeHarnessLocation(value: HarnessLocation): string {
   values.set('workload', value.workload);
   if (value.view !== 'scene') values.set('view', value.view);
   return `?${values.toString()}`;
+}
+
+export function writeHarnessUrl(value: HarnessLocation): string {
+  const pathname = value.layout === 'presentation' ? '/presentation' : '/';
+  return `${pathname}${writeHarnessLocation(value)}`;
 }
 
 function numericEnumValue<const Value extends number>(

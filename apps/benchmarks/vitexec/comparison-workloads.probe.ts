@@ -185,20 +185,22 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
           throw new Error(`${techniqueLabel(technique)} Paint & Effects exposed an active shadow`);
         }
       } else {
-        if (stroke.disabled) throw new Error('MSDF Paint & Effects disabled its stroke control');
+        if (stroke.disabled || stroke.value !== '0') {
+          throw new Error('MSDF Paint & Effects did not initialize with a zero-width stroke');
+        }
         const strokeRevision = numericAttribute(viewport, 'data-configuration-revision');
         setRange('Stroke width', 61);
         await waitForAttribute(viewport, 'data-paint-stroke-width', '0.61');
         await waitForGreaterAttribute(viewport, 'data-configuration-revision', strokeRevision);
-        if (shadow.disabled || !shadow.checked) {
-          throw new Error('MSDF Paint & Effects did not initialize its shadow');
+        if (shadow.disabled || shadow.checked) {
+          throw new Error('MSDF Paint & Effects did not initialize with its shadow disabled');
         }
         const paintRevisionBeforeShadow = numericAttribute(viewport, 'data-paint-revision');
-        setCheckbox('Shadow', false);
-        await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false');
-        await waitForGreaterAttribute(viewport, 'data-paint-revision', paintRevisionBeforeShadow);
         setCheckbox('Shadow', true);
         await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'true');
+        await waitForGreaterAttribute(viewport, 'data-paint-revision', paintRevisionBeforeShadow);
+        setCheckbox('Shadow', false);
+        await waitForAttribute(viewport, 'data-paint-shadow-enabled', 'false');
       }
       await waitForGreaterAttribute(viewport, 'data-paint-revision', paintRevision);
       if (
@@ -370,32 +372,38 @@ if (getComputedStyle(benchmarkActivity).display === 'none') {
 }
 console.log('activity-lifecycle-ready');
 
-await clickAriaButton('Enter Zen Mode');
-await waitForElement('[data-testid="zen-layout"]');
+await clickAriaButton('Enter Presentation Mode');
+await waitForElement('[data-testid="presentation-layout"]');
 if (document.querySelector('[data-testid="workload-scroll"]') !== null) {
-  throw new Error('Zen route retained the Main workload rail');
+  throw new Error('Presentation route retained the Main workload rail');
 }
 if (document.querySelector('[data-testid="font-fixture-panel"]') !== null) {
-  throw new Error('Zen route retained the Main font-fixture panel');
+  throw new Error('Presentation route retained the Main font-fixture panel');
 }
-if (document.querySelector('.zen-layout select') !== null) {
-  throw new Error('Zen route retained a native select');
+if (document.querySelector('.presentation-layout select') !== null) {
+  throw new Error('Presentation route retained a native select');
 }
 for (const label of ['Live workload', 'Font fixture']) {
   const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"][aria-haspopup="listbox"]`);
   if (trigger === null) throw new Error(`${label} custom listbox trigger is unavailable`);
   trigger.click();
-  await waitForElement(`[role="listbox"][aria-label="${label}"]`);
-  if (document.querySelectorAll(`[role="listbox"][aria-label="${label}"] [role="option"]`).length === 0) {
+  const listbox = await observeDocument(() =>
+    [...document.querySelectorAll<HTMLElement>('[role="listbox"]')].find(
+      (candidate) => candidate.offsetParent !== null,
+    ),
+  );
+  if (listbox.querySelectorAll('[role="option"]').length === 0) {
     throw new Error(`${label} custom listbox has no options`);
   }
-  trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+  (document.activeElement ?? document).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
   await nextPaint();
-  if (document.querySelector(`[role="listbox"][aria-label="${label}"]`) !== null) {
+  if (
+    [...document.querySelectorAll<HTMLElement>('[role="listbox"]')].some((candidate) => candidate.offsetParent !== null)
+  ) {
     throw new Error(`${label} custom listbox did not close on Escape`);
   }
-  if (document.querySelector('[data-testid="zen-layout"]') === null) {
-    throw new Error(`${label} listbox Escape incorrectly exited Zen`);
+  if (document.querySelector('[data-testid="presentation-layout"]') === null) {
+    throw new Error(`${label} listbox Escape incorrectly exited Presentation`);
   }
 }
 for (const technique of ['slug', 'bitmap', 'mtsdf'] as const) {
@@ -403,7 +411,7 @@ for (const technique of ['slug', 'bitmap', 'mtsdf'] as const) {
   await waitForReadyViewport(technique, 'paint-effects');
   assertSingleConfiguredRenderer(technique, 'paint-effects');
 }
-console.log('zen-exclusive-renderer-ready');
+console.log('presentation-exclusive-renderer-ready');
 
 console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 7 }));
 

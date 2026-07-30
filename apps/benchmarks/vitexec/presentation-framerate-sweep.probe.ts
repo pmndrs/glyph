@@ -77,11 +77,9 @@ async function selectTechnique(id: Technique, label: string): Promise<void> {
 async function selectWorkload(id: string, label: string): Promise<void> {
   if (new URLSearchParams(location.search).get('workload') === id) return;
   const trigger = visible(document.querySelectorAll<HTMLButtonElement>('button[aria-label="Live workload"]'));
-  if (trigger === undefined) throw new Error('Missing Zen workload control');
+  if (trigger === undefined) throw new Error('Missing Presentation workload control');
   trigger.click();
-  const listbox = await waitFor(() =>
-    visible(document.querySelectorAll<HTMLElement>('[role="listbox"][aria-label="Live workload"]')),
-  );
+  const listbox = await waitFor(() => visible(document.querySelectorAll<HTMLElement>('[role="listbox"]')));
   const option = [...listbox.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
     (candidate) => candidate.textContent?.trim() === label,
   );
@@ -161,7 +159,7 @@ for (const technique of techniques) {
       draws: Number(viewport.getAttribute('data-draw-count')),
     };
     results.push(record);
-    console.log('zen-fps-cell', JSON.stringify(record));
+    console.log('presentation-fps-cell', JSON.stringify(record));
   }
 }
-console.log('zen-fps-sweep-ready', JSON.stringify(results));
+console.log('presentation-fps-sweep-ready', JSON.stringify(results));

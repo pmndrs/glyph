@@ -14,7 +14,7 @@ import {
 export type TelemetryChartStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
 export interface TelemetryChartsProps {
-  readonly presentation?: 'main' | 'zen';
+  readonly presentation?: 'main' | 'presentation';
   readonly stats: TelemetryChartStats | undefined;
 }
 
@@ -25,6 +25,7 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
   const fpsCanvasRef = useRef<HTMLCanvasElement>(null);
   const cpuCanvasRef = useRef<HTMLCanvasElement>(null);
   const gpuCanvasRef = useRef<HTMLCanvasElement>(null);
+  const historySegments = useRef<TelemetryChartStats[]>([]);
   const readStats = useEffectEvent(() => stats);
   useEffect(() => {
     const charts = [
@@ -75,10 +76,11 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
         if (chart.pixelRatio !== Math.max(1, window.devicePixelRatio)) resize(chart);
       }
       const current = readStats();
-      if (current !== undefined) {
-        const presentationTimestamp = sparklinePresentationTimestamp(timestamp, TELEMETRY_PRESENTATION_DELAY_MS);
+      const presentationTimestamp = sparklinePresentationTimestamp(timestamp, TELEMETRY_PRESENTATION_DELAY_MS);
+      if (current !== undefined) retainTelemetrySegment(historySegments.current, current, presentationTimestamp);
+      if (historySegments.current.length > 0) {
         for (const chart of drawing) {
-          drawTelemetryChart(chart, current, presentationTimestamp);
+          drawTelemetryChart(chart, historySegments.current, presentationTimestamp);
         }
       } else {
         for (const { context, width, height } of drawing) context.clearRect(0, 0, width, height);
@@ -157,11 +159,11 @@ function TelemetryChartPanel({
   readonly scaleMaximum: number | undefined;
   readonly tone: 'cyan' | 'success' | 'warning';
   readonly unit: 'fps' | 'ms';
-  readonly presentation: 'main' | 'zen';
+  readonly presentation: 'main' | 'presentation';
 }) {
   return (
     <div
-      className={`flex min-h-0 flex-col p-2 ${presentation === 'zen' ? 'bg-transparent' : 'bg-surface'}`}
+      className={`flex min-h-0 flex-col p-2 ${presentation === 'presentation' ? 'bg-transparent' : 'bg-surface'}`}
       data-scale-maximum={scaleMaximum}
       data-testid={`sparkline-${id}`}
       data-tone={tone}
@@ -187,7 +189,7 @@ function TelemetryChartPanel({
   );
 }
 
-function drawTelemetrySeries(
+function appendTelemetrySeries(
   chart: {
     readonly context: CanvasRenderingContext2D;
     readonly height: number;
@@ -202,8 +204,6 @@ function drawTelemetrySeries(
   windowMs: number,
 ): void {
   const { context, height, width } = chart;
-  context.clearRect(0, 0, width, height);
-  context.beginPath();
   const start = length === values.length ? nextIndex : 0;
   let drawing = false;
   for (let index = 0; index < length; index += 1) {
@@ -217,7 +217,6 @@ function drawTelemetrySeries(
     else context.lineTo(x, y);
     drawing = true;
   }
-  context.stroke();
 }
 
 function drawTelemetryChart(
@@ -227,47 +226,75 @@ function drawTelemetryChart(
     readonly id: 'cpu' | 'fps' | 'gpu';
     readonly width: number;
   },
+  segments: readonly TelemetryChartStats[],
+  presentationTimestamp: number,
+): void {
+  chart.context.clearRect(0, 0, chart.width, chart.height);
+  chart.context.beginPath();
+  for (const stats of segments) {
+    switch (chart.id) {
+      case 'fps':
+        appendTelemetrySeries(
+          chart,
+          stats.frameTimestampHistory,
+          stats.fpsHistory,
+          stats.fpsHistoryLength,
+          stats.fpsHistoryCursor.nextIndex,
+          stats.refreshRateHz,
+          presentationTimestamp,
+          TELEMETRY_CHART_WINDOW_MS,
+        );
+        break;
+      case 'cpu':
+        appendTelemetrySeries(
+          chart,
+          stats.frameTimestampHistory,
+          stats.submitHistory,
+          stats.submitHistoryLength,
+          stats.submitHistoryCursor.nextIndex,
+          stats.frameBudgetMs,
+          presentationTimestamp,
+          TELEMETRY_CHART_WINDOW_MS,
+        );
+        break;
+      case 'gpu':
+        appendTelemetrySeries(
+          chart,
+          stats.frameTimestampHistory,
+          stats.gpuHistory,
+          stats.gpuHistoryLength,
+          stats.gpuHistoryCursor.nextIndex,
+          stats.frameBudgetMs,
+          presentationTimestamp,
+          TELEMETRY_CHART_WINDOW_MS,
+        );
+        break;
+    }
+  }
+  chart.context.stroke();
+}
+
+function retainTelemetrySegment(
+  segments: TelemetryChartStats[],
   stats: TelemetryChartStats,
   presentationTimestamp: number,
 ): void {
-  switch (chart.id) {
-    case 'fps':
-      drawTelemetrySeries(
-        chart,
-        stats.frameTimestampHistory,
-        stats.fpsHistory,
-        stats.fpsHistoryLength,
-        stats.fpsHistoryCursor.nextIndex,
-        stats.refreshRateHz,
-        presentationTimestamp,
-        TELEMETRY_CHART_WINDOW_MS,
-      );
-      return;
-    case 'cpu':
-      drawTelemetrySeries(
-        chart,
-        stats.frameTimestampHistory,
-        stats.submitHistory,
-        stats.submitHistoryLength,
-        stats.submitHistoryCursor.nextIndex,
-        stats.frameBudgetMs,
-        presentationTimestamp,
-        TELEMETRY_CHART_WINDOW_MS,
-      );
-      return;
-    case 'gpu':
-      drawTelemetrySeries(
-        chart,
-        stats.frameTimestampHistory,
-        stats.gpuHistory,
-        stats.gpuHistoryLength,
-        stats.gpuHistoryCursor.nextIndex,
-        stats.frameBudgetMs,
-        presentationTimestamp,
-        TELEMETRY_CHART_WINDOW_MS,
-      );
-      return;
-  }
+  const currentIndex = segments.findIndex(
+    ({ frameTimestampHistory }) => frameTimestampHistory === stats.frameTimestampHistory,
+  );
+  if (currentIndex === -1) segments.push(stats);
+  else segments[currentIndex] = stats;
+
+  const oldestVisibleTimestamp = presentationTimestamp - TELEMETRY_CHART_WINDOW_MS;
+  while (segments.length > 1 && latestHistoryTimestamp(segments[0]!) < oldestVisibleTimestamp) segments.shift();
+}
+
+function latestHistoryTimestamp(stats: TelemetryChartStats): number {
+  const { frameTimestampHistory, fpsHistoryCursor } = stats;
+  if (fpsHistoryCursor.length === 0) return Number.NEGATIVE_INFINITY;
+  return frameTimestampHistory[
+    (fpsHistoryCursor.nextIndex + frameTimestampHistory.length - 1) % frameTimestampHistory.length
+  ]!;
 }
 
 function latestHistoryValue(

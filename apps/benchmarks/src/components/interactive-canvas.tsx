@@ -1,10 +1,7 @@
 import { useEffect, useEffectEvent, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import type { CanvasViewController } from '../renderer/canvas-view-controller';
 
-export interface CanvasViewController {
-  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;
-  resetView(): void;
-  zoomBy?(factor: number): void;
-}
+export type { CanvasViewController } from '../renderer/canvas-view-controller';
 
 interface PointerPosition {
   readonly x: number;

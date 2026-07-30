@@ -1,6 +1,8 @@
 const DEFAULT_CAPACITY = 1_024;
 const DEFAULT_REPORT_INTERVAL_MS = 250;
 const FPS_SMOOTHING_TIME_CONSTANT_MS = 250;
+const MINIMUM_REFRESH_ESTIMATE_SAMPLES = 8;
+const REFRESH_PERIOD_QUANTILE = 0.25;
 
 export interface LiveFrameHistoryCursor {
   length: number;
@@ -64,6 +66,8 @@ export function createLiveFrameTelemetry(options?: {
   }
 
   const frameTimestampHistory = new Float64Array(capacity);
+  const frameDurationHistory = new Float32Array(capacity).fill(Number.NaN);
+  const frameDurationScratch = new Float32Array(capacity);
   const frameIds = new Array<number>(capacity).fill(0);
   const pendingGpuFrames = new Uint8Array(capacity);
   const submitHistory = new Float32Array(capacity).fill(Number.NaN);
@@ -81,7 +85,6 @@ export function createLiveFrameTelemetry(options?: {
   let reportedFrame = 0;
   let latestSnapshot: LiveFrameTelemetrySnapshot | undefined;
   let latestGpuMs: number | undefined;
-  let observedRefreshRateHz = 0;
 
   return {
     gpuTimingSupported,
@@ -108,6 +111,7 @@ export function createLiveFrameTelemetry(options?: {
       }
       const smoothedFps = smoothedFrameDurationMs === undefined ? Number.NaN : 1_000 / smoothedFrameDurationMs;
       frameTimestampHistory[historyIndex] = timestampMs;
+      frameDurationHistory[historyIndex] = frameDurationMs;
       frameIds[historyIndex] = frameId;
       fpsHistory[historyIndex] = smoothedFps;
       submitHistory[historyIndex] = Number.NaN;
@@ -127,9 +131,6 @@ export function createLiveFrameTelemetry(options?: {
       }
       reportFrames[historyIndex] = report ? 1 : 0;
       reportFramesPerSecond[historyIndex] = framesPerSecond;
-      if (Number.isFinite(frameDurationMs)) {
-        observedRefreshRateHz = Math.max(observedRefreshRateHz, 1_000 / frameDurationMs);
-      }
       return frameId;
     },
     endFrame(frameId, durationMs) {
@@ -141,7 +142,14 @@ export function createLiveFrameTelemetry(options?: {
       if (historyIndex === undefined) return undefined;
       submitHistory[historyIndex] = durationMs;
       if (reportFrames[historyIndex] !== 1) return undefined;
-      const refreshRateHz = explicitRefreshRateHz ?? (observedRefreshRateHz || 60);
+      const refreshRateHz =
+        explicitRefreshRateHz ??
+        estimateRefreshRateHz(
+          frameDurationHistory,
+          frameDurationScratch,
+          historyCursor.length,
+          historyCursor.nextIndex,
+        );
       latestSnapshot = snapshot({
         cursor: historyCursor,
         frameCount,
@@ -183,6 +191,18 @@ export function createLiveFrameTelemetry(options?: {
       return true;
     },
   };
+}
+
+function estimateRefreshRateHz(
+  frameDurations: Float32Array,
+  scratch: Float32Array,
+  length: number,
+  nextIndex: number,
+): number {
+  const sampleCount = copyAndSort(frameDurations, scratch, length, nextIndex);
+  if (sampleCount < MINIMUM_REFRESH_ESTIMATE_SAMPLES) return 60;
+  const refreshPeriodMs = quantile(scratch, sampleCount, REFRESH_PERIOD_QUANTILE);
+  return refreshPeriodMs > 0 ? 1_000 / refreshPeriodMs : 60;
 }
 
 function snapshot(options: {

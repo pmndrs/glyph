@@ -11,19 +11,19 @@ export function TechniqueSwitcher({
   onTechnique,
 }: {
   readonly className: string;
-  readonly presentation?: 'main' | 'zen';
+  readonly presentation?: 'main' | 'presentation';
   readonly technique: RasterTechnique;
   readonly onTechnique: (technique: RasterTechnique) => void;
 }) {
   return (
     <div
-      className={`grid grid-cols-3 gap-1 ${presentation === 'main' ? 'rounded-md border border-border bg-background p-0.5' : 'h-8 rounded-lg border border-border bg-black/80 p-0.5'} ${className}`}
+      className={`grid grid-cols-3 gap-1 ${presentation === 'main' ? 'rounded-md border border-border bg-background p-0.5' : 'h-8 rounded-md border border-border bg-black/80 p-0.5'} ${className}`}
       data-testid="technique-switcher"
     >
       {(['bitmap', 'mtsdf', 'slug'] as const).map((value) => (
         <button
           aria-pressed={technique === value}
-          className={`${presentation === 'zen' ? 'h-full min-h-0' : 'min-h-7'} rounded px-2 text-[10px] font-medium capitalize transition-colors ${technique === value ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'} disabled:cursor-not-allowed disabled:opacity-45`}
+          className={`${presentation === 'presentation' ? 'h-full min-h-0' : 'min-h-7'} rounded px-2 text-[10px] font-medium capitalize transition-colors ${technique === value ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'} disabled:cursor-not-allowed disabled:opacity-45`}
           key={value}
           type="button"
           onClick={() => onTechnique(value)}

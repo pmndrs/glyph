@@ -19,11 +19,20 @@ function waitFor<T>(find: () => T | undefined, timeoutMs = 20_000): Promise<T> {
   });
 }
 
-function rangeControl(label: string): HTMLInputElement {
-  const control = [...document.querySelectorAll<HTMLInputElement>('input[type="range"]')].find(
-    (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true,
+async function openRangeControl(label: string): Promise<HTMLInputElement> {
+  const trigger = await waitFor(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find((candidate) =>
+      candidate.getAttribute('aria-label')?.startsWith(`${label}:`),
+    ),
   );
-  if (control === undefined) throw new Error(`${label} range is unavailable`);
+  if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+  const root = await waitFor(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-slot="slider"]')].find(
+      (candidate) => candidate.getAttribute('aria-label') === label && candidate.offsetParent !== null,
+    ),
+  );
+  const control = root.querySelector<HTMLInputElement>('input[type="range"]');
+  if (control === null) throw new Error(`${label} range is unavailable`);
   return control;
 }
 
@@ -51,14 +60,6 @@ function waitFrames(count: number): Promise<void> {
   });
 }
 
-const controlsButton = await waitFor(() =>
-  [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (candidate) => candidate.textContent?.trim() === 'Controls',
-  ),
-);
-if (controlsButton.getAttribute('aria-expanded') !== 'true') controlsButton.click();
-await waitFor(() => (document.querySelector('input[type="range"]') instanceof HTMLInputElement ? true : undefined));
-
 const search = new URLSearchParams(location.search);
 const technique = search.get('technique') ?? 'mtsdf';
 const profileControl = search.get('profileControl') === 'font-size' ? 'font-size' : 'layout-width';
@@ -75,10 +76,10 @@ const viewport = await waitFor(() => {
   }
   return candidate;
 });
-const volume = rangeControl('Text volume');
-const draggedControl = rangeControl(profileControl === 'font-size' ? 'Rendered size' : 'Layout width');
-const initialControlValue = draggedControl.valueAsNumber;
+const volume = await openRangeControl('Text volume');
 setRange(volume, 100);
+const draggedControl = await openRangeControl(profileControl === 'font-size' ? 'Rendered size' : 'Layout width');
+const initialControlValue = draggedControl.valueAsNumber;
 await waitFor(() =>
   Number(viewport.getAttribute('data-configuration-revision')) > 1 &&
   viewport.getAttribute('data-presentation-pending') === 'false'

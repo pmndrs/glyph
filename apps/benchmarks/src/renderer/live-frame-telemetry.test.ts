@@ -102,16 +102,17 @@ describe('live frame telemetry', () => {
     expect(nextSnapshot?.framesPerSecond).toBe(20);
   });
 
-  it('uses a monotonic observed refresh-rate high water when no API value exists', () => {
-    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 5 });
-    recordCpuFrame(telemetry, 1_000, 0.5);
-    const fast = recordCpuFrame(telemetry, 1_010, 0.5);
-    const slow = recordCpuFrame(telemetry, 1_030, 0.5);
-    expect(slow.refreshRateHz).toBe(fast.refreshRateHz);
-    expect(slow.frameBudgetMs).toBe(1_000 / fast.refreshRateHz);
+  it('rejects a short RAF outlier when estimating the display-rate ceiling', () => {
+    const telemetry = createLiveFrameTelemetry({ capacity: 16, gpuTimingSupported: false, reportIntervalMs: 1 });
+    const timestamps = [1_000, 1_001, 1_017.67, 1_034.34, 1_051.01, 1_067.68, 1_084.35, 1_101.02, 1_117.69];
+    let snapshot = recordCpuFrame(telemetry, timestamps[0] ?? 0, 0.5);
+    for (const timestamp of timestamps.slice(1)) snapshot = recordCpuFrame(telemetry, timestamp, 0.5);
+
+    expect(snapshot.refreshRateHz).toBeCloseTo(60, 1);
+    expect(snapshot.frameBudgetMs).toBeCloseTo(1_000 / 60, 1);
   });
 
-  it('smooths the FPS history over frame duration without hiding the observed refresh-rate ceiling', () => {
+  it('smooths the FPS history while the refresh estimator gathers a stable sample window', () => {
     const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 1 });
     recordCpuFrame(telemetry, 1_000, 0.5);
     recordCpuFrame(telemetry, 1_016, 0.5);
@@ -120,7 +121,7 @@ describe('live frame telemetry', () => {
     expect(third.fpsHistory[1]).toBeCloseTo(62.5);
     expect(third.fpsHistory[2]).toBeGreaterThan(61);
     expect(third.fpsHistory[2]).toBeLessThan(62.5);
-    expect(third.refreshRateHz).toBeCloseTo(62.5);
+    expect(third.refreshRateHz).toBe(60);
   });
 
   it('rejects invalid configuration and measurements', () => {

@@ -4,7 +4,9 @@ import { scenarioById } from './scenarios';
 
 import {
   ADVANCED_SHAPING_CASES,
+  ADVANCED_SHAPING_PRESENTATION_CASE_IDS,
   advanceAdvancedShaping,
+  advanceAdvancedShapingByTime,
   advancedShapingFrame,
   advancedShapingFrames,
   initialAdvancedShapingState,
@@ -13,24 +15,89 @@ import {
 
 describe('advanced-shaping timeline', () => {
   it('starts the live showcase as a playing loop from its empty authored boundary', () => {
-    expect(initialAdvancedShapingState()).toMatchObject({ playing: true, tick: 0 });
+    expect(initialAdvancedShapingState()).toMatchObject({
+      playing: true,
+      auto: true,
+      caseId: 'cjk-line-breaks',
+      revealUnitsPerSecond: 240,
+      tick: 0,
+    });
   });
 
   it('seeks exact authored reveal units and pauses while scrubbing', () => {
-    const initial = initialAdvancedShapingState();
+    const initial = updateAdvancedShaping(initialAdvancedShapingState(), {
+      kind: 'select-case',
+      caseId: 'latin-features',
+    });
     const playing = updateAdvancedShaping(initial, { kind: 'play' });
     const scrubbed = updateAdvancedShaping(playing, { kind: 'seek', tick: 15 });
     expect(advancedShapingFrame(scrubbed).text).toBe('AVATAR office e\u0301');
     expect(scrubbed.playing).toBe(false);
   });
 
-  it('advances only explicit playing state and loops at the authored boundary', () => {
+  it('advances from a completed case to the next authored case while auto is enabled', () => {
     let state = updateAdvancedShaping(initialAdvancedShapingState(), { kind: 'play' });
     expect(state.tick).toBe(0);
     const tickCount = advancedShapingFrame(state).tickCount;
     for (let index = 0; index < tickCount; index += 1) state = advanceAdvancedShaping(state);
     expect(state).toMatchObject({ tick: tickCount, playing: true });
-    expect(advanceAdvancedShaping(state)).toMatchObject({ tick: 0, playing: true });
+    expect(advanceAdvancedShaping(state)).toMatchObject({
+      caseId: 'mixed-bidi',
+      tick: 0,
+      playing: true,
+    });
+  });
+
+  it('cycles every shaping case in linear order and wraps to the first case', () => {
+    let state = initialAdvancedShapingState();
+    for (const [index, caseId] of ADVANCED_SHAPING_PRESENTATION_CASE_IDS.entries()) {
+      expect(state.caseId).toBe(caseId);
+      const definition = ADVANCED_SHAPING_CASES.find((candidate) => candidate.id === caseId)!;
+      state = { ...state, tick: definition.showcaseRevealUnits.length };
+      state = advanceAdvancedShaping(state);
+      expect(state.caseId).toBe(
+        ADVANCED_SHAPING_PRESENTATION_CASE_IDS[(index + 1) % ADVANCED_SHAPING_PRESENTATION_CASE_IDS.length],
+      );
+    }
+    expect(state.caseId).toBe('cjk-line-breaks');
+  });
+
+  it('loops the selected case instead when auto is disabled', () => {
+    let state = updateAdvancedShaping(initialAdvancedShapingState(), { kind: 'set-auto', enabled: false });
+    state = { ...state, tick: advancedShapingFrame(state).tickCount };
+    expect(advanceAdvancedShaping(state)).toMatchObject({
+      auto: false,
+      caseId: 'cjk-line-breaks',
+      tick: 0,
+    });
+  });
+
+  it('uses elapsed frame time and adjustable speed without owning a timer', () => {
+    const initial = updateAdvancedShaping(initialAdvancedShapingState(), {
+      kind: 'set-speed',
+      revealUnitsPerSecond: 20,
+    });
+    const partial = advanceAdvancedShapingByTime(initial, 49);
+    expect(partial).toMatchObject({ tick: 0, revealCarryMs: 49 });
+    const advanced = advanceAdvancedShapingByTime(partial, 101);
+    expect(advanced).toMatchObject({ tick: 3, revealCarryMs: 0 });
+
+    expect(advanceAdvancedShapingByTime(updateAdvancedShaping(advanced, { kind: 'pause' }), 500)).toMatchObject({
+      tick: 3,
+      revealCarryMs: 0,
+    });
+  });
+
+  it('rejects invalid elapsed time and reveal speeds at the state boundary', () => {
+    expect(() =>
+      updateAdvancedShaping(initialAdvancedShapingState(), {
+        kind: 'set-speed',
+        revealUnitsPerSecond: 0,
+      }),
+    ).toThrow('advanced-shaping reveal speed must be a positive finite number');
+    expect(() => advanceAdvancedShapingByTime(initialAdvancedShapingState(), -1)).toThrow(
+      'advanced-shaping elapsed time must be a non-negative finite number',
+    );
   });
 
   it('keeps edits whole and restores the authored deterministic timeline', () => {
@@ -75,10 +142,10 @@ describe('advanced-shaping timeline', () => {
       ].map(
         (tick) =>
           advancedShapingFrame({
+            ...initialAdvancedShapingState(),
             caseId: definition.id,
             playing: false,
             tick,
-            editedText: undefined,
           }).widthPermille,
       );
       expect(new Set(widths)).toEqual(new Set([definition.showcaseWidthPermille]));
