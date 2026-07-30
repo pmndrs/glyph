@@ -897,6 +897,7 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
     const renderPreviewFrame = (timestamp: number): void => {
       if (disposed) return;
       try {
+        const cpuFrameStarted = performance.now();
         for (const measurement of activeGpuFrameTimer.poll()) {
           if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
           else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
@@ -912,7 +913,8 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
         if (closing) return;
         const submitMs = performance.now() - started;
         if (firstDrawMs === 0) firstDrawMs = submitMs;
-        const telemetrySnapshot = telemetry.endFrame(frame, submitMs);
+        const cpuFrameMs = performance.now() - cpuFrameStarted;
+        const telemetrySnapshot = telemetry.endFrame(frame, cpuFrameMs);
         if (telemetrySnapshot === undefined) return;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const layout = activeLine.object.layout;

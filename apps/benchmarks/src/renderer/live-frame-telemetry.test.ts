@@ -111,6 +111,18 @@ describe('live frame telemetry', () => {
     expect(slow.frameBudgetMs).toBe(1_000 / fast.refreshRateHz);
   });
 
+  it('smooths the FPS history over frame duration without hiding the observed refresh-rate ceiling', () => {
+    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported: false, reportIntervalMs: 1 });
+    recordCpuFrame(telemetry, 1_000, 0.5);
+    recordCpuFrame(telemetry, 1_016, 0.5);
+    const third = recordCpuFrame(telemetry, 1_034, 0.5);
+
+    expect(third.fpsHistory[1]).toBeCloseTo(62.5);
+    expect(third.fpsHistory[2]).toBeGreaterThan(61);
+    expect(third.fpsHistory[2]).toBeLessThan(62.5);
+    expect(third.refreshRateHz).toBeCloseTo(62.5);
+  });
+
   it('rejects invalid configuration and measurements', () => {
     expect(() => createLiveFrameTelemetry({ capacity: 0 })).toThrow(RangeError);
     expect(() => createLiveFrameTelemetry({ reportIntervalMs: Number.NaN })).toThrow(RangeError);

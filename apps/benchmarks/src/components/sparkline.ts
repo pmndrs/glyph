@@ -4,6 +4,12 @@ export function sparklineTimestampX(timestampMs: number, nowMs: number, windowMs
   return ((timestampMs - (nowMs - normalizedWindow)) / normalizedWindow) * width;
 }
 
+export function sparklinePresentationTimestamp(timestampMs: number, delayMs: number): number {
+  if (!Number.isFinite(timestampMs)) return Number.NaN;
+  const normalizedDelay = Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0;
+  return timestampMs - normalizedDelay;
+}
+
 export function sparklineSampleY(value: number, maximum: number, height: number): number {
   const drawableHeight = Math.max(0, height - 4);
   const ratio = maximum > 0 && Number.isFinite(value) ? Math.min(1, Math.max(0, value / maximum)) : 0;

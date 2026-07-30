@@ -3,7 +3,12 @@ import { useEffect, useEffectEvent, useRef, type RefObject } from 'react';
 import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
-import { sparklineCanvasMetrics, sparklineSampleY, sparklineTimestampX } from './sparkline';
+import {
+  sparklineCanvasMetrics,
+  sparklinePresentationTimestamp,
+  sparklineSampleY,
+  sparklineTimestampX,
+} from './sparkline';
 
 export type TelemetryChartStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
 
@@ -13,6 +18,7 @@ export interface TelemetryChartsProps {
 }
 
 const TELEMETRY_CHART_WINDOW_MS = 8_000;
+const TELEMETRY_PRESENTATION_DELAY_MS = 250;
 
 export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChartsProps) {
   const fpsCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -69,6 +75,7 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
       }
       const current = readStats();
       if (current !== undefined) {
+        const presentationTimestamp = sparklinePresentationTimestamp(timestamp, TELEMETRY_PRESENTATION_DELAY_MS);
         for (const chart of drawing) {
           const series = telemetryChartSeries(current, chart.id);
           drawTelemetrySeries(
@@ -78,7 +85,7 @@ export function TelemetryCharts({ presentation = 'main', stats }: TelemetryChart
             series.length,
             series.nextIndex,
             series.maximum,
-            timestamp,
+            presentationTimestamp,
             TELEMETRY_CHART_WINDOW_MS,
           );
         }

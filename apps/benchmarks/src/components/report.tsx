@@ -154,7 +154,7 @@ function LiveReport({ capture }: { readonly capture: LiveBenchmarkCapture }) {
             median={stats.textUpdateTimings.medianTotalMs}
             p95={stats.textUpdateTimings.p95TotalMs}
           />
-          <TimingRow label="Frame submission" median={stats.medianSubmitMs} p95={stats.p95SubmitMs} />
+          <TimingRow label="CPU frame callback" median={stats.medianSubmitMs} p95={stats.p95SubmitMs} />
           <TimingRow label="GPU frame" median={stats.medianGpuMs} p95={stats.p95GpuMs} />
         </div>
       </div>

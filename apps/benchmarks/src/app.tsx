@@ -1002,7 +1002,7 @@ function Scene({
       {presentation === 'main' && location.mode === 'benchmark' && liveCapture !== undefined && (
         <div className="rounded-md border border-success/40 bg-success/5 px-3 py-2 text-xs text-muted">
           Captured the current rolling window at {liveCapture.capturedAt} ·{' '}
-          {liveCapture.stats.framesPerSecond.toFixed(1)} FPS · {formatMs(liveCapture.stats.medianSubmitMs)} CPU submit
+          {liveCapture.stats.framesPerSecond.toFixed(1)} FPS · {formatMs(liveCapture.stats.medianSubmitMs)} CPU frame
         </div>
       )}
     </section>

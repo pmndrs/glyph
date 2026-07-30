@@ -353,7 +353,7 @@ function monitorLivePresentationContinuity(): { assertContinuous(): void } {
   let loadingOverlayTransitions = 0;
   let replacedCanvases = 0;
   const observer = new MutationObserver(() => {
-    if (liveMetricValue('CPU frame submit') === '—') emptyMetricTransitions += 1;
+    if (liveMetricValue('CPU frame') === '—') emptyMetricTransitions += 1;
     if (surface.textContent?.includes('LOADING MSDF')) loadingOverlayTransitions += 1;
     for (let index = 0; index < labels.length; index += 1) {
       const current = document.querySelector<HTMLCanvasElement>(`canvas[aria-label="${labels[index]}"]`);

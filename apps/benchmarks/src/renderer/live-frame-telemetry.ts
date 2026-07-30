@@ -1,5 +1,6 @@
 const DEFAULT_CAPACITY = 1_024;
 const DEFAULT_REPORT_INTERVAL_MS = 250;
+const FPS_SMOOTHING_TIME_CONSTANT_MS = 250;
 
 export interface LiveFrameHistoryCursor {
   length: number;
@@ -82,6 +83,7 @@ export function createLiveFrameTelemetry(options?: {
   const historyCursor: LiveFrameHistoryCursor = { length: 0, nextIndex: 0 };
   let frameCount = 0;
   let lastFrameTimestamp: number | undefined;
+  let smoothedFrameDurationMs: number | undefined;
   let reportedAt: number | undefined;
   let reportedFrame = 0;
   let latestSnapshot: LiveFrameTelemetrySnapshot | undefined;
@@ -100,14 +102,22 @@ export function createLiveFrameTelemetry(options?: {
         pendingGpuFrames.delete(overwrittenFrameId);
       }
 
-      const instantaneousFps =
+      const frameDurationMs =
         lastFrameTimestamp === undefined || timestampMs <= lastFrameTimestamp
           ? Number.NaN
-          : 1_000 / (timestampMs - lastFrameTimestamp);
+          : timestampMs - lastFrameTimestamp;
+      if (Number.isFinite(frameDurationMs)) {
+        const smoothingAlpha = 1 - Math.exp(-frameDurationMs / FPS_SMOOTHING_TIME_CONSTANT_MS);
+        smoothedFrameDurationMs =
+          smoothedFrameDurationMs === undefined
+            ? frameDurationMs
+            : smoothedFrameDurationMs + smoothingAlpha * (frameDurationMs - smoothedFrameDurationMs);
+      }
+      const smoothedFps = smoothedFrameDurationMs === undefined ? Number.NaN : 1_000 / smoothedFrameDurationMs;
       frameTimestampHistory[historyIndex] = timestampMs;
       frameIds[historyIndex] = frameId;
       frameSlots.set(frameId, historyIndex);
-      fpsHistory[historyIndex] = instantaneousFps;
+      fpsHistory[historyIndex] = smoothedFps;
       submitHistory[historyIndex] = Number.NaN;
       gpuHistory[historyIndex] = latestGpuMs ?? Number.NaN;
       if (gpuTimingSupported) pendingGpuFrames.add(frameId);
@@ -123,8 +133,8 @@ export function createLiveFrameTelemetry(options?: {
         reportedAt = timestampMs;
         reportedFrame = frameCount;
       }
-      if (Number.isFinite(instantaneousFps)) {
-        observedRefreshRateHz = Math.max(observedRefreshRateHz, instantaneousFps);
+      if (Number.isFinite(frameDurationMs)) {
+        observedRefreshRateHz = Math.max(observedRefreshRateHz, 1_000 / frameDurationMs);
       }
       return {
         frameId,
@@ -137,7 +147,7 @@ export function createLiveFrameTelemetry(options?: {
     },
     endFrame(token, durationMs) {
       if (!Number.isFinite(durationMs) || durationMs < 0) {
-        throw new RangeError('CPU submit duration must be finite and nonnegative');
+        throw new RangeError('CPU frame duration must be finite and nonnegative');
       }
       if (frameSlots.get(token.frameId) !== token.historyIndex) return token.snapshot;
       submitHistory[token.historyIndex] = durationMs;

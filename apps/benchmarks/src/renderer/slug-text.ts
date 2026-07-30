@@ -522,6 +522,7 @@ export async function createSlugTextPreview(options: {
     const renderFrame = (timestamp: number): void => {
       if (disposed) return;
       try {
+        const cpuFrameStarted = performance.now();
         for (const measurement of activeGpuFrameTimer.poll()) {
           if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
           else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
@@ -540,7 +541,8 @@ export async function createSlugTextPreview(options: {
           firstDrawRecorded = true;
         }
         if (closing) return;
-        const telemetrySnapshot = telemetry.endFrame(frame, submitMs);
+        const cpuFrameMs = performance.now() - cpuFrameStarted;
+        const telemetrySnapshot = telemetry.endFrame(frame, cpuFrameMs);
         if (telemetrySnapshot === undefined) return;
         const layout = committedLayout(activeLine);
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { sparklineCanvasMetrics, sparklineSampleY, sparklineTimestampX } from './sparkline';
+import {
+  sparklineCanvasMetrics,
+  sparklinePresentationTimestamp,
+  sparklineSampleY,
+  sparklineTimestampX,
+} from './sparkline';
 
 describe('sparklineCanvasMetrics', () => {
   it('maps a fractional CSS box exactly onto its physical backing store', () => {
@@ -35,6 +40,21 @@ describe('sparklineTimestampX', () => {
   it('moves the same sample continuously as RAF time advances', () => {
     expect(sparklineTimestampX(1_000, 1_010, 300, 300)).toBe(290);
     expect(sparklineTimestampX(1_000, 1_020, 300, 300)).toBe(280);
+  });
+});
+
+describe('sparklinePresentationTimestamp', () => {
+  it('holds the shared chart head behind RAF time so delayed samples settle before display', () => {
+    const presentationTimestamp = sparklinePresentationTimestamp(1_250, 250);
+
+    expect(presentationTimestamp).toBe(1_000);
+    expect(sparklineTimestampX(1_000, presentationTimestamp, 300, 300)).toBe(300);
+    expect(sparklineTimestampX(1_100, presentationTimestamp, 300, 300)).toBeGreaterThan(300);
+  });
+
+  it('treats invalid delays as no presentation delay', () => {
+    expect(sparklinePresentationTimestamp(1_000, -1)).toBe(1_000);
+    expect(sparklinePresentationTimestamp(1_000, Number.NaN)).toBe(1_000);
   });
 });
 

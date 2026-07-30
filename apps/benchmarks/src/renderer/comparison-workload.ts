@@ -651,6 +651,7 @@ export async function createComparisonWorkloadPreview(options: {
     const renderFrame = (timestamp: number): void => {
       if (closing || disposed) return;
       try {
+        const cpuFrameStarted = performance.now();
         for (const measurement of gpuFrameTimer?.poll() ?? []) {
           if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
           else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
@@ -677,7 +678,8 @@ export async function createComparisonWorkloadPreview(options: {
         }
         const submitMs = performance.now() - started;
         if (firstDrawMs === 0) firstDrawMs = submitMs;
-        const snapshot = telemetry.endFrame(frame, submitMs);
+        const cpuFrameMs = performance.now() - cpuFrameStarted;
+        const snapshot = telemetry.endFrame(frame, cpuFrameMs);
         if (snapshot === undefined) return;
         const activeEntries = entries.filter(({ node }) => node.visible);
         const layouts = activeEntries.flatMap(entryLayouts);
