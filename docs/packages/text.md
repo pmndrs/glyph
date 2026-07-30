@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:0f50bcc4cb9afb3b4388eb0ead793215ec5158b6d33651c09a8d8b7dfb93313e'
+source_digest: 'sha256:fbc1471ca2fd4d9f8cffe116697ed47fb46f7fe5b2cfe6938acca811ab910de8'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -133,7 +133,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-30T09:07:54Z'
+  at: '2026-07-30T14:30:20Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -143,6 +143,8 @@ Status: ✅ Milestone 9 Slug integration is complete
 Slug V0 renders fill and opacity and rejects outline or shadow paint before batch allocation or paint mutation. The removed exact-distance outline and the bounded replacement gate are retained in the [outline research record](../planning/slug-outline-research.md).
 
 This package owns the accepted public core and React contract types. Its fixtures prove literal font and raster inference, capability composition, source/baked input rules, paragraph constraints, React prop derivation, lazy raster and `useFont` inference, and invalid combinations at compile time. React and React Three Fiber remain optional peer capabilities and are not reachable from the core entry point. Three.js-facing runtime values and types resolve through the public `three/webgpu` and `three/tsl` subpaths rather than the legacy root or internal source exports, matching the renderer boundary used by first-party raster work; package lint rejects those forbidden imports. Public raster-baker descriptors are constrained to `JsonValue` while preserving their exact inferred shape. Plugin-produced values are still revalidated during their unavoidable RFC 8785 canonicalization pass: exotic prototypes, cycles, excessive nesting, non-finite numbers, invalid Unicode, and non-JSON values cannot collide with a valid raster identity, while repeated non-cyclic references remain legal. Project plans resolve each descriptor and `rasterKey` once, then carry that same pair through ordering, packaging, and baking so a stateful plugin cannot make identity drift within one bake.
+
+`Text` generations may stage a raster-owned batch update without mutating the committed generation. A candidate becomes retained only when every participating raster stages successfully; cancellation disposes staging data but never the live batch, while commit transfers exact batch ownership atomically. Bitmap admits this path only for the same resource, strike, ordered glyph sequence, and atlas-page run topology. Authoritative reshaping and paragraph layout still produce the new origins and quad sizes; retained dynamic attributes upload only changed origin, size, or color ranges while UVs, textures, materials, geometry, and draw objects remain stable. Strike or topology changes take the ordinary rebuild path.[^bitmap-identity]
 
 Milestone 9 introduces the fixed Slug V0 identity and standalone artifact-validation boundary.[^slug-contract][^slug-validator] The validator layers the pinned Khronos and byte-identical extension schemas over exact 40-byte dense records, exclusive buffer-view ownership, lossless native RGBA16F KTX2 curve pages, R32UI header grids, R16UI reference grids, checked page-relative addressing, authenticated external resources, and bounded GPU residency. Malformed identity, record, address, padding, KTX2 descriptor, integer-grid tail, external hash, and residency cases are named negative controls. That boundary feeds the package-owned Slug baker, registered-raster loader, analytic runtime, and framework-neutral public `Text` path described below. The retained all-external public-loader framebuffer gate and performance-review packets close Milestone 9; additional Slug tuning remains future measured research rather than unfinished renderer integration.
 

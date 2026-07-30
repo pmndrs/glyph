@@ -57,6 +57,13 @@ test('Text commits layout and draw generations atomically', async () => {
     await text.ready;
     assert.notEqual(text.layout, initialLayout, 'constraint updates commit a new layout');
     assert.equal(text.children.length, 1);
+    assert.equal(text.children[0], initialBatch, 'compatible bitmap reflow retains the draw batch');
+
+    const narrowLayout = text.layout;
+    text.setProperties({ fontSize: 18 });
+    await text.ready;
+    assert.notEqual(text.layout, narrowLayout, 'font-size updates reshape and commit a new layout');
+    assert.equal(text.children[0], initialBatch, 'same-strike bitmap font-size updates retain the draw batch');
 
     text.setProperties({ text: 'first update' });
     const supersededReady = text.ready;
@@ -209,6 +216,7 @@ test('a cancelled reflow does not claim ownership of its committed paragraph', a
   let disposeFontAfterBuild = false;
   const raster = defineRaster({
     ...bitmapRequest.module,
+    stageBatchUpdate: undefined,
     buildBatches(...arguments_) {
       const batch = bitmapRequest.module.buildBatches(...arguments_);
       if (disposeFontAfterBuild) {

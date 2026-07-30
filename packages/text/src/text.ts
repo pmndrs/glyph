@@ -4,7 +4,7 @@ import type { FontHandle, FontSlot } from './identity.js';
 import type { ParagraphLayout } from './layout.js';
 import type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 import { createParagraphEngine, type Paragraph, type ParagraphConstraints } from './paragraph.js';
-import type { AnyRasterInput, AnyRasterModule, LoadedRaster, RasterDrawBatch } from './raster.js';
+import type { AnyRasterInput, AnyRasterModule, LoadedRaster, RasterBatchUpdate, RasterDrawBatch } from './raster.js';
 import {
   assertRasterBatch,
   EMPTY_TEXT_STATE,
@@ -149,7 +149,9 @@ interface ResolvedFontRaster {
 interface OwnedBatch {
   readonly module: AnyRasterModule;
   readonly batch: RasterDrawBatch;
+  readonly fontHandle: FontHandle;
   readonly fontSlot: FontSlot;
+  readonly ownership: 'fresh' | 'retained';
 }
 
 interface TextGeneration {
@@ -160,6 +162,7 @@ interface TextGeneration {
   readonly layout: ParagraphLayout;
   readonly paintPlan: GlyphPaintPlan;
   readonly batches: readonly OwnedBatch[];
+  readonly batchUpdates: RasterBatchUpdate[];
   readonly releaseFontDisposal: () => void;
 }
 
@@ -259,16 +262,21 @@ export class Text extends THREE.Group {
       }
       this.#pending = undefined;
       const previous = this.#generation;
+      for (const update of generation.batchUpdates) update.commit();
+      generation.batchUpdates.length = 0;
       this.#generation = generation;
       previous?.releaseFontDisposal();
       for (const owned of previous?.batches ?? []) {
+        if (generation.batches.some(({ batch }) => batch === owned.batch)) continue;
         this.remove(owned.batch.object);
         owned.batch.dispose();
       }
       if (previous !== undefined && previous.paragraph !== generation.paragraph) {
         previous.paragraph.dispose();
       }
-      for (const owned of generation.batches) this.add(owned.batch.object);
+      for (const owned of generation.batches) {
+        if (owned.batch.object.parent !== this) this.add(owned.batch.object);
+      }
       generation.state.onLayout?.(generation.layout);
     });
     // `ready` remains an observation channel that rejects on failure or cancellation. The
@@ -286,6 +294,7 @@ export class Text extends THREE.Group {
     let paragraph = reusableParagraph;
     let ownsParagraph = false;
     const batches: OwnedBatch[] = [];
+    const batchUpdates: RasterBatchUpdate[] = [];
     try {
       let resolved: ResolvedParagraphInput;
       if (paragraph === undefined) {
@@ -308,6 +317,11 @@ export class Text extends THREE.Group {
       const layout = paragraph.layout(paragraphConstraints(state));
       const paintPlan = createGlyphPaintPlan(layout, state);
       const paint = resolveGlyphPaint(state, paintPlan);
+      const prepared: Array<{
+        readonly fontHandle: FontHandle;
+        readonly fontRaster: ResolvedFontRaster;
+        readonly fontSlot: FontSlot;
+      }> = [];
       for (let slot = 0; slot < layout.fontHandles.length; slot += 1) {
         const handle = layout.fontHandles[slot] as FontHandle | undefined;
         if (handle === undefined) throw new Error('paragraph layout has an incomplete font table');
@@ -318,15 +332,46 @@ export class Text extends THREE.Group {
         fontRaster.raster.module.validatePaint?.(paint);
         await fontRaster.raster.module.prepare(layout, fontRaster.raster.resource, slot, signal);
         signal.throwIfAborted();
-        const batch = fontRaster.raster.module.buildBatches(
-          layout,
-          fontRaster.raster.resource,
-          slot,
-          paint,
-          state.rasterPixelRatio,
-        );
-        assertRasterBatch(batch);
-        batches.push({ module: fontRaster.raster.module, batch, fontSlot: slot });
+        prepared.push({ fontHandle: handle, fontRaster, fontSlot: slot });
+      }
+      let retainAll = this.#generation !== undefined && this.#generation.batches.length === prepared.length;
+      if (retainAll) {
+        for (const { fontHandle, fontRaster, fontSlot } of prepared) {
+          const previous = this.#generation?.batches.find(
+            (owned) => owned.fontHandle === fontHandle && owned.module === fontRaster.raster.module,
+          );
+          const update =
+            previous?.module.stageBatchUpdate?.(
+              previous.batch,
+              layout,
+              fontRaster.raster.resource,
+              fontSlot,
+              paint,
+              state.rasterPixelRatio,
+            ) ?? undefined;
+          if (previous === undefined || update === undefined) {
+            retainAll = false;
+            break;
+          }
+          batchUpdates.push(update);
+          batches.push({ ...previous, fontSlot, ownership: 'retained' });
+        }
+      }
+      if (!retainAll) {
+        for (const update of batchUpdates) update.dispose();
+        batchUpdates.length = 0;
+        batches.length = 0;
+        for (const { fontHandle, fontRaster, fontSlot } of prepared) {
+          const batch = fontRaster.raster.module.buildBatches(
+            layout,
+            fontRaster.raster.resource,
+            fontSlot,
+            paint,
+            state.rasterPixelRatio,
+          );
+          assertRasterBatch(batch);
+          batches.push({ module: fontRaster.raster.module, batch, fontHandle, fontSlot, ownership: 'fresh' });
+        }
       }
       const fontHandles = new Set(resolved.fontsByHandle.keys());
       let generation: TextGeneration;
@@ -343,11 +388,15 @@ export class Text extends THREE.Group {
         layout,
         paintPlan,
         batches,
+        batchUpdates,
         releaseFontDisposal,
       };
       return generation;
     } catch (error) {
-      for (const owned of batches) owned.batch.dispose();
+      for (const update of batchUpdates) update.dispose();
+      for (const owned of batches) {
+        if (owned.ownership === 'fresh') owned.batch.dispose();
+      }
       if (ownsParagraph) paragraph?.dispose();
       throw error;
     }
@@ -365,7 +414,10 @@ export class Text extends THREE.Group {
 
   #disposeUncommitted(generation: TextGeneration): void {
     generation.releaseFontDisposal();
-    for (const owned of generation.batches) owned.batch.dispose();
+    for (const update of generation.batchUpdates) update.dispose();
+    for (const owned of generation.batches) {
+      if (owned.ownership === 'fresh') owned.batch.dispose();
+    }
     if (generation.createdParagraph) generation.paragraph.dispose();
   }
 

@@ -598,25 +598,26 @@ export async function createComparisonWorkloadPreview(options: {
       }
       const nextContentWidth = comparisonWorkloadContentWidth(next, width);
       const contentWidthChanged = nextContentWidth !== committedContentWidth;
+      const fontSizeChanged = next.fontSize !== configuration.fontSize;
       if (comparisonWorkloadUpdateKind(configuration, next, contentWidthChanged) === 'rebuild') {
         await commit(next);
         configuration = next;
         committedContentWidth = nextContentWidth;
         return;
       }
-      if (contentWidthChanged) {
+      if (contentWidthChanged || fontSizeChanged) {
         const readyStarted = performance.now();
         if (next.workload === 'dynamic-layout' && entries.some(({ reflowPending }) => reflowPending === true)) {
           await Promise.all(entries.map(({ text }) => text.ready));
         }
-        const widths =
-          next.workload === 'dynamic-layout'
+        const retainedWidths = contentWidthChanged
+          ? next.workload === 'dynamic-layout'
             ? dynamicLayoutWidths(next, width, performance.now() - animationEpoch)
             : nextContentWidth === undefined
-              ? []
-              : [nextContentWidth];
-        const retainedWidths = next.workload === 'dynamic-layout' ? widths : entries.map(() => widths[0]!);
-        if (next.workload === 'dynamic-layout') {
+              ? undefined
+              : entries.map(() => nextContentWidth)
+          : undefined;
+        if (next.workload === 'dynamic-layout' && retainedWidths !== undefined) {
           for (const [index, entry] of entries.entries()) {
             entry.reflowPending = true;
             entry.lastWidth = retainedWidths[index]!;
@@ -628,9 +629,10 @@ export async function createComparisonWorkloadPreview(options: {
         }
         const scheduledAt = performance.now();
         try {
-          await applyRetainedTextWidths(
+          await applyRetainedTextLayout(
             entries.map(({ text }) => text),
             retainedWidths,
+            fontSizeChanged ? next.fontSize : undefined,
           );
         } finally {
           for (const entry of entries) entry.reflowPending = false;
@@ -1505,25 +1507,41 @@ export function comparisonWorkloadUpdateKind(
   _contentWidthChanged = false,
 ): 'rebuild' | 'retained' {
   const paragraphVolumeChanged = next.workload === 'paragraph-stress' && previous.amount !== next.amount;
-  const fontSizeRebuild =
-    previous.fontSize !== next.fontSize && next.workload !== 'icon-grid' && next.workload !== 'zoom-text';
-  return fontSizeRebuild || paragraphVolumeChanged ? 'rebuild' : 'retained';
+  return paragraphVolumeChanged ? 'rebuild' : 'retained';
 }
 
 interface RetainedWidthText {
   readonly ready: Promise<void>;
-  setProperties(properties: { readonly width: number }): void;
+  setProperties(properties: { readonly fontSize?: number; readonly width?: number }): void;
 }
 
 export async function applyRetainedTextWidths(
   texts: readonly RetainedWidthText[],
   widths: ArrayLike<number>,
 ): Promise<void> {
-  if (texts.length !== widths.length) {
+  await applyRetainedTextLayout(texts, widths, undefined);
+}
+
+async function applyRetainedTextLayout(
+  texts: readonly RetainedWidthText[],
+  widths: ArrayLike<number> | undefined,
+  fontSize: number | undefined,
+): Promise<void> {
+  if (widths === undefined && fontSize === undefined) return;
+  if (widths !== undefined && texts.length !== widths.length) {
     throw new RangeError('retained text widths must match the text entry count');
   }
-  for (const [index, text] of texts.entries()) text.setProperties({ width: widths[index]! });
+  for (const [index, text] of texts.entries()) {
+    text.setProperties({
+      ...(fontSize === undefined ? {} : { fontSize }),
+      ...(widths === undefined ? {} : { width: widths[index]! }),
+    });
+  }
   await Promise.all(texts.map((text) => text.ready));
+}
+
+export async function applyRetainedTextFontSize(texts: readonly RetainedWidthText[], fontSize: number): Promise<void> {
+  await applyRetainedTextLayout(texts, undefined, fontSize);
 }
 
 export function comparisonWorkloadContentWidth(

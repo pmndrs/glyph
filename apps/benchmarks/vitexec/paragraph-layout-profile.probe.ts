@@ -59,9 +59,12 @@ const controlsButton = await waitFor(() =>
 if (controlsButton.getAttribute('aria-expanded') !== 'true') controlsButton.click();
 await waitFor(() => (document.querySelector('input[type="range"]') instanceof HTMLInputElement ? true : undefined));
 
+const search = new URLSearchParams(location.search);
+const technique = search.get('technique') ?? 'mtsdf';
+const profileControl = search.get('profileControl') === 'font-size' ? 'font-size' : 'layout-width';
 const viewport = await waitFor(() => {
   const candidate = document.querySelector<HTMLElement>(
-    '[data-testid="comparison-live-viewport"][data-technique="mtsdf"][data-workload="paragraph-stress"]',
+    `[data-testid="comparison-live-viewport"][data-technique="${technique}"][data-workload="paragraph-stress"]`,
   );
   if (
     candidate === null ||
@@ -73,7 +76,8 @@ const viewport = await waitFor(() => {
   return candidate;
 });
 const volume = rangeControl('Text volume');
-const width = rangeControl('Layout width');
+const draggedControl = rangeControl(profileControl === 'font-size' ? 'Rendered size' : 'Layout width');
+const initialControlValue = draggedControl.valueAsNumber;
 setRange(volume, 100);
 await waitFor(() =>
   Number(viewport.getAttribute('data-configuration-revision')) > 1 &&
@@ -103,14 +107,16 @@ await new Promise<void>((resolve) => {
     previous = now;
     const phase = ((now - started) % 2_000) / 2_000;
     const triangle = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
-    setRange(width, 40 + Math.round(triangle * 30) * 2);
+    const nextValue =
+      profileControl === 'font-size' ? 8 + Math.round(triangle * 88) : 40 + Math.round(triangle * 30) * 2;
+    setRange(draggedControl, nextValue);
     inputCount += 1;
     if (now - started >= 6_000) resolve();
     else requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
 });
-setRange(width, 82);
+setRange(draggedControl, initialControlValue);
 await waitFor(() => (viewport.getAttribute('data-presentation-pending') === 'false' ? true : undefined));
 await waitFrames(12);
 longTaskObserver?.disconnect();
@@ -120,6 +126,8 @@ const memoryAfter = (performance as Performance & { memory?: { usedJSHeapSize: n
 console.log(
   'paragraph-layout-profile-ready',
   JSON.stringify({
+    technique,
+    profileControl,
     inputCount,
     rafFps: (frameDeltas.length * 1_000) / elapsed,
     p95FrameMs: percentile(frameDeltas, 0.95),

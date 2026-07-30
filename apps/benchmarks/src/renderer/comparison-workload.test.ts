@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyRetainedTextFontSize,
   applyRetainedTextWidths,
   comparisonWorkloadContentWidth,
   comparisonWorkloadUpdateKind,
@@ -64,8 +65,8 @@ describe('comparison workload updates', () => {
     }
   });
 
-  it('retains width-only layout changes and rebuilds ordinary font-size changes', () => {
-    expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, fontSize: 32 })).toBe('rebuild');
+  it('retains width and font-size layout changes', () => {
+    expect(comparisonWorkloadUpdateKind(baseConfiguration, { ...baseConfiguration, fontSize: 32 })).toBe('retained');
     expect(
       comparisonWorkloadUpdateKind(baseConfiguration, {
         ...baseConfiguration,
@@ -80,7 +81,7 @@ describe('comparison workload updates', () => {
     const updates: number[][] = [[], [], []];
     const texts = updates.map((entryUpdates) => ({
       ready: new Promise<void>((resolve) => releases.push(resolve)),
-      setProperties: ({ width }: { readonly width: number }) => entryUpdates.push(width),
+      setProperties: ({ width }: { readonly width?: number }) => entryUpdates.push(width!),
     }));
     let settled = false;
     const update = applyRetainedTextWidths(texts, new Float64Array([320, 480, 640])).then(() => {
@@ -96,6 +97,18 @@ describe('comparison workload updates', () => {
     releases[2]!();
     await update;
     expect(settled).toBe(true);
+  });
+
+  it('updates retained Text font sizes without replacing their objects', async () => {
+    const updates: Array<{ readonly fontSize?: number; readonly width?: number }> = [];
+    const text = {
+      ready: Promise.resolve(),
+      setProperties: (properties: { readonly fontSize?: number; readonly width?: number }) => updates.push(properties),
+    };
+
+    await applyRetainedTextFontSize([text], 72);
+
+    expect(updates).toEqual([{ fontSize: 72 }]);
   });
 
   it('rebuilds paragraph stress when its text volume changes', () => {

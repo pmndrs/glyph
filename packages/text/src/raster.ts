@@ -131,6 +131,14 @@ export interface RasterModule<Kind extends string, Resource, DrawBatch extends R
     paint: GlyphPaint,
     rasterPixelRatio: number,
   ): DrawBatch;
+  stageBatchUpdate?(
+    batch: DrawBatch,
+    layout: ParagraphLayout,
+    resource: Resource,
+    fontSlot: FontSlot,
+    paint: GlyphPaint,
+    rasterPixelRatio: number,
+  ): RasterBatchUpdate | undefined;
   validatePaint?(paint: GlyphPaint): void;
   updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void;
   dispose(resource: Resource): void;
@@ -183,6 +191,14 @@ export interface LoadedRaster<Module extends AnyRasterModule> {
 /** Minimum lifecycle surface core needs from every raster-owned batch. */
 export interface RasterDrawBatch {
   readonly object: Object3D;
+  dispose(): void;
+}
+
+/** Staged CPU-side changes for one live raster batch. Staging must not mutate the committed batch. */
+export interface RasterBatchUpdate {
+  /** Apply the validated update synchronously. A staged commit must not perform fallible work. */
+  commit(): void;
+  /** Release uncommitted staging storage. Safe to call repeatedly. */
   dispose(): void;
 }
 

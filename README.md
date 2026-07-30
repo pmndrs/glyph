@@ -197,6 +197,7 @@ The benchmark app also owns reproducible performance probes for the retained Par
 
 ```sh
 pnpm benchmarks:profile:paragraph-layout
+pnpm benchmarks:profile:paragraph-font-size:bitmap
 pnpm benchmarks:profile:zen-sweep
 ```
 
