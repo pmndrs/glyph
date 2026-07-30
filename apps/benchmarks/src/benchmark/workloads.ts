@@ -32,7 +32,7 @@ const benchmarkWorkloads: readonly WorkloadOption[] = [
   {
     id: 'text-ladder',
     label: 'Text ladder',
-    description: 'Tests how text quality holds up from 8 to 512 pixels.',
+    description: 'Tests how text quality holds up from 8 to 1024 pixels.',
     techniques: { bitmap: READY, mtsdf: READY, slug: READY },
   },
   {

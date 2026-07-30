@@ -221,12 +221,14 @@ describe('dynamic layout animation', () => {
 
 describe('text ladder scale selection', () => {
   it('fills a tall viewport with the complete ordered scale', () => {
-    expect(ladderCssSizes(1_700)).toEqual([8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512]);
+    expect(ladderCssSizes(1_700)).toEqual([
+      8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512, 1024,
+    ]);
   });
 
   it('keeps the complete CSS-pixel range on a small viewport', () => {
     expect(ladderCssSizes(360).at(0)).toBe(8);
-    expect(ladderCssSizes(360).at(-1)).toBe(512);
+    expect(ladderCssSizes(360).at(-1)).toBe(1024);
   });
 
   it('rejects invalid viewport inputs', () => {

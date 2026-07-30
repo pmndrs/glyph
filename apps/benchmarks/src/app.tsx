@@ -212,7 +212,7 @@ function liveWorkloadSceneDescription(
     case 'advanced-shaping':
       return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`;
     case 'text-ladder':
-      return 'Tests one sentence at every size from 8 through 512 pixels.';
+      return 'Tests one sentence at every size from 8 through 1024 pixels.';
     case 'zoom-text':
       return 'Tests retained center scaling from 8 pt to viewport fit while authenticated Inter translations of “Shape” cycle by language.';
     case 'icon-grid':
@@ -3240,7 +3240,7 @@ function ComparisonWorkloadViewport({
 
   const rangeLabel =
     workload === 'text-ladder'
-      ? '8–512 CSS PX'
+      ? '8–1024 CSS PX'
       : workload === 'zoom-text'
         ? '8 PT · 10.67 CSS PX → VIEWPORT FIT'
         : workload === 'icon-grid'

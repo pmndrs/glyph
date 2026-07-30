@@ -179,7 +179,7 @@ interface PendingConfigurationUpdate {
   }>;
 }
 
-const LADDER_CSS_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512] as const;
+const LADDER_CSS_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512, 1024] as const;
 const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.';
 const LADDER_GAP_CSS_PX = 10;
 const LADDER_INSET_CSS_PX = 20;

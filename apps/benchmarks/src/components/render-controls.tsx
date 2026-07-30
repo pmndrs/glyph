@@ -74,7 +74,7 @@ function liveWorkloadControlDescription(workload: string, technique: RasterTechn
           ? 'MSDF text uses one 64 px/em atlas to stay crisp across the rendered-size range.'
           : 'Slug evaluates the source outlines analytically across the rendered-size range.';
     case 'text-ladder':
-      return 'Use the ladder to compare crispness and artifacts from 8 to 512 pixels.';
+      return 'Use the ladder to compare crispness and artifacts from 8 to 1024 pixels.';
     case 'zoom-text':
       return 'Centered translations of “Shape” cycle while scaling from 8 pt to the largest size the viewport fits.';
     case 'icon-grid':
@@ -509,7 +509,7 @@ function LiveWorkloadControls({
     <div className="grid gap-3 rounded-md border border-border bg-surface p-3">
       <p className="eyebrow">Live workload</p>
       {workload === 'text-ladder' ? (
-        <p className="font-mono text-[9px] uppercase text-muted">Rendered range · 8–512 CSS px</p>
+        <p className="font-mono text-[9px] uppercase text-muted">Rendered range · 8–1024 CSS px</p>
       ) : workload !== 'zoom-text' ? (
         <Field
           label={`${workload === 'icon-grid' ? 'Icon size' : 'Rendered size'} · ${fontSize} CSS px`}
