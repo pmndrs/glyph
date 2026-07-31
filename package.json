@@ -21,6 +21,7 @@
     "benchmarks:profile:paragraph-font-size:bitmap": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-font-size:bitmap",
     "benchmarks:profile:paragraph-font-size:bitmap:cpu": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-font-size:bitmap:cpu",
     "benchmarks:profile:inspect:paragraph-font-size:bitmap": "pnpm --filter @pmndrs/text-benchmarks profile:inspect:paragraph-font-size:bitmap",
+    "benchmarks:profile:icon-grid:gc": "pnpm --filter @pmndrs/text-benchmarks profile:icon-grid:gc",
     "benchmarks:profile:presentation-sweep": "pnpm --filter @pmndrs/text-benchmarks profile:presentation-sweep",
     "benchmarks:generate:japanese-showcase-subset": "pnpm --filter @pmndrs/text-benchmarks generate:japanese-showcase-subset",
     "test:types": "pnpm --filter @pmndrs/text test:types"

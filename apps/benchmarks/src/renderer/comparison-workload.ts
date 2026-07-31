@@ -110,6 +110,7 @@ export interface ComparisonWorkloadConfiguration {
   readonly animationSpeed: number;
   readonly fontSize: number;
   readonly fontFixture: BenchmarkFontFixture;
+  readonly iconGridView?: IconGridView;
   readonly layoutWidthRatio: number;
   readonly paintOpacity: number;
   readonly paintShadowEnabled: boolean;
@@ -118,6 +119,8 @@ export interface ComparisonWorkloadConfiguration {
   readonly showLayoutBounds: boolean;
   readonly workload: ComparisonWorkloadId;
 }
+
+export type IconGridView = 'alternate' | 'origin';
 
 export interface ComparisonWorkloadPreview {
   resize(width: number, height: number): void;
@@ -317,6 +320,8 @@ const ICON_GRID_LABEL_GAP = 8;
 const ICON_GRID_OVERSCAN_ROWS = 3;
 const ICON_GRID_OVERSCAN_COLUMNS = 3;
 const ICON_GRID_AUTO_PAN_PX_PER_SECOND = 160;
+const ICON_GRID_FRAME_DELTA_RESPONSE = 0.2;
+const ICON_GRID_MAX_FRAME_DELTA_MULTIPLIER = 2;
 // Authenticated fa-solid-900.ttf metrics: 512 units/em and a 640-unit maximum advance.
 const ICON_GRID_FONT_UNITS_PER_EM = 512;
 const ICON_GRID_MAX_ADVANCE = 640;
@@ -480,6 +485,7 @@ async function createComparisonWorkloadRuntime(
   const dynamicWidthsScratch = new Float64Array(DYNAMIC_LAYOUT_TEXT.length);
   const dynamicReadyScratch = new Array<Promise<void>>(DYNAMIC_LAYOUT_TEXT.length);
   const iconAutoPanState: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
+  const iconFrameDeltaState: IconGridFrameDeltaState = { smoothedElapsedMs: undefined };
   let iconAutoPanTimestamp: number | undefined;
   let iconWindowRequestScrollX = 0;
   let iconWindowRequestScrollY = 0;
@@ -610,6 +616,18 @@ async function createComparisonWorkloadRuntime(
       }
       const commitRevision = ++revision;
       const readyStarted = performance.now();
+      const initialIconWindow =
+        workloadChanged && next.workload === 'icon-grid'
+          ? iconGridVirtualWindow(ICON_GRID_ITEMS.length, next.fontSize, width, height, 0, 0)
+          : undefined;
+      const initialIconPan =
+        initialIconWindow === undefined
+          ? undefined
+          : iconGridAutoPanStart(
+              next.iconGridView ?? 'origin',
+              initialIconWindow.maximumScrollX,
+              initialIconWindow.maximumScrollY,
+            );
       const nextEntries = createEntries(
         activeFont().font,
         activeFont().raster,
@@ -621,8 +639,8 @@ async function createComparisonWorkloadRuntime(
         workloadChanged ? 0 : performance.now() - animationEpoch,
         options.textLadderSpecimen,
         iconFont,
-        workloadChanged ? 0 : -scene.position.x,
-        workloadChanged ? 0 : scene.position.y,
+        initialIconPan?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
+        initialIconPan?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
       );
       const scheduledAt = performance.now();
       try {
@@ -639,19 +657,20 @@ async function createComparisonWorkloadRuntime(
         configuration = next;
         committedContentWidth = comparisonWorkloadContentWidth(next, width);
         if (workloadChanged) {
-          scene.position.set(0, 0, 0);
+          scene.position.set(-(initialIconPan?.scrollX ?? 0), initialIconPan?.scrollY ?? 0, 0);
           camera = nextCamera;
           animationEpoch = performance.now();
           zoomAnimationState.phraseIndex = 0;
           zoomAnimationState.phraseRevision = 0;
           zoomAnimationState.progress = 0;
-          iconAutoPanState.directionX = 1;
-          iconAutoPanState.directionY = 1;
-          iconAutoPanState.scrollX = 0;
-          iconAutoPanState.scrollY = 0;
+          iconAutoPanState.directionX = initialIconPan?.directionX ?? 1;
+          iconAutoPanState.directionY = initialIconPan?.directionY ?? 1;
+          iconAutoPanState.scrollX = initialIconPan?.scrollX ?? 0;
+          iconAutoPanState.scrollY = initialIconPan?.scrollY ?? 0;
           iconAutoPanTimestamp = undefined;
-          iconWindowRequestScrollX = 0;
-          iconWindowRequestScrollY = 0;
+          iconFrameDeltaState.smoothedElapsedMs = undefined;
+          iconWindowRequestScrollX = initialIconPan?.scrollX ?? 0;
+          iconWindowRequestScrollY = initialIconPan?.scrollY ?? 0;
           settledIconWindow = undefined;
         }
         scene.clear();
@@ -855,11 +874,26 @@ async function createComparisonWorkloadRuntime(
       if (
         configuration.workload === 'icon-grid' &&
         next.workload === 'icon-grid' &&
-        (viewportChanged || next.fontSize !== configuration.fontSize)
+        (viewportChanged ||
+          next.fontSize !== configuration.fontSize ||
+          next.iconGridView !== configuration.iconGridView)
       ) {
         await iconWindowDrain;
-        const [requestedScrollX, requestedScrollY] =
-          next.fontSize === configuration.fontSize
+        const viewChanged = next.iconGridView !== configuration.iconGridView;
+        const [requestedScrollX, requestedScrollY] = viewChanged
+          ? (() => {
+              const origin = iconGridVirtualWindow(ICON_GRID_ITEMS.length, next.fontSize, width, height, 0, 0);
+              const start = iconGridAutoPanStart(
+                next.iconGridView ?? 'origin',
+                origin.maximumScrollX,
+                origin.maximumScrollY,
+              );
+              iconAutoPanState.directionX = start.directionX;
+              iconAutoPanState.directionY = start.directionY;
+              iconFrameDeltaState.smoothedElapsedMs = undefined;
+              return [start.scrollX, start.scrollY] as const;
+            })()
+          : next.fontSize === configuration.fontSize
             ? [-scene.position.x, scene.position.y]
             : iconGridCenteredScroll(
                 ICON_GRID_ITEMS.length,
@@ -1021,9 +1055,11 @@ async function createComparisonWorkloadRuntime(
       if (closing || disposed) return;
       try {
         const cpuFrameStarted = performance.now();
-        for (const measurement of gpuFrameTimer?.poll() ?? []) {
-          if (measurement.durationMs === undefined) telemetry?.discardGpu(measurement.frameId);
-          else telemetry?.recordGpu(measurement.frameId, measurement.durationMs);
+        if (gpuFrameTimer !== undefined) {
+          for (const measurement of gpuFrameTimer.poll()) {
+            if (measurement.durationMs === undefined) telemetry?.discardGpu(measurement.frameId);
+            else telemetry?.recordGpu(measurement.frameId, measurement.durationMs);
+          }
         }
         const frameId = telemetry?.beginFrame(timestamp);
         if (renderScene && configuration.workload === 'icon-grid') {
@@ -1031,15 +1067,15 @@ async function createComparisonWorkloadRuntime(
           iconAutoPanTimestamp = timestamp;
           const window = settledIconWindow;
           if (configuration.animationEnabled && window !== undefined) {
-            // Keep the frame path to transforms and visibility toggles. The overscanned pool is recycled only after
-            // crossing a cell pitch, so auto-pan does not allocate, reshape, or rebuild text on every frame.
+            // Keep the per-frame path to numeric motion, transforms, and visibility toggles. Content reassignment is
+            // requested only after crossing a complete cell pitch and commits against the overscanned pool.
             advanceIconGridAutoPan(
               iconAutoPanState,
               -scene.position.x,
               scene.position.y,
               window.maximumScrollX,
               window.maximumScrollY,
-              elapsedMs,
+              smoothIconGridFrameDelta(iconFrameDeltaState, elapsedMs),
               ICON_GRID_AUTO_PAN_PX_PER_SECOND * animationRate(configuration),
             );
             scene.position.set(-iconAutoPanState.scrollX, iconAutoPanState.scrollY, 0);
@@ -1062,6 +1098,7 @@ async function createComparisonWorkloadRuntime(
           }
         } else if (renderScene) {
           iconAutoPanTimestamp = undefined;
+          iconFrameDeltaState.smoothedElapsedMs = undefined;
         }
         if (
           renderScene &&
@@ -1301,6 +1338,7 @@ async function createComparisonWorkloadRuntime(
         iconAutoPanState.directionY = 1;
         iconAutoPanState.scrollX = 0;
         iconAutoPanState.scrollY = 0;
+        iconFrameDeltaState.smoothedElapsedMs = undefined;
         camera.zoom = 1;
         camera.updateProjectionMatrix();
         requestIconWindowRefresh();
@@ -1773,8 +1811,8 @@ export function textLadderScenePosition({
   const scrollProgress = smoothstep(Math.min(1, cycle / 0.52));
   const marqueeProgress = smoothstep(Math.max(0, Math.min(1, (cycle - 0.52) / 0.38)));
   const centeredScrollY = -viewportHeight / 2 - finalCenterY;
-  const trailingEdgeAlignedX = viewportWidth * 0.92 - finalEntryX - finalEntryWidth;
-  return { x: trailingEdgeAlignedX * marqueeProgress, y: centeredScrollY * scrollProgress };
+  const offscreenLeftX = -finalEntryX - finalEntryWidth - viewportWidth * 0.05;
+  return { x: offscreenLeftX * marqueeProgress, y: centeredScrollY * scrollProgress };
 }
 
 function animateParagraphStressScene(
@@ -1928,6 +1966,14 @@ function animateZoomText(
   const current = entries[state.phraseRevision % 2]!;
   const incoming = entries[(state.phraseRevision + 1) % 2]!;
   prepareZoomTextEntry(current, state.phraseRevision, viewportWidth, viewportHeight, onError);
+  if (current.zoomReadyRevision !== state.phraseRevision) {
+    // A delayed replacement must not hide the previous phrase. Keep that fully zoomed frame until the current slot
+    // is ready, then prepare the following slot; preparing both slots here would make an asynchronous miss blank.
+    incoming.node.visible = incoming.zoomReadyRevision === state.phraseRevision - 1;
+    incoming.node.scale.setScalar(incoming.zoomMaximumScale ?? 1);
+    setZoomTextOpacity(incoming, 1);
+    return;
+  }
   prepareZoomTextEntry(incoming, state.phraseRevision + 1, viewportWidth, viewportHeight, onError);
 
   const incomingReady = incoming.zoomReadyRevision === state.phraseRevision + 1;
@@ -1954,18 +2000,25 @@ function prepareZoomTextEntry(
   entry.zoomPreparingRevision = phraseRevision;
   entry.node.visible = false;
   entry.text.setProperties({ language: phrase.language, opacity: 0, text: phrase.text });
-  void entry.text.ready.then(() => {
-    if (entry.zoomPreparingRevision !== phraseRevision || entry.disposed === true) return;
-    entry.sourceText = phrase.text;
-    entry.zoomLanguage = phrase.language;
-    entry.zoomPhraseIndex = phraseIndex;
-    entry.zoomPhraseRevision = phraseRevision;
-    entry.zoomReadyRevision = phraseRevision;
-    delete entry.zoomPreparingRevision;
-    entry.zoomOpacity = 0;
-    if (entry.zoomOpacityUpdate !== undefined) entry.zoomOpacityUpdate.opacity = 0;
-    layoutZoomTextEntry(entry, viewportWidth, viewportHeight);
-  }, onError);
+  const generationReady = entry.text.ready;
+  void generationReady.then(
+    () => {
+      if (entry.zoomPreparingRevision !== phraseRevision || entry.disposed === true) return;
+      entry.sourceText = phrase.text;
+      entry.zoomLanguage = phrase.language;
+      entry.zoomPhraseIndex = phraseIndex;
+      entry.zoomPhraseRevision = phraseRevision;
+      entry.zoomReadyRevision = phraseRevision;
+      delete entry.zoomPreparingRevision;
+      entry.zoomOpacity = 0;
+      if (entry.zoomOpacityUpdate !== undefined) entry.zoomOpacityUpdate.opacity = 0;
+      layoutZoomTextEntry(entry, viewportWidth, viewportHeight);
+    },
+    (error: unknown) => {
+      if (entry.zoomPreparingRevision === phraseRevision) delete entry.zoomPreparingRevision;
+      if (!(error instanceof DOMException && error.name === 'AbortError')) onError(error);
+    },
+  );
 }
 
 function setZoomTextOpacity(entry: WorkloadEntry, opacity: number): void {
@@ -2358,6 +2411,49 @@ export interface IconGridAutoPanState {
   directionY: -1 | 1;
   scrollX: number;
   scrollY: number;
+}
+
+export interface IconGridFrameDeltaState {
+  smoothedElapsedMs: number | undefined;
+}
+
+export function iconGridAutoPanStart(
+  view: IconGridView,
+  maximumScrollX: number,
+  maximumScrollY: number,
+): IconGridAutoPanState {
+  if (!Number.isFinite(maximumScrollX) || !Number.isFinite(maximumScrollY)) {
+    throw new TypeError('icon grid auto-pan bounds must be finite');
+  }
+  if (maximumScrollX < 0 || maximumScrollY < 0) {
+    throw new RangeError('icon grid auto-pan bounds must be non-negative');
+  }
+  if (view === 'origin') return { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
+  if (view === 'alternate') {
+    return {
+      directionX: -1,
+      directionY: -1,
+      scrollX: maximumScrollX * 0.72,
+      scrollY: maximumScrollY * 0.58,
+    };
+  }
+  throw new RangeError(`unknown icon grid view: ${String(view)}`);
+}
+
+export function smoothIconGridFrameDelta(state: IconGridFrameDeltaState, elapsedMs: number): number {
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    throw new RangeError('icon grid frame delta must be finite and nonnegative');
+  }
+  if (elapsedMs === 0) return 0;
+  const previous = state.smoothedElapsedMs;
+  if (previous === undefined) {
+    state.smoothedElapsedMs = elapsedMs;
+    return elapsedMs;
+  }
+  const boundedElapsedMs = Math.min(elapsedMs, previous * ICON_GRID_MAX_FRAME_DELTA_MULTIPLIER);
+  const smoothedElapsedMs = previous + (boundedElapsedMs - previous) * ICON_GRID_FRAME_DELTA_RESPONSE;
+  state.smoothedElapsedMs = smoothedElapsedMs;
+  return smoothedElapsedMs;
 }
 
 export function advanceIconGridAutoPan(
@@ -2836,6 +2932,13 @@ async function loadTechniqueFont(
 }
 
 function validateConfiguration(configuration: ComparisonWorkloadConfiguration): ComparisonWorkloadConfiguration {
+  if (
+    configuration.iconGridView !== undefined &&
+    configuration.iconGridView !== 'origin' &&
+    configuration.iconGridView !== 'alternate'
+  ) {
+    throw new RangeError('icon grid view must be origin or alternate');
+  }
   positive(configuration.fontSize, 'comparison workload font size');
   const maximumLayoutWidthRatio = configuration.workload === 'off-axis-3d' ? 2 : 1;
   if (

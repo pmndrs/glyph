@@ -162,9 +162,18 @@ export const ADVANCED_SHAPING_PRESENTATION_CASE_IDS: readonly AdvancedShapingCas
   'indic-reordering',
   'latin-features',
 ];
-export const DEFAULT_ADVANCED_SHAPING_REVEAL_UNITS_PER_SECOND = 240;
+export const DEFAULT_ADVANCED_SHAPING_REVEAL_UNITS_PER_SECOND = 180;
 
 const casesById = new Map(ADVANCED_SHAPING_CASES.map((entry) => [entry.id, entry]));
+
+export const ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS = Math.ceil(
+  (ADVANCED_SHAPING_PRESENTATION_CASE_IDS.reduce(
+    (total, caseId) => total + advancedShapingCase(caseId).showcaseRevealUnits.length,
+    0,
+  ) /
+    DEFAULT_ADVANCED_SHAPING_REVEAL_UNITS_PER_SECOND) *
+    1_000,
+);
 
 export function initialAdvancedShapingState(): AdvancedShapingState {
   const definition = advancedShapingCase(ADVANCED_SHAPING_PRESENTATION_CASE_IDS[0]!);
@@ -174,7 +183,7 @@ export function initialAdvancedShapingState(): AdvancedShapingState {
     auto: true,
     revealUnitsPerSecond: DEFAULT_ADVANCED_SHAPING_REVEAL_UNITS_PER_SECOND,
     revealCarryMs: 0,
-    tick: 0,
+    tick: 1,
     editedText: undefined,
   };
 }
@@ -190,7 +199,7 @@ export function updateAdvancedShaping(
         ...state,
         playing: true,
         revealCarryMs: 0,
-        tick: state.tick >= definition.showcaseRevealUnits.length ? 0 : state.tick,
+        tick: state.tick >= definition.showcaseRevealUnits.length ? 1 : state.tick,
       };
     case 'pause':
       return { ...state, playing: false, revealCarryMs: 0 };
@@ -217,7 +226,7 @@ export function updateAdvancedShaping(
         auto: state.auto,
         revealUnitsPerSecond: state.revealUnitsPerSecond,
         revealCarryMs: 0,
-        tick: state.playing ? 0 : nextDefinition.showcaseRevealUnits.length,
+        tick: state.playing ? 1 : nextDefinition.showcaseRevealUnits.length,
         editedText: undefined,
       };
     case 'set-auto':
@@ -237,8 +246,8 @@ export function advanceAdvancedShaping(state: AdvancedShapingState): AdvancedSha
   if (!state.playing || state.editedText !== undefined) return state;
   const tickCount = advancedShapingCase(state.caseId).showcaseRevealUnits.length;
   if (state.tick >= tickCount) {
-    if (!state.auto) return { ...state, tick: 0 };
-    return { ...state, caseId: nextAdvancedShapingCaseId(state.caseId), tick: 0 };
+    if (!state.auto) return { ...state, tick: 1 };
+    return { ...state, caseId: nextAdvancedShapingCaseId(state.caseId), tick: 1 };
   }
   return { ...state, tick: state.tick + 1 };
 }

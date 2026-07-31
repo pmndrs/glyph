@@ -605,7 +605,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       });
       const scheduledAt = performance.now();
       await line.ready;
-      line.visible = renderedGlyphCount(line) > 0;
+      updateSlugDrawVisibility(line);
       const readyAt = performance.now();
       context.signal.throwIfAborted();
       textReadyMs = performance.now() - textStarted;
@@ -626,6 +626,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (closing || disposed) return;
       const active = activeResources();
       const startedAt = performance.now();
+      updateSlugDrawVisibility(active.line);
       active.canvasSurface.render(active.scene, active.camera);
       if (!firstDrawRecorded) {
         firstDrawMs = performance.now() - startedAt;
@@ -724,7 +725,8 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         },
         commit: async (fixture) => {
           updateScheduledAt = performance.now();
-          if (next.text.length === 0) activeLine.visible = false;
+          const replacingFont = fixture.font !== activeFontFixture.current.asset.font;
+          if (replacingFont || next.text.length === 0) activeLine.visible = false;
           activeLine.setProperties({
             text: next.text,
             font: fixture.font,
@@ -736,8 +738,9 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
             features: next.features,
             textAlign: next.textAlign,
           });
+          if (!replacingFont) updateSlugDrawVisibility(activeLine);
           await activeLine.ready;
-          activeLine.visible = renderedGlyphCount(activeLine) > 0;
+          updateSlugDrawVisibility(activeLine);
           fontSize = nextFontSize;
           anchor = next.anchor;
           layoutWidthRatio = next.layoutWidthRatio;
@@ -2018,6 +2021,22 @@ function renderedGlyphCount(object: THREE.Object3D): number {
     }
   });
   return count;
+}
+
+function updateSlugDrawVisibility(object: THREE.Object3D): void {
+  let glyphCount = 0;
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const availableVertexCount = child.geometry.index?.count ?? child.geometry.getAttribute('position')?.count ?? 0;
+    const vertexCount = Number.isFinite(child.geometry.drawRange.count)
+      ? Math.min(availableVertexCount, child.geometry.drawRange.count)
+      : availableVertexCount;
+    const instanceCount =
+      child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : vertexCount > 0 ? 1 : 0;
+    child.visible = vertexCount > 0 && instanceCount > 0;
+    if (child.geometry instanceof THREE.InstancedBufferGeometry) glyphCount += child.geometry.instanceCount;
+  });
+  object.visible = glyphCount > 0;
 }
 
 function drawCount(object: THREE.Object3D): number {

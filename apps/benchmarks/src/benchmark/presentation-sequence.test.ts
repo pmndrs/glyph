@@ -1,18 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { adjacentPresentationWorkload, PRESENTATION_SCENES, presentationFrame } from './presentation-sequence';
+import { ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS } from './advanced-shaping';
+import {
+  adjacentPresentationWorkload,
+  PRESENTATION_SCENES,
+  presentationFrame,
+  TEXT_LADDER_PRESENTATION_DURATION_MS,
+  ZOOM_TEXT_PRESENTATION_DURATION_MS,
+} from './presentation-sequence';
 
 describe('presentation sequence', () => {
   it('keeps the reviewed one-minute scene order and durations in one table', () => {
     expect(PRESENTATION_SCENES).toEqual([
-      { durationMs: 7_000, workload: 'off-axis-3d' },
-      { durationMs: 8_000, workload: 'icon-grid' },
-      { durationMs: 7_000, workload: 'paint-effects' },
-      { durationMs: 10_000, workload: 'advanced-shaping' },
-      { durationMs: 7_000, workload: 'zoom-text' },
-      { durationMs: 7_000, workload: 'text-ladder' },
-      { durationMs: 7_000, workload: 'dynamic-layout' },
-      { durationMs: 7_000, workload: 'paragraph-stress' },
+      { durationMs: 2_000, workload: 'off-axis-3d' },
+      { durationMs: 2_000, workload: 'icon-grid' },
+      { durationMs: 4_000, workload: 'paint-effects' },
+      { durationMs: ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS, workload: 'advanced-shaping' },
+      { durationMs: ZOOM_TEXT_PRESENTATION_DURATION_MS, workload: 'zoom-text' },
+      { durationMs: TEXT_LADDER_PRESENTATION_DURATION_MS, workload: 'text-ladder' },
+      { durationMs: 9_000, preset: 'icon-grid-return', workload: 'icon-grid' },
+      { durationMs: 6_000, workload: 'dynamic-layout' },
+      { durationMs: 6_000, workload: 'paragraph-stress' },
+      { durationMs: 8_016, workload: 'off-axis-3d' },
     ]);
     expect(PRESENTATION_SCENES.reduce((total, scene) => total + scene.durationMs, 0)).toBe(60_000);
   });
@@ -31,15 +40,29 @@ describe('presentation sequence', () => {
       elapsedInSceneMs: 0,
       workload: 'paint-effects',
     });
-    expect(presentationFrame('paint-effects', 7_000)).toEqual({
+    expect(presentationFrame('paint-effects', 4_000)).toEqual({
       complete: false,
       elapsedInSceneMs: 0,
       workload: 'advanced-shaping',
     });
-    expect(presentationFrame('paragraph-stress', 7_000)).toEqual({
+    expect(presentationFrame('paragraph-stress', 6_000)).toEqual({
+      complete: false,
+      elapsedInSceneMs: 0,
+      workload: 'off-axis-3d',
+    });
+    expect(presentationFrame('paragraph-stress', 14_016)).toEqual({
       complete: true,
-      elapsedInSceneMs: 7_000,
-      workload: 'paragraph-stress',
+      elapsedInSceneMs: 8_016,
+      workload: 'off-axis-3d',
+    });
+  });
+
+  it('returns to icons with an explicit alternate preset', () => {
+    expect(presentationFrame('off-axis-3d', 30_984)).toEqual({
+      complete: false,
+      elapsedInSceneMs: 0,
+      preset: 'icon-grid-return',
+      workload: 'icon-grid',
     });
   });
 });

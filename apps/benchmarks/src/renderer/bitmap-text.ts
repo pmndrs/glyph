@@ -1089,6 +1089,7 @@ async function activateBitmapTextPersistentScene(
                       textAlign: update.textAlign,
                     }),
               });
+              updateBitmapDrawVisibility(activeLine.object);
               await activeLine.object.ready;
               updateBitmapDrawVisibility(activeLine.object);
             }
@@ -1178,6 +1179,7 @@ async function activateBitmapTextPersistentScene(
       frame() {
         if (closing || disposed) return;
         const startedAt = performance.now();
+        updateBitmapDrawVisibility(activeLine.object);
         canvasSurface.render(scene, camera);
         if (firstDrawMs === 0) firstDrawMs = performance.now() - startedAt;
       },

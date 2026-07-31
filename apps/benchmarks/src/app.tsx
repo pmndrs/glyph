@@ -52,6 +52,7 @@ import { createPayloadSummary } from './benchmark/payload-summary';
 import {
   adjacentPresentationWorkload,
   presentationFrame,
+  type PresentationPreset,
   type PresentationWorkload,
 } from './benchmark/presentation-sequence';
 import { paragraphStressMotionFrame } from './benchmark/paragraph-stress-motion';
@@ -106,6 +107,7 @@ import type { RasterTechniqueComparisonPersistentScene } from './renderer/raster
 import type { PersistentRenderJob } from './renderer/persistent-render-host';
 import { createLatestAsyncQueue, type LatestAsyncQueue } from './renderer/latest-async-queue';
 import type {
+  ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
   ComparisonWorkloadPersistentScene,
   ComparisonWorkloadStats,
@@ -395,6 +397,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const [workloadPanelOpen, setWorkloadPanelOpen] = useState(() => desktopSnapshot());
   const [fontNoticesOpen, setFontNoticesOpen] = useState(false);
   const [presentationPlaying, setPresentationPlaying] = useState(false);
+  const [presentationPreset, setPresentationPreset] = useState<PresentationPreset>();
   const [isPending, startTransition] = useTransition();
   const reportCaptureRequested = useRef(false);
   const conformanceRunRevision = useRef(0);
@@ -403,7 +406,13 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const requestedLocationRef = useRef(location);
   const locationRequestRevisionRef = useRef(0);
   const presentationPlayback = useRef<
-    { readonly startedAt: number; readonly startWorkload: PresentationWorkload } | undefined
+    | {
+        preset: PresentationPreset | undefined;
+        readonly startedAt: number;
+        readonly startWorkload: PresentationWorkload;
+        workload: PresentationWorkload;
+      }
+    | undefined
   >(undefined);
 
   const workload = workloadById(location.mode, location.workload);
@@ -482,6 +491,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   }, [location.mode, location.workload, presentationAnimation.animationEnabled, presentationAnimation.animationSpeed]);
 
   function setLocation(next: Partial<HarnessLocation>): void {
+    if (presentationPlayback.current === undefined && next.workload !== undefined) setPresentationPreset(undefined);
     const previous = requestedLocationRef.current;
     const value = { ...previous, ...next };
     const requestRevision = ++locationRequestRevisionRef.current;
@@ -590,8 +600,20 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       stopPresentation();
       return;
     }
-    const startWorkload = presentationFrame(location.workload, 0).workload;
-    presentationPlayback.current = { startedAt: performance.now(), startWorkload };
+    const startFrame = presentationFrame(location.workload, 0);
+    const startWorkload = startFrame.workload;
+    presentationPlayback.current = {
+      preset: startFrame.preset,
+      startedAt: performance.now(),
+      startWorkload,
+      workload: startWorkload,
+    };
+    if (startWorkload === 'advanced-shaping') {
+      const initial = initialAdvancedShapingState();
+      setShowcaseState(initial);
+      setAdvancedFontFixture(advancedShapingCase(initial.caseId).fontFixture);
+    }
+    setPresentationPreset(startFrame.preset);
     setPresentationPlaying(true);
     if (location.mode !== 'benchmark' || location.workload !== startWorkload) {
       setLocation({ mode: 'benchmark', view: 'scene', workload: startWorkload });
@@ -601,6 +623,18 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const playback = presentationPlayback.current;
     if (playback === undefined) return;
     const frame = presentationFrame(playback.startWorkload, timestamp - playback.startedAt);
+    if (frame.workload !== playback.workload) {
+      playback.workload = frame.workload;
+      if (frame.workload === 'advanced-shaping') {
+        const initial = initialAdvancedShapingState();
+        setShowcaseState(initial);
+        setAdvancedFontFixture(advancedShapingCase(initial.caseId).fontFixture);
+      }
+    }
+    if (frame.preset !== playback.preset) {
+      playback.preset = frame.preset;
+      setPresentationPreset(frame.preset);
+    }
     const requestedLocation = requestedLocationRef.current;
     if (frame.workload !== requestedLocation.workload || requestedLocation.mode !== 'benchmark') {
       setLocation({ mode: 'benchmark', view: 'scene', workload: frame.workload });
@@ -845,6 +879,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
         location={location}
         demoMode={presentationPlaying}
         presentation={presentationMode ? 'presentation' : 'main'}
+        presentationPreset={presentationPreset}
         activityWorkloads={activityWorkloads}
         summary={summary}
         showcaseFrame={showcaseFrame}
@@ -1295,6 +1330,7 @@ function Scene({
   location,
   demoMode,
   presentation,
+  presentationPreset,
   showcaseFrame,
   summary,
   onConformancePan,
@@ -1313,6 +1349,7 @@ function Scene({
   readonly location: HarnessLocation;
   readonly demoMode: boolean;
   readonly presentation: 'main' | 'presentation';
+  readonly presentationPreset: PresentationPreset | undefined;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly summary: BenchmarkSummary | undefined;
   readonly onConformancePan: (deltaXPercent: number, deltaYPercent: number) => void;
@@ -1352,6 +1389,7 @@ function Scene({
         paintShadowEnabled={paintShadowEnabled}
         paintStrokePercent={paintStrokePercent}
         presentation={presentation}
+        presentationPreset={presentationPreset}
         showLayoutBounds={showLayoutBounds}
         workloadAmount={workloadAmount}
         key={`${location.mode}-${location.backend}-${location.delivery}-${String(dpr)}`}
@@ -1477,6 +1515,7 @@ function BenchmarkSurface({
   paintShadowEnabled,
   paintStrokePercent,
   presentation,
+  presentationPreset,
   showLayoutBounds,
   workloadAmount,
   showcaseFrame,
@@ -1499,6 +1538,7 @@ function BenchmarkSurface({
   readonly paintShadowEnabled: boolean;
   readonly paintStrokePercent: number;
   readonly presentation: 'main' | 'presentation';
+  readonly presentationPreset: PresentationPreset | undefined;
   readonly showLayoutBounds: boolean;
   readonly workloadAmount: number;
   readonly showcaseFrame: AdvancedShapingFrame;
@@ -1562,6 +1602,7 @@ function BenchmarkSurface({
         paintOpacity={paintOpacityPercent / 100}
         paintShadowEnabled={paintShadowEnabled}
         paintStrokeWidth={paintStrokePercent / 100}
+        presentationPreset={presentationPreset}
         showLayoutBounds={showLayoutBounds}
         stats={comparisonStats}
         technique={technique}
@@ -1619,6 +1660,8 @@ function BenchmarkSurface({
           ? 'grid h-full min-h-0 grid-rows-[0_minmax(0,1fr)] overflow-hidden'
           : 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3'
       }
+      data-advanced-case={advanced ? showcaseFrame.caseDefinition.id : undefined}
+      data-advanced-progress={advanced ? showcaseFrame.progress : undefined}
       data-presentation={presentation}
       data-testid="benchmark-surface"
     >
@@ -2866,7 +2909,10 @@ function BitmapViewportChrome({
         <BakeProgressOverlay backend={backend} progress={bakeProgressValue} technique="BITMAP" />
       )}
       {error !== undefined && (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
+        <div
+          className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger"
+          data-testid="mtsdf-live-error"
+        >
           {error}
         </div>
       )}
@@ -3122,7 +3168,10 @@ function MtsdfTextViewport({
         <BakeProgressOverlay backend={backend} progress={bakeProgressValue} technique="MSDF" />
       )}
       {error !== undefined && (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
+        <div
+          className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger"
+          data-testid="slug-live-error"
+        >
           {error}
         </div>
       )}
@@ -3533,6 +3582,7 @@ function ComparisonWorkloadViewport({
   paintOpacity,
   paintShadowEnabled,
   paintStrokeWidth,
+  presentationPreset,
   showLayoutBounds,
   suppressLoading,
   stats,
@@ -3554,6 +3604,7 @@ function ComparisonWorkloadViewport({
   readonly paintOpacity: number;
   readonly paintShadowEnabled: boolean;
   readonly paintStrokeWidth: number;
+  readonly presentationPreset: PresentationPreset | undefined;
   readonly showLayoutBounds: boolean;
   readonly suppressLoading: boolean;
   readonly stats: ComparisonWorkloadStats | undefined;
@@ -3585,20 +3636,23 @@ function ComparisonWorkloadViewport({
     finishBakeProgress();
     setError(caught instanceof Error ? caught.message : String(caught));
   });
-  const currentConfiguration = useEffectEvent(() => ({
-    amount,
-    animationEnabled,
-    animationSpeed,
-    fontFixture,
-    fontSize,
-    layoutWidthRatio,
-    paintOpacity,
-    paintShadowEnabled,
-    paintStrokeWidth,
-    showGrid: grid,
-    showLayoutBounds,
-    workload,
-  }));
+  const currentConfiguration = useEffectEvent(
+    (): ComparisonWorkloadConfiguration => ({
+      amount,
+      animationEnabled,
+      animationSpeed,
+      fontFixture,
+      fontSize,
+      iconGridView: presentationPreset === 'icon-grid-return' ? 'alternate' : 'origin',
+      layoutWidthRatio,
+      paintOpacity,
+      paintShadowEnabled,
+      paintStrokeWidth,
+      showGrid: grid,
+      showLayoutBounds,
+      workload,
+    }),
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -3680,6 +3734,7 @@ function ComparisonWorkloadViewport({
     paintOpacity,
     paintShadowEnabled,
     paintStrokeWidth,
+    presentationPreset,
     grid,
     showLayoutBounds,
     workload,

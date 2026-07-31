@@ -4,6 +4,7 @@ import { scenarioById } from './scenarios';
 
 import {
   ADVANCED_SHAPING_CASES,
+  ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS,
   ADVANCED_SHAPING_PRESENTATION_CASE_IDS,
   advanceAdvancedShaping,
   advanceAdvancedShapingByTime,
@@ -14,14 +15,22 @@ import {
 } from './advanced-shaping';
 
 describe('advanced-shaping timeline', () => {
-  it('starts the live showcase as a playing loop from its empty authored boundary', () => {
+  it('starts the live showcase on CJK without publishing an empty playing frame', () => {
     expect(initialAdvancedShapingState()).toMatchObject({
       playing: true,
       auto: true,
       caseId: 'cjk-line-breaks',
-      revealUnitsPerSecond: 240,
-      tick: 0,
+      revealUnitsPerSecond: 180,
+      tick: 1,
     });
+  });
+
+  it('completes one presentation cycle at the authored duration', () => {
+    const completed = advanceAdvancedShapingByTime(
+      initialAdvancedShapingState(),
+      ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS,
+    );
+    expect(completed).toMatchObject({ caseId: 'cjk-line-breaks', tick: 1 });
   });
 
   it('seeks exact authored reveal units and pauses while scrubbing', () => {
@@ -37,13 +46,13 @@ describe('advanced-shaping timeline', () => {
 
   it('advances from a completed case to the next authored case while auto is enabled', () => {
     let state = updateAdvancedShaping(initialAdvancedShapingState(), { kind: 'play' });
-    expect(state.tick).toBe(0);
+    expect(state.tick).toBe(1);
     const tickCount = advancedShapingFrame(state).tickCount;
-    for (let index = 0; index < tickCount; index += 1) state = advanceAdvancedShaping(state);
+    for (let index = 1; index < tickCount; index += 1) state = advanceAdvancedShaping(state);
     expect(state).toMatchObject({ tick: tickCount, playing: true });
     expect(advanceAdvancedShaping(state)).toMatchObject({
       caseId: 'mixed-bidi',
-      tick: 0,
+      tick: 1,
       playing: true,
     });
   });
@@ -68,7 +77,7 @@ describe('advanced-shaping timeline', () => {
     expect(advanceAdvancedShaping(state)).toMatchObject({
       auto: false,
       caseId: 'cjk-line-breaks',
-      tick: 0,
+      tick: 1,
     });
   });
 
@@ -78,12 +87,12 @@ describe('advanced-shaping timeline', () => {
       revealUnitsPerSecond: 20,
     });
     const partial = advanceAdvancedShapingByTime(initial, 49);
-    expect(partial).toMatchObject({ tick: 0, revealCarryMs: 49 });
+    expect(partial).toMatchObject({ tick: 1, revealCarryMs: 49 });
     const advanced = advanceAdvancedShapingByTime(partial, 101);
-    expect(advanced).toMatchObject({ tick: 3, revealCarryMs: 0 });
+    expect(advanced).toMatchObject({ tick: 4, revealCarryMs: 0 });
 
     expect(advanceAdvancedShapingByTime(updateAdvancedShaping(advanced, { kind: 'pause' }), 500)).toMatchObject({
-      tick: 3,
+      tick: 4,
       revealCarryMs: 0,
     });
   });

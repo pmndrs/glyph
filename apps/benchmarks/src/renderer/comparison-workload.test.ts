@@ -12,6 +12,7 @@ import {
   createComparisonWorkloadPersistentScene,
   dynamicLayoutWidths,
   iconGridAssignmentSignature,
+  iconGridAutoPanStart,
   iconGridCenteredScroll,
   iconGridLayout,
   iconGridVirtualWindow,
@@ -20,6 +21,7 @@ import {
   OFF_AXIS_SPANS,
   OFF_AXIS_TEXT,
   paintWordHue,
+  smoothIconGridFrameDelta,
   ZOOM_TEXT_BASE_CSS_PX,
   ZOOM_TEXT_PHRASES,
   ZOOM_TEXT_CORPUS,
@@ -353,27 +355,59 @@ describe('text ladder scale selection', () => {
     expect(() => ladderCssSizes(0)).toThrow('text ladder viewport height must be positive');
   });
 
-  it('keeps the final specimen trailing edge inside the viewport through the cycle hold', () => {
+  it('moves the final specimen completely through the left edge when its marquee finishes', () => {
     const viewportWidth = 1_280;
     const finalEntryX = 120;
     const finalEntryWidth = 2_000;
-    for (const elapsedMs of [0, 4_160, 5_680, 7_200, 7_920]) {
-      const position = textLadderScenePosition({
-        animationSpeed: 50,
-        elapsedMs,
-        finalCenterY: -1_500,
-        finalEntryWidth,
-        finalEntryX,
-        viewportHeight: 720,
-        viewportWidth,
-      });
+    const position = textLadderScenePosition({
+      animationSpeed: 50,
+      elapsedMs: 7_200,
+      finalCenterY: -1_500,
+      finalEntryWidth,
+      finalEntryX,
+      viewportHeight: 720,
+      viewportWidth,
+    });
 
-      expect(position.x + finalEntryX + finalEntryWidth).toBeGreaterThanOrEqual(viewportWidth * 0.92);
-    }
+    expect(position.x + finalEntryX + finalEntryWidth).toBeLessThan(0);
   });
 });
 
 describe('icon grid layout', () => {
+  it('uses explicit, bounded start state for each presentation run', () => {
+    expect(iconGridAutoPanStart('origin', 1_000, 500)).toEqual({
+      directionX: 1,
+      directionY: 1,
+      scrollX: 0,
+      scrollY: 0,
+    });
+    expect(iconGridAutoPanStart('alternate', 1_000, 500)).toEqual({
+      directionX: -1,
+      directionY: -1,
+      scrollX: 720,
+      scrollY: 290,
+    });
+  });
+
+  it('smooths a delayed frame without converting the entire stall into one positional jump', () => {
+    const state = { smoothedElapsedMs: undefined };
+
+    expect(smoothIconGridFrameDelta(state, 16)).toBe(16);
+    expect(smoothIconGridFrameDelta(state, 50)).toBeCloseTo(19.2);
+    expect(smoothIconGridFrameDelta(state, 16)).toBeCloseTo(18.56);
+    expect(smoothIconGridFrameDelta(state, 16)).toBeCloseTo(18.048);
+  });
+
+  it('preserves a stable display cadence and rejects invalid deltas', () => {
+    const state = { smoothedElapsedMs: undefined };
+
+    for (let frame = 0; frame < 120; frame += 1) {
+      expect(smoothIconGridFrameDelta(state, 1_000 / 58)).toBeCloseTo(1_000 / 58);
+    }
+    expect(() => smoothIconGridFrameDelta(state, Number.NaN)).toThrow('finite and nonnegative');
+    expect(() => smoothIconGridFrameDelta(state, -1)).toThrow('finite and nonnegative');
+  });
+
   it('starts at the top-left and advances both axes at a constant rate', () => {
     const state: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
 
