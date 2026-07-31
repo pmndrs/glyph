@@ -14,6 +14,7 @@
     "benchmarks": "pnpm --filter @pmndrs/text-benchmarks dev",
     "benchmarks:check": "pnpm --filter @pmndrs/text-benchmarks check",
     "benchmarks:test:live": "pnpm --filter @pmndrs/text-benchmarks test:live",
+    "benchmarks:test:presentation-demo": "pnpm --filter @pmndrs/text-benchmarks test:presentation-demo",
     "benchmarks:test:presentation-controls": "pnpm --filter @pmndrs/text-benchmarks test:presentation-controls",
     "benchmarks:test:raster-technique-compare": "pnpm --filter @pmndrs/text-benchmarks test:raster-technique-compare",
     "benchmarks:profile:paragraph-layout": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-layout",

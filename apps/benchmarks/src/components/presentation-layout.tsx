@@ -8,6 +8,7 @@ export interface PresentationLayoutProps {
   readonly fontOptions: readonly PresentationSelectOption[];
   readonly fontValue: string;
   readonly payload: ReactNode;
+  readonly playing: boolean;
   readonly scene: ReactNode;
   readonly techniqueControl: ReactNode;
   readonly telemetry: ReactNode;
@@ -23,6 +24,7 @@ export function PresentationLayout({
   fontOptions,
   fontValue,
   payload,
+  playing,
   scene,
   techniqueControl,
   telemetry,
@@ -46,6 +48,7 @@ export function PresentationLayout({
   return (
     <div
       className="presentation-layout relative h-dvh min-h-0 min-w-0 overflow-hidden bg-background text-foreground"
+      data-presentation-playing={playing}
       data-testid="presentation-layout"
     >
       <main className="absolute inset-0 min-h-0 min-w-0 overflow-hidden">{scene}</main>

@@ -83,6 +83,17 @@ try {
   const workloadControl = page.getByLabel('Live workload', { exact: true });
   await workloadControl.waitFor();
   await page.waitForFunction(() => document.querySelector('canvas[data-configured-renderer-active="true"]') !== null);
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector<HTMLElement>(
+      '[data-testid="comparison-live-viewport"][data-workload="text-ladder"]',
+    );
+    return (
+      viewport?.dataset.presentationPending === 'false' &&
+      Number(viewport.dataset.glyphCount) > 0 &&
+      Number(viewport.dataset.drawCount) > 0 &&
+      Number(viewport.dataset.framesPerSecond) > 0
+    );
+  });
   await page.evaluate(() => {
     const scope = globalThis as typeof globalThis & { presentationProbeCanvas: Element | undefined };
     scope.presentationProbeCanvas =

@@ -601,13 +601,22 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const playback = presentationPlayback.current;
     if (playback === undefined) return;
     const frame = presentationFrame(playback.startWorkload, timestamp - playback.startedAt);
-    if (frame.workload !== location.workload || location.mode !== 'benchmark') {
+    const requestedLocation = requestedLocationRef.current;
+    if (frame.workload !== requestedLocation.workload || requestedLocation.mode !== 'benchmark') {
       setLocation({ mode: 'benchmark', view: 'scene', workload: frame.workload });
     }
     if (frame.complete) stopPresentation();
   });
   useEffect(() => {
     const onKeyDown = (keyboardEvent: KeyboardEvent): void => {
+      const requestedLocation = requestedLocationRef.current;
+      if (requestedLocation.layout !== 'presentation' || requestedLocation.mode !== 'benchmark') return;
+      if (keyboardEvent.code === 'Space' && !isPresentationTextEntryTarget(keyboardEvent.target)) {
+        keyboardEvent.preventDefault();
+        keyboardEvent.stopImmediatePropagation();
+        if (!keyboardEvent.repeat) togglePresentation();
+        return;
+      }
       if (keyboardEvent.repeat || isPresentationShortcutTarget(keyboardEvent.target)) return;
       if (keyboardEvent.key === 'ArrowLeft') {
         keyboardEvent.preventDefault();
@@ -615,13 +624,27 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       } else if (keyboardEvent.key === 'ArrowRight') {
         keyboardEvent.preventDefault();
         navigatePresentation(1);
-      } else if (keyboardEvent.code === 'Space') {
-        keyboardEvent.preventDefault();
-        togglePresentation();
       }
     };
-    globalThis.addEventListener?.('keydown', onKeyDown);
-    return () => globalThis.removeEventListener?.('keydown', onKeyDown);
+    const onKeyUp = (keyboardEvent: KeyboardEvent): void => {
+      const requestedLocation = requestedLocationRef.current;
+      if (
+        requestedLocation.layout !== 'presentation' ||
+        requestedLocation.mode !== 'benchmark' ||
+        keyboardEvent.code !== 'Space' ||
+        isPresentationTextEntryTarget(keyboardEvent.target)
+      ) {
+        return;
+      }
+      keyboardEvent.preventDefault();
+      keyboardEvent.stopImmediatePropagation();
+    };
+    globalThis.addEventListener?.('keydown', onKeyDown, true);
+    globalThis.addEventListener?.('keyup', onKeyUp, true);
+    return () => {
+      globalThis.removeEventListener?.('keydown', onKeyDown, true);
+      globalThis.removeEventListener?.('keyup', onKeyUp, true);
+    };
   }, []);
   useEffect(() => {
     if (!presentationPlaying) return;
@@ -860,6 +883,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
         liveTechniqueComparison={liveTechniqueComparison}
         location={location}
         phone={phone}
+        presentationPlaying={presentationPlaying}
         scene={scene}
         showcaseFrame={showcaseFrame}
         summary={summary}
@@ -985,6 +1009,7 @@ function HarnessLayout({
   liveTechniqueComparison,
   location,
   phone,
+  presentationPlaying,
   scene,
   showcaseFrame,
   summary,
@@ -1008,6 +1033,7 @@ function HarnessLayout({
   readonly liveTechniqueComparison: boolean;
   readonly location: HarnessLocation;
   readonly phone: boolean;
+  readonly presentationPlaying: boolean;
   readonly scene: ReactNode;
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly summary: BenchmarkSummary | undefined;
@@ -1055,6 +1081,7 @@ function HarnessLayout({
                 : activeFontFixture
           }
           payload={<PresentationPayloadPills summary={presentationPayload} />}
+          playing={presentationPlaying}
           scene={scene}
           techniqueControl={
             <TechniqueSwitcher
@@ -1217,6 +1244,15 @@ function isPresentationShortcutTarget(target: EventTarget | null): boolean {
   return (
     target.closest('input, textarea, select, button, [contenteditable="true"], [role="slider"], [role="combobox"]') !==
     null
+  );
+}
+
+function isPresentationTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return (
+    target.closest(
+      'textarea, [contenteditable="true"], input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input[type="password"]',
+    ) !== null
   );
 }
 
