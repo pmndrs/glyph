@@ -62,6 +62,7 @@
     "test:headless": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-headless.mts --suite conformance --dpr 1 --samples 3 --warmup 1 --port 5181",
     "test:packed": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/run-packed-consumer.mts",
     "test:live": "node ./scripts/run-live-probe.mts",
+    "test:presentation-workloads": "node ./scripts/run-presentation-workload-probe.mts",
     "test:presentation-controls": "vitexec --gpu --path '/presentation?mode=benchmark&technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=icon-grid' ./vitexec/presentation-controls.probe.ts",
     "test:raster-technique-compare": "pnpm test:raster-technique-compare:webgpu && pnpm test:raster-technique-compare:webgl",
     "test:raster-technique-compare:webgl": "vitexec --gpu --path '/?mode=conformance&technique=mtsdf&backend=webgl2&delivery=baked&dpr=1&font=inter&workload=mtsdf-slug-compare' ./vitexec/raster-technique-compare.probe.ts",

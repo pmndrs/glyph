@@ -55,4 +55,5 @@ for (const probe of [
   await runProbe(probe);
 }
 
+await import('./run-presentation-workload-probe.mts');
 await import('./run-mobile-probe.mts');

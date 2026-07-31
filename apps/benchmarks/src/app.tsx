@@ -33,8 +33,7 @@ import { runRegisteredBenchmark } from './benchmark/execution';
 import {
   RuntimeAnimationControls,
   defaultRuntimeFontSizeForWorkload,
-  defaultRuntimeLayoutWidthPercentForWorkload,
-  defaultRuntimeWorkloadAmountForWorkload,
+  resetRuntimeControlsForWorkload,
   RuntimeLayoutControls,
   RuntimePaintControls,
   RuntimeTelemetry,
@@ -274,10 +273,6 @@ function workloadAmountLabel(workload: string, amount: number): string | undefin
   }
 }
 
-function defaultFontSizeForWorkload(workload: string, layout: HarnessLocation['layout']): number {
-  return defaultRuntimeFontSizeForWorkload(workload, layout);
-}
-
 function liveWorkloadSceneDescription(
   workload: string,
   showcaseFrame: AdvancedShapingFrame,
@@ -474,7 +469,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const startedAt = performance.now();
     const animate = (): void => {
       if (!active) return;
-      animateParagraphStressControls(Math.max(0, performance.now() - startedAt));
+      if (requestedLocationRef.current.workload === 'paragraph-stress') {
+        animateParagraphStressControls(Math.max(0, performance.now() - startedAt));
+      }
       if (active) animationFrame = requestAnimationFrame(animate);
     };
     animationFrame = requestAnimationFrame(animate);
@@ -529,11 +526,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       (next.delivery !== undefined && next.delivery !== previous.delivery);
     const applyRuntimeDefaults = (): void => {
       if (!updatesRuntimeDefaults) return;
-      runtimeWorld.set(RuntimeLayoutControls, {
-        fontSize: defaultFontSizeForWorkload(value.workload, value.layout),
-        layoutWidthPercent: defaultRuntimeLayoutWidthPercentForWorkload(value.workload),
-        workloadAmount: defaultRuntimeWorkloadAmountForWorkload(value.workload),
-      });
+      resetRuntimeControlsForWorkload(runtimeWorld, value.workload, value.layout);
     };
     if (transitionsScene) {
       startTransition(async () => {
@@ -3357,14 +3350,12 @@ function SlugTextViewport({
 }
 
 function comparisonViewportEvidence({
-  grid,
   layoutWidthRatio,
   stats,
   technique,
   workload,
   workloadFonts,
 }: {
-  readonly grid: boolean;
   readonly layoutWidthRatio: number;
   readonly stats: ComparisonWorkloadStats | undefined;
   readonly technique: RasterTechnique;
@@ -3377,15 +3368,9 @@ function comparisonViewportEvidence({
   const appliedWorkloadFonts =
     stats === undefined ? undefined : liveWorkloadFontFixtures(stats.workload, stats.appliedFontFixture);
   const requestedFontFixture = workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : workloadFonts.primary;
-  const animatedStats =
-    stats?.workload === 'dynamic-layout' ||
-    stats?.workload === 'icon-grid' ||
-    stats?.workload === 'paint-effects' ||
-    stats?.workload === 'zoom-text'
-      ? stats
-      : undefined;
+  const animatedStats = stats;
   return {
-    'data-canvas-grid': String(grid),
+    'data-canvas-grid': stats === undefined ? undefined : String(stats.showGrid),
     'data-artifact-bytes': stats?.artifactBytes,
     'data-atlas-gpu-bytes': stats?.atlasGpuBytes,
     'data-backend': stats?.backend,
@@ -3443,6 +3428,10 @@ function comparisonViewportEvidence({
     'data-p95-submit-ms': stats?.p95SubmitMs,
     'data-renderer-init-ms': stats?.rendererInitMs,
     'data-configuration-revision': stats?.configurationRevision,
+    'data-camera-kind': stats?.cameraKind,
+    'data-applied-font-size': stats?.appliedFontSize,
+    'data-applied-workload-amount': stats?.appliedAmount,
+    'data-layout-width-ratio': stats?.appliedLayoutWidthRatio,
     'data-paint-opacity': paintStats?.appliedPaintOpacity,
     'data-paint-shadow-enabled': paintStats === undefined ? undefined : String(paintStats.appliedPaintShadowEnabled),
     'data-paint-stroke-width': paintStats?.appliedPaintStrokeWidth,
@@ -3671,7 +3660,7 @@ function ComparisonWorkloadViewport({
   return (
     <div
       className="pointer-events-none absolute inset-0 overflow-hidden rounded border border-border"
-      {...comparisonViewportEvidence({ grid, stats, technique, workload, workloadFonts, layoutWidthRatio })}
+      {...comparisonViewportEvidence({ stats, technique, workload, workloadFonts, layoutWidthRatio })}
       data-testid="comparison-live-viewport"
       ref={containerRef}
     >

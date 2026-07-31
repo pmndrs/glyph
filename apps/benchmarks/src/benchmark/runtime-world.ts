@@ -82,6 +82,21 @@ export function defaultRuntimeWorkloadAmountForWorkload(workload: string): numbe
   return workload === 'off-axis-3d' || workload === 'paragraph-stress' ? 100 : 50;
 }
 
+export function resetRuntimeControlsForWorkload(world: World, workload: string, layout: HarnessLayout): void {
+  world.set(RuntimeViewControls, { showGrid: true, showLayoutBounds: true });
+  world.set(RuntimeLayoutControls, {
+    fontSize: defaultRuntimeFontSizeForWorkload(workload, layout),
+    layoutWidthPercent: defaultRuntimeLayoutWidthPercentForWorkload(workload),
+    workloadAmount: defaultRuntimeWorkloadAmountForWorkload(workload),
+  });
+  world.set(RuntimeAnimationControls, { animationEnabled: true, animationSpeed: 50 });
+  world.set(RuntimePaintControls, {
+    paintOpacityPercent: 100,
+    paintShadowEnabled: false,
+    paintStrokePercent: 0,
+  });
+}
+
 export function createRuntimeWorld({
   initialFontSize = 16,
   initialLayoutWidthPercent = 82,

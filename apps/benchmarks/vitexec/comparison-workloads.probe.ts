@@ -19,6 +19,10 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     let viewport = await waitForReadyViewport(technique, workload.id);
     console.log('comparison-workload-viewport-ready', technique, workload.id);
     assertSingleConfiguredRenderer(technique, workload.id);
+    const expectedCameraKind = workload.id === 'off-axis-3d' ? 'perspective' : 'orthographic';
+    if (viewport.getAttribute('data-camera-kind') !== expectedCameraKind) {
+      throw new Error(`${techniqueLabel(technique)} ${workload.id} retained the wrong camera projection`);
+    }
     verifyCanvasNavigation(viewport, workload.id !== 'zoom-text', workload.id === 'off-axis-3d');
     const pauseForManualControls = workload.id === 'dynamic-layout';
     if (pauseForManualControls) {

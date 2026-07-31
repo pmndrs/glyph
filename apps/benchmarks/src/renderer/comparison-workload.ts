@@ -56,6 +56,7 @@ export type ComparisonWorkloadId =
 export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats) & {
   readonly configurationRevision: number;
   readonly appliedFontFixture: BenchmarkFontFixture;
+  readonly cameraKind: 'orthographic' | 'perspective';
   readonly workload: ComparisonWorkloadId;
   readonly appliedAmount: number;
   readonly appliedAnimationEnabled: boolean;
@@ -483,7 +484,7 @@ async function createComparisonWorkloadRuntime(
   let iconWindowRequestScrollX = 0;
   let iconWindowRequestScrollY = 0;
   const scene = new THREE.Scene();
-  const camera = createWorkloadCamera(configuration.workload, width, height);
+  let camera = createWorkloadCamera(configuration.workload, width, height);
   gpuFrameTimer = persistent ? undefined : createGpuFrameTimer({ backend, renderer, onError });
   const telemetry = persistent
     ? undefined
@@ -591,6 +592,8 @@ async function createComparisonWorkloadRuntime(
 
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
       await iconWindowDrain;
+      const workloadChanged = next.workload !== configuration.workload;
+      const nextCamera = workloadChanged ? createWorkloadCamera(next.workload, width, height) : camera;
       if (next.workload === 'icon-grid' && iconFont === undefined) {
         iconFont = await loadTechniqueFont(
           technique,
@@ -602,7 +605,7 @@ async function createComparisonWorkloadRuntime(
           sharedRegistry,
         );
       }
-      if (next.workload === 'icon-grid') {
+      if (next.workload === 'icon-grid' && !workloadChanged) {
         clampIconGridScene(scene, next.fontSize, width, height);
       }
       const commitRevision = ++revision;
@@ -615,11 +618,11 @@ async function createComparisonWorkloadRuntime(
         rendererViewport.pixelRatio,
         width,
         height,
-        performance.now() - animationEpoch,
+        workloadChanged ? 0 : performance.now() - animationEpoch,
         options.textLadderSpecimen,
         iconFont,
-        -scene.position.x,
-        scene.position.y,
+        workloadChanged ? 0 : -scene.position.x,
+        workloadChanged ? 0 : scene.position.y,
       );
       const scheduledAt = performance.now();
       try {
@@ -635,6 +638,22 @@ async function createComparisonWorkloadRuntime(
         entries = nextEntries;
         configuration = next;
         committedContentWidth = comparisonWorkloadContentWidth(next, width);
+        if (workloadChanged) {
+          scene.position.set(0, 0, 0);
+          camera = nextCamera;
+          animationEpoch = performance.now();
+          zoomAnimationState.phraseIndex = 0;
+          zoomAnimationState.phraseRevision = 0;
+          zoomAnimationState.progress = 0;
+          iconAutoPanState.directionX = 1;
+          iconAutoPanState.directionY = 1;
+          iconAutoPanState.scrollX = 0;
+          iconAutoPanState.scrollY = 0;
+          iconAutoPanTimestamp = undefined;
+          iconWindowRequestScrollX = 0;
+          iconWindowRequestScrollY = 0;
+          settledIconWindow = undefined;
+        }
         scene.clear();
         for (const { node } of entries) scene.add(node);
         disposeEntries(previous);
@@ -1101,6 +1120,8 @@ async function createComparisonWorkloadRuntime(
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const currentLoadedFonts = loadedFonts();
         const currentStatsFont = statsFont();
+        const cameraKind: ComparisonWorkloadStats['cameraKind'] =
+          camera instanceof THREE.PerspectiveCamera ? 'perspective' : 'orthographic';
         const common = {
           backend,
           dpr: rendererViewport.pixelRatio,
@@ -1133,6 +1154,7 @@ async function createComparisonWorkloadRuntime(
           textUpdateTimings: textUpdateTelemetry.summary(),
           configurationRevision: revision,
           appliedFontFixture: configuration.fontFixture,
+          cameraKind,
           workload: configuration.workload,
           appliedAmount: configuration.amount,
           appliedAnimationEnabled: configuration.animationEnabled,
@@ -1881,10 +1903,11 @@ function animateZoomText(
   prepareZoomTextEntry(current, state.phraseRevision, viewportWidth, viewportHeight, onError);
   prepareZoomTextEntry(incoming, state.phraseRevision + 1, viewportWidth, viewportHeight, onError);
 
-  const fadeProgress = smoothstep(Math.max(0, Math.min(1, (state.progress - 0.82) / 0.18)));
+  const incomingReady = incoming.zoomReadyRevision === state.phraseRevision + 1;
+  const fadeProgress = incomingReady ? smoothstep(Math.max(0, Math.min(1, (state.progress - 0.82) / 0.18))) : 0;
   const zoomProgress = state.progress ** 3;
   current.node.visible = current.zoomReadyRevision === state.phraseRevision;
-  incoming.node.visible = incoming.zoomReadyRevision === state.phraseRevision + 1 && fadeProgress > 0;
+  incoming.node.visible = incomingReady && fadeProgress > 0;
   current.node.scale.setScalar(1 + ((current.zoomMaximumScale ?? 1) - 1) * zoomProgress);
   incoming.node.scale.setScalar(1);
   setZoomTextOpacity(current, 1 - fadeProgress);

@@ -12,6 +12,8 @@ import {
   RuntimeCanvasSettings,
   RuntimeLayoutControls,
   RuntimePaintControls,
+  RuntimeViewControls,
+  resetRuntimeControlsForWorkload,
   useRuntimeLayoutControls,
 } from './runtime-world';
 import { WorldProvider } from 'koota/react';
@@ -53,6 +55,34 @@ describe('runtime world', () => {
 
     first.destroy();
     second.destroy();
+  });
+
+  it('installs a complete workload-local default snapshot', () => {
+    const world = createRuntimeWorld();
+    world.set(RuntimeViewControls, { showGrid: false, showLayoutBounds: false });
+    world.set(RuntimeLayoutControls, { fontSize: 12, layoutWidthPercent: 20, workloadAmount: 7 });
+    world.set(RuntimeAnimationControls, { animationEnabled: false, animationSpeed: 3 });
+    world.set(RuntimePaintControls, {
+      paintOpacityPercent: 14,
+      paintShadowEnabled: true,
+      paintStrokePercent: 90,
+    });
+
+    resetRuntimeControlsForWorkload(world, 'off-axis-3d', 'presentation');
+
+    expect(world.get(RuntimeViewControls)).toEqual({ showGrid: true, showLayoutBounds: true });
+    expect(world.get(RuntimeLayoutControls)).toEqual({
+      fontSize: 96,
+      layoutWidthPercent: 120,
+      workloadAmount: 100,
+    });
+    expect(world.get(RuntimeAnimationControls)).toEqual({ animationEnabled: true, animationSpeed: 50 });
+    expect(world.get(RuntimePaintControls)).toEqual({
+      paintOpacityPercent: 100,
+      paintShadowEnabled: false,
+      paintStrokePercent: 0,
+    });
+    world.destroy();
   });
 
   it('routes hooks to the provider-local world', () => {
