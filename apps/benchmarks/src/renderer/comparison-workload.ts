@@ -41,6 +41,7 @@ import type {
   PersistentRenderSceneContext,
   PersistentRenderViewport,
 } from './persistent-render-host';
+import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { createRetainedFontFixtureController, type RetainedFontFixtureController } from './retained-font-fixture';
 
 export type ComparisonWorkloadId =
@@ -54,6 +55,7 @@ export type ComparisonWorkloadId =
 
 export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats) & {
   readonly configurationRevision: number;
+  readonly appliedFontFixture: BenchmarkFontFixture;
   readonly workload: ComparisonWorkloadId;
   readonly appliedAmount: number;
   readonly appliedAnimationEnabled: boolean;
@@ -346,6 +348,7 @@ export function createComparisonWorkloadPersistentScene(
   let runtime: ComparisonWorkloadRuntime | undefined;
   let activated = false;
   let deactivated = false;
+  const activation = createPersistentSceneActivation<ComparisonWorkloadRuntime>();
   const active = (): ComparisonWorkloadRuntime => {
     if (runtime === undefined || deactivated) {
       throw new DOMException('The comparison workload scene is not active', 'InvalidStateError');
@@ -358,16 +361,22 @@ export function createComparisonWorkloadPersistentScene(
       if (activated)
         throw new DOMException('The comparison workload scene cannot be activated twice', 'InvalidStateError');
       activated = true;
-      runtime = await createComparisonWorkloadRuntime(
-        {
-          ...options,
-          dpr: context.viewport.dpr,
-          height: context.viewport.height,
-          signal: context.signal,
-          width: context.viewport.width,
-        },
-        context,
-      );
+      try {
+        runtime = await createComparisonWorkloadRuntime(
+          {
+            ...options,
+            dpr: context.viewport.dpr,
+            height: context.viewport.height,
+            signal: context.signal,
+            width: context.viewport.width,
+          },
+          context,
+        );
+        activation.resolve(runtime);
+      } catch (error) {
+        activation.reject(error);
+        throw error;
+      }
     },
     frame(context) {
       active().persistentFrame(context);
@@ -381,6 +390,7 @@ export function createComparisonWorkloadPersistentScene(
     async deactivate() {
       if (deactivated) return;
       deactivated = true;
+      activation.reject(new DOMException('The comparison workload scene was deactivated', 'AbortError'));
       await runtime?.dispose();
       runtime = undefined;
     },
@@ -394,7 +404,7 @@ export function createComparisonWorkloadPersistentScene(
       active().zoomBy(factor);
     },
     update(configuration) {
-      return active().update(configuration);
+      return activation.wait().then((activatedRuntime) => activatedRuntime.update(configuration));
     },
   };
 }
@@ -955,6 +965,7 @@ async function createComparisonWorkloadRuntime(
       }
       requestedConfiguration = next;
       if (
+        comparisonWorkloadRequiresIconWindowSuspension(configuration, next) ||
         comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild' ||
         next.fontFixture !== configuration.fontFixture
       ) {
@@ -1039,7 +1050,7 @@ async function createComparisonWorkloadRuntime(
           configuration.workload === 'text-ladder' &&
           configuration.animationEnabled
         ) {
-          animateTextLadderScene(scene, entries, configuration, timestamp - animationEpoch, width, height);
+          animateTextLadderScene(scene, entries, configuration, Math.max(0, timestamp - animationEpoch), width, height);
         }
         if (
           renderScene &&
@@ -1047,7 +1058,7 @@ async function createComparisonWorkloadRuntime(
           configuration.workload === 'paragraph-stress' &&
           configuration.animationEnabled
         ) {
-          animateParagraphStressScene(scene, entries, configuration, timestamp - animationEpoch, height);
+          animateParagraphStressScene(scene, entries, configuration, Math.max(0, timestamp - animationEpoch), height);
         }
         if (renderScene && !fontFixtureCommitting) {
           if (!fontFixtureSwitching) {
@@ -1121,6 +1132,7 @@ async function createComparisonWorkloadRuntime(
           gpuTimingSupported,
           textUpdateTimings: textUpdateTelemetry.summary(),
           configurationRevision: revision,
+          appliedFontFixture: configuration.fontFixture,
           workload: configuration.workload,
           appliedAmount: configuration.amount,
           appliedAnimationEnabled: configuration.animationEnabled,
@@ -1980,6 +1992,13 @@ export function comparisonWorkloadUpdateKind(
   if (previous.workload !== next.workload) return 'rebuild';
   const paragraphVolumeChanged = next.workload === 'paragraph-stress' && previous.amount !== next.amount;
   return paragraphVolumeChanged ? 'rebuild' : 'retained';
+}
+
+export function comparisonWorkloadRequiresIconWindowSuspension(
+  previous: ComparisonWorkloadConfiguration,
+  next: ComparisonWorkloadConfiguration,
+): boolean {
+  return previous.workload === 'icon-grid' || next.workload === 'icon-grid';
 }
 
 interface RetainedWidthText {

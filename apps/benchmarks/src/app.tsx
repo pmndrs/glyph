@@ -105,6 +105,7 @@ import type { MtsdfTextConformanceCapture, MtsdfTextLiveStats, MtsdfTextPersiste
 import type { SlugTextConformanceCapture, SlugTextLiveStats, SlugTextPersistentScene } from './renderer/slug-text';
 import type { RasterTechniqueComparisonPersistentScene } from './renderer/raster-technique-compare';
 import type { PersistentRenderJob } from './renderer/persistent-render-host';
+import { createLatestAsyncQueue, type LatestAsyncQueue } from './renderer/latest-async-queue';
 import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPersistentScene,
@@ -207,6 +208,11 @@ interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'
   readonly fontFixture: BenchmarkFontFixture;
   readonly expectedGlyphCount: number | undefined;
   readonly timelineTick: number | undefined;
+}
+
+interface RetainedLiveTextUpdate extends BitmapTextPreviewUpdate {
+  readonly timelineTick: number | undefined;
+  readonly workload: string;
 }
 
 interface PresentationEvidence {
@@ -398,6 +404,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const reportCaptureRequested = useRef(false);
   const conformanceRunRevision = useRef(0);
   const conformanceRunController = useRef<AbortController | undefined>(undefined);
+  const committedLocationRef = useRef(location);
+  const requestedLocationRef = useRef(location);
+  const locationRequestRevisionRef = useRef(0);
   const presentationPlayback = useRef<
     { readonly startedAt: number; readonly startWorkload: PresentationWorkload } | undefined
   >(undefined);
@@ -417,9 +426,11 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const presentationMode = location.layout === 'presentation' && location.mode === 'benchmark';
 
   useEffect(() => {
-    if (location.mode !== 'benchmark') return;
+    if (!presentationMode) return;
     const controller = new AbortController();
+    let started = false;
     const preload = (): void => {
+      started = true;
       void preloadPresentationAssets(location.technique, location.delivery, fontFixture, controller.signal).catch(
         (caught: unknown) => {
           if (!(caught instanceof DOMException && caught.name === 'AbortError')) console.warn(caught);
@@ -428,14 +439,16 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     };
     if (globalThis.requestIdleCallback === undefined) {
       preload();
-      return () => controller.abort();
+      return () => {
+        if (!started) controller.abort();
+      };
     }
     const request = globalThis.requestIdleCallback(preload);
     return () => {
       globalThis.cancelIdleCallback(request);
-      controller.abort();
+      if (!started) controller.abort();
     };
-  }, [fontFixture, location.delivery, location.mode, location.technique]);
+  }, [fontFixture, location.delivery, location.technique, presentationMode]);
 
   const animateParagraphStressControls = useEffectEvent((elapsedMs: number) => {
     const startFontSize = defaultRuntimeFontSizeForWorkload('paragraph-stress', location.layout);
@@ -457,21 +470,28 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       return;
     }
     let animationFrame = 0;
-    let startedAt: number | undefined;
-    const animate = (timestamp: number): void => {
-      startedAt ??= timestamp;
-      animateParagraphStressControls(timestamp - startedAt);
-      animationFrame = requestAnimationFrame(animate);
+    let active = true;
+    const startedAt = performance.now();
+    const animate = (): void => {
+      if (!active) return;
+      animateParagraphStressControls(Math.max(0, performance.now() - startedAt));
+      if (active) animationFrame = requestAnimationFrame(animate);
     };
     animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
+    return () => {
+      active = false;
+      cancelAnimationFrame(animationFrame);
+    };
   }, [location.mode, location.workload, presentationAnimation.animationEnabled, presentationAnimation.animationSpeed]);
 
   function setLocation(next: Partial<HarnessLocation>): void {
-    const value = { ...location, ...next };
+    const previous = requestedLocationRef.current;
+    const value = { ...previous, ...next };
+    const requestRevision = ++locationRequestRevisionRef.current;
+    requestedLocationRef.current = value;
     const updatesRuntimeDefaults =
-      (next.workload !== undefined && next.workload !== location.workload) ||
-      (next.layout !== undefined && next.layout !== location.layout);
+      (next.workload !== undefined && next.workload !== previous.workload) ||
+      (next.layout !== undefined && next.layout !== previous.layout);
     const replacesLiveSurface =
       next.mode !== undefined ||
       next.technique !== undefined ||
@@ -490,21 +510,23 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       setLiveCapture(undefined);
     }
     const commitLocation = (): void => {
+      if (requestRevision !== locationRequestRevisionRef.current) return;
       if (next.workload !== undefined) {
         setActivityWorkloads((current) => ({ ...current, [value.mode]: value.workload }));
       }
+      committedLocationRef.current = value;
       setLocationState(value);
-      if (value.layout === location.layout) {
+      if (value.layout === previous.layout) {
         globalThis.history?.replaceState(null, '', writeHarnessUrl(value));
       } else {
         navigate(writeHarnessUrl(value));
       }
     };
     const transitionsScene =
-      (next.technique !== undefined && next.technique !== location.technique) ||
-      (next.workload !== undefined && next.workload !== location.workload) ||
-      (next.fontFixture !== undefined && next.fontFixture !== location.fontFixture) ||
-      (next.delivery !== undefined && next.delivery !== location.delivery);
+      (next.technique !== undefined && next.technique !== previous.technique) ||
+      (next.workload !== undefined && next.workload !== previous.workload) ||
+      (next.fontFixture !== undefined && next.fontFixture !== previous.fontFixture) ||
+      (next.delivery !== undefined && next.delivery !== previous.delivery);
     const applyRuntimeDefaults = (): void => {
       if (!updatesRuntimeDefaults) return;
       runtimeWorld.set(RuntimeLayoutControls, {
@@ -524,6 +546,8 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
             commitLocation();
           });
         } catch (caught) {
+          if (requestRevision !== locationRequestRevisionRef.current) return;
+          requestedLocationRef.current = committedLocationRef.current;
           setError(caught instanceof Error ? caught.message : String(caught));
         }
       });
@@ -1527,6 +1551,7 @@ function BenchmarkSurface({
         surfaceAnchorRef={surfaceAnchorRef}
         stats={slugStats}
         textConfiguration={textConfiguration}
+        workload={workload}
         onStats={onStats}
       />
     ) : technique === 'mtsdf' ? (
@@ -1540,6 +1565,7 @@ function BenchmarkSurface({
         surfaceAnchorRef={surfaceAnchorRef}
         stats={mtsdfStats}
         textConfiguration={textConfiguration}
+        workload={workload}
         onStats={onStats}
       />
     ) : (
@@ -1553,6 +1579,7 @@ function BenchmarkSurface({
         surfaceAnchorRef={surfaceAnchorRef}
         stats={bitmapStats}
         textConfiguration={textConfiguration}
+        workload={workload}
         onStats={onStats}
       />
     );
@@ -2467,6 +2494,20 @@ function bitmapViewportEvidence({
   };
 }
 
+interface BitmapTextViewportProps {
+  readonly backend: GraphicsBackend;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly fontSize: number;
+  readonly grid: boolean;
+  readonly suppressLoading: boolean;
+  readonly stats: BitmapTextLiveStats | undefined;
+  readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
+  readonly textConfiguration: LiveTextConfiguration;
+  readonly workload: string;
+  readonly onStats: (stats: BitmapTextLiveStats) => void;
+}
+
 function BitmapTextViewport({
   backend,
   delivery,
@@ -2477,26 +2518,19 @@ function BitmapTextViewport({
   stats,
   surfaceAnchorRef,
   textConfiguration,
+  workload,
   onStats,
-}: {
-  readonly backend: GraphicsBackend;
-  readonly delivery: FontDelivery;
-  readonly dpr: 1 | 2;
-  readonly fontSize: number;
-  readonly grid: boolean;
-  readonly suppressLoading: boolean;
-  readonly stats: BitmapTextLiveStats | undefined;
-  readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
-  readonly textConfiguration: LiveTextConfiguration;
-  readonly onStats: (stats: BitmapTextLiveStats) => void;
-}) {
+}: BitmapTextViewportProps) {
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<BitmapTextPersistentScene>(undefined);
+  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextPreviewSnapshot>>(undefined);
+  const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [settledRevision, setSettledRevision] = useState(0);
   const [settledTextLength, setSettledTextLength] = useState(0);
   const [settledTimelineTick, setSettledTimelineTick] = useState<number>();
+  const [settledWorkload, setSettledWorkload] = useState<string>();
   const [presentationEvidence, setPresentationEvidence] = useState<PresentationEvidence>({
     revision: 0,
     progress: 1,
@@ -2527,6 +2561,11 @@ function BitmapTextViewport({
     finishBakeProgress();
     onStats(next);
     setError(undefined);
+    const pendingWorkload = pendingSettledWorkloadRef.current;
+    if (pendingWorkload !== undefined) {
+      pendingSettledWorkloadRef.current = undefined;
+      setSettledWorkload(pendingWorkload);
+    }
   });
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return;
@@ -2546,6 +2585,7 @@ function BitmapTextViewport({
     text,
     textAlign,
     timelineTick,
+    workload,
   }));
   const publishSettledRevision = useEffectEvent((revision: number) => {
     setSettledRevision(revision);
@@ -2555,6 +2595,9 @@ function BitmapTextViewport({
   });
   const publishSettledTextLength = useEffectEvent((length: number) => {
     setSettledTextLength(length);
+  });
+  const publishSettledWorkload = useEffectEvent((value: string) => {
+    pendingSettledWorkloadRef.current = value;
   });
   const publishPresentation = useEffectEvent((snapshot: BitmapTextPreviewSnapshot, progress: 0 | 1) => {
     setPresentationEvidence({
@@ -2572,6 +2615,7 @@ function BitmapTextViewport({
     const controller = new AbortController();
     const configuration = previewConfiguration();
     let preview: BitmapTextPersistentScene | undefined;
+    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextPreviewSnapshot> | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -2600,6 +2644,8 @@ function BitmapTextViewport({
       });
       preview = created;
       previewRef.current = created;
+      updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
+      updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
@@ -2615,8 +2661,10 @@ function BitmapTextViewport({
         await surfaceLease.release();
         return;
       }
-      publishSettledTimelineTick(configuration.timelineTick);
-      publishSettledTextLength(configuration.text.length);
+      const committed = await updateQueue.enqueue(previewConfiguration());
+      publishSettledTimelineTick(committed.input.timelineTick);
+      publishSettledTextLength(committed.input.text.length);
+      publishSettledWorkload(committed.input.workload);
     })();
     void initialization.catch(publishError);
     return () => {
@@ -2627,12 +2675,14 @@ function BitmapTextViewport({
           const current = preview;
           preview = undefined;
           if (previewRef.current === current) previewRef.current = undefined;
+          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
           const current = preview;
           preview = undefined;
           if (previewRef.current === current) previewRef.current = undefined;
+          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
         },
       );
     };
@@ -2644,18 +2694,20 @@ function BitmapTextViewport({
 
   useEffect(() => {
     const preview = previewRef.current;
-    if (preview === undefined) return;
+    const updateQueue = updateQueueRef.current;
+    if (preview === undefined || updateQueue === undefined) return;
     let cancelled = false;
     let animationFrame: number | undefined;
-    const publishSettled = (snapshot: BitmapTextPreviewSnapshot): void => {
+    const publishSettled = (snapshot: BitmapTextPreviewSnapshot, input: RetainedLiveTextUpdate): void => {
       if (cancelled) return;
       publishPresentation(snapshot, 1);
       publishSettledRevision(snapshot.revision);
-      publishSettledTimelineTick(timelineTick);
-      publishSettledTextLength(text.length);
+      publishSettledTimelineTick(input.timelineTick);
+      publishSettledTextLength(input.text.length);
+      publishSettledWorkload(input.workload);
     };
-    void preview
-      .update({
+    void updateQueue
+      .enqueue({
         anchor,
         fontFixture,
         fontSize,
@@ -2663,14 +2715,17 @@ function BitmapTextViewport({
         text,
         language,
         direction,
+        expectedGlyphCount,
         features,
         textAlign,
+        timelineTick,
+        workload,
       })
-      .then((snapshot) => {
+      .then(({ input, output: snapshot }) => {
         if (cancelled) return;
         publishPresentation(snapshot, 0);
         if (!animatePresentation) {
-          publishSettled(preview.finishPresentation(snapshot.revision));
+          publishSettled(preview.finishPresentation(snapshot.revision), input);
           return;
         }
         const startedAt = performance.now();
@@ -2680,7 +2735,7 @@ function BitmapTextViewport({
           const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
           const presented = preview.setPresentationProgress(snapshot.revision, easedProgress);
           if (linearProgress === 1) {
-            publishSettled(presented);
+            publishSettled(presented, input);
             return;
           }
           animationFrame = requestAnimationFrame(animate);
@@ -2697,6 +2752,7 @@ function BitmapTextViewport({
     animatePresentation,
     direction,
     dpr,
+    expectedGlyphCount,
     features,
     fontFixture,
     fontSize,
@@ -2705,6 +2761,7 @@ function BitmapTextViewport({
     text,
     textAlign,
     timelineTick,
+    workload,
   ]);
 
   return (
@@ -2724,8 +2781,48 @@ function BitmapTextViewport({
         textAlign,
       })}
       data-testid="bitmap-live-viewport"
+      data-workload={settledWorkload}
+      data-presentation-pending={settledWorkload !== workload}
       ref={containerRef}
     >
+      <BitmapViewportChrome
+        backend={backend}
+        bakeProgressActive={bakeProgressActive}
+        bakeProgressValue={bakeProgressValue}
+        delivery={delivery}
+        dpr={dpr}
+        error={error}
+        fontSize={fontSize}
+        stats={stats}
+        suppressLoading={suppressLoading}
+      />
+    </div>
+  );
+}
+
+function BitmapViewportChrome({
+  backend,
+  bakeProgressActive,
+  bakeProgressValue,
+  delivery,
+  dpr,
+  error,
+  fontSize,
+  stats,
+  suppressLoading,
+}: {
+  readonly backend: GraphicsBackend;
+  readonly bakeProgressActive: boolean;
+  readonly bakeProgressValue: BakeProgress | undefined;
+  readonly delivery: FontDelivery;
+  readonly dpr: 1 | 2;
+  readonly error: string | undefined;
+  readonly fontSize: number;
+  readonly stats: BitmapTextLiveStats | undefined;
+  readonly suppressLoading: boolean;
+}) {
+  return (
+    <>
       <div
         className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted"
         data-testid="canvas-render-status"
@@ -2744,7 +2841,7 @@ function BitmapTextViewport({
           {error}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -2758,6 +2855,7 @@ function MtsdfTextViewport({
   stats,
   surfaceAnchorRef,
   textConfiguration,
+  workload,
   onStats,
 }: {
   readonly backend: GraphicsBackend;
@@ -2769,24 +2867,34 @@ function MtsdfTextViewport({
   readonly stats: MtsdfTextLiveStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
   readonly textConfiguration: LiveTextConfiguration;
+  readonly workload: string;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<MtsdfTextPersistentScene>(undefined);
+  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, void>>(undefined);
+  const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [error, setError] = useState<string>();
+  const [settledWorkload, setSettledWorkload] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('MSDF');
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } = textConfiguration;
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign, timelineTick } =
+    textConfiguration;
   const publishStats = useEffectEvent((next: MtsdfTextLiveStats) => {
     finishBakeProgress();
     onStats(next);
     setError(undefined);
+    const pendingWorkload = pendingSettledWorkloadRef.current;
+    if (pendingWorkload !== undefined) {
+      pendingSettledWorkloadRef.current = undefined;
+      setSettledWorkload(pendingWorkload);
+    }
   });
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return;
@@ -2804,7 +2912,12 @@ function MtsdfTextViewport({
     showGrid: grid,
     text,
     textAlign,
+    timelineTick,
+    workload,
   }));
+  const publishSettledWorkload = useEffectEvent((value: string) => {
+    pendingSettledWorkloadRef.current = value;
+  });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -2813,6 +2926,7 @@ function MtsdfTextViewport({
     const controller = new AbortController();
     const configuration = previewConfiguration();
     let preview: MtsdfTextPersistentScene | undefined;
+    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, void> | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -2838,6 +2952,8 @@ function MtsdfTextViewport({
       });
       preview = created;
       previewRef.current = created;
+      updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
+      updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
@@ -2850,6 +2966,10 @@ function MtsdfTextViewport({
         controller.signal,
       );
       if (cancelled) await surfaceLease.release();
+      else {
+        const committed = await updateQueue.enqueue(previewConfiguration());
+        publishSettledWorkload(committed.input.workload);
+      }
     })();
     void initialization.catch(publishError);
     return () => {
@@ -2860,12 +2980,14 @@ function MtsdfTextViewport({
           const current = preview;
           preview = undefined;
           if (previewRef.current === current) previewRef.current = undefined;
+          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
           const current = preview;
           preview = undefined;
           if (previewRef.current === current) previewRef.current = undefined;
+          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
         },
       );
     };
@@ -2876,10 +2998,10 @@ function MtsdfTextViewport({
   }, [grid]);
 
   useEffect(() => {
-    const preview = previewRef.current;
-    if (preview === undefined) return;
-    void preview
-      .update({
+    const updateQueue = updateQueueRef.current;
+    if (updateQueue === undefined) return;
+    void updateQueue
+      .enqueue({
         anchor,
         direction,
         features,
@@ -2889,9 +3011,25 @@ function MtsdfTextViewport({
         layoutWidthRatio,
         text,
         textAlign,
+        timelineTick,
+        workload,
       })
+      .then(({ input }) => publishSettledWorkload(input.workload))
       .catch(publishError);
-  }, [anchor, direction, dpr, features, fontFixture, fontSize, language, layoutWidthRatio, text, textAlign]);
+  }, [
+    anchor,
+    direction,
+    dpr,
+    features,
+    fontFixture,
+    fontSize,
+    language,
+    layoutWidthRatio,
+    text,
+    textAlign,
+    timelineTick,
+    workload,
+  ]);
 
   return (
     <div
@@ -2937,6 +3075,8 @@ function MtsdfTextViewport({
       data-text-align={textAlign}
       data-timeline-tick={textConfiguration.timelineTick}
       data-testid="mtsdf-live-viewport"
+      data-workload={settledWorkload}
+      data-presentation-pending={settledWorkload !== workload}
       ref={containerRef}
     >
       <div
@@ -2971,6 +3111,7 @@ function SlugTextViewport({
   stats,
   surfaceAnchorRef,
   textConfiguration,
+  workload,
   onStats,
 }: {
   readonly backend: GraphicsBackend;
@@ -2982,24 +3123,34 @@ function SlugTextViewport({
   readonly stats: SlugTextLiveStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
   readonly textConfiguration: LiveTextConfiguration;
+  readonly workload: string;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<SlugTextPersistentScene>(undefined);
+  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, void>>(undefined);
+  const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [error, setError] = useState<string>();
+  const [settledWorkload, setSettledWorkload] = useState<string>();
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
     publish: publishBakeProgress,
     value: bakeProgressValue,
   } = useBakeProgress('Slug');
-  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign } = textConfiguration;
+  const { anchor, direction, features, fontFixture, language, layoutWidthRatio, text, textAlign, timelineTick } =
+    textConfiguration;
   const publishStats = useEffectEvent((next: SlugTextLiveStats) => {
     finishBakeProgress();
     onStats(next);
     setError(undefined);
+    const pendingWorkload = pendingSettledWorkloadRef.current;
+    if (pendingWorkload !== undefined) {
+      pendingSettledWorkloadRef.current = undefined;
+      setSettledWorkload(pendingWorkload);
+    }
   });
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return;
@@ -3017,7 +3168,12 @@ function SlugTextViewport({
     showGrid: grid,
     text,
     textAlign,
+    timelineTick,
+    workload,
   }));
+  const publishSettledWorkload = useEffectEvent((value: string) => {
+    pendingSettledWorkloadRef.current = value;
+  });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -3026,6 +3182,7 @@ function SlugTextViewport({
     const controller = new AbortController();
     const configuration = previewConfiguration();
     let preview: SlugTextPersistentScene | undefined;
+    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, void> | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -3050,6 +3207,8 @@ function SlugTextViewport({
       });
       preview = created;
       previewRef.current = created;
+      updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
+      updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
@@ -3062,6 +3221,10 @@ function SlugTextViewport({
         controller.signal,
       );
       if (cancelled) await surfaceLease.release();
+      else {
+        const committed = await updateQueue.enqueue(previewConfiguration());
+        publishSettledWorkload(committed.input.workload);
+      }
     })();
     void initialization.catch(publishError);
     return () => {
@@ -3072,12 +3235,14 @@ function SlugTextViewport({
           const current = preview;
           preview = undefined;
           if (previewRef.current === current) previewRef.current = undefined;
+          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
           const current = preview;
           preview = undefined;
           if (previewRef.current === current) previewRef.current = undefined;
+          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
         },
       );
     };
@@ -3088,10 +3253,10 @@ function SlugTextViewport({
   }, [grid]);
 
   useEffect(() => {
-    const preview = previewRef.current;
-    if (preview === undefined) return;
-    void preview
-      .update({
+    const updateQueue = updateQueueRef.current;
+    if (updateQueue === undefined) return;
+    void updateQueue
+      .enqueue({
         anchor,
         direction,
         features,
@@ -3101,9 +3266,25 @@ function SlugTextViewport({
         layoutWidthRatio,
         text,
         textAlign,
+        timelineTick,
+        workload,
       })
+      .then(({ input }) => publishSettledWorkload(input.workload))
       .catch(publishError);
-  }, [anchor, direction, dpr, features, fontFixture, fontSize, language, layoutWidthRatio, text, textAlign]);
+  }, [
+    anchor,
+    direction,
+    dpr,
+    features,
+    fontFixture,
+    fontSize,
+    language,
+    layoutWidthRatio,
+    text,
+    textAlign,
+    timelineTick,
+    workload,
+  ]);
 
   return (
     <div
@@ -3149,6 +3330,8 @@ function SlugTextViewport({
       data-text-align={textAlign}
       data-timeline-tick={textConfiguration.timelineTick}
       data-testid="slug-live-viewport"
+      data-workload={settledWorkload}
+      data-presentation-pending={settledWorkload !== workload}
       ref={containerRef}
     >
       <div
@@ -3191,6 +3374,9 @@ function comparisonViewportEvidence({
   const iconStats = stats?.workload === 'icon-grid' ? stats : undefined;
   const paintStats = stats?.workload === 'paint-effects' ? stats : undefined;
   const zoomStats = stats?.workload === 'zoom-text' ? stats : undefined;
+  const appliedWorkloadFonts =
+    stats === undefined ? undefined : liveWorkloadFontFixtures(stats.workload, stats.appliedFontFixture);
+  const requestedFontFixture = workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : workloadFonts.primary;
   const animatedStats =
     stats?.workload === 'dynamic-layout' ||
     stats?.workload === 'icon-grid' ||
@@ -3212,8 +3398,8 @@ function comparisonViewportEvidence({
     'data-raster-artifact-bytes': stats?.rasterArtifactBytes,
     'data-draw-count': stats?.drawCount,
     'data-first-draw-ms': stats?.firstDrawMs,
-    'data-font-fixture': workloadFonts.primary,
-    'data-label-font-fixture': workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : undefined,
+    'data-font-fixture': appliedWorkloadFonts?.primary,
+    'data-label-font-fixture': appliedWorkloadFonts?.kind === 'icon-grid' ? appliedWorkloadFonts.labels : undefined,
     'data-font-load-ms': stats?.fontLoadMs,
     'data-frames-per-second': stats?.framesPerSecond,
     'data-glyph-count': stats?.glyphCount,
@@ -3262,7 +3448,11 @@ function comparisonViewportEvidence({
     'data-paint-stroke-width': paintStats?.appliedPaintStrokeWidth,
     'data-paint-revision': paintStats?.paintRevision,
     'data-paint-update-ms': paintStats?.lastPaintUpdateMs,
-    'data-presentation-pending': stats !== undefined && (stats.technique !== technique || stats.workload !== workload),
+    'data-presentation-pending':
+      stats !== undefined &&
+      (stats.technique !== technique ||
+        stats.workload !== workload ||
+        stats.appliedFontFixture !== requestedFontFixture),
     'data-layout-bounds-visible':
       stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined,
     'data-reflow-count': stats?.reflowCount,

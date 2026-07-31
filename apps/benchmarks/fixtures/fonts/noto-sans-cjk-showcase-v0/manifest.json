@@ -21,7 +21,7 @@
   "subset": {
     "tool": "hb-subset",
     "toolVersion": "13.0.0",
-    "corpusSha256": "4097e27ccd61516868fc20bc140d891cfc29c13225dafa8a41cae6a33ec8c5dd",
+    "corpusSha256": "8fb23ad8cafe34c724246ac2f5e62666f2f13ada5d8b191c29b7200b1be34f20",
     "fontFile": "NotoSansCJKjp-Showcase.otf",
     "fontBytes": 38092,
     "fontSha256": "1fe4cf952bf410cf4dc22d17be08b5b5bffa137549a25e1122af6a3f96c2ab3f"

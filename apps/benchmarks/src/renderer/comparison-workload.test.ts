@@ -7,6 +7,7 @@ import {
   applyRetainedTextFontSize,
   applyRetainedTextWidths,
   comparisonWorkloadContentWidth,
+  comparisonWorkloadRequiresIconWindowSuspension,
   comparisonWorkloadUpdateKind,
   createComparisonWorkloadPersistentScene,
   dynamicLayoutWidths,
@@ -212,6 +213,10 @@ describe('comparison workload updates', () => {
     } satisfies ComparisonWorkloadConfiguration;
 
     expect(comparisonWorkloadUpdateKind(iconGrid, { ...iconGrid, fontSize: 1_024 })).toBe('retained');
+    expect(comparisonWorkloadRequiresIconWindowSuspension(iconGrid, { ...iconGrid, fontSize: 1_024 })).toBe(true);
+    expect(comparisonWorkloadRequiresIconWindowSuspension(iconGrid, baseConfiguration)).toBe(true);
+    expect(comparisonWorkloadRequiresIconWindowSuspension(baseConfiguration, iconGrid)).toBe(true);
+    expect(comparisonWorkloadRequiresIconWindowSuspension(baseConfiguration, baseConfiguration)).toBe(false);
   });
 
   it('keeps Zoom text controls and viewport fitting on retained nodes', () => {

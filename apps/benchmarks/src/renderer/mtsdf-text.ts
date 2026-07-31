@@ -41,6 +41,7 @@ import {
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from './persistent-render-host';
+import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { withRendererStateRestored } from './renderer-state-transaction';
 import {
   createFontDeliveryMetrics,
@@ -369,6 +370,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
   let updateRevision = 0;
   let disposed = false;
   let activation: MtsdfPersistentActivation | undefined;
+  const activationGate = createPersistentSceneActivation<MtsdfPersistentActivation>();
   const textUpdateTelemetry = createTextUpdateTelemetry();
 
   const active = (): MtsdfPersistentActivation => {
@@ -469,6 +471,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         });
         const scheduledAt = performance.now();
         await line.ready;
+        line.visible = renderedGlyphCount(line) > 0;
         const readyAt = performance.now();
         context.signal.throwIfAborted();
         const textReadyMs = performance.now() - textStartedAt;
@@ -507,8 +510,10 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         if (fontFixtureController === undefined) font?.dispose();
         else fontFixtureController.dispose();
         canvasSurface.dispose();
+        activationGate.reject(error);
         throw error;
       }
+      activationGate.resolve(activation);
     },
     frame() {
       const resources = active();
@@ -573,7 +578,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       activation?.canvasSurface.setGridVisible(visible);
     },
     async update(next) {
-      const resources = active();
+      const resources = await activationGate.wait();
       const updateStartedAt = performance.now();
       const nextFontSize = positiveViewportSize(next.fontSize, 'MSDF preview font size');
       assertLayoutWidthRatio(next.layoutWidthRatio);
@@ -602,6 +607,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         },
         commit: async (fontFixture) => {
           scheduledAt = performance.now();
+          if (next.text.length === 0) resources.line.visible = false;
           resources.line.setProperties({
             text: next.text,
             font: fontFixture.font,
@@ -614,6 +620,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
             textAlign: next.textAlign,
           });
           await resources.line.ready;
+          resources.line.visible = renderedGlyphCount(resources.line) > 0;
           fontSize = nextFontSize;
           anchor = next.anchor;
           layoutWidthRatio = next.layoutWidthRatio;
@@ -643,6 +650,9 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     deactivate() {
       if (disposed) return;
       disposed = true;
+      if (activation === undefined) {
+        activationGate.reject(new DOMException('The MSDF persistent scene was deactivated', 'AbortError'));
+      }
       updateRevision += 1;
       const resources = activation;
       activation = undefined;

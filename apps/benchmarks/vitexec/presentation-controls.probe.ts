@@ -1,12 +1,29 @@
 export {};
 
+function presentationState(): string {
+  const viewport = document.querySelector<HTMLElement>('[data-testid$="live-viewport"]');
+  const attributes =
+    viewport === null
+      ? undefined
+      : Object.fromEntries([...viewport.attributes].map(({ name, value }) => [name, value]));
+  return JSON.stringify({
+    attributes,
+    body: document.body.innerText.slice(0, 2_000),
+    buttons: [...document.querySelectorAll<HTMLButtonElement>('button')].map((button) => ({
+      ariaLabel: button.getAttribute('aria-label'),
+      text: button.textContent?.trim(),
+    })),
+    url: location.href,
+  });
+}
+
 function waitFor<T>(find: () => T | undefined, timeoutMs = 20_000): Promise<T> {
   const current = find();
   if (current !== undefined) return Promise.resolve(current);
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       observer.disconnect();
-      reject(new Error('Timed out waiting for Presentation control state'));
+      reject(new Error(`Timed out waiting for Presentation control state: ${presentationState()}`));
     }, timeoutMs);
     const observer = new MutationObserver(() => {
       const value = find();
@@ -74,21 +91,24 @@ const offAxisViewport = await waitFor(() => {
   );
   return candidate?.getAttribute('data-presentation-pending') === 'false' ? candidate : undefined;
 });
+console.log('presentation-controls-off-axis-ready');
 if (offAxisViewport.getAttribute('data-missing-glyph-count') !== '0') {
   throw new Error(
     `Off-axis technical specimen contains ${offAxisViewport.getAttribute('data-missing-glyph-count') ?? 'unknown'} missing glyphs`,
   );
 }
 const layoutWidthTrigger = await waitFor(() =>
-  [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.getAttribute('aria-label') === 'Layout width: 100%',
+  [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+    button.getAttribute('aria-label')?.startsWith('Layout width:'),
   ),
 );
+console.log('presentation-controls-layout-trigger-ready', layoutWidthTrigger.getAttribute('aria-label'));
 layoutWidthTrigger.click();
 const layoutWidthSlider = await waitFor(() => {
   const candidate = document.querySelector<HTMLElement>('[data-slot="slider"][aria-label="Layout width"]');
   return candidate?.querySelector<HTMLInputElement>('input[type="range"]') ?? undefined;
 });
+console.log('presentation-controls-layout-slider-ready', layoutWidthSlider.max);
 if (layoutWidthSlider.max !== '200') {
   throw new Error(`Off-axis layout width maximum is ${layoutWidthSlider.max}, expected 200`);
 }

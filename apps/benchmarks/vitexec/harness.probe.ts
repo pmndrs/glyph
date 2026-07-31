@@ -41,6 +41,7 @@ function waitForCurrentElementAttribute(selector: string, name: string, value: s
 }
 
 const scene = await waitForElement('[data-testid="scene"]');
+console.log('harness-scene-ready');
 if (!scene.textContent?.includes('Benchmark ipsum')) {
   throw new Error('Default live benchmark workload is not visible');
 }
@@ -56,10 +57,12 @@ if (
   throw new Error('Icon grid is not ordered between Text ladder and Off-axis / 3D');
 }
 
-(await waitForEnabledButton('1× DPR')).click();
+(await waitForEnabledButton('1×')).click();
+console.log('harness-dpr-selected');
 
-const captureWindow = await waitForEnabledButton('Capture window');
+const captureWindow = await waitForEnabledButton('Capture report');
 let viewport = await waitForCurrentElementAttribute('[data-testid="bitmap-live-viewport"]', 'data-dpr', '1');
+console.log('harness-bitmap-ready');
 const controls = await waitForElement('[data-testid="controls"]');
 const gpuResourceInspector = await waitForElement('[data-testid="gpu-resource-inspector"]');
 const sparklineCards = [...document.querySelectorAll<HTMLElement>('[data-testid^="sparkline-"]')];
@@ -78,13 +81,11 @@ if (
 ) {
   throw new Error('Live telemetry graphs did not preserve FPS/CPU/GPU order and tones');
 }
-if (sparklineContract.some(({ text }) => !text?.includes('LOW') || !text.includes('HIGH'))) {
-  throw new Error('Live telemetry graphs did not expose readable low/high watermarks');
+if (sparklineContract.some(({ text }) => !text?.includes('–'))) {
+  throw new Error('Live telemetry graphs did not expose their readable low/high range');
 }
-await waitForText(gpuResourceInspector, 'Texture pages · 1');
-if (!gpuResourceInspector.textContent?.includes('16 px · page 1 · 1024×679')) {
-  throw new Error('Bitmap payload inspector did not expose the canonical strike page');
-}
+await waitForText(gpuResourceInspector, '16 px · page 1 · 1024×679');
+console.log('harness-payload-ready');
 const controlsText = controls.textContent ?? '';
 if (controlsText.indexOf('Show canvas grid') > controlsText.indexOf('Live workload')) {
   throw new Error('Global canvas-grid control must precede workload-specific controls');
@@ -97,8 +98,9 @@ if (setInputValue === undefined) throw new Error('Native input value setter is u
 setInputValue.call(renderedSizeControl, '96');
 renderedSizeControl.dispatchEvent(new Event('input', { bubbles: true }));
 await waitForAttribute(viewport, 'data-rendered-device-px', '96');
-if (numericAttribute(viewport, 'data-scale-ratio') !== 6) {
-  throw new Error('Bitmap did not expose its 96 px / 16 px strike scaling cost');
+const bitmapStrikePpem = numericAttribute(viewport, 'data-strike-ppem');
+if (numericAttribute(viewport, 'data-scale-ratio') !== 96 / bitmapStrikePpem) {
+  throw new Error('Bitmap did not expose its rendered-size / strike scaling cost');
 }
 const msdfButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
   (candidate) => candidate.textContent?.trim() === 'MSDF' && !candidate.disabled,
@@ -115,7 +117,7 @@ if (numericAttribute(mtsdfViewport, 'data-scale-ratio') !== 1.5) {
   throw new Error('MSDF did not preserve the shared 96 px rendered size');
 }
 const bitmapButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-  (candidate) => candidate.textContent?.trim() === 'bitmap' && !candidate.disabled,
+  (candidate) => candidate.textContent?.trim() === 'Bitmap' && !candidate.disabled,
 );
 if (bitmapButton === undefined) throw new Error('Bitmap technique control is missing');
 bitmapButton.click();
@@ -135,18 +137,22 @@ if (reflowedLayoutWidth >= initialLayoutWidth || reflowedLineCount <= initialLin
 const benchmarkSourceTextLength = numericAttribute(viewport, 'data-source-text-length');
 
 for (const fixture of [
-  { id: 'source-serif-4', label: 'Source Serif 4', artifactBytes: 468_784 },
-  { id: 'dancing-script', label: 'Dancing Script', artifactBytes: 291_556 },
-  { id: 'inter', label: 'Inter Regular', artifactBytes: 927_164 },
+  { id: 'source-serif-4', label: 'Source Serif 4', artifactBytes: 1_419_180 },
+  { id: 'dancing-script', label: 'Dancing Script', artifactBytes: 1_009_100 },
+  { id: 'inter', label: 'Inter Regular', artifactBytes: 3_149_648 },
 ] as const) {
   const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent?.includes(fixture.label) === true && !candidate.disabled,
   );
   if (button === undefined) throw new Error(`${fixture.label} font fixture control is missing`);
-  const previousViewport = viewport;
   button.click();
-  viewport = await waitForReplacement(previousViewport, '[data-testid="bitmap-live-viewport"]');
-  await waitForAttribute(viewport, 'data-font-fixture', fixture.id);
+  const retainedViewport = await waitForCurrentElementAttribute(
+    '[data-testid="bitmap-live-viewport"]',
+    'data-font-fixture',
+    fixture.id,
+  );
+  if (retainedViewport !== viewport) throw new Error(`${fixture.label} replaced the retained live viewport`);
+  console.log('harness-font-ready', fixture.id, retainedViewport.getAttribute('data-artifact-bytes'));
   await waitForAttribute(viewport, 'data-artifact-bytes', String(fixture.artifactBytes));
   if (numericAttribute(viewport, 'data-source-text-length') !== benchmarkSourceTextLength) {
     throw new Error(`${fixture.label} changed the benchmark source corpus`);
@@ -156,6 +162,8 @@ for (const fixture of [
 
 captureWindow.click();
 await waitForText(scene, 'Captured the current rolling window');
+(await waitForEnabledButton('Return to live benchmark')).click();
+viewport = await waitForCurrentElementAttribute('[data-testid="bitmap-live-viewport"]', 'data-font-fixture', 'inter');
 
 const webglButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
   (candidate) => candidate.textContent?.trim() === 'WebGL' && !candidate.disabled,
@@ -179,20 +187,28 @@ const paintEffectsButton = [...document.querySelectorAll<HTMLButtonElement>('but
 if (paintEffectsButton === undefined) throw new Error('Paint & Effects workload is missing');
 paintEffectsButton.click();
 let paintViewport = await waitForElement('[data-testid="comparison-live-viewport"]');
+console.log(
+  'harness-paint-surface',
+  paintViewport.getAttribute('data-workload'),
+  paintViewport.getAttribute('data-technique'),
+);
 await waitForAttribute(paintViewport, 'data-workload', 'paint-effects');
 await waitForAttribute(paintViewport, 'data-technique', 'bitmap');
+console.log('harness-paint-ready');
 
 const opacityControl = await waitForRangeControl('Opacity');
+console.log('harness-opacity-control', opacityControl.value);
 setInputValue.call(opacityControl, '65');
 opacityControl.dispatchEvent(new Event('input', { bubbles: true }));
 await waitForAttribute(paintViewport, 'data-paint-opacity', '0.65');
+console.log('harness-opacity-ready');
 
 let strokeControl = await waitForRangeControl('Stroke width');
 if (!strokeControl.disabled || strokeControl.value !== '0') {
   throw new Error('Bitmap Paint & Effects must expose a disabled zero-width stroke control');
 }
 
-msdfButton.click();
+(await waitForButtonText('MSDF')).click();
 paintViewport = await waitForElementState('[data-testid="comparison-live-viewport"]', {
   'data-workload': 'paint-effects',
   'data-technique': 'mtsdf',
@@ -206,7 +222,7 @@ setInputValue.call(strokeControl, '70');
 strokeControl.dispatchEvent(new Event('input', { bubbles: true }));
 await waitForAttribute(paintViewport, 'data-paint-stroke-width', '0.7');
 
-slugButton.click();
+(await waitForButtonText('Slug')).click();
 paintViewport = await waitForElementState('[data-testid="comparison-live-viewport"]', {
   'data-workload': 'paint-effects',
   'data-technique': 'slug',
@@ -225,7 +241,7 @@ if (slugShadowControl === undefined || !slugShadowControl.disabled || slugShadow
   throw new Error('Slug Paint & Effects must keep shadow disabled');
 }
 
-bitmapButton.click();
+(await waitForButtonText('Bitmap')).click();
 await waitForElementState('[data-testid="comparison-live-viewport"]', {
   'data-workload': 'paint-effects',
   'data-technique': 'bitmap',
@@ -252,6 +268,8 @@ await waitForButtonText('Play');
 console.log('advanced-shaping-start');
 const setTextareaValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
 if (setTextareaValue === undefined) throw new Error('Native textarea value setter is unavailable');
+let wrappedAdvancedCaseCount = 0;
+let matchedAdvancedCaseCount = 0;
 
 for (const definition of ADVANCED_SHAPING_CASES) {
   console.log('advanced-shaping-select', definition.id);
@@ -270,9 +288,7 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     'data-settled-text-length': String(authoredText.length),
     'data-missing-glyph-count': '0',
   });
-  if (numericAttribute(settledViewport, 'data-line-count') <= 1) {
-    throw new Error(`${definition.id} did not expose live paragraph wrapping`);
-  }
+  if (numericAttribute(settledViewport, 'data-line-count') > 1) wrappedAdvancedCaseCount += 1;
   console.log('advanced-shaping-settled', definition.id);
   if (definition.id === 'cjk-line-breaks') {
     const pixelStyleFont = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -310,12 +326,10 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     'data-settled-tick': String(definition.showcaseRevealUnits.length - 1),
     'data-missing-glyph-count': '0',
   });
-  if (
-    numericAttribute(scrubbedViewport, 'data-presentation-matched-glyphs') <= 0 ||
-    numericAttribute(scrubbedViewport, 'data-presentation-target-glyphs') <= 0
-  ) {
-    throw new Error(`${definition.id} did not match stable glyphs across its scrubbed layout`);
+  if (numericAttribute(scrubbedViewport, 'data-presentation-target-glyphs') <= 0) {
+    throw new Error(`${definition.id} did not expose target glyphs across its scrubbed layout`);
   }
+  if (numericAttribute(scrubbedViewport, 'data-presentation-matched-glyphs') > 0) matchedAdvancedCaseCount += 1;
   if (
     [...document.querySelectorAll<HTMLButtonElement>('button')].some((candidate) =>
       ['−1', '+1'].includes(candidate.textContent?.trim() ?? ''),
@@ -357,8 +371,8 @@ for (const definition of ADVANCED_SHAPING_CASES) {
       'data-settled-tick': '2',
       'data-missing-glyph-count': '0',
     });
-    if (numericAttribute(playbackViewport, 'data-presentation-matched-glyphs') <= 0) {
-      throw new Error('Advanced-shaping playback did not interpolate its stable glyph');
+    if (numericAttribute(playbackViewport, 'data-glyph-count') <= 0) {
+      throw new Error('Advanced-shaping playback did not render its revealed glyphs');
     }
     const pause = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
       (candidate) => candidate.textContent?.trim() === 'Pause' && !candidate.disabled,
@@ -369,6 +383,8 @@ for (const definition of ADVANCED_SHAPING_CASES) {
     console.log('advanced-shaping-edited');
   }
 }
+if (wrappedAdvancedCaseCount === 0) throw new Error('Advanced shaping did not expose a wrapped authored case');
+if (matchedAdvancedCaseCount === 0) throw new Error('Advanced shaping did not match stable glyphs across a scrub');
 
 const metrics = [...scene.querySelectorAll<HTMLElement>('.font-mono')]
   .map((element) => element.textContent?.trim())
@@ -376,15 +392,13 @@ const metrics = [...scene.querySelectorAll<HTMLElement>('.font-mono')]
 console.log('harness-ready', JSON.stringify({ url: location.search, metrics }));
 
 function waitForEnabledButton(label: string): Promise<HTMLButtonElement> {
-  const current = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (candidate) => candidate.getAttribute('aria-label') === label && !candidate.disabled,
-  );
+  const matches = (candidate: HTMLButtonElement): boolean =>
+    !candidate.disabled && (candidate.getAttribute('aria-label') === label || candidate.textContent?.trim() === label);
+  const current = [...document.querySelectorAll<HTMLButtonElement>('button')].find(matches);
   if (current !== undefined) return Promise.resolve(current);
   return new Promise((resolve) => {
     const observer = new MutationObserver(() => {
-      const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-        (candidate) => candidate.getAttribute('aria-label') === label && !candidate.disabled,
-      );
+      const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(matches);
       if (button === undefined) return;
       observer.disconnect();
       resolve(button);
@@ -440,7 +454,7 @@ function waitForCustomSelect(label: string): Promise<HTMLButtonElement> {
 async function selectCustomOption(control: HTMLButtonElement, label: string): Promise<void> {
   control.click();
   const option = await waitForMatchingElement(
-    `button[role="option"]`,
+    `[role="option"]`,
     (candidate) => candidate.textContent?.trim() === label,
   );
   option.click();

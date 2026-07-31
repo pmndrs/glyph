@@ -23,7 +23,7 @@ export function TechniqueSwitcher({
       {(['bitmap', 'mtsdf', 'slug'] as const).map((value) => (
         <button
           aria-pressed={technique === value}
-          className={`${presentation === 'presentation' ? 'h-full min-h-0' : 'min-h-7'} rounded px-2 text-[10px] font-medium capitalize transition-colors ${technique === value ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'} disabled:cursor-not-allowed disabled:opacity-45`}
+          className={`${presentation === 'presentation' ? 'h-full min-h-0 px-2' : 'min-h-7 px-1.5'} rounded text-[10px] font-medium capitalize transition-colors ${technique === value ? 'bg-surface-active text-foreground ring-1 ring-inset ring-accent' : 'text-muted hover:bg-surface hover:text-foreground'} disabled:cursor-not-allowed disabled:opacity-45`}
           key={value}
           type="button"
           onClick={() => onTechnique(value)}

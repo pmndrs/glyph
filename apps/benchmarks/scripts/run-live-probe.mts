@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url));
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 
-async function runProbe(path: string, humanSurface = false): Promise<void> {
-  const args = humanSurface ? ['--gpu', path] : ['--gpu', '--path', '/?runner=probe', path];
+async function runProbe(path: string, humanSurfacePath?: string): Promise<void> {
+  const args = ['--gpu', '--path', humanSurfacePath ?? '/?runner=probe', path];
   const child = spawn(executable, args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -30,9 +30,14 @@ async function runProbe(path: string, humanSurface = false): Promise<void> {
   }
 }
 
-await runProbe('./vitexec/advanced-shaping-performance.probe.ts', true);
-await runProbe('./vitexec/harness.probe.ts', true);
-await runProbe('./vitexec/comparison-workloads.probe.ts', true);
+await runProbe(
+  './vitexec/advanced-shaping-performance.probe.ts',
+  '/?mode=benchmark&technique=bitmap&backend=webgpu&delivery=baked&dpr=1&font=noto-sans-cjk-showcase&workload=advanced-shaping',
+);
+const benchmarkSurface =
+  '/?mode=benchmark&technique=bitmap&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=benchmark-ipsum';
+await runProbe('./vitexec/harness.probe.ts', benchmarkSurface);
+await runProbe('./vitexec/comparison-workloads.probe.ts', benchmarkSurface);
 
 for (const probe of [
   './vitexec/tsl-renderer.probe.ts',

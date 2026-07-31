@@ -28,6 +28,21 @@ const comparisonWorkloads = new Set([
 
 type Technique = (typeof techniques)[number]['id'];
 
+function presentationState(): string {
+  const viewport = document.querySelector<HTMLElement>('[data-testid$="live-viewport"]');
+  return JSON.stringify({
+    attributes:
+      viewport === null
+        ? undefined
+        : Object.fromEntries([...viewport.attributes].map(({ name, value }) => [name, value])),
+    buttons: [...document.querySelectorAll<HTMLButtonElement>('button')].map((button) => ({
+      ariaLabel: button.getAttribute('aria-label'),
+      text: button.textContent?.trim(),
+    })),
+    url: location.href,
+  });
+}
+
 function visible<T extends HTMLElement>(elements: NodeListOf<T> | T[]): T | undefined {
   return [...elements].find((element) => element.offsetParent !== null);
 }
@@ -38,7 +53,7 @@ function waitFor<T>(find: () => T | undefined, timeoutMs = 20_000): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       observer.disconnect();
-      reject(new Error('Timed out waiting for benchmark state'));
+      reject(new Error(`Timed out waiting for benchmark state: ${presentationState()}`));
     }, timeoutMs);
     const observer = new MutationObserver(() => {
       const value = find();
@@ -88,6 +103,37 @@ async function selectWorkload(id: string, label: string): Promise<void> {
   await waitFor(() => (new URLSearchParams(location.search).get('workload') === id ? true : undefined));
 }
 
+async function completeAdvancedShaping(): Promise<void> {
+  const trigger = await waitFor(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.getAttribute('aria-label')?.startsWith('Shaping timeline:'),
+    ),
+  );
+  console.log('presentation-advanced-timeline-trigger-ready', trigger.getAttribute('aria-label'));
+  trigger.click();
+  const timelineAction = await waitFor(() =>
+    visible(
+      [...document.querySelectorAll<HTMLButtonElement>('button')].filter((button) =>
+        ['Pause', 'Play'].includes(button.textContent?.trim() ?? ''),
+      ),
+    ),
+  );
+  console.log('presentation-advanced-timeline-action-ready', timelineAction.textContent?.trim());
+  if (timelineAction.textContent?.trim() === 'Pause') timelineAction.click();
+  const sliderRoot = await waitFor(() => {
+    const candidate = document.querySelector<HTMLElement>('[data-slot="slider"][aria-label="Shaping timeline"]');
+    return candidate ?? undefined;
+  });
+  const slider = sliderRoot.querySelector<HTMLInputElement>('input[type="range"]');
+  if (slider === null) throw new Error('Advanced shaping timeline is missing its range input');
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (setter === undefined) throw new Error('Native range value setter is unavailable');
+  setter.call(slider, slider.max);
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  slider.dispatchEvent(new Event('change', { bubbles: true }));
+  console.log('presentation-advanced-timeline-completed', slider.max);
+}
+
 async function readyViewport(technique: Technique, workload: string): Promise<HTMLElement> {
   const selector = comparisonWorkloads.has(workload)
     ? `[data-testid="comparison-live-viewport"][data-technique="${technique}"][data-workload="${workload}"]`
@@ -97,9 +143,11 @@ async function readyViewport(technique: Technique, workload: string): Promise<HT
     const framesPerSecond = Number(viewport?.getAttribute('data-frames-per-second'));
     if (
       viewport === undefined ||
-      (comparisonWorkloads.has(workload) && viewport.getAttribute('data-presentation-pending') !== 'false') ||
+      viewport.getAttribute('data-workload') !== workload ||
+      viewport.getAttribute('data-presentation-pending') !== 'false' ||
       !Number.isFinite(framesPerSecond) ||
       framesPerSecond <= 0 ||
+      (workload === 'advanced-shaping' && Number(viewport.getAttribute('data-glyph-count')) <= 0) ||
       viewport.getAttribute('data-missing-glyph-count') !== '0'
     ) {
       return undefined;
@@ -142,6 +190,7 @@ for (const technique of techniques) {
   await selectTechnique(technique.id, technique.label);
   for (const workload of workloads) {
     await selectWorkload(workload.id, workload.label);
+    if (workload.id === 'advanced-shaping') await completeAdvancedShaping();
     const viewport = await readyViewport(technique.id, workload.id);
     await waitFrames(30);
     const raf = await sampleRaf(1_500);

@@ -36,7 +36,7 @@ if (
       metrics.reshapeBoundaryCrossings !== 0 ||
       metrics.planCount !== 8 ||
       metrics.retainedFontBytes !== 1_539_372 ||
-      metrics.wasmMemoryBytes !== 4_587_520 ||
+      metrics.wasmMemoryBytes !== 4_718_592 ||
       metrics.sourceFontBytes !== 16_467_736 ||
       metrics.artifactBytes !== 1_540_480 ||
       metrics.shapingPayloadRawBytes !== 1_539_372 ||

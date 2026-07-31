@@ -265,7 +265,7 @@ function StandardControls(props: ControlsProps) {
         workload={props.workload}
       />
       <button
-        className="text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
+        className="min-h-7 text-left text-[9px] text-muted underline decoration-border underline-offset-4 hover:text-foreground"
         type="button"
         onClick={props.onFontNotices}
       >

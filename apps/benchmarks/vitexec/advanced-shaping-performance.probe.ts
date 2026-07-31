@@ -6,18 +6,22 @@ const [{ ADVANCED_SHAPING_CASES }, { environmentResource }] = await Promise.all(
   import(/* @vite-ignore */ environmentPath),
 ]);
 
-(await waitForEnabledButton('WebGPU')).click();
-(await waitForEnabledButton('1× DPR')).click();
-(await waitForEnabledButton('Advanced shaping', true)).click();
 console.log('advanced-shaping-performance-start');
 
 const caseSelector = await waitForCustomSelect('Case');
+const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+if (setInputValue === undefined) throw new Error('Native input value setter is unavailable');
+(await waitForButtonText('Pause')).click();
+await waitForButtonText('Play');
 
 const cases: Array<Record<string, number | string>> = [];
 for (const definition of ADVANCED_SHAPING_CASES) {
   console.log('advanced-shaping-performance-select', definition.id);
   await selectCustomOption(caseSelector, definition.label);
   const authoredText = definition.showcaseRevealUnits.join('');
+  const timeline = await waitForRangeMaximum('Timeline', String(definition.showcaseRevealUnits.length));
+  setInputValue.call(timeline, String(definition.showcaseRevealUnits.length));
+  timeline.dispatchEvent(new Event('input', { bubbles: true }));
   const viewport = await waitForLiveViewportState({
     'data-backend': 'webgpu',
     'data-dpr': '1',
@@ -83,18 +87,6 @@ console.log(
   }),
 );
 
-function waitForEnabledButton(label: string, includes = false): Promise<HTMLButtonElement> {
-  const find = (): HTMLButtonElement | undefined =>
-    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (candidate) =>
-        !candidate.disabled &&
-        (includes ? candidate.textContent?.includes(label) === true : candidate.textContent?.trim() === label),
-    );
-  const current = find();
-  if (current !== undefined) return Promise.resolve(current);
-  return observeUntil(document.documentElement, find);
-}
-
 function waitForCustomSelect(label: string): Promise<HTMLButtonElement> {
   const find = (): HTMLButtonElement | undefined =>
     [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="listbox"]')].find(
@@ -105,10 +97,31 @@ function waitForCustomSelect(label: string): Promise<HTMLButtonElement> {
   return observeUntil(document.documentElement, find);
 }
 
+function waitForButtonText(label: string): Promise<HTMLButtonElement> {
+  const find = (): HTMLButtonElement | undefined =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) => !candidate.disabled && candidate.textContent?.trim() === label,
+    );
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(document.documentElement, find);
+}
+
+function waitForRangeMaximum(label: string, maximum: string): Promise<HTMLInputElement> {
+  const find = (): HTMLInputElement | undefined =>
+    [...document.querySelectorAll<HTMLInputElement>('input[type="range"]')].find(
+      (candidate) => candidate.labels?.[0]?.textContent?.includes(label) === true && candidate.max === maximum,
+    );
+  const current = find();
+  if (current !== undefined) return Promise.resolve(current);
+  return observeUntil(document.documentElement, find);
+}
+
 async function selectCustomOption(control: HTMLButtonElement, label: string): Promise<void> {
+  if (control.textContent?.trim() === label) return;
   control.click();
   const option = await observeUntil(document.documentElement, () =>
-    [...document.querySelectorAll<HTMLButtonElement>('button[role="option"]')].find(
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (candidate) => candidate.textContent?.trim() === label,
     ),
   );

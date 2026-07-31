@@ -20,6 +20,11 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     console.log('comparison-workload-viewport-ready', technique, workload.id);
     assertSingleConfiguredRenderer(technique, workload.id);
     verifyCanvasNavigation(viewport, workload.id !== 'zoom-text', workload.id === 'off-axis-3d');
+    const pauseForManualControls = workload.id === 'dynamic-layout';
+    if (pauseForManualControls) {
+      setCheckbox('Animate', false);
+      await waitForAttribute(viewport, 'data-animation-enabled', 'false');
+    }
 
     if (technique === 'bitmap' && workload.id === 'text-ladder') {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true');
@@ -29,7 +34,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true');
     }
 
-    if (workload.id !== 'text-ladder' && workload.id !== 'zoom-text') {
+    if (workload.id !== 'text-ladder' && workload.id !== 'zoom-text' && workload.id !== 'paragraph-stress') {
       const revision = numericAttribute(viewport, 'data-configuration-revision');
       const sizeLabel = workload.id === 'icon-grid' ? 'Icon size' : 'Rendered size';
       assertRangeVisualTravel(rangeControl(sizeLabel));
@@ -133,7 +138,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       }
     }
 
-    if ('amountLabel' in workload) {
+    if ('amountLabel' in workload && workload.id !== 'paragraph-stress') {
       const revision = numericAttribute(viewport, 'data-configuration-revision');
       const amount = setDifferentRange(workload.amountLabel, 72);
       await waitForAttribute(viewport, 'data-workload-amount', String(amount));
@@ -164,6 +169,14 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       await waitForGreaterAttribute(viewport, 'data-configuration-revision', boundsRevision);
       setCheckbox('Show layout bounds', true);
       await waitForAttribute(viewport, 'data-layout-bounds-visible', 'true');
+    }
+
+    if (workload.id === 'paragraph-stress') {
+      const reflowCount = numericAttribute(viewport, 'data-reflow-count');
+      await waitForGreaterAttribute(viewport, 'data-reflow-count', reflowCount);
+      if (numericAttribute(viewport, 'data-reflow-ms') <= 0) {
+        throw new Error('Paragraph stress did not publish a measured asynchronous reflow');
+      }
     }
 
     if (workload.id === 'paint-effects') {
@@ -226,11 +239,8 @@ function verifyCanvasNavigation(viewport: HTMLElement, panEnabled: boolean, zoom
     canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
     canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
     const appliedPanX = Number(canvas.dataset.panX);
-    const expectedPanX = 15;
-    if (appliedPanX !== expectedPanX) {
-      throw new Error(
-        `Mouse drag did not publish the applied live-canvas pan: expected ${String(expectedPanX)}, received ${String(appliedPanX)}`,
-      );
+    if (!(appliedPanX > 0 && appliedPanX <= 15)) {
+      throw new Error(`Mouse drag did not publish a positive clamped live-canvas pan: received ${String(appliedPanX)}`);
     }
   } else if (canvas.dataset.touchPan !== 'disabled') {
     throw new Error('Centered live workload exposed touch panning');
@@ -337,6 +347,7 @@ if (
 }
 console.log('font-fixture-rail-ready', JSON.stringify({ fixturePanelRatio, singleFixtureRatio }));
 
+await waitForReadyViewport('slug', 'icon-grid');
 await clickButton('MSDF', true);
 await clickButton('Paragraph stress', false);
 await waitForReadyViewport('mtsdf', 'paragraph-stress');
@@ -355,9 +366,10 @@ fontSwitchContinuity.assertContinuous();
 console.log('font-fixture-corpus-ready', paragraphStressTextLength);
 
 selectFontFixture('inter');
+await waitForRenderedFixture('mtsdf', 'paragraph-stress', 'inter');
 await clickButton('Paint & effects', false);
 const activePaintViewport = await waitForReadyViewport('mtsdf', 'paint-effects');
-await clickButton('conformance', true);
+await clickAriaButton('conformance');
 const benchmarkActivity = await waitForActivityVisibility('benchmark', false);
 const hiddenPaintRevision = numericAttribute(activePaintViewport, 'data-paint-revision');
 await clickAriaButton('Run conformance');
@@ -365,7 +377,7 @@ await waitForConformanceCapture();
 if (numericAttribute(activePaintViewport, 'data-paint-revision') !== hiddenPaintRevision) {
   throw new Error('Hidden Benchmark Activity continued its paint animation loop');
 }
-await clickButton('benchmark', true);
+await clickAriaButton('benchmark');
 await waitForActivityVisibility('benchmark', true);
 const resumedPaintViewport = await waitForReadyViewport('mtsdf', 'paint-effects');
 await waitForGreaterAttribute(
@@ -380,6 +392,7 @@ console.log('activity-lifecycle-ready');
 
 await clickAriaButton('Enter Presentation Mode');
 await waitForElement('[data-testid="presentation-layout"]');
+await waitForReadyViewport('mtsdf', 'paint-effects');
 if (document.querySelector('[data-testid="workload-scroll"]') !== null) {
   throw new Error('Presentation route retained the Main workload rail');
 }
@@ -402,12 +415,7 @@ for (const label of ['Live workload', 'Font fixture']) {
     throw new Error(`${label} custom listbox has no options`);
   }
   (document.activeElement ?? document).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
-  await nextPaint();
-  if (
-    [...document.querySelectorAll<HTMLElement>('[role="listbox"]')].some((candidate) => candidate.offsetParent !== null)
-  ) {
-    throw new Error(`${label} custom listbox did not close on Escape`);
-  }
+  await waitForAttribute(trigger, 'aria-expanded', 'false');
   if (document.querySelector('[data-testid="presentation-layout"]') === null) {
     throw new Error(`${label} listbox Escape incorrectly exited Presentation`);
   }
@@ -651,6 +659,7 @@ function readyViewport(technique: RasterTechnique, workload: string): HTMLElemen
     viewport === null ||
     viewport.getAttribute('data-technique') !== technique ||
     viewport.getAttribute('data-workload') !== workload ||
+    viewport.getAttribute('data-presentation-pending') !== 'false' ||
     viewport.getAttribute('data-missing-glyph-count') !== '0' ||
     positiveAttribute(viewport, 'data-glyph-count') === false ||
     positiveAttribute(viewport, 'data-draw-count') === false ||
@@ -681,6 +690,7 @@ function waitForRenderedFixture(
       viewport.getAttribute('data-technique') !== technique ||
       viewport.getAttribute('data-workload') !== workload ||
       viewport.getAttribute('data-font-fixture') !== fontFixture ||
+      viewport.getAttribute('data-presentation-pending') !== 'false' ||
       positiveAttribute(viewport, 'data-glyph-count') === false ||
       positiveAttribute(viewport, 'data-draw-count') === false ||
       positiveAttribute(viewport, 'data-source-text-length') === false

@@ -68,18 +68,20 @@ export function TopBar({
         <div className="flex rounded-md border border-border bg-background p-0.5 sm:ml-3">
           {(['benchmark', 'conformance'] as const).map((value) => (
             <button
+              aria-label={value}
               className={`min-h-7 rounded px-2 py-1.5 text-[10px] capitalize sm:px-3 sm:text-[11px] ${mode === value ? 'bg-surface-active text-foreground' : 'text-muted hover:bg-surface'}`}
               key={value}
               type="button"
               onClick={() => onMode(value)}
             >
-              {value}
+              <span className="sm:hidden">{value === 'benchmark' ? 'Bench' : 'Test'}</span>
+              <span className="hidden sm:inline">{value}</span>
             </button>
           ))}
         </div>
         {compact && (
           <TechniqueSwitcher
-            className="w-[148px] sm:w-[180px]"
+            className="w-[136px] shrink-0 sm:w-[180px]"
             technique={location.technique}
             onTechnique={onTechnique}
           />
@@ -101,7 +103,7 @@ export function TopBar({
         {mode === 'benchmark' && (
           <Button
             aria-label="Enter Presentation Mode"
-            className="size-8 p-0"
+            className="hidden size-8 p-0 sm:inline-flex"
             title="Enter Presentation Mode"
             variant="secondary"
             onClick={onPresentationMode}

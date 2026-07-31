@@ -42,11 +42,13 @@ try {
   );
   await page.locator('[data-testid="scene"]:visible').waitFor();
   await assertResponsiveSurface(page, '390 px scene');
-  const captureWindow = page.getByRole('button', { name: 'Capture window', exact: true });
+  const captureWindow = page.getByRole('button', { name: 'Capture report', exact: true });
   await captureWindow.waitFor();
   await captureWindow.click();
-  await page.getByText('Captured the current rolling window', { exact: false }).waitFor();
-  const liveCanvasCount = await page.locator('[data-testid="bitmap-live-viewport"] canvas').count();
+  await page.waitForURL((url) => url.searchParams.get('view') === 'report');
+  await page.getByRole('button', { name: 'Return to live benchmark', exact: true }).click();
+  await page.waitForURL((url) => url.searchParams.has('view') === false);
+  const liveCanvasCount = await page.locator('canvas[aria-label^="Live bitmap benchmark"]:visible').count();
   if (liveCanvasCount !== 1) {
     throw new Error(`Mobile live surface mounted ${String(liveCanvasCount)} canvases instead of one`);
   }
@@ -59,18 +61,18 @@ try {
   await assertResponsiveSurface(page, '390 px MSDF scene');
   step = 'phone workload menu';
   await page.getByRole('button', { name: 'Open workload menu', exact: true }).click();
-  await page.getByText('Advanced shaping', { exact: true }).waitFor();
+  await page.locator('button:visible').filter({ hasText: 'Advanced shaping' }).first().waitFor();
   await assertResponsiveSurface(page, '390 px workload menu');
   await page.getByRole('button', { name: 'Close workload menu', exact: true }).first().click();
   step = 'controls navigation';
-  await page.getByRole('button', { name: 'Open render controls', exact: true }).click();
+  await page.getByRole('button', { name: /^controls$/i }).click();
   await page.locator('[data-testid="controls"]:visible').waitFor();
   await page.locator('[data-testid="scene"]:visible').waitFor();
   const controlsHeight = await page
     .locator('[data-testid="controls"]:visible')
     .evaluate((controls) => controls.parentElement?.getBoundingClientRect().height);
-  if (controlsHeight === undefined || controlsHeight > 844 * 0.62) {
-    throw new Error(`Phone controls panel is not capped near 60vh: ${String(controlsHeight)}`);
+  if (controlsHeight === undefined || controlsHeight > 844 - 126 + 1) {
+    throw new Error(`Phone controls panel exceeds its navigation-safe viewport: ${String(controlsHeight)}`);
   }
   await assertResponsiveSurface(page, '390 px controls');
   await page.screenshot({ path: '/tmp/pmndrs-text-benchmarks-mobile-controls.png' });
@@ -132,6 +134,8 @@ async function assertResponsiveSurface(page: Page, label: string): Promise<void>
             ...labelElements.map((labelElement) => Number.parseFloat(getComputedStyle(labelElement).fontSize)),
           ),
           height: button.getBoundingClientRect().height,
+          clientSize: [button.clientWidth, button.clientHeight],
+          scrollSize: [button.scrollWidth, button.scrollHeight],
           clipped: button.scrollWidth > button.clientWidth + 1 || button.scrollHeight > button.clientHeight + 1,
         };
       }),
@@ -148,7 +152,7 @@ async function assertResponsiveSurface(page: Page, label: string): Promise<void>
   }
   const clipped = result.buttons.filter((button) => button.clipped);
   if (clipped.length > 0) {
-    throw new Error(`${label} clips control labels: ${clipped.map((button) => button.label).join(', ')}`);
+    throw new Error(`${label} clips control labels: ${JSON.stringify(clipped)}`);
   }
   const undersized = result.buttons.filter((button) => button.height < 28);
   if (undersized.length > 0) {

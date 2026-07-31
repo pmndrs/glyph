@@ -46,6 +46,7 @@ import {
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from './persistent-render-host';
+import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { withRendererStateRestored } from './renderer-state-transaction';
 import {
   createRetainedFontFixtureController,
@@ -507,6 +508,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   let closing = false;
   let disposed = false;
   let updateRevision = 0;
+  const activationGate = createPersistentSceneActivation<void>();
 
   const activeResources = (): {
     readonly canvasSurface: ReturnType<typeof createCanvasSurface>;
@@ -603,6 +605,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       });
       const scheduledAt = performance.now();
       await line.ready;
+      line.visible = renderedGlyphCount(line) > 0;
       const readyAt = performance.now();
       context.signal.throwIfAborted();
       textReadyMs = performance.now() - textStarted;
@@ -617,6 +620,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         totalMs: sceneFinishedAt - textStarted,
       });
       startupMs = performance.now() - startupStarted;
+      activationGate.resolve();
     },
     frame() {
       if (closing || disposed) return;
@@ -690,6 +694,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       activeResources().canvasSurface.setGridVisible(visible);
     },
     async update(next) {
+      await activationGate.wait();
       if (closing || disposed) throw new DOMException('The Slug preview is disposed', 'AbortError');
       const activeLine = activeResources().line;
       const activeFontFixture = fontFixture;
@@ -719,6 +724,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         },
         commit: async (fixture) => {
           updateScheduledAt = performance.now();
+          if (next.text.length === 0) activeLine.visible = false;
           activeLine.setProperties({
             text: next.text,
             font: fixture.font,
@@ -731,6 +737,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
             textAlign: next.textAlign,
           });
           await activeLine.ready;
+          activeLine.visible = renderedGlyphCount(activeLine) > 0;
           fontSize = nextFontSize;
           anchor = next.anchor;
           layoutWidthRatio = next.layoutWidthRatio;
@@ -755,6 +762,9 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (disposed) return;
       closing = true;
       disposed = true;
+      if (line === undefined) {
+        activationGate.reject(new DOMException('The Slug persistent scene was deactivated', 'AbortError'));
+      }
       updateRevision += 1;
       line?.dispose();
       if (fontFixture === undefined) font?.dispose();
