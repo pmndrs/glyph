@@ -24,6 +24,7 @@ import {
   ZOOM_TEXT_PHRASES,
   ZOOM_TEXT_CORPUS,
   shuffleZoomTextPhrases,
+  textLadderScenePosition,
   zoomTextAnimationState,
   zoomTextMaximumScale,
   type ComparisonWorkloadConfiguration,
@@ -350,6 +351,25 @@ describe('text ladder scale selection', () => {
 
   it('rejects invalid viewport inputs', () => {
     expect(() => ladderCssSizes(0)).toThrow('text ladder viewport height must be positive');
+  });
+
+  it('keeps the final specimen trailing edge inside the viewport through the cycle hold', () => {
+    const viewportWidth = 1_280;
+    const finalEntryX = 120;
+    const finalEntryWidth = 2_000;
+    for (const elapsedMs of [0, 4_160, 5_680, 7_200, 7_920]) {
+      const position = textLadderScenePosition({
+        animationSpeed: 50,
+        elapsedMs,
+        finalCenterY: -1_500,
+        finalEntryWidth,
+        finalEntryX,
+        viewportHeight: 720,
+        viewportWidth,
+      });
+
+      expect(position.x + finalEntryX + finalEntryWidth).toBeGreaterThanOrEqual(viewportWidth * 0.92);
+    }
   });
 });
 

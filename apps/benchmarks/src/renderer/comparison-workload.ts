@@ -1740,14 +1740,41 @@ function animateTextLadderScene(
   const finalEntry = entries[entries.length - 1];
   if (finalEntry === undefined) return;
   const layout = committedLayout(finalEntry.text);
-  const cycle = modulo((elapsedMs / 9_000) * animationRate(configuration), 1);
+  const position = textLadderScenePosition({
+    animationSpeed: configuration.animationSpeed,
+    elapsedMs,
+    finalCenterY: finalEntry.text.position.y - layout.height / 2,
+    finalEntryX: finalEntry.text.position.x,
+    finalEntryWidth: layout.width,
+    viewportHeight,
+    viewportWidth,
+  });
+  scene.position.set(position.x, position.y, 0);
+}
+
+export function textLadderScenePosition({
+  animationSpeed,
+  elapsedMs,
+  finalCenterY,
+  finalEntryWidth,
+  finalEntryX,
+  viewportHeight,
+  viewportWidth,
+}: {
+  readonly animationSpeed: number;
+  readonly elapsedMs: number;
+  readonly finalCenterY: number;
+  readonly finalEntryWidth: number;
+  readonly finalEntryX: number;
+  readonly viewportHeight: number;
+  readonly viewportWidth: number;
+}): Readonly<{ x: number; y: number }> {
+  const cycle = modulo((elapsedMs / 9_000) * animationRate({ animationSpeed }), 1);
   const scrollProgress = smoothstep(Math.min(1, cycle / 0.52));
   const marqueeProgress = smoothstep(Math.max(0, Math.min(1, (cycle - 0.52) / 0.38)));
-  const finalCenterY = finalEntry.text.position.y - layout.height / 2;
   const centeredScrollY = -viewportHeight / 2 - finalCenterY;
-  const offscreenX = -(finalEntry.text.position.x + layout.width + viewportWidth * 0.08);
-  scene.position.x = offscreenX * marqueeProgress;
-  scene.position.y = centeredScrollY * scrollProgress;
+  const trailingEdgeAlignedX = viewportWidth * 0.92 - finalEntryX - finalEntryWidth;
+  return { x: trailingEdgeAlignedX * marqueeProgress, y: centeredScrollY * scrollProgress };
 }
 
 function animateParagraphStressScene(

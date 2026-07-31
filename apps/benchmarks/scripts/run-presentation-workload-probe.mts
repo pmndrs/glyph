@@ -6,6 +6,7 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
+const technique = presentationTechnique(process.env.PRESENTATION_TECHNIQUE);
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
 await server.listen();
 const address = server.httpServer?.address();
@@ -60,6 +61,8 @@ const workloads = [
 ] as const;
 
 const consoleProblems: string[] = [];
+const presentationIntervalMs = 7_000;
+const presentationSamplePeriodMs = 300;
 let browser: Browser | undefined;
 try {
   browser = await launchProjectChromium({
@@ -74,7 +77,7 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=mtsdf&backend=webgpu&delivery=baked&dpr=1&font=inter&workload=text-ladder`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=webgpu&delivery=baked&dpr=1&font=inter&workload=text-ladder`,
     { waitUntil: 'domcontentloaded' },
   );
   const workloadControl = page.getByLabel('Live workload', { exact: true });
@@ -89,6 +92,7 @@ try {
   for (const workload of workloads) {
     await workloadControl.click();
     await page.getByRole('option', { name: workload.label, exact: true }).click();
+    await assertPresentationRemainsVisible(page, workload.id);
     await page.waitForFunction(
       ({ expected }) => {
         const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
@@ -120,24 +124,60 @@ try {
       return scope.presentationProbeCanvas === document.querySelector('canvas[data-configured-renderer-active="true"]');
     });
     if (!retainedCanvas) throw new Error(`${workload.id} replaced the persistent renderer canvas`);
-    const screenshot = await page.screenshot();
-    const visibleInkPixels = await visiblePresentationInkPixels(page, screenshot.toString('base64'));
-    if (visibleInkPixels < 300) {
-      await page.screenshot({ path: `/tmp/pmndrs-text-presentation-${workload.id}-blank.png` });
-      throw new Error(`${workload.id} rendered only ${String(visibleInkPixels)} visible foreground pixels`);
-    }
     if (Number(await page.locator('html').getAttribute('data-active-configured-renderers')) !== 1) {
       throw new Error(`${workload.id} did not retain exactly one configured renderer`);
     }
-    console.log('presentation-workload-visible', workload.id, visibleInkPixels);
   }
   if (consoleProblems.length > 0) {
     throw new Error(`Presentation emitted browser warnings or errors: ${consoleProblems.join(' | ')}`);
   }
-  console.log('presentation-workloads-ready', JSON.stringify({ workloads: workloads.length, rendererCount: 1 }));
+  console.log(
+    'presentation-workloads-ready',
+    JSON.stringify({ workloads: workloads.length, rendererCount: 1, technique }),
+  );
 } finally {
   await browser?.close();
   await server.close();
+}
+
+function presentationTechnique(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
+  if (value === undefined || value === 'mtsdf') return 'mtsdf';
+  if (value === 'bitmap' || value === 'slug') return value;
+  throw new RangeError(`PRESENTATION_TECHNIQUE must be bitmap, mtsdf, or slug; received ${value}`);
+}
+
+async function assertPresentationRemainsVisible(page: Page, workload: string): Promise<void> {
+  const minimumRequiredInkPixels = workload === 'zoom-text' ? 32 : 300;
+  let minimumVisibleInkPixels = Number.POSITIVE_INFINITY;
+  let sample = 0;
+  const startedAt = await page.evaluate(() => performance.now());
+  while (true) {
+    const screenshot = await page.screenshot();
+    const visibleInkPixels = await visiblePresentationInkPixels(page, screenshot.toString('base64'));
+    minimumVisibleInkPixels = Math.min(minimumVisibleInkPixels, visibleInkPixels);
+    if (visibleInkPixels < minimumRequiredInkPixels) {
+      await page.screenshot({ path: `/tmp/pmndrs-text-presentation-${workload}-blank-${String(sample)}.png` });
+      throw new Error(
+        `${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels at sample ${String(sample)}`,
+      );
+    }
+    const elapsedMs = await page.evaluate((start) => performance.now() - start, startedAt);
+    if (elapsedMs >= presentationIntervalMs) break;
+    const nextSampleAt = startedAt + Math.min(presentationIntervalMs, elapsedMs + presentationSamplePeriodMs);
+    await page.evaluate(
+      (targetTimestamp) =>
+        new Promise<void>((resolve) => {
+          const advance = (timestamp: number): void => {
+            if (timestamp >= targetTimestamp) resolve();
+            else requestAnimationFrame(advance);
+          };
+          requestAnimationFrame(advance);
+        }),
+      nextSampleAt,
+    );
+    sample += 1;
+  }
+  console.log('presentation-workload-visible', workload, minimumVisibleInkPixels);
 }
 
 async function visiblePresentationInkPixels(page: Page, screenshotBase64: string): Promise<number> {
