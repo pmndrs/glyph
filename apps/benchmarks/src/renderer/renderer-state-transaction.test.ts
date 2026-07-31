@@ -45,6 +45,35 @@ describe('renderer state transaction', () => {
     expect(state().clearAlpha).toBe(0.25);
   });
 
+  it('restores every host render-state field when an offscreen operation aborts', async () => {
+    const { renderer, state } = rendererFixture();
+    const controller = new AbortController();
+    const failure = new DOMException('capture cancelled', 'AbortError');
+    controller.abort(failure);
+
+    await expect(
+      withRendererStateRestored(renderer, () => {
+        renderer.setRenderTarget(new THREE.RenderTarget(8, 8), 0, 0);
+        renderer.setClearColor(0xffffff, 1);
+        renderer.setViewport(9, 10, 11, 12);
+        renderer.setScissor(13, 14, 15, 16);
+        renderer.setScissorTest(false);
+        controller.signal.throwIfAborted();
+      }),
+    ).rejects.toBe(failure);
+
+    expect(state()).toMatchObject({
+      activeCubeFace: 4,
+      activeMipmapLevel: 3,
+      clearAlpha: 0.25,
+      scissorTest: true,
+    });
+    expect(state().renderTarget).toBe(hostTarget);
+    expect(state().clearColor.getHex()).toBe(0x123456);
+    expect(state().viewport.toArray()).toEqual([1, 2, 3, 4]);
+    expect(state().scissor.toArray()).toEqual([5, 6, 7, 8]);
+  });
+
   it('does not require renderer lifecycle methods at its boundary', async () => {
     const { renderer } = rendererFixture();
 

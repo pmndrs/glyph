@@ -104,6 +104,7 @@ import type {
 import type { MtsdfTextConformanceCapture, MtsdfTextLiveStats, MtsdfTextPersistentScene } from './renderer/mtsdf-text';
 import type { SlugTextConformanceCapture, SlugTextLiveStats, SlugTextPersistentScene } from './renderer/slug-text';
 import type { RasterTechniqueComparisonPersistentScene } from './renderer/raster-technique-compare';
+import type { PersistentRenderJob } from './renderer/persistent-render-host';
 import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPersistentScene,
@@ -121,6 +122,7 @@ import type { BakeProgress } from '@pmndrs/text';
 import { Route, Switch, useLocation } from 'wouter';
 
 type LiveTextStats = RuntimeLiveStats;
+type RunExclusiveJob = <T>(job: PersistentRenderJob<T>, signal?: AbortSignal) => Promise<Awaited<T>>;
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 const liveSceneAssetResources = new Map<string, Promise<void>>();
@@ -395,6 +397,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const [isPending, startTransition] = useTransition();
   const reportCaptureRequested = useRef(false);
   const conformanceRunRevision = useRef(0);
+  const conformanceRunController = useRef<AbortController | undefined>(undefined);
   const presentationPlayback = useRef<
     { readonly startedAt: number; readonly startWorkload: PresentationWorkload } | undefined
   >(undefined);
@@ -479,6 +482,8 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const replacesRendererGeneration = next.mode !== undefined || next.backend !== undefined;
     if (replacesRendererGeneration) runtimeWorld.set(RuntimeTelemetry, { stats: undefined });
     if (replacesLiveSurface || next.fontFixture !== undefined) {
+      conformanceRunController.current?.abort(new DOMException('conformance run was superseded', 'AbortError'));
+      conformanceRunController.current = undefined;
       conformanceRunRevision.current += 1;
       setSummary(undefined);
       setEvent(undefined);
@@ -612,44 +617,59 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     return () => cancelAnimationFrame(animationFrame);
   }, [presentationPlaying]);
 
-  function runConformance(): void {
+  function runConformance(runExclusiveJob: RunExclusiveJob): void {
+    conformanceRunController.current?.abort(new DOMException('conformance run was superseded', 'AbortError'));
+    const controller = new AbortController();
+    conformanceRunController.current = controller;
     const revision = ++conformanceRunRevision.current;
     setError(undefined);
     startTransition(async () => {
       try {
-        const value = await runRegisteredBenchmark({
-          targetId:
-            location.workload === 'runtime-fallback'
-              ? `runtime-fallback-${location.technique}-${location.backend}`
-              : location.workload === 'cross-technique-fidelity'
-                ? `source-outline-${location.technique}-${location.backend}`
-                : location.technique === 'slug'
-                  ? `slug-conformance-${location.backend}`
-                  : location.technique === 'mtsdf'
-                    ? `mtsdf-conformance-${location.backend}`
-                    : `bitmap-text-${location.backend}`,
-          scenarioId:
-            location.workload === 'runtime-fallback'
-              ? 'runtime-fallback-parity'
-              : location.workload === 'cross-technique-fidelity'
-                ? 'source-outline-fidelity'
-                : location.technique === 'slug'
-                  ? 'slug-sampling-conformance'
-                  : location.technique === 'mtsdf'
-                    ? 'mtsdf-sampling-conformance'
-                    : 'bitmap-text-frame',
-          input: { fontFixture: activeFontFixture },
-          controls: { dpr, samples, warmup },
-          environment,
-          onEvent: (nextEvent) => {
-            if (revision === conformanceRunRevision.current) setEvent(nextEvent);
-          },
-        });
-        if (revision === conformanceRunRevision.current) setSummary(value);
-      } catch (caught) {
+        const value = await runExclusiveJob(
+          ({ renderer, signal }) =>
+            runRegisteredBenchmark({
+              targetId:
+                location.workload === 'runtime-fallback'
+                  ? `runtime-fallback-${location.technique}-${location.backend}`
+                  : location.workload === 'cross-technique-fidelity'
+                    ? `source-outline-${location.technique}-${location.backend}`
+                    : location.technique === 'slug'
+                      ? `slug-conformance-${location.backend}`
+                      : location.technique === 'mtsdf'
+                        ? `mtsdf-conformance-${location.backend}`
+                        : `bitmap-text-${location.backend}`,
+              scenarioId:
+                location.workload === 'runtime-fallback'
+                  ? 'runtime-fallback-parity'
+                  : location.workload === 'cross-technique-fidelity'
+                    ? 'source-outline-fidelity'
+                    : location.technique === 'slug'
+                      ? 'slug-sampling-conformance'
+                      : location.technique === 'mtsdf'
+                        ? 'mtsdf-sampling-conformance'
+                        : 'bitmap-text-frame',
+              input: { fontFixture: activeFontFixture },
+              controls: { dpr, samples, warmup },
+              environment,
+              executionContext: { renderer, signal },
+              onEvent: (nextEvent) => {
+                if (revision === conformanceRunRevision.current) setEvent(nextEvent);
+              },
+            }),
+          controller.signal,
+        );
         if (revision === conformanceRunRevision.current) {
+          startTransition(() => setSummary(value));
+        }
+      } catch (caught) {
+        if (
+          revision === conformanceRunRevision.current &&
+          !(caught instanceof DOMException && caught.name === 'AbortError')
+        ) {
           setError(caught instanceof Error ? caught.message : String(caught));
         }
+      } finally {
+        if (conformanceRunController.current === controller) conformanceRunController.current = undefined;
       }
     });
   }
@@ -812,7 +832,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       key={location.backend}
       onError={reportRendererError}
     >
-      <HarnessLayout
+      <PersistentHarnessLayout
         actionEligible={actionEligible}
         activeFontFixture={activeFontFixture}
         controls={controls}
@@ -828,7 +848,8 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
         summary={summary}
         webgpu={environment.webgpu}
         workloadPanelOpen={workloadPanelOpen}
-        onAction={location.mode === 'benchmark' ? captureWindow : runConformance}
+        onBenchmarkAction={captureWindow}
+        onConformanceAction={runConformance}
         onAdvancedFontFixture={(value) => {
           setAdvancedFontFixture(value);
           invalidateLiveCapture();
@@ -840,6 +861,25 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
         onWorkloadPanelOpen={setWorkloadPanelOpen}
       />
     </PersistentRenderHostProvider>
+  );
+}
+
+function PersistentHarnessLayout({
+  onBenchmarkAction,
+  onConformanceAction,
+  ...properties
+}: Omit<Parameters<typeof HarnessLayout>[0], 'onAction'> & {
+  readonly onBenchmarkAction: () => void;
+  readonly onConformanceAction: (runExclusiveJob: RunExclusiveJob) => void;
+}) {
+  const { runExclusiveJob } = usePersistentRenderHost();
+  return (
+    <HarnessLayout
+      {...properties}
+      onAction={
+        properties.location.mode === 'benchmark' ? onBenchmarkAction : () => onConformanceAction(runExclusiveJob)
+      }
+    />
   );
 }
 
@@ -1622,6 +1662,7 @@ function RasterTechniqueComparisonSurface({
   readonly onZoom: (zoom: number) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
+  const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const comparisonRef = useRef<RasterTechniqueComparisonPersistentScene>(undefined);
   const [ready, setReady] = useState(false);
@@ -1663,7 +1704,7 @@ function RasterTechniqueComparisonSurface({
         });
         comparison = created;
         comparisonRef.current = created;
-        surfaceLease = await activateSurface(
+        surfaceLease = await activatePersistentSurface(
           {
             anchor: container,
             controller: comparisonRef,
@@ -1715,7 +1756,7 @@ function RasterTechniqueComparisonSurface({
         () => undefined,
       );
     };
-  }, [activateSurface, backend, fontFixture]);
+  }, [backend, fontFixture]);
 
   useEffect(() => {
     comparisonRef.current?.setView(conformanceView.zoom, conformanceView.panXPercent, conformanceView.panYPercent);
@@ -1804,6 +1845,8 @@ function FiniteConformanceSurface({
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
   readonly onZoom: (zoom: number) => void;
 }) {
+  const { runExclusiveJob } = usePersistentRenderHost();
+  const runExclusiveCapture = useEffectEvent(runExclusiveJob);
   const [capture, setCapture] = useState<
     | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
     | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
@@ -1833,77 +1876,87 @@ function FiniteConformanceSurface({
     if (summary === undefined) return;
     const controller = new AbortController();
     let cancelled = false;
-    const request =
-      workload === 'runtime-fallback'
-        ? import('./renderer/runtime-fallback-conformance').then(async ({ captureRuntimeFallbackConformance }) => ({
-            kind: 'runtime-fallback' as const,
-            value: await captureRuntimeFallbackConformance({
-              backend,
-              dpr,
-              fontFixture,
-              signal: controller.signal,
-              technique,
-            }),
-          }))
-        : workload === 'cross-technique-fidelity'
-          ? technique === 'slug'
-            ? import('./renderer/slug-text').then(async ({ captureSlugSourceOutlineFidelity }) => ({
-                kind: 'source-outline' as const,
-                value: await captureSlugSourceOutlineFidelity({
-                  backend,
-                  dpr,
-                  fontFixture,
-                  signal: controller.signal,
-                }),
-              }))
-            : technique === 'mtsdf'
-              ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfSourceOutlineFidelity }) => ({
+    const request = runExclusiveCapture(
+      async ({ renderer, signal }) =>
+        workload === 'runtime-fallback'
+          ? import('./renderer/runtime-fallback-conformance').then(async ({ captureRuntimeFallbackConformance }) => ({
+              kind: 'runtime-fallback' as const,
+              value: await captureRuntimeFallbackConformance({
+                backend,
+                dpr,
+                fontFixture,
+                renderer,
+                signal,
+                technique,
+              }),
+            }))
+          : workload === 'cross-technique-fidelity'
+            ? technique === 'slug'
+              ? import('./renderer/slug-text').then(async ({ captureSlugSourceOutlineFidelity }) => ({
                   kind: 'source-outline' as const,
-                  value: await captureMtsdfSourceOutlineFidelity({
+                  value: await captureSlugSourceOutlineFidelity({
                     backend,
                     dpr,
                     fontFixture,
-                    signal: controller.signal,
+                    renderer,
+                    signal,
                   }),
                 }))
-              : import('./renderer/bitmap-text').then(async ({ captureBitmapSourceOutlineFidelity }) => ({
-                  kind: 'source-outline' as const,
-                  value: await captureBitmapSourceOutlineFidelity({
+              : technique === 'mtsdf'
+                ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfSourceOutlineFidelity }) => ({
+                    kind: 'source-outline' as const,
+                    value: await captureMtsdfSourceOutlineFidelity({
+                      backend,
+                      dpr,
+                      fontFixture,
+                      renderer,
+                      signal,
+                    }),
+                  }))
+                : import('./renderer/bitmap-text').then(async ({ captureBitmapSourceOutlineFidelity }) => ({
+                    kind: 'source-outline' as const,
+                    value: await captureBitmapSourceOutlineFidelity({
+                      backend,
+                      dpr,
+                      fontFixture,
+                      renderer,
+                      signal,
+                    }),
+                  }))
+            : technique === 'slug'
+              ? import('./renderer/slug-text').then(async ({ captureSlugTextConformance }) => ({
+                  kind: 'slug' as const,
+                  value: await captureSlugTextConformance({
                     backend,
                     dpr,
                     fontFixture,
-                    signal: controller.signal,
+                    renderer,
+                    signal,
                   }),
                 }))
-          : technique === 'slug'
-            ? import('./renderer/slug-text').then(async ({ captureSlugTextConformance }) => ({
-                kind: 'slug' as const,
-                value: await captureSlugTextConformance({
-                  backend,
-                  dpr,
-                  fontFixture,
-                  signal: controller.signal,
-                }),
-              }))
-            : technique === 'mtsdf'
-              ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
-                  kind: 'mtsdf' as const,
-                  value: await captureMtsdfTextConformance({
-                    backend,
-                    dpr,
-                    fontFixture,
-                    signal: controller.signal,
-                  }),
-                }))
-              : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
-                  kind: 'bitmap' as const,
-                  value: await captureBitmapTextConformance({
-                    backend,
-                    dpr,
-                    fontFixture,
-                    signal: controller.signal,
-                  }),
-                }));
+              : technique === 'mtsdf'
+                ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
+                    kind: 'mtsdf' as const,
+                    value: await captureMtsdfTextConformance({
+                      backend,
+                      dpr,
+                      fontFixture,
+                      renderer,
+                      signal,
+                    }),
+                  }))
+                : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
+                    kind: 'bitmap' as const,
+                    value: await captureBitmapTextConformance({
+                      backend,
+                      dpr,
+                      fontFixture,
+                      renderer,
+                      signal,
+                    }),
+                  })),
+      controller.signal,
+    );
     void request
       .then((value) => {
         if (!cancelled) publishCapture(value);
@@ -2438,6 +2491,7 @@ function BitmapTextViewport({
   readonly onStats: (stats: BitmapTextLiveStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
+  const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<BitmapTextPersistentScene>(undefined);
   const [settledRevision, setSettledRevision] = useState(0);
@@ -2546,7 +2600,7 @@ function BitmapTextViewport({
       });
       preview = created;
       previewRef.current = created;
-      surfaceLease = await activateSurface(
+      surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
           controller: previewRef,
@@ -2582,7 +2636,7 @@ function BitmapTextViewport({
         },
       );
     };
-  }, [activateSurface, backend, delivery, publishBakeProgress, surfaceAnchorRef]);
+  }, [backend, delivery, publishBakeProgress, surfaceAnchorRef]);
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid);
@@ -2718,6 +2772,7 @@ function MtsdfTextViewport({
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
+  const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<MtsdfTextPersistentScene>(undefined);
   const [error, setError] = useState<string>();
@@ -2783,7 +2838,7 @@ function MtsdfTextViewport({
       });
       preview = created;
       previewRef.current = created;
-      surfaceLease = await activateSurface(
+      surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
           controller: previewRef,
@@ -2814,7 +2869,7 @@ function MtsdfTextViewport({
         },
       );
     };
-  }, [activateSurface, backend, delivery, publishBakeProgress, surfaceAnchorRef]);
+  }, [backend, delivery, publishBakeProgress, surfaceAnchorRef]);
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid);
@@ -2930,6 +2985,7 @@ function SlugTextViewport({
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
+  const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<SlugTextPersistentScene>(undefined);
   const [error, setError] = useState<string>();
@@ -2994,7 +3050,7 @@ function SlugTextViewport({
       });
       preview = created;
       previewRef.current = created;
-      surfaceLease = await activateSurface(
+      surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
           controller: previewRef,
@@ -3025,7 +3081,7 @@ function SlugTextViewport({
         },
       );
     };
-  }, [activateSurface, backend, delivery, publishBakeProgress, surfaceAnchorRef]);
+  }, [backend, delivery, publishBakeProgress, surfaceAnchorRef]);
 
   useEffect(() => {
     previewRef.current?.setGridVisible(grid);
@@ -3136,7 +3192,10 @@ function comparisonViewportEvidence({
   const paintStats = stats?.workload === 'paint-effects' ? stats : undefined;
   const zoomStats = stats?.workload === 'zoom-text' ? stats : undefined;
   const animatedStats =
-    stats?.workload === 'dynamic-layout' || stats?.workload === 'paint-effects' || stats?.workload === 'zoom-text'
+    stats?.workload === 'dynamic-layout' ||
+    stats?.workload === 'icon-grid' ||
+    stats?.workload === 'paint-effects' ||
+    stats?.workload === 'zoom-text'
       ? stats
       : undefined;
   return {
@@ -3289,6 +3348,8 @@ function ComparisonWorkloadViewport({
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface, configureSurface } = usePersistentRenderHost();
+  const activatePersistentSurface = useEffectEvent(activateSurface);
+  const configurePersistentSurface = useEffectEvent(configureSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<ComparisonWorkloadPersistentScene>(undefined);
   const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture);
@@ -3347,7 +3408,7 @@ function ComparisonWorkloadViewport({
       });
       preview = created;
       previewRef.current = created;
-      surfaceLease = await activateSurface(
+      surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
           controller: previewRef,
@@ -3378,16 +3439,16 @@ function ComparisonWorkloadViewport({
         },
       );
     };
-  }, [activateSurface, backend, delivery, publishBakeProgress, surfaceAnchorRef, technique]);
+  }, [backend, delivery, publishBakeProgress, surfaceAnchorRef, technique]);
 
   useEffect(() => {
-    configureSurface({
+    configurePersistentSurface({
       controller: previewRef,
       label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
       pan: workload !== 'zoom-text',
       zoom: workload === 'off-axis-3d',
     });
-  }, [backend, configureSurface, technique, workload]);
+  }, [backend, technique, workload]);
 
   useEffect(() => {
     const preview = previewRef.current;

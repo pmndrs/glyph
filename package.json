@@ -15,6 +15,7 @@
     "benchmarks:check": "pnpm --filter @pmndrs/text-benchmarks check",
     "benchmarks:test:live": "pnpm --filter @pmndrs/text-benchmarks test:live",
     "benchmarks:test:presentation-controls": "pnpm --filter @pmndrs/text-benchmarks test:presentation-controls",
+    "benchmarks:test:raster-technique-compare": "pnpm --filter @pmndrs/text-benchmarks test:raster-technique-compare",
     "benchmarks:profile:paragraph-layout": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-layout",
     "benchmarks:profile:paragraph-font-size:bitmap": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-font-size:bitmap",
     "benchmarks:profile:paragraph-font-size:bitmap:cpu": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-font-size:bitmap:cpu",

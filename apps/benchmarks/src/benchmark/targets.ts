@@ -973,7 +973,7 @@ function sourceOutlineFidelityTarget(
     },
     status: () => 'ready',
     load: async () => undefined,
-    run: async (input, _sampleIndex, controls) => {
+    run: async (input, _sampleIndex, controls, context) => {
       const fontFixture = input.fontFixture ?? configuredInput.fontFixture ?? 'inter';
       const capture =
         technique === 'slug'
@@ -982,6 +982,8 @@ function sourceOutlineFidelityTarget(
                 backend,
                 dpr: controls.dpr,
                 fontFixture,
+                ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
+                ...(context?.signal === undefined ? {} : { signal: context.signal }),
               }),
             )
           : technique === 'mtsdf'
@@ -990,6 +992,8 @@ function sourceOutlineFidelityTarget(
                   backend,
                   dpr: controls.dpr,
                   fontFixture: selectableFontFixture(fontFixture),
+                  ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
+                  ...(context?.signal === undefined ? {} : { signal: context.signal }),
                 }),
               )
             : await import('../renderer/bitmap-text').then(({ captureBitmapSourceOutlineFidelity }) =>
@@ -997,6 +1001,8 @@ function sourceOutlineFidelityTarget(
                   backend,
                   dpr: controls.dpr,
                   fontFixture: selectableFontFixture(fontFixture),
+                  ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
+                  ...(context?.signal === undefined ? {} : { signal: context.signal }),
                 }),
               );
       return {
@@ -1036,13 +1042,15 @@ function runtimeFallbackTarget(technique: 'bitmap' | 'mtsdf' | 'slug', backend: 
     },
     status: () => 'ready',
     load: async () => undefined,
-    run: async (input, _sampleIndex, controls) => {
+    run: async (input, _sampleIndex, controls, context) => {
       const fontFixture = selectableFontFixture(input.fontFixture ?? configuredInput.fontFixture ?? 'inter');
       const { captureRuntimeFallbackConformance } = await import('../renderer/runtime-fallback-conformance');
       const capture = await captureRuntimeFallbackConformance({
         backend,
         dpr: controls.dpr,
         fontFixture,
+        ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
+        ...(context?.signal === undefined ? {} : { signal: context.signal }),
         technique,
       });
       return {

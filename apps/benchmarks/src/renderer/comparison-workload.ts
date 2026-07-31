@@ -623,6 +623,8 @@ async function createComparisonWorkloadRuntime(
         layoutEntries(nextEntries, next, width, height);
         const previous = entries;
         entries = nextEntries;
+        configuration = next;
+        committedContentWidth = comparisonWorkloadContentWidth(next, width);
         scene.clear();
         for (const { node } of entries) scene.add(node);
         disposeEntries(previous);
@@ -806,13 +808,14 @@ async function createComparisonWorkloadRuntime(
 
     await commit(configuration);
     signal?.throwIfAborted();
+    let requestedConfiguration = configuration;
     let pendingUpdate: PendingConfigurationUpdate | undefined;
     let updateDrain: Promise<void> | undefined;
 
     async function applyConfiguration(next: ComparisonWorkloadConfiguration, viewportChanged: boolean): Promise<void> {
       canvasSurface.setGridVisible(next.showGrid);
       if (next.fontFixture !== configuration.fontFixture) await switchSelectedFontFixture(next.fontFixture);
-      if (next.workload === 'zoom-text' && viewportChanged) {
+      if (configuration.workload === 'zoom-text' && next.workload === 'zoom-text' && viewportChanged) {
         configuration = next;
         committedContentWidth = undefined;
         revision += 1;
@@ -848,11 +851,11 @@ async function createComparisonWorkloadRuntime(
         );
         scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
         await resizeIconPool(nextWindow.poolCapacity, next.fontSize, nextWindow.layout);
+        await applyIconWindow(nextWindow);
         configuration = next;
         committedContentWidth = undefined;
         revision += 1;
         applyRetainedConfiguration(entries, technique, configuration);
-        await applyIconWindow(nextWindow);
         return;
       }
       const nextContentWidth = comparisonWorkloadContentWidth(next, width);
@@ -860,8 +863,6 @@ async function createComparisonWorkloadRuntime(
       const fontSizeChanged = next.fontSize !== configuration.fontSize;
       if (comparisonWorkloadUpdateKind(configuration, next, contentWidthChanged) === 'rebuild') {
         await commit(next);
-        configuration = next;
-        committedContentWidth = nextContentWidth;
         return;
       }
       if (contentWidthChanged || fontSizeChanged) {
@@ -929,6 +930,7 @@ async function createComparisonWorkloadRuntime(
             for (const waiter of current.waiters) waiter.resolve();
           } catch (error) {
             for (const waiter of current.waiters) waiter.reject(error);
+            if (pendingUpdate === undefined) requestedConfiguration = configuration;
           }
         }
       })().finally(() => {
@@ -951,6 +953,7 @@ async function createComparisonWorkloadRuntime(
       if (closing || disposed) {
         return Promise.reject(new DOMException('The comparison preview is disposed', 'AbortError'));
       }
+      requestedConfiguration = next;
       if (
         comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild' ||
         next.fontFixture !== configuration.fontFixture
@@ -1237,7 +1240,7 @@ async function createComparisonWorkloadRuntime(
         }
         canvasSurface.resize(width, height);
         resizeWorkloadCamera(camera, width, height);
-        void enqueueUpdate(configuration, true).catch(onError);
+        void enqueueUpdate(requestedConfiguration, true).catch(onError);
       },
       panBy(deltaX, deltaY) {
         if (closing || disposed) return;
@@ -1857,7 +1860,9 @@ function animateZoomText(
   onError: (error: unknown) => void,
 ): void {
   if (!configuration.animationEnabled) return;
-  if (entries.length !== 2) throw new Error('zoom text requires exactly two retained Text slots');
+  if (entries.length !== 2) {
+    throw new Error(`zoom text requires exactly two retained Text slots; received ${String(entries.length)}`);
+  }
   updateZoomTextAnimationState(state, timestamp, configuration.animationSpeed, ZOOM_TEXT_PHRASES.length);
   const current = entries[state.phraseRevision % 2]!;
   const incoming = entries[(state.phraseRevision + 1) % 2]!;

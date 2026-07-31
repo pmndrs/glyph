@@ -19,12 +19,7 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
     let viewport = await waitForReadyViewport(technique, workload.id);
     console.log('comparison-workload-viewport-ready', technique, workload.id);
     assertSingleConfiguredRenderer(technique, workload.id);
-    verifyCanvasNavigation(
-      viewport,
-      workload.id !== 'zoom-text',
-      workload.id === 'off-axis-3d',
-      workload.id === 'icon-grid',
-    );
+    verifyCanvasNavigation(viewport, workload.id !== 'zoom-text', workload.id === 'off-axis-3d');
 
     if (technique === 'bitmap' && workload.id === 'text-ladder') {
       await waitForAttribute(viewport, 'data-canvas-grid', 'true');
@@ -118,7 +113,11 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
       if (numericAttribute(viewport, 'data-icon-first-visible-index') !== 0) {
         throw new Error(`${techniqueLabel(technique)} icon grid did not begin at the first icon`);
       }
+      setCheckbox('Animate', false);
+      await waitForAttribute(viewport, 'data-animation-enabled', 'false');
       await verifyIconVirtualization(viewport, technique);
+      setCheckbox('Animate', true);
+      await waitForAttribute(viewport, 'data-animation-enabled', 'true');
       if (rows !== Math.ceil(itemCount / columns)) {
         throw new Error(`${techniqueLabel(technique)} icon grid published invalid dimensions`);
       }
@@ -214,14 +213,9 @@ for (const technique of ['bitmap', 'mtsdf', 'slug'] as const) {
   }
 }
 
-function verifyCanvasNavigation(
-  viewport: HTMLElement,
-  panEnabled: boolean,
-  zoomEnabled: boolean,
-  clampedAtOrigin: boolean,
-): void {
-  const canvas = viewport.querySelector<HTMLCanvasElement>('canvas');
-  if (canvas === null || canvas.dataset.panEnabled !== String(panEnabled)) {
+function verifyCanvasNavigation(viewport: HTMLElement, panEnabled: boolean, zoomEnabled: boolean): void {
+  const canvas = activeRendererCanvas();
+  if (canvas.dataset.panEnabled !== String(panEnabled)) {
     throw new Error('Live workload canvas exposed the wrong panning capability');
   }
   if (panEnabled) {
@@ -231,8 +225,12 @@ function verifyCanvasNavigation(
     canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 41, clientX: 20 }));
     canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
     canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 41, clientX: 35 }));
-    if (Number(canvas.dataset.panX) !== (clampedAtOrigin ? 0 : 15)) {
-      throw new Error('Mouse drag did not publish the applied live-canvas pan');
+    const appliedPanX = Number(canvas.dataset.panX);
+    const expectedPanX = 15;
+    if (appliedPanX !== expectedPanX) {
+      throw new Error(
+        `Mouse drag did not publish the applied live-canvas pan: expected ${String(expectedPanX)}, received ${String(appliedPanX)}`,
+      );
     }
   } else if (canvas.dataset.touchPan !== 'disabled') {
     throw new Error('Centered live workload exposed touch panning');
@@ -251,8 +249,8 @@ function verifyCanvasNavigation(
 }
 
 async function verifyIconVirtualization(viewport: HTMLElement, technique: RasterTechnique): Promise<void> {
-  const canvas = viewport.querySelector<HTMLCanvasElement>('canvas[data-pan-enabled="true"]');
-  if (canvas === null) throw new Error('Icon grid canvas is unavailable');
+  const canvas = activeRendererCanvas();
+  if (canvas.dataset.panEnabled !== 'true') throw new Error('Icon grid canvas is unavailable');
   const maximumScrollY = numericAttribute(viewport, 'data-icon-maximum-scroll-y');
   const maximumScrollX = numericAttribute(viewport, 'data-icon-maximum-scroll-x');
   if (maximumScrollX <= 0 || maximumScrollY <= 0) {
@@ -297,6 +295,14 @@ async function verifyIconVirtualization(viewport: HTMLElement, technique: Raster
   await waitForAttribute(viewport, 'data-icon-first-visible-index', '0');
   await waitForAttribute(viewport, 'data-icon-scroll-x', '0');
   await waitForAttribute(viewport, 'data-icon-scroll-y', '0');
+}
+
+function activeRendererCanvas(): HTMLCanvasElement {
+  const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+  if (canvases.length !== 1) {
+    throw new Error(`Expected one active route renderer canvas, found ${String(canvases.length)}`);
+  }
+  return canvases[0]!;
 }
 
 await clickButton('Advanced shaping', false);
@@ -726,8 +732,16 @@ function waitForGreaterAttribute(element: HTMLElement, name: string, previous: n
 }
 
 function observeDocument<Element extends HTMLElement>(find: () => Element | undefined): Promise<Element> {
-  return new Promise((resolve) => {
+  const currentError = liveSurfaceError();
+  if (currentError !== undefined) return Promise.reject(currentError);
+  return new Promise((resolve, reject) => {
     const observer = new MutationObserver(() => {
+      const error = liveSurfaceError();
+      if (error !== undefined) {
+        observer.disconnect();
+        reject(error);
+        return;
+      }
       const value = find();
       if (value === undefined) return;
       observer.disconnect();
@@ -739,6 +753,11 @@ function observeDocument<Element extends HTMLElement>(find: () => Element | unde
       subtree: true,
     });
   });
+}
+
+function liveSurfaceError(): Error | undefined {
+  const error = document.querySelector<HTMLElement>('[data-testid="benchmark-surface"] .text-danger');
+  return error === null ? undefined : new Error(error.textContent?.trim() || 'Live workload failed');
 }
 
 function positiveAttribute(element: HTMLElement, name: string): boolean {

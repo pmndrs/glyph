@@ -112,6 +112,60 @@ describe('persistent render host', () => {
     await host.dispose();
   });
 
+  it('aborts an exclusive renderer job and resumes the retained live scene', async () => {
+    const harness = renderHostHarness();
+    const scene = sceneHarness('live');
+    const controller = new AbortController();
+    const jobStarted = deferred<void>();
+    const failure = new DOMException('capture cancelled', 'AbortError');
+    const host = await harness.create();
+    await host.replaceScene(scene.scene);
+
+    const job = host.runExclusiveJob(({ signal }) => {
+      jobStarted.resolve();
+      return new Promise<never>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    }, controller.signal);
+    await jobStarted.promise;
+    harness.frame(10);
+    controller.abort(failure);
+
+    await expect(job).rejects.toBe(failure);
+    harness.frame(20);
+    expect(scene.frames).toEqual([1]);
+    expect(scene.telemetryFrames).toEqual([1]);
+    expect(scene.deactivations).toEqual([]);
+    expect(harness.createRenderer).toHaveBeenCalledOnce();
+    await host.dispose();
+  });
+
+  it('never overlaps queued exclusive renderer jobs', async () => {
+    const harness = renderHostHarness();
+    const firstStarted = deferred<void>();
+    const finishFirst = deferred<void>();
+    const order: string[] = [];
+    const host = await harness.create();
+
+    const first = host.runExclusiveJob(async () => {
+      order.push('first:start');
+      firstStarted.resolve();
+      await finishFirst.promise;
+      order.push('first:end');
+    });
+    const second = host.runExclusiveJob(() => {
+      order.push('second:start');
+    });
+    await firstStarted.promise;
+    expect(order).toEqual(['first:start']);
+
+    finishFirst.resolve();
+    await Promise.all([first, second]);
+    expect(order).toEqual(['first:start', 'first:end', 'second:start']);
+    expect(harness.createRenderer).toHaveBeenCalledOnce();
+    await host.dispose();
+  });
+
   it('serializes replacement and revokes a scene superseded during activation', async () => {
     const harness = renderHostHarness();
     const activation = deferred<void>();
