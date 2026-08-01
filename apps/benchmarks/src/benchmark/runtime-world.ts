@@ -150,8 +150,3 @@ export function useRuntimeTelemetry() {
   const world = useRuntimeWorld();
   return useRequiredWorldTrait(world, RuntimeTelemetry);
 }
-
-export function useRuntimeCanvasSettings() {
-  const world = useRuntimeWorld();
-  return useRequiredWorldTrait(world, RuntimeCanvasSettings);
-}

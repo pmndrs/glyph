@@ -1,0 +1,16 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "noScore": true,
+  "supplyChain": {
+    "enabled": false
+  },
+  "ignore": {
+    "files": ["vitexec/**", "src/benchmark/bake-host-baseline.ts", "src/benchmark/worker-queue-evidence.ts"],
+    "overrides": [
+      {
+        "files": ["src/benchmark/paragraph-layout-digest.ts"],
+        "rules": ["deslop/unused-export"]
+      }
+    ]
+  }
+}
