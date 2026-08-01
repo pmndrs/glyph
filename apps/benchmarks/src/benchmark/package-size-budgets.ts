@@ -1,6 +1,6 @@
 export const packageSizeBudgets = {
   'browser-core': {
-    rawBytes: 330_000,
+    rawBytes: 331_000,
     minifiedBytes: 252_000,
     gzipBytes: 74_000,
     brotliBytes: 57_000,

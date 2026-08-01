@@ -235,6 +235,7 @@ export class Text extends THREE.Group {
     this.#pending = undefined;
     this.#disposeGeneration(this.#generation);
     this.#generation = undefined;
+    this.#invalidatedState = undefined;
     this.#setCancelledReady(reason);
   }
 
@@ -439,7 +440,7 @@ export class Text extends THREE.Group {
 
   #invalidateGeneration(generation: TextGeneration, reason: unknown): void {
     if (this.#generation !== generation) return;
-    this.#invalidatedState = this.#state;
+    this.#invalidatedState = generation.state;
     this.#revision += 1;
     this.#pending?.abort(reason);
     this.#pending = undefined;

@@ -495,6 +495,35 @@ test('disposing a registered font invalidates live Text batches before raster re
   }
 });
 
+test('disposing a superseded font does not terminally invalidate its pending replacement', async () => {
+  const restoreFetch = installFileFetch();
+  const bytes = await readFile(fixtureUrl);
+  const registryA = new FontRegistry();
+  const registryB = new FontRegistry();
+  const fontA = await registryA.registerAsset(bytes);
+  const fontB = await registryB.registerAsset(bytes);
+  const text = new Text({
+    text: 'font replacement lifecycle',
+    font: fontA,
+    raster: bitmap({ strikes: [16] }),
+    fontSize: 16,
+  });
+  try {
+    await text.ready;
+    text.setProperties({ font: fontB });
+    fontA.dispose();
+    await text.ready.catch(() => undefined);
+    text.setProperties({});
+    await text.ready;
+    assert.equal(text.children.length, 1);
+  } finally {
+    text.dispose();
+    fontA.dispose();
+    fontB.dispose();
+    restoreFetch();
+  }
+});
+
 test('Text rejects a raster batch without the required Three.js lifecycle surface', async () => {
   const restoreFetch = installFileFetch();
   const registry = new FontRegistry();
