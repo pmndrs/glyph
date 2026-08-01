@@ -2,6 +2,7 @@
 
 ## 2026-08-01
 
+- **Single coverage validation authority** — Removed unused Bitmap and MTSDF validation-context coverage fields; standalone validators now expose only the authenticated descriptor as expected coverage authority, eliminating a public input that could silently disagree.
 - **Configured MTSDF outline authority** — Qualified the public four-atlas-pixel outline constant as the 64/8 default and proved a real 32/4 artifact accepts exactly two atlas pixels but rejects `2.0001`, discriminating the authenticated runtime limit from the exported default.
 - **Pending Text no-op lifecycle** — Semantic no-op `Text.setProperties` calls now preserve the active cold generation, abort signal, and readiness promise, including callback-only updates that publish to the latest `onLayout`. Failed generations clear their pending ownership so the same semantic input can retry. Deterministic delayed-decode and failure regressions prove both paths without timers.
 - **Thin baker diagnostics boundary** — Moved direct Wasm timing and memory observation behind a private diagnostic-only TypeScript entry while retaining the Rust phase observer behind its non-default `profiling` feature. The production package-size build now rejects diagnostic module or symbol reachability, clock calls in thin baker hosts, and profiling/timing Wasm imports or exports; packed consumers receive no diagnostic module, and the package concept records exact thin-build, diagnostic-run, and evidence-refresh commands.

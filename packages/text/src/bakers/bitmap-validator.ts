@@ -103,7 +103,6 @@ export interface BitmapArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
-  readonly coverage?: Uint8Array;
   readonly glyphIdWidth: 16;
   readonly descriptor: BitmapDescriptorV0;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
