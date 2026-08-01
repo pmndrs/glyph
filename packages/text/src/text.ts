@@ -13,7 +13,6 @@ import {
   normalizeRasterInput,
   normalizeTextState,
   sameLayoutInput,
-  samePaintInput,
   sameParagraphInput,
   sameTextInput,
   type NormalizedRasterRequest,
@@ -22,6 +21,8 @@ import {
 } from './internal/text-properties.js';
 import {
   isRegisteredFont,
+  loadedTextFont,
+  loadedTextShaper,
   loadTextFont,
   sharedRasterRuntime,
   textRegistry,
@@ -173,6 +174,12 @@ interface TextGeneration {
   readonly releaseFontDisposal: () => void;
 }
 
+interface PendingPublication {
+  readonly generation: TextGeneration;
+  readonly resolve: () => void;
+  readonly reject: (reason?: unknown) => void;
+}
+
 interface GlyphPaintPlan {
   readonly paintIndices: Uint16Array;
   readonly spanCount: number;
@@ -185,11 +192,18 @@ interface ResolvedParagraphInput {
   readonly spans: readonly import('./paragraph.js').ParagraphSpan[];
 }
 
-/** Framework-neutral Three.js text object with transactional async generations. */
+interface PreparedFontRaster {
+  readonly fontHandle: FontHandle;
+  readonly fontRaster: ResolvedFontRaster;
+  readonly fontSlot: FontSlot;
+}
+
+/** Framework-neutral Three.js text object with transactional generations. */
 export class Text extends THREE.Group {
   #state: TextState;
   #generation: TextGeneration | undefined;
   #pending: AbortController | undefined;
+  #publication: PendingPublication | undefined;
   #invalidatedState: TextState | undefined;
   #revision = 0;
   #ready: Promise<void> = Promise.resolve();
@@ -217,6 +231,10 @@ export class Text extends THREE.Group {
       this.#state = next;
       if (this.#invalidatedState !== undefined && sameTextInput(this.#invalidatedState, next)) return;
       if (this.#pending !== undefined) return;
+      if (this.#publication !== undefined && sameTextInput(this.#publication.generation.state, next)) {
+        this.#publication.generation.state = next;
+        return;
+      }
       if (this.#generation !== undefined && sameTextInput(this.#generation.state, next)) {
         this.#generation.state = next;
         return;
@@ -245,10 +263,21 @@ export class Text extends THREE.Group {
     const reason = new DOMException('The text object was disposed', 'AbortError');
     this.#pending?.abort(reason);
     this.#pending = undefined;
+    this.#cancelPublication(reason);
     this.#disposeGeneration(this.#generation);
     this.#generation = undefined;
     this.#invalidatedState = undefined;
     this.#setCancelledReady(reason);
+  }
+
+  override updateMatrixWorld(force?: boolean): void {
+    this.#publishPending();
+    super.updateMatrixWorld(force);
+  }
+
+  override updateWorldMatrix(updateParents: boolean, updateChildren: boolean): void {
+    this.#publishPending();
+    super.updateWorldMatrix(updateParents, updateChildren);
   }
 
   #schedule(prevalidatedPaint?: GlyphPaint): void {
@@ -257,23 +286,35 @@ export class Text extends THREE.Group {
       this.#revision += 1;
       this.#pending?.abort();
       this.#pending = undefined;
+      this.#cancelPublication(new DOMException('The text generation was superseded', 'AbortError'));
       this.#disposeGeneration(this.#generation);
       this.#generation = undefined;
       this.#ready = Promise.resolve();
       return;
     }
 
-    if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, this.#state)) {
-      if (!samePaintInput(this.#generation.state, this.#state)) {
-        const paint = prevalidatedPaint ?? resolveGlyphPaint(this.#state, this.#generation.paintPlan);
-        this.#commitBatchStages(this.#generation, paint);
-      }
+    const controller = new AbortController();
+    const warm = this.#buildWarmGeneration(this.#state, prevalidatedPaint, controller);
+    if (warm !== undefined) {
       this.#invalidatedState = undefined;
       this.#revision += 1;
+      const revision = this.#revision;
       this.#pending?.abort();
       this.#pending = undefined;
-      this.#generation.state = this.#state;
-      this.#ready = Promise.resolve();
+      this.#cancelPublication(new DOMException('The text generation was superseded', 'AbortError'));
+      if (warm instanceof Promise) {
+        this.#trackAsyncGeneration(warm, controller, revision);
+        return;
+      }
+      if (this.#generation === undefined) {
+        this.#commitGeneration(warm);
+        this.#ready = Promise.resolve();
+        return;
+      }
+      const publication = Promise.withResolvers<void>();
+      void publication.promise.catch(() => undefined);
+      this.#publication = { generation: warm, resolve: publication.resolve, reject: publication.reject };
+      this.#ready = publication.promise;
       return;
     }
 
@@ -282,39 +323,20 @@ export class Text extends THREE.Group {
     const revision = this.#revision;
     this.#pending?.abort();
     this.#pending = undefined;
-    const controller = new AbortController();
+    this.#cancelPublication(new DOMException('The text generation was superseded', 'AbortError'));
+    this.#trackAsyncGeneration(this.#buildGeneration(this.#state, controller), controller, revision);
+  }
+
+  #trackAsyncGeneration(build: Promise<TextGeneration>, controller: AbortController, revision: number): void {
     this.#pending = controller;
-    const state = this.#state;
-    const ready = this.#buildGeneration(state, controller).then((generation) => {
+    const ready = build.then((generation) => {
       if (this.#disposed || revision !== this.#revision || controller.signal.aborted) {
         this.#disposeUncommitted(generation);
         controller.signal.throwIfAborted();
         return;
       }
       this.#pending = undefined;
-      const previous = this.#generation;
-      try {
-        for (const { stage } of generation.batchStages) stage.commit();
-      } catch (error) {
-        this.#disposeUncommitted(generation);
-        throw error;
-      }
-      generation.batchStages.length = 0;
-      generation.state = this.#state;
-      this.#generation = generation;
-      previous?.releaseFontDisposal();
-      for (const owned of previous?.batches ?? []) {
-        if (generation.batches.some(({ batch }) => batch === owned.batch)) continue;
-        this.remove(owned.batch.object);
-        owned.batch.dispose();
-      }
-      if (previous !== undefined && previous.paragraph !== generation.paragraph) {
-        previous.paragraph.dispose();
-      }
-      for (const owned of generation.batches) {
-        if (owned.batch.object.parent !== this) this.add(owned.batch.object);
-      }
-      this.#state.onLayout?.(generation.layout);
+      this.#commitGeneration(generation);
     });
     // `ready` remains an observation channel that rejects on failure or cancellation. The
     // internal branch prevents an abandoned generation from becoming an unhandled rejection.
@@ -322,6 +344,96 @@ export class Text extends THREE.Group {
       if (this.#pending === controller) this.#pending = undefined;
     });
     this.#ready = ready;
+  }
+
+  #buildWarmGeneration(
+    state: TextState,
+    prevalidatedPaint: GlyphPaint | undefined,
+    controller: AbortController,
+  ): TextGeneration | Promise<TextGeneration> | undefined {
+    const resolved = resolveParagraphInputSync(state);
+    if (resolved === undefined) return undefined;
+    const reusableParagraph =
+      this.#generation !== undefined && sameParagraphInput(this.#generation.state, state)
+        ? this.#generation.paragraph
+        : undefined;
+    let paragraph = reusableParagraph;
+    let ownsParagraph = false;
+    let handedOff = false;
+    const cleanup = () => {
+      if (handedOff) return;
+      handedOff = true;
+      if (ownsParagraph) paragraph?.dispose();
+    };
+    try {
+      if (paragraph === undefined) {
+        const shaper = loadedTextShaper(resolved.registry);
+        if (shaper === undefined) return undefined;
+        paragraph = createParagraphEngine({ shaper }).create({
+          text: state.text,
+          font: resolved.root.font.handle,
+          spans: resolved.spans,
+          style: paragraphStyle(state),
+        });
+        ownsParagraph = true;
+      }
+      const builtParagraph = paragraph;
+      const retainedLayout =
+        this.#generation !== undefined && sameLayoutInput(this.#generation.state, state) ? this.#generation : undefined;
+      const layout = retainedLayout?.layout ?? builtParagraph.layout(paragraphConstraints(state));
+      const paintPlan = retainedLayout?.paintPlan ?? createGlyphPaintPlan(layout, state);
+      const paint = prevalidatedPaint ?? resolveGlyphPaint(state, paintPlan);
+      const prepared: PreparedFontRaster[] = [];
+      const preparations: Promise<void>[] = [];
+      for (let slot = 0; slot < layout.fontHandles.length; slot += 1) {
+        const handle = layout.fontHandles[slot] as FontHandle | undefined;
+        if (handle === undefined) throw new Error('paragraph layout has an incomplete font table');
+        const fontRaster = resolved.fontsByHandle.get(handle);
+        if (fontRaster === undefined) throw new Error('paragraph layout references an unresolved font');
+        fontRaster.raster.module.validatePaint?.(paint);
+        if (retainedLayout === undefined) {
+          const preparation = fontRaster.raster.module.prepare(
+            layout,
+            fontRaster.raster.resource,
+            slot,
+            controller.signal,
+          );
+          if (preparation !== undefined) {
+            void preparation.catch(() => undefined);
+            preparations.push(preparation);
+          }
+        }
+        prepared.push({ fontHandle: handle, fontRaster, fontSlot: slot });
+      }
+      const finish = (): TextGeneration => {
+        controller.signal.throwIfAborted();
+        const generation = this.#stageGeneration({
+          state,
+          resolved,
+          paragraph: builtParagraph,
+          createdParagraph: ownsParagraph,
+          layout,
+          paintPlan,
+          paint,
+          prepared,
+          controller,
+        });
+        handedOff = true;
+        return generation;
+      };
+      if (preparations.length === 0) return finish();
+      return Promise.all(preparations)
+        .then(finish)
+        .catch((error: unknown) => {
+          controller.abort(error);
+          cleanup();
+          throw error;
+        });
+    } catch (error) {
+      controller.abort(error);
+      cleanup();
+      throw error;
+    }
   }
 
   async #buildGeneration(state: TextState, controller: AbortController): Promise<TextGeneration> {
@@ -332,8 +444,6 @@ export class Text extends THREE.Group {
         : undefined;
     let paragraph = reusableParagraph;
     let ownsParagraph = false;
-    const batches: OwnedBatch[] = [];
-    const batchStages: StagedBatch[] = [];
     try {
       let resolved: ResolvedParagraphInput;
       if (paragraph === undefined) {
@@ -356,11 +466,7 @@ export class Text extends THREE.Group {
       const layout = paragraph.layout(paragraphConstraints(state));
       const paintPlan = createGlyphPaintPlan(layout, state);
       const paint = resolveGlyphPaint(state, paintPlan);
-      const prepared: Array<{
-        readonly fontHandle: FontHandle;
-        readonly fontRaster: ResolvedFontRaster;
-        readonly fontSlot: FontSlot;
-      }> = [];
+      const prepared: PreparedFontRaster[] = [];
       for (let slot = 0; slot < layout.fontHandles.length; slot += 1) {
         const handle = layout.fontHandles[slot] as FontHandle | undefined;
         if (handle === undefined) throw new Error('paragraph layout has an incomplete font table');
@@ -373,6 +479,38 @@ export class Text extends THREE.Group {
         signal.throwIfAborted();
         prepared.push({ fontHandle: handle, fontRaster, fontSlot: slot });
       }
+      return this.#stageGeneration({
+        state,
+        resolved,
+        paragraph,
+        createdParagraph: ownsParagraph,
+        layout,
+        paintPlan,
+        paint,
+        prepared,
+        controller,
+      });
+    } catch (error) {
+      if (ownsParagraph) paragraph?.dispose();
+      throw error;
+    }
+  }
+
+  #stageGeneration(input: {
+    readonly state: TextState;
+    readonly resolved: ResolvedParagraphInput;
+    readonly paragraph: Paragraph;
+    readonly createdParagraph: boolean;
+    readonly layout: ParagraphLayout;
+    readonly paintPlan: GlyphPaintPlan;
+    readonly paint: GlyphPaint;
+    readonly prepared: readonly PreparedFontRaster[];
+    readonly controller: AbortController;
+  }): TextGeneration {
+    const { state, resolved, paragraph, createdParagraph, layout, paintPlan, paint, prepared, controller } = input;
+    const batches: OwnedBatch[] = [];
+    const batchStages: StagedBatch[] = [];
+    try {
       for (const { fontHandle, fontRaster, fontSlot } of prepared) {
         const previous = this.#generation?.batches.find(
           (owned) => owned.fontHandle === fontHandle && owned.module === fontRaster.raster.module,
@@ -410,12 +548,13 @@ export class Text extends THREE.Group {
         if (!fontHandles.has(font.handle)) return;
         const reason = new DOMException('A font used by this text was disposed', 'AbortError');
         controller.abort(reason);
-        if (this.#generation === generation) this.#invalidateGeneration(generation, reason);
+        if (this.#publication?.generation === generation) this.#cancelPublication(reason);
+        else if (this.#generation === generation) this.#invalidateGeneration(generation, reason);
       });
       generation = {
         state,
         paragraph,
-        createdParagraph: ownsParagraph,
+        createdParagraph,
         layout,
         paintPlan,
         batches,
@@ -425,7 +564,6 @@ export class Text extends THREE.Group {
       return generation;
     } catch (error) {
       for (const staged of batchStages) abortStagedBatch(staged);
-      if (ownsParagraph) paragraph?.dispose();
       throw error;
     }
   }
@@ -446,6 +584,50 @@ export class Text extends THREE.Group {
     if (generation.createdParagraph) generation.paragraph.dispose();
   }
 
+  #commitGeneration(generation: TextGeneration): void {
+    try {
+      for (const { stage } of generation.batchStages) stage.commit();
+    } catch (error) {
+      this.#disposeUncommitted(generation);
+      throw error;
+    }
+    generation.batchStages.length = 0;
+    generation.state = this.#state;
+    const previous = this.#generation;
+    this.#generation = generation;
+    previous?.releaseFontDisposal();
+    for (const owned of previous?.batches ?? []) {
+      if (generation.batches.some(({ batch }) => batch === owned.batch)) continue;
+      this.remove(owned.batch.object);
+      owned.batch.dispose();
+    }
+    if (previous !== undefined && previous.paragraph !== generation.paragraph) previous.paragraph.dispose();
+    for (const owned of generation.batches) {
+      if (owned.batch.object.parent !== this) this.add(owned.batch.object);
+    }
+    if (previous?.layout !== generation.layout) this.#state.onLayout?.(generation.layout);
+  }
+
+  #publishPending(): void {
+    const publication = this.#publication;
+    if (publication === undefined) return;
+    this.#publication = undefined;
+    try {
+      this.#commitGeneration(publication.generation);
+      publication.resolve();
+    } catch (error) {
+      publication.reject(error);
+    }
+  }
+
+  #cancelPublication(reason: unknown): void {
+    const publication = this.#publication;
+    if (publication === undefined) return;
+    this.#publication = undefined;
+    this.#disposeUncommitted(publication.generation);
+    publication.reject(reason);
+  }
+
   #invalidateGeneration(generation: TextGeneration, reason: unknown): void {
     if (this.#generation !== generation) return;
     this.#invalidatedState = generation.state;
@@ -454,55 +636,11 @@ export class Text extends THREE.Group {
     this.#pending = undefined;
     this.#disposeGeneration(generation);
     this.#generation = undefined;
+    if (this.#publication !== undefined) {
+      this.#invalidatedState = undefined;
+      return;
+    }
     this.#setCancelledReady(reason);
-  }
-
-  #commitBatchStages(generation: TextGeneration, paint: GlyphPaint): void {
-    const stages: StagedBatch[] = [];
-    const batches: OwnedBatch[] = [];
-    try {
-      for (const owned of generation.batches) {
-        const stage = owned.module.stageBatch(
-          owned.batch,
-          generation.layout,
-          owned.raster.resource,
-          owned.fontSlot,
-          paint,
-          this.#state.rasterPixelRatio,
-        );
-        try {
-          assertRasterBatchStage(stage);
-        } catch (error) {
-          try {
-            stage.abort();
-          } catch {
-            // The untrusted module returned no usable cleanup surface.
-          }
-          throw error;
-        }
-        stages.push({ stage, previous: owned.batch });
-        batches.push({ ...owned, batch: stage.batch });
-      }
-    } catch (error) {
-      for (const staged of stages) abortStagedBatch(staged);
-      throw error;
-    }
-    try {
-      for (const { stage } of stages) stage.commit();
-    } catch (error) {
-      for (const staged of stages) abortStagedBatch(staged);
-      throw error;
-    }
-    const previous = generation.batches;
-    generation.batches = batches;
-    for (const owned of previous) {
-      if (batches.some(({ batch }) => batch === owned.batch)) continue;
-      this.remove(owned.batch.object);
-      owned.batch.dispose();
-    }
-    for (const owned of batches) {
-      if (owned.batch.object.parent !== this) this.add(owned.batch.object);
-    }
   }
 
   #setCancelledReady(reason: unknown): void {
@@ -567,6 +705,46 @@ async function resolveParagraphInput(state: TextState, signal: AbortSignal): Pro
   return { registry: rootRegistry, root, fontsByHandle, spans };
 }
 
+function resolveParagraphInputSync(state: TextState): ResolvedParagraphInput | undefined {
+  const rootSource = state.font;
+  if (rootSource === undefined) throw new Error('text has no font');
+  const registry = isRegisteredFont(rootSource) ? textRegistry(rootSource) : textRegistry();
+  const root = resolveFontRasterSync(rootSource, state.raster, registry);
+  if (root === undefined) return undefined;
+  const rootRegistry = textRegistry(root.font);
+  const fontsByHandle = new Map<FontHandle, ResolvedFontRaster>([[root.font.handle, root]]);
+  const spans = [] as import('./paragraph.js').ParagraphSpan[];
+  for (const span of state.spans) {
+    let font = root;
+    if (span.font !== undefined) {
+      const resolvedFont = resolveFontRasterSync(span.font, root.request, rootRegistry);
+      if (resolvedFont === undefined) return undefined;
+      font = resolvedFont;
+      const existing = fontsByHandle.get(font.font.handle);
+      if (
+        existing !== undefined &&
+        (existing.raster.module !== font.raster.module ||
+          existing.raster.artifact.rasterKey !== font.raster.artifact.rasterKey)
+      ) {
+        throw new TypeError('one font cannot select multiple raster definitions in one paragraph');
+      }
+      fontsByHandle.set(font.font.handle, font);
+    }
+    spans.push({
+      start: span.start,
+      end: span.end,
+      font: font.font.handle,
+      ...(span.fontSize === undefined ? {} : { fontSize: span.fontSize }),
+      ...(span.lineHeight === undefined ? {} : { lineHeight: span.lineHeight }),
+      ...(span.letterSpacing === undefined ? {} : { letterSpacing: span.letterSpacing }),
+      ...(span.language === undefined ? {} : { language: span.language }),
+      ...(span.direction === undefined ? {} : { direction: span.direction }),
+      ...(span.features === undefined ? {} : { features: span.features }),
+    });
+  }
+  return { registry: rootRegistry, root, fontsByHandle, spans };
+}
+
 async function resolveFontRaster(
   source: AnyFontToken | FontInput | RegisteredFont,
   inheritedRaster: AnyRasterInput | NormalizedRasterRequest | undefined,
@@ -587,6 +765,30 @@ async function resolveFontRaster(
     throw new TypeError('all fonts in one Text object must belong to the same registry');
   }
   const raster = await sharedRasterRuntime.load(font, { module: request.module, options: request.options }, { signal });
+  return { font, request, raster };
+}
+
+function resolveFontRasterSync(
+  source: AnyFontToken | FontInput | RegisteredFont,
+  inheritedRaster: AnyRasterInput | NormalizedRasterRequest | undefined,
+  registry: FontRegistry,
+): ResolvedFontRaster | undefined {
+  const font = isRegisteredFont(source)
+    ? source
+    : loadedTextFont(isFontToken(source) ? source.input : source, registry);
+  if (font === undefined) return undefined;
+  let request: NormalizedRasterRequest;
+  if (isFontToken(source)) {
+    request = normalizeRasterInput(source.raster);
+  } else {
+    if (inheritedRaster === undefined) throw new TypeError('raw fonts require a raster definition');
+    request = isNormalizedRasterRequest(inheritedRaster) ? inheritedRaster : normalizeRasterInput(inheritedRaster);
+  }
+  if (textRegistry(font) !== registry) {
+    throw new TypeError('all fonts in one Text object must belong to the same registry');
+  }
+  const raster = sharedRasterRuntime._peek(font, { module: request.module, options: request.options });
+  if (raster === undefined) return undefined;
   return { font, request, raster };
 }
 

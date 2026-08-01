@@ -121,10 +121,12 @@ export interface RasterModule<Kind extends string, Resource, DrawBatch extends R
 
   decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Resource>;
 
-  prepare(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, signal?: AbortSignal): Promise<void>;
+  prepare(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, signal?: AbortSignal): void | Promise<void>;
   /**
    * Stage one complete renderer-owned batch generation. The implementation must not mutate
-   * `previous` before commit and must release partial allocations before throwing.
+   * `previous` before commit and must release partial allocations before throwing. Each stage
+   * owns its unpublished state independently: aborting one candidate must not affect another
+   * candidate staged concurrently against the same `previous` batch.
    */
   stageBatch(
     previous: DrawBatch | undefined,

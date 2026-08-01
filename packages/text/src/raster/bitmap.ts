@@ -173,7 +173,7 @@ const bitmapModule: RasterModule<typeof BITMAP_KIND, BitmapResource, BitmapDrawB
       signal?.throwIfAborted();
       return resource;
     },
-    async prepare(layout, resource, fontSlot, signal) {
+    prepare(layout, resource, fontSlot, signal) {
       signal?.throwIfAborted();
       assertRasterCoverage(layout, fontSlot, resource.coverage, BITMAP_KIND);
     },

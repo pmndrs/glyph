@@ -45,6 +45,7 @@ const baseConfiguration: ComparisonWorkloadConfiguration = {
   paintStrokeWidth: 0.5,
   showGrid: true,
   showLayoutBounds: true,
+  textLadderExitEnabled: false,
   workload: 'paint-effects',
 };
 
@@ -362,6 +363,7 @@ describe('text ladder scale selection', () => {
     const position = textLadderScenePosition({
       animationSpeed: 50,
       elapsedMs: 7_200,
+      exitEnabled: true,
       finalCenterY: -1_500,
       finalEntryWidth,
       finalEntryX,
@@ -370,6 +372,21 @@ describe('text ladder scale selection', () => {
     });
 
     expect(position.x + finalEntryX + finalEntryWidth).toBeLessThan(0);
+  });
+
+  it('keeps the final specimen visible outside timed presentation playback', () => {
+    const position = textLadderScenePosition({
+      animationSpeed: 50,
+      elapsedMs: 7_200,
+      exitEnabled: false,
+      finalCenterY: -1_500,
+      finalEntryWidth: 2_000,
+      finalEntryX: 120,
+      viewportHeight: 720,
+      viewportWidth: 1_280,
+    });
+
+    expect(position.x).toBe(0);
   });
 });
 

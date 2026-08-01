@@ -117,6 +117,7 @@ export interface ComparisonWorkloadConfiguration {
   readonly paintStrokeWidth: number;
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
+  readonly textLadderExitEnabled: boolean;
   readonly workload: ComparisonWorkloadId;
 }
 
@@ -148,6 +149,7 @@ export interface ComparisonWorkloadPreviewOptions {
   readonly paintStrokeWidth: number;
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
+  readonly textLadderExitEnabled: boolean;
   readonly signal?: AbortSignal;
   readonly slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource;
   readonly technique: RasterTechnique;
@@ -179,7 +181,6 @@ interface WorkloadEntry {
   readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>;
   readonly role: 'primary' | 'secondary';
   virtualIconIndex?: number;
-  iconAssignmentPending?: boolean;
   disposed?: boolean;
   readonly alignment?: 'start' | 'center' | 'end';
   readonly animationPhase?: number;
@@ -702,7 +703,7 @@ async function createComparisonWorkloadRuntime(
       }
     }
 
-    async function applyIconWindow(window: IconGridVirtualWindow): Promise<void> {
+    function applyIconWindow(window: IconGridVirtualWindow): void {
       if (iconFont === undefined || configuration.workload !== 'icon-grid') return;
       if (window.poolCapacity !== entries.length) {
         throw new Error('icon grid pool capacity changed without a scene rebuild');
@@ -734,31 +735,18 @@ async function createComparisonWorkloadRuntime(
       for (const [missingIndex, iconIndex] of missingIndices.entries()) {
         const entry = availableEntries[missingIndex]!;
         const { content, glyph } = iconGridContent(iconIndex);
-        // A Text object retains its previous complete generation while replacement content loads,
-        // but individual Text objects become ready independently. Keep every recyclable slot hidden
-        // until the complete window is ready so the pool publishes one coherent assignment.
-        entry.node.visible = false;
-        entry.iconAssignmentPending = true;
+        // Keep the old assignment visible while every warm replacement is staged. The Three.js lifecycle publishes
+        // the staged generations together below; no consumer promise coordinates ordinary warm recycling.
         entry.text.setProperties({ text: glyph });
         entry.labelText?.setProperties({ text: iconGridLabel(iconIndex) });
         recycled += 1;
         pendingAssignments.push({ entry, iconIndex, content });
       }
-      try {
-        await Promise.all(pendingAssignments.flatMap(({ entry }) => entryReadyPromises(entry)));
-      } catch (error) {
-        for (const { entry } of pendingAssignments) {
-          entry.node.visible = false;
-          entry.iconAssignmentPending = false;
-          delete entry.virtualIconIndex;
-        }
-        throw error;
-      }
+      publishEntryUpdates(pendingAssignments.map(({ entry }) => entry));
       if (closing || disposed) return;
       for (const { entry, iconIndex, content } of pendingAssignments) {
         if (entry.disposed) continue;
         entry.virtualIconIndex = iconIndex;
-        entry.iconAssignmentPending = false;
         entry.sourceText = content;
         const column = iconIndex % window.layout.columns;
         const row = Math.floor(iconIndex / window.layout.columns);
@@ -801,7 +789,7 @@ async function createComparisonWorkloadRuntime(
         for (const { node } of removed) scene.remove(node);
         disposeEntries(removed);
       }
-      await resizeIconGridEntries(entries, iconSize, layout);
+      resizeIconGridEntries(entries, iconSize, layout);
     }
 
     function settleIconWindow(window: IconGridVirtualWindow): void {
@@ -1657,19 +1645,19 @@ function entryLayouts(entry: WorkloadEntry): readonly ParagraphLayout[] {
     : [committedLayout(entry.text), committedLayout(entry.labelText)];
 }
 
-async function resizeIconGridEntries(
-  entries: readonly WorkloadEntry[],
-  iconSize: number,
-  layout: IconGridLayout,
-): Promise<void> {
+function resizeIconGridEntries(entries: readonly WorkloadEntry[], iconSize: number, layout: IconGridLayout): void {
   for (const entry of entries) entry.text.setProperties({ fontSize: iconSize });
-  await Promise.all(entries.map(({ text }) => text.ready));
+  publishEntryUpdates(entries);
   for (const entry of entries) {
     if (entry.virtualIconIndex === undefined) continue;
     const column = entry.virtualIconIndex % layout.columns;
     const row = Math.floor(entry.virtualIconIndex / layout.columns);
     positionIconGridEntry(entry, layout, column, row, iconSize);
   }
+}
+
+function publishEntryUpdates(entries: readonly WorkloadEntry[]): void {
+  for (const { node } of entries) node.updateMatrixWorld(true);
 }
 
 function positionIconGridEntry(
@@ -1770,7 +1758,7 @@ function layoutZoomTextEntry(entry: WorkloadEntry, viewportWidth: number, viewpo
 function animateTextLadderScene(
   scene: THREE.Scene,
   entries: readonly WorkloadEntry[],
-  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>,
+  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed' | 'textLadderExitEnabled'>,
   elapsedMs: number,
   viewportWidth: number,
   viewportHeight: number,
@@ -1781,6 +1769,7 @@ function animateTextLadderScene(
   const position = textLadderScenePosition({
     animationSpeed: configuration.animationSpeed,
     elapsedMs,
+    exitEnabled: configuration.textLadderExitEnabled,
     finalCenterY: finalEntry.text.position.y - layout.height / 2,
     finalEntryX: finalEntry.text.position.x,
     finalEntryWidth: layout.width,
@@ -1793,6 +1782,7 @@ function animateTextLadderScene(
 export function textLadderScenePosition({
   animationSpeed,
   elapsedMs,
+  exitEnabled,
   finalCenterY,
   finalEntryWidth,
   finalEntryX,
@@ -1801,6 +1791,7 @@ export function textLadderScenePosition({
 }: {
   readonly animationSpeed: number;
   readonly elapsedMs: number;
+  readonly exitEnabled: boolean;
   readonly finalCenterY: number;
   readonly finalEntryWidth: number;
   readonly finalEntryX: number;
@@ -1809,10 +1800,10 @@ export function textLadderScenePosition({
 }): Readonly<{ x: number; y: number }> {
   const cycle = modulo((elapsedMs / 9_000) * animationRate({ animationSpeed }), 1);
   const scrollProgress = smoothstep(Math.min(1, cycle / 0.52));
-  const marqueeProgress = smoothstep(Math.max(0, Math.min(1, (cycle - 0.52) / 0.38)));
+  const marqueeProgress = exitEnabled ? smoothstep(Math.max(0, Math.min(1, (cycle - 0.52) / 0.38))) : 0;
   const centeredScrollY = -viewportHeight / 2 - finalCenterY;
   const offscreenLeftX = -finalEntryX - finalEntryWidth - viewportWidth * 0.05;
-  return { x: offscreenLeftX * marqueeProgress, y: centeredScrollY * scrollProgress };
+  return { x: marqueeProgress === 0 ? 0 : offscreenLeftX * marqueeProgress, y: centeredScrollY * scrollProgress };
 }
 
 function animateParagraphStressScene(
@@ -2732,7 +2723,7 @@ function updateIconGridEntryVisibility(
   const viewportBottom = scrollY + viewportHeight;
   for (const entry of entries) {
     const index = entry.virtualIconIndex;
-    if (index === undefined || entry.iconAssignmentPending === true) {
+    if (index === undefined) {
       entry.node.visible = false;
       continue;
     }

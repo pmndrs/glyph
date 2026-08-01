@@ -160,15 +160,7 @@ export function PersistentRenderHostProvider({
         observer.disconnect();
         throw error;
       }
-      return createSurfaceLease(
-        sceneLease,
-        observer,
-        generation,
-        surfaceGenerationRef,
-        activeAnchorRef,
-        runtimeWorld,
-        canvas,
-      );
+      return createSurfaceLease(sceneLease, observer, generation, surfaceGenerationRef, activeAnchorRef, runtimeWorld);
     },
     [canvas, configureSurface, ensureHost, runtimeWorld],
   );
@@ -204,7 +196,6 @@ function createSurfaceLease(
   surfaceGenerationRef: RefObject<number>,
   activeAnchorRef: RefObject<HTMLElement | undefined>,
   runtimeWorld: ReturnType<typeof useRuntimeWorld>,
-  canvas: HTMLCanvasElement,
 ): PersistentRenderSurfaceLease {
   let released = false;
   return {
@@ -215,13 +206,14 @@ function createSurfaceLease(
       await sceneLease.release();
       if (surfaceGenerationRef.current !== generation) return;
       activeAnchorRef.current = undefined;
+      // Keep the provider-owned canvas attached while a replacement effect activates. Its last complete frame is a
+      // better handoff than a DOM detach/reattach flash; provider teardown and anchor removal still detach it.
       runtimeWorld.set(RuntimeCanvasSettings, {
         controller: undefined,
         label: 'Text rendering canvas',
         panEnabled: false,
         zoomEnabled: false,
       });
-      canvas.remove();
     },
   };
 }

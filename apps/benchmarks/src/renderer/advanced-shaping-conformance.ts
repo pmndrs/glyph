@@ -79,6 +79,8 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
       let missingGlyphCount = 0;
       let renderedGlyphCount = 0;
       let drawCount = 0;
+      let coldReadyObservationCount = 0;
+      let warmLifecyclePublicationCount = 0;
 
       for (const definition of ADVANCED_SHAPING_CASES) {
         const font = state.fonts.get(definition.fontFixture);
@@ -101,10 +103,13 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
                 font,
                 raster: bitmapRequest,
               });
+              await text.ready;
+              coldReadyObservationCount += 1;
             } else {
               text.setProperties(properties);
+              text.updateMatrixWorld(true);
+              warmLifecyclePublicationCount += 1;
             }
-            await text.ready;
             const layout = text.layout;
             if (layout === undefined) throw new Error(`${definition.id}:${frame.tick} has no layout`);
             const rendered = renderedGlyphs(text);
@@ -150,6 +155,9 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
           missingGlyphCount,
           renderedGlyphCount,
           drawCount,
+          coldReadyObservationCount,
+          warmLifecyclePublicationCount,
+          warmReadyWaitCount: 0,
         },
       };
     },

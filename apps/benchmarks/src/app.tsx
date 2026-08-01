@@ -1392,7 +1392,6 @@ function Scene({
         presentationPreset={presentationPreset}
         showLayoutBounds={showLayoutBounds}
         workloadAmount={workloadAmount}
-        key={`${location.mode}-${location.backend}-${location.delivery}-${String(dpr)}`}
         showcaseFrame={showcaseFrame}
         stats={liveStats}
         technique={location.technique}
@@ -1593,6 +1592,7 @@ function BenchmarkSurface({
         animationSpeed={animationSpeed}
         backend={backend}
         delivery={delivery}
+        demoMode={demoMode}
         suppressLoading={demoMode || presentation === 'presentation'}
         dpr={dpr}
         fontSize={fontSize}
@@ -3574,6 +3574,7 @@ function ComparisonWorkloadViewport({
   animationSpeed,
   backend,
   delivery,
+  demoMode,
   dpr,
   fontFixture,
   fontSize,
@@ -3596,6 +3597,7 @@ function ComparisonWorkloadViewport({
   readonly animationSpeed: number;
   readonly backend: GraphicsBackend;
   readonly delivery: FontDelivery;
+  readonly demoMode: boolean;
   readonly dpr: 1 | 2;
   readonly fontFixture: BenchmarkFontFixture;
   readonly fontSize: number;
@@ -3650,6 +3652,7 @@ function ComparisonWorkloadViewport({
       paintStrokeWidth,
       showGrid: grid,
       showLayoutBounds,
+      textLadderExitEnabled: demoMode && workload === 'text-ladder',
       workload,
     }),
   );
@@ -3728,6 +3731,7 @@ function ComparisonWorkloadViewport({
     animationEnabled,
     animationSpeed,
     dpr,
+    demoMode,
     fontFixture,
     fontSize,
     layoutWidthRatio,

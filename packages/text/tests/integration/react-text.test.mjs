@@ -48,7 +48,7 @@ test('React Text flattens spans, reconciles, forwards its ref, and disposes', as
       reference.current instanceof CoreText,
       `forwarded ref resolved to ${reference.current?.constructor?.name ?? String(reference.current)}`,
     );
-    await reference.current.ready;
+    reference.current.updateMatrixWorld();
     assert.equal(reference.current.children.length, 1);
     assert.equal(reference.current.layout?.glyphIds.length, 11);
     assert.equal(layouts.length, 1);
@@ -56,13 +56,13 @@ test('React Text flattens spans, reconciles, forwards its ref, and disposes', as
     const object = reference.current;
     const initialLayout = object.layout;
     await renderer.update(render('office', '#00aaff', [2, 1, 0]));
-    await object.ready;
+    object.updateMatrixWorld();
     assert.equal(reference.current, object, 'React updates retain the core object identity');
     assert.equal(object.layout, initialLayout, 'paint and transform changes do not reflow');
     assert.deepEqual(object.position.toArray(), [2, 1, 0]);
 
     await renderer.update(render('accurate', '#00aaff', [2, 1, 0]));
-    await object.ready;
+    object.updateMatrixWorld();
     assert.notEqual(object.layout, initialLayout, 'text changes replace the layout generation');
     assert.equal(object.layout?.glyphIds.length, 13);
     assert.equal(layouts.length, 2);
@@ -117,7 +117,7 @@ test('lazyRaster participates in the real React Text dependency and draw path', 
         React.createElement(Text, { font, fontSize: 16, ref: reference }, 'lazy raster'),
       );
     });
-    await reference.current.ready;
+    reference.current.updateMatrixWorld();
     assert.equal(reference.current.children.length, 1);
   } finally {
     if (renderer !== undefined) await renderer.unmount();

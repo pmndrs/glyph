@@ -66,7 +66,7 @@ const presentationSamplePeriodMs = 300;
 let browser: Browser | undefined;
 try {
   browser = await launchProjectChromium({
-    headless: false,
+    headless: true,
     args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'],
   });
   const page = await browser.newPage({ viewport: { width: 1_280, height: 720 } });
@@ -77,7 +77,7 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=webgpu&delivery=baked&dpr=1&font=inter&workload=text-ladder`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=text-ladder`,
     { waitUntil: 'domcontentloaded' },
   );
   const workloadControl = page.getByLabel('Live workload', { exact: true });
@@ -95,9 +95,58 @@ try {
     );
   });
   await page.evaluate(() => {
-    const scope = globalThis as typeof globalThis & { presentationProbeCanvas: Element | undefined };
-    scope.presentationProbeCanvas =
-      document.querySelector('canvas[data-configured-renderer-active="true"]') ?? undefined;
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+    const scope = globalThis as typeof globalThis & {
+      presentationProbeCanvas: HTMLCanvasElement | undefined;
+      presentationProbeCanvasEvidence: CanvasEvidence | undefined;
+      presentationProbeCanvasEvents: string[];
+      presentationProbeInputEvents: string[];
+    };
+    scope.presentationProbeCanvas = canvas ?? undefined;
+    if (canvas === null) {
+      scope.presentationProbeCanvasEvidence = undefined;
+    } else {
+      const bounds = canvas.getBoundingClientRect();
+      scope.presentationProbeCanvasEvidence = {
+        backingHeight: canvas.height,
+        backingWidth: canvas.width,
+        connected: canvas.isConnected,
+        cssHeight: bounds.height,
+        cssWidth: bounds.width,
+      };
+    }
+    scope.presentationProbeCanvasEvents = [];
+    scope.presentationProbeInputEvents = [];
+    document.addEventListener(
+      'click',
+      (event) => {
+        const target = event.target instanceof Element ? event.target : undefined;
+        scope.presentationProbeInputEvents.push(
+          `${performance.now().toFixed(1)}ms click ${target?.getAttribute('aria-label') ?? target?.textContent?.trim().slice(0, 80) ?? 'unknown'}`,
+        );
+      },
+      { capture: true },
+    );
+    if (canvas !== null) {
+      new MutationObserver((records) => {
+        for (const record of records) {
+          scope.presentationProbeCanvasEvents.push(
+            `${performance.now().toFixed(1)}ms attribute ${record.attributeName ?? 'unknown'} ${record.oldValue ?? 'null'} -> ${canvas.getAttribute(record.attributeName ?? '') ?? 'null'}`,
+          );
+        }
+      }).observe(canvas, { attributeFilter: ['height', 'width'], attributeOldValue: true, attributes: true });
+      new ResizeObserver(() => {
+        const bounds = canvas.getBoundingClientRect();
+        scope.presentationProbeCanvasEvents.push(
+          `${performance.now().toFixed(1)}ms css ${String(bounds.width)}x${String(bounds.height)}`,
+        );
+      }).observe(canvas);
+      new MutationObserver(() => {
+        if (!canvas.isConnected) {
+          scope.presentationProbeCanvasEvents.push(`${performance.now().toFixed(1)}ms disconnected`);
+        }
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    }
   });
 
   for (const workload of workloads) {
@@ -139,6 +188,37 @@ try {
       throw new Error(`${workload.id} did not retain exactly one configured renderer`);
     }
   }
+  if (technique === 'bitmap') {
+    const dprMenu = page.getByRole('button', { name: 'Device pixel ratio: 2×', exact: true });
+    await dprMenu.click();
+    await page
+      .getByRole('button', { name: '1×', exact: true })
+      .evaluate((element) => (element as HTMLButtonElement).click());
+    await page.waitForFunction(() => new URLSearchParams(location.search).get('dpr') === '1');
+    await assertCanvasHandoff(page, 'DPR 2→1');
+    await page.getByRole('button', { name: 'Device pixel ratio: 1×', exact: true }).click();
+    await page
+      .getByRole('button', { name: '2×', exact: true })
+      .evaluate((element) => (element as HTMLButtonElement).click());
+    await page.waitForFunction(() => new URLSearchParams(location.search).get('dpr') === '2');
+    await assertCanvasHandoff(page, 'DPR 1→2');
+
+    const mtsdfControl = page.getByRole('button', { name: 'MSDF', exact: true });
+    await mtsdfControl.evaluate((element) => (element as HTMLButtonElement).click());
+    await page.waitForFunction(() => {
+      const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      return viewport?.dataset.technique === 'mtsdf' && viewport.dataset.presentationPending === 'false';
+    });
+    await assertCanvasHandoff(page, 'Bitmap→MTSDF');
+    await page
+      .getByRole('button', { name: 'Bitmap', exact: true })
+      .evaluate((element) => (element as HTMLButtonElement).click());
+    await page.waitForFunction(() => {
+      const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      return viewport?.dataset.technique === 'bitmap' && viewport.dataset.presentationPending === 'false';
+    });
+    await assertCanvasHandoff(page, 'MTSDF→Bitmap');
+  }
   if (consoleProblems.length > 0) {
     throw new Error(`Presentation emitted browser warnings or errors: ${consoleProblems.join(' | ')}`);
   }
@@ -151,6 +231,24 @@ try {
   await server.close();
 }
 
+async function assertCanvasHandoff(page: Page, label: string): Promise<void> {
+  const evidence = await page.evaluate(() => {
+    const scope = globalThis as typeof globalThis & {
+      presentationProbeCanvas: HTMLCanvasElement | undefined;
+      presentationProbeCanvasEvents: string[];
+    };
+    const current = document.querySelector('canvas[data-configured-renderer-active="true"]');
+    return {
+      disconnected: scope.presentationProbeCanvasEvents.some((event) => event.endsWith('disconnected')),
+      rendererCount: Number(document.documentElement.dataset.activeConfiguredRenderers),
+      retained: current !== null && current === scope.presentationProbeCanvas && current.isConnected,
+    };
+  });
+  if (!evidence.retained || evidence.disconnected || evidence.rendererCount !== 1) {
+    throw new Error(`${label} did not retain one continuously attached renderer canvas: ${JSON.stringify(evidence)}`);
+  }
+}
+
 function presentationTechnique(value: string | undefined): 'bitmap' | 'mtsdf' | 'slug' {
   if (value === undefined || value === 'mtsdf') return 'mtsdf';
   if (value === 'bitmap' || value === 'slug') return value;
@@ -159,19 +257,41 @@ function presentationTechnique(value: string | undefined): 'bitmap' | 'mtsdf' | 
 
 async function assertPresentationRemainsVisible(page: Page, workload: string): Promise<void> {
   const minimumRequiredInkPixels = workload === 'zoom-text' ? 32 : 300;
-  let minimumVisibleInkPixels = Number.POSITIVE_INFINITY;
-  let sample = 0;
   const startedAt = await page.evaluate(() => performance.now());
   while (true) {
-    const screenshot = await page.screenshot();
-    const visibleInkPixels = await visiblePresentationInkPixels(page, screenshot.toString('base64'));
-    minimumVisibleInkPixels = Math.min(minimumVisibleInkPixels, visibleInkPixels);
-    if (visibleInkPixels < minimumRequiredInkPixels) {
-      await page.screenshot({ path: `/tmp/pmndrs-text-presentation-${workload}-blank-${String(sample)}.png` });
-      throw new Error(
-        `${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels at sample ${String(sample)}`,
-      );
-    }
+    const canvasFailure = await page.evaluate(() => {
+      const scope = globalThis as typeof globalThis & {
+        presentationProbeCanvas: HTMLCanvasElement | undefined;
+        presentationProbeCanvasEvidence: CanvasEvidence | undefined;
+        presentationProbeCanvasEvents: string[];
+        presentationProbeInputEvents: string[];
+      };
+      const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
+      const expected = scope.presentationProbeCanvasEvidence;
+      if (canvas === null || expected === undefined) return 'the configured renderer canvas is missing';
+      if (canvas !== scope.presentationProbeCanvas) return 'the configured renderer canvas identity changed';
+      const bounds = canvas.getBoundingClientRect();
+      const actual: CanvasEvidence = {
+        backingHeight: canvas.height,
+        backingWidth: canvas.width,
+        connected: canvas.isConnected,
+        cssHeight: bounds.height,
+        cssWidth: bounds.width,
+      };
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        const navigationStatus =
+          document.querySelector<HTMLElement>('[data-testid="canvas-navigation-status"]')?.textContent ?? 'missing';
+        return `the canvas dimensions changed from ${JSON.stringify(expected)} to ${JSON.stringify(actual)}; browser DPR ${String(devicePixelRatio)}; URL ${location.search}; status ${navigationStatus.trim()}; canvas events ${scope.presentationProbeCanvasEvents.slice(-12).join(' | ')}; input events ${scope.presentationProbeInputEvents.slice(-12).join(' | ')}`;
+      }
+      const rendererCount = Number(document.documentElement.dataset.activeConfiguredRenderers);
+      if (rendererCount !== 1) return `the active renderer count changed to ${String(rendererCount)}`;
+      const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      if (Number(viewport?.dataset.glyphCount) <= 0 || Number(viewport?.dataset.drawCount) <= 0) {
+        return 'the active workload stopped publishing glyphs or draw calls';
+      }
+      return undefined;
+    });
+    if (canvasFailure !== undefined) throw new Error(`${workload}: ${canvasFailure}`);
     const elapsedMs = await page.evaluate((start) => performance.now() - start, startedAt);
     if (elapsedMs >= presentationIntervalMs) break;
     const nextSampleAt = startedAt + Math.min(presentationIntervalMs, elapsedMs + presentationSamplePeriodMs);
@@ -186,9 +306,24 @@ async function assertPresentationRemainsVisible(page: Page, workload: string): P
         }),
       nextSampleAt,
     );
-    sample += 1;
   }
-  console.log('presentation-workload-visible', workload, minimumVisibleInkPixels);
+
+  // Full-page capture can perturb a hardware-composited canvas on some Chromium/macOS combinations. Keep cadence
+  // monitoring capture-free, then take one bounded headless proof after the workload has survived the interval.
+  const screenshot = await page.screenshot();
+  const visibleInkPixels = await visiblePresentationInkPixels(page, screenshot.toString('base64'));
+  if (visibleInkPixels < minimumRequiredInkPixels) {
+    throw new Error(`${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels`);
+  }
+  console.log('presentation-workload-visible', workload, visibleInkPixels);
+}
+
+interface CanvasEvidence {
+  readonly backingHeight: number;
+  readonly backingWidth: number;
+  readonly connected: boolean;
+  readonly cssHeight: number;
+  readonly cssWidth: number;
 }
 
 async function visiblePresentationInkPixels(page: Page, screenshotBase64: string): Promise<number> {

@@ -2,7 +2,7 @@ import type { RasterBakeArtifact } from './bake.js';
 import type { RegisteredFont } from './font.js';
 import type { RasterKey } from './identity.js';
 import { FontLoadError, registeredFontRegistry } from './loader.js';
-import { deriveRasterKey } from './internal/raster-identity.js';
+import { canonicalJson, deriveRasterKey } from './internal/raster-identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import type {
   AnyRasterModule,
@@ -18,6 +18,8 @@ type LoadedAnyRaster = LoadedRaster<AnyRasterModule>;
 interface CachedRaster {
   readonly promise: Promise<LoadedAnyRaster>;
   readonly controller: AbortController;
+  readonly descriptorKey: string;
+  value: LoadedAnyRaster | undefined;
   consumers: number;
   settled: boolean;
 }
@@ -46,6 +48,27 @@ export class RasterRuntime {
     return this.#load(font, request, options);
   }
 
+  /** @internal Return a current decoded resource without crossing a Promise boundary. */
+  _peek<const Module extends AnyRasterModule>(
+    font: RegisteredFont,
+    request: RasterRequest<Module>,
+  ): LoadedRaster<Module> | undefined {
+    this.#assertActive();
+    const rasters = this.#fonts.get(font)?.get(request.module);
+    if (rasters === undefined) return undefined;
+    const descriptorKey = rasterDescriptorKey(request.module, request.options);
+    for (const [rasterKey, cached] of rasters) {
+      if (cached.descriptorKey !== descriptorKey || cached.value === undefined) continue;
+      if (isCurrentRaster(font, rasterKey as RasterKey, cached.value.artifact)) {
+        return cached.value as LoadedRaster<Module>;
+      }
+      rasters.delete(rasterKey);
+      request.module.dispose(cached.value.resource);
+      return undefined;
+    }
+    return undefined;
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -61,6 +84,7 @@ export class RasterRuntime {
   ): Promise<LoadedRaster<Module>> {
     const module = request.module;
     const descriptor = module.descriptor(request.options);
+    const descriptorKey = rasterDescriptorKey(module, request.options, descriptor);
     const rasterKey = await deriveRasterKey({
       descriptor,
       extension: module.extension,
@@ -119,6 +143,7 @@ export class RasterRuntime {
       .then(
         (loaded) => {
           cached.settled = true;
+          cached.value = loaded;
           return loaded;
         },
         (error: unknown) => {
@@ -127,7 +152,7 @@ export class RasterRuntime {
           throw error;
         },
       );
-    cached = { promise, controller, consumers: 0, settled: false };
+    cached = { promise, controller, descriptorKey, value: undefined, consumers: 0, settled: false };
     rasters.set(rasterKey, cached);
     return consumeCachedRaster<Module>(cached, options.signal);
   }
@@ -252,6 +277,14 @@ export class RasterRuntime {
   #assertActive(): void {
     if (this.#disposed) throw new Error('raster runtime is disposed');
   }
+}
+
+function rasterDescriptorKey(
+  module: AnyRasterModule,
+  options: unknown,
+  descriptor = module.descriptor(options),
+): string {
+  return canonicalJson({ descriptor, extension: module.extension, kind: module.kind, version: module.version });
 }
 
 function isCurrentRaster(font: RegisteredFont, rasterKey: RasterKey, raster: LoadedAnyRaster['artifact']): boolean {

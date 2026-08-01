@@ -254,6 +254,20 @@ describe('persistent render host', () => {
     await host.dispose();
   });
 
+  it('does not reconfigure the renderer for an identical viewport', async () => {
+    const harness = renderHostHarness();
+    const scene = sceneHarness('scene');
+    const host = await harness.create();
+    await host.replaceScene(scene.scene);
+
+    host.resize(160, 90, 1);
+
+    expect(harness.setPixelRatio).not.toHaveBeenCalled();
+    expect(harness.setSize).not.toHaveBeenCalled();
+    expect(scene.viewports).toHaveLength(1);
+    await host.dispose();
+  });
+
   it('cleans up a scene whose activation fails before admitting the next generation', async () => {
     const harness = renderHostHarness();
     const failed = sceneHarness('failed', Promise.reject(new Error('activation failed')));

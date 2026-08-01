@@ -770,7 +770,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     lines.push(resizeLine);
     await resizeLine.ready;
     resizeLine.setProperties({ width: 476 });
-    await resizeLine.ready;
+    resizeLine.updateMatrixWorld();
     resizeLine.position.set(18, -24, 0);
     scene.add(resizeLine);
 

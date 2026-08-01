@@ -1,4 +1,4 @@
-import type { ThreeElements } from '@react-three/fiber/webgpu';
+import { useThree, type ThreeElements } from '@react-three/fiber/webgpu';
 import {
   createElement,
   isValidElement,
@@ -86,6 +86,7 @@ const lifecycles = new WeakMap<CoreText, number>();
 export function Text(properties: ReactTextProps): ReactElement {
   const { core, object, ref } = splitProperties(properties);
   for (const dependency of textDependencies(core)) use(dependency);
+  const invalidate = useThree((state) => state.invalidate);
 
   // Keep the Strict Mode double-invoked initializer resource-free. The committed layout effect
   // supplies the already-suspended properties to the retained object.
@@ -94,8 +95,11 @@ export function Text(properties: ReactTextProps): ReactElement {
   useLayoutEffect(() => {
     const update = textPatch(committedProperties.get(text) ?? {}, core);
     committedProperties.set(text, core);
-    if (update !== undefined) text.setProperties(update);
-  }, [core, text]);
+    if (update !== undefined) {
+      text.setProperties(update);
+      invalidate();
+    }
+  }, [core, invalidate, text]);
 
   useLayoutEffect(() => {
     const lifecycle = (lifecycles.get(text) ?? 0) + 1;

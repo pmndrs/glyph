@@ -282,8 +282,8 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   };
   const resource = await msdf.decode(font, runtimeRaster);
   await msdf.prepare({ glyphIds: Uint16Array.of(43), glyphFontSlots: Uint16Array.of(0) }, resource, 0);
-  await assert.rejects(
-    msdf.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
+  assert.throws(
+    () => msdf.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
     RasterCoverageError,
   );
   msdf.dispose(resource);

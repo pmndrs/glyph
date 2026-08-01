@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import * as THREE from 'three/webgpu';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createCanvasGridPositions } from './canvas-surface';
+import { createCanvasGridPositions, createCanvasSurface } from './canvas-surface';
 
 describe('canvas surface grid', () => {
   it('builds fixed one-CSS-pixel grid quads at the sixteen-pixel design rhythm', () => {
@@ -14,5 +15,25 @@ describe('canvas surface grid', () => {
   it('rejects invalid viewport dimensions before allocating geometry', () => {
     expect(() => createCanvasGridPositions(0, 32)).toThrow(RangeError);
     expect(() => createCanvasGridPositions(32, Number.NaN)).toThrow(RangeError);
+  });
+
+  it('does not submit an empty grid mesh while a one-pixel surface is waiting for layout', () => {
+    const renderer = {
+      autoClear: true,
+      clear: vi.fn<(...args: unknown[]) => void>(),
+      clearDepth: vi.fn<(...args: unknown[]) => void>(),
+      render: vi.fn<(...args: unknown[]) => void>(),
+      setClearColor: vi.fn<(...args: unknown[]) => void>(),
+      setRenderTarget: vi.fn<(...args: unknown[]) => void>(),
+    } as unknown as THREE.WebGPURenderer;
+    const surface = createCanvasSurface(renderer, 1, 1, true);
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera();
+
+    surface.render(scene, camera);
+
+    expect(renderer.render).toHaveBeenCalledOnce();
+    expect(renderer.render).toHaveBeenCalledWith(scene, camera);
+    surface.dispose();
   });
 });

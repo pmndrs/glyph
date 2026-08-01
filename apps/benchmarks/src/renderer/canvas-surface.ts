@@ -22,6 +22,7 @@ export function createCanvasSurface(
 ): CanvasSurface {
   let surfaceWidth = width;
   let surfaceHeight = height;
+  let gridRequested = gridVisible;
   const backgroundScene = new THREE.Scene();
   const backgroundCamera = createBackgroundCamera(width, height);
   const grid = new THREE.Mesh(
@@ -34,7 +35,7 @@ export function createCanvasSurface(
     }),
   );
   grid.frustumCulled = false;
-  grid.visible = gridVisible;
+  grid.visible = gridRequested && gridHasVertices(grid.geometry);
   backgroundScene.add(grid);
   renderer.autoClear = false;
   renderer.setClearColor(CANVAS_BACKGROUND_COLOR, 1);
@@ -49,12 +50,14 @@ export function createCanvasSurface(
       const previous = grid.geometry;
       grid.geometry = createCanvasGridGeometry(nextWidth, nextHeight);
       previous.dispose();
+      grid.visible = gridRequested && gridHasVertices(grid.geometry);
       backgroundCamera.right = nextWidth;
       backgroundCamera.bottom = -nextHeight;
       backgroundCamera.updateProjectionMatrix();
     },
     setGridVisible(visible) {
-      grid.visible = visible;
+      gridRequested = visible;
+      grid.visible = gridRequested && gridHasVertices(grid.geometry);
     },
     render(scene, camera) {
       renderer.setRenderTarget(null);
@@ -90,6 +93,10 @@ function createCanvasGridGeometry(width: number, height: number): THREE.BufferGe
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(createCanvasGridPositions(width, height), 3));
   return geometry;
+}
+
+function gridHasVertices(geometry: THREE.BufferGeometry): boolean {
+  return (geometry.getAttribute('position')?.count ?? 0) > 0;
 }
 
 function createBackgroundCamera(width: number, height: number): THREE.OrthographicCamera {

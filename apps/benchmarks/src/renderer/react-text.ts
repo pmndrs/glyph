@@ -92,7 +92,6 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
     font = await useFont.preload(fontToken);
     const reference = createRef<CoreText>();
     const initial = await renderCommittedText(root, fontToken, reference);
-    await initial.core.ready;
     return { canvas, font, fontToken, reference, renderer, root, store: initial.store };
   } catch (error) {
     flushSync(() => root.unmount());
@@ -109,7 +108,6 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
   assertOracleLayout(initialLayout, 'natural');
 
   const narrow = await renderCommittedText(resources.root, resources.fontToken, resources.reference, 360, '#31d7c5');
-  await narrow.core.ready;
   const narrowLayout = requiredLayout(core);
   assertOracleLayout(narrowLayout, 'narrow');
   if (narrow.core !== core || narrowLayout === initialLayout) {
@@ -117,7 +115,6 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
   }
 
   const restored = await renderCommittedText(resources.root, resources.fontToken, resources.reference);
-  await restored.core.ready;
   const restoredLayout = requiredLayout(core);
   assertOracleLayout(restoredLayout, 'natural');
   if (restored.core !== core) throw new Error('React Text replaced its core object during restore');
@@ -170,6 +167,8 @@ async function renderCommittedText(
   });
   const core = await committed.promise;
   if (store === undefined) throw new Error('R3F did not publish its root store');
+  const state = store.getState();
+  state.gl.render(state.scene, state.camera);
   return { core, store };
 }
 

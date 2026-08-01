@@ -197,6 +197,9 @@ describe('advanced-shaping timeline', () => {
         missingGlyphCount: 0,
         renderedGlyphCount: 625,
         drawCount: 72,
+        coldReadyObservationCount: 5,
+        warmLifecyclePublicationCount: 63,
+        warmReadyWaitCount: 0,
       },
     };
     expect(scenario.validate([measurement])).toContain('68 frames/sample');

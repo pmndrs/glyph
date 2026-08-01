@@ -139,7 +139,7 @@ const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = 
     signal?.throwIfAborted();
     return resource;
   },
-  async prepare(_layout, _resource, _fontSlot, signal) {
+  prepare(_layout, _resource, _fontSlot, signal) {
     signal?.throwIfAborted();
   },
   stageBatch(previous, layout, resource, fontSlot, paint) {

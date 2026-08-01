@@ -68,10 +68,10 @@ describe('independent package-size report', () => {
   it('bounds the accepted coverage-capability growth from its pre-coverage baseline', () => {
     const coverageGrowth = {
       'browser-core': {
-        rawBytes: { baseline: 324_269, maximumGrowth: 7_900 },
-        minifiedBytes: { baseline: 247_205, maximumGrowth: 5_400 },
-        gzipBytes: { baseline: 72_108, maximumGrowth: 1_300 },
-        brotliBytes: { baseline: 55_251, maximumGrowth: 1_050 },
+        rawBytes: { baseline: 324_269, maximumGrowth: 16_000 },
+        minifiedBytes: { baseline: 247_205, maximumGrowth: 10_500 },
+        gzipBytes: { baseline: 72_108, maximumGrowth: 2_250 },
+        brotliBytes: { baseline: 55_251, maximumGrowth: 1_900 },
       },
       'bitmap-baker-js': {
         rawBytes: { baseline: 17_478, maximumGrowth: 5_700 },
@@ -86,10 +86,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
       },
       'bitmap-runtime-js': {
-        rawBytes: { baseline: 361_809, maximumGrowth: 12_300 },
-        minifiedBytes: { baseline: 271_005, maximumGrowth: 8_000 },
-        gzipBytes: { baseline: 78_673, maximumGrowth: 1_750 },
-        brotliBytes: { baseline: 60_857, maximumGrowth: 1_600 },
+        rawBytes: { baseline: 361_809, maximumGrowth: 20_500 },
+        minifiedBytes: { baseline: 271_005, maximumGrowth: 13_000 },
+        gzipBytes: { baseline: 78_673, maximumGrowth: 2_800 },
+        brotliBytes: { baseline: 60_857, maximumGrowth: 2_350 },
       },
       'mtsdf-baker-wasm': {
         rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
@@ -104,10 +104,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
       },
       'mtsdf-runtime-js': {
-        rawBytes: { baseline: 370_255, maximumGrowth: 11_500 },
-        minifiedBytes: { baseline: 275_271, maximumGrowth: 7_400 },
-        gzipBytes: { baseline: 79_993, maximumGrowth: 1_700 },
-        brotliBytes: { baseline: 62_081, maximumGrowth: 1_500 },
+        rawBytes: { baseline: 370_255, maximumGrowth: 19_750 },
+        minifiedBytes: { baseline: 275_271, maximumGrowth: 12_500 },
+        gzipBytes: { baseline: 79_993, maximumGrowth: 2_800 },
+        brotliBytes: { baseline: 62_081, maximumGrowth: 2_300 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;

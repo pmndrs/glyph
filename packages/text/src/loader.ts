@@ -88,6 +88,7 @@ interface FontAssetContext {
 interface SharedFontLoad {
   readonly controller: AbortController;
   promise: Promise<RegisteredFont>;
+  value: RegisteredFont | undefined;
   consumers: number;
   settled: boolean;
 }
@@ -405,6 +406,18 @@ export class FontLoader {
     return active;
   }
 
+  /** @internal Return a currently registered load without crossing a Promise boundary. */
+  _peek(input: FontInput): RegisteredFont | undefined {
+    const request = resolveFontRequest(input, this.#baseUrl);
+    const key = requestKey(request);
+    const shared = this.#loads.get(key);
+    const font = shared?.value;
+    if (font === undefined) return undefined;
+    if (this.registry.get(font.key) === font) return font;
+    if (this.#loads.get(key) === shared) this.#loads.delete(key);
+    return undefined;
+  }
+
   #sharedLoad(request: ResolvedFontRequest, key: string): SharedFontLoad {
     let shared = this.#loads.get(key);
     if (shared?.controller.signal.aborted === true) {
@@ -417,6 +430,7 @@ export class FontLoader {
       const promise = this.#load(request, controller.signal).then(
         (font) => {
           created.settled = true;
+          created.value = font;
           return font;
         },
         (error: unknown) => {
@@ -427,6 +441,7 @@ export class FontLoader {
       );
       created = {
         controller,
+        value: undefined,
         consumers: 0,
         settled: false,
         promise,

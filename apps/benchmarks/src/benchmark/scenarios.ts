@@ -408,7 +408,10 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
       metrics.missingGlyphCount !== 0 ||
       metrics.glyphCount !== 709 ||
       metrics.renderedGlyphCount !== 625 ||
-      metrics.drawCount !== 72
+      metrics.drawCount !== 72 ||
+      metrics.coldReadyObservationCount !== ADVANCED_SHAPING_CASES.length ||
+      metrics.warmLifecyclePublicationCount !== frameCount - ADVANCED_SHAPING_CASES.length ||
+      metrics.warmReadyWaitCount !== 0
     ) {
       throw new Error('Advanced shaping did not preserve its complete authored frame matrix');
     }

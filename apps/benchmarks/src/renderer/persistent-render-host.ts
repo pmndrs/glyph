@@ -321,9 +321,14 @@ export async function createPersistentRenderHost(options: PersistentRenderHostOp
       },
       resize(nextWidth, nextHeight, nextDpr = pixelRatio) {
         if (disposed) throw disposedError();
-        logicalWidth = positive(nextWidth, 'persistent render-host width');
-        logicalHeight = positive(nextHeight, 'persistent render-host height');
+        const validatedWidth = positive(nextWidth, 'persistent render-host width');
+        const validatedHeight = positive(nextHeight, 'persistent render-host height');
         const validatedDpr = positive(nextDpr, 'persistent render-host DPR');
+        if (validatedWidth === logicalWidth && validatedHeight === logicalHeight && validatedDpr === pixelRatio) {
+          return;
+        }
+        logicalWidth = validatedWidth;
+        logicalHeight = validatedHeight;
         if (validatedDpr !== pixelRatio) {
           pixelRatio = validatedDpr;
           renderer.setPixelRatio(pixelRatio);

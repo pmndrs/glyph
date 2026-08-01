@@ -177,7 +177,7 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, Ms
     signal?.throwIfAborted();
     return resource;
   },
-  async prepare(layout, resource, fontSlot, signal) {
+  prepare(layout, resource, fontSlot, signal) {
     signal?.throwIfAborted();
     assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
   },

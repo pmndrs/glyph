@@ -160,8 +160,8 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   const module = bitmap(options).module;
   const resource = await module.decode(font, runtimeRaster);
   await module.prepare({ glyphIds: Uint16Array.of(43), glyphFontSlots: Uint16Array.of(0) }, resource, 0);
-  await assert.rejects(
-    module.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
+  assert.throws(
+    () => module.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
     RasterCoverageError,
   );
   module.dispose(resource);
