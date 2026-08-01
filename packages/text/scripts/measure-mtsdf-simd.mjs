@@ -10,6 +10,7 @@ import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs';
 import { MtsdfGenerationError, createMtsdfGeneratorFromInstance } from '../dist/internal/mtsdf-generator.js';
 import { mtsdfOracleCases } from '../tests/fixtures/mtsdf-oracle-cases.mjs';
+import { assertHostVariantSizeEvidenceFresh } from './support/host-variant-size-evidence.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -35,6 +36,13 @@ const variantDefinitions = [
     features: ['adjacent-texel-simd-experiment'],
   },
 ];
+const variantSizeBudgets = {
+  scalar: { optimizedBytes: 54_000, gzipBytes: 24_000, brotliBytes: 21_000 },
+  'auto-vectorized': { optimizedBytes: 54_000, gzipBytes: 24_000, brotliBytes: 21_000 },
+  'explicit-simd128': { optimizedBytes: 54_000, gzipBytes: 24_000, brotliBytes: 21_000 },
+  'adjacent-scalar-tile': { optimizedBytes: 65_000, gzipBytes: 27_000, brotliBytes: 23_000 },
+  'adjacent-simd128': { optimizedBytes: 65_000, gzipBytes: 27_000, brotliBytes: 23_000 },
+};
 
 try {
   const variants = [];
@@ -127,18 +135,24 @@ async function checkEvidence(report) {
     throw new Error('MTSDF SIMD evidence does not select the admitted scalar kernel');
   }
   checkDecisionObservations(evidence);
+  const currentHost = `${report.environment.platform}-${report.environment.architecture}`;
   for (const variant of report.variants) {
     const recorded = evidence.variants?.[variant.id];
-    if (
-      !sameStrings(recorded?.targetFeatures ?? [], variant.targetFeatures) ||
-      recorded?.optimizedBytes !== variant.wasm.optimizedBytes ||
-      recorded?.gzipBytes !== variant.wasm.gzipBytes ||
-      recorded?.brotliBytes !== variant.wasm.brotliBytes ||
-      recorded?.optimizedSha256 !== variant.wasm.optimizedSha256
-    ) {
+    try {
+      assertHostVariantSizeEvidenceFresh(
+        evidence.toolchain?.platform,
+        currentHost,
+        recorded,
+        { targetFeatures: variant.targetFeatures, ...variant.wasm },
+        variantSizeBudgets[variant.id],
+      );
+    } catch (error) {
       throw new Error(
         `${variant.id} MTSDF SIMD size evidence is stale\n${JSON.stringify({
+          recordedHost: evidence.toolchain?.platform,
+          currentHost,
           recorded: {
+            targetFeatures: recorded?.targetFeatures,
             optimizedBytes: recorded?.optimizedBytes,
             gzipBytes: recorded?.gzipBytes,
             brotliBytes: recorded?.brotliBytes,
@@ -150,7 +164,10 @@ async function checkEvidence(report) {
             brotliBytes: variant.wasm.brotliBytes,
             optimizedSha256: variant.wasm.optimizedSha256,
           },
+          budget: variantSizeBudgets[variant.id],
+          cause: error instanceof Error ? error.message : String(error),
         })}`,
+        { cause: error },
       );
     }
     if (!variant.exactOracleHashes) {
@@ -443,10 +460,6 @@ function sameNumbers(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function sameStrings(left, right) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
 function fnv1a(bytes) {
   let hash = 2_166_136_261;
   for (const byte of bytes) hash = Math.imul(hash ^ byte, 16_777_619) >>> 0;
@@ -501,6 +514,9 @@ async function prepareObservations(variants) {
   for (const variant of variants) {
     const compileStart = performance.now();
     const module = await WebAssembly.compile(variant.optimized);
+    if (WebAssembly.Module.imports(module).length !== 0) {
+      throw new Error(`${variant.id} introduced a host import`);
+    }
     const compileMilliseconds = performance.now() - compileStart;
     const initializationStart = performance.now();
     const instance = await WebAssembly.instantiate(module, {});
