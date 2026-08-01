@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:989892d65803fe5e21d066e0d11b1eadc475b2817e7f8e6a861790c43d6c578c'
+source_digest: 'sha256:b8e9a74c222fdf8ecd3caee73f4ce0b3b5ee78a155677222a731847d6c9e7340'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -142,7 +142,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T14:06:37Z'
+  at: '2026-08-01T14:10:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -197,7 +197,7 @@ Item 8.3 promotes `@pmndrs/text/raster/msdf` from an identity-only contract to t
 
 The runtime repeats no parallel wire-format implementation. Bitmap and MTSDF renderers plus both standalone validators consume the same dependency-light KTX2 and dense-record rules; only the standalone layer imports Khronos/Ajv. The renderers also share the lossless-atlas adapter, unit quad, parallel-array checks, and resolved-paint lookup. The MTSDF resource uploads only its authenticated base levels into one padded texture array, samples them bilinearly, sizes reconstruction with screen derivatives, and owns one material per logical array; disposal releases materials and textures transactionally.
 
-One instanced batch family handles fill, outline, opacity, and translated hard shadow. The version-matched TSL graph reconstructs the fill edge from the RGB median and consumes alpha's true signed distance for effects. Shadow offsets expand each instance's geometric bounds and shift the same authenticated atlas sample, while clamped sampling and an explicit in-glyph mask prevent neighboring atlas cells from bleeding into the result. V0 outlines are bounded to half of the resource's authenticated full `pixelRange`; the exported `MTSDF_MAX_OUTLINE_ATLAS_PIXELS` is specifically the four-pixel limit for the default 64/8 configuration, while non-default resources derive their limit from their own authenticated range. A larger request fails instead of silently clipping. Paint updates reuse geometry and rewrite only owned instance attributes. The canonical Inter integration test decodes all ten real legacy-default pages, creates and repaints a live batch, verifies normalized effect attributes, and proves idempotent batch/resource cleanup without loading baker Wasm into the runtime graph. A real 32/4 artifact additionally proves its two-atlas-pixel boundary normalizes to half of that resource's field range.
+One instanced batch family handles fill, outline, opacity, and translated hard shadow. The version-matched TSL graph reconstructs the fill edge from the RGB median and consumes alpha's true signed distance for effects. Shadow offsets expand each instance's geometric bounds and shift the same authenticated atlas sample, while clamped sampling and an explicit in-glyph mask prevent neighboring atlas cells from bleeding into the result. V0 outlines are bounded to half of the resource's authenticated full `pixelRange`; the exported `MTSDF_MAX_OUTLINE_ATLAS_PIXELS` is specifically the four-pixel limit for the default 64/8 configuration, while non-default resources derive their limit from their own authenticated range. A larger request fails instead of silently clipping. Paint updates reuse geometry and rewrite only owned instance attributes. The canonical Inter integration test decodes all ten real legacy-default pages, creates and repaints a live batch, verifies normalized effect attributes, and proves idempotent batch/resource cleanup without loading baker Wasm into the runtime graph. A real 32/4 artifact accepts its exact two-atlas-pixel boundary, normalizes it to half of that resource's field range, and rejects `2.0001`, distinguishing the configured limit from the exported default.
 
 The checked SIMD comparison builds scalar, compiler-auto-vectorized, and explicit-four-lane kernels from isolated target directories. Every variant preserves all seven corrected native-oracle hashes and the complete Inter result of 2,915 generated glyphs, 22 non-rendering rejected slots, checksum `a5a6aa6e`, and composite SHA-256 `f6381c2f…eef6`; an instrumented warm seven-call corpus records seven request allocations, zero reallocations, and seven deallocations, one owned output copy occurs per call, and Wasm memory does not grow after the cold corpus. On Node 24, scalar measured 46.462 milliseconds for seven warm calls versus 47.079 milliseconds for explicit SIMD. Chromium 149 measured 47.6 versus 48.1 milliseconds. Explicit SIMD improves the complete Inter warm pass from 48.13 to 45.38 seconds, a 5.7% stress/offline win, and saves 297 Brotli bytes. Because the supported runtime default is bounded interactive baking and the target feature would require an alternate artifact, scalar remains the only shipped baker kernel; item 8.6 retains the explicit variant as evidence for phase-led optimization rather than exposing a toggle now. The repository-local Vitexec capture and full-font request emitter preserve the experiment as repeatable evidence rather than product complexity.
 

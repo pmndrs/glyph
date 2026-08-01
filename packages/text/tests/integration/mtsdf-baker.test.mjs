@@ -205,6 +205,14 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
           const mesh = batch.object.children[0];
           assert.ok(mesh);
           assert.equal(mesh.geometry.getAttribute('msdfOutlineWidth').getX(0), 0.5);
+          assert.throws(
+            () =>
+              batch.updatePaint({
+                paintIndices: Uint16Array.of(0),
+                palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 2.0001 } }],
+              }),
+            /2-atlas-pixel field limit/,
+          );
         } finally {
           batch.dispose();
         }
