@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 
 import { reproducibleRustEnvironment } from '../../font-baker/scripts/reproducible-rust-env.mjs';
+import { assertHostSizeEvidenceFresh } from './support/host-size-evidence.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const workspaceRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -21,6 +22,7 @@ const optimizedWasm = fileURLToPath(
   new URL('../rust/mtsdf-admission/target/mtsdf-admission-opt.wasm', import.meta.url),
 );
 const evidenceUrl = new URL('../rust/mtsdf-admission/evidence/size-v0.json', import.meta.url);
+const sizeBudgets = { rawBytes: 68_000, optimizedBytes: 61_000, gzipBytes: 27_000, brotliBytes: 23_000 };
 
 await run('cargo', [
   'build',
@@ -84,6 +86,10 @@ const evidence = {
   },
   syntheticOutputFnv1a32: outputChecksum.toString(16).padStart(8, '0'),
   wasmImportCount: imports.length,
+  measurementHost: {
+    platform: process.platform,
+    architecture: process.arch,
+  },
   rawBytes: rawBytes.byteLength,
   optimizedBytes: optimizedBytes.byteLength,
   gzipBytes: gzipSync(optimizedBytes, { level: 9, mtime: 0 }).byteLength,
@@ -94,9 +100,8 @@ const evidence = {
 };
 const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
 if (process.argv.includes('--check')) {
-  if ((await readFile(evidenceUrl, 'utf8')) !== serialized) {
-    throw new Error('MTSDF admission size evidence is stale; run pnpm measure:mtsdf-admission');
-  }
+  const recorded = JSON.parse(await readFile(evidenceUrl, 'utf8'));
+  assertHostSizeEvidenceFresh(recorded, evidence, sizeBudgets);
 } else {
   await writeFile(evidenceUrl, serialized);
 }

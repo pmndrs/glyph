@@ -7,6 +7,7 @@
 
 ## 2026-07-31
 
+- **Host-scoped MTSDF admission evidence** — Labeled the compiled admission-module measurement by platform and architecture. The recorded host retains exact evidence freshness; foreign hosts must rebuild, reproduce the portable contract and synthetic output, retain zero imports, emit a complete SHA-256 identity, and remain under reviewed raw/optimized/gzip/Brotli ceilings. Focused contract tests reject stale portable fields, incomplete hashes, and budget overflow.
 - **Coverage-era size gates** — Reconciled the package-size record and its fail-closed autoresearch provenance with bounded raster coverage. Narrow current-capability ceilings pair with an independent regression that preserves the pre-coverage browser core, Bitmap host, MTSDF host, and MTSDF Wasm baselines and caps each accepted raw, minified, gzip, and Brotli delta.
 - **Portable raster fixture identity** — Removed the Bitmap fixture's host-specific optimized-Wasm byte count from its portable artifact identity. The integration gate still executes the rebuilt baker and requires every canonical artifact, record, page, and report byte to match; compiled-module hash and size remain host-labeled package-size evidence under reviewed foreign-host ceilings.
 - **Package artifact identity** — Extended the existing single-build package-size lane with SHA-256 identities for each measured minified JavaScript payload and emitted Wasm module. Refreshed the stale Darwin arm64 size evidence from a clean reproducible build without adding a second artifact build to CI.

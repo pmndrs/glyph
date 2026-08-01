@@ -14,9 +14,13 @@
   },
   "syntheticOutputFnv1a32": "bfc76761",
   "wasmImportCount": 0,
+  "measurementHost": {
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
   "rawBytes": 67526,
   "optimizedBytes": 60563,
   "gzipBytes": 26493,
-  "brotliBytes": 22518,
-  "optimizedSha256": "6ccd07817f13e6efad72b6e12c952232bea180eb529985e8ed6a314b24455b2b"
+  "brotliBytes": 22535,
+  "optimizedSha256": "7ae6230eb72a30d1ec172d037b2f7615390b5aded7a423d468564fcc74e7834c"
 }

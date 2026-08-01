@@ -125,7 +125,22 @@ async function checkEvidence(report) {
       recorded?.brotliBytes !== variant.wasm.brotliBytes ||
       recorded?.optimizedSha256 !== variant.wasm.optimizedSha256
     ) {
-      throw new Error(`${variant.id} MTSDF SIMD size evidence is stale`);
+      throw new Error(
+        `${variant.id} MTSDF SIMD size evidence is stale\n${JSON.stringify({
+          recorded: {
+            optimizedBytes: recorded?.optimizedBytes,
+            gzipBytes: recorded?.gzipBytes,
+            brotliBytes: recorded?.brotliBytes,
+            optimizedSha256: recorded?.optimizedSha256,
+          },
+          current: {
+            optimizedBytes: variant.wasm.optimizedBytes,
+            gzipBytes: variant.wasm.gzipBytes,
+            brotliBytes: variant.wasm.brotliBytes,
+            optimizedSha256: variant.wasm.optimizedSha256,
+          },
+        })}`,
+      );
     }
     if (!variant.exactOracleHashes) {
       throw new Error(`${variant.id} no longer matches the native-oracle candidate hashes`);
@@ -397,16 +412,15 @@ function fnv1a(bytes) {
 
 async function buildVariant(definition) {
   const targetDirectory = join(temporaryRoot, definition.id);
+  const rustFlags = [
+    rustEnvironment.CARGO_ENCODED_RUSTFLAGS,
+    `--remap-path-prefix=${temporaryRoot}=/mtsdf-simd-experiment`,
+  ];
+  if (definition.simd) rustFlags.push('-C', 'target-feature=+simd128');
   const environment = {
     ...rustEnvironment,
     CARGO_TARGET_DIR: targetDirectory,
-    ...(definition.simd
-      ? {
-          CARGO_ENCODED_RUSTFLAGS: [rustEnvironment.CARGO_ENCODED_RUSTFLAGS, '-C', 'target-feature=+simd128'].join(
-            encodedFlagSeparator,
-          ),
-        }
-      : {}),
+    CARGO_ENCODED_RUSTFLAGS: rustFlags.join(encodedFlagSeparator),
   };
   const cargoArguments = [
     'build',
