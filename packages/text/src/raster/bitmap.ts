@@ -52,6 +52,8 @@ import {
   type BitmapOptions,
 } from '../internal/bitmap-contract.js';
 import { nearestBitmapStrikeIndex } from '../internal/bitmap-strike.js';
+import { assertRasterCoverage, decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
+import type { RasterCoverage } from '../raster-coverage.js';
 
 export {
   BITMAP_EXTENSION,
@@ -69,6 +71,7 @@ export {
 
 interface BitmapRuntimeOptions {
   readonly strikes: readonly [number, ...number[]];
+  readonly coverage?: RasterCoverage;
 }
 
 export interface BitmapPageResource {
@@ -94,6 +97,7 @@ export function selectBitmapStrikePpem(
 
 export interface BitmapResource {
   readonly strikes: readonly BitmapStrikeResource[];
+  readonly coverage?: Uint8Array;
 }
 
 interface BitmapBatchRun {
@@ -173,8 +177,9 @@ const bitmapModule: RasterModule<typeof BITMAP_KIND, BitmapResource, BitmapDrawB
       signal?.throwIfAborted();
       return resource;
     },
-    async prepare(_layout, _resource, _fontSlot, signal) {
+    async prepare(layout, resource, fontSlot, signal) {
       signal?.throwIfAborted();
+      assertRasterCoverage(layout, fontSlot, resource.coverage, BITMAP_KIND);
     },
     buildBatches(layout, resource, fontSlot, paint, rasterPixelRatio) {
       return buildBitmapBatches(layout, resource, fontSlot, paint, rasterPixelRatio);
@@ -428,6 +433,7 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
   ) {
     throw new TypeError('bitmap extension identity does not match its registered font and raster');
   }
+  const coverage = decodeRasterCoverage(extension, font.glyphCount, (view) => raster.view(view), 'bitmap');
   const strikes: BitmapStrikeResource[] = [];
   try {
     const strikeValues = jsonArray(extension.strikes, 'bitmap strikes');
@@ -461,7 +467,7 @@ function decodeBitmapResource(font: RegisteredFont, raster: RegisteredRaster): B
         throw error;
       }
     }
-    return { strikes };
+    return { strikes, ...(coverage === undefined ? {} : { coverage: coverage.bits }) };
   } catch (error) {
     disposeBitmapStrikes(strikes);
     throw error;
@@ -500,6 +506,7 @@ function buildBitmapBatches(
   rasterPixelRatio: number,
 ): BitmapDrawBatch {
   assertParallelRasterLayout(layout, paint);
+  assertRasterCoverage(layout, fontSlot, resource.coverage, BITMAP_KIND);
   const strike = selectBitmapStrike(resource.strikes, layout, fontSlot, rasterPixelRatio);
   const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
   const group = new THREE.Group();

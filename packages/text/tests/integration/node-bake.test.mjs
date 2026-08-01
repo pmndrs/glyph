@@ -9,6 +9,8 @@ import test from 'node:test';
 
 import { bakeFont, bakeProject, NodeBakeError } from '@pmndrs/text/bake';
 import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
+import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
+import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 
 import { runCli } from '../../dist/node/cli.js';
@@ -77,6 +79,41 @@ test('bakeFont writes exact combined embedded and external artifacts with comple
   );
   assert.equal(external.transport.filter(({ artifactId }) => artifactId.endsWith('.ktx2')).length, 1);
   assert.ok((await readdir(join(root, 'external'))).every((name) => !name.endsWith('.tmp')));
+});
+
+test('bakeFont preserves bounded raster options through the Node composition path', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-text-node-coverage-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'Inter-Regular.ttf');
+  const output = join(root, 'Inter-Regular.font.glb');
+  await writeFile(input, await readFile(fontUrl));
+  const options = { strikes: [16], coverage: { glyphIds: [43, 44] } };
+  await bakeFont({
+    input,
+    output,
+    font: { fontFaceIndex: 0 },
+    rasters: [
+      {
+        baker: bitmapBaker,
+        packaging: { artifact: 'embedded', pages: 'embedded' },
+        options,
+      },
+    ],
+  });
+  const bytes = new Uint8Array(await readFile(output));
+  const core = await validateFontArtifact(bytes);
+  const descriptor = bitmapDescriptor(options);
+  const validated = await validateBitmapArtifact(bytes, {
+    rasterKey: await bitmapRasterKey(options),
+    shapingHash: core.shapingHash,
+    glyphCount: core.glyphCount,
+    glyphIdWidth: 16,
+    descriptor,
+  });
+  assert.equal(
+    validated.coverage.reduce((count, byte) => count + byte.toString(2).replaceAll('0', '').length, 0),
+    2,
+  );
 });
 
 test('rolls back every earlier artifact when a later publication fails', async (t) => {

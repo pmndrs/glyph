@@ -5,6 +5,9 @@ import {
   type NativeKtx2Format,
 } from './raster-ktx.js';
 import { DenseGlyphRecordError, validateDenseGlyphRecordTable, type RasterPageDimensions } from './raster-records.js';
+import { canonicalJson } from './raster-identity.js';
+import { normalizeRasterCoverage, type RasterCoverageV0 } from '../raster-coverage.js';
+import type { JsonValue } from '../raster.js';
 
 export interface RasterArtifactValidationIssue {
   readonly code: string;
@@ -91,6 +94,85 @@ export function validateDenseRasterRecords(
       );
     }
     throw error;
+  }
+}
+
+export function validateRasterCoverage(
+  parsed: ParsedGlb,
+  extension: Readonly<Record<string, unknown>>,
+  expectedCoverage: RasterCoverageV0 | undefined,
+  views: readonly RasterBufferView[],
+  claimedViews: Set<number>,
+  glyphCount: number,
+  path: string,
+  label: string,
+): Uint8Array | undefined {
+  const hasDescriptor = extension.coverage !== undefined;
+  const hasView = extension.coverageBufferView !== undefined;
+  if (hasDescriptor !== hasView || hasDescriptor !== (expectedCoverage !== undefined)) {
+    fail(
+      'RASTER_COVERAGE_CONTRACT',
+      `${label} coverage descriptor and coverageBufferView must both be present exactly for a bounded raster`,
+      path,
+    );
+  }
+  if (expectedCoverage === undefined) return undefined;
+
+  let actualCoverage: RasterCoverageV0;
+  try {
+    actualCoverage = normalizeRasterCoverage(extension.coverage)!;
+  } catch {
+    fail('RASTER_COVERAGE_DESCRIPTOR', `${label} coverage is not canonical`, `${path}/coverage`);
+  }
+  if (
+    canonicalJson(extension.coverage as JsonValue) !== canonicalJson(actualCoverage) ||
+    canonicalJson(actualCoverage) !== canonicalJson(expectedCoverage)
+  ) {
+    fail(
+      'RASTER_COVERAGE_DESCRIPTOR',
+      `${label} coverage does not match the authenticated raster descriptor`,
+      `${path}/coverage`,
+    );
+  }
+  const viewIndex = asInteger(extension.coverageBufferView, `${path}/coverageBufferView`, 0, views.length - 1);
+  claimRasterView(claimedViews, views, viewIndex, `${path}/coverageBufferView`, label);
+  const expectedBytes = Math.ceil(glyphCount / 8);
+  if (views[viewIndex]?.byteLength !== expectedBytes) {
+    fail(
+      'RASTER_COVERAGE_LENGTH',
+      `${label} coverage bitset must contain exactly ceil(glyphCount / 8) bytes`,
+      `${path}/coverageBufferView`,
+    );
+  }
+  const coverage = sliceRasterView(parsed, views[viewIndex]!);
+  const usedBits = glyphCount % 8;
+  if (usedBits !== 0 && (coverage.at(-1)! & ~((1 << usedBits) - 1)) !== 0) {
+    fail('RASTER_COVERAGE_PADDING', `${label} coverage padding bits must be zero`, `${path}/coverageBufferView`);
+  }
+  if (!coverage.some((byte) => byte !== 0)) {
+    fail('RASTER_COVERAGE_EMPTY', `${label} coverage must select at least one glyph`, `${path}/coverageBufferView`);
+  }
+  return coverage;
+}
+
+export function validateRasterCoverageRecords(
+  coverage: Uint8Array | undefined,
+  records: Uint8Array,
+  glyphCount: number,
+  path: string,
+  label: string,
+): void {
+  if (coverage === undefined) return;
+  const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
+  for (let glyphId = 0; glyphId < glyphCount; glyphId += 1) {
+    if ((coverage[glyphId >> 3]! & (1 << (glyphId & 7))) !== 0) continue;
+    if (view.getUint16(glyphId * 20 + 16, true) !== 0xffff) {
+      fail(
+        'RASTER_COVERAGE_RECORD',
+        `${label} unselected glyph ${glyphId} must retain an absent dense record`,
+        `${path}/records/${glyphId}`,
+      );
+    }
   }
 }
 

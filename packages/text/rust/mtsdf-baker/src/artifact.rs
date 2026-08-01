@@ -6,8 +6,10 @@ use pmndrs_text_mtsdf_core::{
     AtlasRegion, GenerateError, MtsdfGenerator, MtsdfTransform, ReadOutlineError,
 };
 use pmndrs_text_mtsdf_fontations::{font_outline_source, glyph_count};
-use pmndrs_text_raster_artifact::{ABSENT_PAGE, AtlasPage, GlyphRecordTable, RasterizedPage};
-use skrifa::{FontRef, GlyphId};
+use pmndrs_text_raster_artifact::{
+    ABSENT_PAGE, AtlasPage, GlyphRecordTable, RasterizedPage, resolve_raster_coverage,
+};
+use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 use crate::{
     error::{MtsdfBakeError, MtsdfBakeErrorCode, overflow},
@@ -26,6 +28,7 @@ const MAX_ATLAS_PAGES: usize = 60;
 pub(crate) struct RasterizedMtsdf {
     pub(crate) records: Vec<u8>,
     pub(crate) pages: Vec<RasterizedPage>,
+    pub(crate) coverage: Option<Vec<u8>>,
 }
 
 /// Bake one fixed, deterministic linear-RGBA8 MTSDF resource.
@@ -50,14 +53,20 @@ pub fn bake_mtsdf(
         request.font_face_index,
         request.glyph_count,
         settings,
+        request.descriptor.coverage.as_ref(),
     )?;
-    let metadata_bytes = rasterized.records.len();
+    let metadata_bytes = rasterized.records.len()
+        + rasterized
+            .coverage
+            .as_ref()
+            .map_or(0, |coverage| coverage.len());
     let built = build_mtsdf_glb(
         &request.raster_key,
         &request.shaping_hash,
         request.glyph_count,
         request.packaging.pages,
         settings,
+        request.descriptor.coverage.as_ref(),
         &rasterized,
     )?;
     let raster_id = format!("msdf-{}-{}.glb", request.shaping_hash, request.raster_key);
@@ -124,21 +133,28 @@ pub fn bake_mtsdf(
 }
 
 pub fn descriptor_raster_key(descriptor: &MtsdfDescriptorV0) -> String {
+    let coverage = descriptor.coverage.as_ref().map(|coverage| {
+        format!(
+            "\"coverage\":{},",
+            pmndrs_text_raster_artifact::canonical_raster_coverage_json(coverage)
+        )
+    });
+    let coverage = coverage.as_deref().unwrap_or("");
     let descriptor_json = match (descriptor.em_size, descriptor.pixel_range) {
         (None, None) => format!(
-            "{{\"generatorVersion\":\"{}\"}}",
+            "{{{coverage}\"generatorVersion\":\"{}\"}}",
             descriptor.generator_version,
         ),
         (Some(em_size), Some(pixel_range)) => format!(
-            "{{\"emSize\":{em_size},\"generatorVersion\":\"{}\",\"pixelRange\":{pixel_range}}}",
+            "{{{coverage}\"emSize\":{em_size},\"generatorVersion\":\"{}\",\"pixelRange\":{pixel_range}}}",
             descriptor.generator_version,
         ),
         (Some(em_size), None) => format!(
-            "{{\"emSize\":{em_size},\"generatorVersion\":\"{}\"}}",
+            "{{{coverage}\"emSize\":{em_size},\"generatorVersion\":\"{}\"}}",
             descriptor.generator_version,
         ),
         (None, Some(pixel_range)) => format!(
-            "{{\"generatorVersion\":\"{}\",\"pixelRange\":{pixel_range}}}",
+            "{{{coverage}\"generatorVersion\":\"{}\",\"pixelRange\":{pixel_range}}}",
             descriptor.generator_version,
         ),
     };
@@ -154,6 +170,7 @@ fn rasterize_font(
     face_index: u32,
     expected_glyph_count: u16,
     settings: MtsdfBakeSettingsV0,
+    requested_coverage: Option<&pmndrs_text_raster_artifact::RasterCoverageV0>,
 ) -> Result<RasterizedMtsdf, MtsdfBakeError> {
     let font = FontRef::from_index(source, face_index).map_err(|error| {
         MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
@@ -167,6 +184,7 @@ fn rasterize_font(
         )
         .at("/glyphCount"));
     }
+    let coverage = request_coverage(&font, actual_glyph_count, requested_coverage)?;
 
     let mut records = GlyphRecordTable::new(actual_glyph_count)?;
     let mut pages = Vec::new();
@@ -176,9 +194,21 @@ fn rasterize_font(
     pages.push(AtlasPage::new(ATLAS_LIMIT, 4)?);
     let mut generator = MtsdfGenerator::default();
 
-    crate::progress::report(0, u32::from(actual_glyph_count));
+    let progress_total = coverage
+        .as_ref()
+        .map_or(actual_glyph_count, |selection| selection.selected_glyphs());
+    crate::progress::report(0, u32::from(progress_total));
+    let mut selected_index = 0_u32;
     for raw_glyph_id in 0..actual_glyph_count {
-        crate::progress::report(u32::from(raw_glyph_id), u32::from(actual_glyph_count));
+        if coverage
+            .as_ref()
+            .is_some_and(|selection| !selection.contains(raw_glyph_id))
+        {
+            records.mark_absent(raw_glyph_id)?;
+            continue;
+        }
+        crate::progress::report(selected_index, u32::from(progress_total));
+        selected_index = selected_index.saturating_add(1);
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
         let Some(source) = font_outline_source(&font, glyph_id) else {
             records.mark_absent(raw_glyph_id)?;
@@ -223,7 +253,7 @@ fn rasterize_font(
             u16::try_from(page_index).map_err(|_| overflow())?,
         )?;
     }
-    crate::progress::report(u32::from(actual_glyph_count), u32::from(actual_glyph_count));
+    crate::progress::report(u32::from(progress_total), u32::from(progress_total));
 
     let mut finished_pages = Vec::new();
     finished_pages
@@ -235,6 +265,27 @@ fn rasterize_font(
     Ok(RasterizedMtsdf {
         records: records.into_bytes(),
         pages: finished_pages,
+        coverage: coverage.map(|selection| selection.bits().to_vec()),
+    })
+}
+
+fn request_coverage(
+    font: &FontRef<'_>,
+    glyph_count: u16,
+    coverage: Option<&pmndrs_text_raster_artifact::RasterCoverageV0>,
+) -> Result<Option<pmndrs_text_raster_artifact::ResolvedRasterCoverage>, MtsdfBakeError> {
+    let Some(coverage) = coverage else {
+        return Ok(None);
+    };
+    let charmap = font.charmap();
+    resolve_raster_coverage(coverage, glyph_count, |character| {
+        charmap
+            .map(character)
+            .and_then(|glyph_id| u16::try_from(glyph_id.to_u32()).ok())
+    })
+    .map(Some)
+    .map_err(|error| {
+        MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidDescriptor, error).at("/descriptor/coverage")
     })
 }
 
@@ -382,6 +433,7 @@ mod tests {
 
     fn descriptor(em_size: Option<u16>, pixel_range: Option<u16>) -> MtsdfDescriptorV0 {
         MtsdfDescriptorV0 {
+            coverage: None,
             generator_version: MSDF_GENERATOR_VERSION.into(),
             em_size,
             pixel_range,
@@ -414,6 +466,56 @@ mod tests {
             descriptor_raster_key(&descriptor(Some(32), Some(6))),
             "fa8f5c03367db3652abb41659835618f989ad00c0dc0c39fac8dcf3e21ee16a8"
         );
+    }
+
+    #[test]
+    fn bounded_descriptor_key_matches_the_typescript_contract() {
+        let mut descriptor = descriptor(None, None);
+        descriptor.coverage = Some(pmndrs_text_raster_artifact::RasterCoverageV0 {
+            unicode_ranges: Some(vec![pmndrs_text_raster_artifact::RasterUnicodeRangeV0 {
+                start: 65,
+                end: 90,
+            }]),
+            text: Some("AB".into()),
+            glyph_ids: Some(vec![3, 7]),
+        });
+        assert_eq!(
+            descriptor_raster_key(&descriptor),
+            "4118e8f8787ea4de99492c4869059cca10b0ae69494b780699a421d5fe22fe4d"
+        );
+    }
+
+    #[test]
+    fn bounded_mtsdf_rasterizes_only_selected_font_local_glyphs() {
+        let coverage = pmndrs_text_raster_artifact::RasterCoverageV0 {
+            unicode_ranges: None,
+            text: None,
+            glyph_ids: Some(vec![43, 44]),
+        };
+        let rasterized = rasterize_font(
+            INTER,
+            0,
+            2937,
+            MtsdfBakeSettingsV0::DEFAULT,
+            Some(&coverage),
+        )
+        .unwrap();
+        let coverage = rasterized.coverage.as_ref().unwrap();
+        assert_eq!(coverage.len(), 2937_usize.div_ceil(8));
+        assert_eq!(
+            coverage.iter().map(|byte| byte.count_ones()).sum::<u32>(),
+            2
+        );
+        for glyph_id in 0..2937 {
+            let offset = glyph_id * 20 + 16;
+            let page =
+                u16::from_le_bytes(rasterized.records[offset..offset + 2].try_into().unwrap());
+            if glyph_id == 43 || glyph_id == 44 {
+                assert_ne!(page, 0xffff);
+            } else {
+                assert_eq!(page, 0xffff);
+            }
+        }
     }
 
     #[test]
@@ -483,6 +585,7 @@ mod tests {
                 height: 1,
                 texels: vec![0; 4],
             }],
+            coverage: None,
         };
         let built = build_mtsdf_glb(
             &"1".repeat(64),
@@ -490,6 +593,7 @@ mod tests {
             1,
             PagePackaging::Embedded,
             settings(32, 5),
+            None,
             &rasterized,
         )
         .unwrap();
@@ -506,7 +610,7 @@ mod tests {
     #[ignore = "full Inter generation is the deterministic integration fixture"]
     fn inter_mtsdf_is_deterministic_and_packaging_preserves_records() {
         let settings = MtsdfBakeSettingsV0::DEFAULT;
-        let rasterized = rasterize_font(INTER, 0, 2937, settings).expect("rasterize Inter");
+        let rasterized = rasterize_font(INTER, 0, 2937, settings, None).expect("rasterize Inter");
         assert_eq!(rasterized.records.len(), 2937 * 20);
         let descriptor = descriptor(None, None);
         let raster_key = descriptor_raster_key(&descriptor);
@@ -516,6 +620,7 @@ mod tests {
             2937,
             PagePackaging::Embedded,
             settings,
+            None,
             &rasterized,
         )
         .expect("embedded");
@@ -525,6 +630,7 @@ mod tests {
             2937,
             PagePackaging::External,
             settings,
+            None,
             &rasterized,
         )
         .expect("external");

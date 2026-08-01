@@ -9,6 +9,7 @@ const SEED: u32 = 0x504d_4e44;
 fn arbitrary_font_bytes_fail_safely_and_deterministically() {
     let mut random = XorShift32(SEED);
     let descriptor = BitmapDescriptorV0 {
+        coverage: None,
         generator_version: "0.0.0".into(),
         strikes: vec![16],
     };

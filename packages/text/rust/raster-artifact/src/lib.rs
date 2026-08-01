@@ -6,11 +6,18 @@
 extern crate alloc as std;
 
 mod atlas;
+mod coverage;
 mod glb;
 mod ktx;
 mod records;
 
 pub use atlas::{AtlasPage, RasterizedPage};
+pub use coverage::{
+    MAX_RASTER_COVERAGE_GLYPH_IDS, MAX_RASTER_COVERAGE_RANGES, MAX_RASTER_COVERAGE_SCALARS,
+    MAX_RASTER_COVERAGE_TEXT_CODE_POINTS, RasterCoverageError, RasterCoverageV0,
+    RasterUnicodeRangeV0, ResolvedRasterCoverage, canonical_raster_coverage_json,
+    resolve_raster_coverage,
+};
 pub use glb::{append_buffer_view, encode_glb};
 pub use ktx::{KtxFormat, encode_ktx2};
 pub use records::{ABSENT_PAGE, GLYPH_RECORD_STRIDE, GlyphRecordTable};

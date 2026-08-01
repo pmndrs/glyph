@@ -19,7 +19,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T11:22:07Z'
+  at: '2026-08-01T05:44:56Z'
 ---
 
 # Runtime and bake API fixture V0
@@ -1018,8 +1018,18 @@ Each raster package owns its configuration surface and returns a typed raster de
 ```ts
 type StaticNumberTuple<Values extends readonly [number, ...number[]]> = number extends Values[number] ? never : Values;
 
+interface RasterCoverage {
+  /** Sorted, non-overlapping inclusive Unicode scalar ranges after normalization. */
+  readonly unicodeRanges?: readonly { readonly start: number; readonly end: number }[];
+  /** Authored Unicode scalar text; every scalar must map through the selected face. */
+  readonly text?: string;
+  /** Expert font-local `u16` glyph IDs. */
+  readonly glyphIds?: readonly number[];
+}
+
 declare function bitmap<const Strikes extends readonly [number, ...number[]]>(options: {
   strikes: StaticNumberTuple<Strikes>;
+  readonly coverage?: RasterCoverage;
 }): RasterRequest<BitmapModule>;
 
 interface MsdfOptions {
@@ -1027,6 +1037,7 @@ interface MsdfOptions {
   readonly emSize?: number;
   /** Full encoded signed-distance range; integer 1..=1020, default 8. */
   readonly pixelRange?: number;
+  readonly coverage?: RasterCoverage;
 }
 
 export const msdf: MsdfModule;
@@ -1065,6 +1076,8 @@ export const slug: SlugModule;
 Inline values such as `bitmap({ strikes: [16, 32] })` infer a literal tuple. A broad `number`, `number[]`, user input, environment value, calculation, or other runtime-only strike fails the TypeScript contract. JavaScript and untyped boundaries receive the same validation at runtime: the tuple must be non-empty, finite, positive, integral, no greater than the exported `MAX_BITMAP_PPEM` value of 1022, and duplicate-free. The package-owned `descriptor` sorts the values in ascending order and canonicalizes every other payload-changing option; it is shared by the runtime loader and the Node analyzer. This restriction makes the bitmap payload discoverable before the application executes and makes its raster key reproducible.
 
 MSDF option normalization fills a missing field from the 64/8 defaults, then authenticates both effective fields in every non-default descriptor. Explicit 64/8 canonicalizes to the legacy fieldless descriptor and raster key so old baked assets remain compatible. The generated resource sets `planeUnitsPerEm` equal to `emSize` and pads each glyph by `ceil(pixelRange / 2)` texels. These controls allow callers to trade atlas cost against field resolution; they do not change the recommended default without separate quality and payload evidence.
+
+Coverage seeds are normalized, bounded, and authenticated in the raster descriptor. Their union selects atlas generation only: it retains the complete shaping font, dense source-local glyph namespace, and original glyph IDs and does not claim transitive shaping closure. Unicode ranges ignore unmapped scalars, authored text rejects them, and exact IDs reject values outside the selected face. A sparse artifact carries an exact little-endian glyph-selection bitset; runtime preparation reports omitted shaped IDs through `RasterCoverageError` before a replacement batch can publish.
 
 The optional bitmap presentation helpers snapshot copied font handles, glyph IDs, UTF-16 clusters, exact font-size bits, occurrence ordinals, and currently displayed instance origins without retaining a `Text`, batch, texture, or geometry. A transition matches only the same complete glyph identity and updates the target batch's existing origin arrays. New or reshaped glyphs remain at their authoritative target positions; sizes, UVs, paint, shaping, line breaks, and `ParagraphLayout` never interpolate. Progress is finite and bounded to `[0, 1]`, stale or disposed batches reject mutation, and `finish`/`dispose` are idempotent. Target-origin storage is allocated only when a consumer creates a transition. The existing TSL graph still performs the final physical-pixel snap.
 

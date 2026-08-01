@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:02e9306dfeafac565bf2aaf687aa87be13ad52710f359be81997d4fba6ba0b7d'
+source_digest: 'sha256:9a014e61abcd121a9ebe60f75410a9fb3c6f3f6999bce5b1917edd72564e854f'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-31T15:00:00Z'
+  at: '2026-08-01T05:44:56Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -177,7 +177,7 @@ The CI-safe advanced-shaping target derives all 68 finite frames from that same 
 
 The separate live performance observation runs the human WebGPU surface at explicit 1× DPR on Chromium 149 and an Apple `metal-3` adapter. Each paragraph-scale script lane must settle its exact authored state with zero missing glyphs and then publish twelve causal FPS and GPU-report intervals; there are no sleeps or timing thresholds. The refreshed run observed 119.46–120.16 FPS, 0.2–0.3 ms median CPU submission, 0.3–0.5 ms CPU P95, 0.679–3.457 ms median GPU time, and 3.261–5.033 ms GPU P95 across 112–278 glyphs and one to fifteen draws. Initial public `Text` readiness was 7.2–22.0 ms and total startup 17.0–122.9 ms; the first cold Inter fetch dominates the high end. `Text.ready` includes shaping, paragraph layout, and bitmap-batch publication, so it is not mislabeled as a pure shape call; the dedicated HarfRust target owns that narrower metric. These machine observations are authenticated evidence, not cross-device budgets.
 
-The package-size lane measures the item 8.1 MTSDF kernel separately from the item 8.2 fixed baker and every initial browser or unrelated raster graph. The validated generator host is 11,543 raw, 8,466 minified, 2,658 gzip, and 2,364 Brotli bytes; the corrected optimized scalar kernel is 52,633 raw, 23,116 gzip, and 19,744 Brotli bytes. The complete fixed baker adds Fontations and artifact packaging behind the optional subpath and measures 531,933 raw, 207,333 gzip, and 162,596 Brotli Wasm bytes plus a 19,661 raw / 14,115 minified / 4,333 gzip / 3,860 Brotli host. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. A package-owned command additionally reports compile, initialization, cold-corpus, and five warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. The local `capture:mtsdf-simd` command builds isolated scalar, auto-vectorized, and explicit-SIMD evidence modules, executes exact-hash-gated calls in GPU-enabled Chromium, and does not publish the two experimental variants.
+The package-size lane measures the item 8.1 MTSDF kernel separately from the coverage-capable item 8.6 baker and every initial browser or unrelated raster graph. The validated generator host is 11,543 raw, 8,466 minified, 2,658 gzip, and 2,364 Brotli bytes; the corrected optimized scalar kernel is 52,633 raw, 23,116 gzip, and 19,744 Brotli bytes. The complete MTSDF baker adds Fontations, bounded face-resolved coverage, and artifact packaging behind the optional subpath and measures 556,995 raw, 216,935 gzip, and 170,318 Brotli Wasm bytes plus a 26,970 raw / 19,147 minified / 5,533 gzip / 4,909 Brotli host. The Bitmap baker with the same coverage contract measures 629,127 raw, 235,599 gzip, and 181,380 Brotli Wasm bytes. Complete reviewed ceilings apply on foreign hosts, while same-host regeneration must remain byte-exact. A package-owned command additionally reports compile, initialization, cold-corpus, and five warm-corpus observations only after all seven independent oracle hashes pass; it is generator evidence, not frame-rendering performance. The local `capture:mtsdf-simd` command builds isolated scalar, auto-vectorized, and explicit-SIMD evidence modules, executes exact-hash-gated calls in GPU-enabled Chromium, and does not publish the two experimental variants.
 
 Inter and Amiri retain their established roles. A pinned static Noto Sans Devanagari face adds the Indic lane without weakening the baker's explicit variable-font rejection. Advanced Shaping recommends a script-appropriate font for each case but exposes every baked fixture so a human can inspect coverage failures instead of having the selection silently locked. The CJK default is a reproducible HarfBuzz 13 subset of the authored Noto Sans CJK JP case; DotGothic16 remains available and explicitly labeled as pixel style. The subset is showcase evidence, not an answer to complete CJK distribution: the full 65,535-glyph Noto face remains the authoritative shaping/paragraph oracle and Milestone 13 owns chunked raster paging.
 

@@ -1,6 +1,8 @@
 use std::{string::String, vec::Vec};
 
-pub use pmndrs_text_raster_artifact::{ArtifactPackaging, PagePackaging};
+pub use pmndrs_text_raster_artifact::{
+    ArtifactPackaging, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{BitmapBakeError, BitmapBakeErrorCode};
@@ -16,12 +18,20 @@ pub const MAX_BITMAP_PPEM: u16 = 1022;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BitmapDescriptorV0 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<RasterCoverageV0>,
     pub generator_version: String,
     pub strikes: Vec<u16>,
 }
 
 impl BitmapDescriptorV0 {
     pub(crate) fn validate(&self) -> Result<(), BitmapBakeError> {
+        if let Some(coverage) = &self.coverage {
+            coverage.validate().map_err(|error| {
+                BitmapBakeError::new(BitmapBakeErrorCode::InvalidDescriptor, error)
+                    .at("/descriptor/coverage")
+            })?;
+        }
         if self.generator_version != BITMAP_GENERATOR_VERSION {
             return Err(BitmapBakeError::new(
                 BitmapBakeErrorCode::InvalidDescriptor,

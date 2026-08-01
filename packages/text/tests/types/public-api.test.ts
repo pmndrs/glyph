@@ -16,6 +16,7 @@ import {
   type GlyphPaint,
   type RasterKey,
   type RasterBatchOf,
+  type RasterCoverage,
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
   type RasterKindOf,
@@ -497,7 +498,12 @@ rasterBake(msdfBaker, {
   options: { ppem: 16 },
 });
 
-const proseFont = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: [16, 32] }));
+const proseCoverage: RasterCoverage = {
+  unicodeRanges: [{ start: 0x20, end: 0x7e }],
+  text: 'Authored text',
+  glyphIds: [0, 43],
+};
+const proseFont = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: [16, 32], coverage: proseCoverage }));
 void proseFont;
 
 const proseStrikes = [16, 32] as const;

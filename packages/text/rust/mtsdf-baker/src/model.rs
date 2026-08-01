@@ -1,6 +1,8 @@
 use alloc::{string::String, vec::Vec};
 
-pub use pmndrs_text_raster_artifact::{ArtifactPackaging, PagePackaging};
+pub use pmndrs_text_raster_artifact::{
+    ArtifactPackaging, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MtsdfBakeError, MtsdfBakeErrorCode};
@@ -37,6 +39,8 @@ impl MtsdfBakeSettingsV0 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MtsdfDescriptorV0 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<RasterCoverageV0>,
     pub generator_version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub em_size: Option<u16>,
@@ -46,6 +50,12 @@ pub struct MtsdfDescriptorV0 {
 
 impl MtsdfDescriptorV0 {
     pub(crate) fn validate(&self) -> Result<MtsdfBakeSettingsV0, MtsdfBakeError> {
+        if let Some(coverage) = &self.coverage {
+            coverage.validate().map_err(|error| {
+                MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidDescriptor, error)
+                    .at("/descriptor/coverage")
+            })?;
+        }
         if self.generator_version != MSDF_GENERATOR_VERSION {
             return Err(MtsdfBakeError::new(
                 MtsdfBakeErrorCode::InvalidDescriptor,

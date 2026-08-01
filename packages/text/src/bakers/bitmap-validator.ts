@@ -37,10 +37,13 @@ import {
   stringArray,
   validateDenseRasterRecords,
   validateNativeKtx2,
+  validateRasterCoverage,
+  validateRasterCoverageRecords,
   validateRasterBufferViews,
   withSchemaId,
   type RasterArtifactValidationIssue,
 } from '../internal/raster-artifact-validation.js';
+import { canonicalJson } from '../internal/raster-identity.js';
 import {
   BITMAP_EXTENSION,
   BITMAP_FORMAT_VERSION,
@@ -100,6 +103,7 @@ export interface BitmapArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
+  readonly coverage?: Uint8Array;
   readonly glyphIdWidth: 16;
   readonly descriptor: BitmapDescriptorV0;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
@@ -166,11 +170,8 @@ async function validateBitmapSemantics(
   khronos: KhronosValidationReport,
   context: BitmapArtifactValidationContext,
 ): Promise<ValidatedBitmapArtifactV0> {
-  const expectedDescriptor = canonicalizeBitmapDescriptor(context.descriptor.strikes);
-  if (
-    context.descriptor.generatorVersion !== expectedDescriptor.generatorVersion ||
-    !equalNumbers(context.descriptor.strikes, expectedDescriptor.strikes)
-  ) {
+  const expectedDescriptor = canonicalizeBitmapDescriptor(context.descriptor.strikes, context.descriptor.coverage);
+  if (canonicalJson(context.descriptor) !== canonicalJson(expectedDescriptor)) {
     fail('BITMAP_DESCRIPTOR', 'descriptor is not in canonical bitmap form', '/descriptor');
   }
   const expectedKey = await bitmapDescriptorRasterKey(expectedDescriptor);
@@ -236,6 +237,16 @@ async function validateBitmapSemantics(
   if (combined) {
     claimCoreRasterViews(extensions.PMNDRS_font, claimedViews, views.length, BITMAP_EXTENSION, 'bitmap');
   }
+  const coverage = validateRasterCoverage(
+    parsed,
+    extension,
+    expectedDescriptor.coverage,
+    views,
+    claimedViews,
+    context.glyphCount,
+    `/extensions/${BITMAP_EXTENSION}`,
+    'bitmap',
+  );
   const strikeValues = asArray(extension.strikes, `/extensions/${BITMAP_EXTENSION}/strikes`);
   if (strikeValues.length !== expectedDescriptor.strikes.length) {
     fail('STRIKE_TUPLE', 'artifact does not contain the exact declared strike tuple');
@@ -344,6 +355,7 @@ async function validateBitmapSemantics(
     }
     const records = sliceRasterView(parsed, views[recordView]!);
     validateDenseRasterRecords(records, pages, context.glyphCount, path, 'bitmap');
+    validateRasterCoverageRecords(coverage, records, context.glyphCount, path, 'bitmap');
     strikes.push({ ppem, planeUnitsPerEm, records, pages });
   }
   if (combined) {
@@ -358,6 +370,7 @@ async function validateBitmapSemantics(
     rasterKey: context.rasterKey as RasterKey,
     shapingHash: context.shapingHash as Sha256Hex,
     glyphCount: context.glyphCount,
+    ...(coverage === undefined ? {} : { coverage }),
     strikes,
     khronos,
   };
@@ -365,8 +378,4 @@ async function validateBitmapSemantics(
 
 function isBitmapGpuFormat(value: string): value is BitmapGpuFormat {
   return Object.hasOwn(BITMAP_VARIANTS, value);
-}
-
-function equalNumbers(left: readonly number[], right: readonly number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

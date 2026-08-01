@@ -9,6 +9,8 @@
     "shapingHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "glyphCount": { "type": "integer", "minimum": 1, "maximum": 65535 },
     "glyphIdWidth": { "type": "integer", "enum": [16] },
+    "coverage": { "$ref": "#/definitions/rasterCoverage" },
+    "coverageBufferView": { "type": "integer", "minimum": 0 },
     "encoding": { "type": "string", "enum": ["mtsdf"] },
     "emSize": { "type": "integer", "minimum": 1, "maximum": 65535 },
     "pixelRange": { "type": "number", "exclusiveMinimum": true, "minimum": 0 },
@@ -52,5 +54,36 @@
     "recordBufferView",
     "recordStride",
     "pages"
-  ]
+  ],
+  "definitions": {
+    "rasterCoverage": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "unicodeRanges": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": { "type": "integer", "minimum": 0, "maximum": 1114111 },
+              "end": { "type": "integer", "minimum": 0, "maximum": 1114111 }
+            },
+            "required": ["start", "end"],
+            "additionalProperties": false
+          }
+        },
+        "text": { "type": "string", "minLength": 1 },
+        "glyphIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 65535,
+          "items": { "type": "integer", "minimum": 0, "maximum": 65535 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
 }

@@ -34,14 +34,19 @@ import {
   stringArray,
   validateDenseRasterRecords,
   validateNativeKtx2,
+  validateRasterCoverage,
+  validateRasterCoverageRecords,
   validateRasterBufferViews,
   withSchemaId,
   type RasterArtifactValidationIssue,
 } from '../internal/raster-artifact-validation.js';
+import { canonicalJson } from '../internal/raster-identity.js';
+import { normalizeRasterCoverage } from '../raster-coverage.js';
 import {
   MSDF_EXTENSION,
   MSDF_FORMAT_VERSION,
   msdfDescriptorConfiguration,
+  msdfDescriptor,
   msdfDescriptorRasterKey,
   type MsdfConfiguration,
   type MsdfDescriptorV0,
@@ -73,6 +78,7 @@ export interface MtsdfArtifactValidationContext {
   readonly rasterKey: RasterKey | string;
   readonly shapingHash: Sha256Hex | string;
   readonly glyphCount: number;
+  readonly coverage?: Uint8Array;
   readonly glyphIdWidth: 16;
   readonly descriptor: MsdfDescriptorV0;
   readonly externalPages?: ReadonlyMap<string, Uint8Array>;
@@ -140,6 +146,15 @@ async function validateMtsdfSemantics(
     configuration = msdfDescriptorConfiguration(context.descriptor);
   } catch {
     fail('MTSDF_DESCRIPTOR', 'descriptor is not a canonical MTSDF generation policy', '/descriptor');
+  }
+  const descriptorCoverage = normalizeRasterCoverage(context.descriptor.coverage);
+  const canonicalDescriptor = msdfDescriptor({
+    emSize: configuration.emSize,
+    pixelRange: configuration.pixelRange,
+    ...(descriptorCoverage === undefined ? {} : { coverage: descriptorCoverage }),
+  });
+  if (canonicalJson(context.descriptor) !== canonicalJson(canonicalDescriptor)) {
+    fail('MTSDF_DESCRIPTOR', 'descriptor is not in canonical MTSDF form', '/descriptor');
   }
   const expectedKey = await msdfDescriptorRasterKey(context.descriptor);
   if (context.rasterKey !== expectedKey) {
@@ -214,6 +229,16 @@ async function validateMtsdfSemantics(
   if (combined) {
     claimCoreRasterViews(extensions.PMNDRS_font, claimedViews, views.length, MSDF_EXTENSION, 'MTSDF');
   }
+  const coverage = validateRasterCoverage(
+    parsed,
+    extension,
+    descriptorCoverage,
+    views,
+    claimedViews,
+    context.glyphCount,
+    extensionPath,
+    'MTSDF',
+  );
   const recordView = asInteger(extension.recordBufferView, `${extensionPath}/recordBufferView`, 0, views.length - 1);
   claimRasterView(claimedViews, views, recordView, `${extensionPath}/recordBufferView`, 'MTSDF');
   const expectedRecordBytes = checkedProduct(context.glyphCount, RECORD_STRIDE, `${extensionPath}/records`);
@@ -288,6 +313,7 @@ async function validateMtsdfSemantics(
 
   const records = sliceRasterView(parsed, views[recordView]!);
   validateDenseRasterRecords(records, pages, context.glyphCount, extensionPath, 'MTSDF', true);
+  validateRasterCoverageRecords(coverage, records, context.glyphCount, extensionPath, 'MTSDF');
   if (combined) {
     claimOtherRasterExtensionViews(extensions, claimedViews, views.length, MSDF_EXTENSION);
   }
@@ -300,6 +326,7 @@ async function validateMtsdfSemantics(
     rasterKey: context.rasterKey as RasterKey,
     shapingHash: context.shapingHash as Sha256Hex,
     glyphCount: context.glyphCount,
+    ...(coverage === undefined ? {} : { coverage }),
     records,
     pages,
     khronos,

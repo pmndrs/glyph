@@ -2,13 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { RasterCoverageError } from '@pmndrs/text';
 import {
   bitmapBakerFromCore,
   createBitmapBaker,
   createBitmapBakerFromInstance,
   readBitmapBakerAbi,
 } from '@pmndrs/text/bakers/bitmap';
-import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
 
 const wasmUrl = new URL('../../dist/bitmap_baker.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/bitmap-baker-abi-v0.json', import.meta.url);
@@ -65,7 +67,16 @@ test('ships one generated progress import and bundles its generated ABI in TypeS
 
 test('bakes canonical Inter deterministically through the public direct-memory shim', async () => {
   const { source, core } = await setup();
-  const first = await bake(core, source, 'embedded');
+  const progress = [];
+  const options = { strikes: [16] };
+  const descriptor = bitmapDescriptor(options);
+  const first = await bitmapBakerFromCore(core).bake({
+    font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
+    rasterKey: await bitmapRasterKey(options),
+    packaging: { artifact: 'external', pages: 'embedded' },
+    descriptor,
+    onProgress: (event) => progress.push([event.completed, event.total]),
+  });
   const second = await bake(core, source, 'embedded');
 
   assert.deepEqual(first, second);
@@ -78,6 +89,8 @@ test('bakes canonical Inter deterministically through the public direct-memory s
   assert.ok(first.artifacts.every(({ role }) => role === 'raster'));
   assert.match(first.artifacts[0].id, new RegExp(`^bitmap-${shapingHash}-[0-9a-f]{64}\\.glb$`));
   assert.deepEqual([...first.artifacts[0].bytes.subarray(0, 4)], [0x67, 0x6c, 0x54, 0x46]);
+  assert.deepEqual(progress.at(-1), [2937, 2937]);
+  assert.ok(progress.every((entry) => entry[1] === 2937));
 });
 
 test('external page packaging preserves authoritative records and emits hashed KTX2 artifacts', async () => {
@@ -98,6 +111,60 @@ test('external page packaging preserves authoritative records and emits hashed K
     );
     assert.match(page.sha256, /^[0-9a-f]{64}$/);
   }
+});
+
+test('bakes bounded coverage with deterministic progress and a validated selection bitset', async () => {
+  const { source, core } = await setup();
+  const options = { strikes: [16], coverage: { glyphIds: [43, 44] } };
+  const descriptor = bitmapDescriptor(options);
+  const rasterKey = await bitmapRasterKey(options);
+  const progress = [];
+  const result = await bitmapBakerFromCore(core).bake({
+    font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
+    rasterKey,
+    packaging: { artifact: 'external', pages: 'embedded' },
+    descriptor,
+    onProgress: (event) => progress.push([event.completed, event.total]),
+  });
+  const raster = result.artifacts.find((artifact) => artifact.role === 'raster');
+  assert.ok(raster);
+  assert.equal(result.report.metadataBytes, 2937 * 20 + Math.ceil(2937 / 8));
+  assert.deepEqual(progress.at(-1), [2, 2]);
+  assert.ok(progress.every((entry) => entry[1] === 2));
+  const validated = await validateBitmapArtifact(raster.bytes, {
+    rasterKey,
+    shapingHash,
+    glyphCount: 2937,
+    glyphIdWidth: 16,
+    descriptor,
+  });
+  assert.equal(validated.coverage.length, Math.ceil(2937 / 8));
+  assert.equal(
+    validated.coverage.reduce((count, byte) => count + byte.toString(2).replaceAll('0', '').length, 0),
+    2,
+  );
+
+  const { document, views } = glbViews(raster.bytes);
+  const font = { handle: 7, shapingHash, glyphCount: 2937 };
+  const runtimeRaster = {
+    font: font.handle,
+    handle: 11,
+    kind: 'bitmap',
+    extension: 'PMNDRS_font_bitmap',
+    version: 0,
+    rasterKey,
+    extensionData: document.extensions.PMNDRS_font_bitmap,
+    view: (index) => views[index],
+    dispose() {},
+  };
+  const module = bitmap(options).module;
+  const resource = await module.decode(font, runtimeRaster);
+  await module.prepare({ glyphIds: Uint16Array.of(43), glyphFontSlots: Uint16Array.of(0) }, resource, 0);
+  await assert.rejects(
+    module.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
+    RasterCoverageError,
+  );
+  module.dispose(resource);
 });
 
 test('rejects mismatched shaping context and honors pre-bake cancellation', async () => {
@@ -234,5 +301,18 @@ function fakeBitmapBakerInstance({ allocate = () => 0, deallocate = () => undefi
       pmndrs_bitmap_baker_bake: () => 0,
       pmndrs_bitmap_baker_result_len: () => 0,
     },
+  };
+}
+
+function glbViews(bytes) {
+  const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const jsonLength = data.getUint32(12, true);
+  const document = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + jsonLength)));
+  const binaryStart = 20 + jsonLength + 8;
+  return {
+    document,
+    views: document.bufferViews.map(({ byteOffset = 0, byteLength }) =>
+      bytes.subarray(binaryStart + byteOffset, binaryStart + byteOffset + byteLength),
+    ),
   };
 }

@@ -96,6 +96,16 @@ export { defineRaster } from './raster.js';
 export { RasterRuntime } from './raster-runtime.js';
 export type { RasterDrawBatch } from './raster.js';
 
+export type { RasterCoverage, RasterCoverageV0, RasterUnicodeRange, RasterUnicodeRangeV0 } from './raster-coverage.js';
+export {
+  MAX_RASTER_COVERAGE_GLYPH_IDS,
+  MAX_RASTER_COVERAGE_RANGES,
+  MAX_RASTER_COVERAGE_SCALARS,
+  MAX_RASTER_COVERAGE_TEXT_CODE_POINTS,
+  RasterCoverageError,
+  normalizeRasterCoverage,
+} from './raster-coverage.js';
+
 export type {
   BidiAnalysisViews,
   BidiDirection,

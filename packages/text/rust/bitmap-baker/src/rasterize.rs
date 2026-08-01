@@ -1,6 +1,9 @@
 use std::vec::Vec;
 
-use pmndrs_text_raster_artifact::{ABSENT_PAGE, AtlasPage, GlyphRecordTable, RasterizedPage};
+use pmndrs_text_raster_artifact::{
+    ABSENT_PAGE, AtlasPage, GlyphRecordTable, RasterCoverageV0, RasterizedPage,
+    ResolvedRasterCoverage, resolve_raster_coverage,
+};
 use read_fonts::{FontRef, TableProvider, types::GlyphId};
 use skrifa::{
     MetadataProvider,
@@ -14,6 +17,42 @@ use crate::error::{BitmapBakeError, BitmapBakeErrorCode, overflow};
 const ATLAS_LIMIT: u16 = 1024;
 const GLYPH_PADDING: u16 = 1;
 pub(crate) const MAX_ATLAS_PAGES: usize = 60;
+
+pub(crate) fn resolve_coverage(
+    source: &[u8],
+    face_index: u32,
+    expected_glyph_count: u16,
+    coverage: Option<&RasterCoverageV0>,
+) -> Result<Option<ResolvedRasterCoverage>, BitmapBakeError> {
+    let Some(coverage) = coverage else {
+        return Ok(None);
+    };
+    let font = FontRef::from_index(source, face_index).map_err(|error| {
+        BitmapBakeError::new(BitmapBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
+    })?;
+    let glyph_count = font
+        .maxp()
+        .map_err(|error| BitmapBakeError::new(BitmapBakeErrorCode::InvalidFont, error))?
+        .num_glyphs();
+    if glyph_count != expected_glyph_count {
+        return Err(BitmapBakeError::new(
+            BitmapBakeErrorCode::InvalidGlyphCount,
+            "source font glyph count does not match the shaping context",
+        )
+        .at("/glyphCount"));
+    }
+    let charmap = font.charmap();
+    resolve_raster_coverage(coverage, glyph_count, |character| {
+        charmap
+            .map(character)
+            .and_then(|glyph_id| u16::try_from(glyph_id.to_u32()).ok())
+    })
+    .map(Some)
+    .map_err(|error| {
+        BitmapBakeError::new(BitmapBakeErrorCode::InvalidDescriptor, error)
+            .at("/descriptor/coverage")
+    })
+}
 
 pub(crate) struct RasterizedStrike {
     pub ppem: u16,
@@ -66,6 +105,7 @@ pub(crate) fn rasterize_strike(
     face_index: u32,
     expected_glyph_count: u16,
     ppem: u16,
+    coverage: Option<&ResolvedRasterCoverage>,
     progress_offset: u32,
     progress_total: u32,
 ) -> Result<RasterizedStrike, BitmapBakeError> {
@@ -100,11 +140,17 @@ pub(crate) fn rasterize_strike(
 
     let outlines = font.outline_glyphs();
     crate::progress::report(progress_offset, progress_total);
+    let mut selected_index = 0_u32;
     for raw_glyph_id in 0..glyph_count {
+        if coverage.is_some_and(|selection| !selection.contains(raw_glyph_id)) {
+            records.mark_absent(raw_glyph_id)?;
+            continue;
+        }
         crate::progress::report(
-            progress_offset.saturating_add(u32::from(raw_glyph_id)),
+            progress_offset.saturating_add(selected_index),
             progress_total,
         );
+        selected_index = selected_index.saturating_add(1);
         let glyph_id = GlyphId::new(u32::from(raw_glyph_id));
         let Some(outline) = outlines.get(glyph_id) else {
             records.mark_absent(raw_glyph_id)?;

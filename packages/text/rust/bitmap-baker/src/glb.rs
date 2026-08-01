@@ -1,6 +1,8 @@
 use std::{string::String, vec::Vec};
 
-use pmndrs_text_raster_artifact::{KtxFormat, append_buffer_view, encode_glb, encode_ktx2};
+use pmndrs_text_raster_artifact::{
+    KtxFormat, RasterCoverageV0, append_buffer_view, encode_glb, encode_ktx2,
+};
 use serde_json::{Value, json};
 
 use crate::{
@@ -30,11 +32,16 @@ pub(crate) fn build_bitmap_glb(
     glyph_count: u16,
     page_packaging: PagePackaging,
     strikes: &[RasterizedStrike],
+    coverage_descriptor: Option<&RasterCoverageV0>,
+    coverage: Option<&[u8]>,
 ) -> Result<BuiltRasterGlb, BitmapBakeError> {
     let mut binary = Vec::<u8>::new();
     let mut buffer_views = Vec::<Value>::new();
     let mut page_artifacts = Vec::<BuiltPage>::new();
     let mut strike_values = Vec::<Value>::with_capacity(strikes.len());
+    let coverage_view = coverage
+        .map(|bits| append_buffer_view(&mut binary, &mut buffer_views, bits))
+        .transpose()?;
 
     for strike in strikes {
         let record_view = append_buffer_view(&mut binary, &mut buffer_views, &strike.records)?;
@@ -90,6 +97,30 @@ pub(crate) fn build_bitmap_glb(
     }
 
     let logical_binary_length = binary.len();
+    let mut extension = json!({
+        "version": 0,
+        "rasterKey": raster_key,
+        "shapingHash": shaping_hash,
+        "glyphCount": glyph_count,
+        "glyphIdWidth": 16,
+        "strikes": strike_values,
+    });
+    if let Some(coverage_view) = coverage_view {
+        let extension = extension.as_object_mut().expect("extension is an object");
+        extension.insert(
+            "coverage".into(),
+            serde_json::to_value(
+                coverage_descriptor.expect("coverage descriptor accompanies bits"),
+            )
+            .map_err(|error| {
+                crate::error::BitmapBakeError::new(
+                    crate::error::BitmapBakeErrorCode::SerializationFailed,
+                    error,
+                )
+            })?,
+        );
+        extension.insert("coverageBufferView".into(), coverage_view.into());
+    }
     let root = json!({
         "asset": {
             "version": "2.0",
@@ -98,14 +129,7 @@ pub(crate) fn build_bitmap_glb(
         "extensionsUsed": [BITMAP_EXTENSION],
         "extensionsRequired": [BITMAP_EXTENSION],
         "extensions": {
-            BITMAP_EXTENSION: {
-                "version": 0,
-                "rasterKey": raster_key,
-                "shapingHash": shaping_hash,
-                "glyphCount": glyph_count,
-                "glyphIdWidth": 16,
-                "strikes": strike_values,
-            },
+            BITMAP_EXTENSION: extension,
         },
         "buffers": [{ "byteLength": logical_binary_length }],
         "bufferViews": buffer_views,

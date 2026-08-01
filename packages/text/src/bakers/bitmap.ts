@@ -15,9 +15,11 @@ import {
   bitmapDescriptor,
   type BitmapDescriptorV0,
 } from '../internal/bitmap-contract.js';
+import type { RasterCoverage } from '../raster-coverage.js';
 
 export interface BitmapBakerOptions {
   readonly strikes: readonly [number, ...number[]];
+  readonly coverage?: RasterCoverage;
 }
 
 export interface BitmapBakerRequestV0 {

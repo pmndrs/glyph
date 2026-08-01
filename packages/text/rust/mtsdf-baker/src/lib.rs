@@ -34,5 +34,5 @@ pub use model::{
     ArtifactPackaging, MSDF_EXTENSION, MSDF_FORMAT_VERSION, MSDF_GENERATOR_VERSION, MSDF_KIND,
     MTSDF_EM_SIZE, MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM, MtsdfBakeArtifactV0,
     MtsdfBakeRequestV0, MtsdfBakeResultV0, MtsdfDescriptorV0, MtsdfPackagingV0, MtsdfPageReportV0,
-    MtsdfPayloadReportV0, PagePackaging,
+    MtsdfPayloadReportV0, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
 };

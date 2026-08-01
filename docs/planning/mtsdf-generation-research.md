@@ -42,7 +42,7 @@ sources:
     title: TypeGPU functions and WGSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T11:22:07Z'
+  at: '2026-08-01T05:44:56Z'
 ---
 
 # MTSDF generation research
@@ -123,7 +123,7 @@ The scalar production boundary satisfies that final ABI gate: the package build 
 
 Item 8.6 makes the checked transform configurable without changing the low-level Wasm ABI. `emSize` is an integer in `1..=1022`, full `pixelRange` is an integer in `1..=1020`, `planeUnitsPerEm` equals `emSize`, and each quantized glyph rectangle receives `ceil(pixelRange / 2)` field-padding texels. Partial options fill the other 64/8 default before hashing; every non-default descriptor carries both effective fields, while explicit effective 64/8 canonicalizes to the legacy descriptor. Real 155-glyph subset bakes at 32/4 and 32/6 pass generation and artifact validation. Those results prove configurability and deterministic authentication, not comparative quality or a new default. The completed scalar/auto/explicit comparison includes exact quality, the complete Inter pass, representative Node and Chromium calls, allocation/memory behavior, and compressed size. Scalar remains the sole production implementation because it wins the bounded runtime corpus and avoids a required target feature plus alternate artifact; the explicit variant's complete-font win remains item 8.6 evidence.
 
-The published baker integrates the selected kernel without publishing a duplicate standalone generator Wasm. The isolated production-kernel graph is 52,633 optimized bytes, while the zero-import admission export and its harness are 60,563 optimized bytes. The measured legacy-default package resource is the 531,933-byte full baker containing the same scalar core plus Fontations, dense records, atlas packing, hashing, KTX2, GLB, and its second generated ABI surface. Canonical 64/8 Inter occupies ten near-full 1024-pixel RGBA8 pages: 39,111,736 GPU bytes and 39,177,416 externally serialized bytes. Uncompressed KTX2 contributes only 196 bytes per page, so container removal would not materially change this result. Reversible KTX2 supercompression, lossy GPU block formats, coverage subsetting, a lower authored generation resolution, and paging address different costs and require separate measurements; configurability alone does not select a lower default, and no lossy format replaces the exact baseline by declaration.
+The published baker integrates the selected kernel without publishing a duplicate standalone generator Wasm. The isolated production-kernel graph is 52,633 optimized bytes, while the zero-import admission export and its harness are 60,563 optimized bytes. The coverage-capable package resource is a 556,995-byte full baker containing the same scalar core plus Fontations, bounded face-resolved selection, dense records, atlas packing, hashing, KTX2, GLB, and its second generated ABI surface. Canonical 64/8 complete Inter retains its legacy artifact and page hashes and occupies ten near-full 1024-pixel RGBA8 pages: 39,111,736 GPU bytes and 39,177,416 externally serialized bytes. Uncompressed KTX2 contributes only 196 bytes per page, so container removal would not materially change this result. Reversible KTX2 supercompression, lossy GPU block formats, a lower authored generation resolution, and paging address different costs and require separate measurements; configurability alone does not select a lower default, and no lossy format replaces the exact baseline by declaration.
 
 ## WebGPU compute generation
 

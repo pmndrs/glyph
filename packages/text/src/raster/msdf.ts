@@ -54,6 +54,7 @@ import {
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint, ResolvedPaint } from '../paint.js';
 import { defineRaster, type JsonValue, type RasterModule, type RegisteredRaster } from '../raster.js';
+import { assertRasterCoverage, decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
 
 export {
   MSDF_EXTENSION,
@@ -95,6 +96,7 @@ export interface MsdfResource {
   readonly pixelRange: number;
   readonly planeUnitsPerEm: number;
   readonly records: Uint8Array;
+  readonly coverage?: Uint8Array;
   readonly pages: readonly MsdfPageResource[];
   readonly atlas: MsdfAtlasResource;
   /** Exact padded base-level texture-array bytes. */
@@ -161,8 +163,9 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, Ms
     signal?.throwIfAborted();
     return resource;
   },
-  async prepare(_layout, _resource, _fontSlot, signal) {
+  async prepare(layout, resource, fontSlot, signal) {
     signal?.throwIfAborted();
+    assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
   },
   buildBatches(layout, resource, fontSlot, paint) {
     return buildMsdfBatches(layout, resource, fontSlot, paint);
@@ -208,7 +211,15 @@ async function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster
   if (planeUnitsPerEm !== emSize) {
     throw new TypeError('MTSDF planeUnitsPerEm must equal emSize');
   }
-  if (raster.rasterKey !== (await msdfRasterKey({ emSize, pixelRange }))) {
+  const coverage = decodeRasterCoverage(extension, font.glyphCount, (view) => raster.view(view), 'MTSDF');
+  if (
+    raster.rasterKey !==
+    (await msdfRasterKey({
+      emSize,
+      pixelRange,
+      ...(coverage === undefined ? {} : { coverage: coverage.descriptor }),
+    }))
+  ) {
     throw new TypeError('MTSDF raster key does not match its generation policy');
   }
   const records = raster.view(nonnegativeSafeInteger(extension.recordBufferView, 'MTSDF recordBufferView'));
@@ -247,6 +258,7 @@ async function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster
       pixelRange,
       planeUnitsPerEm,
       records,
+      ...(coverage === undefined ? {} : { coverage: coverage.bits }),
       pages,
       atlas,
       gpuBytes,
@@ -333,6 +345,7 @@ function buildMsdfBatches(
   paint: GlyphPaint,
 ): MsdfDrawBatch {
   assertParallelRasterLayout(layout, paint);
+  assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
   assertMsdfPaint(paint);
   const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
   const group = new THREE.Group();

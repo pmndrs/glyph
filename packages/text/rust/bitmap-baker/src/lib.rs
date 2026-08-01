@@ -21,7 +21,7 @@ pub use error::{BitmapBakeError, BitmapBakeErrorCode};
 pub use model::{
     ArtifactPackaging, BITMAP_GENERATOR_VERSION, BitmapBakeArtifactV0, BitmapBakeRequestV0,
     BitmapBakeResultV0, BitmapDescriptorV0, BitmapPackagingV0, BitmapPageReportV0,
-    BitmapPayloadReportV0, MAX_BITMAP_PPEM, PagePackaging,
+    BitmapPayloadReportV0, MAX_BITMAP_PPEM, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
 };
 
 /// Return the generated direct-memory ABI contract embedded in this build.
@@ -56,8 +56,17 @@ pub fn bake_bitmap(
         .at("/rasterKey"));
     }
 
+    let coverage = rasterize::resolve_coverage(
+        source,
+        request.font_face_index,
+        request.glyph_count,
+        request.descriptor.coverage.as_ref(),
+    )?;
+    let selected_glyphs = coverage
+        .as_ref()
+        .map_or(request.glyph_count, |selection| selection.selected_glyphs());
     let mut strikes = Vec::with_capacity(request.descriptor.strikes.len());
-    let progress_total = u32::from(request.glyph_count)
+    let progress_total = u32::from(selected_glyphs)
         .checked_mul(u32::try_from(request.descriptor.strikes.len()).unwrap_or(u32::MAX))
         .unwrap_or(u32::MAX);
     for (strike_index, ppem) in request.descriptor.strikes.iter().copied().enumerate() {
@@ -66,9 +75,10 @@ pub fn bake_bitmap(
             request.font_face_index,
             request.glyph_count,
             ppem,
+            coverage.as_ref(),
             u32::try_from(strike_index)
                 .unwrap_or(u32::MAX)
-                .saturating_mul(u32::from(request.glyph_count)),
+                .saturating_mul(u32::from(selected_glyphs)),
             progress_total,
         )?;
         strikes.push(strike);
@@ -77,13 +87,18 @@ pub fn bake_bitmap(
     let metadata_bytes = strikes
         .iter()
         .map(|strike| strike.records.len())
-        .sum::<usize>();
+        .sum::<usize>()
+        + coverage
+            .as_ref()
+            .map_or(0, |selection| selection.bits().len());
     let built = glb::build_bitmap_glb(
         &request.raster_key,
         &request.shaping_hash,
         request.glyph_count,
         request.packaging.pages,
         &strikes,
+        request.descriptor.coverage.as_ref(),
+        coverage.as_ref().map(|selection| selection.bits()),
     )?;
     let raster_id = format!("bitmap-{}-{}.glb", request.shaping_hash, request.raster_key);
     let raster_hash = hex_sha256(&built.bytes);
@@ -145,9 +160,20 @@ pub fn descriptor_raster_key(descriptor: &BitmapDescriptorV0) -> String {
         .map(u16::to_string)
         .collect::<Vec<_>>()
         .join(",");
+    let coverage = descriptor.coverage.as_ref().map(|coverage| {
+        format!(
+            "\"coverage\":{},",
+            pmndrs_text_raster_artifact::canonical_raster_coverage_json(coverage)
+        )
+    });
     let canonical = format!(
-        "{{\"descriptor\":{{\"generatorVersion\":\"{}\",\"strikes\":[{}]}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
-        descriptor.generator_version, strikes, BITMAP_EXTENSION, BITMAP_KIND, BITMAP_FORMAT_VERSION,
+        "{{\"descriptor\":{{{}\"generatorVersion\":\"{}\",\"strikes\":[{}]}},\"extension\":\"{}\",\"kind\":\"{}\",\"version\":{}}}",
+        coverage.as_deref().unwrap_or(""),
+        descriptor.generator_version,
+        strikes,
+        BITMAP_EXTENSION,
+        BITMAP_KIND,
+        BITMAP_FORMAT_VERSION,
     );
     hex_sha256(canonical.as_bytes())
 }
@@ -183,6 +209,7 @@ mod tests {
 
     fn request(pages: PagePackaging) -> BitmapBakeRequestV0 {
         let descriptor = BitmapDescriptorV0 {
+            coverage: None,
             generator_version: BITMAP_GENERATOR_VERSION.into(),
             strikes: vec![16],
         };
@@ -202,6 +229,7 @@ mod tests {
     #[test]
     fn descriptor_key_matches_the_typescript_contract() {
         let descriptor = BitmapDescriptorV0 {
+            coverage: None,
             generator_version: BITMAP_GENERATOR_VERSION.into(),
             strikes: vec![16, 32],
         };
@@ -209,6 +237,77 @@ mod tests {
             descriptor_raster_key(&descriptor),
             "26e1ebd842adaa30a61b27bf182f244432a61890ed8882d141c270a95ff56783"
         );
+    }
+
+    #[test]
+    fn bounded_descriptor_key_matches_the_typescript_contract() {
+        let descriptor = BitmapDescriptorV0 {
+            coverage: Some(RasterCoverageV0 {
+                unicode_ranges: Some(vec![RasterUnicodeRangeV0 { start: 65, end: 90 }]),
+                text: Some("AB".into()),
+                glyph_ids: Some(vec![3, 7]),
+            }),
+            generator_version: BITMAP_GENERATOR_VERSION.into(),
+            strikes: vec![16, 32],
+        };
+        assert_eq!(
+            descriptor_raster_key(&descriptor),
+            "c2ca57973a0666f858d350def46deb26b41b9219e3073df6636a3eaa0810e853"
+        );
+    }
+
+    #[test]
+    fn bounded_bitmap_rasterizes_only_selected_font_local_glyphs() {
+        let mut bounded = request(PagePackaging::Embedded);
+        bounded.descriptor.coverage = Some(RasterCoverageV0 {
+            unicode_ranges: None,
+            text: None,
+            glyph_ids: Some(vec![43, 44]),
+        });
+        bounded.raster_key = descriptor_raster_key(&bounded.descriptor);
+        let result = bake_bitmap(INTER, bounded).unwrap();
+        let glb = &result.artifacts[0].bytes;
+        let coverage = coverage_bytes(glb);
+        assert_eq!(coverage.len(), 2937_usize.div_ceil(8));
+        assert_eq!(coverage[43 / 8] & (1 << (43 % 8)), 1 << (43 % 8));
+        assert_eq!(coverage[44 / 8] & (1 << (44 % 8)), 1 << (44 % 8));
+        assert_eq!(
+            coverage.iter().map(|byte| byte.count_ones()).sum::<u32>(),
+            2
+        );
+
+        let records = record_bytes(glb);
+        for glyph_id in 0..2937 {
+            let offset = glyph_id * 20 + 16;
+            let page = u16::from_le_bytes(records[offset..offset + 2].try_into().unwrap());
+            if glyph_id == 43 || glyph_id == 44 {
+                assert_ne!(page, 0xffff);
+            } else {
+                assert_eq!(page, 0xffff);
+            }
+        }
+    }
+
+    #[test]
+    fn unicode_and_authored_text_seeds_resolve_through_the_selected_face() {
+        let coverage = RasterCoverageV0 {
+            unicode_ranges: Some(vec![RasterUnicodeRangeV0 { start: 65, end: 66 }]),
+            text: Some("C".into()),
+            glyph_ids: None,
+        };
+        let resolved = rasterize::resolve_coverage(INTER, 0, 2937, Some(&coverage))
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved.selected_glyphs(), 3);
+
+        let unmapped = RasterCoverageV0 {
+            unicode_ranges: None,
+            text: Some("\u{10ffff}".into()),
+            glyph_ids: None,
+        };
+        let error = rasterize::resolve_coverage(INTER, 0, 2937, Some(&unmapped)).unwrap_err();
+        assert_eq!(error.code, BitmapBakeErrorCode::InvalidDescriptor);
+        assert_eq!(error.path.as_deref(), Some("/descriptor/coverage"));
     }
 
     #[test]
@@ -297,6 +396,16 @@ mod tests {
         root["extensions"]["PMNDRS_font_bitmap"]["strikes"][0]["planeUnitsPerEm"]
             .as_u64()
             .unwrap()
+    }
+
+    fn coverage_bytes(glb: &[u8]) -> Vec<u8> {
+        let (root, bin_start) = glb_root(glb);
+        let extension = &root["extensions"]["PMNDRS_font_bitmap"];
+        let view_index = extension["coverageBufferView"].as_u64().unwrap() as usize;
+        let view = &root["bufferViews"][view_index];
+        let offset = view["byteOffset"].as_u64().unwrap() as usize;
+        let length = view["byteLength"].as_u64().unwrap() as usize;
+        glb[bin_start + offset..bin_start + offset + length].to_vec()
     }
 
     fn glb_root(glb: &[u8]) -> (serde_json::Value, usize) {

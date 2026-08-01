@@ -1,5 +1,6 @@
 import type { RasterKey } from '../identity.js';
 import type { JsonValue, StaticNumberTuple } from '../raster.js';
+import { normalizeRasterCoverage, type RasterCoverage, type RasterCoverageV0 } from '../raster-coverage.js';
 import { deriveRasterKey } from './raster-identity.js';
 
 export const BITMAP_KIND = 'bitmap' as const;
@@ -10,12 +11,19 @@ export const MAX_BITMAP_PPEM = 1022 as const;
 
 export interface BitmapOptions<Strikes extends readonly [number, ...number[]]> {
   readonly strikes: StaticNumberTuple<Strikes>;
+  readonly coverage?: RasterCoverage;
 }
 
 export interface BitmapDescriptorV0 {
   readonly [key: string]: JsonValue;
   readonly generatorVersion: typeof BITMAP_GENERATOR_VERSION;
   readonly strikes: readonly number[];
+  readonly coverage?: RasterCoverageV0;
+}
+
+export interface NormalizedBitmapOptions {
+  readonly strikes: readonly [number, ...number[]];
+  readonly coverage?: RasterCoverageV0;
 }
 
 function canonicalStrikes(values: readonly number[]): readonly number[] {
@@ -36,15 +44,36 @@ function canonicalStrikes(values: readonly number[]): readonly number[] {
 export function bitmapDescriptor<const Strikes extends readonly [number, ...number[]]>(
   options: BitmapOptions<Strikes>,
 ): BitmapDescriptorV0 {
-  if (typeof options !== 'object' || options === null || !Array.isArray(options.strikes)) {
+  const normalized = normalizeBitmapOptions(options);
+  return canonicalizeBitmapDescriptor(normalized.strikes, normalized.coverage);
+}
+
+/** Validate options crossing JavaScript, JSON, or Worker boundaries. */
+export function normalizeBitmapOptions(value: unknown): NormalizedBitmapOptions {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('bitmap options must provide a strikes tuple');
   }
-  return canonicalizeBitmapDescriptor(options.strikes);
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== 'coverage' && key !== 'strikes')) {
+    throw new TypeError('bitmap options contain an unknown property');
+  }
+  const strikes = Reflect.get(value, 'strikes');
+  if (!Array.isArray(strikes)) throw new TypeError('bitmap options must provide a strikes tuple');
+  const normalizedStrikes = canonicalStrikes(strikes) as readonly [number, ...number[]];
+  const coverage = Object.hasOwn(value, 'coverage')
+    ? normalizeRasterCoverage(Reflect.get(value, 'coverage'))
+    : undefined;
+  return Object.freeze({
+    strikes: normalizedStrikes,
+    ...(coverage === undefined ? {} : { coverage }),
+  });
 }
 
 /** Canonicalize JSON strike data at analyzer and artifact-validation boundaries. */
-export function canonicalizeBitmapDescriptor(strikes: readonly number[]): BitmapDescriptorV0 {
+export function canonicalizeBitmapDescriptor(strikes: readonly number[], coverage?: unknown): BitmapDescriptorV0 {
+  const normalizedCoverage = normalizeRasterCoverage(coverage);
   return Object.freeze({
+    ...(normalizedCoverage === undefined ? {} : { coverage: normalizedCoverage }),
     generatorVersion: BITMAP_GENERATOR_VERSION,
     strikes: canonicalStrikes(strikes),
   });

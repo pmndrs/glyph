@@ -1,5 +1,6 @@
 import type { RasterKey } from '../identity.js';
 import type { JsonValue } from '../raster.js';
+import { normalizeRasterCoverage, type RasterCoverage, type RasterCoverageV0 } from '../raster-coverage.js';
 import { deriveRasterKey } from './raster-identity.js';
 
 export const MSDF_KIND = 'msdf' as const;
@@ -21,6 +22,7 @@ export interface MsdfOptions {
   readonly emSize?: number;
   /** Full encoded signed-distance range in atlas pixels. Defaults to 8. */
   readonly pixelRange?: number;
+  readonly coverage?: RasterCoverage;
 }
 
 export interface MsdfConfiguration {
@@ -32,6 +34,7 @@ export interface MsdfConfiguration {
 export interface DefaultMsdfDescriptorV0 {
   readonly [key: string]: JsonValue;
   readonly generatorVersion: typeof MSDF_GENERATOR_VERSION;
+  readonly coverage?: RasterCoverageV0;
 }
 
 export interface ConfiguredMsdfDescriptorV0 {
@@ -39,6 +42,7 @@ export interface ConfiguredMsdfDescriptorV0 {
   readonly emSize: number;
   readonly generatorVersion: typeof MSDF_GENERATOR_VERSION;
   readonly pixelRange: number;
+  readonly coverage?: RasterCoverageV0;
 }
 
 export type MsdfDescriptorV0 = DefaultMsdfDescriptorV0 | ConfiguredMsdfDescriptorV0;
@@ -53,25 +57,36 @@ export function msdfDescriptor(options?: MsdfOptions): MsdfDescriptorV0 {
   if (normalized === undefined) return defaultDescriptor;
   const emSize = normalized.emSize ?? MTSDF_EM_SIZE;
   const pixelRange = normalized.pixelRange ?? MTSDF_PIXEL_RANGE;
-  if (emSize === MTSDF_EM_SIZE && pixelRange === MTSDF_PIXEL_RANGE) return defaultDescriptor;
-  return Object.freeze({ emSize, generatorVersion: MSDF_GENERATOR_VERSION, pixelRange });
+  const coverage = normalizeRasterCoverage(normalized.coverage);
+  if (emSize === MTSDF_EM_SIZE && pixelRange === MTSDF_PIXEL_RANGE) {
+    return coverage === undefined
+      ? defaultDescriptor
+      : Object.freeze({ coverage, generatorVersion: MSDF_GENERATOR_VERSION });
+  }
+  return Object.freeze({
+    ...(coverage === undefined ? {} : { coverage }),
+    emSize,
+    generatorVersion: MSDF_GENERATOR_VERSION,
+    pixelRange,
+  });
 }
 
 /** Resolve the authenticated generation policy represented by a descriptor. */
 export function msdfDescriptorConfiguration(descriptor: MsdfDescriptorV0): MsdfConfiguration {
   const keys = Object.keys(descriptor);
-  if (descriptor.generatorVersion !== MSDF_GENERATOR_VERSION || (keys.length !== 1 && keys.length !== 3)) {
+  if (
+    descriptor.generatorVersion !== MSDF_GENERATOR_VERSION ||
+    keys.some((key) => key !== 'coverage' && key !== 'emSize' && key !== 'generatorVersion' && key !== 'pixelRange')
+  ) {
     throw new TypeError('invalid MTSDF descriptor');
   }
-  if (keys.length === 1) {
-    if (keys[0] !== 'generatorVersion') throw new TypeError('invalid MTSDF descriptor');
+  normalizeRasterCoverage(descriptor.coverage);
+  const hasEmSize = Object.hasOwn(descriptor, 'emSize');
+  const hasPixelRange = Object.hasOwn(descriptor, 'pixelRange');
+  if (!hasEmSize && !hasPixelRange) {
     return defaultConfiguration;
   }
-  if (
-    !Object.hasOwn(descriptor, 'emSize') ||
-    !Object.hasOwn(descriptor, 'pixelRange') ||
-    keys.some((key) => key !== 'emSize' && key !== 'generatorVersion' && key !== 'pixelRange')
-  ) {
+  if (!hasEmSize || !hasPixelRange) {
     throw new TypeError('invalid MTSDF descriptor');
   }
   const emSize = Reflect.get(descriptor, 'emSize');
@@ -120,7 +135,7 @@ export function normalizeMsdfOptions(value: unknown): MsdfOptions | undefined {
     throw new TypeError('MTSDF options must be an object');
   }
   const keys = Object.keys(value);
-  if (keys.some((key) => key !== 'emSize' && key !== 'pixelRange')) {
+  if (keys.some((key) => key !== 'coverage' && key !== 'emSize' && key !== 'pixelRange')) {
     throw new TypeError('MTSDF options contain an unknown property');
   }
   let emSize: number | undefined;
@@ -137,7 +152,11 @@ export function normalizeMsdfOptions(value: unknown): MsdfOptions | undefined {
     validatePixelRange(candidate);
     pixelRange = candidate;
   }
+  const coverage = Object.hasOwn(value, 'coverage')
+    ? normalizeRasterCoverage(Reflect.get(value, 'coverage'))
+    : undefined;
   return Object.freeze({
+    ...(coverage === undefined ? {} : { coverage }),
     ...(emSize === undefined ? {} : { emSize }),
     ...(pixelRange === undefined ? {} : { pixelRange }),
   });

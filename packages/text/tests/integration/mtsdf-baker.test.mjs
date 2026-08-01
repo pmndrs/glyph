@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import * as THREE from 'three/webgpu';
+import { RasterCoverageError } from '@pmndrs/text';
 
 import {
   createMtsdfBaker,
@@ -69,6 +70,7 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   const { source, core } = await setup();
   const descriptor = msdfDescriptor();
   const rasterKey = await msdfDescriptorRasterKey();
+  const progress = [];
   assert.equal(rasterKey, 'e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93');
   const result = await msdfBakerFromCore(core).bake({
     font: {
@@ -80,6 +82,7 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
     rasterKey,
     packaging: { artifact: 'external', pages: 'external' },
     descriptor,
+    onProgress: (event) => progress.push([event.completed, event.total]),
   });
 
   assert.equal(result.kind, 'msdf');
@@ -124,6 +127,8 @@ test('bakes canonical Inter through the public direct-memory shim', async () => 
   assert.equal(extension.planeUnitsPerEm, MTSDF_PLANE_UNITS_PER_EM);
   assert.equal(extension.recordStride, 20);
   assert.equal(extension.pages.length, pages.length);
+  assert.deepEqual(progress.at(-1), [2937, 2937]);
+  assert.ok(progress.every((entry) => entry[1] === 2937));
   await exerciseArtifactValidation(result, raster, pages, rasterKey);
   await exerciseRuntime(result, raster, extension, rasterKey);
 });
@@ -163,6 +168,58 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
     reports.push(result.report);
   }
   assert.ok(reports[0].gpuBytes < reports[1].gpuBytes);
+});
+
+test('bakes bounded coverage with deterministic progress and a validated selection bitset', async () => {
+  const { source, core } = await setup();
+  const descriptor = msdfDescriptor({ coverage: { glyphIds: [43, 44] } });
+  const rasterKey = await msdfDescriptorRasterKey(descriptor);
+  const progress = [];
+  const result = await msdfBakerFromCore(core).bake({
+    font: { source, fontFaceIndex: 0, glyphCount: 2937, shapingHash },
+    rasterKey,
+    packaging: { artifact: 'external', pages: 'embedded' },
+    descriptor,
+    onProgress: (event) => progress.push([event.completed, event.total]),
+  });
+  const raster = result.artifacts.find((artifact) => artifact.role === 'raster');
+  assert.ok(raster);
+  assert.equal(result.report.metadataBytes, 2937 * 20 + Math.ceil(2937 / 8));
+  assert.deepEqual(progress.at(-1), [2, 2]);
+  assert.ok(progress.every((entry) => entry[1] === 2));
+  const validated = await validateMtsdfArtifact(raster.bytes, {
+    rasterKey,
+    shapingHash,
+    glyphCount: 2937,
+    glyphIdWidth: 16,
+    descriptor,
+  });
+  assert.equal(validated.coverage.length, Math.ceil(2937 / 8));
+  assert.equal(
+    validated.coverage.reduce((count, byte) => count + byte.toString(2).replaceAll('0', '').length, 0),
+    2,
+  );
+
+  const { document, views } = glbViews(raster.bytes);
+  const font = { handle: 7, shapingHash, glyphCount: 2937 };
+  const runtimeRaster = {
+    font: font.handle,
+    handle: 11,
+    kind: 'msdf',
+    extension: MSDF_EXTENSION,
+    version: 0,
+    rasterKey,
+    extensionData: document.extensions[MSDF_EXTENSION],
+    view: (index) => views[index],
+    dispose() {},
+  };
+  const resource = await msdf.decode(font, runtimeRaster);
+  await msdf.prepare({ glyphIds: Uint16Array.of(43), glyphFontSlots: Uint16Array.of(0) }, resource, 0);
+  await assert.rejects(
+    msdf.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
+    RasterCoverageError,
+  );
+  msdf.dispose(resource);
 });
 
 test('keeps the packaged MTSDF schema byte-identical to its canonical source', async () => {
