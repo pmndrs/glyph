@@ -51,6 +51,7 @@ import {
   assertParallelRasterPaint,
   unitRasterQuadGeometry,
 } from '../internal/raster-batch.js';
+import { rasterInstanceCapacity, rasterInstanceUpdateRanges } from '../internal/raster-instance-capacity.js';
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint, ResolvedPaint } from '../paint.js';
 import {
@@ -110,20 +111,11 @@ export interface MsdfResource {
 }
 
 interface MsdfBatchRun {
-  readonly glyphIndices: Uint32Array;
+  readonly capacity: number;
+  glyphIndices: Uint32Array;
+  logicalCount: number;
   readonly instanceData: THREE.InstancedInterleavedBuffer;
   readonly paintStructure: Float64Array;
-  readonly originAttribute: THREE.InterleavedBufferAttribute;
-  readonly sizeAttribute: THREE.InterleavedBufferAttribute;
-  readonly uvOriginAttribute: THREE.InterleavedBufferAttribute;
-  readonly uvSizeAttribute: THREE.InterleavedBufferAttribute;
-  readonly uvBoundsAttribute: THREE.InterleavedBufferAttribute;
-  readonly shadowOffsetAttribute: THREE.InterleavedBufferAttribute;
-  readonly fillColorAttribute: THREE.InterleavedBufferAttribute;
-  readonly outlineColorAttribute: THREE.InterleavedBufferAttribute;
-  readonly outlineWidthAttribute: THREE.InterleavedBufferAttribute;
-  readonly shadowColorAttribute: THREE.InterleavedBufferAttribute;
-  readonly pageIndexAttribute: THREE.InterleavedBufferAttribute;
   readonly geometry: THREE.InstancedBufferGeometry;
   readonly mesh: THREE.Mesh;
 }
@@ -140,15 +132,14 @@ interface MsdfMaterialState {
 }
 
 const materialByAtlasTexture = new WeakMap<THREE.DataArrayTexture, MsdfMaterialState>();
-const batchContext = new WeakMap<
-  MsdfDrawBatch,
-  {
-    readonly layout: ParagraphLayout;
-    readonly resource: MsdfResource;
-    readonly fontSlot: number;
-    readonly run: MsdfBatchRun | undefined;
-  }
->();
+interface MsdfBatchContext {
+  layout: ParagraphLayout;
+  readonly resource: MsdfResource;
+  readonly fontSlot: number;
+  readonly run: MsdfBatchRun | undefined;
+}
+
+const batchContext = new WeakMap<MsdfDrawBatch, MsdfBatchContext>();
 
 const INSTANCE_STRIDE = 28;
 const INSTANCE_OFFSETS = {
@@ -164,6 +155,7 @@ const INSTANCE_OFFSETS = {
   shadowColor: 23,
   pageIndex: 27,
 } as const;
+const PAINT_STRUCTURE_STRIDE = 3;
 
 const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, MsdfOptions | undefined> = defineRaster({
   kind: MSDF_KIND,
@@ -183,18 +175,12 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, Ms
   },
   stageBatch(previous, layout, resource, fontSlot, paint) {
     const context = previous === undefined ? undefined : batchContext.get(previous);
-    if (
-      previous !== undefined &&
-      context?.layout === layout &&
-      context.resource === resource &&
-      context.fontSlot === fontSlot
-    ) {
-      assertMsdfBatchPaintUpdate(layout, resource, context.run, paint);
-      return defineRasterBatchStage(
-        previous,
-        () => commitMsdfBatchPaint(context.run, layout, resource, paint),
-        () => undefined,
-      );
+    if (previous !== undefined && context?.resource === resource && context.fontSlot === fontSlot) {
+      const update =
+        context.layout === layout && sameMsdfPaintStructure(context.run, paint)
+          ? stageMsdfPaintUpdate(context.layout, context.run, paint)
+          : stageMsdfBatchUpdate(context, layout, resource, fontSlot, paint);
+      if (update !== undefined) return defineRasterBatchStage(previous, update.commit, update.dispose);
     }
     const batch = buildMsdfBatches(layout, resource, fontSlot, paint);
     return defineRasterBatchStage(
@@ -377,32 +363,20 @@ function buildMsdfBatches(
   assertParallelRasterLayout(layout, paint);
   assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
   assertMsdfPaint(paint);
-  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
   const group = new THREE.Group();
-  const glyphIndices: number[] = [];
-
-  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
-    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
-    const glyphId = layout.glyphIds[glyphIndex];
-    if (glyphId === undefined) continue;
-    if (glyphId >= resource.records.byteLength / RECORD_STRIDE) {
-      throw new TypeError('paragraph layout references an MTSDF glyph outside the registered font');
-    }
-    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
-    if (pageIndex === ABSENT_PAGE) continue;
-    if (resource.pages[pageIndex] === undefined) {
-      throw new TypeError('MTSDF batch references a missing page');
-    }
-    glyphIndices.push(glyphIndex);
-  }
+  const glyphIndices = collectMsdfGlyphIndices(layout, resource, fontSlot);
   const run = glyphIndices.length === 0 ? undefined : createMsdfRun(layout, resource, glyphIndices, paint);
   if (run !== undefined) group.add(run.mesh);
 
   let disposed = false;
   const batch: MsdfDrawBatch = {
     object: group,
-    glyphCount: glyphIndices.length,
-    drawCount: run === undefined ? 0 : 1,
+    get glyphCount() {
+      return run?.logicalCount ?? 0;
+    },
+    get drawCount() {
+      return run === undefined || run.logicalCount === 0 ? 0 : 1;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -418,74 +392,44 @@ function buildMsdfBatches(
 function createMsdfRun(
   layout: ParagraphLayout,
   resource: MsdfResource,
-  glyphIndices: readonly number[],
+  glyphIndices: Uint32Array,
   paint: GlyphPaint,
 ): MsdfBatchRun {
   const count = glyphIndices.length;
+  const capacity = rasterInstanceCapacity(count);
   const geometry = unitRasterQuadGeometry();
   geometry.instanceCount = count;
   const instanceData = new THREE.InstancedInterleavedBuffer(
-    new Float32Array(count * INSTANCE_STRIDE),
+    new Float32Array(capacity * INSTANCE_STRIDE),
     INSTANCE_STRIDE,
     1,
-  );
-  const originAttribute = instanceAttribute(geometry, instanceData, 'msdfOrigin', 2, INSTANCE_OFFSETS.origin);
-  const sizeAttribute = instanceAttribute(geometry, instanceData, 'msdfSize', 2, INSTANCE_OFFSETS.size);
-  const uvOriginAttribute = instanceAttribute(geometry, instanceData, 'msdfUvOrigin', 2, INSTANCE_OFFSETS.uvOrigin);
-  const uvSizeAttribute = instanceAttribute(geometry, instanceData, 'msdfUvSize', 2, INSTANCE_OFFSETS.uvSize);
-  const uvBoundsAttribute = instanceAttribute(geometry, instanceData, 'msdfUvBounds', 4, INSTANCE_OFFSETS.uvBounds);
-  const shadowOffsetAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfShadowOffset',
-    2,
-    INSTANCE_OFFSETS.shadowOffset,
-  );
-  const fillColorAttribute = instanceAttribute(geometry, instanceData, 'msdfFillColor', 4, INSTANCE_OFFSETS.fillColor);
-  const outlineColorAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfOutlineColor',
-    4,
-    INSTANCE_OFFSETS.outlineColor,
-  );
-  const outlineWidthAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfOutlineWidth',
-    1,
-    INSTANCE_OFFSETS.outlineWidth,
-  );
-  const shadowColorAttribute = instanceAttribute(
-    geometry,
-    instanceData,
-    'msdfShadowColor',
-    4,
-    INSTANCE_OFFSETS.shadowColor,
-  );
-  const pageIndexAttribute = instanceAttribute(geometry, instanceData, 'msdfPageIndex', 1, INSTANCE_OFFSETS.pageIndex);
+  ).setUsage(THREE.DynamicDrawUsage);
+  instanceAttribute(geometry, instanceData, 'msdfOrigin', 2, INSTANCE_OFFSETS.origin);
+  instanceAttribute(geometry, instanceData, 'msdfSize', 2, INSTANCE_OFFSETS.size);
+  instanceAttribute(geometry, instanceData, 'msdfUvOrigin', 2, INSTANCE_OFFSETS.uvOrigin);
+  instanceAttribute(geometry, instanceData, 'msdfUvSize', 2, INSTANCE_OFFSETS.uvSize);
+  instanceAttribute(geometry, instanceData, 'msdfUvBounds', 4, INSTANCE_OFFSETS.uvBounds);
+  instanceAttribute(geometry, instanceData, 'msdfShadowOffset', 2, INSTANCE_OFFSETS.shadowOffset);
+  instanceAttribute(geometry, instanceData, 'msdfFillColor', 4, INSTANCE_OFFSETS.fillColor);
+  instanceAttribute(geometry, instanceData, 'msdfOutlineColor', 4, INSTANCE_OFFSETS.outlineColor);
+  instanceAttribute(geometry, instanceData, 'msdfOutlineWidth', 1, INSTANCE_OFFSETS.outlineWidth);
+  instanceAttribute(geometry, instanceData, 'msdfShadowColor', 4, INSTANCE_OFFSETS.shadowColor);
+  instanceAttribute(geometry, instanceData, 'msdfPageIndex', 1, INSTANCE_OFFSETS.pageIndex);
   const mesh = new THREE.Mesh(geometry, msdfMaterial(resource.atlas, resource.pixelRange));
   mesh.frustumCulled = false;
   mesh.renderOrder = glyphIndices[0] ?? 0;
   const run: MsdfBatchRun = {
-    glyphIndices: Uint32Array.from(glyphIndices),
+    capacity,
+    glyphIndices: new Uint32Array(capacity),
+    logicalCount: count,
     instanceData,
-    paintStructure: new Float64Array(count * PAINT_STRUCTURE_STRIDE),
-    originAttribute,
-    sizeAttribute,
-    uvOriginAttribute,
-    uvSizeAttribute,
-    uvBoundsAttribute,
-    shadowOffsetAttribute,
-    fillColorAttribute,
-    outlineColorAttribute,
-    outlineWidthAttribute,
-    shadowColorAttribute,
-    pageIndexAttribute,
+    paintStructure: new Float64Array(capacity * PAINT_STRUCTURE_STRIDE),
     geometry,
     mesh,
   };
-  updateMsdfRun(layout, resource, run, paint);
+  run.glyphIndices.set(glyphIndices);
+  writeMsdfInstances(layout, resource, run.instanceData.array as Float32Array, glyphIndices, paint, run.paintStructure);
+  run.instanceData.needsUpdate = true;
   return run;
 }
 
@@ -501,75 +445,179 @@ function instanceAttribute(
   return attribute;
 }
 
-function updateMsdfRun(layout: ParagraphLayout, resource: MsdfResource, run: MsdfBatchRun, paint: GlyphPaint): void {
-  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
-  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    const glyphIndex = run.glyphIndices[instance]!;
-    const paintEntry = resolvedPaint(paint, glyphIndex);
-    writeMsdfInstance(layout, resource, run, records, instance, glyphIndex, paintEntry);
-  }
-  run.instanceData.needsUpdate = true;
-}
-
-function assertMsdfBatchPaintUpdate(
+function writeMsdfInstances(
   layout: ParagraphLayout,
   resource: MsdfResource,
+  values: Float32Array,
+  glyphIndices: Uint32Array,
+  paint: GlyphPaint,
+  paintStructure?: Float64Array,
+): void {
+  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
+  for (let instance = 0; instance < glyphIndices.length; instance += 1) {
+    const glyphIndex = glyphIndices[instance]!;
+    const paintEntry = resolvedPaint(paint, glyphIndex);
+    writeMsdfInstance(layout, resource, values, records, instance, glyphIndex, paintEntry, paintStructure);
+  }
+}
+
+function collectMsdfGlyphIndices(layout: ParagraphLayout, resource: MsdfResource, fontSlot: number): Uint32Array {
+  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
+  let count = 0;
+  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
+    const glyphId = layout.glyphIds[glyphIndex];
+    if (glyphId === undefined || glyphId >= resource.records.byteLength / RECORD_STRIDE) {
+      throw new TypeError('paragraph layout references an MTSDF glyph outside the registered font');
+    }
+    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
+    if (pageIndex === ABSENT_PAGE) continue;
+    if (resource.pages[pageIndex] === undefined) throw new TypeError('MTSDF batch references a missing page');
+    count += 1;
+  }
+  const glyphIndices = new Uint32Array(count);
+  let instance = 0;
+  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
+    const glyphId = layout.glyphIds[glyphIndex]!;
+    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
+    if (pageIndex !== ABSENT_PAGE) glyphIndices[instance++] = glyphIndex;
+  }
+  return glyphIndices;
+}
+
+interface MsdfBatchUpdate {
+  commit(): void;
+  dispose(): void;
+}
+
+function stageMsdfBatchUpdate(
+  context: MsdfBatchContext,
+  layout: ParagraphLayout,
+  resource: MsdfResource,
+  fontSlot: number,
+  paint: GlyphPaint,
+): MsdfBatchUpdate | undefined {
+  assertParallelRasterLayout(layout, paint);
+  assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
+  assertMsdfPaint(paint);
+  const glyphIndices = collectMsdfGlyphIndices(layout, resource, fontSlot);
+  const run = context.run;
+  if (run === undefined) {
+    if (glyphIndices.length !== 0) return undefined;
+    let disposed = false;
+    return {
+      commit() {
+        if (disposed) return;
+        disposed = true;
+        context.layout = layout;
+      },
+      dispose() {
+        disposed = true;
+      },
+    };
+  }
+  if (glyphIndices.length > run.capacity) return undefined;
+
+  const values = new Float32Array(glyphIndices.length * INSTANCE_STRIDE);
+  const paintStructure = new Float64Array(glyphIndices.length * PAINT_STRUCTURE_STRIDE);
+  writeMsdfInstances(layout, resource, values, glyphIndices, paint, paintStructure);
+  const liveValues = run.instanceData.array as Float32Array;
+  return stageMsdfRunCommit(run, liveValues, values, glyphIndices, () => {
+    run.paintStructure.set(paintStructure);
+    context.layout = layout;
+  });
+}
+
+function stageMsdfPaintUpdate(
+  layout: ParagraphLayout,
   run: MsdfBatchRun | undefined,
   paint: GlyphPaint,
-): void {
+): MsdfBatchUpdate {
   assertParallelRasterPaint(layout, paint);
   assertMsdfPaint(paint);
-  if (run === undefined) return;
-  for (const glyphIndex of run.glyphIndices) {
-    const entry = resolvedPaint(paint, glyphIndex);
-    const fontSize = layout.glyphFontSizes[glyphIndex]!;
-    resolveMsdfOutlineAtlasPixels(resource, fontSize, entry.outline?.width ?? 0);
-  }
-}
-
-function commitMsdfBatchPaint(
-  run: MsdfBatchRun | undefined,
-  layout: ParagraphLayout,
-  resource: MsdfResource,
-  paint: GlyphPaint,
-): void {
-  if (run === undefined) return;
-  if (sameMsdfPaintStructure(run, paint)) updateMsdfRunColors(run, paint);
-  else updateMsdfRun(layout, resource, run, paint);
-}
-
-const PAINT_STRUCTURE_STRIDE = 3;
-
-function sameMsdfPaintStructure(run: MsdfBatchRun, next: GlyphPaint): boolean {
-  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+  if (run === undefined) return noOpMsdfBatchUpdate;
+  const logicalLength = run.logicalCount * INSTANCE_STRIDE;
+  const values = new Float32Array((run.instanceData.array as Float32Array).subarray(0, logicalLength));
+  for (let instance = 0; instance < run.logicalCount; instance += 1) {
     const glyphIndex = run.glyphIndices[instance]!;
-    const nextPaint = resolvedPaint(next, glyphIndex);
+    const entry = resolvedPaint(paint, glyphIndex);
+    const offset = instance * INSTANCE_STRIDE;
+    values.set(entry.color, offset + INSTANCE_OFFSETS.fillColor);
+    values.set(entry.outline?.color ?? TRANSPARENT_LINEAR_RGBA, offset + INSTANCE_OFFSETS.outlineColor);
+    values.set(entry.shadow?.color ?? TRANSPARENT_LINEAR_RGBA, offset + INSTANCE_OFFSETS.shadowColor);
+  }
+  return stageMsdfRunCommit(
+    run,
+    run.instanceData.array as Float32Array,
+    values,
+    run.glyphIndices.subarray(0, run.logicalCount),
+    () => undefined,
+  );
+}
+
+function stageMsdfRunCommit(
+  run: MsdfBatchRun,
+  liveValues: Float32Array,
+  values: Float32Array,
+  glyphIndices: Uint32Array,
+  beforeCommit: () => void,
+): MsdfBatchUpdate {
+  const logicalCount = glyphIndices.length;
+  const ranges = rasterInstanceUpdateRanges(
+    liveValues,
+    values,
+    run.instanceData.updateRanges,
+    run.logicalCount,
+    logicalCount,
+    INSTANCE_STRIDE,
+  );
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      beforeCommit();
+      liveValues.set(values);
+      run.glyphIndices.set(glyphIndices);
+      run.logicalCount = logicalCount;
+      run.geometry.instanceCount = logicalCount;
+      run.mesh.renderOrder = glyphIndices[0] ?? 0;
+      if (ranges.length === 0) return;
+      run.instanceData.clearUpdateRanges();
+      for (const range of ranges) run.instanceData.addUpdateRange(range.start, range.count);
+      run.instanceData.needsUpdate = true;
+    },
+    dispose() {
+      disposed = true;
+    },
+  };
+}
+
+const noOpMsdfBatchUpdate: MsdfBatchUpdate = { commit: () => undefined, dispose: () => undefined };
+
+function sameMsdfPaintStructure(run: MsdfBatchRun | undefined, paint: GlyphPaint): boolean {
+  if (run === undefined) return true;
+  for (let instance = 0; instance < run.logicalCount; instance += 1) {
+    const glyphIndex = run.glyphIndices[instance]!;
+    const entry = resolvedPaint(paint, glyphIndex);
     const offset = instance * PAINT_STRUCTURE_STRIDE;
-    if (run.paintStructure[offset] !== (nextPaint.outline?.width ?? 0)) return false;
-    if (run.paintStructure[offset + 1] !== (nextPaint.shadow?.offset[0] ?? 0)) return false;
-    if (run.paintStructure[offset + 2] !== (nextPaint.shadow?.offset[1] ?? 0)) return false;
+    if (run.paintStructure[offset] !== (entry.outline?.width ?? 0)) return false;
+    if (run.paintStructure[offset + 1] !== (entry.shadow?.offset[0] ?? 0)) return false;
+    if (run.paintStructure[offset + 2] !== (entry.shadow?.offset[1] ?? 0)) return false;
   }
   return true;
-}
-
-function updateMsdfRunColors(run: MsdfBatchRun, paint: GlyphPaint): void {
-  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    const paintEntry = resolvedPaint(paint, run.glyphIndices[instance]!);
-    setAttribute4(run.fillColorAttribute, instance, ...paintEntry.color);
-    setAttribute4(run.outlineColorAttribute, instance, ...(paintEntry.outline?.color ?? TRANSPARENT_LINEAR_RGBA));
-    setAttribute4(run.shadowColorAttribute, instance, ...(paintEntry.shadow?.color ?? TRANSPARENT_LINEAR_RGBA));
-  }
-  run.instanceData.needsUpdate = true;
 }
 
 function writeMsdfInstance(
   layout: ParagraphLayout,
   resource: MsdfResource,
-  run: MsdfBatchRun,
+  values: Float32Array,
   records: DataView,
   instance: number,
   glyphIndex: number,
   paint: ResolvedPaint,
+  paintStructure: Float64Array | undefined,
 ): void {
   const glyphId = layout.glyphIds[glyphIndex]!;
   const record = glyphId * RECORD_STRIDE;
@@ -604,21 +652,32 @@ function writeMsdfInstance(
   const uvOriginX = baseUvX + (originX - baseOriginX) * uvPerUnitX;
   const uvOriginY = baseUvY + (originY - baseOriginY) * uvPerUnitY;
   const outlineAtlasPixels = resolveMsdfOutlineAtlasPixels(resource, fontSize, paint.outline?.width ?? 0);
-  setAttribute2(run.originAttribute, instance, originX, originY);
-  setAttribute2(run.sizeAttribute, instance, width, height);
-  setAttribute2(run.uvOriginAttribute, instance, uvOriginX, uvOriginY);
-  setAttribute2(run.uvSizeAttribute, instance, width * uvPerUnitX, height * uvPerUnitY);
-  setAttribute4(run.uvBoundsAttribute, instance, baseUvX, baseUvY, baseUvX + baseUvWidth, baseUvY + baseUvHeight);
-  setAttribute2(run.shadowOffsetAttribute, instance, shadowX * uvPerUnitX, shadowY * uvPerUnitY);
-  setAttribute4(run.fillColorAttribute, instance, ...paint.color);
-  setAttribute4(run.outlineColorAttribute, instance, ...(paint.outline?.color ?? TRANSPARENT_LINEAR_RGBA));
-  setAttribute1(run.outlineWidthAttribute, instance, outlineAtlasPixels / resource.pixelRange);
-  setAttribute4(run.shadowColorAttribute, instance, ...(paint.shadow?.color ?? TRANSPARENT_LINEAR_RGBA));
-  setAttribute1(run.pageIndexAttribute, instance, pageIndex);
-  const paintStructureOffset = instance * PAINT_STRUCTURE_STRIDE;
-  run.paintStructure[paintStructureOffset] = paint.outline?.width ?? 0;
-  run.paintStructure[paintStructureOffset + 1] = shadowX;
-  run.paintStructure[paintStructureOffset + 2] = sourceShadowY;
+  const offset = instance * INSTANCE_STRIDE;
+  values[offset + INSTANCE_OFFSETS.origin] = originX;
+  values[offset + INSTANCE_OFFSETS.origin + 1] = originY;
+  values[offset + INSTANCE_OFFSETS.size] = width;
+  values[offset + INSTANCE_OFFSETS.size + 1] = height;
+  values[offset + INSTANCE_OFFSETS.uvOrigin] = uvOriginX;
+  values[offset + INSTANCE_OFFSETS.uvOrigin + 1] = uvOriginY;
+  values[offset + INSTANCE_OFFSETS.uvSize] = width * uvPerUnitX;
+  values[offset + INSTANCE_OFFSETS.uvSize + 1] = height * uvPerUnitY;
+  values[offset + INSTANCE_OFFSETS.uvBounds] = baseUvX;
+  values[offset + INSTANCE_OFFSETS.uvBounds + 1] = baseUvY;
+  values[offset + INSTANCE_OFFSETS.uvBounds + 2] = baseUvX + baseUvWidth;
+  values[offset + INSTANCE_OFFSETS.uvBounds + 3] = baseUvY + baseUvHeight;
+  values[offset + INSTANCE_OFFSETS.shadowOffset] = shadowX * uvPerUnitX;
+  values[offset + INSTANCE_OFFSETS.shadowOffset + 1] = shadowY * uvPerUnitY;
+  values.set(paint.color, offset + INSTANCE_OFFSETS.fillColor);
+  values.set(paint.outline?.color ?? TRANSPARENT_LINEAR_RGBA, offset + INSTANCE_OFFSETS.outlineColor);
+  values[offset + INSTANCE_OFFSETS.outlineWidth] = outlineAtlasPixels / resource.pixelRange;
+  values.set(paint.shadow?.color ?? TRANSPARENT_LINEAR_RGBA, offset + INSTANCE_OFFSETS.shadowColor);
+  values[offset + INSTANCE_OFFSETS.pageIndex] = pageIndex;
+  if (paintStructure !== undefined) {
+    const structureOffset = instance * PAINT_STRUCTURE_STRIDE;
+    paintStructure[structureOffset] = paint.outline?.width ?? 0;
+    paintStructure[structureOffset + 1] = shadowX;
+    paintStructure[structureOffset + 2] = sourceShadowY;
+  }
 }
 
 function resolveMsdfOutlineAtlasPixels(resource: MsdfResource, fontSize: number, outlineWidth: number): number {
@@ -634,38 +693,6 @@ function resolveMsdfOutlineAtlasPixels(resource: MsdfResource, fontSize: number,
 }
 
 const TRANSPARENT_LINEAR_RGBA = [0, 0, 0, 0] as const;
-
-function attributeArrayOffset(attribute: THREE.InterleavedBufferAttribute, instance: number): number {
-  return instance * attribute.data.stride + attribute.offset;
-}
-
-function setAttribute1(attribute: THREE.InterleavedBufferAttribute, instance: number, x: number): void {
-  const array = attribute.data.array as Float32Array;
-  array[attributeArrayOffset(attribute, instance)] = x;
-}
-
-function setAttribute2(attribute: THREE.InterleavedBufferAttribute, instance: number, x: number, y: number): void {
-  const array = attribute.data.array as Float32Array;
-  const offset = attributeArrayOffset(attribute, instance);
-  array[offset] = x;
-  array[offset + 1] = y;
-}
-
-function setAttribute4(
-  attribute: THREE.InterleavedBufferAttribute,
-  instance: number,
-  x: number,
-  y: number,
-  z: number,
-  w: number,
-): void {
-  const array = attribute.data.array as Float32Array;
-  const offset = attributeArrayOffset(attribute, instance);
-  array[offset] = x;
-  array[offset + 1] = y;
-  array[offset + 2] = z;
-  array[offset + 3] = w;
-}
 
 function resolvedPaint(paint: GlyphPaint, glyphIndex: number): ResolvedPaint {
   const paintIndex = paint.paintIndices[glyphIndex];

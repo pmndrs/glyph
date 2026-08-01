@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:e7c99c8d10158636b5eb15a053e1d34ff2f16fa19470e06396a1b46f61897332'
+source_digest: 'sha256:87815fb10ee113959affd493fa5f766e82e9693adb9faa04b92cdae54d81f19c'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -64,7 +64,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T15:28:00Z'
+  at: '2026-08-01T20:19:48Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -187,7 +187,7 @@ The browser product also carries the React 19 subpath proofs. A shared registry 
 
 The initial deterministic browser probe is admitted with a checked-in record: 100 executions across 10 fresh GPU-friendly Chromium/Vite lifecycles, zero retries/failures, unique causal completion identities, and wrong-expectation plus withheld-completion negative controls. Probe exit status and every parsed lifecycle/environment field are validated before publication. Browser scripts navigate only through DOM readiness and then wait on the product's own completion promise or visible state; they do not use network-idle heuristics. Exact contract comparison rejects non-finite numbers, exotic objects, key-order differences, and missing or additional fields without JSON coercion. The current live probe executes the exact TSL graph on asserted WebGPU and forced WebGL2 backends before paragraph measurement, positioned-layout, bidi/policy, CJK, and mobile Playwright flows. This proves a real GPU shader workload while reserving the rendered-font claim for item 6.1.
 
-The final lifecycle remediation revises the reviewed browser-core raw ceiling from 330,000 to 331,000 bytes. Independent pre-coverage caps advance only for browser core and the Bitmap/MTSDF runtime closures that contain it, retaining 13–120 bytes of headroom over the current values. Every absolute minified/compressed budget and every baker-host and Wasm ceiling remains unchanged.
+Roadmap item 10.3 leaves browser core, every baker host, and every Wasm artifact byte-identical. Relative to the warm-publication baseline, bounded retained capacity adds 5,155 raw / 2,779 minified / 627 gzip / 598 Brotli bytes to the optional Bitmap closure, 6,038 / 3,148 / 778 / 762 to MTSDF, and 9,309 / 4,976 / 1,238 / 1,204 to Slug. A dedicated regression bounds those increments independently from the accumulated pre-coverage baseline. All three remain below the existing absolute 425,000 raw / 325,000 minified / 95,000 gzip / 75,000 Brotli renderer ceilings, so no absolute runtime, baker-host, or Wasm budget changes.
 
 ## Package scripts
 

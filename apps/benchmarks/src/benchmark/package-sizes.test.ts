@@ -65,7 +65,7 @@ describe('independent package-size report', () => {
     }
   });
 
-  it('bounds the accepted coverage-capability growth from its pre-coverage baseline', () => {
+  it('bounds accumulated renderer growth from the pre-coverage baseline', () => {
     const coverageGrowth = {
       'browser-core': {
         rawBytes: { baseline: 324_269, maximumGrowth: 16_000 },
@@ -86,10 +86,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
       },
       'bitmap-runtime-js': {
-        rawBytes: { baseline: 361_809, maximumGrowth: 20_500 },
-        minifiedBytes: { baseline: 271_005, maximumGrowth: 13_000 },
-        gzipBytes: { baseline: 78_673, maximumGrowth: 2_800 },
-        brotliBytes: { baseline: 60_857, maximumGrowth: 2_350 },
+        rawBytes: { baseline: 361_809, maximumGrowth: 25_500 },
+        minifiedBytes: { baseline: 271_005, maximumGrowth: 15_750 },
+        gzipBytes: { baseline: 78_673, maximumGrowth: 3_450 },
+        brotliBytes: { baseline: 60_857, maximumGrowth: 2_950 },
       },
       'mtsdf-baker-wasm': {
         rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
@@ -104,10 +104,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
       },
       'mtsdf-runtime-js': {
-        rawBytes: { baseline: 370_255, maximumGrowth: 19_750 },
-        minifiedBytes: { baseline: 275_271, maximumGrowth: 12_500 },
-        gzipBytes: { baseline: 79_993, maximumGrowth: 2_800 },
-        brotliBytes: { baseline: 62_081, maximumGrowth: 2_300 },
+        rawBytes: { baseline: 370_255, maximumGrowth: 25_650 },
+        minifiedBytes: { baseline: 275_271, maximumGrowth: 15_600 },
+        gzipBytes: { baseline: 79_993, maximumGrowth: 3_600 },
+        brotliBytes: { baseline: 62_081, maximumGrowth: 3_050 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
@@ -118,6 +118,32 @@ describe('independent package-size report', () => {
       for (const field of fields) {
         const { baseline, maximumGrowth } = expectation[field];
         expect(entry[field] - baseline).toBeLessThanOrEqual(maximumGrowth);
+      }
+    }
+  });
+
+  it('bounds retained-capacity growth from the warm-publication baseline', () => {
+    const retainedCapacityGrowth = {
+      'bitmap-runtime-js': {
+        baseline: { rawBytes: 382_060, minifiedBytes: 283_898, gzipBytes: 81_435, brotliBytes: 63_146 },
+        maximumGrowth: { rawBytes: 5_200, minifiedBytes: 2_850, gzipBytes: 700, brotliBytes: 650 },
+      },
+      'mtsdf-runtime-js': {
+        baseline: { rawBytes: 389_761, minifiedBytes: 287_629, gzipBytes: 82_721, brotliBytes: 64_286 },
+        maximumGrowth: { rawBytes: 6_100, minifiedBytes: 3_200, gzipBytes: 850, brotliBytes: 825 },
+      },
+      'slug-runtime-js': {
+        baseline: { rawBytes: 390_276, minifiedBytes: 286_600, gzipBytes: 82_730, brotliBytes: 64_271 },
+        maximumGrowth: { rawBytes: 9_400, minifiedBytes: 5_050, gzipBytes: 1_300, brotliBytes: 1_275 },
+      },
+    } as const;
+    const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
+    for (const [id, expectation] of Object.entries(retainedCapacityGrowth)) {
+      const entry = report.entries.find((candidate) => candidate.id === id);
+      expect(entry?.status).toBe('measured');
+      if (entry?.status !== 'measured') throw new Error(`Missing measured size entry: ${id}`);
+      for (const field of fields) {
+        expect(entry[field] - expectation.baseline[field]).toBeLessThanOrEqual(expectation.maximumGrowth[field]);
       }
     }
   });

@@ -1196,7 +1196,7 @@ function bitmapOrigins(object) {
   for (const mesh of object.children) {
     const attribute = mesh.geometry?.getAttribute('bitmapOrigin');
     assert.ok(attribute);
-    values.push(...attribute.array);
+    values.push(...attribute.array.subarray(0, mesh.geometry.instanceCount * attribute.itemSize));
   }
   return Float32Array.from(values);
 }

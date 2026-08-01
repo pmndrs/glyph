@@ -21,6 +21,7 @@ import type { RegisteredFont } from '../font.js';
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint } from '../paint.js';
 import { assertParallelRasterLayout, resolvedGlyphColor, unitRasterQuadGeometry } from '../internal/raster-batch.js';
+import { rasterInstanceCapacity, rasterInstanceUpdateRanges } from '../internal/raster-instance-capacity.js';
 import {
   ABSENT_GLYPH_PAGE,
   DENSE_GLYPH_RECORD_STRIDE,
@@ -98,9 +99,13 @@ export interface BitmapResource {
 }
 
 interface BitmapBatchRun {
-  readonly glyphIndices: Uint32Array;
+  readonly capacity: number;
+  glyphIndices: Uint32Array;
+  logicalCount: number;
   readonly originAttribute: THREE.InstancedBufferAttribute;
   readonly sizeAttribute: THREE.InstancedBufferAttribute;
+  readonly uvOriginAttribute: THREE.InstancedBufferAttribute;
+  readonly uvSizeAttribute: THREE.InstancedBufferAttribute;
   targetOrigins?: Float32Array;
   readonly colorAttribute: THREE.InstancedBufferAttribute;
   readonly geometry: THREE.InstancedBufferGeometry;
@@ -211,7 +216,7 @@ export function bitmap<const Strikes extends readonly [number, ...number[]]>(
 export function captureBitmapGlyphPositions(object: THREE.Object3D): BitmapGlyphPositionSnapshot {
   const batch = presentableBitmapBatch(object);
   const identities = bitmapGlyphIdentities(batch.layout);
-  const glyphCount = batch.runs.reduce((count, run) => count + run.glyphIndices.length, 0);
+  const glyphCount = batch.runs.reduce((count, run) => count + run.logicalCount, 0);
   const fontHandles = new Uint32Array(glyphCount);
   const glyphIds = new Uint16Array(glyphCount);
   const clusters = new Uint32Array(glyphCount);
@@ -221,7 +226,7 @@ export function captureBitmapGlyphPositions(object: THREE.Object3D): BitmapGlyph
   let outputIndex = 0;
   for (const run of batch.runs) {
     const displayedOrigins = run.originAttribute.array as Float32Array;
-    for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+    for (let instance = 0; instance < run.logicalCount; instance += 1) {
       const glyphIndex = run.glyphIndices[instance]!;
       fontHandles[outputIndex] = identities.fontHandles[glyphIndex]!;
       glyphIds[outputIndex] = batch.layout.glyphIds[glyphIndex]!;
@@ -260,10 +265,10 @@ export function createBitmapGlyphPositionTransition(
   let targetGlyphs = 0;
   for (const run of batch.runs) {
     const displayedOrigins = run.originAttribute.array as Float32Array;
-    const targetOrigins = run.targetOrigins ?? displayedOrigins.slice();
+    const targetOrigins = run.targetOrigins ?? displayedOrigins.slice(0, run.logicalCount * 2);
     run.targetOrigins = targetOrigins;
     const fromOrigins = targetOrigins.slice();
-    for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+    for (let instance = 0; instance < run.logicalCount; instance += 1) {
       const glyphIndex = run.glyphIndices[instance]!;
       const key = bitmapGlyphIdentityKey(
         identities.fontHandles[glyphIndex]!,
@@ -300,10 +305,12 @@ export function createBitmapGlyphPositionTransition(
       const fromOrigins = fromOriginsByRun[runIndex]!;
       const targetOrigins = targetOriginsByRun[runIndex]!;
       const displayedOrigins = run.originAttribute.array as Float32Array;
-      for (let offset = 0; offset < displayedOrigins.length; offset += 1) {
+      for (let offset = 0; offset < run.logicalCount * 2; offset += 1) {
         const start = fromOrigins[offset]!;
         displayedOrigins[offset] = start + (targetOrigins[offset]! - start) * nextProgress;
       }
+      run.originAttribute.clearUpdateRanges();
+      run.originAttribute.addUpdateRange(0, run.logicalCount * 2);
       run.originAttribute.needsUpdate = true;
     }
     progress = nextProgress;
@@ -522,40 +529,12 @@ function buildBitmapBatches(
   assertParallelRasterLayout(layout, paint);
   assertRasterCoverage(layout, fontSlot, resource.coverage, BITMAP_KIND);
   const strike = selectBitmapStrike(resource.strikes, layout, fontSlot, rasterPixelRatio);
-  const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
   const group = new THREE.Group();
-  const runs: BitmapBatchRun[] = [];
-  let glyphCount = 0;
-  let pendingPage = -1;
-  let pendingGlyphs: number[] = [];
-
-  const finishRun = (): void => {
-    if (pendingGlyphs.length === 0) return;
-    const page = strike.pages[pendingPage];
-    if (page === undefined) throw new TypeError('bitmap batch references a missing page');
-    const run = createBitmapRun(layout, strike, page, pendingGlyphs, paint);
-    runs.push(run);
+  const runs = collectBitmapRunPlans(layout, strike, fontSlot).map(({ page, glyphIndices }) => {
+    const run = createBitmapRun(layout, strike, page, glyphIndices, paint);
     group.add(run.mesh);
-    glyphCount += pendingGlyphs.length;
-    pendingGlyphs = [];
-  };
-
-  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
-    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
-    const glyphId = layout.glyphIds[glyphIndex];
-    if (glyphId === undefined) continue;
-    if (glyphId >= strike.records.byteLength / RECORD_STRIDE) {
-      throw new TypeError('paragraph layout references a bitmap glyph outside the registered font');
-    }
-    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
-    if (pageIndex === ABSENT_PAGE) continue;
-    if (pendingPage !== pageIndex) {
-      finishRun();
-      pendingPage = pageIndex;
-    }
-    pendingGlyphs.push(glyphIndex);
-  }
-  finishRun();
+    return run;
+  });
 
   const presentation: PresentableBitmapBatch = {
     layout,
@@ -570,8 +549,12 @@ function buildBitmapBatches(
   let disposed = false;
   return {
     object: group,
-    glyphCount,
-    drawCount: runs.length,
+    get glyphCount() {
+      return runs.reduce((count, run) => count + run.logicalCount, 0);
+    },
+    get drawCount() {
+      return runs.reduce((count, run) => count + (run.logicalCount === 0 ? 0 : 1), 0);
+    },
     strikePpem: strike.ppem,
     dispose() {
       if (disposed) return;
@@ -604,142 +587,103 @@ function stageBitmapBatchUpdate(
   const strike = selectBitmapStrike(resource.strikes, layout, fontSlot, rasterPixelRatio);
   if (strike !== presentation.strike) return undefined;
   if (layout === presentation.layout) return stageBitmapPaintUpdate(presentation.runs, paint);
-  const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
-  let runIndex = 0;
-  let instance = 0;
-  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
-    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
-    const glyphId = layout.glyphIds[glyphIndex];
-    if (glyphId === undefined || glyphId >= strike.records.byteLength / RECORD_STRIDE) return undefined;
-    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
-    if (pageIndex === ABSENT_PAGE) continue;
-    const run = presentation.runs[runIndex];
-    if (
-      run === undefined ||
-      run.glyphIndices[instance] !== glyphIndex ||
-      run.page !== strike.pages[pageIndex] ||
-      presentation.layout.glyphIds[glyphIndex] !== glyphId
-    ) {
-      return undefined;
-    }
-    instance += 1;
-    if (instance === run.glyphIndices.length) {
-      runIndex += 1;
-      instance = 0;
-    }
+  const plans = collectBitmapRunPlans(layout, strike, fontSlot);
+  if (
+    plans.length !== presentation.runs.length ||
+    plans.some(({ page, glyphIndices }, index) => {
+      const run = presentation.runs[index];
+      return run === undefined || run.page !== page || glyphIndices.length > run.capacity;
+    })
+  ) {
+    return undefined;
   }
-  if (runIndex !== presentation.runs.length || instance !== 0) return undefined;
-
-  const staged = presentation.runs.map((run) => {
-    const origins = new Float32Array(run.glyphIndices.length * 2);
-    const sizes = new Float32Array(run.glyphIndices.length * 2);
-    const colors = new Float32Array(run.glyphIndices.length * 4);
-    for (let index = 0; index < run.glyphIndices.length; index += 1) {
-      const glyphIndex = run.glyphIndices[index]!;
-      const glyphId = layout.glyphIds[glyphIndex]!;
-      const record = glyphId * RECORD_STRIDE;
-      const scale = layout.glyphFontSizes[glyphIndex]! / strike.planeUnitsPerEm;
-      const planeLeft = records.getInt16(record, true);
-      const planeBottom = records.getInt16(record + 2, true);
-      const planeRight = records.getInt16(record + 4, true);
-      const planeTop = records.getInt16(record + 6, true);
-      origins.set([layout.x[glyphIndex]! + planeLeft * scale, -layout.y[glyphIndex]! + planeBottom * scale], index * 2);
-      sizes.set([(planeRight - planeLeft) * scale, (planeTop - planeBottom) * scale], index * 2);
-      colors.set(resolvedGlyphColor(paint, glyphIndex), index * 4);
-    }
-    return {
-      run,
-      origins: sameFloatValues(origins, run.originAttribute.array as Float32Array) ? undefined : origins,
-      sizes: sameFloatValues(sizes, run.sizeAttribute.array as Float32Array) ? undefined : sizes,
-      colors: sameFloatValues(colors, run.colorAttribute.array as Float32Array) ? undefined : colors,
-    };
+  const staged = plans.map(({ glyphIndices, page }, index) => {
+    const run = presentation.runs[index]!;
+    return stageBitmapRunUpdate(run, glyphIndices, bitmapRunValues(layout, strike, page, glyphIndices, paint));
   });
   let disposed = false;
   return {
     commit() {
       if (disposed) return;
       disposed = true;
-      for (const update of staged) {
-        commitAttribute(update.run.originAttribute, update.origins);
-        commitAttribute(update.run.sizeAttribute, update.sizes);
-        commitAttribute(update.run.colorAttribute, update.colors);
-        delete update.run.targetOrigins;
-      }
+      for (const update of staged) update.commit();
       presentation.layout = layout;
       presentation.revision += 1;
     },
     dispose() {
       disposed = true;
+      for (const update of staged) update.dispose();
     },
   };
 }
 
-function stageBitmapPaintUpdate(runs: readonly BitmapBatchRun[], paint: GlyphPaint): BitmapBatchUpdate {
-  const staged = runs.map((run) => {
-    const colors = new Float32Array(run.glyphIndices.length * 4);
-    for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-      colors.set(resolvedGlyphColor(paint, run.glyphIndices[instance]!), instance * 4);
-    }
-    return {
-      attribute: run.colorAttribute,
-      colors: sameFloatValues(colors, run.colorAttribute.array as Float32Array) ? undefined : colors,
-    };
-  });
-  let disposed = false;
-  return {
-    commit() {
-      if (disposed) return;
-      disposed = true;
-      for (const update of staged) commitAttribute(update.attribute, update.colors);
-    },
-    dispose() {
-      disposed = true;
-    },
-  };
+interface BitmapRunPlan {
+  readonly page: BitmapPageResource;
+  readonly glyphIndices: Uint32Array;
 }
 
-function sameFloatValues(left: Float32Array, right: Float32Array): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+interface BitmapRunValues {
+  readonly origins: Float32Array;
+  readonly sizes: Float32Array;
+  readonly uvOrigins: Float32Array;
+  readonly uvSizes: Float32Array;
+  readonly colors: Float32Array;
 }
 
-function commitAttribute(bufferAttribute: THREE.InstancedBufferAttribute, values: Float32Array | undefined): void {
-  if (values === undefined) return;
-  (bufferAttribute.array as Float32Array).set(values);
-  bufferAttribute.clearUpdateRanges();
-  bufferAttribute.addUpdateRange(0, values.length);
-  bufferAttribute.needsUpdate = true;
+interface BitmapAttributeUpdate {
+  commit(): void;
+  dispose(): void;
 }
 
-function selectBitmapStrike(
-  strikes: readonly BitmapStrikeResource[],
+function collectBitmapRunPlans(
   layout: ParagraphLayout,
+  strike: BitmapStrikeResource,
   fontSlot: number,
-  rasterPixelRatio: number,
-): BitmapStrikeResource {
-  let maximumFontSize = 0;
-  for (let index = 0; index < layout.glyphFontSizes.length; index += 1) {
-    if (layout.glyphFontSlots[index] === fontSlot) {
-      maximumFontSize = Math.max(maximumFontSize, layout.glyphFontSizes[index] ?? 0);
+): readonly BitmapRunPlan[] {
+  const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
+  const runs: BitmapRunPlan[] = [];
+  let pendingPage = -1;
+  let pendingGlyphs: number[] = [];
+  const finishRun = (): void => {
+    if (pendingGlyphs.length === 0) return;
+    const page = strike.pages[pendingPage];
+    if (page === undefined) throw new TypeError('bitmap batch references a missing page');
+    runs.push({ page, glyphIndices: Uint32Array.from(pendingGlyphs) });
+    pendingGlyphs = [];
+  };
+  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
+    const glyphId = layout.glyphIds[glyphIndex];
+    if (glyphId === undefined || glyphId >= strike.records.byteLength / RECORD_STRIDE) {
+      throw new TypeError('paragraph layout references a bitmap glyph outside the registered font');
     }
+    const pageIndex = records.getUint16(glyphId * RECORD_STRIDE + 16, true);
+    if (pageIndex === ABSENT_PAGE) continue;
+    if (strike.pages[pageIndex] === undefined) throw new TypeError('bitmap batch references a missing page');
+    if (pendingPage !== pageIndex) {
+      finishRun();
+      pendingPage = pageIndex;
+    }
+    pendingGlyphs.push(glyphIndex);
   }
-  return strikes[nearestBitmapStrikeIndex(strikes, maximumFontSize, rasterPixelRatio)]!;
+  finishRun();
+  return runs;
 }
 
-function createBitmapRun(
+function bitmapRunValues(
   layout: ParagraphLayout,
   strike: BitmapStrikeResource,
   page: BitmapPageResource,
-  glyphIndices: readonly number[],
+  glyphIndices: Uint32Array,
   paint: GlyphPaint,
-): BitmapBatchRun {
-  const count = glyphIndices.length;
-  const origins = new Float32Array(count * 2);
-  const sizes = new Float32Array(count * 2);
-  const uvOrigins = new Float32Array(count * 2);
-  const uvSizes = new Float32Array(count * 2);
-  const colors = new Float32Array(count * 4);
+): BitmapRunValues {
+  const origins = new Float32Array(glyphIndices.length * 2);
+  const sizes = new Float32Array(glyphIndices.length * 2);
+  const uvOrigins = new Float32Array(glyphIndices.length * 2);
+  const uvSizes = new Float32Array(glyphIndices.length * 2);
+  const colors = new Float32Array(glyphIndices.length * 4);
   const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
-  for (let instance = 0; instance < count; instance += 1) {
+  for (let instance = 0; instance < glyphIndices.length; instance += 1) {
     const glyphIndex = glyphIndices[instance]!;
     const glyphId = layout.glyphIds[glyphIndex]!;
     const record = glyphId * RECORD_STRIDE;
@@ -761,6 +705,133 @@ function createBitmapRun(
     uvSizes.set([(atlasRight - atlasLeft) / page.width, (atlasBottom - atlasTop) / page.height], instance * 2);
     colors.set(resolvedGlyphColor(paint, glyphIndex), instance * 4);
   }
+  return { origins, sizes, uvOrigins, uvSizes, colors };
+}
+
+function stageBitmapRunUpdate(
+  run: BitmapBatchRun,
+  glyphIndices: Uint32Array,
+  values: BitmapRunValues,
+): BitmapBatchUpdate {
+  const logicalCount = glyphIndices.length;
+  const attributeUpdates = [
+    stageBitmapAttribute(run.originAttribute, values.origins, run.logicalCount, 2, logicalCount),
+    stageBitmapAttribute(run.sizeAttribute, values.sizes, run.logicalCount, 2, logicalCount),
+    stageBitmapAttribute(run.uvOriginAttribute, values.uvOrigins, run.logicalCount, 2, logicalCount),
+    stageBitmapAttribute(run.uvSizeAttribute, values.uvSizes, run.logicalCount, 2, logicalCount),
+    stageBitmapAttribute(run.colorAttribute, values.colors, run.logicalCount, 4, logicalCount),
+  ];
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of attributeUpdates) update.commit();
+      run.glyphIndices.set(glyphIndices);
+      run.logicalCount = logicalCount;
+      run.geometry.instanceCount = logicalCount;
+      run.mesh.renderOrder = glyphIndices[0] ?? 0;
+      delete run.targetOrigins;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of attributeUpdates) update.dispose();
+    },
+  };
+}
+
+function stageBitmapAttribute(
+  bufferAttribute: THREE.InstancedBufferAttribute,
+  values: Float32Array,
+  previousLogicalCount: number,
+  componentStride: number,
+  logicalCount: number,
+): BitmapAttributeUpdate {
+  const liveValues = bufferAttribute.array as Float32Array;
+  const ranges = rasterInstanceUpdateRanges(
+    liveValues,
+    values,
+    bufferAttribute.updateRanges,
+    previousLogicalCount,
+    logicalCount,
+    componentStride,
+  );
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      liveValues.set(values);
+      if (ranges.length === 0) return;
+      bufferAttribute.clearUpdateRanges();
+      for (const range of ranges) bufferAttribute.addUpdateRange(range.start, range.count);
+      bufferAttribute.needsUpdate = true;
+    },
+    dispose() {
+      disposed = true;
+    },
+  };
+}
+
+function stageBitmapPaintUpdate(runs: readonly BitmapBatchRun[], paint: GlyphPaint): BitmapBatchUpdate {
+  const staged = runs.map((run) => {
+    const colors = new Float32Array(run.logicalCount * 4);
+    for (let instance = 0; instance < run.logicalCount; instance += 1) {
+      colors.set(resolvedGlyphColor(paint, run.glyphIndices[instance]!), instance * 4);
+    }
+    return stageBitmapAttribute(run.colorAttribute, colors, run.logicalCount, 4, run.logicalCount);
+  });
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) update.commit();
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) update.dispose();
+    },
+  };
+}
+
+function selectBitmapStrike(
+  strikes: readonly BitmapStrikeResource[],
+  layout: ParagraphLayout,
+  fontSlot: number,
+  rasterPixelRatio: number,
+): BitmapStrikeResource {
+  let maximumFontSize = 0;
+  for (let index = 0; index < layout.glyphFontSizes.length; index += 1) {
+    if (layout.glyphFontSlots[index] === fontSlot) {
+      maximumFontSize = Math.max(maximumFontSize, layout.glyphFontSizes[index] ?? 0);
+    }
+  }
+  return strikes[nearestBitmapStrikeIndex(strikes, maximumFontSize, rasterPixelRatio)]!;
+}
+
+function createBitmapRun(
+  layout: ParagraphLayout,
+  strike: BitmapStrikeResource,
+  page: BitmapPageResource,
+  glyphIndices: Uint32Array,
+  paint: GlyphPaint,
+): BitmapBatchRun {
+  const count = glyphIndices.length;
+  const capacity = rasterInstanceCapacity(count);
+  const origins = new Float32Array(capacity * 2);
+  const sizes = new Float32Array(capacity * 2);
+  const uvOrigins = new Float32Array(capacity * 2);
+  const uvSizes = new Float32Array(capacity * 2);
+  const colors = new Float32Array(capacity * 4);
+  const values = bitmapRunValues(layout, strike, page, glyphIndices, paint);
+  origins.set(values.origins);
+  sizes.set(values.sizes);
+  uvOrigins.set(values.uvOrigins);
+  uvSizes.set(values.uvSizes);
+  colors.set(values.colors);
 
   const geometry = unitRasterQuadGeometry();
   geometry.instanceCount = count;
@@ -768,18 +839,26 @@ function createBitmapRun(
   geometry.setAttribute('bitmapOrigin', originAttribute);
   const sizeAttribute = new THREE.InstancedBufferAttribute(sizes, 2).setUsage(THREE.DynamicDrawUsage);
   geometry.setAttribute('bitmapSize', sizeAttribute);
-  geometry.setAttribute('bitmapUvOrigin', new THREE.InstancedBufferAttribute(uvOrigins, 2));
-  geometry.setAttribute('bitmapUvSize', new THREE.InstancedBufferAttribute(uvSizes, 2));
+  const uvOriginAttribute = new THREE.InstancedBufferAttribute(uvOrigins, 2).setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('bitmapUvOrigin', uvOriginAttribute);
+  const uvSizeAttribute = new THREE.InstancedBufferAttribute(uvSizes, 2).setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('bitmapUvSize', uvSizeAttribute);
   const colorAttribute = new THREE.InstancedBufferAttribute(colors, 4).setUsage(THREE.DynamicDrawUsage);
   geometry.setAttribute('bitmapColor', colorAttribute);
   const material = bitmapMaterial(page.texture);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
   mesh.renderOrder = glyphIndices[0] ?? 0;
+  const retainedGlyphIndices = new Uint32Array(capacity);
+  retainedGlyphIndices.set(glyphIndices);
   return {
-    glyphIndices: Uint32Array.from(glyphIndices),
+    capacity,
+    glyphIndices: retainedGlyphIndices,
+    logicalCount: count,
     originAttribute,
     sizeAttribute,
+    uvOriginAttribute,
+    uvSizeAttribute,
     colorAttribute,
     geometry,
     mesh,

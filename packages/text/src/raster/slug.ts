@@ -11,11 +11,13 @@ import { Fn, add, attribute, bool, mul, positionLocal, sub, uniform, varyingProp
 
 import type { RegisteredFont } from '../font.js';
 import type { Sha256Hex } from '../identity.js';
+import { assertParallelRasterLayout, unitRasterQuadGeometry } from '../internal/raster-batch.js';
 import {
-  assertParallelRasterLayout,
-  assertParallelRasterPaint,
-  unitRasterQuadGeometry,
-} from '../internal/raster-batch.js';
+  coalesceRasterInstanceRanges,
+  pendingRasterDirtyInstances,
+  rasterInstanceCapacity,
+  rasterInstanceUpdateRanges,
+} from '../internal/raster-instance-capacity.js';
 import { jsonArray, jsonObject, nonnegativeSafeInteger, positiveSafeInteger } from '../internal/raster-atlas.js';
 import { validateNativeKtx2 } from '../internal/raster-ktx.js';
 import {
@@ -102,11 +104,15 @@ export interface SlugResource {
 }
 
 interface SlugBatchRun {
+  readonly capacity: number;
   readonly glyphIndices: Uint32Array;
+  logicalCount: number;
   readonly floatData: THREE.InstancedInterleavedBuffer;
-  geometry: THREE.InstancedBufferGeometry;
+  readonly uintData: THREE.InstancedInterleavedBuffer;
+  readonly geometry: THREE.InstancedBufferGeometry;
   readonly fillMesh: THREE.Mesh;
   readonly materialState: SlugMaterialState;
+  readonly pageIndex: number;
 }
 
 export interface SlugDrawBatch {
@@ -117,15 +123,14 @@ export interface SlugDrawBatch {
 }
 
 const materialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>();
-const batchContext = new WeakMap<
-  SlugDrawBatch,
-  {
-    readonly layout: ParagraphLayout;
-    readonly resource: SlugResource;
-    readonly fontSlot: number;
-    readonly runs: readonly SlugBatchRun[];
-  }
->();
+interface SlugBatchContext {
+  layout: ParagraphLayout;
+  readonly resource: SlugResource;
+  readonly fontSlot: number;
+  readonly runs: readonly SlugBatchRun[];
+}
+
+const batchContext = new WeakMap<SlugDrawBatch, SlugBatchContext>();
 
 const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = defineRaster({
   kind: SLUG_KIND,
@@ -143,23 +148,12 @@ const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = 
     signal?.throwIfAborted();
   },
   stageBatch(previous, layout, resource, fontSlot, paint) {
-    const context = previous === undefined ? undefined : batchContext.get(previous);
-    if (
-      previous !== undefined &&
-      context?.layout === layout &&
-      context.resource === resource &&
-      context.fontSlot === fontSlot
-    ) {
-      assertParallelRasterPaint(layout, paint);
-      assertSlugPaint(paint);
-      for (const run of context.runs) assertSlugRunPaint(run.glyphIndices, paint);
-      return defineRasterBatchStage(
-        previous,
-        () => {
-          for (const run of context.runs) updateRunPaint(run, paint);
-        },
-        () => undefined,
-      );
+    assertParallelRasterLayout(layout, paint);
+    assertSlugPaint(paint);
+    assertSlugGlyphInputs(layout, resource, fontSlot, paint);
+    if (previous !== undefined) {
+      const update = stageSlugBatchUpdate(previous, layout, resource, fontSlot, paint);
+      if (update !== undefined) return defineRasterBatchStage(previous, update.commit, update.dispose);
     }
     const batch = buildSlugBatches(layout, resource, fontSlot, paint);
     return defineRasterBatchStage(
@@ -483,32 +477,15 @@ function buildSlugBatches(
   assertParallelRasterLayout(layout, paint);
   assertSlugPaint(paint);
   assertSlugGlyphInputs(layout, resource, fontSlot, paint);
-  const records = recordView(resource);
   const group = new THREE.Group();
   group.name = 'pmndrs.text.slug';
   const runs: SlugBatchRun[] = [];
-  let pageIndex: number | undefined;
-  let glyphIndices: number[] = [];
-
-  const finishRun = (): void => {
-    if (pageIndex === undefined || glyphIndices.length === 0) return;
-    const run = createSlugRun(layout, resource, pageIndex, glyphIndices, paint);
-    runs.push(run);
-    group.add(run.fillMesh);
-    glyphIndices = [];
-  };
-
   try {
-    for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
-      if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
-      const glyphId = layout.glyphIds[glyphIndex]!;
-      const nextPage = records.getUint16(glyphId * SLUG_GLYPH_RECORD_STRIDE + 8, true);
-      if (nextPage === ABSENT_PAGE) continue;
-      if (pageIndex !== undefined && pageIndex !== nextPage) finishRun();
-      pageIndex = nextPage;
-      glyphIndices.push(glyphIndex);
+    for (const { pageIndex, glyphIndices } of collectSlugRunPlans(layout, resource, fontSlot)) {
+      const run = createSlugRun(layout, resource, pageIndex, glyphIndices, paint);
+      runs.push(run);
+      group.add(run.fillMesh);
     }
-    finishRun();
   } catch (error) {
     group.clear();
     for (const run of runs) run.geometry.dispose();
@@ -516,11 +493,14 @@ function buildSlugBatches(
   }
 
   let disposed = false;
-  const glyphCount = runs.reduce((count, run) => count + run.glyphIndices.length, 0);
   const batch: SlugDrawBatch = {
     object: group,
-    glyphCount,
-    drawCount: runs.length,
+    get glyphCount() {
+      return runs.reduce((count, run) => count + run.logicalCount, 0);
+    },
+    get drawCount() {
+      return runs.reduce((count, run) => count + (run.logicalCount === 0 ? 0 : 1), 0);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -533,44 +513,97 @@ function buildSlugBatches(
   return batch;
 }
 
-function createSlugRun(
-  layout: ParagraphLayout,
-  resource: SlugResource,
-  pageIndex: number,
-  glyphIndices: readonly number[],
-  paint: GlyphPaint,
-): SlugBatchRun {
-  const geometry = unitRasterQuadGeometry();
-  try {
-    return populateSlugRun(geometry, layout, resource, pageIndex, glyphIndices, paint);
-  } catch (error) {
-    geometry.dispose();
-    throw error;
-  }
+interface SlugRunPlan {
+  readonly pageIndex: number;
+  readonly glyphIndices: Uint32Array;
 }
 
-function populateSlugRun(
-  geometry: THREE.InstancedBufferGeometry,
+interface SlugRunValues {
+  readonly floats: Float32Array;
+  readonly uints: Uint32Array;
+}
+
+interface SlugBatchUpdate {
+  commit(): void;
+  dispose(): void;
+}
+
+function stageSlugBatchUpdate(
+  batch: SlugDrawBatch,
   layout: ParagraphLayout,
   resource: SlugResource,
-  pageIndex: number,
-  glyphIndices: readonly number[],
+  fontSlot: number,
   paint: GlyphPaint,
-): SlugBatchRun {
-  const count = glyphIndices.length;
-  geometry.instanceCount = count;
-  const floatData = new THREE.InstancedInterleavedBuffer(
-    new Float32Array(count * SLUG_FLOAT_INSTANCE_STRIDE),
-    SLUG_FLOAT_INSTANCE_STRIDE,
-    1,
+): SlugBatchUpdate | undefined {
+  const context = batchContext.get(batch);
+  if (context === undefined || context.resource !== resource || context.fontSlot !== fontSlot) return undefined;
+  if (context.layout === layout) return stageSlugPaintUpdate(context.runs, paint);
+  const plans = collectSlugRunPlans(layout, resource, fontSlot);
+  if (
+    plans.length !== context.runs.length ||
+    plans.some(({ pageIndex, glyphIndices }, index) => {
+      const run = context.runs[index];
+      return run === undefined || run.pageIndex !== pageIndex || glyphIndices.length > run.capacity;
+    })
+  ) {
+    return undefined;
+  }
+  const staged = plans.map(({ glyphIndices }, index) =>
+    stageSlugRunUpdate(context.runs[index]!, glyphIndices, slugRunValues(layout, resource, glyphIndices, paint)),
   );
-  const uintData = new THREE.InstancedInterleavedBuffer(
-    new Uint32Array(count * SLUG_UINT_INSTANCE_STRIDE),
-    SLUG_UINT_INSTANCE_STRIDE,
-    1,
-  );
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) update.commit();
+      context.layout = layout;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) update.dispose();
+    },
+  };
+}
+
+function collectSlugRunPlans(
+  layout: ParagraphLayout,
+  resource: SlugResource,
+  fontSlot: number,
+): readonly SlugRunPlan[] {
   const records = recordView(resource);
-  for (let instance = 0; instance < count; instance += 1) {
+  const plans: SlugRunPlan[] = [];
+  let pendingPage: number | undefined;
+  let pendingGlyphs: number[] = [];
+  const finishRun = (): void => {
+    if (pendingPage === undefined || pendingGlyphs.length === 0) return;
+    plans.push({ pageIndex: pendingPage, glyphIndices: Uint32Array.from(pendingGlyphs) });
+    pendingGlyphs = [];
+  };
+  for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
+    if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
+    const glyphId = layout.glyphIds[glyphIndex]!;
+    const pageIndex = records.getUint16(glyphId * SLUG_GLYPH_RECORD_STRIDE + 8, true);
+    if (pageIndex === ABSENT_PAGE) continue;
+    if (pendingPage !== undefined && pendingPage !== pageIndex) finishRun();
+    pendingPage = pageIndex;
+    pendingGlyphs.push(glyphIndex);
+  }
+  finishRun();
+  return plans;
+}
+
+function slugRunValues(
+  layout: ParagraphLayout,
+  resource: SlugResource,
+  glyphIndices: Uint32Array,
+  paint: GlyphPaint,
+): SlugRunValues {
+  const floats = new Float32Array(glyphIndices.length * SLUG_FLOAT_INSTANCE_STRIDE);
+  const uints = new Uint32Array(glyphIndices.length * SLUG_UINT_INSTANCE_STRIDE);
+  const records = recordView(resource);
+  for (let instance = 0; instance < glyphIndices.length; instance += 1) {
     const glyphIndex = glyphIndices[instance]!;
     const glyphId = layout.glyphIds[glyphIndex]!;
     const record = glyphId * SLUG_GLYPH_RECORD_STRIDE;
@@ -589,40 +622,227 @@ function populateSlugRun(
     const normalizedBottom = bottom / resource.planeUnitsPerEm;
     const normalizedWidth = (right - left) / resource.planeUnitsPerEm;
     const normalizedHeight = (top - bottom) / resource.planeUnitsPerEm;
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.origin, [
+    setSlugValues(floats, SLUG_FLOAT_INSTANCE_STRIDE, instance, SLUG_FLOAT_INSTANCE_OFFSETS.origin, [
       layout.x[glyphIndex]! + left * scale,
       -layout.y[glyphIndex]! + bottom * scale,
     ]);
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.size, [
+    setSlugValues(floats, SLUG_FLOAT_INSTANCE_STRIDE, instance, SLUG_FLOAT_INSTANCE_OFFSETS.size, [
       (right - left) * scale,
       (top - bottom) * scale,
     ]);
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.emOrigin, [normalizedLeft, normalizedBottom]);
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.emSize, [normalizedWidth, normalizedHeight]);
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.inverseScale, [1 / fontSize]);
+    setSlugValues(floats, SLUG_FLOAT_INSTANCE_STRIDE, instance, SLUG_FLOAT_INSTANCE_OFFSETS.emOrigin, [
+      normalizedLeft,
+      normalizedBottom,
+    ]);
+    setSlugValues(floats, SLUG_FLOAT_INSTANCE_STRIDE, instance, SLUG_FLOAT_INSTANCE_OFFSETS.emSize, [
+      normalizedWidth,
+      normalizedHeight,
+    ]);
+    setSlugValues(floats, SLUG_FLOAT_INSTANCE_STRIDE, instance, SLUG_FLOAT_INSTANCE_OFFSETS.inverseScale, [
+      1 / fontSize,
+    ]);
     const bandScaleX = verticalBands / normalizedWidth;
     const bandScaleY = horizontalBands / normalizedHeight;
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.bandTransform, [
+    setSlugValues(floats, SLUG_FLOAT_INSTANCE_STRIDE, instance, SLUG_FLOAT_INSTANCE_OFFSETS.bandTransform, [
       bandScaleX,
       bandScaleY,
       -normalizedLeft * bandScaleX,
       -normalizedBottom * bandScaleY,
     ]);
-    const resolvedPaint = resolvedSlugPaint(paint, glyphIndex);
-    setInstanceValues(floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.color, resolvedPaint.color);
-    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.curveBase, [records.getUint32(record + 16, true)]);
-    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.horizontalHeaderBase, [
+    setSlugValues(
+      floats,
+      SLUG_FLOAT_INSTANCE_STRIDE,
+      instance,
+      SLUG_FLOAT_INSTANCE_OFFSETS.color,
+      resolvedSlugPaint(paint, glyphIndex).color,
+    );
+    setSlugValues(uints, SLUG_UINT_INSTANCE_STRIDE, instance, SLUG_UINT_INSTANCE_OFFSETS.curveBase, [
+      records.getUint32(record + 16, true),
+    ]);
+    setSlugValues(uints, SLUG_UINT_INSTANCE_STRIDE, instance, SLUG_UINT_INSTANCE_OFFSETS.horizontalHeaderBase, [
       records.getUint32(record + 24, true),
     ]);
-    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.verticalHeaderBase, [
+    setSlugValues(uints, SLUG_UINT_INSTANCE_STRIDE, instance, SLUG_UINT_INSTANCE_OFFSETS.verticalHeaderBase, [
       records.getUint32(record + 28, true),
     ]);
-    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.referenceBase, [
+    setSlugValues(uints, SLUG_UINT_INSTANCE_STRIDE, instance, SLUG_UINT_INSTANCE_OFFSETS.referenceBase, [
       records.getUint32(record + 32, true),
     ]);
-    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.horizontalBandCount, [horizontalBands]);
-    setInstanceValues(uintData, instance, SLUG_UINT_INSTANCE_OFFSETS.verticalBandCount, [verticalBands]);
+    setSlugValues(uints, SLUG_UINT_INSTANCE_STRIDE, instance, SLUG_UINT_INSTANCE_OFFSETS.horizontalBandCount, [
+      horizontalBands,
+    ]);
+    setSlugValues(uints, SLUG_UINT_INSTANCE_STRIDE, instance, SLUG_UINT_INSTANCE_OFFSETS.verticalBandCount, [
+      verticalBands,
+    ]);
   }
+  return { floats, uints };
+}
+
+function stageSlugRunUpdate(run: SlugBatchRun, glyphIndices: Uint32Array, values: SlugRunValues): SlugBatchUpdate {
+  const logicalCount = glyphIndices.length;
+  const floatUpdate = stageSlugInterleavedData(run.floatData, values.floats, run.logicalCount, logicalCount);
+  const uintUpdate = stageSlugInterleavedData(run.uintData, values.uints, run.logicalCount, logicalCount);
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      floatUpdate.commit();
+      uintUpdate.commit();
+      run.glyphIndices.set(glyphIndices);
+      run.logicalCount = logicalCount;
+      run.geometry.instanceCount = logicalCount;
+      run.fillMesh.renderOrder = glyphIndices[0] ?? 0;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      floatUpdate.dispose();
+      uintUpdate.dispose();
+    },
+  };
+}
+
+function stageSlugInterleavedData<Values extends Float32Array | Uint32Array>(
+  data: THREE.InstancedInterleavedBuffer,
+  values: Values,
+  previousLogicalCount: number,
+  logicalCount: number,
+): SlugBatchUpdate {
+  const liveValues = data.array as Values;
+  const ranges = rasterInstanceUpdateRanges(
+    liveValues,
+    values,
+    data.updateRanges,
+    previousLogicalCount,
+    logicalCount,
+    data.stride,
+  );
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      liveValues.set(values);
+      if (ranges.length === 0) return;
+      data.clearUpdateRanges();
+      for (const range of ranges) data.addUpdateRange(range.start, range.count);
+      data.needsUpdate = true;
+    },
+    dispose() {
+      disposed = true;
+    },
+  };
+}
+
+function stageSlugPaintUpdate(runs: readonly SlugBatchRun[], paint: GlyphPaint): SlugBatchUpdate {
+  const staged = runs.map((run) => {
+    const colors = new Float32Array(run.logicalCount * 4);
+    const liveFloats = run.floatData.array as Float32Array;
+    const dirtyInstances = pendingRasterDirtyInstances(
+      run.floatData.updateRanges,
+      run.logicalCount,
+      SLUG_FLOAT_INSTANCE_STRIDE,
+    );
+    for (let instance = 0; instance < run.logicalCount; instance += 1) {
+      const color = resolvedSlugPaint(paint, run.glyphIndices[instance]!).color;
+      colors.set(color, instance * 4);
+      const liveStart = instance * SLUG_FLOAT_INSTANCE_STRIDE + SLUG_FLOAT_INSTANCE_OFFSETS.color;
+      let changed = false;
+      for (let component = 0; component < 4 && !changed; component += 1) {
+        changed = color[component] !== liveFloats[liveStart + component];
+      }
+      if (changed) dirtyInstances.push(instance);
+    }
+    const ranges = coalesceRasterInstanceRanges(dirtyInstances, run.logicalCount, SLUG_FLOAT_INSTANCE_STRIDE);
+    let disposed = false;
+    return {
+      commit() {
+        if (disposed) return;
+        disposed = true;
+        for (let instance = 0; instance < run.logicalCount; instance += 1) {
+          const colorStart = instance * 4;
+          const liveStart = instance * SLUG_FLOAT_INSTANCE_STRIDE + SLUG_FLOAT_INSTANCE_OFFSETS.color;
+          liveFloats[liveStart] = colors[colorStart]!;
+          liveFloats[liveStart + 1] = colors[colorStart + 1]!;
+          liveFloats[liveStart + 2] = colors[colorStart + 2]!;
+          liveFloats[liveStart + 3] = colors[colorStart + 3]!;
+        }
+        if (ranges.length === 0) return;
+        run.floatData.clearUpdateRanges();
+        for (const range of ranges) run.floatData.addUpdateRange(range.start, range.count);
+        run.floatData.needsUpdate = true;
+      },
+      dispose() {
+        disposed = true;
+      },
+    } satisfies SlugBatchUpdate;
+  });
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) update.commit();
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) update.dispose();
+    },
+  };
+}
+
+function setSlugValues(
+  data: Float32Array | Uint32Array,
+  stride: number,
+  instance: number,
+  offset: number,
+  values: readonly number[],
+): void {
+  data.set(values, instance * stride + offset);
+}
+
+function createSlugRun(
+  layout: ParagraphLayout,
+  resource: SlugResource,
+  pageIndex: number,
+  glyphIndices: Uint32Array,
+  paint: GlyphPaint,
+): SlugBatchRun {
+  const geometry = unitRasterQuadGeometry();
+  try {
+    return populateSlugRun(geometry, layout, resource, pageIndex, glyphIndices, paint);
+  } catch (error) {
+    geometry.dispose();
+    throw error;
+  }
+}
+
+function populateSlugRun(
+  geometry: THREE.InstancedBufferGeometry,
+  layout: ParagraphLayout,
+  resource: SlugResource,
+  pageIndex: number,
+  glyphIndices: Uint32Array,
+  paint: GlyphPaint,
+): SlugBatchRun {
+  const count = glyphIndices.length;
+  const capacity = rasterInstanceCapacity(count);
+  geometry.instanceCount = count;
+  const floatData = new THREE.InstancedInterleavedBuffer(
+    new Float32Array(capacity * SLUG_FLOAT_INSTANCE_STRIDE),
+    SLUG_FLOAT_INSTANCE_STRIDE,
+    1,
+  ).setUsage(THREE.DynamicDrawUsage);
+  const uintData = new THREE.InstancedInterleavedBuffer(
+    new Uint32Array(capacity * SLUG_UINT_INSTANCE_STRIDE),
+    SLUG_UINT_INSTANCE_STRIDE,
+    1,
+  ).setUsage(THREE.DynamicDrawUsage);
+  const values = slugRunValues(layout, resource, glyphIndices, paint);
+  (floatData.array as Float32Array).set(values.floats);
+  (uintData.array as Uint32Array).set(values.uints);
 
   instanceAttribute(geometry, floatData, 'slugOrigin', 2, SLUG_FLOAT_INSTANCE_OFFSETS.origin);
   instanceAttribute(geometry, floatData, 'slugSize', 2, SLUG_FLOAT_INSTANCE_OFFSETS.size);
@@ -643,12 +863,18 @@ function populateSlugRun(
   const fillMesh = new THREE.Mesh(geometry, initialState.material);
   fillMesh.frustumCulled = false;
   fillMesh.renderOrder = glyphIndices[0] ?? 0;
+  const retainedGlyphIndices = new Uint32Array(capacity);
+  retainedGlyphIndices.set(glyphIndices);
   const run: SlugBatchRun = {
-    glyphIndices: Uint32Array.from(glyphIndices),
+    capacity,
+    glyphIndices: retainedGlyphIndices,
+    logicalCount: count,
     floatData,
+    uintData,
     geometry,
     fillMesh,
     materialState: initialState,
+    pageIndex,
   };
   fillMesh.onBeforeRender = (renderer, _scene, camera): void => {
     renderer.getDrawingBufferSize(drawingBufferSize);
@@ -668,15 +894,6 @@ function instanceAttribute(
   const bufferAttribute = new THREE.InterleavedBufferAttribute(data, itemSize, offset, false);
   geometry.setAttribute(name, bufferAttribute);
   return bufferAttribute;
-}
-
-function setInstanceValues(
-  data: THREE.InstancedInterleavedBuffer,
-  instance: number,
-  offset: number,
-  values: readonly number[],
-): void {
-  (data.array as Float32Array | Uint32Array).set(values, instance * data.stride + offset);
 }
 
 function resolvedSlugPaint(paint: GlyphPaint, glyphIndex: number): ResolvedPaint {
@@ -800,15 +1017,6 @@ function updateMvpUniforms(state: SlugMaterialState, object: THREE.Object3D, cam
   state.mvpRow0.value.set(values[0]!, values[4]!, values[8]!, values[12]!);
   state.mvpRow1.value.set(values[1]!, values[5]!, values[9]!, values[13]!);
   state.mvpRow3.value.set(values[3]!, values[7]!, values[11]!, values[15]!);
-}
-
-function updateRunPaint(run: SlugBatchRun, paint: GlyphPaint): void {
-  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    const glyphIndex = run.glyphIndices[instance]!;
-    const resolvedPaint = resolvedSlugPaint(paint, glyphIndex);
-    setInstanceValues(run.floatData, instance, SLUG_FLOAT_INSTANCE_OFFSETS.color, resolvedPaint.color);
-  }
-  run.floatData.needsUpdate = true;
 }
 
 function assertSlugPaint(paint: GlyphPaint): void {
