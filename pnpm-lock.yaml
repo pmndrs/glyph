@@ -13,6 +13,12 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      oxfmt:
+        specifier: 0.35.0
+        version: 0.35.0
       typescript:
         specifier: 7.0.2
         version: 7.0.2

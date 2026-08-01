@@ -4,10 +4,13 @@
   "type": "module",
   "scripts": {
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm docs:check",
+    "check": "pnpm claude:sync:typecheck && pnpm claude:sync:test && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm docs:check",
+    "claude:sync": "node .claude/hooks/sync-agent-config.ts --verbose",
+    "claude:sync:test": "node --test .claude/hooks/sync-agent-config.test.ts",
+    "claude:sync:typecheck": "tsc -p .claude/tsconfig.json",
     "docs:digest": "ruby .agents/skills/open-knowledge-format/scripts/generate_package_digests.rb .",
     "docs:check": "ruby .agents/skills/open-knowledge-format/scripts/validate_okf.rb docs --workspace-root .",
-    "format:check": "pnpm --filter './packages/*' --if-present format:check && pnpm --filter './apps/*' --if-present format:check",
+    "format:check": "oxfmt --check .claude/hooks .claude/settings.json .claude/tsconfig.json package.json docs/log.md && pnpm --filter './packages/*' --if-present format:check && pnpm --filter './apps/*' --if-present format:check",
     "lint": "pnpm --filter './packages/*' --if-present lint && pnpm --filter './apps/*' --if-present lint",
     "typecheck": "pnpm --filter './packages/*' build && pnpm --filter './packages/*' typecheck && pnpm --filter './apps/*' typecheck",
     "test": "pnpm --filter './packages/*' --if-present test && pnpm --filter './apps/*' --if-present test",
@@ -27,6 +30,8 @@
     "test:types": "pnpm --filter @pmndrs/text test:types"
   },
   "devDependencies": {
+    "@types/node": "24.13.3",
+    "oxfmt": "0.35.0",
     "typescript": "7.0.2"
   },
   "packageManager": "pnpm@11.15.1"

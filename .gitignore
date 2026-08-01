@@ -6,4 +6,11 @@ target/
 coverage/
 apps/benchmarks/.cache/
 packages/text/.cache/
+
+# Adversarial review cache
 .cache/claude-review/
+
+# Claude sync on SessionStart hook
+**/CLAUDE.md
+!/CLAUDE.md
+.claude/skills/
