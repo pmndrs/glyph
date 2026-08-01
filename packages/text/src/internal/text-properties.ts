@@ -436,7 +436,7 @@ export function samePaintInput(left: TextState, right: TextState): boolean {
 }
 
 export function sameTextInput(left: TextState, right: TextState): boolean {
-  return sameLayoutInput(left, right) && samePaintInput(left, right) && left.onLayout === right.onLayout;
+  return sameLayoutInput(left, right) && samePaintInput(left, right);
 }
 
 export function samePaintProperties(left: ComparablePaintProperties, right: ComparablePaintProperties): boolean {

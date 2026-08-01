@@ -117,6 +117,8 @@ test('Text no-op updates preserve one pending initial generation', async () => {
     await decodeStarted.promise;
     text.setProperties({});
     text.setProperties({ opacity: 0.5 });
+    let committedLayout;
+    text.setProperties({ onLayout: (layout) => (committedLayout = layout) });
 
     assert.equal(text.ready, initialReady, 'semantic no-ops retain the original readiness observation');
     assert.equal(decodeCount, 1, 'semantic no-ops do not restart raster decoding');
@@ -126,8 +128,42 @@ test('Text no-op updates preserve one pending initial generation', async () => {
     await initialReady;
     assert.equal(text.children.length, 1);
     assert.equal(decodeCount, 1);
+    assert.equal(committedLayout, text.layout, 'the latest callback observes the pending generation at commit');
   } finally {
     releaseDecode.resolve();
+    text.dispose();
+    font.dispose();
+    restoreFetch();
+  }
+});
+
+test('Text semantic no-ops retry a failed generation', async () => {
+  const restoreFetch = installFileFetch();
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(await readFile(fixtureUrl));
+  const request = bitmap({ strikes: [16] });
+  let decodeCount = 0;
+  const raster = defineRaster({
+    ...request.module,
+    async decode(...arguments_) {
+      decodeCount += 1;
+      if (decodeCount === 1) throw new Error('synthetic decode failure');
+      return request.module.decode(...arguments_);
+    },
+  });
+  const text = new Text({
+    text: 'retry the same generation',
+    font,
+    raster: { module: raster, options: request.options },
+    fontSize: 16,
+  });
+  try {
+    await assert.rejects(text.ready, /synthetic decode failure/);
+    text.setProperties({});
+    await text.ready;
+    assert.equal(decodeCount, 2);
+    assert.equal(text.children.length, 1);
+  } finally {
     text.dispose();
     font.dispose();
     restoreFetch();

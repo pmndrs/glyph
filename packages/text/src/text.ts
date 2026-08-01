@@ -156,7 +156,7 @@ interface OwnedBatch {
 }
 
 interface TextGeneration {
-  readonly state: TextState;
+  state: TextState;
   readonly paragraph: Paragraph;
   /** True only when this uncommitted generation acquired the paragraph it carries. */
   readonly createdParagraph: boolean;
@@ -206,7 +206,15 @@ export class Text extends THREE.Group {
   setProperties(properties: TextUpdateProperties): void {
     this.#assertActive();
     const next = normalizeTextState(this.#state, properties, false);
-    if (sameTextInput(this.#state, next)) return;
+    if (sameTextInput(this.#state, next)) {
+      this.#state = next;
+      if (this.#pending !== undefined) return;
+      if (this.#generation !== undefined && sameTextInput(this.#generation.state, next)) {
+        this.#generation.state = next;
+        return;
+      }
+      if (next.font === undefined) return;
+    }
     let prevalidatedPaint: GlyphPaint | undefined;
     if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, next)) {
       prevalidatedPaint = resolveGlyphPaint(next, this.#generation.paintPlan);
@@ -266,6 +274,7 @@ export class Text extends THREE.Group {
       const previous = this.#generation;
       for (const update of generation.batchUpdates) update.commit();
       generation.batchUpdates.length = 0;
+      generation.state = this.#state;
       this.#generation = generation;
       previous?.releaseFontDisposal();
       for (const owned of previous?.batches ?? []) {
@@ -279,11 +288,13 @@ export class Text extends THREE.Group {
       for (const owned of generation.batches) {
         if (owned.batch.object.parent !== this) this.add(owned.batch.object);
       }
-      generation.state.onLayout?.(generation.layout);
+      this.#state.onLayout?.(generation.layout);
     });
     // `ready` remains an observation channel that rejects on failure or cancellation. The
     // internal branch prevents an abandoned generation from becoming an unhandled rejection.
-    void ready.catch(() => undefined);
+    void ready.catch(() => {
+      if (this.#pending === controller) this.#pending = undefined;
+    });
     this.#ready = ready;
   }
 
