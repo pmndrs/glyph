@@ -478,8 +478,13 @@ test('disposing a registered font invalidates live Text batches before raster re
   try {
     await text.ready;
     assert.equal(text.children.length, 1);
+    text.setProperties({ opacity: 0.5 });
+    await text.ready;
     text.visible = false;
     font.dispose();
+    const invalidatedReady = text.ready;
+    text.setProperties({});
+    assert.equal(text.ready, invalidatedReady, 'semantic no-ops preserve terminal font invalidation');
     assert.equal(text.children.length, 0);
     assert.equal(text.layout, undefined);
     assert.equal(text.visible, false, 'font lifecycle does not override caller visibility');

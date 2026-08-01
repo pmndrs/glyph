@@ -184,6 +184,7 @@ export class Text extends THREE.Group {
   #state: TextState;
   #generation: TextGeneration | undefined;
   #pending: AbortController | undefined;
+  #invalidatedState: TextState | undefined;
   #revision = 0;
   #ready: Promise<void> = Promise.resolve();
   #disposed = false;
@@ -208,6 +209,7 @@ export class Text extends THREE.Group {
     const next = normalizeTextState(this.#state, properties, false);
     if (sameTextInput(this.#state, next)) {
       this.#state = next;
+      if (this.#invalidatedState !== undefined && sameTextInput(this.#invalidatedState, next)) return;
       if (this.#pending !== undefined) return;
       if (this.#generation !== undefined && sameTextInput(this.#generation.state, next)) {
         this.#generation.state = next;
@@ -237,6 +239,7 @@ export class Text extends THREE.Group {
   }
 
   #schedule(prevalidatedPaint?: GlyphPaint): void {
+    this.#invalidatedState = undefined;
     this.#revision += 1;
     const revision = this.#revision;
     this.#pending?.abort();
@@ -256,7 +259,7 @@ export class Text extends THREE.Group {
           owned.module.updatePaint(owned.batch, paint, owned.fontSlot);
         }
       }
-      this.#generation = { ...this.#generation, state: this.#state };
+      this.#generation.state = this.#state;
       this.#ready = Promise.resolve();
       return;
     }
@@ -436,6 +439,7 @@ export class Text extends THREE.Group {
 
   #invalidateGeneration(generation: TextGeneration, reason: unknown): void {
     if (this.#generation !== generation) return;
+    this.#invalidatedState = this.#state;
     this.#revision += 1;
     this.#pending?.abort(reason);
     this.#pending = undefined;
