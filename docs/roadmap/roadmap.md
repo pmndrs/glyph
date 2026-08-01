@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T06:26:44Z'
+  at: '2026-08-01T15:31:00Z'
 ---
 
 # Canonical implementation roadmap
@@ -49,13 +49,13 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     3 |   ✅   | Build baked-first loader and Worker fallback                          | L      | 2                   | Baked hits stay small; misses dynamically load the Worker path and reproduce canonical bytes.               |
 |     4 |   ✅   | Integrate HarfRust Wasm shaping                                       | L      | 2–3                 | Coarse batch calls match pinned HarfRust fixtures and expose clusters, positions, and flags.                |
 |     5 |   ✅   | Implement paragraph reflow and validate universal shaping assumptions | L      | 4                   | Allocation-light layout passes Latin, bidi/complex-script, and focused CJK source/reduced-font evidence.    |
-|     6 |   🟡   | Prove rendering with bitmap inside the benchmark harness              | L      | 3, 5                | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload.                |
+|     6 |   ✅   | Prove rendering with bitmap inside the benchmark harness              | L      | 3, 5                | The harness produces the first real font frame on WebGPU and WebGL2 with direct bulk upload.                |
 |     7 |   ✅   | Harden the integration proof                                          | L      | 1–6                 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review.                |
-|     8 |   🟡   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
+|     8 |   ✅   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
 |     9 |   ✅   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
 |    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–5, 7, and 9 are closed. Milestone 6 remains active pending its deferred closure review, while Milestone 8 implementation is active through item 8.6. The final Milestone 8 review also closes the remaining Milestone 6 review gates.
+Milestones 0–9 are closed. Milestone 10 is the next authorized implementation milestone.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -103,9 +103,9 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 5.4  |   ✅   | Pin one redistributable pan-CJK face and prove source/reduced HarfRust, HarfBuzz, horizontal paragraph layout, fuzz, and Node/Chromium/Vitexec evidence without renderer or paging work. |  L   | 5.3        |
 | 6.0  |   ✅   | Establish the current-repository TSL compiler, shader, and live WebGPU/WebGL2 baseline without broad type erasure.                                                                       |  S   | 3.3, 5.4   |
 | 6.1  |   ✅   | Upload/render bitmap records and textures as the harness's first real raster target on WebGPU/WebGL2.                                                                                    |  M   | 6.0        |
-| 6.2  |   🟡   | Implement the Three.js `Text` object over the bitmap proof.                                                                                                                              |  M   | 6.1        |
-| 6.3  |   🟡   | Implement `@pmndrs/text/react` as a thin reconciliation layer.                                                                                                                           |  M   | 6.2        |
-| 6.4  |   🟡   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                   |  M   | 6.1–6.3    |
+| 6.2  |   ✅   | Implement the Three.js `Text` object over the bitmap proof.                                                                                                                              |  M   | 6.1        |
+| 6.3  |   ✅   | Implement `@pmndrs/text/react` as a thin reconciliation layer.                                                                                                                           |  M   | 6.2        |
+| 6.4  |   ✅   | Rework the harness into a benchmark-first human control plane with a separate visual conformance mode.                                                                                   |  M   | 6.1–6.3    |
 | 7.1  |   ✅   | Harden lifecycle, invalid input, limits, and package graphs.                                                                                                                             |  M   | 1–6        |
 | 7.2  |   ✅   | Ship the advanced-shaping showcase and record end-to-end conformance/performance baselines.                                                                                              |  M   | 7.1        |
 | 8.1  |   ✅   | Implement the repository-owned deterministic `no_std` Rust MTSDF core and pass panic, scalar/SIMD, Wasm, size, fuzz, and native-msdfgen quality gates.                                   |  L   | 7.2        |
@@ -113,7 +113,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 8.3  |   ✅   | Implement the optional MSDF runtime module, strict validation, one resource/batch family, paint effects, and disposal.                                                                   |  L   | 8.2        |
 | 8.4  |   ✅   | Implement one version-matched TSL MTSDF graph for WebGPU and WebGL2 with resize, transform, base-level minification, and effects scenes.                                                 |  L   | 8.3        |
 | 8.5  |   ✅   | Record visual-error, atlas, upload, memory, bundle-isolation, and steady-state rendering evidence.                                                                                       |  XL  | 8.4        |
-| 8.6  |   🟡   | Add configurable MTSDF quality, bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                   |  XL  | 8.5        |
+| 8.6  |   ✅   | Add configurable MTSDF quality, bounded runtime-atlas options, compiler-derived Wasm ABI layouts, and measured baker performance hardening before closing Milestone 8.                   |  XL  | 8.5        |
 | 9.1  |   ✅   | Port Slug outline conversion, exact normalization/bands, compact packing, deterministic baker, validator, and embedded/external resources.                                               |  XL  | 7.2        |
 | 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL fill runtime, batching, lifecycle, fail-closed paint boundary, and public `Text` integration.                                            |  XL  | 9.1        |
 | 9.3  |   ✅   | Integrate Slug into the shared benchmark/conformance product, release-role scenes, source-outline matrix, and complete two-axis icon-font grid.                                          |  XL  | 9.2        |
@@ -460,7 +460,7 @@ Large-coverage raster paging remains in Milestone 13. Vertical-form source table
 - [x] Malformed language/surrogate/variation/constraint cases and fixed-seed CJK mutations are deterministic and trap-free.
 - [x] Node integration, Chromium 149 headless, GPU-enabled Vitexec, and the mobile Playwright flow pass through the shared benchmark registry without timers, retries, renderer metrics, or paging claims.
 
-Item 5.4 and Milestone 5 are closed. Milestone 6 is active.
+Item 5.4 and Milestones 5 and 6 are closed.
 
 ## Milestone 6 — first rendering proof: bitmap in the benchmark harness
 
@@ -468,7 +468,7 @@ Items 6.0 and 6.1 are closed on the repository's current Three.js 0.185.1, `@typ
 
 The first real font frame travels through composed Inter GLB loading, the public framework-neutral `Text`, retained HarfRust shaping, paragraph positioning, strict bitmap record/KTX2 decode, direct R8 texture upload, order-preserving instanced batching, and one shared TSL material. Explicit 1× and 2× runs each execute three measured samples after one warmup on WebGPU and forced WebGL2. Both backends render the five-lane benchmark ipsum as 120 visible glyphs with zero missing glyphs, in one draw from 695,296 atlas bytes. Bitmap density is a hard contract rather than an implicit layout scale: CSS font size remains stable across DPR, the rendering integration supplies `rasterPixelRatio`, and the bitmap module targets `CSS size × ratio` when choosing a declared physical strike. The existing exact conformance capture deliberately uses 16 device pixels at both DPRs; the live product keeps 16 CSS pixels and exposes visible degradation until a 32 ppem strike is present at 2×. Raster records retain Zeno's actual integer placement with `planeUnitsPerEm = 16`, and the TSL graph snaps projected quad edges to physical pixels. A benchmark-only CPU compositor places authenticated atlas texels and matches every normalized GPU byte for the full frame and a resized clipped frame. WebGPU and forced WebGL2 produce identical full-frame hashes: `a47930d3…e893` at 1× and `95b20e05…a34d` at 2×. Both DPRs contain the same 3,473 half-coverage pixels; bounds are `[68, 18, 313, 112]` and `[260, 82, 505, 176]`. Framebuffer bytes are 196,608 at 1× and 786,432 at 2×; total tracked bytes are 891,904 and 1,481,728. The shared registry also owns a deterministic React reconciler scenario that retains one core object across nested-span reflow. Bitmap rejects outline/shadow rather than silently discarding them; hinted grayscale and four-phase packing remain documented research, and LCD/ClearType rendering is out of scope.
 
-Items 6.2 and 6.3 are implemented and their first adversarial-review findings are remediated. Item 6.4 is active before the milestone closure review because the initial shell exposed internal target/scenario mechanics and presented conformance duration too prominently. The corrected human default is a continuously rendered benchmark control plane showing consumer-facing startup, retained-size, CPU-frame, FPS, and supported GPU-time evidence. Conformance is a separate finite deep-inspection surface showing candidate, reference, difference, structured evidence, and end-to-end test duration. Technique, backend, and workload are independent user controls; target and scenario remain internal runner concepts. The Figma wireframe supplies visual direction rather than prescribing product information architecture.
+Items 6.2–6.4 and Milestone 6 are closed after the deferred combined Milestone 6/8 adversarial review. Every actionable lifecycle finding was reproduced and remediated, including pending semantic no-ops, callback-only ownership, failed-generation retry, paint-generation identity, terminal invalidation scope, and explicit disposal cleanup. The corrected human default is a continuously rendered benchmark control plane showing consumer-facing startup, retained-size, CPU-frame, FPS, and supported GPU-time evidence. Conformance is a separate finite deep-inspection surface showing candidate, reference, difference, structured evidence, and end-to-end test duration. Technique, backend, and workload are independent user controls; target and scenario remain internal runner concepts. The Figma wireframe supplies visual direction rather than prescribing product information architecture.
 
 The five-line, 120-glyph text above is now named the diagnostic conformance specimen. The separate paragraph-scale live benchmark renders 1,151 glyphs through the same single-draw bitmap path.
 
@@ -478,7 +478,7 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 - [x] Initial readiness, generation replacement, stale cancellation, paint-only updates, width reflow, shaping invalidation, and disposal have deterministic integration tests over the canonical Inter GLB.
 - [x] Distinct span fonts resolve independent raster resources while sharing registry-scoped loader, shaper, and raster caches.
 - [x] Every raster draw batch exposes its Three.js object and deterministic disposal contract.
-- [ ] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.2.
+- [x] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.2.
 
 ### 6.3 closure checklist
 
@@ -486,7 +486,7 @@ The five-line, 120-glyph text above is now named the diagnostic conformance spec
 - [x] Nested `<Text>` nodes flatten into one string plus ordered inherited spans; non-text children and nested object/layout properties fail explicitly.
 - [x] `useFont`, `.preload`, `.clear`, and `lazyRaster` share core dependency caches and expose deterministic Suspense boundaries.
 - [x] Resolved R3F reconciliation and browser-pending Suspense have executable evidence without sleeps, retries, or timer cushions.
-- [ ] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.3.
+- [x] The Milestone 6 adversarial review has no unresolved actionable finding against item 6.3.
 
 ### 6.4 closure checklist
 
@@ -643,7 +643,9 @@ Runtime baking is a supported delivery path, not merely a missing-asset recovery
 - [x] Instrument the baker by phase and publish small, medium, and complete-face results for glyph selection, outline extraction, MTSDF texel generation, packing, texture-payload encoding, container serialization, Wasm-to-Worker copying, peak memory, and output bytes. Reports include glyphs, generated texels, edges visited, and throughput rather than one opaque wall-clock duration; direct Wasm and the real serial Worker retain exact artifact identity.
 - [x] Optimize the measured dominant phase without weakening native-msdfgen quality or deterministic artifact gates. Texel generation dominates, so an equivalent four-texel scalar tile and an adjacent-texel SIMD line-distance kernel were compared against the unchanged scalar quadratic/cubic lane fallback. Every exact oracle and complete-Inter identity remains unchanged. Adjacent SIMD improves the bounded Node and Chromium corpora by 2.4% and 0.9%, but is indistinguishable from scalar over complete Inter warm execution while adding 20.7% optimized and 11.4% Brotli bytes. Scalar tile improves bounded Node by 10.1% but regresses Chromium by 1.5% and complete Inter warm by 1.4% while adding 20.0% optimized and 10.9% Brotli bytes. Machine-checked structured observations retain those tradeoffs. Both candidates are rejected as universal runtime defaults, remain non-shipping experiment features, and scalar Wasm remains the single shipped kernel. TypeGPU/WebGPU compute remains research until identical-work evidence can justify its device and readback complexity.
 - [x] Select pinned dynamic Talc from the complete optimized Wasm corpus: byte-identical behavior retains the existing ownership/error/reused-Worker tests while saving 46,610 raw, 15,121 gzip, and 12,121 Brotli bytes versus `dlmalloc`. Reject a 128 MiB global arena because it raises initial memory to about 129 MiB for no meaningful transfer saving; keep request-local scratch arenas as profiling-led future work only.
-- [ ] Complete the final adversarial Milestone 6/8 review with no unresolved actionable findings.
+- [x] Complete the final adversarial Milestone 6/8 review with no unresolved actionable findings.
+
+Item 8.6 and Milestone 8 are closed. The combined closure review retained complete traces under the ignored repository review cache, every actionable finding was independently reproduced and remediated, the exact package-size identity and fail-closed provenance are current, and the complete package, benchmark-unit, headless conformance, packed-consumer, and documentation gates pass on the recorded host.
 
 ## Milestone 9 — Slug release renderer
 
