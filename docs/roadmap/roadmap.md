@@ -122,8 +122,8 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 10.2 |   ✅   | Publish warm shaping, layout, paint planning, and raster staging through the Three.js object-update lifecycle without consumer `ready` waits.                                            |  L   | 10.1       |
 | 10.3 |   ✅   | Add bounded glyph-capacity slack, complete in-place field replacement, authoritative shrink counts, overflow replacement, and coalesced dirty uploads to all three rasters.              |  XL  | 10.2       |
 | 10.4 |   ✅   | Prove the public extension boundary with a private workspace raster/baker package that owns a new kind, artifact, adapter, retained updates, overflow, abort, and disposal.              |  L   | 10.1, 10.3 |
-| 10.5 |   🟡   | Remove benchmark recycling workarounds and prove Icon Grid plus every Presentation workload through sequential, timed, allocation, cadence, dual-backend, and React Doctor gates.        |  XL  | 10.2–10.4  |
-| 10.6 |   ⬜   | Complete raster switching, release conformance, public API review, recommendations, migration material, package-size evidence, and signed stacked delivery.                              |  L   | 10.5       |
+| 10.5 |   ✅   | Remove benchmark recycling workarounds and prove Icon Grid plus every Presentation workload through sequential, timed, allocation, cadence, dual-backend, and React Doctor gates.        |  XL  | 10.2–10.4  |
+| 10.6 |   🟡   | Complete raster switching, release conformance, public API review, recommendations, migration material, package-size evidence, and signed stacked delivery.                              |  L   | 10.5       |
 
 ## Milestone 0 — accept contracts and versions
 
@@ -684,7 +684,7 @@ Milestone 9 is closed. Additional Slug optimization hypotheses are future measur
 
 ## Milestone 10 — harden the first shippable release
 
-Item 10.5 is active. Item 10.1 established the required renderer-neutral transaction and Three.js adapter parity, item 10.2 moved resident shaping, layout, paint planning, raster staging, and atomic publication into the Three.js object-update lifecycle without warm consumer readiness waits, item 10.3 added bounded retained instance capacity to all three first-party rasters, and item 10.4 proved the published extension boundary with a private external consumer package. The remaining accepted order is benchmark cleanup and hardware evidence, then release review. Each layer must remain independently green; renderer-wide batching across separate `Text` objects is explicitly not part of this milestone.
+Item 10.6 is active. Item 10.1 established the required renderer-neutral transaction and Three.js adapter parity, item 10.2 moved resident shaping, layout, paint planning, raster staging, and atomic publication into the Three.js object-update lifecycle without warm consumer readiness waits, item 10.3 added bounded retained instance capacity to all three first-party rasters, item 10.4 proved the published extension boundary with a private external consumer package, and item 10.5 removed benchmark workarounds and retained complete dual-backend Presentation evidence. The remaining accepted work is release review. Each layer must remain independently green; renderer-wide batching across separate `Text` objects is explicitly not part of this milestone.
 
 ### 10.1–10.6 closure checklist
 
@@ -693,8 +693,8 @@ Item 10.5 is active. Item 10.1 established the required renderer-neutral transac
 - [x] Warm resident updates publish before Three.js child traversal without consumer `await text.ready`; cold font, shaper, and raster-page preparation remains asynchronous and Suspense-owned.
 - [x] Same-capacity replacement updates every glyph identity and parallel instance field in place; shrink, exact-capacity growth, fragmented dirty ranges, overflow replacement, topology changes, and stale generations have deterministic tests.
 - [x] The private external package bakes, packages, loads, renders, updates, overflows, aborts, and disposes through published entry points without a core kind switch or undocumented import.
-- [ ] Icon Grid reuses its Text pool across all 1,402 glyphs and all three techniques without blank recycling, missing glyphs, warnings, unhandled rejections, or avoidable GPU-object churn.
-- [ ] WebGPU and forced WebGL complete every Presentation workload sequentially and in timed demo mode with visible text, one renderer, retained canvas/graph identity, no warm loader flash, no overlapping jobs, and recovery after success, failure, abort, technique/font changes, and navigation.
+- [x] Icon Grid reuses its Text pool across all 1,402 glyphs and all three techniques without blank recycling, missing glyphs, warnings, unhandled rejections, or avoidable GPU-object churn.
+- [x] WebGPU and forced WebGL complete every Presentation workload sequentially and in timed demo mode with visible text, one renderer, retained canvas/graph identity, no warm loader flash, no overlapping jobs, and recovery after success, failure, abort, technique/font changes, and navigation.
 - [ ] Allocation/GC traces, approximately-60-Hz cadence sweeps, React Doctor 100/100, screenshots, complete repository checks, package-size evidence, OKF validation, signed stack history, accurate PR bodies, and green CI are retained.
 
 Deliver:
