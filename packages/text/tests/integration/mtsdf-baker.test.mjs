@@ -165,6 +165,53 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
       descriptor,
     });
     assert.equal(validated.pages.length, result.report.pages.length);
+    if (pixelRange === 4) {
+      const { document, views } = glbViews(raster.bytes);
+      const font = { handle: 7, shapingHash: showcaseShapingHash, glyphCount: 155 };
+      const runtimeRaster = {
+        font: font.handle,
+        handle: 11,
+        kind: 'msdf',
+        extension: MSDF_EXTENSION,
+        version: 0,
+        rasterKey,
+        extensionData: document.extensions[MSDF_EXTENSION],
+        view(index) {
+          const view = views[index];
+          if (view === undefined) throw new RangeError('missing embedded 32 px/em MTSDF runtime view');
+          return view;
+        },
+        dispose() {},
+      };
+      const resource = await msdf.decode(font, runtimeRaster);
+      try {
+        assert.equal(resource.emSize, 32);
+        assert.equal(resource.pixelRange, 4);
+        const records = views[extension.recordBufferView];
+        assert.ok(records);
+        const layout = {
+          glyphIds: Uint16Array.of(firstPresentGlyph(records)),
+          glyphFontSlots: Uint16Array.of(0),
+          glyphFontSizes: Float32Array.of(32),
+          x: Float32Array.of(0),
+          y: Float32Array.of(0),
+        };
+        const paint = {
+          paintIndices: Uint16Array.of(0),
+          palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 2 } }],
+        };
+        const batch = msdf.buildBatches(layout, resource, 0, paint);
+        try {
+          const mesh = batch.object.children[0];
+          assert.ok(mesh);
+          assert.equal(mesh.geometry.getAttribute('msdfOutlineWidth').getX(0), 0.5);
+        } finally {
+          batch.dispose();
+        }
+      } finally {
+        msdf.dispose(resource);
+      }
+    }
     reports.push(result.report);
   }
   assert.ok(reports[0].gpuBytes < reports[1].gpuBytes);
