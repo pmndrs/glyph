@@ -62,13 +62,21 @@ export function assertPackageSizeReportFresh(committed: PackageSizeReport, curre
     ) {
       throw new Error(`foreign-host measurement is incomplete for ${entry.id}`);
     }
-    if (
-      entry.rawBytes > budget.rawBytes ||
-      entry.minifiedBytes > budget.minifiedBytes ||
-      entry.gzipBytes > budget.gzipBytes ||
-      entry.brotliBytes > budget.brotliBytes
-    ) {
-      throw new Error(`foreign-host measurement exceeds the reviewed ${entry.id} budget`);
+    const exceeded = {
+      rawBytes: entry.rawBytes > budget.rawBytes,
+      minifiedBytes: entry.minifiedBytes > budget.minifiedBytes,
+      gzipBytes: entry.gzipBytes > budget.gzipBytes,
+      brotliBytes: entry.brotliBytes > budget.brotliBytes,
+    };
+    if (Object.values(exceeded).some(Boolean)) {
+      throw new Error(
+        `foreign-host measurement exceeds the reviewed ${entry.id} budget\n${JSON.stringify({
+          measurementHost: current.measurementHost,
+          measured: entry,
+          budget,
+          exceeded,
+        })}`,
+      );
     }
   }
 }
