@@ -6,6 +6,7 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
+const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
 await server.listen();
 const address = server.httpServer?.address();
@@ -37,12 +38,12 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=mtsdf&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=off-axis-3d`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=mtsdf&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=off-axis-3d`,
     { waitUntil: 'domcontentloaded' },
   );
 
   const initialViewport = page.locator(
-    '[data-testid="comparison-live-viewport"][data-workload="off-axis-3d"][data-presentation-pending="false"]',
+    `[data-testid="comparison-live-viewport"][data-workload="off-axis-3d"][data-presentation-pending="false"][data-backend="${backend}"]`,
   );
   await initialViewport.waitFor();
   await page.waitForFunction(() => document.querySelector('canvas[data-configured-renderer-active="true"]') !== null);
@@ -74,7 +75,7 @@ try {
   if (!(await animationSwitch.isChecked()))
     throw new Error('Presentation Space shortcut toggled the focused Animate control');
 
-  await page.waitForFunction(() => {
+  await page.waitForFunction((expectedBackend) => {
     const viewport = document.querySelector<HTMLElement>(
       '[data-testid="comparison-live-viewport"][data-workload="icon-grid"]',
     );
@@ -83,6 +84,7 @@ try {
       Math.abs(Number(viewport.getAttribute(attribute)) - value) < 0.000_001;
     return (
       viewport.dataset.cameraKind === 'orthographic' &&
+      viewport.dataset.backend === expectedBackend &&
       viewport.dataset.canvasGrid === 'true' &&
       viewport.dataset.animationEnabled === 'true' &&
       close('data-applied-font-size', 64) &&
@@ -93,7 +95,7 @@ try {
       Number(viewport.dataset.drawCount) > 0 &&
       Number(viewport.dataset.framesPerSecond) > 0
     );
-  });
+  }, backend);
 
   const retainedCanvas = await page.evaluate(() => {
     const scope = globalThis as typeof globalThis & { presentationDemoCanvas: Element | null };
@@ -118,8 +120,25 @@ try {
   const observedWorkloads = ['off-axis-3d', 'icon-grid'];
   const waitForWorkload = async (workload: string): Promise<void> => {
     await page.waitForFunction(
-      (expected) => new URLSearchParams(location.search).get('workload') === expected,
-      workload,
+      ({ expectedBackend, expectedWorkload }) => {
+        if (new URLSearchParams(location.search).get('workload') !== expectedWorkload) return false;
+        const canvas = document.querySelector('canvas[data-configured-renderer-active="true"]');
+        if (canvas === null || Number(document.documentElement.dataset.activeConfiguredRenderers) !== 1) return false;
+        if (expectedWorkload === 'advanced-shaping') {
+          return (
+            document.querySelector('[data-testid="benchmark-surface"]')?.hasAttribute('data-advanced-case') === true
+          );
+        }
+        const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+        return (
+          viewport?.dataset.workload === expectedWorkload &&
+          viewport.dataset.presentationPending === 'false' &&
+          viewport.dataset.backend === expectedBackend &&
+          Number(viewport.dataset.glyphCount) > 0 &&
+          Number(viewport.dataset.drawCount) > 0
+        );
+      },
+      { expectedBackend: backend, expectedWorkload: workload },
     );
     observedWorkloads.push(workload);
   };
@@ -177,6 +196,12 @@ try {
   if (new URLSearchParams(new URL(page.url()).search).get('workload') !== 'off-axis-3d') {
     throw new Error('Timed demo did not finish on Off-axis / 3D');
   }
+  const finalBackend = await page
+    .locator('[data-testid="comparison-live-viewport"][data-workload="off-axis-3d"]')
+    .getAttribute('data-backend');
+  if (finalBackend !== backend) {
+    throw new Error(`Timed demo changed the configured backend from ${backend} to ${finalBackend ?? 'missing'}`);
+  }
 
   const workloadControl = page.getByLabel('Live workload', { exact: true });
   await workloadControl.focus();
@@ -201,6 +226,7 @@ try {
     'presentation-demo-ready',
     JSON.stringify({
       focusedControlCaptured: true,
+      backend,
       iconGridDefaults: true,
       iconGridFps,
       observedWorkloads,
@@ -213,3 +239,11 @@ try {
   await browser?.close();
   await server.close();
 }
+
+function presentationBackend(value: string | undefined): PresentationBackend {
+  if (value === undefined || value === 'webgpu') return 'webgpu';
+  if (value === 'webgl2') return value;
+  throw new RangeError(`PRESENTATION_BACKEND must be webgpu or webgl2; received ${value}`);
+}
+
+type PresentationBackend = 'webgpu' | 'webgl2';

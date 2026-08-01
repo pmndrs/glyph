@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises';
+import { resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';
@@ -7,6 +9,9 @@ import { launchProjectChromium } from './support/project-chromium.mts';
 const root = fileURLToPath(new URL('..', import.meta.url));
 process.chdir(root);
 const technique = presentationTechnique(process.env.PRESENTATION_TECHNIQUE);
+const backend = presentationBackend(process.env.PRESENTATION_BACKEND);
+const screenshotDirectory = process.env.PRESENTATION_SCREENSHOT_DIR;
+if (screenshotDirectory !== undefined) await mkdir(screenshotDirectory, { recursive: true });
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
 await server.listen();
 const address = server.httpServer?.address();
@@ -77,23 +82,24 @@ try {
   });
   page.on('pageerror', (error) => consoleProblems.push(`pageerror: ${error.message}`));
   await page.goto(
-    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=text-ladder`,
+    `http://127.0.0.1:${String(address.port)}/presentation?mode=benchmark&technique=${technique}&backend=${backend}&delivery=baked&dpr=2&font=inter&workload=text-ladder`,
     { waitUntil: 'domcontentloaded' },
   );
   const workloadControl = page.getByLabel('Live workload', { exact: true });
   await workloadControl.waitFor();
   await page.waitForFunction(() => document.querySelector('canvas[data-configured-renderer-active="true"]') !== null);
-  await page.waitForFunction(() => {
+  await page.waitForFunction((expectedBackend) => {
     const viewport = document.querySelector<HTMLElement>(
       '[data-testid="comparison-live-viewport"][data-workload="text-ladder"]',
     );
     return (
       viewport?.dataset.presentationPending === 'false' &&
+      viewport.dataset.backend === expectedBackend &&
       Number(viewport.dataset.glyphCount) > 0 &&
       Number(viewport.dataset.drawCount) > 0 &&
       Number(viewport.dataset.framesPerSecond) > 0
     );
-  });
+  }, backend);
   await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
     const scope = globalThis as typeof globalThis & {
@@ -152,7 +158,7 @@ try {
   for (const workload of workloads) {
     await workloadControl.click();
     await page.getByRole('option', { name: workload.label, exact: true }).click();
-    await assertPresentationRemainsVisible(page, workload.id);
+    await assertPresentationRemainsVisible(page, workload.id, backend);
     await page.waitForFunction(
       ({ expected }) => {
         const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
@@ -164,6 +170,7 @@ try {
         return (
           viewport.dataset.workload === expected.id &&
           viewport.dataset.presentationPending === 'false' &&
+          viewport.dataset.backend === expected.backend &&
           viewport.dataset.cameraKind === expected.camera &&
           viewport.dataset.canvasGrid === 'true' &&
           viewport.dataset.animationEnabled === 'true' &&
@@ -177,7 +184,7 @@ try {
           zoomReady
         );
       },
-      { expected: workload },
+      { expected: { ...workload, backend } },
     );
     const retainedCanvas = await page.evaluate(() => {
       const scope = globalThis as typeof globalThis & { presentationProbeCanvas: Element | undefined };
@@ -187,6 +194,11 @@ try {
     if (Number(await page.locator('html').getAttribute('data-active-configured-renderers')) !== 1) {
       throw new Error(`${workload.id} did not retain exactly one configured renderer`);
     }
+    if (screenshotDirectory !== undefined) {
+      await page.screenshot({
+        path: resolvePath(screenshotDirectory, `${backend}-${technique}-${workload.id}.png`),
+      });
+    }
   }
   if (technique === 'bitmap') {
     const dprMenu = page.getByRole('button', { name: 'Device pixel ratio: 2×', exact: true });
@@ -195,13 +207,13 @@ try {
       .getByRole('button', { name: '1×', exact: true })
       .evaluate((element) => (element as HTMLButtonElement).click());
     await page.waitForFunction(() => new URLSearchParams(location.search).get('dpr') === '1');
-    await assertCanvasHandoff(page, 'DPR 2→1');
+    await assertCanvasHandoff(page, 'DPR 2→1', backend);
     await page.getByRole('button', { name: 'Device pixel ratio: 1×', exact: true }).click();
     await page
       .getByRole('button', { name: '2×', exact: true })
       .evaluate((element) => (element as HTMLButtonElement).click());
     await page.waitForFunction(() => new URLSearchParams(location.search).get('dpr') === '2');
-    await assertCanvasHandoff(page, 'DPR 1→2');
+    await assertCanvasHandoff(page, 'DPR 1→2', backend);
 
     const mtsdfControl = page.getByRole('button', { name: 'MSDF', exact: true });
     await mtsdfControl.evaluate((element) => (element as HTMLButtonElement).click());
@@ -209,7 +221,7 @@ try {
       const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
       return viewport?.dataset.technique === 'mtsdf' && viewport.dataset.presentationPending === 'false';
     });
-    await assertCanvasHandoff(page, 'Bitmap→MTSDF');
+    await assertCanvasHandoff(page, 'Bitmap→MTSDF', backend);
     await page
       .getByRole('button', { name: 'Bitmap', exact: true })
       .evaluate((element) => (element as HTMLButtonElement).click());
@@ -217,34 +229,41 @@ try {
       const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
       return viewport?.dataset.technique === 'bitmap' && viewport.dataset.presentationPending === 'false';
     });
-    await assertCanvasHandoff(page, 'MTSDF→Bitmap');
+    await assertCanvasHandoff(page, 'MTSDF→Bitmap', backend);
   }
   if (consoleProblems.length > 0) {
     throw new Error(`Presentation emitted browser warnings or errors: ${consoleProblems.join(' | ')}`);
   }
   console.log(
     'presentation-workloads-ready',
-    JSON.stringify({ workloads: workloads.length, rendererCount: 1, technique }),
+    JSON.stringify({ backend, workloads: workloads.length, rendererCount: 1, technique }),
   );
 } finally {
   await browser?.close();
   await server.close();
 }
 
-async function assertCanvasHandoff(page: Page, label: string): Promise<void> {
+async function assertCanvasHandoff(page: Page, label: string, expectedBackend: PresentationBackend): Promise<void> {
   const evidence = await page.evaluate(() => {
     const scope = globalThis as typeof globalThis & {
       presentationProbeCanvas: HTMLCanvasElement | undefined;
       presentationProbeCanvasEvents: string[];
     };
     const current = document.querySelector('canvas[data-configured-renderer-active="true"]');
+    const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
     return {
+      backend: viewport?.dataset.backend,
       disconnected: scope.presentationProbeCanvasEvents.some((event) => event.endsWith('disconnected')),
       rendererCount: Number(document.documentElement.dataset.activeConfiguredRenderers),
       retained: current !== null && current === scope.presentationProbeCanvas && current.isConnected,
     };
   });
-  if (!evidence.retained || evidence.disconnected || evidence.rendererCount !== 1) {
+  if (
+    !evidence.retained ||
+    evidence.disconnected ||
+    evidence.rendererCount !== 1 ||
+    evidence.backend !== expectedBackend
+  ) {
     throw new Error(`${label} did not retain one continuously attached renderer canvas: ${JSON.stringify(evidence)}`);
   }
 }
@@ -255,11 +274,21 @@ function presentationTechnique(value: string | undefined): 'bitmap' | 'mtsdf' | 
   throw new RangeError(`PRESENTATION_TECHNIQUE must be bitmap, mtsdf, or slug; received ${value}`);
 }
 
-async function assertPresentationRemainsVisible(page: Page, workload: string): Promise<void> {
+function presentationBackend(value: string | undefined): PresentationBackend {
+  if (value === undefined || value === 'webgpu') return 'webgpu';
+  if (value === 'webgl2') return value;
+  throw new RangeError(`PRESENTATION_BACKEND must be webgpu or webgl2; received ${value}`);
+}
+
+async function assertPresentationRemainsVisible(
+  page: Page,
+  workload: string,
+  expectedBackend: PresentationBackend,
+): Promise<void> {
   const minimumRequiredInkPixels = workload === 'zoom-text' ? 32 : 300;
   const startedAt = await page.evaluate(() => performance.now());
   while (true) {
-    const canvasFailure = await page.evaluate(() => {
+    const canvasFailure = await page.evaluate((reportedBackend) => {
       const scope = globalThis as typeof globalThis & {
         presentationProbeCanvas: HTMLCanvasElement | undefined;
         presentationProbeCanvasEvidence: CanvasEvidence | undefined;
@@ -286,11 +315,14 @@ async function assertPresentationRemainsVisible(page: Page, workload: string): P
       const rendererCount = Number(document.documentElement.dataset.activeConfiguredRenderers);
       if (rendererCount !== 1) return `the active renderer count changed to ${String(rendererCount)}`;
       const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      if (viewport?.dataset.backend !== reportedBackend) {
+        return `the active backend changed to ${viewport?.dataset.backend ?? 'missing'}`;
+      }
       if (Number(viewport?.dataset.glyphCount) <= 0 || Number(viewport?.dataset.drawCount) <= 0) {
         return 'the active workload stopped publishing glyphs or draw calls';
       }
       return undefined;
-    });
+    }, expectedBackend);
     if (canvasFailure !== undefined) throw new Error(`${workload}: ${canvasFailure}`);
     const elapsedMs = await page.evaluate((start) => performance.now() - start, startedAt);
     if (elapsedMs >= presentationIntervalMs) break;
@@ -325,6 +357,8 @@ interface CanvasEvidence {
   readonly cssHeight: number;
   readonly cssWidth: number;
 }
+
+type PresentationBackend = 'webgpu' | 'webgl2';
 
 async function visiblePresentationInkPixels(page: Page, screenshotBase64: string): Promise<number> {
   return page.evaluate(async (encoded) => {
