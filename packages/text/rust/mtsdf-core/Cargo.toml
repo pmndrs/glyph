@@ -12,6 +12,7 @@ publish = false
 default = ["std"]
 std = []
 simd128-experiment = []
+profiling = []
 
 [dependencies]
 core_maths = "0.1.1"

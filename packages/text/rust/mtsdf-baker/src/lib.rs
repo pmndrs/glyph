@@ -14,6 +14,8 @@ mod error;
 mod glb;
 #[cfg(feature = "artifact-baker")]
 mod model;
+#[cfg(feature = "profiling")]
+mod profile;
 #[cfg(feature = "artifact-baker")]
 mod progress;
 
@@ -25,6 +27,8 @@ pub fn mtsdf_abi_json() -> alloc::string::String {
     abi_contract::json(cfg!(feature = "artifact-baker"))
 }
 
+#[cfg(feature = "profiling")]
+pub use artifact::bake_mtsdf_profiled;
 #[cfg(feature = "artifact-baker")]
 pub use artifact::{bake_mtsdf, descriptor_raster_key};
 #[cfg(feature = "artifact-baker")]
@@ -35,4 +39,8 @@ pub use model::{
     MTSDF_EM_SIZE, MTSDF_PIXEL_RANGE, MTSDF_PLANE_UNITS_PER_EM, MtsdfBakeArtifactV0,
     MtsdfBakeRequestV0, MtsdfBakeResultV0, MtsdfDescriptorV0, MtsdfPackagingV0, MtsdfPageReportV0,
     MtsdfPayloadReportV0, PagePackaging, RasterCoverageV0, RasterUnicodeRangeV0,
+};
+#[cfg(feature = "profiling")]
+pub use profile::{
+    MtsdfBakeCounters, MtsdfBakePhaseDurations, MtsdfBakeProfile, ProfiledMtsdfBake,
 };

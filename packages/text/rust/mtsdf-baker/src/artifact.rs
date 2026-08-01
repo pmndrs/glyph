@@ -11,6 +11,8 @@ use pmndrs_text_raster_artifact::{
 };
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 
+#[cfg(feature = "profiling")]
+use crate::profile::{BakePhase, BakeProfiler, PhaseTimer};
 use crate::{
     error::{MtsdfBakeError, MtsdfBakeErrorCode, overflow},
     glb::build_mtsdf_glb,
@@ -36,6 +38,34 @@ pub fn bake_mtsdf(
     source: &[u8],
     request: MtsdfBakeRequestV0,
 ) -> Result<MtsdfBakeResultV0, MtsdfBakeError> {
+    #[cfg(feature = "profiling")]
+    {
+        bake_mtsdf_internal(source, request, &mut BakeProfiler::start())
+    }
+    #[cfg(not(feature = "profiling"))]
+    {
+        bake_mtsdf_internal(source, request)
+    }
+}
+
+#[cfg(feature = "profiling")]
+pub fn bake_mtsdf_profiled(
+    source: &[u8],
+    request: MtsdfBakeRequestV0,
+) -> Result<crate::profile::ProfiledMtsdfBake, MtsdfBakeError> {
+    let mut profiler = BakeProfiler::start();
+    let result = bake_mtsdf_internal(source, request, &mut profiler)?;
+    Ok(crate::profile::ProfiledMtsdfBake {
+        result,
+        profile: profiler.finish(),
+    })
+}
+
+fn bake_mtsdf_internal(
+    source: &[u8],
+    request: MtsdfBakeRequestV0,
+    #[cfg(feature = "profiling")] profiler: &mut BakeProfiler,
+) -> Result<MtsdfBakeResultV0, MtsdfBakeError> {
     let settings = request.descriptor.validate()?;
     validate_hash("shapingHash", &request.shaping_hash)?;
     validate_hash("rasterKey", &request.raster_key)?;
@@ -54,6 +84,8 @@ pub fn bake_mtsdf(
         request.glyph_count,
         settings,
         request.descriptor.coverage.as_ref(),
+        #[cfg(feature = "profiling")]
+        profiler,
     )?;
     let metadata_bytes = rasterized.records.len()
         + rasterized
@@ -68,6 +100,8 @@ pub fn bake_mtsdf(
         settings,
         request.descriptor.coverage.as_ref(),
         &rasterized,
+        #[cfg(feature = "profiling")]
+        profiler,
     )?;
     let raster_id = format!("msdf-{}-{}.glb", request.shaping_hash, request.raster_key);
     let raster_hash = pmndrs_text_raster_artifact::sha256_hex(&built.bytes);
@@ -171,20 +205,15 @@ fn rasterize_font(
     expected_glyph_count: u16,
     settings: MtsdfBakeSettingsV0,
     requested_coverage: Option<&pmndrs_text_raster_artifact::RasterCoverageV0>,
+    #[cfg(feature = "profiling")] profiler: &mut BakeProfiler,
 ) -> Result<RasterizedMtsdf, MtsdfBakeError> {
-    let font = FontRef::from_index(source, face_index).map_err(|error| {
-        MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
+    #[cfg(feature = "profiling")]
+    let (font, actual_glyph_count, coverage) = profiler.measure(BakePhase::Selection, || {
+        select_font(source, face_index, expected_glyph_count, requested_coverage)
     })?;
-    let actual_glyph_count = glyph_count(&font)
-        .map_err(|error| MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFont, error))?;
-    if actual_glyph_count != expected_glyph_count {
-        return Err(MtsdfBakeError::new(
-            MtsdfBakeErrorCode::InvalidGlyphCount,
-            "source font glyph count does not match the shaping context",
-        )
-        .at("/glyphCount"));
-    }
-    let coverage = request_coverage(&font, actual_glyph_count, requested_coverage)?;
+    #[cfg(not(feature = "profiling"))]
+    let (font, actual_glyph_count, coverage) =
+        select_font(source, face_index, expected_glyph_count, requested_coverage)?;
 
     let mut records = GlyphRecordTable::new(actual_glyph_count)?;
     let mut pages = Vec::new();
@@ -197,6 +226,8 @@ fn rasterize_font(
     let progress_total = coverage
         .as_ref()
         .map_or(actual_glyph_count, |selection| selection.selected_glyphs());
+    #[cfg(feature = "profiling")]
+    profiler.set_selected_glyphs(progress_total);
     crate::progress::report(0, u32::from(progress_total));
     let mut selected_index = 0_u32;
     for raw_glyph_id in 0..actual_glyph_count {
@@ -215,19 +246,37 @@ fn rasterize_font(
             continue;
         };
         let units_per_em = source.units_per_em();
+        #[cfg(feature = "profiling")]
+        let outline_timer = PhaseTimer::start();
         let mut outline = match generator.read_outline(&source) {
             Ok(outline) => outline,
             Err(ReadOutlineError::EmptyOutline | ReadOutlineError::InvalidBounds) => {
+                #[cfg(feature = "profiling")]
+                profiler.finish_phase(BakePhase::OutlineExtraction, outline_timer);
                 records.mark_absent(raw_glyph_id)?;
                 continue;
             }
             Err(error) => return Err(outline_error(raw_glyph_id, error)),
         };
+        #[cfg(feature = "profiling")]
+        profiler.finish_phase(BakePhase::OutlineExtraction, outline_timer);
+        #[cfg(feature = "profiling")]
+        let edge_count = outline.edge_count();
         let quantized =
             QuantizedGlyph::new(outline.bounds(), units_per_em, raw_glyph_id, settings)?;
+        #[cfg(feature = "profiling")]
+        let texel_timer = PhaseTimer::start();
         let texels = outline
             .generate_mtsdf_with_transform(quantized.region, quantized.transform)
             .map_err(|error| generation_error(raw_glyph_id, error))?;
+        #[cfg(feature = "profiling")]
+        profiler.finish_phase(BakePhase::TexelGeneration, texel_timer);
+        #[cfg(feature = "profiling")]
+        let generated_texels = usize::from(quantized.width) * usize::from(quantized.height);
+        #[cfg(feature = "profiling")]
+        profiler.record_generated_glyph(generated_texels, edge_count);
+        #[cfg(feature = "profiling")]
+        let packing_timer = PhaseTimer::start();
         let mut page_index = pages.len() - 1;
         let atlas_bounds = if let Some(bounds) =
             pages[page_index].place(quantized.width, quantized.height, texels, ATLAS_GLYPH_GAP)?
@@ -252,6 +301,8 @@ fn rasterize_font(
             atlas_bounds,
             u16::try_from(page_index).map_err(|_| overflow())?,
         )?;
+        #[cfg(feature = "profiling")]
+        profiler.finish_phase(BakePhase::Packing, packing_timer);
     }
     crate::progress::report(u32::from(progress_total), u32::from(progress_total));
 
@@ -260,13 +311,48 @@ fn rasterize_font(
         .try_reserve_exact(pages.len())
         .map_err(|_| overflow())?;
     for page in pages {
-        finished_pages.push(page.finish()?);
+        #[cfg(feature = "profiling")]
+        let packing_timer = PhaseTimer::start();
+        let page = page.finish()?;
+        #[cfg(feature = "profiling")]
+        profiler.finish_phase(BakePhase::Packing, packing_timer);
+        finished_pages.push(page);
     }
     Ok(RasterizedMtsdf {
         records: records.into_bytes(),
         pages: finished_pages,
         coverage: coverage.map(|selection| selection.bits().to_vec()),
     })
+}
+
+#[inline]
+fn select_font<'source>(
+    source: &'source [u8],
+    face_index: u32,
+    expected_glyph_count: u16,
+    requested_coverage: Option<&pmndrs_text_raster_artifact::RasterCoverageV0>,
+) -> Result<
+    (
+        FontRef<'source>,
+        u16,
+        Option<pmndrs_text_raster_artifact::ResolvedRasterCoverage>,
+    ),
+    MtsdfBakeError,
+> {
+    let font = FontRef::from_index(source, face_index).map_err(|error| {
+        MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFontFace, error).at("/fontFaceIndex")
+    })?;
+    let actual_glyph_count = glyph_count(&font)
+        .map_err(|error| MtsdfBakeError::new(MtsdfBakeErrorCode::InvalidFont, error))?;
+    if actual_glyph_count != expected_glyph_count {
+        return Err(MtsdfBakeError::new(
+            MtsdfBakeErrorCode::InvalidGlyphCount,
+            "source font glyph count does not match the shaping context",
+        )
+        .at("/glyphCount"));
+    }
+    let coverage = request_coverage(&font, actual_glyph_count, requested_coverage)?;
+    Ok((font, actual_glyph_count, coverage))
 }
 
 fn request_coverage(
@@ -498,6 +584,8 @@ mod tests {
             2937,
             MtsdfBakeSettingsV0::DEFAULT,
             Some(&coverage),
+            #[cfg(feature = "profiling")]
+            &mut BakeProfiler::start(),
         )
         .unwrap();
         let coverage = rasterized.coverage.as_ref().unwrap();
@@ -516,6 +604,38 @@ mod tests {
                 assert_eq!(page, 0xffff);
             }
         }
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn phase_profiling_preserves_the_bake_and_counts_actual_work() {
+        let mut descriptor = descriptor(None, None);
+        descriptor.coverage = Some(pmndrs_text_raster_artifact::RasterCoverageV0 {
+            unicode_ranges: None,
+            text: None,
+            glyph_ids: Some(vec![43, 44]),
+        });
+        let raster_key = descriptor_raster_key(&descriptor);
+        let request = MtsdfBakeRequestV0 {
+            font_face_index: 0,
+            glyph_count: 2937,
+            shaping_hash: SHAPING_HASH.into(),
+            raster_key,
+            packaging: crate::MtsdfPackagingV0 {
+                artifact: crate::ArtifactPackaging::Embedded,
+                pages: crate::PagePackaging::Embedded,
+            },
+            descriptor,
+        };
+        let expected = bake_mtsdf(INTER, request.clone()).unwrap();
+        let profiled = bake_mtsdf_profiled(INTER, request).unwrap();
+        assert_eq!(profiled.result, expected);
+        assert_eq!(profiled.profile.counters.selected_glyphs, 2);
+        assert_eq!(profiled.profile.counters.generated_glyphs, 2);
+        assert!(profiled.profile.counters.generated_texels > 0);
+        assert!(profiled.profile.counters.edges_visited > 0);
+        assert!(profiled.profile.phases_ns.texel_generation > 0);
+        assert!(profiled.profile.phases_ns.total >= profiled.profile.phases_ns.texel_generation);
     }
 
     #[test]
@@ -595,6 +715,8 @@ mod tests {
             settings(32, 5),
             None,
             &rasterized,
+            #[cfg(feature = "profiling")]
+            &mut BakeProfiler::start(),
         )
         .unwrap();
         let json_length = u32::from_le_bytes(built.bytes[12..16].try_into().unwrap()) as usize;
@@ -610,7 +732,16 @@ mod tests {
     #[ignore = "full Inter generation is the deterministic integration fixture"]
     fn inter_mtsdf_is_deterministic_and_packaging_preserves_records() {
         let settings = MtsdfBakeSettingsV0::DEFAULT;
-        let rasterized = rasterize_font(INTER, 0, 2937, settings, None).expect("rasterize Inter");
+        let rasterized = rasterize_font(
+            INTER,
+            0,
+            2937,
+            settings,
+            None,
+            #[cfg(feature = "profiling")]
+            &mut BakeProfiler::start(),
+        )
+        .expect("rasterize Inter");
         assert_eq!(rasterized.records.len(), 2937 * 20);
         let descriptor = descriptor(None, None);
         let raster_key = descriptor_raster_key(&descriptor);
@@ -622,6 +753,8 @@ mod tests {
             settings,
             None,
             &rasterized,
+            #[cfg(feature = "profiling")]
+            &mut BakeProfiler::start(),
         )
         .expect("embedded");
         let external = build_mtsdf_glb(
@@ -632,6 +765,8 @@ mod tests {
             settings,
             None,
             &rasterized,
+            #[cfg(feature = "profiling")]
+            &mut BakeProfiler::start(),
         )
         .expect("external");
         assert_eq!(embedded.pages.len(), external.pages.len());

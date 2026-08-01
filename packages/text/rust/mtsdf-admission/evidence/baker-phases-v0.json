@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 0,
+  "kind": "mtsdf-baker-phase-profile",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v24.18.0",
+    "rust": "1.97.1",
+    "fixture": "apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf"
+  },
+  "cases": [
+    {
+      "id": "small",
+      "coverage": {
+        "text": "Sphinx of black quartz, judge my vow. 0123456789"
+      },
+      "counters": {
+        "edgesVisited": 1694576,
+        "generatedGlyphs": 38,
+        "generatedTexels": 71341,
+        "selectedGlyphs": 39
+      },
+      "phasesMs": {
+        "containerSerialization": 0.333041,
+        "outlineExtraction": 0.930414,
+        "packing": 0.112587,
+        "selection": 0.104583,
+        "texelGeneration": 245.40475,
+        "textureEncoding": 0.035917,
+        "total": 248.321875
+      },
+      "throughput": {
+        "generatedGlyphsPerSecond": 154.84622852654644,
+        "generatedTexelsPerSecond": 290707.49445558817,
+        "edgeVisitsPerSecond": 6905229.014515815
+      },
+      "payload": {
+        "gpuBytes": 535392,
+        "metadataBytes": 59108,
+        "pages": [
+          {
+            "encodedBytes": 535588,
+            "format": "rgba8unorm",
+            "gpuBytes": 535392,
+            "height": 132,
+            "source": "embedded",
+            "width": 1014
+          }
+        ],
+        "serializedBytes": 595752
+      },
+      "artifactSha256": "d03f354f28bc7b0017cf9dd3db84b50bddb3e574f20559bc23ae215704988eb0",
+      "nativeArtifactSha256": "d03f354f28bc7b0017cf9dd3db84b50bddb3e574f20559bc23ae215704988eb0",
+      "wasmHost": {
+        "requestEncodingMs": 0.014874999999960892,
+        "wasmInputCopyMs": 0.34462500000000773,
+        "wasmBakeMs": 511.9625,
+        "wasmToHostCopyMs": 0.6885829999999942,
+        "cleanupMs": 0.04570899999998801,
+        "wasmMemoryBeforeBytes": 1114112,
+        "wasmMemoryPeakBytes": 6488064,
+        "wasmMemoryAfterBytes": 6488064,
+        "outputBytes": 595752,
+        "artifactSha256": "d03f354f28bc7b0017cf9dd3db84b50bddb3e574f20559bc23ae215704988eb0",
+        "serializedBytes": 595752
+      },
+      "worker": {
+        "totalMs": 520.8824999999999,
+        "responseTransferMs": 0.460207999999966,
+        "rssBeforeBytes": 55689216,
+        "rssAfterBytes": 109002752,
+        "processMaxRssBytes": 109002752,
+        "artifactSha256": "d03f354f28bc7b0017cf9dd3db84b50bddb3e574f20559bc23ae215704988eb0",
+        "serializedBytes": 595752
+      }
+    },
+    {
+      "id": "medium",
+      "coverage": {
+        "unicodeRanges": [
+          {
+            "start": 32,
+            "end": 591
+          }
+        ]
+      },
+      "counters": {
+        "edgesVisited": 36939819,
+        "generatedGlyphs": 522,
+        "generatedTexels": 1289496,
+        "selectedGlyphs": 524
+      },
+      "phasesMs": {
+        "containerSerialization": 5.455166,
+        "outlineExtraction": 2.709879,
+        "packing": 2.205163,
+        "selection": 0.020042,
+        "texelGeneration": 4429.170967,
+        "textureEncoding": 0.744542,
+        "total": 4445.45525
+      },
+      "throughput": {
+        "generatedGlyphsPerSecond": 117.85501257215299,
+        "generatedTexelsPerSecond": 291137.1020914578,
+        "edgeVisitsPerSecond": 8340120.369076735
+      },
+      "payload": {
+        "gpuBytes": 7014008,
+        "metadataBytes": 59108,
+        "pages": [
+          {
+            "encodedBytes": 4014768,
+            "format": "rgba8unorm",
+            "gpuBytes": 4014572,
+            "height": 983,
+            "source": "embedded",
+            "width": 1021
+          },
+          {
+            "encodedBytes": 2999632,
+            "format": "rgba8unorm",
+            "gpuBytes": 2999436,
+            "height": 733,
+            "source": "embedded",
+            "width": 1023
+          }
+        ],
+        "serializedBytes": 7074796
+      },
+      "artifactSha256": "57f3ffe03760a77d36507eadf5efe9badb30da5f94d6e344f444d7892394f5b0",
+      "nativeArtifactSha256": "57f3ffe03760a77d36507eadf5efe9badb30da5f94d6e344f444d7892394f5b0",
+      "wasmHost": {
+        "requestEncodingMs": 0.01749999999992724,
+        "wasmInputCopyMs": 0.07808300000033341,
+        "wasmBakeMs": 9075.969834,
+        "wasmToHostCopyMs": 0.7371249999996508,
+        "cleanupMs": 0.002791000000797794,
+        "wasmMemoryBeforeBytes": 1114112,
+        "wasmMemoryPeakBytes": 36634624,
+        "wasmMemoryAfterBytes": 36634624,
+        "outputBytes": 7074796,
+        "artifactSha256": "57f3ffe03760a77d36507eadf5efe9badb30da5f94d6e344f444d7892394f5b0",
+        "serializedBytes": 7074796
+      },
+      "worker": {
+        "totalMs": 9109.3645,
+        "responseTransferMs": 0.6059580000001006,
+        "rssBeforeBytes": 55525376,
+        "rssAfterBytes": 147177472,
+        "processMaxRssBytes": 147177472,
+        "artifactSha256": "57f3ffe03760a77d36507eadf5efe9badb30da5f94d6e344f444d7892394f5b0",
+        "serializedBytes": 7074796
+      }
+    },
+    {
+      "id": "complete",
+      "coverage": "complete-face",
+      "counters": {
+        "edgesVisited": 227327416,
+        "generatedGlyphs": 2915,
+        "generatedTexels": 7233197,
+        "selectedGlyphs": 2937
+      },
+      "phasesMs": {
+        "containerSerialization": 28.058749,
+        "outlineExtraction": 13.081898,
+        "packing": 12.455424,
+        "selection": 0.000375,
+        "texelGeneration": 25871.568325,
+        "textureEncoding": 5.021251,
+        "total": 25957.064375
+      },
+      "throughput": {
+        "generatedGlyphsPerSecond": 112.671947961624,
+        "generatedTexelsPerSecond": 279580.92486455396,
+        "edgeVisitsPerSecond": 8786765.9642547
+      },
+      "payload": {
+        "gpuBytes": 39111736,
+        "metadataBytes": 58740,
+        "pages": [
+          {
+            "encodedBytes": 3989700,
+            "format": "rgba8unorm",
+            "gpuBytes": 3989504,
+            "height": 974,
+            "source": "embedded",
+            "width": 1024
+          },
+          {
+            "encodedBytes": 4190404,
+            "format": "rgba8unorm",
+            "gpuBytes": 4190208,
+            "height": 1024,
+            "source": "embedded",
+            "width": 1023
+          },
+          {
+            "encodedBytes": 4161760,
+            "format": "rgba8unorm",
+            "gpuBytes": 4161564,
+            "height": 1017,
+            "source": "embedded",
+            "width": 1023
+          },
+          {
+            "encodedBytes": 4137316,
+            "format": "rgba8unorm",
+            "gpuBytes": 4137120,
+            "height": 1014,
+            "source": "embedded",
+            "width": 1020
+          },
+          {
+            "encodedBytes": 4051140,
+            "format": "rgba8unorm",
+            "gpuBytes": 4050944,
+            "height": 989,
+            "source": "embedded",
+            "width": 1024
+          },
+          {
+            "encodedBytes": 3969644,
+            "format": "rgba8unorm",
+            "gpuBytes": 3969448,
+            "height": 971,
+            "source": "embedded",
+            "width": 1022
+          },
+          {
+            "encodedBytes": 3845356,
+            "format": "rgba8unorm",
+            "gpuBytes": 3845160,
+            "height": 971,
+            "source": "embedded",
+            "width": 990
+          },
+          {
+            "encodedBytes": 4178128,
+            "format": "rgba8unorm",
+            "gpuBytes": 4177932,
+            "height": 1021,
+            "source": "embedded",
+            "width": 1023
+          },
+          {
+            "encodedBytes": 4186308,
+            "format": "rgba8unorm",
+            "gpuBytes": 4186112,
+            "height": 1022,
+            "source": "embedded",
+            "width": 1024
+          },
+          {
+            "encodedBytes": 2403940,
+            "format": "rgba8unorm",
+            "gpuBytes": 2403744,
+            "height": 588,
+            "source": "embedded",
+            "width": 1022
+          }
+        ],
+        "serializedBytes": 39175608
+      },
+      "artifactSha256": "24f0937b888a17e7ed097af718d02320b254d8d093ed6693a35e73f82d71e5df",
+      "nativeArtifactSha256": "6ba5638c58506aecd49dcd6fdb6a1d2d7ea461492c1d74746bb6603903a14cc5",
+      "wasmHost": {
+        "requestEncodingMs": 0.00787500000296859,
+        "wasmInputCopyMs": 0.07966599999781465,
+        "wasmBakeMs": 52420.371958,
+        "wasmToHostCopyMs": 4.513082999998005,
+        "cleanupMs": 0.006250000005820766,
+        "wasmMemoryBeforeBytes": 1114112,
+        "wasmMemoryPeakBytes": 227737600,
+        "wasmMemoryAfterBytes": 227737600,
+        "outputBytes": 39175608,
+        "artifactSha256": "24f0937b888a17e7ed097af718d02320b254d8d093ed6693a35e73f82d71e5df",
+        "serializedBytes": 39175608
+      },
+      "worker": {
+        "totalMs": 52860.209833,
+        "responseTransferMs": 0.47020800000609597,
+        "rssBeforeBytes": 55836672,
+        "rssAfterBytes": 343343104,
+        "processMaxRssBytes": 343343104,
+        "artifactSha256": "24f0937b888a17e7ed097af718d02320b254d8d093ed6693a35e73f82d71e5df",
+        "serializedBytes": 39175608
+      }
+    }
+  ]
+}

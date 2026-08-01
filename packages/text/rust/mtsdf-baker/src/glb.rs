@@ -5,6 +5,8 @@ use pmndrs_text_raster_artifact::{
 };
 use serde_json::{Value, json};
 
+#[cfg(feature = "profiling")]
+use crate::profile::{BakePhase, BakeProfiler, PhaseTimer};
 use crate::{
     artifact::RasterizedMtsdf,
     error::MtsdfBakeError,
@@ -33,7 +35,12 @@ pub(crate) fn build_mtsdf_glb(
     settings: MtsdfBakeSettingsV0,
     coverage_descriptor: Option<&RasterCoverageV0>,
     rasterized: &RasterizedMtsdf,
+    #[cfg(feature = "profiling")] profiler: &mut BakeProfiler,
 ) -> Result<BuiltRasterGlb, MtsdfBakeError> {
+    #[cfg(feature = "profiling")]
+    let container_timer = PhaseTimer::start();
+    #[cfg(feature = "profiling")]
+    let texture_encoding_before = profiler.duration(BakePhase::TextureEncoding);
     let mut binary = Vec::<u8>::new();
     let mut buffer_views = Vec::<Value>::new();
     let coverage_view = rasterized
@@ -51,6 +58,11 @@ pub(crate) fn build_mtsdf_glb(
         .try_reserve_exact(rasterized.pages.len())
         .map_err(|_| crate::error::overflow())?;
     for (page_index, page) in rasterized.pages.iter().enumerate() {
+        #[cfg(feature = "profiling")]
+        let ktx2 = profiler.measure(BakePhase::TextureEncoding, || {
+            encode_ktx2(KtxFormat::Rgba8Unorm, page.width, page.height, &page.texels)
+        })?;
+        #[cfg(not(feature = "profiling"))]
         let ktx2 = encode_ktx2(KtxFormat::Rgba8Unorm, page.width, page.height, &page.texels)?;
         let sha256 = pmndrs_text_raster_artifact::sha256_hex(&ktx2);
         let id = format!("msdf-{shaping_hash}-{raster_key}-p{page_index}.ktx2");
@@ -127,6 +139,12 @@ pub(crate) fn build_mtsdf_glb(
         "bufferViews": buffer_views,
     });
     let bytes = encode_glb(&root, binary)?;
+    #[cfg(feature = "profiling")]
+    profiler.finish_container(
+        container_timer,
+        #[cfg(feature = "profiling")]
+        texture_encoding_before,
+    );
     Ok(BuiltRasterGlb {
         bytes,
         pages: page_artifacts,

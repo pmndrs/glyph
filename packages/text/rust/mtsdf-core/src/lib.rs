@@ -257,6 +257,13 @@ impl GlyphOutline<'_> {
         self.units_per_em
     }
 
+    #[cfg(feature = "profiling")]
+    /// Number of color-split edges visited for every generated texel.
+    pub fn edge_count(&self) -> usize {
+        let edges = &self.generator.scratch.hot_edges;
+        edges.lines.x0.len() + edges.quadratics.x0.len() + edges.cubics.x0.len()
+    }
+
     pub fn generate_mtsdf(&mut self, region: AtlasRegion) -> Result<&[u8], GenerateError> {
         let transform = MtsdfTransform {
             bounds: self.bounds,

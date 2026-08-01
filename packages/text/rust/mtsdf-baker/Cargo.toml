@@ -16,6 +16,11 @@ name = "generate-mtsdf-abi"
 path = "src/bin/generate-mtsdf-abi.rs"
 required-features = ["std"]
 
+[[bin]]
+name = "profile-mtsdf-baker"
+path = "src/bin/profile-mtsdf-baker.rs"
+required-features = ["profiling"]
+
 [features]
 default = ["std", "artifact-baker"]
 std = [
@@ -37,6 +42,7 @@ artifact-baker = [
 ]
 simd128-experiment = ["pmndrs-text-mtsdf-core/simd128-experiment"]
 allocation-evidence = []
+profiling = ["std", "artifact-baker", "pmndrs-text-mtsdf-core/profiling"]
 
 [dependencies]
 core_maths = "0.1.1"

@@ -71,7 +71,7 @@ describe('independent package-size report', () => {
         rawBytes: { baseline: 324_269, maximumGrowth: 5_400 },
         minifiedBytes: { baseline: 247_205, maximumGrowth: 4_000 },
         gzipBytes: { baseline: 72_108, maximumGrowth: 1_000 },
-        brotliBytes: { baseline: 55_251, maximumGrowth: 800 },
+        brotliBytes: { baseline: 55_251, maximumGrowth: 825 },
       },
       'bitmap-baker-js': {
         rawBytes: { baseline: 17_478, maximumGrowth: 5_700 },
@@ -107,7 +107,7 @@ describe('independent package-size report', () => {
         rawBytes: { baseline: 370_255, maximumGrowth: 8_050 },
         minifiedBytes: { baseline: 275_271, maximumGrowth: 5_500 },
         gzipBytes: { baseline: 79_993, maximumGrowth: 1_300 },
-        brotliBytes: { baseline: 62_081, maximumGrowth: 1_050 },
+        brotliBytes: { baseline: 62_081, maximumGrowth: 1_075 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;

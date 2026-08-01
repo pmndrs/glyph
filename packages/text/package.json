@@ -90,6 +90,7 @@
     "measure:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs",
     "measure:mtsdf-generator": "pnpm build && node ./scripts/measure-mtsdf-generator.mjs",
     "measure:mtsdf-simd": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs",
+    "profile:mtsdf-baker": "pnpm build && node ./scripts/profile-mtsdf-baker.mjs",
     "check:mtsdf-admission": "node ./scripts/measure-mtsdf-admission.mjs --check",
     "check:mtsdf-simd": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs --check",
     "check:mtsdf-simd-full-font": "pnpm build && node ./scripts/measure-mtsdf-simd.mjs --check --full-font",
