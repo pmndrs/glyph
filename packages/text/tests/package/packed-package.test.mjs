@@ -28,6 +28,8 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   const manifest = JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'));
   const packedFiles = await readdir(installedDirectory, { recursive: true });
   assert.equal(packedFiles.includes('dist/.tsbuildinfo'), false);
+  assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.d.ts'), false);
+  assert.equal(packedFiles.includes('dist/internal/raster-baker-profile.js'), false);
   assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v0.json'), false);
   assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v1.json'), true);
   assert.equal(packedFiles.includes('dist/slug-baker-abi-v1.json'), false);

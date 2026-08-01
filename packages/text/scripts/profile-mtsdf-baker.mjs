@@ -89,7 +89,7 @@ async function runNativeProfile(profileCase) {
 
 async function runDirectProfile(profileCase, source) {
   const [{ createProfiledDirectRasterBakerFromInstance }, { mtsdfBakerAbi }, contract] = await Promise.all([
-    import('../dist/internal/raster-baker-wasm.js'),
+    import('../dist/internal/raster-baker-profile.js'),
     import('../dist/generated/mtsdf-baker-abi.js'),
     import('../dist/internal/msdf-contract.js'),
   ]);

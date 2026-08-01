@@ -48,7 +48,7 @@ export interface DirectRasterBakerAbi {
   };
 }
 
-interface DirectRasterBakerExports {
+export interface DirectRasterBakerExports {
   readonly memory: WebAssembly.Memory;
   readonly allocate: (length: number) => number;
   readonly deallocate: (pointer: number, length: number) => void;
@@ -92,18 +92,6 @@ export interface DirectRasterBakerSpec<Kind extends string> {
   createError(error: SerializedBakeError): Error;
 }
 
-export interface DirectRasterBakerProfileSample {
-  readonly requestEncodingMs: number;
-  readonly wasmInputCopyMs: number;
-  readonly wasmBakeMs: number;
-  readonly wasmToHostCopyMs: number;
-  readonly cleanupMs: number;
-  readonly wasmMemoryBeforeBytes: number;
-  readonly wasmMemoryPeakBytes: number;
-  readonly wasmMemoryAfterBytes: number;
-  readonly outputBytes: number;
-}
-
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -143,9 +131,9 @@ export function createDirectRasterBakerFromInstance<Request, Kind extends string
         const response = memoryRange(exports.memory, responsePointer, responseLength, spec.label);
         return decodeResponse(response, abi, spec);
       } finally {
-        if (sourcePointer !== 0) exports.deallocate(sourcePointer, source.byteLength);
-        if (requestPointer !== 0) exports.deallocate(requestPointer, requestBytes.byteLength);
-        if (responsePointer !== 0 && responseLength !== 0) {
+        if (sourcePointer) exports.deallocate(sourcePointer, source.byteLength);
+        if (requestPointer) exports.deallocate(requestPointer, requestBytes.byteLength);
+        if (responsePointer && responseLength) {
           exports.deallocate(responsePointer, responseLength);
         }
         if (segmentedResponse) exports.segmented?.release();
@@ -154,81 +142,7 @@ export function createDirectRasterBakerFromInstance<Request, Kind extends string
   };
 }
 
-export function createProfiledDirectRasterBakerFromInstance<Request, Kind extends string>(
-  instance: WebAssembly.Instance,
-  abi: DirectRasterBakerAbi,
-  spec: DirectRasterBakerSpec<Kind>,
-  observeProfile: (sample: DirectRasterBakerProfileSample) => void,
-): {
-  bake(input: { readonly source: Uint8Array; readonly request: Request }): RasterBakeArtifact<Kind>;
-} {
-  const exports = readExports(instance.exports, abi, spec.label);
-  return {
-    bake({ source, request }) {
-      let phase = performance.now();
-      const requestBytes = textEncoder.encode(JSON.stringify(request));
-      const requestEncodingMs = performance.now() - phase;
-      const wasmMemoryBeforeBytes = exports.memory.buffer.byteLength;
-      let wasmMemoryPeakBytes = wasmMemoryBeforeBytes;
-      let wasmInputCopyMs = 0;
-      let wasmBakeMs = 0;
-      let wasmToHostCopyMs = 0;
-      let cleanupMs = 0;
-      let outputBytes = 0;
-      let sourcePointer = 0;
-      let requestPointer = 0;
-      let responsePointer = 0;
-      let responseLength = 0;
-      let segmentedResponse = false;
-      try {
-        phase = performance.now();
-        sourcePointer = copyIntoWasm(exports, source, spec.label);
-        requestPointer = copyIntoWasm(exports, requestBytes, spec.label);
-        wasmInputCopyMs = performance.now() - phase;
-        wasmMemoryPeakBytes = Math.max(wasmMemoryPeakBytes, exports.memory.buffer.byteLength);
-        phase = performance.now();
-        responsePointer = u32(exports.bake(sourcePointer, source.byteLength, requestPointer, requestBytes.byteLength));
-        wasmBakeMs = performance.now() - phase;
-        wasmMemoryPeakBytes = Math.max(wasmMemoryPeakBytes, exports.memory.buffer.byteLength);
-        responseLength = u32(exports.responseLength());
-        phase = performance.now();
-        let result: RasterBakeArtifact<Kind>;
-        if (responsePointer === 0 && responseLength === 0 && exports.segmented !== undefined) {
-          segmentedResponse = true;
-          result = decodeSegmentedResponse(exports, abi, spec);
-        } else {
-          const response = memoryRange(exports.memory, responsePointer, responseLength, spec.label);
-          result = decodeResponse(response, abi, spec);
-        }
-        wasmToHostCopyMs = performance.now() - phase;
-        outputBytes = result.artifacts.reduce((total, artifact) => total + artifact.bytes.byteLength, 0);
-        return result;
-      } finally {
-        phase = performance.now();
-        if (sourcePointer !== 0) exports.deallocate(sourcePointer, source.byteLength);
-        if (requestPointer !== 0) exports.deallocate(requestPointer, requestBytes.byteLength);
-        if (responsePointer !== 0 && responseLength !== 0) {
-          exports.deallocate(responsePointer, responseLength);
-        }
-        if (segmentedResponse) exports.segmented?.release();
-        cleanupMs = performance.now() - phase;
-        observeProfile({
-          requestEncodingMs,
-          wasmInputCopyMs,
-          wasmBakeMs,
-          wasmToHostCopyMs,
-          cleanupMs,
-          wasmMemoryBeforeBytes,
-          wasmMemoryPeakBytes,
-          wasmMemoryAfterBytes: exports.memory.buffer.byteLength,
-          outputBytes,
-        });
-      }
-    },
-  };
-}
-
-function readExports(
+export function readExports(
   wasmExports: WebAssembly.Exports,
   abi: DirectRasterBakerAbi,
   label: string,
@@ -281,7 +195,7 @@ function readSegmentedExports(
   return values as DirectRasterBakerExports['segmented'];
 }
 
-function copyIntoWasm(exports: DirectRasterBakerExports, bytes: Uint8Array, label: string): number {
+export function copyIntoWasm(exports: DirectRasterBakerExports, bytes: Uint8Array, label: string): number {
   const pointer = u32(exports.allocate(bytes.byteLength));
   if (pointer === 0 && bytes.byteLength !== 0) {
     throw new RangeError(`${label} Wasm allocation failed`);
@@ -290,12 +204,12 @@ function copyIntoWasm(exports: DirectRasterBakerExports, bytes: Uint8Array, labe
     memoryRange(exports.memory, pointer, bytes.byteLength, label).set(bytes);
     return pointer;
   } catch (error) {
-    if (pointer !== 0) exports.deallocate(pointer, bytes.byteLength);
+    if (pointer) exports.deallocate(pointer, bytes.byteLength);
     throw error;
   }
 }
 
-function decodeSegmentedResponse<Kind extends string>(
+export function decodeSegmentedResponse<Kind extends string>(
   exports: DirectRasterBakerExports,
   abi: DirectRasterBakerAbi,
   spec: DirectRasterBakerSpec<Kind>,
@@ -379,7 +293,7 @@ function decodeSegmentedResponse<Kind extends string>(
   };
 }
 
-function decodeResponse<Kind extends string>(
+export function decodeResponse<Kind extends string>(
   response: Uint8Array,
   abi: DirectRasterBakerAbi,
   spec: DirectRasterBakerSpec<Kind>,
@@ -509,11 +423,11 @@ function parseError(value: unknown, label: string): SerializedBakeError {
   };
 }
 
-function u32(value: number): number {
+export function u32(value: number): number {
   return value >>> 0;
 }
 
-function memoryRange(memory: WebAssembly.Memory, pointer: number, length: number, label: string): Uint8Array {
+export function memoryRange(memory: WebAssembly.Memory, pointer: number, length: number, label: string): Uint8Array {
   const end = pointer + length;
   if (
     !Number.isSafeInteger(pointer) ||

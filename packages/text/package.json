@@ -9,7 +9,9 @@
   },
   "files": [
     "dist",
-    "!dist/.tsbuildinfo"
+    "!dist/.tsbuildinfo",
+    "!dist/internal/raster-baker-profile.d.ts",
+    "!dist/internal/raster-baker-profile.js"
   ],
   "type": "module",
   "sideEffects": false,

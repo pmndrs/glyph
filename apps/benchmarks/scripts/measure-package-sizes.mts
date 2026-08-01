@@ -34,6 +34,11 @@ interface BundleResult {
 }
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const diagnosticModuleFragments = ['/packages/text/dist/internal/raster-baker-profile.js'];
+const diagnosticCodeFragments = [
+  'createProfiledDirectRasterBakerFromInstance',
+  'profiled MTSDF baker',
+];
 
 function isTextPeerDependency(id: string): boolean {
   return id === 'three' || id.startsWith('three/') || id === 'react' || id.startsWith('@react-three/fiber');
@@ -164,6 +169,21 @@ function assertGraphBoundary(
   }
 }
 
+function assertThinJavaScriptGraph(label: string, graph: BundleResult, excludedCode: readonly string[]): void {
+  for (const fragment of diagnosticModuleFragments) {
+    const matches = [...graph.includedModules].filter((module) => module.includes(fragment));
+    if (matches.length > 0) {
+      throw new Error(
+        `${label} pulled diagnostic-only module ${fragment} into its shipped graph:\n${matches.join('\n')}`,
+      );
+    }
+  }
+  const code = new TextDecoder().decode(graph.bytes);
+  for (const fragment of [...diagnosticCodeFragments, ...excludedCode]) {
+    if (code.includes(fragment)) throw new Error(`${label} contains excluded diagnostic code ${fragment}`);
+  }
+}
+
 function compression(bytes: Uint8Array): Pick<MeasuredEntry, 'gzipBytes' | 'brotliBytes'> {
   return {
     gzipBytes: gzipSync(bytes, { level: 9 }).byteLength,
@@ -190,6 +210,7 @@ async function measureJavaScript(
     readonly expectedDynamic: readonly string[];
     readonly excludedInitial: readonly string[];
   },
+  excludedCode: readonly string[] = [],
 ): Promise<MeasuredEntry> {
   const [raw, minified] = await Promise.all([
     bundle(fileURLToPath(entry), false, includeDynamic, externalizeWasmAsset, externalizePeerDependencies),
@@ -199,6 +220,8 @@ async function measureJavaScript(
     assertGraphBoundary(label, raw, graphBoundary.expectedDynamic, graphBoundary.excludedInitial);
     assertGraphBoundary(label, minified, graphBoundary.expectedDynamic, graphBoundary.excludedInitial);
   }
+  assertThinJavaScriptGraph(label, raw, excludedCode);
+  assertThinJavaScriptGraph(label, minified, excludedCode);
   return {
     id,
     label,
@@ -213,6 +236,14 @@ async function measureJavaScript(
 
 async function measureWasm(id: string, label: string, source: URL): Promise<MeasuredEntry> {
   const bytes = await readFile(source);
+  const module = new WebAssembly.Module(bytes);
+  const boundaryNames = [...WebAssembly.Module.imports(module), ...WebAssembly.Module.exports(module)].map(
+    ({ name }) => name,
+  );
+  const diagnosticName = boundaryNames.find((name) => /profil|timing|clock|instant/i.test(name));
+  if (diagnosticName !== undefined) {
+    throw new Error(`${label} exposes diagnostic-only Wasm boundary ${diagnosticName}`);
+  }
   return {
     id,
     label,
@@ -316,6 +347,9 @@ const entries: SizeEntry[] = [
     new URL('../size-entries/text-shaper.ts', import.meta.url),
     false,
     true,
+    false,
+    undefined,
+    ['performance.now'],
   ),
   await measureWasm(
     'text-shaper-wasm',
@@ -375,6 +409,9 @@ const entries: SizeEntry[] = [
     new URL('../size-entries/bitmap-baker.ts', import.meta.url),
     false,
     true,
+    false,
+    undefined,
+    ['performance.now'],
   ),
   await measureJavaScript(
     'mtsdf-generator-js',
@@ -393,6 +430,9 @@ const entries: SizeEntry[] = [
     new URL('../size-entries/mtsdf-baker.ts', import.meta.url),
     false,
     true,
+    false,
+    undefined,
+    ['performance.now'],
   ),
   await measureWasm(
     'slug-baker-wasm',
@@ -405,6 +445,9 @@ const entries: SizeEntry[] = [
     new URL('../size-entries/slug-baker.ts', import.meta.url),
     false,
     true,
+    false,
+    undefined,
+    ['performance.now'],
   ),
   await measureJavaScript(
     'portable-baker-js',
