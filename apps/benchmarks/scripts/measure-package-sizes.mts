@@ -35,10 +35,7 @@ interface BundleResult {
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const diagnosticModuleFragments = ['/packages/text/dist/internal/raster-baker-profile.js'];
-const diagnosticCodeFragments = [
-  'createProfiledDirectRasterBakerFromInstance',
-  'profiled MTSDF baker',
-];
+const diagnosticCodeFragments = ['createProfiledDirectRasterBakerFromInstance', 'profiled MTSDF baker'];
 
 function isTextPeerDependency(id: string): boolean {
   return id === 'three' || id.startsWith('three/') || id === 'react' || id.startsWith('@react-three/fiber');
