@@ -13,7 +13,13 @@ const snippet = `
 const root = ${JSON.stringify(browserRoot)}
 const { createMtsdfGenerator } = await import(root + "/dist/internal/mtsdf-generator.js")
 const { mtsdfOracleCases } = await import(root + "/tests/fixtures/mtsdf-oracle-cases.mjs")
-const ids = ["scalar", "auto-vectorized", "explicit-simd128"]
+const ids = [
+  "scalar",
+  "auto-vectorized",
+  "explicit-simd128",
+  "adjacent-scalar-tile",
+  "adjacent-simd128",
+]
 const generators = []
 for (const id of ids) {
   const response = await fetch(root + "/dist/evidence/mtsdf-simd/" + id + ".wasm")
@@ -21,8 +27,9 @@ for (const id of ids) {
   generators.push(await createMtsdfGenerator(await response.arrayBuffer()))
 }
 const samples = ids.map(() => [])
+const forwardOrder = ids.map((_, index) => index)
 for (let pass = 0; pass < 24; pass += 1) {
-  const order = pass % 2 === 0 ? [0, 1, 2] : [2, 1, 0]
+  const order = pass % 2 === 0 ? forwardOrder : forwardOrder.toReversed()
   for (const index of order) {
     const outputs = new Array(mtsdfOracleCases.length)
     const start = performance.now()

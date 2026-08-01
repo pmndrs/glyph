@@ -160,6 +160,8 @@ struct GeneratorScratch {
     corners: Vec<usize>,
     hot_edges: EdgeSoa,
     contour_distances: Vec<ContourDistance>,
+    #[cfg(feature = "adjacent-texel-tile-experiment")]
+    contour_distances_tile: [Vec<ContourDistance>; 4],
     output: Vec<u8>,
     error_stencil: Vec<u8>,
 }
@@ -319,9 +321,21 @@ impl GlyphOutline<'_> {
         } else {
             contour_distances.truncate(contour_count);
         }
+        #[cfg(feature = "adjacent-texel-tile-experiment")]
+        for contours in &mut self.generator.scratch.contour_distances_tile {
+            if contour_count > contours.len() {
+                contours
+                    .try_reserve_exact(contour_count - contours.len())
+                    .map_err(|_| GenerateError::Allocation)?;
+                contours.resize(contour_count, ContourDistance::default());
+            } else {
+                contours.truncate(contour_count);
+            }
+        }
 
         let edges = &self.generator.scratch.hot_edges;
         let contour_distances = &mut self.generator.scratch.contour_distances;
+        #[cfg(not(feature = "adjacent-texel-tile-experiment"))]
         for (output_y, row) in output.chunks_exact_mut(total_width * 4).enumerate() {
             let source_y = total_height - output_y - 1;
             let y_ratio =
@@ -342,6 +356,57 @@ impl GlyphOutline<'_> {
                 pixel.copy_from_slice(&math::quantize_unorm4(lanes));
                 #[cfg(not(all(target_arch = "wasm32", feature = "simd128-experiment")))]
                 {
+                    pixel[0] = math::quantize_unorm(lanes[0]);
+                    pixel[1] = math::quantize_unorm(lanes[1]);
+                    pixel[2] = math::quantize_unorm(lanes[2]);
+                    pixel[3] = math::quantize_unorm(lanes[3]);
+                }
+            }
+        }
+        #[cfg(feature = "adjacent-texel-tile-experiment")]
+        {
+            let contour_distances_tile = &mut self.generator.scratch.contour_distances_tile;
+            for (output_y, row) in output.chunks_exact_mut(total_width * 4).enumerate() {
+                let source_y = total_height - output_y - 1;
+                let y_ratio =
+                    (source_y as f32 + 0.5 - region.padding_y as f32) / region.inner_height as f32;
+                let y = bounds.min_y + bounds.height() * y_ratio;
+                let tiled_width = total_width / 4 * 4;
+                let (tiled, remainder) = row.split_at_mut(tiled_width * 4);
+                for (tile_x, tile) in tiled.chunks_exact_mut(16).enumerate() {
+                    let first_x = tile_x * 4;
+                    let points = core::array::from_fn(|lane| {
+                        let x = first_x + lane;
+                        let x_ratio =
+                            (x as f32 + 0.5 - region.padding_x as f32) / region.inner_width as f32;
+                        Point::new(bounds.min_x + bounds.width() * x_ratio, y)
+                    });
+                    let distances = Distance4::evaluate_tile(
+                        points,
+                        edges,
+                        transform.full_distance_range,
+                        contour_distances_tile,
+                    );
+                    for (pixel, distance) in tile.chunks_exact_mut(4).zip(distances) {
+                        let lanes = distance.lanes();
+                        pixel[0] = math::quantize_unorm(lanes[0]);
+                        pixel[1] = math::quantize_unorm(lanes[1]);
+                        pixel[2] = math::quantize_unorm(lanes[2]);
+                        pixel[3] = math::quantize_unorm(lanes[3]);
+                    }
+                }
+                for (offset, pixel) in remainder.chunks_exact_mut(4).enumerate() {
+                    let x = tiled_width + offset;
+                    let x_ratio =
+                        (x as f32 + 0.5 - region.padding_x as f32) / region.inner_width as f32;
+                    let point = Point::new(bounds.min_x + bounds.width() * x_ratio, y);
+                    let lanes = Distance4::evaluate(
+                        point,
+                        edges,
+                        transform.full_distance_range,
+                        contour_distances,
+                    )
+                    .lanes();
                     pixel[0] = math::quantize_unorm(lanes[0]);
                     pixel[1] = math::quantize_unorm(lanes[1]);
                     pixel[2] = math::quantize_unorm(lanes[2]);

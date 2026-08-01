@@ -13,6 +13,8 @@ default = ["std"]
 std = []
 simd128-experiment = []
 profiling = []
+adjacent-texel-tile-experiment = []
+adjacent-texel-simd-experiment = ["adjacent-texel-tile-experiment"]
 
 [dependencies]
 core_maths = "0.1.1"

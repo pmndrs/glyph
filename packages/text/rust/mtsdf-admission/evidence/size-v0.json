@@ -21,6 +21,6 @@
   "rawBytes": 67526,
   "optimizedBytes": 60563,
   "gzipBytes": 26493,
-  "brotliBytes": 22535,
-  "optimizedSha256": "7ae6230eb72a30d1ec172d037b2f7615390b5aded7a423d468564fcc74e7834c"
+  "brotliBytes": 22533,
+  "optimizedSha256": "8678a575e5be1b998e287f86645a0e64f54bca4c7145dcb872811b301aa731be"
 }

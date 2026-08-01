@@ -3,7 +3,23 @@
   "kind": "mtsdf-simd-decision",
   "decision": {
     "selected": "scalar",
-    "reason": "scalar remains fastest for the bounded Node and browser corpus; explicit simd128 improves the complete Inter stress pass by 5.7% but requires a target feature and alternate artifact"
+    "reason": "scalar remains the universal runtime kernel: adjacent-texel SIMD improves the bounded Node and Chromium corpora by 2.4% and 0.9%, but is indistinguishable from scalar in the complete Inter warm stress pass while adding 20.7% optimized and 11.4% Brotli bytes; the equivalent scalar tile improves bounded Node by 10.1% but regresses Chromium by 1.5% and complete Inter warm by 1.4% while adding 20.0% optimized and 10.9% Brotli bytes",
+    "observations": {
+      "adjacent-scalar-tile": {
+        "nodeSevenCaseSpeedupPercent": 10.1,
+        "browserSevenCaseSpeedupPercent": -1.5,
+        "completeInterWarmSpeedupPercent": -1.4,
+        "optimizedByteGrowthPercent": 20.0,
+        "brotliByteGrowthPercent": 10.9
+      },
+      "adjacent-simd128": {
+        "nodeSevenCaseSpeedupPercent": 2.4,
+        "browserSevenCaseSpeedupPercent": 0.9,
+        "completeInterWarmSpeedupPercent": 0.0,
+        "optimizedByteGrowthPercent": 20.7,
+        "brotliByteGrowthPercent": 11.4
+      }
+    }
   },
   "toolchain": {
     "rust": "1.97.1",
@@ -21,35 +37,57 @@
     "scalar": {
       "targetFeatures": [],
       "optimizedBytes": 52633,
-      "gzipBytes": 23116,
-      "brotliBytes": 19634,
-      "optimizedSha256": "27a06ed2ea51c14078a9ef88e520a02b097bf0f1d06f581dfd399864caa9dfa1",
-      "nodeSevenCaseWarmMedianMs": 46.462,
-      "browserSevenCaseWarmMedianMs": 47.6,
-      "interColdMs": 45375.622,
-      "interWarmMs": 48125.482
+      "gzipBytes": 23115,
+      "brotliBytes": 19660,
+      "optimizedSha256": "f2bf6ac11a7c1ac235bf03c3759aa44998a3a3464cc7f4ef6b067bf0b87ce43a",
+      "nodeSevenCaseWarmMedianMs": 45.712,
+      "browserSevenCaseWarmMedianMs": 28.965,
+      "interColdMs": 44089.204,
+      "interWarmMs": 45066.33
     },
     "auto-vectorized": {
       "targetFeatures": ["simd128"],
       "optimizedBytes": 52417,
-      "gzipBytes": 22674,
-      "brotliBytes": 19508,
-      "optimizedSha256": "ff405d4fb14deeb17c1c28f8b7fb8366ac67be708ed86c9003718d7dbd2c29a8",
-      "nodeSevenCaseWarmMedianMs": 47.254,
-      "browserSevenCaseWarmMedianMs": 48.5,
-      "interColdMs": 46338.22,
-      "interWarmMs": 47005.323
+      "gzipBytes": 22676,
+      "brotliBytes": 19527,
+      "optimizedSha256": "34d5fcaa659b26b493901f2d1e6180d36a507854fe253c4e612212abdb7e5da8",
+      "nodeSevenCaseWarmMedianMs": 44.615,
+      "browserSevenCaseWarmMedianMs": 29.74,
+      "interColdMs": 45468.958,
+      "interWarmMs": 44664.466
     },
     "explicit-simd128": {
       "targetFeatures": ["simd128"],
       "optimizedBytes": 52189,
-      "gzipBytes": 22637,
-      "brotliBytes": 19440,
-      "optimizedSha256": "cc45c96451da080003f8bdfa96ffd1abb552ad88de3e7e35da97be59a0414ee7",
-      "nodeSevenCaseWarmMedianMs": 47.079,
-      "browserSevenCaseWarmMedianMs": 48.1,
-      "interColdMs": 45031.933,
-      "interWarmMs": 45382.427
+      "gzipBytes": 22638,
+      "brotliBytes": 19441,
+      "optimizedSha256": "5a800f2e496cb9a78c4dcc093d817464d317f41a7d1a15545621ff62ae851fe7",
+      "nodeSevenCaseWarmMedianMs": 44.721,
+      "browserSevenCaseWarmMedianMs": 29.35,
+      "interColdMs": 48762.938,
+      "interWarmMs": 44591.976
+    },
+    "adjacent-scalar-tile": {
+      "targetFeatures": [],
+      "optimizedBytes": 63149,
+      "gzipBytes": 26213,
+      "brotliBytes": 21798,
+      "optimizedSha256": "133a3e55134f3380802ea65b8facd145b259bbe966289f287a7f222041799f7c",
+      "nodeSevenCaseWarmMedianMs": 41.105,
+      "browserSevenCaseWarmMedianMs": 29.405,
+      "interColdMs": 46813.382,
+      "interWarmMs": 45680.458
+    },
+    "adjacent-simd128": {
+      "targetFeatures": ["simd128"],
+      "optimizedBytes": 63549,
+      "gzipBytes": 25910,
+      "brotliBytes": 21904,
+      "optimizedSha256": "c6617284bd5edeedc0ecc0dbc56ccde251199eb6e17bad4e598cf25509bb31d3",
+      "nodeSevenCaseWarmMedianMs": 44.608,
+      "browserSevenCaseWarmMedianMs": 28.7,
+      "interColdMs": 50110.007,
+      "interWarmMs": 45067.928
     }
   },
   "completeInter": {

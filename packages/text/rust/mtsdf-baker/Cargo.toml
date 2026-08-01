@@ -41,6 +41,8 @@ artifact-baker = [
   "dep:thiserror",
 ]
 simd128-experiment = ["pmndrs-text-mtsdf-core/simd128-experiment"]
+adjacent-texel-tile-experiment = ["pmndrs-text-mtsdf-core/adjacent-texel-tile-experiment"]
+adjacent-texel-simd-experiment = ["pmndrs-text-mtsdf-core/adjacent-texel-simd-experiment"]
 allocation-evidence = []
 profiling = ["std", "artifact-baker", "pmndrs-text-mtsdf-core/profiling"]
 

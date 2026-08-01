@@ -24,6 +24,16 @@ const variantDefinitions = [
   { id: 'scalar', simd: false, features: [] },
   { id: 'auto-vectorized', simd: true, features: [] },
   { id: 'explicit-simd128', simd: true, features: ['simd128-experiment'] },
+  {
+    id: 'adjacent-scalar-tile',
+    simd: false,
+    features: ['adjacent-texel-tile-experiment'],
+  },
+  {
+    id: 'adjacent-simd128',
+    simd: true,
+    features: ['adjacent-texel-simd-experiment'],
+  },
 ];
 
 try {
@@ -116,6 +126,7 @@ async function checkEvidence(report) {
   if (evidence.kind !== 'mtsdf-simd-decision' || evidence.decision?.selected !== 'scalar') {
     throw new Error('MTSDF SIMD evidence does not select the admitted scalar kernel');
   }
+  checkDecisionObservations(evidence);
   for (const variant of report.variants) {
     const recorded = evidence.variants?.[variant.id];
     if (
@@ -157,6 +168,38 @@ async function checkEvidence(report) {
     }
   }
   if (report.fullFont !== undefined) checkFullFontEvidence(report.fullFont, evidence);
+}
+
+function checkDecisionObservations(evidence) {
+  const scalar = evidence.variants?.scalar;
+  if (scalar === undefined) throw new Error('MTSDF SIMD evidence is missing the scalar decision baseline');
+  for (const id of ['adjacent-scalar-tile', 'adjacent-simd128']) {
+    const candidate = evidence.variants?.[id];
+    const recorded = evidence.decision?.observations?.[id];
+    if (candidate === undefined || recorded === undefined) {
+      throw new Error(`MTSDF SIMD evidence is missing the ${id} decision observation`);
+    }
+    const expected = {
+      nodeSevenCaseSpeedupPercent: roundedPercent(
+        scalar.nodeSevenCaseWarmMedianMs,
+        candidate.nodeSevenCaseWarmMedianMs,
+      ),
+      browserSevenCaseSpeedupPercent: roundedPercent(
+        scalar.browserSevenCaseWarmMedianMs,
+        candidate.browserSevenCaseWarmMedianMs,
+      ),
+      completeInterWarmSpeedupPercent: roundedPercent(scalar.interWarmMs, candidate.interWarmMs),
+      optimizedByteGrowthPercent: roundedPercent(scalar.optimizedBytes, candidate.optimizedBytes) * -1,
+      brotliByteGrowthPercent: roundedPercent(scalar.brotliBytes, candidate.brotliBytes) * -1,
+    };
+    if (JSON.stringify(recorded) !== JSON.stringify(expected)) {
+      throw new Error(`${id} MTSDF SIMD decision rationale is stale\n${JSON.stringify({ recorded, expected })}`);
+    }
+  }
+}
+
+function roundedPercent(baseline, candidate) {
+  return Math.round(((baseline - candidate) / baseline) * 1_000) / 10;
 }
 
 function checkFullFontEvidence(fullFont, evidence) {
@@ -503,6 +546,10 @@ function summarize(observation, allocationEvidence) {
     id: observation.id,
     targetFeatures: observation.simd ? ['simd128'] : [],
     explicitSimd: observation.features.includes('simd128-experiment'),
+    adjacentTexelTile:
+      observation.features.includes('adjacent-texel-tile-experiment') ||
+      observation.features.includes('adjacent-texel-simd-experiment'),
+    adjacentTexelSimd: observation.features.includes('adjacent-texel-simd-experiment'),
     exactOracleHashes: true,
     wasm: {
       rawBytes: observation.raw.byteLength,

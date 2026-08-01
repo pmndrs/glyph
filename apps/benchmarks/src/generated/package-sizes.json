@@ -142,22 +142,22 @@
       "label": "MTSDF admitted generator kernel",
       "status": "measured",
       "format": "wasm",
-      "sha256": "27a06ed2ea51c14078a9ef88e520a02b097bf0f1d06f581dfd399864caa9dfa1",
+      "sha256": "f2bf6ac11a7c1ac235bf03c3759aa44998a3a3464cc7f4ef6b067bf0b87ce43a",
       "rawBytes": 52633,
       "minifiedBytes": 52633,
-      "gzipBytes": 23116,
-      "brotliBytes": 19634
+      "gzipBytes": 23115,
+      "brotliBytes": 19660
     },
     {
       "id": "mtsdf-baker-wasm",
       "label": "MTSDF fixed baker Wasm",
       "status": "measured",
       "format": "wasm",
-      "sha256": "3703b4fe488fd968314f305ed6d53b7c335379629abd39eddabeb414798546b2",
+      "sha256": "ec6eb1640d587ba8ce9b614aa334c7a93b4a5c36a6c12ee1dba725d7adce7de8",
       "rawBytes": 552025,
       "minifiedBytes": 552025,
-      "gzipBytes": 215027,
-      "brotliBytes": 169041
+      "gzipBytes": 215030,
+      "brotliBytes": 168758
     },
     {
       "id": "mtsdf-baker-js",
