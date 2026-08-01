@@ -9,6 +9,7 @@ interface SizeEntry {
   readonly id: string;
   readonly status: string;
   readonly format?: string;
+  readonly sha256?: string;
   readonly rawBytes?: number;
   readonly minifiedBytes?: number;
   readonly gzipBytes?: number;
@@ -53,6 +54,8 @@ export function assertPackageSizeReportFresh(committed: PackageSizeReport, curre
     }
     if (
       entry.rawBytes === undefined ||
+      entry.sha256 === undefined ||
+      !/^[0-9a-f]{64}$/.test(entry.sha256) ||
       entry.minifiedBytes === undefined ||
       entry.gzipBytes === undefined ||
       entry.brotliBytes === undefined

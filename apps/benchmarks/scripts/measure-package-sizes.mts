@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,7 @@ interface MeasuredEntry {
   readonly label: string;
   readonly status: 'measured';
   readonly format: 'javascript' | 'wasm';
+  readonly sha256: string;
   readonly rawBytes: number;
   readonly minifiedBytes: number;
   readonly gzipBytes: number;
@@ -173,6 +175,10 @@ function compression(bytes: Uint8Array): Pick<MeasuredEntry, 'gzipBytes' | 'brot
   };
 }
 
+function sha256(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
 async function measureJavaScript(
   id: string,
   label: string,
@@ -198,6 +204,7 @@ async function measureJavaScript(
     label,
     status: 'measured',
     format: 'javascript',
+    sha256: sha256(minified.bytes),
     rawBytes: raw.bytes.byteLength,
     minifiedBytes: minified.bytes.byteLength,
     ...compression(minified.bytes),
@@ -211,6 +218,7 @@ async function measureWasm(id: string, label: string, source: URL): Promise<Meas
     label,
     status: 'measured',
     format: 'wasm',
+    sha256: sha256(bytes),
     rawBytes: bytes.byteLength,
     minifiedBytes: bytes.byteLength,
     ...compression(bytes),
@@ -230,6 +238,7 @@ async function measureAdmittedMtsdfGenerator(): Promise<MeasuredEntry> {
         string,
         {
           readonly optimizedBytes?: number;
+          readonly optimizedSha256?: string;
           readonly gzipBytes?: number;
           readonly brotliBytes?: number;
         }
@@ -240,6 +249,7 @@ async function measureAdmittedMtsdfGenerator(): Promise<MeasuredEntry> {
   if (
     evidence.decision?.selected !== 'scalar' ||
     scalar?.optimizedBytes === undefined ||
+    scalar.optimizedSha256 === undefined ||
     scalar.gzipBytes === undefined ||
     scalar.brotliBytes === undefined
   ) {
@@ -250,6 +260,7 @@ async function measureAdmittedMtsdfGenerator(): Promise<MeasuredEntry> {
     label: 'MTSDF admitted generator kernel',
     status: 'measured',
     format: 'wasm',
+    sha256: scalar.optimizedSha256,
     rawBytes: scalar.optimizedBytes,
     minifiedBytes: scalar.optimizedBytes,
     gzipBytes: scalar.gzipBytes,
@@ -413,7 +424,7 @@ const entries: SizeEntry[] = [
 ];
 
 const report = {
-  schemaVersion: 0,
+  schemaVersion: 1,
   measurementHost: {
     platform: process.platform,
     architecture: process.arch,

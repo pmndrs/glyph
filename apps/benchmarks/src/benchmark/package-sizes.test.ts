@@ -4,6 +4,22 @@ import { packageSizeBudgets } from './package-size-budgets';
 import { assertPackageSizeReportFresh } from './package-size-report';
 
 describe('independent package-size report', () => {
+  it('identifies every measured payload by SHA-256', () => {
+    expect(report.schemaVersion).toBe(1);
+    for (const entry of report.entries) {
+      if (entry.status !== 'measured') continue;
+      expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it('rejects a same-size payload identity change', () => {
+    const changed = structuredClone(report);
+    const browserCore = changed.entries.find(({ id }) => id === 'browser-core');
+    if (browserCore?.status !== 'measured') throw new Error('Missing browser-core measurement');
+    browserCore.sha256 = '0'.repeat(64);
+    expect(() => assertPackageSizeReportFresh(report, changed)).toThrow(/stale/);
+  });
+
   it('contains nonzero public core, baker JavaScript, and baker Wasm measurements', () => {
     for (const id of [
       'browser-core',

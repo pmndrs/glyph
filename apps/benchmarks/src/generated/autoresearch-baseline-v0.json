@@ -14,8 +14,8 @@
     {
       "id": "package-sizes",
       "path": "apps/benchmarks/src/generated/package-sizes.json",
-      "sha256": "d29dadf99d7dd201ff21147888b20de87f1baf3d8e64d76367c0ae387319b1f8",
-      "bytes": 5145
+      "sha256": "5b9b94f11f0a2e4cd209b40d0a6c03fc1e42b211303b03c7ed7d28e1544f4612",
+      "bytes": 6825
     },
     {
       "id": "harness-admission",
