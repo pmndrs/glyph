@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { AnyFontToken, FontInput, RegisteredFont } from '../font.js';
-import type { AnyRasterModule, RasterBatchStage, RasterDrawBatch } from '../raster.js';
+import type { AnyRasterModule, RasterBatchStage, RasterObjectDrawBatch } from '../raster.js';
 import type {
   FontFeature,
   TextLayoutProperties,
@@ -305,9 +305,7 @@ function isRasterModule(value: unknown): value is AnyRasterModule {
   );
 }
 
-export interface ThreeRasterDrawBatch extends RasterDrawBatch {
-  readonly object: THREE.Object3D;
-}
+export type ThreeRasterDrawBatch = RasterObjectDrawBatch<THREE.Object3D>;
 
 function assertRasterBatch(value: unknown): asserts value is ThreeRasterDrawBatch {
   if (

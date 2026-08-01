@@ -764,6 +764,31 @@ function tslBaselineTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   };
 }
 
+function externalRasterProofTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
+  let loaded: BenchmarkTarget | undefined;
+  return {
+    id: `external-raster-proof-${backend}`,
+    label: `External raster proof · ${backend === 'webgpu' ? 'WebGPU' : 'WebGL'}`,
+    detail: 'Private package · public bake/load/Text lifecycle · retained TSL instances',
+    color: backend === 'webgpu' ? 'cyan' : 'amber',
+    capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
+    status: () => 'ready',
+    load: async (controls, context) => {
+      loaded ??= (await import('../renderer/external-raster-proof')).createExternalRasterProofTarget(backend);
+      await loaded.load(controls, context);
+    },
+    run: async (input, sampleIndex, controls, context) => {
+      if (loaded === undefined) throw new Error('external raster proof target was not loaded');
+      return loaded.run(input, sampleIndex, controls, context);
+    },
+    dispose: async () => {
+      const target = loaded;
+      loaded = undefined;
+      if (target !== undefined) await target.dispose();
+    },
+  };
+}
+
 function bitmapTextTarget(backend: 'webgpu' | 'webgl2'): BenchmarkTarget {
   let loaded: BenchmarkTarget | undefined;
   let configuredInput: BenchmarkInput = {};
@@ -1072,6 +1097,8 @@ export const targets: readonly BenchmarkTarget[] = [
   syntheticTarget,
   tslBaselineTarget('webgl2'),
   tslBaselineTarget('webgpu'),
+  externalRasterProofTarget('webgl2'),
+  externalRasterProofTarget('webgpu'),
   bakerTarget,
   loaderWorkerTarget,
   harfrustShaperTarget,

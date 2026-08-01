@@ -1097,6 +1097,28 @@ The optional bitmap presentation helpers snapshot copied font handles, glyph IDs
 
 The resource and draw-batch types are owned by their optional raster packages. `defineRaster` captures the literal `kind` and associated types from the module value; consumers do not supply generic arguments. Core has no closed raster-kind union and does not assume which raster packages are installed or shipped. Each optional package owns its literal kind and companion data contract. Adding a first-party or external raster requires no change to the core type declarations. The shared package depends only on `RasterModule` and never imports concrete engines.
 
+`RasterDrawBatch` is the portable disposal contract. Renderer adapters refine it without changing that core boundary:
+`RasterObjectDrawBatch<Object>` adds one host scene object, and the public `ThreeRasterDrawBatch` alias binds that object to
+Three.js for modules rendered through `Text`. The `Text` adapter validates the object at the untrusted plugin boundary before
+publication. This makes the runtime requirement statically visible to external Three adapters without importing Three.js into
+the renderer-neutral raster contract.
+
+The private `@pmndrs/text-glyph-debug-raster` workspace package is the accepted external proof. Its `glyphDebug` factory,
+literal kind, `PMNDRS_text_glyph_debug` extension, descriptor, baker, standalone companion GLB, embedded/external record
+payload, decoder, runtime generator, retained TSL adapter, overflow, abort, and disposal are package-owned. Its source imports
+only the root and public Node-bake entry points from `@pmndrs/text`, plus its own Three.js dependency. Static discovery maps
+the imported factory export name through `package.json#pmndrs.text[exportName]`; that key and the default baker's `kind` must
+equal the imported export name. Multiple descriptors may share an extension, but project bake embeds only the first and emits
+later companions externally.
+
+The proof exposed one functional forwarding defect: `RasterRuntime.load` accepted `resolveResource` but omitted it from the
+cache-owned options passed to `RegisteredFont.loadRaster`. The runtime now carries both artifact and resource resolvers through
+the shared load, and an authenticated external-record test proves the resource resolver is invoked exactly once. It also
+exposed artifact-authoring friction rather than a closed core assumption: external/runtime companion GLBs must be ordinary
+standalone-valid glTF because attachment runs the pinned Khronos validator. The proof package owns a minimal one-point witness
+and encoder. A future package-neutral artifact helper is an ergonomic opportunity, not a prerequisite or private-import escape
+hatch.
+
 Raster module values and package-created raster definitions are the only public selection mechanisms. The API does not accept `raster="msdf"`, maintain a built-in name registry, or automatically replace the caller's selected module. External packages implement the same interfaces and own their option types. The built-in MSDF module consumes one MTSDF resource and one batch: fill coverage uses the median of RGB, while outlines and other true-distance effects may use alpha. It never creates parallel MSDF and MTSDF batches.
 
 ```ts

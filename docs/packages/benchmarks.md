@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:de43027a0a1d5e34671a28cc375eee89d8889cab7b2924c970de5a411bf95a51'
+source_digest: 'sha256:75389813b6ca1c9ef2662c4569840573c1555291f70bf48fcf95bbb9190e588a'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -74,6 +74,17 @@ Status: ✅ Milestone 9 Slug integration is complete
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane. Conformance mode combines live GPU inspection with finite visual correctness checks; finite CPU-reference work begins only through the explicit run action rather than during workload navigation. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 
 The MSDF / Slug comparison workload owns one renderer, two equal RGBA8 render targets, and one fullscreen TSL composition graph. Both candidates share authored text, layout dimensions, camera, physical target size, zoom, and pan. The heatmap samples both candidate textures directly with no readback or CPU composition: black agrees, red marks extra MSDF coverage, cyan marks extra Slug coverage, and intensity is amplified eight times. Editable comparison text updates both retained `Text` objects and publishes a new comparison only after both layouts are ready. Explicit conformance runs and their follow-up visual captures execute as serialized jobs borrowing the route renderer; the retained scene pauses during each job and resumes after success, failure, or abort without replacing its canvas or leaking finite renderer state into the next frame. The permanent hardware-browser probe proves custom text, 4× zoom, responsive tab switching, zero automatic finite capture, abort and successful-capture recovery, a peak renderer concurrency of one, exact WebGPU backend initialization, and a live canvas; forced WebGL2 proves the same lifecycle without shader or validation errors. Run both backend lanes with `pnpm benchmarks:test:raster-technique-compare`.[^raster-technique-compare-probe]
+
+The external-raster target is the product gate for the private `glyphDebug` extension package. It starts from the public
+source-font fallback so source bytes are legitimately available, runs the package runtime baker and generic artifact
+attachment, publishes a cold `Text`, then replaces its text through the warm matrix-update lifecycle. WebGPU and forced WebGL2
+must retain the draw object and geometry, submit one draw, produce visible pixels, and return the same deterministic readback
+hash. The focused workflow is `pnpm benchmarks:test:external-raster-proof`; it fails on page, console, shader, backend, pixel,
+or lifecycle errors.
+
+Conformance inspection distinguishes retained GPU capacity from submitted logical content. In particular, React paint
+validation walks only `InstancedBufferGeometry.instanceCount`; unused slack records are allocation capacity, not visible
+glyphs or paints.
 
 Font delivery is an explicit benchmark axis. **Baked asset** exercises the normal sibling asset, while **Runtime bake** passes `{ source, baked: null }`, downloads the source font, builds the core font in the serial core-baker Worker, then builds the selected Bitmap or MSDF raster in its serial lazy Worker. The inspector distinguishes the always-loaded runtime/shaper graph from the conditional core and raster baker host, Worker, and Wasm graphs; it reports source download bytes, generated core/raster CPU bytes, bake durations, and atlas GPU memory. The runtime-fallback conformance workload renders both delivery paths through the same public pipeline and requires an exact RGBA frame match. Canonical Inter matched with zero differing bytes for Bitmap and MSDF on the admitted WebGPU product probe; the observed cold MSDF raster bake was roughly 114 seconds on this host and remains an observation, not a portability threshold.
 

@@ -1,0 +1,45 @@
+{
+  "name": "@pmndrs/text-glyph-debug-raster",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./baker": {
+      "types": "./dist/baker.d.ts",
+      "import": "./dist/baker.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "format": "oxfmt package.json src tests tsconfig.json tsconfig.build.json",
+    "format:check": "oxfmt --check package.json src tests tsconfig.json tsconfig.build.json",
+    "lint": "oxlint --deny-warnings .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && vitest run"
+  },
+  "dependencies": {
+    "@pmndrs/text": "workspace:*",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/three": "0.185.1",
+    "oxfmt": "0.35.0",
+    "oxlint": "1.75.0",
+    "vitest": "4.1.0"
+  },
+  "peerDependencies": {
+    "three": ">=0.185.1 <0.186"
+  },
+  "pmndrs": {
+    "text": {
+      "glyphDebug": "./baker"
+    }
+  }
+}

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:053fb16ebac9880b1e5c64c499692e0c034ba30a955a3d2de588d3618d0195ab'
+source_digest: 'sha256:922d2a163759703fdc5207cc7dff6f183c2b0d2229b7e478a0f72fddfbe774a6'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -148,6 +148,17 @@ generated:
 # Package reference: `@pmndrs/text`
 
 Status: ✅ Milestone 9 Slug integration is complete
+
+Milestone 10.4 proves that the open contract is implementable outside this package. The private
+`@pmndrs/text-glyph-debug-raster` consumer owns a new literal kind, companion GLB, embedded/external records, static and runtime
+bakers, decoder, retained Three.js/TSL adapter, dirty uploads, overflow, abort, and disposal without importing this package's
+internals or first-party raster modules. The proof made the Three adapter requirement explicit through public
+`RasterObjectDrawBatch<Object>` and `ThreeRasterDrawBatch` types while keeping portable `RasterDrawBatch` renderer-neutral. It
+also corrected `RasterRuntime.load` to retain the caller's `resolveResource` callback in cache-owned options; authenticated
+external records now traverse the same deduplicated load as their companion artifact. The public type additions erase at
+runtime. Compact forwarding of the complete public option bag makes browser core and every first-party runtime closure 55 raw
+/ 49 minified bytes smaller than the parent. Browser core changes by −11 gzip / +76 Brotli bytes, Bitmap by −15 / −74, MTSDF
+by −14 / −41, and Slug by −13 / +6. The lazy validator, every baker host, and every Wasm artifact remain byte-identical.
 
 Slug V0 renders fill and opacity and rejects outline or shadow paint before batch allocation or paint mutation. The removed exact-distance outline and the bounded replacement gate are retained in the [outline research record](../planning/slug-outline-research.md).
 

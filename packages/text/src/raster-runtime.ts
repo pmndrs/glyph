@@ -122,10 +122,7 @@ export class RasterRuntime {
     }
 
     const controller = new AbortController();
-    const loadOptions: RasterLoadOptions = {
-      ...(options.resolve === undefined ? {} : { resolve: options.resolve }),
-      signal: controller.signal,
-    };
+    const loadOptions: RasterLoadOptions = { ...options, signal: controller.signal };
     let cached!: CachedRaster;
     const promise = this.#loadUncached(font, request, rasterKey, loadOptions)
       .then((loaded) => {

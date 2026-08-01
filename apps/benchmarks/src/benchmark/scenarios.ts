@@ -11,6 +11,7 @@ const paragraphPolicyHash = [
   paragraphBidiContract.uikit.resolved.layout.hash,
 ].join(':');
 const ADVANCED_SHAPING_HASH = '51ba1d14';
+const UPDATED_EXTERNAL_RASTER_GLYPHS = 13;
 
 function deterministicValidation(hashes: readonly string[]): string {
   if (hashes.length === 0) throw new Error('Scenario produced no measurements');
@@ -37,6 +38,24 @@ function tslBaselineValidation(values: readonly import('./contracts').BenchmarkM
     }
   }
   return `${values.length}/${values.length} exact TSL shader readbacks`;
+}
+
+function externalRasterProofValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
+  for (const value of values) {
+    const metrics = value.metrics;
+    if (
+      metrics?.glyphCount !== UPDATED_EXTERNAL_RASTER_GLYPHS ||
+      metrics.drawCount !== 1 ||
+      metrics.retainedObject !== 1 ||
+      metrics.retainedGeometry !== 1 ||
+      (metrics.litPixels ?? 0) < 100 ||
+      (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
+    ) {
+      throw new Error('External raster proof did not preserve its visible retained draw contract');
+    }
+  }
+  return `${values.length}/${values.length} deterministic external raster frames`;
 }
 
 function bitmapTextValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
@@ -499,6 +518,13 @@ export const scenarios: readonly BenchmarkScenario[] = [
     description: 'Exact TSL compilation and readback through WebGPURenderer.',
     requiredCapabilities: new Set(['deterministic', 'raster']),
     validate: tslBaselineValidation,
+  },
+  {
+    id: 'external-raster-proof',
+    label: 'Public external raster proof',
+    description: 'Private package bake, load, Text publication, retained update, TSL draw, and readback.',
+    requiredCapabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
+    validate: externalRasterProofValidation,
   },
   {
     id: 'overview',

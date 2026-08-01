@@ -4,7 +4,13 @@ import type { FontHandle, FontSlot } from './identity.js';
 import type { ParagraphLayout } from './layout.js';
 import type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 import { createParagraphEngine, type Paragraph, type ParagraphConstraints } from './paragraph.js';
-import type { AnyRasterInput, AnyRasterModule, LoadedRaster, RasterBatchStage } from './raster.js';
+import type {
+  AnyRasterInput,
+  AnyRasterModule,
+  LoadedRaster,
+  RasterBatchStage,
+  RasterObjectDrawBatch,
+} from './raster.js';
 import {
   assertRasterBatchStage,
   EMPTY_TEXT_STATE,
@@ -16,7 +22,6 @@ import {
   sameParagraphInput,
   sameTextInput,
   type NormalizedRasterRequest,
-  type ThreeRasterDrawBatch,
   type TextState,
 } from './internal/text-properties.js';
 import {
@@ -29,6 +34,9 @@ import {
   textShaper,
 } from './internal/text-runtime.js';
 import type { FontRegistry } from './loader.js';
+
+/** Three.js adapter batch required by raster modules rendered through {@link Text}. */
+export type ThreeRasterDrawBatch = RasterObjectDrawBatch<THREE.Object3D>;
 
 export interface FontFeature {
   readonly tag: string;

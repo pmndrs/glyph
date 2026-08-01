@@ -190,6 +190,11 @@ export interface RasterDrawBatch {
   dispose(): void;
 }
 
+/** Renderer adapter batch that publishes one host-owned scene object. */
+export interface RasterObjectDrawBatch<SceneObject> extends RasterDrawBatch {
+  readonly object: SceneObject;
+}
+
 /**
  * One unpublished raster generation. The target may retain `previous` or replace it, but staging
  * must not mutate committed state. Commit is synchronous and infallible; abort is idempotent and

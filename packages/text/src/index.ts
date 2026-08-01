@@ -95,7 +95,7 @@ export type {
 } from './raster.js';
 export { defineRaster, defineRasterBatchStage } from './raster.js';
 export { RasterRuntime } from './raster-runtime.js';
-export type { RasterDrawBatch } from './raster.js';
+export type { RasterDrawBatch, RasterObjectDrawBatch } from './raster.js';
 
 export type { RasterCoverage, RasterCoverageV0, RasterUnicodeRange, RasterUnicodeRangeV0 } from './raster-coverage.js';
 export {
@@ -133,5 +133,6 @@ export type {
   TextShapingProperties,
   TextSpan,
   TextUpdateProperties,
+  ThreeRasterDrawBatch,
 } from './text.js';
 export { Text } from './text.js';

@@ -37,6 +37,9 @@ importers:
       '@pmndrs/text-font-baker':
         specifier: workspace:*
         version: link:../../packages/font-baker
+      '@pmndrs/text-glyph-debug-raster':
+        specifier: workspace:*
+        version: link:../../packages/glyph-debug-raster
       '@react-three/fiber':
         specifier: 10.0.0-alpha.2
         version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
@@ -147,6 +150,31 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+
+  packages/glyph-debug-raster:
+    dependencies:
+      '@pmndrs/text':
+        specifier: workspace:*
+        version: link:../text
+      three:
+        specifier: 0.185.1
+        version: 0.185.1
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+      '@types/three':
+        specifier: 0.185.1
+        version: 0.185.1(patch_hash=a5d0add8a1d5e65aab9c242df680720a8962e6d8970c0e1a2c69bc66983f9010)
+      oxfmt:
+        specifier: 0.35.0
+        version: 0.35.0
+      oxlint:
+        specifier: 1.75.0
+        version: 1.75.0
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@types/node@24.13.3)(vite@8.1.5(@types/node@24.13.3)(jiti@2.7.0))
 
   packages/text:
     dependencies:
