@@ -85,6 +85,55 @@ test('Text commits layout and draw generations atomically', async () => {
   assert.throws(() => text.setProperties({ opacity: 1 }), /disposed/);
 });
 
+test('Text no-op updates preserve one pending initial generation', async () => {
+  const restoreFetch = installFileFetch();
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(await readFile(fixtureUrl));
+  const request = bitmap({ strikes: [16] });
+  const decodeStarted = Promise.withResolvers();
+  const releaseDecode = Promise.withResolvers();
+  let decodeCount = 0;
+  let decodeSignal;
+  const raster = defineRaster({
+    ...request.module,
+    async decode(...arguments_) {
+      decodeCount += 1;
+      decodeSignal = arguments_[2];
+      decodeStarted.resolve();
+      await releaseDecode.promise;
+      decodeSignal?.throwIfAborted();
+      return request.module.decode(...arguments_);
+    },
+  });
+  const text = new Text({
+    text: 'one cold generation',
+    font,
+    raster: { module: raster, options: request.options },
+    fontSize: 16,
+    opacity: 0.5,
+  });
+  try {
+    const initialReady = text.ready;
+    await decodeStarted.promise;
+    text.setProperties({});
+    text.setProperties({ opacity: 0.5 });
+
+    assert.equal(text.ready, initialReady, 'semantic no-ops retain the original readiness observation');
+    assert.equal(decodeCount, 1, 'semantic no-ops do not restart raster decoding');
+    assert.equal(decodeSignal?.aborted, false, 'semantic no-ops do not abort the pending generation');
+
+    releaseDecode.resolve();
+    await initialReady;
+    assert.equal(text.children.length, 1);
+    assert.equal(decodeCount, 1);
+  } finally {
+    releaseDecode.resolve();
+    text.dispose();
+    font.dispose();
+    restoreFetch();
+  }
+});
+
 test('bitmap glyph-position transitions preserve authoritative layouts and pixel-snap inputs', async () => {
   const restoreFetch = installFileFetch();
   const registry = new FontRegistry();

@@ -15,6 +15,7 @@ import {
   sameLayoutInput,
   samePaintInput,
   sameParagraphInput,
+  sameTextInput,
   type NormalizedRasterRequest,
   type TextState,
 } from './internal/text-properties.js';
@@ -205,6 +206,7 @@ export class Text extends THREE.Group {
   setProperties(properties: TextUpdateProperties): void {
     this.#assertActive();
     const next = normalizeTextState(this.#state, properties, false);
+    if (sameTextInput(this.#state, next)) return;
     let prevalidatedPaint: GlyphPaint | undefined;
     if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, next)) {
       prevalidatedPaint = resolveGlyphPaint(next, this.#generation.paintPlan);
