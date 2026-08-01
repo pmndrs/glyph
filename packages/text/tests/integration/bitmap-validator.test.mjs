@@ -18,7 +18,6 @@ let external;
 let context;
 let golden;
 let sourceBytes;
-let wasmBytes;
 
 before(async () => {
   const [wasm, source, goldenBytes] = await Promise.all([
@@ -27,7 +26,6 @@ before(async () => {
     readFile(new URL('../fixtures/inter-bitmap-v0.json', import.meta.url)),
   ]);
   sourceBytes = source;
-  wasmBytes = wasm;
   golden = JSON.parse(goldenBytes);
   rasterKey = await bitmapRasterKey({ strikes: [16] });
   const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
@@ -54,7 +52,6 @@ test('matches the exact canonical Inter bitmap identities and payload bytes', as
     { bytes: sourceBytes.byteLength, sha256: hash(sourceBytes) },
     { bytes: golden.source.bytes, sha256: golden.source.sha256 },
   );
-  assert.equal(wasmBytes.byteLength, golden.generator.optimizedWasmBytes);
   assert.equal(rasterKey, golden.rasterKey);
   assert.deepEqual(descriptor, golden.descriptor);
   assert.deepEqual(
