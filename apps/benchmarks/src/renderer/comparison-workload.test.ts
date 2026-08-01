@@ -21,6 +21,7 @@ import {
   OFF_AXIS_SPANS,
   OFF_AXIS_TEXT,
   paintWordHue,
+  setTextLadderScenePosition,
   smoothIconGridFrameDelta,
   ZOOM_TEXT_BASE_CSS_PX,
   ZOOM_TEXT_PHRASES,
@@ -138,66 +139,60 @@ describe('comparison workload updates', () => {
     expect(comparisonWorkloadUpdateKind(baseConfiguration, baseConfiguration, true)).toBe('retained');
   });
 
-  it('updates retained Text objects in place and waits for every replacement layout', async () => {
-    const releases: Array<() => void> = [];
+  it('stages every retained width before publishing through the Three.js lifecycle', () => {
     const updates: number[][] = [[], [], []];
-    const texts = updates.map((entryUpdates) => ({
-      ready: new Promise<void>((resolve) => releases.push(resolve)),
+    const publications: number[] = [];
+    const texts = updates.map((entryUpdates, index) => ({
       setProperties: ({ width }: { readonly width?: number }) => entryUpdates.push(width!),
+      updateMatrixWorld: () => {
+        expect(updates).toEqual([[320], [480], [640]]);
+        publications.push(index);
+      },
     }));
-    let settled = false;
-    const update = applyRetainedTextWidths(texts, new Float64Array([320, 480, 640])).then(() => {
-      settled = true;
-    });
+
+    applyRetainedTextWidths(texts, new Float64Array([320, 480, 640]));
 
     expect(updates).toEqual([[320], [480], [640]]);
-    expect(settled).toBe(false);
-    releases[0]!();
-    releases[1]!();
-    await Promise.resolve();
-    expect(settled).toBe(false);
-    releases[2]!();
-    await update;
-    expect(settled).toBe(true);
+    expect(publications).toEqual([0, 1, 2]);
   });
 
-  it('updates retained Text font sizes without replacing their objects', async () => {
+  it('updates retained Text font sizes without replacing their objects', () => {
     const updates: Array<{ readonly fontSize?: number; readonly width?: number }> = [];
+    let publications = 0;
     const text = {
-      ready: Promise.resolve(),
       setProperties: (properties: { readonly fontSize?: number; readonly width?: number }) => updates.push(properties),
+      updateMatrixWorld: () => {
+        publications += 1;
+      },
     };
 
-    await applyRetainedTextFontSize([text], 72);
+    applyRetainedTextFontSize([text], 72);
 
     expect(updates).toEqual([{ fontSize: 72 }]);
+    expect(publications).toBe(1);
   });
 
-  it('rolls every retained Text back before a failed candidate font can be released', async () => {
+  it('rolls every retained Text back before a failed candidate font can be released', () => {
     const previous = fakeFontFixture();
     const next = fakeFontFixture();
     const updates: Array<Array<RegisteredFont>> = [[], []];
-    const texts = updates.map((fontUpdates, index) => {
-      let ready = Promise.resolve();
-      return {
-        get ready() {
-          return ready;
-        },
-        setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }) {
-          fontUpdates.push(properties.font);
-          ready =
-            properties.font === next.font && index === 1
-              ? Promise.reject(new Error('candidate failed'))
-              : Promise.resolve();
-        },
-      };
-    });
+    const publications: number[] = [];
+    const texts = updates.map((fontUpdates, index) => ({
+      setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }) {
+        fontUpdates.push(properties.font);
+        if (properties.font === next.font && index === 1) throw new Error('candidate failed');
+      },
+      updateMatrixWorld() {
+        publications.push(index);
+      },
+    }));
 
-    await expect(applyRetainedTextFontFixture(texts, previous, next)).rejects.toThrow('rolled back');
+    expect(() => applyRetainedTextFontFixture(texts, previous, next)).toThrow('rolled back');
     expect(updates).toEqual([
       [next.font, previous.font],
       [next.font, previous.font],
     ]);
+    expect(publications).toEqual([0, 1]);
   });
 
   it('rebuilds paragraph stress when its text volume changes', () => {
@@ -289,7 +284,7 @@ describe('Zoom text scale and language cycle', () => {
     expect(zoomTextMaximumScale(500, 200, 200, 100)).toBe(1);
   });
 
-  it('advances each phrase monotonically before the two-slot handoff', () => {
+  it('advances each phrase monotonically before the next resident-node handoff', () => {
     const start = zoomTextAnimationState(0, 50, 3);
     const maximum = zoomTextAnimationState(1_555.555_556, 50, 3);
     const next = zoomTextAnimationState(3_111.111_112, 50, 3);
@@ -387,6 +382,34 @@ describe('text ladder scale selection', () => {
     });
 
     expect(position.x).toBe(0);
+  });
+
+  it('updates a caller-owned text-ladder position without replacing it', () => {
+    const position = { x: Number.NaN, y: Number.NaN };
+    const result = setTextLadderScenePosition(position, {
+      animationSpeed: 50,
+      elapsedMs: 7_200,
+      exitEnabled: true,
+      finalCenterY: -1_500,
+      finalEntryWidth: 2_000,
+      finalEntryX: 120,
+      viewportHeight: 720,
+      viewportWidth: 1_280,
+    });
+
+    expect(result).toBeUndefined();
+    expect(position).toEqual(
+      textLadderScenePosition({
+        animationSpeed: 50,
+        elapsedMs: 7_200,
+        exitEnabled: true,
+        finalCenterY: -1_500,
+        finalEntryWidth: 2_000,
+        finalEntryX: 120,
+        viewportHeight: 720,
+        viewportWidth: 1_280,
+      }),
+    );
   });
 });
 

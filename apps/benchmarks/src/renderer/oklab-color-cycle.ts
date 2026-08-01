@@ -16,11 +16,11 @@ export function createOklabColorCycle(palette: readonly number[]): (offset: numb
     const amount = position - startIndex;
     const start = colors[startIndex]!;
     const end = colors[endIndex]!;
-    return oklabToSrgbHex({
-      lightness: lerp(start.lightness, end.lightness, amount),
-      a: lerp(start.a, end.a, amount),
-      b: lerp(start.b, end.b, amount),
-    });
+    return oklabToSrgbHex(
+      lerp(start.lightness, end.lightness, amount),
+      lerp(start.a, end.a, amount),
+      lerp(start.b, end.b, amount),
+    );
   };
 }
 
@@ -38,10 +38,10 @@ function srgbHexToOklab(value: number): OklabColor {
   };
 }
 
-function oklabToSrgbHex(color: OklabColor): number {
-  const l = color.lightness + 0.3963377774 * color.a + 0.2158037573 * color.b;
-  const m = color.lightness - 0.1055613458 * color.a - 0.0638541728 * color.b;
-  const s = color.lightness - 0.0894841775 * color.a - 1.291485548 * color.b;
+function oklabToSrgbHex(lightness: number, a: number, b: number): number {
+  const l = lightness + 0.3963377774 * a + 0.2158037573 * b;
+  const m = lightness - 0.1055613458 * a - 0.0638541728 * b;
+  const s = lightness - 0.0894841775 * a - 1.291485548 * b;
   const l3 = l * l * l;
   const m3 = m * m * m;
   const s3 = s * s * s;

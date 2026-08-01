@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { AdvancedShapingFrame } from '../benchmark/advanced-shaping';
 import {
   ADVANCED_FONT_FIXTURES,
@@ -72,6 +72,14 @@ function workloadRailDescription(workload: WorkloadOption, technique: RasterTech
   return status.kind === 'ready' ? workload.description : `M${status.milestone} · ${workload.description}`;
 }
 
+function synchronizeScrollEdges(
+  element: HTMLDivElement,
+  setEdges: Dispatch<SetStateAction<WorkloadScrollEdges>>,
+): void {
+  const next = workloadScrollEdges(element);
+  setEdges((current) => (current.before === next.before && current.after === next.after ? current : next));
+}
+
 export function WorkloadRail({
   activeFontFixture,
   className = '',
@@ -112,38 +120,27 @@ export function WorkloadRail({
   const [scrollEdges, setScrollEdges] = useState<WorkloadScrollEdges>({ before: false, after: false });
   const fixtureScrollRef = useRef<HTMLDivElement>(null);
   const [fixtureScrollEdges, setFixtureScrollEdges] = useState<WorkloadScrollEdges>({ before: false, after: false });
-  const syncScrollEdges = useCallback((element: HTMLDivElement) => {
-    const next = workloadScrollEdges(element);
-    setScrollEdges((current) => (current.before === next.before && current.after === next.after ? current : next));
-  }, []);
-  const syncFixtureScrollEdges = useCallback((element: HTMLDivElement) => {
-    const next = workloadScrollEdges(element);
-    setFixtureScrollEdges((current) =>
-      current.before === next.before && current.after === next.after ? current : next,
-    );
-  }, []);
-
   useEffect(() => {
     const element = workloadScrollRef.current;
     if (element === null) return;
-    const observer = new ResizeObserver(() => syncScrollEdges(element));
+    const observer = new ResizeObserver(() => synchronizeScrollEdges(element, setScrollEdges));
     observer.observe(element);
     const content = element.firstElementChild;
     if (content !== null) observer.observe(content);
-    syncScrollEdges(element);
+    synchronizeScrollEdges(element, setScrollEdges);
     return () => observer.disconnect();
-  }, [location.mode, syncScrollEdges]);
+  }, [location.mode]);
 
   useEffect(() => {
     const element = fixtureScrollRef.current;
     if (element === null) return;
-    const observer = new ResizeObserver(() => syncFixtureScrollEdges(element));
+    const observer = new ResizeObserver(() => synchronizeScrollEdges(element, setFixtureScrollEdges));
     observer.observe(element);
     const content = element.firstElementChild;
     if (content !== null) observer.observe(content);
-    syncFixtureScrollEdges(element);
+    synchronizeScrollEdges(element, setFixtureScrollEdges);
     return () => observer.disconnect();
-  }, [activeFontFixture, location.technique, location.workload, syncFixtureScrollEdges]);
+  }, [activeFontFixture, location.technique, location.workload]);
 
   const fixtureOptions: readonly FontFixtureButtonOption<BenchmarkFontFixture>[] =
     location.workload === 'icon-grid'
@@ -197,7 +194,7 @@ export function WorkloadRail({
             data-scroll-before={String(scrollEdges.before)}
             data-testid="workload-scroll"
             ref={workloadScrollRef}
-            onScroll={(event) => syncScrollEdges(event.currentTarget)}
+            onScroll={(event) => synchronizeScrollEdges(event.currentTarget, setScrollEdges)}
           >
             <nav className="grid gap-1">
               {workloads.map((workload) => (
@@ -248,7 +245,7 @@ export function WorkloadRail({
               data-scroll-before={String(fixtureScrollEdges.before)}
               data-testid="font-fixture-scroll"
               ref={fixtureScrollRef}
-              onScroll={(event) => syncFixtureScrollEdges(event.currentTarget)}
+              onScroll={(event) => synchronizeScrollEdges(event.currentTarget, setFixtureScrollEdges)}
             >
               <FontFixtureButtons
                 options={fixtureOptions}

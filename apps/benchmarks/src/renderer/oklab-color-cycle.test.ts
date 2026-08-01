@@ -15,6 +15,15 @@ describe('OKLab palette cycle', () => {
     expect(color(0, 0.25)).toBe(color(0, 1.25));
   });
 
+  it('retains deterministic scalar interpolation across repeated frame samples', () => {
+    const color = createOklabColorCycle([0xff0000, 0x0000ff]);
+    const expected = color(1, 0.375);
+
+    for (let index = 0; index < 120; index += 1) {
+      expect(color(1, 0.375)).toBe(expected);
+    }
+  });
+
   it('rejects an unusable palette', () => {
     expect(() => createOklabColorCycle([0xffffff])).toThrow('at least two colors');
   });

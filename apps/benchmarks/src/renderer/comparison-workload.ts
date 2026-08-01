@@ -12,7 +12,7 @@ import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures';
 import { benchmarkIpsumText, ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fixtures';
-import { paragraphStressMotionFrame } from '../benchmark/paragraph-stress-motion';
+import { paragraphStressScrollProgress } from '../benchmark/paragraph-stress-motion';
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state';
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
 import { createCanvasSurface } from './canvas-surface';
@@ -196,15 +196,11 @@ interface WorkloadEntry {
   readonly offAxisPaintUpdate?: { text: string; spans: readonly TextSpan[] };
   lastWidth?: number;
   readonly widthUpdate?: { width: number };
-  reflowPending?: boolean;
   zoomLanguage?: string;
   zoomOpacity?: number;
   readonly zoomOpacityUpdate?: { opacity: number };
   zoomMaximumScale?: number;
   zoomPhraseIndex?: number;
-  zoomPhraseRevision?: number;
-  zoomPreparingRevision?: number;
-  zoomReadyRevision?: number;
 }
 
 interface MutablePaintSpan {
@@ -219,6 +215,40 @@ interface ZoomTextAnimationState {
   phraseIndex: number;
   phraseRevision: number;
   progress: number;
+}
+
+interface MutableVisibleEntryMetrics {
+  drawCount: number;
+  glyphCount: number;
+  layoutHeight: number;
+  layoutWidth: number;
+  lineCount: number;
+  missingGlyphCount: number;
+  sourceTextLength: number;
+}
+
+interface MutableLoadedFontMetrics {
+  artifactBytes: number;
+  atlasGpuBytes: number;
+  coreArtifactBytes: number;
+  coreBakeMs: number;
+  fontLoadMs: number;
+  rasterArtifactBytes: number;
+  rasterBakeMs: number;
+  slugCurveGpuBytes: number;
+  slugCurveTexelCount: number;
+  slugGpuBytes: number;
+  slugHeaderCount: number;
+  slugHeaderGpuBytes: number;
+  slugPageCount: number;
+  slugReferenceCount: number;
+  slugReferenceGpuBytes: number;
+  sourceFontBytes: number;
+}
+
+export interface MutableTextLadderScenePosition {
+  x: number;
+  y: number;
 }
 
 interface LoadedTechniqueFont {
@@ -328,6 +358,10 @@ const ICON_GRID_FONT_UNITS_PER_EM = 512;
 const ICON_GRID_MAX_ADVANCE = 640;
 const ICON_GRID_MAX_ADVANCE_EM = ICON_GRID_MAX_ADVANCE / ICON_GRID_FONT_UNITS_PER_EM;
 const ICON_GRID_ITEMS = fontAwesomeIcons.icons;
+const ICON_GRID_CONTENT = ICON_GRID_ITEMS.map((icon) => {
+  const glyph = String.fromCodePoint(icon.codePoint);
+  return { content: `${glyph}\n${icon.name}`, glyph, label: icon.name };
+});
 const PAINT_EFFECTS_TEXT =
   'Color begins as light, then the human eye turns wavelength into sensation. Our cones negotiate red, green, and blue while the brain invents every violet, amber, and electric cyan between them. Here each word carries its own chromatic phase, flowing through a continuous spectrum while opacity and contour remain live.';
 const PAINT_WORD_RANGES = Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match) => ({
@@ -483,8 +517,8 @@ async function createComparisonWorkloadRuntime(
   let lastReflowMs = 0;
   let animationEpoch = performance.now();
   const zoomAnimationState: ZoomTextAnimationState = { phraseIndex: 0, phraseRevision: 0, progress: 0 };
+  const textLadderPositionScratch: MutableTextLadderScenePosition = { x: 0, y: 0 };
   const dynamicWidthsScratch = new Float64Array(DYNAMIC_LAYOUT_TEXT.length);
-  const dynamicReadyScratch = new Array<Promise<void>>(DYNAMIC_LAYOUT_TEXT.length);
   const iconAutoPanState: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
   const iconFrameDeltaState: IconGridFrameDeltaState = { smoothedElapsedMs: undefined };
   let iconAutoPanTimestamp: number | undefined;
@@ -497,6 +531,34 @@ async function createComparisonWorkloadRuntime(
     ? undefined
     : createLiveFrameTelemetry({ gpuTimingSupported: gpuFrameTimer?.supported ?? false });
   const textUpdateTelemetry = createTextUpdateTelemetry();
+  const visibleEntryMetrics: MutableVisibleEntryMetrics = {
+    drawCount: 0,
+    glyphCount: 0,
+    layoutHeight: 0,
+    layoutWidth: 0,
+    lineCount: 0,
+    missingGlyphCount: 0,
+    sourceTextLength: 0,
+  };
+  const visibleGeometryScratch = new Set<THREE.InstancedBufferGeometry>();
+  const loadedFontMetrics: MutableLoadedFontMetrics = {
+    artifactBytes: 0,
+    atlasGpuBytes: 0,
+    coreArtifactBytes: 0,
+    coreBakeMs: 0,
+    fontLoadMs: 0,
+    rasterArtifactBytes: 0,
+    rasterBakeMs: 0,
+    slugCurveGpuBytes: 0,
+    slugCurveTexelCount: 0,
+    slugGpuBytes: 0,
+    slugHeaderCount: 0,
+    slugHeaderGpuBytes: 0,
+    slugPageCount: 0,
+    slugReferenceCount: 0,
+    slugReferenceGpuBytes: 0,
+    sourceFontBytes: 0,
+  };
   let gpuTimingSupported = renderer.hasFeature('timestamp-query');
   let persistentSnapshot: LiveFrameTelemetrySnapshot | undefined;
 
@@ -535,24 +597,50 @@ async function createComparisonWorkloadRuntime(
     );
     const activeSelectedFont = selectedFontController;
     const activeFont = (): LoadedTechniqueFont => activeSelectedFont.current.asset;
-    const loadedFonts = (): readonly LoadedTechniqueFont[] =>
-      iconFont === undefined ? [activeFont()] : [activeFont(), iconFont];
+    const loadedFontsScratch: LoadedTechniqueFont[] = [];
+    const loadedFonts = (): readonly LoadedTechniqueFont[] => {
+      loadedFontsScratch[0] = activeFont();
+      if (iconFont === undefined) loadedFontsScratch.length = 1;
+      else {
+        loadedFontsScratch[1] = iconFont;
+        loadedFontsScratch.length = 2;
+      }
+      return loadedFontsScratch;
+    };
+    let cachedBitmapAtlasPrimary: LoadedTechniqueFont | undefined;
+    let cachedBitmapAtlasSecondary: LoadedTechniqueFont | undefined;
+    let cachedBitmapAtlasPages: BitmapTextLiveStats['atlasPages'] = [];
+    const bitmapAtlasPages = (fonts: readonly LoadedTechniqueFont[]): BitmapTextLiveStats['atlasPages'] => {
+      const primary = fonts[0];
+      const secondary = fonts[1];
+      if (primary !== cachedBitmapAtlasPrimary || secondary !== cachedBitmapAtlasSecondary) {
+        cachedBitmapAtlasPrimary = primary;
+        cachedBitmapAtlasSecondary = secondary;
+        cachedBitmapAtlasPages = combineBitmapAtlasPages(fonts);
+      }
+      return cachedBitmapAtlasPages;
+    };
     const statsFont = (): LoadedTechniqueFont => iconFont ?? activeFont();
     let iconRecycleCount = 0;
     let iconWindowRevision = 0;
     let iconAssignmentSignature = '[]';
     let settledIconWindow: IconGridVirtualWindow | undefined;
     let pendingIconWindow: IconGridVirtualWindow | undefined;
-    let iconWindowDrain: Promise<void> | undefined;
+    let iconWindowRefreshing = false;
     let iconWindowSuspended = false;
     let iconWindowRefreshDeferred = false;
     let fontFixtureSwitching = false;
     let fontFixtureCommitting = false;
     let committedContentWidth = comparisonWorkloadContentWidth(configuration, width);
+    const desiredIconEpochs = new Uint32Array(ICON_GRID_ITEMS.length);
+    const retainedIconEpochs = new Uint32Array(ICON_GRID_ITEMS.length);
+    const availableIconEntries: WorkloadEntry[] = [];
+    const pendingIconEntries: WorkloadEntry[] = [];
+    const missingIconIndices: number[] = [];
+    let iconAssignmentEpoch = 0;
 
     async function switchSelectedFontFixture(nextFixture: BenchmarkFontFixture): Promise<void> {
       if (nextFixture === activeSelectedFont.current.fixture) return;
-      await iconWindowDrain;
       const targetTexts =
         configuration.workload === 'icon-grid'
           ? entries.flatMap(({ labelText }) => (labelText === undefined ? [] : [labelText]))
@@ -578,7 +666,7 @@ async function createComparisonWorkloadRuntime(
             scheduledAt = performance.now();
             fontFixtureCommitting = true;
             try {
-              await applyRetainedTextFontFixture(targetTexts, activeSelectedFont.current.asset, nextFont);
+              applyRetainedTextFontFixture(targetTexts, activeSelectedFont.current.asset, nextFont);
             } finally {
               fontFixtureCommitting = false;
             }
@@ -598,7 +686,6 @@ async function createComparisonWorkloadRuntime(
     }
 
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
-      await iconWindowDrain;
       const workloadChanged = next.workload !== configuration.workload;
       const nextCamera = workloadChanged ? createWorkloadCamera(next.workload, width, height) : camera;
       if (next.workload === 'icon-grid' && iconFont === undefined) {
@@ -709,50 +796,58 @@ async function createComparisonWorkloadRuntime(
         throw new Error('icon grid pool capacity changed without a scene rebuild');
       }
       let recycled = 0;
-      const pendingAssignments: {
-        entry: WorkloadEntry;
-        iconIndex: number;
-        content: string;
-      }[] = [];
-      const desiredIndices = new Set(window.indices);
-      const retainedIndices = new Set<number>();
-      const availableEntries: WorkloadEntry[] = [];
+      iconAssignmentEpoch = (iconAssignmentEpoch + 1) >>> 0;
+      if (iconAssignmentEpoch === 0) {
+        desiredIconEpochs.fill(0);
+        retainedIconEpochs.fill(0);
+        iconAssignmentEpoch = 1;
+      }
+      availableIconEntries.length = 0;
+      pendingIconEntries.length = 0;
+      missingIconIndices.length = 0;
+      for (const index of window.indices) desiredIconEpochs[index] = iconAssignmentEpoch;
       for (const entry of entries) {
+        const iconIndex = entry.virtualIconIndex;
         if (
-          entry.virtualIconIndex !== undefined &&
-          desiredIndices.has(entry.virtualIconIndex) &&
-          !retainedIndices.has(entry.virtualIconIndex)
+          iconIndex !== undefined &&
+          desiredIconEpochs[iconIndex] === iconAssignmentEpoch &&
+          retainedIconEpochs[iconIndex] !== iconAssignmentEpoch
         ) {
-          retainedIndices.add(entry.virtualIconIndex);
+          retainedIconEpochs[iconIndex] = iconAssignmentEpoch;
           continue;
         }
-        availableEntries.push(entry);
+        availableIconEntries.push(entry);
       }
-      const missingIndices = window.indices.filter((index) => !retainedIndices.has(index));
-      if (missingIndices.length > availableEntries.length) {
+      for (const index of window.indices) {
+        if (retainedIconEpochs[index] !== iconAssignmentEpoch) missingIconIndices.push(index);
+      }
+      if (missingIconIndices.length > availableIconEntries.length) {
         throw new Error('icon grid window exceeds its recyclable tile pool');
       }
-      for (const [missingIndex, iconIndex] of missingIndices.entries()) {
-        const entry = availableEntries[missingIndex]!;
-        const { content, glyph } = iconGridContent(iconIndex);
+      for (const [missingIndex, iconIndex] of missingIconIndices.entries()) {
+        const entry = availableIconEntries[missingIndex]!;
+        const { glyph } = iconGridContent(iconIndex);
         // Keep the old assignment visible while every warm replacement is staged. The Three.js lifecycle publishes
         // the staged generations together below; no consumer promise coordinates ordinary warm recycling.
         entry.text.setProperties({ text: glyph });
         entry.labelText?.setProperties({ text: iconGridLabel(iconIndex) });
         recycled += 1;
-        pendingAssignments.push({ entry, iconIndex, content });
+        pendingIconEntries.push(entry);
       }
-      publishEntryUpdates(pendingAssignments.map(({ entry }) => entry));
+      publishEntryUpdates(pendingIconEntries);
       if (closing || disposed) return;
-      for (const { entry, iconIndex, content } of pendingAssignments) {
+      for (const [index, entry] of pendingIconEntries.entries()) {
         if (entry.disposed) continue;
+        const iconIndex = missingIconIndices[index]!;
+        const { content } = iconGridContent(iconIndex);
         entry.virtualIconIndex = iconIndex;
         entry.sourceText = content;
         const column = iconIndex % window.layout.columns;
         const row = Math.floor(iconIndex / window.layout.columns);
         positionIconGridEntry(entry, window.layout, column, row, configuration.fontSize);
       }
-      for (const entry of availableEntries.slice(missingIndices.length)) {
+      for (let index = missingIconIndices.length; index < availableIconEntries.length; index += 1) {
+        const entry = availableIconEntries[index]!;
         entry.node.visible = false;
         delete entry.virtualIconIndex;
       }
@@ -824,22 +919,21 @@ async function createComparisonWorkloadRuntime(
         -scene.position.x,
         scene.position.y,
       );
-      if (iconWindowDrain !== undefined) return;
-      iconWindowDrain = (async () => {
+      if (iconWindowRefreshing) return;
+      iconWindowRefreshing = true;
+      try {
         while (pendingIconWindow !== undefined) {
           if (closing || disposed) break;
           const nextWindow = pendingIconWindow;
           pendingIconWindow = undefined;
-          await applyIconWindow(nextWindow);
+          applyIconWindow(nextWindow);
         }
-      })()
-        .catch(onError)
-        .finally(() => {
-          iconWindowDrain = undefined;
-          if (pendingIconWindow !== undefined && !closing && !disposed) {
-            requestIconWindowRefresh();
-          }
-        });
+      } catch (error) {
+        onError(error);
+      } finally {
+        iconWindowRefreshing = false;
+      }
+      if (pendingIconWindow !== undefined && !closing && !disposed) requestIconWindowRefresh();
     }
 
     await commit(configuration);
@@ -866,7 +960,6 @@ async function createComparisonWorkloadRuntime(
           next.fontSize !== configuration.fontSize ||
           next.iconGridView !== configuration.iconGridView)
       ) {
-        await iconWindowDrain;
         const viewChanged = next.iconGridView !== configuration.iconGridView;
         const [requestedScrollX, requestedScrollY] = viewChanged
           ? (() => {
@@ -900,8 +993,10 @@ async function createComparisonWorkloadRuntime(
           requestedScrollX,
           requestedScrollY,
         );
-        scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
         await resizeIconPool(nextWindow.poolCapacity, next.fontSize, nextWindow.layout);
+        // Pool growth is genuinely cold and stays detached while it loads. Publish size, position, and assignments
+        // in one continuation so the live scene never exposes new camera coordinates with the old tile defaults.
+        scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
         await applyIconWindow(nextWindow);
         configuration = next;
         committedContentWidth = undefined;
@@ -918,9 +1013,6 @@ async function createComparisonWorkloadRuntime(
       }
       if (contentWidthChanged || fontSizeChanged) {
         const readyStarted = performance.now();
-        if (next.workload === 'dynamic-layout' && entries.some(({ reflowPending }) => reflowPending === true)) {
-          await Promise.all(entries.map(({ text }) => text.ready));
-        }
         const retainedWidths = contentWidthChanged
           ? next.workload === 'dynamic-layout'
             ? dynamicLayoutWidths(next, width, performance.now() - animationEpoch)
@@ -930,7 +1022,6 @@ async function createComparisonWorkloadRuntime(
           : undefined;
         if (next.workload === 'dynamic-layout' && retainedWidths !== undefined) {
           for (const [index, entry] of entries.entries()) {
-            entry.reflowPending = true;
             entry.lastWidth = retainedWidths[index]!;
             if (entry.widthUpdate === undefined) {
               throw new Error('dynamic layout entry is missing its retained width update');
@@ -939,15 +1030,11 @@ async function createComparisonWorkloadRuntime(
           }
         }
         const scheduledAt = performance.now();
-        try {
-          await applyRetainedTextLayout(
-            entries.map(({ text }) => text),
-            retainedWidths,
-            fontSizeChanged ? next.fontSize : undefined,
-          );
-        } finally {
-          for (const entry of entries) entry.reflowPending = false;
-        }
+        applyRetainedTextLayout(
+          entries.map(({ text }) => text),
+          retainedWidths,
+          fontSizeChanged ? next.fontSize : undefined,
+        );
         const readyAt = performance.now();
         const sceneStartedAt = performance.now();
         layoutEntries(entries, next, width, height);
@@ -1094,7 +1181,15 @@ async function createComparisonWorkloadRuntime(
           configuration.workload === 'text-ladder' &&
           configuration.animationEnabled
         ) {
-          animateTextLadderScene(scene, entries, configuration, Math.max(0, timestamp - animationEpoch), width, height);
+          animateTextLadderScene(
+            scene,
+            entries,
+            configuration,
+            Math.max(0, timestamp - animationEpoch),
+            width,
+            height,
+            textLadderPositionScratch,
+          );
         }
         if (
           renderScene &&
@@ -1112,7 +1207,6 @@ async function createComparisonWorkloadRuntime(
               Math.max(0, timestamp - animationEpoch),
               zoomAnimationState,
               dynamicWidthsScratch,
-              dynamicReadyScratch,
               width,
               height,
               onError,
@@ -1133,18 +1227,22 @@ async function createComparisonWorkloadRuntime(
         const snapshot = frameId === undefined ? persistentSnapshot : telemetry?.endFrame(frameId, cpuFrameMs);
         if (snapshot === undefined) return;
         if (persistent) persistentSnapshot = undefined;
-        const activeEntries = entries.filter(({ node }) => node.visible);
-        const layouts = activeEntries.flatMap(entryLayouts);
         const activeZoomEntry =
-          configuration.workload === 'zoom-text'
-            ? entries.find(({ zoomPhraseRevision }) => zoomPhraseRevision === zoomAnimationState.phraseRevision)
-            : undefined;
+          configuration.workload === 'zoom-text' ? entries[zoomAnimationState.phraseIndex] : undefined;
         const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
+        measureVisibleEntries(entries, zoomScale, visibleEntryMetrics, visibleGeometryScratch);
         const effectiveCssFontSize =
           configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX * zoomScale : configuration.fontSize;
         const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
         const currentLoadedFonts = loadedFonts();
+        measureLoadedFonts(currentLoadedFonts, loadedFontMetrics);
         const currentStatsFont = statsFont();
+        let paintRevision = 0;
+        let lastPaintUpdateMs = 0;
+        for (const entry of entries) {
+          paintRevision = Math.max(paintRevision, entry.paintRevision ?? 0);
+          lastPaintUpdateMs = Math.max(lastPaintUpdateMs, entry.lastPaintUpdateMs ?? 0);
+        }
         const cameraKind: ComparisonWorkloadStats['cameraKind'] =
           camera instanceof THREE.PerspectiveCamera ? 'perspective' : 'orthographic';
         const common = {
@@ -1152,24 +1250,24 @@ async function createComparisonWorkloadRuntime(
           dpr: rendererViewport.pixelRatio,
           showGrid: configuration.showGrid,
           ...snapshot,
-          glyphCount: activeEntries.reduce((total, entry) => total + renderedGlyphCount(entry.node), 0),
-          missingGlyphCount: layouts.reduce((total, layout) => total + missingGlyphCount(layout), 0),
-          drawCount: activeEntries.reduce((total, entry) => total + drawCount(entry.node), 0),
-          layoutWidth: layouts.reduce((maximum, layout) => Math.max(maximum, layout.width * zoomScale), 0),
-          layoutHeight: layouts.reduce((total, layout) => total + layout.height * zoomScale, 0),
-          lineCount: layouts.reduce((total, layout) => total + layout.lineGlyphCounts.length, 0),
-          atlasGpuBytes: sumLoadedFonts(currentLoadedFonts, ({ atlasGpuBytes }) => atlasGpuBytes),
+          glyphCount: visibleEntryMetrics.glyphCount,
+          missingGlyphCount: visibleEntryMetrics.missingGlyphCount,
+          drawCount: visibleEntryMetrics.drawCount,
+          layoutWidth: visibleEntryMetrics.layoutWidth,
+          layoutHeight: visibleEntryMetrics.layoutHeight,
+          lineCount: visibleEntryMetrics.lineCount,
+          atlasGpuBytes: loadedFontMetrics.atlasGpuBytes,
           framebufferGpuBytes,
-          totalGpuBytes: sumLoadedFonts(currentLoadedFonts, ({ atlasGpuBytes }) => atlasGpuBytes) + framebufferGpuBytes,
-          artifactBytes: sumLoadedFonts(currentLoadedFonts, ({ artifactBytes }) => artifactBytes),
+          totalGpuBytes: loadedFontMetrics.atlasGpuBytes + framebufferGpuBytes,
+          artifactBytes: loadedFontMetrics.artifactBytes,
           delivery: activeFont().metrics.delivery,
-          sourceFontBytes: sumLoadedFonts(currentLoadedFonts, ({ metrics }) => metrics.sourceFontBytes),
-          coreArtifactBytes: sumLoadedFonts(currentLoadedFonts, ({ metrics }) => metrics.coreArtifactBytes),
-          coreBakeMs: sumLoadedFonts(currentLoadedFonts, ({ metrics }) => metrics.coreBakeMs),
-          rasterArtifactBytes: sumLoadedFonts(currentLoadedFonts, ({ metrics }) => metrics.rasterArtifactBytes),
-          rasterBakeMs: sumLoadedFonts(currentLoadedFonts, ({ metrics }) => metrics.rasterBakeMs),
+          sourceFontBytes: loadedFontMetrics.sourceFontBytes,
+          coreArtifactBytes: loadedFontMetrics.coreArtifactBytes,
+          coreBakeMs: loadedFontMetrics.coreBakeMs,
+          rasterArtifactBytes: loadedFontMetrics.rasterArtifactBytes,
+          rasterBakeMs: loadedFontMetrics.rasterBakeMs,
           rendererInitMs,
-          fontLoadMs: sumLoadedFonts(currentLoadedFonts, ({ fontLoadMs }) => fontLoadMs),
+          fontLoadMs: loadedFontMetrics.fontLoadMs,
           textReadyMs,
           firstDrawMs,
           ...(uploadFrameGpuMs === undefined ? {} : { uploadFrameGpuMs }),
@@ -1192,13 +1290,13 @@ async function createComparisonWorkloadRuntime(
           appliedShowLayoutBounds: configuration.showLayoutBounds,
           reflowCount,
           lastReflowMs,
-          paintRevision: entries.reduce((maximum, entry) => Math.max(maximum, entry.paintRevision ?? 0), 0),
-          lastPaintUpdateMs: entries.reduce((maximum, entry) => Math.max(maximum, entry.lastPaintUpdateMs ?? 0), 0),
-          sourceTextLength: activeEntries.reduce((total, entry) => total + entry.sourceText.length, 0),
+          paintRevision,
+          lastPaintUpdateMs,
+          sourceTextLength: visibleEntryMetrics.sourceTextLength,
           zoomText: activeZoomEntry?.sourceText,
           zoomLanguage: activeZoomEntry?.zoomLanguage,
           zoomPhraseIndex: activeZoomEntry?.zoomPhraseIndex ?? -1,
-          zoomPhraseRevision: activeZoomEntry?.zoomPhraseRevision ?? 0,
+          zoomPhraseRevision: configuration.workload === 'zoom-text' ? zoomAnimationState.phraseRevision : 0,
           zoomBaseCssPx: configuration.workload === 'zoom-text' ? ZOOM_TEXT_BASE_CSS_PX : 0,
           zoomEffectiveCssPx: configuration.workload === 'zoom-text' ? effectiveCssFontSize : 0,
           zoomMaximumCssPx:
@@ -1233,7 +1331,7 @@ async function createComparisonWorkloadRuntime(
             cssFontSize: effectiveCssFontSize,
             renderedPpem: effectiveCssFontSize * rendererViewport.pixelRatio,
             scaleRatio: (effectiveCssFontSize * rendererViewport.pixelRatio) / strikePpem,
-            atlasPages: combineBitmapAtlasPages(currentLoadedFonts),
+            atlasPages: bitmapAtlasPages(currentLoadedFonts),
           });
         } else if (technique === 'mtsdf') {
           const mtsdfConfiguration = currentStatsFont.mtsdfConfiguration;
@@ -1250,12 +1348,6 @@ async function createComparisonWorkloadRuntime(
             scaleRatio: renderedPpem / mtsdfConfiguration.emSize,
           });
         } else {
-          const slugConfigurations = currentLoadedFonts.map(({ slugConfiguration }) => {
-            if (slugConfiguration === undefined) {
-              throw new Error('Slug workload is missing its registered raster configuration');
-            }
-            return slugConfiguration;
-          });
           const slugConfiguration = currentStatsFont.slugConfiguration;
           if (slugConfiguration === undefined) {
             throw new Error('Slug workload is missing its registered raster configuration');
@@ -1265,17 +1357,14 @@ async function createComparisonWorkloadRuntime(
             technique,
             ...common,
             renderedPpem,
-            slugPageCount: sumSlugConfigurations(slugConfigurations, ({ pageCount }) => pageCount),
-            slugCurveTexelCount: sumSlugConfigurations(slugConfigurations, ({ curveTexelCount }) => curveTexelCount),
-            slugCurveGpuBytes: sumSlugConfigurations(slugConfigurations, ({ curveGpuBytes }) => curveGpuBytes),
-            slugHeaderCount: sumSlugConfigurations(slugConfigurations, ({ headerCount }) => headerCount),
-            slugHeaderGpuBytes: sumSlugConfigurations(slugConfigurations, ({ headerGpuBytes }) => headerGpuBytes),
-            slugReferenceCount: sumSlugConfigurations(slugConfigurations, ({ referenceCount }) => referenceCount),
-            slugReferenceGpuBytes: sumSlugConfigurations(
-              slugConfigurations,
-              ({ referenceGpuBytes }) => referenceGpuBytes,
-            ),
-            slugGpuBytes: sumSlugConfigurations(slugConfigurations, ({ gpuBytes }) => gpuBytes),
+            slugPageCount: loadedFontMetrics.slugPageCount,
+            slugCurveTexelCount: loadedFontMetrics.slugCurveTexelCount,
+            slugCurveGpuBytes: loadedFontMetrics.slugCurveGpuBytes,
+            slugHeaderCount: loadedFontMetrics.slugHeaderCount,
+            slugHeaderGpuBytes: loadedFontMetrics.slugHeaderGpuBytes,
+            slugReferenceCount: loadedFontMetrics.slugReferenceCount,
+            slugReferenceGpuBytes: loadedFontMetrics.slugReferenceGpuBytes,
+            slugGpuBytes: loadedFontMetrics.slugGpuBytes,
           });
         }
       } catch (error) {
@@ -1365,7 +1454,6 @@ async function createComparisonWorkloadRuntime(
         disposal = (async () => {
           await stopRendering;
           await updateDrain;
-          await iconWindowDrain;
           disposed = true;
           await gpuFrameTimer?.dispose();
           if (!persistent) {
@@ -1434,10 +1522,8 @@ function createEntries(
     });
   }
   if (configuration.workload === 'zoom-text') {
-    return Array.from({ length: 2 }, (_, zoomPhraseRevision) => {
-      const zoomPhraseIndex = zoomPhraseRevision % ZOOM_TEXT_PHRASES.length;
-      const phrase = ZOOM_TEXT_PHRASES[zoomPhraseIndex]!;
-      const opacity = zoomPhraseRevision === 0 ? 1 : 0;
+    return ZOOM_TEXT_PHRASES.map((phrase, zoomPhraseIndex) => {
+      const opacity = zoomPhraseIndex === 0 ? 1 : 0;
       const text = new Text({
         ...base,
         text: phrase.text,
@@ -1449,8 +1535,8 @@ function createEntries(
       });
       const node = new THREE.Group();
       node.add(text);
-      node.visible = zoomPhraseRevision === 0;
-      return {
+      node.visible = zoomPhraseIndex === 0;
+      const entry: WorkloadEntry = {
         ...textEntry('primary', text, phrase.text),
         node,
         zoomOpacity: opacity,
@@ -1458,9 +1544,8 @@ function createEntries(
         zoomLanguage: phrase.language,
         zoomMaximumScale: 1,
         zoomPhraseIndex,
-        zoomPhraseRevision,
-        zoomReadyRevision: zoomPhraseRevision,
       };
+      return entry;
     });
   }
   if (configuration.workload === 'icon-grid') {
@@ -1639,12 +1724,6 @@ function entryReadyPromises(entry: WorkloadEntry): readonly Promise<void>[] {
   return entry.labelText === undefined ? [entry.text.ready] : [entry.text.ready, entry.labelText.ready];
 }
 
-function entryLayouts(entry: WorkloadEntry): readonly ParagraphLayout[] {
-  return entry.labelText === undefined
-    ? [committedLayout(entry.text)]
-    : [committedLayout(entry.text), committedLayout(entry.labelText)];
-}
-
 function resizeIconGridEntries(entries: readonly WorkloadEntry[], iconSize: number, layout: IconGridLayout): void {
   for (const entry of entries) entry.text.setProperties({ fontSize: iconSize });
   publishEntryUpdates(entries);
@@ -1762,11 +1841,12 @@ function animateTextLadderScene(
   elapsedMs: number,
   viewportWidth: number,
   viewportHeight: number,
+  positionScratch: MutableTextLadderScenePosition,
 ): void {
   const finalEntry = entries[entries.length - 1];
   if (finalEntry === undefined) return;
   const layout = committedLayout(finalEntry.text);
-  const position = textLadderScenePosition({
+  setTextLadderScenePosition(positionScratch, {
     animationSpeed: configuration.animationSpeed,
     elapsedMs,
     exitEnabled: configuration.textLadderExitEnabled,
@@ -1776,7 +1856,7 @@ function animateTextLadderScene(
     viewportHeight,
     viewportWidth,
   });
-  scene.position.set(position.x, position.y, 0);
+  scene.position.set(positionScratch.x, positionScratch.y, 0);
 }
 
 export function textLadderScenePosition({
@@ -1798,12 +1878,50 @@ export function textLadderScenePosition({
   readonly viewportHeight: number;
   readonly viewportWidth: number;
 }): Readonly<{ x: number; y: number }> {
+  const position: MutableTextLadderScenePosition = { x: 0, y: 0 };
+  setTextLadderScenePosition(position, {
+    animationSpeed,
+    elapsedMs,
+    exitEnabled,
+    finalCenterY,
+    finalEntryWidth,
+    finalEntryX,
+    viewportHeight,
+    viewportWidth,
+  });
+  return position;
+}
+
+/** Updates caller-owned scene-position storage for the text-ladder render loop. */
+export function setTextLadderScenePosition(
+  position: MutableTextLadderScenePosition,
+  {
+    animationSpeed,
+    elapsedMs,
+    exitEnabled,
+    finalCenterY,
+    finalEntryWidth,
+    finalEntryX,
+    viewportHeight,
+    viewportWidth,
+  }: {
+    readonly animationSpeed: number;
+    readonly elapsedMs: number;
+    readonly exitEnabled: boolean;
+    readonly finalCenterY: number;
+    readonly finalEntryWidth: number;
+    readonly finalEntryX: number;
+    readonly viewportHeight: number;
+    readonly viewportWidth: number;
+  },
+): void {
   const cycle = modulo((elapsedMs / 9_000) * animationRate({ animationSpeed }), 1);
   const scrollProgress = smoothstep(Math.min(1, cycle / 0.52));
   const marqueeProgress = exitEnabled ? smoothstep(Math.max(0, Math.min(1, (cycle - 0.52) / 0.38))) : 0;
   const centeredScrollY = -viewportHeight / 2 - finalCenterY;
   const offscreenLeftX = -finalEntryX - finalEntryWidth - viewportWidth * 0.05;
-  return { x: marqueeProgress === 0 ? 0 : offscreenLeftX * marqueeProgress, y: centeredScrollY * scrollProgress };
+  position.x = marqueeProgress === 0 ? 0 : offscreenLeftX * marqueeProgress;
+  position.y = centeredScrollY * scrollProgress;
 }
 
 function animateParagraphStressScene(
@@ -1816,7 +1934,7 @@ function animateParagraphStressScene(
   const entry = entries[0];
   if (entry === undefined) return;
   const layout = committedLayout(entry.text);
-  const { scrollProgress } = paragraphStressMotionFrame(elapsedMs, configuration.animationSpeed, 24);
+  const scrollProgress = paragraphStressScrollProgress(elapsedMs, configuration.animationSpeed);
   const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
   scene.position.y = maximumScrollY * scrollProgress;
 }
@@ -1871,16 +1989,15 @@ function iconGridContent(iconIndex: number): {
   readonly content: string;
   readonly glyph: string;
 } {
-  const icon = ICON_GRID_ITEMS[iconIndex];
-  if (icon === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`);
-  const glyph = String.fromCodePoint(icon.codePoint);
-  return { content: `${glyph}\n${icon.name}`, glyph };
+  const content = ICON_GRID_CONTENT[iconIndex];
+  if (content === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`);
+  return content;
 }
 
 function iconGridLabel(iconIndex: number): string {
-  const icon = ICON_GRID_ITEMS[iconIndex];
-  if (icon === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`);
-  return icon.name;
+  const content = ICON_GRID_CONTENT[iconIndex];
+  if (content === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`);
+  return content.label;
 }
 
 function animateEntries(
@@ -1889,14 +2006,13 @@ function animateEntries(
   timestamp: number,
   zoomAnimationState: ZoomTextAnimationState,
   dynamicWidthsScratch: Float64Array,
-  dynamicReadyScratch: Promise<void>[],
   width: number,
   height: number,
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
   if (configuration.workload === 'zoom-text') {
-    animateZoomText(entries, configuration, timestamp, zoomAnimationState, width, height, onError);
+    animateZoomText(entries, configuration, timestamp, zoomAnimationState);
     return;
   }
   if (configuration.workload === 'paint-effects') {
@@ -1904,17 +2020,7 @@ function animateEntries(
     return;
   }
   if (configuration.workload === 'dynamic-layout') {
-    animateDynamicLayout(
-      entries,
-      configuration,
-      timestamp,
-      width,
-      height,
-      dynamicWidthsScratch,
-      dynamicReadyScratch,
-      onError,
-      onReflow,
-    );
+    animateDynamicLayout(entries, configuration, timestamp, width, height, dynamicWidthsScratch, onError, onReflow);
     return;
   }
   if (configuration.workload !== 'off-axis-3d') return;
@@ -1945,71 +2051,26 @@ function animateZoomText(
   configuration: ComparisonWorkloadConfiguration,
   timestamp: number,
   state: ZoomTextAnimationState,
-  viewportWidth: number,
-  viewportHeight: number,
-  onError: (error: unknown) => void,
 ): void {
   if (!configuration.animationEnabled) return;
-  if (entries.length !== 2) {
-    throw new Error(`zoom text requires exactly two retained Text slots; received ${String(entries.length)}`);
+  if (entries.length !== ZOOM_TEXT_PHRASES.length) {
+    throw new Error(
+      `zoom text requires one retained Text per phrase; received ${String(entries.length)} for ${String(ZOOM_TEXT_PHRASES.length)} phrases`,
+    );
   }
   updateZoomTextAnimationState(state, timestamp, configuration.animationSpeed, ZOOM_TEXT_PHRASES.length);
-  const current = entries[state.phraseRevision % 2]!;
-  const incoming = entries[(state.phraseRevision + 1) % 2]!;
-  prepareZoomTextEntry(current, state.phraseRevision, viewportWidth, viewportHeight, onError);
-  if (current.zoomReadyRevision !== state.phraseRevision) {
-    // A delayed replacement must not hide the previous phrase. Keep that fully zoomed frame until the current slot
-    // is ready, then prepare the following slot; preparing both slots here would make an asynchronous miss blank.
-    incoming.node.visible = incoming.zoomReadyRevision === state.phraseRevision - 1;
-    incoming.node.scale.setScalar(incoming.zoomMaximumScale ?? 1);
-    setZoomTextOpacity(incoming, 1);
-    return;
-  }
-  prepareZoomTextEntry(incoming, state.phraseRevision + 1, viewportWidth, viewportHeight, onError);
-
-  const incomingReady = incoming.zoomReadyRevision === state.phraseRevision + 1;
-  const fadeProgress = incomingReady ? smoothstep(Math.max(0, Math.min(1, (state.progress - 0.82) / 0.18))) : 0;
+  const current = entries[state.phraseIndex]!;
+  const incoming = entries[(state.phraseIndex + 1) % entries.length]!;
+  const previous = entries[(state.phraseIndex + entries.length - 1) % entries.length]!;
+  const fadeProgress = smoothstep(Math.max(0, Math.min(1, (state.progress - 0.82) / 0.18)));
   const zoomProgress = state.progress ** 3;
-  current.node.visible = current.zoomReadyRevision === state.phraseRevision;
-  incoming.node.visible = incomingReady && fadeProgress > 0;
+  previous.node.visible = false;
+  current.node.visible = true;
+  incoming.node.visible = fadeProgress > 0;
   current.node.scale.setScalar(1 + ((current.zoomMaximumScale ?? 1) - 1) * zoomProgress);
   incoming.node.scale.setScalar(1);
   setZoomTextOpacity(current, 1 - fadeProgress);
   setZoomTextOpacity(incoming, fadeProgress);
-}
-
-function prepareZoomTextEntry(
-  entry: WorkloadEntry,
-  phraseRevision: number,
-  viewportWidth: number,
-  viewportHeight: number,
-  onError: (error: unknown) => void,
-): void {
-  if (entry.zoomPhraseRevision === phraseRevision || entry.zoomPreparingRevision === phraseRevision) return;
-  const phraseIndex = phraseRevision % ZOOM_TEXT_PHRASES.length;
-  const phrase = ZOOM_TEXT_PHRASES[phraseIndex]!;
-  entry.zoomPreparingRevision = phraseRevision;
-  entry.node.visible = false;
-  entry.text.setProperties({ language: phrase.language, opacity: 0, text: phrase.text });
-  const generationReady = entry.text.ready;
-  void generationReady.then(
-    () => {
-      if (entry.zoomPreparingRevision !== phraseRevision || entry.disposed === true) return;
-      entry.sourceText = phrase.text;
-      entry.zoomLanguage = phrase.language;
-      entry.zoomPhraseIndex = phraseIndex;
-      entry.zoomPhraseRevision = phraseRevision;
-      entry.zoomReadyRevision = phraseRevision;
-      delete entry.zoomPreparingRevision;
-      entry.zoomOpacity = 0;
-      if (entry.zoomOpacityUpdate !== undefined) entry.zoomOpacityUpdate.opacity = 0;
-      layoutZoomTextEntry(entry, viewportWidth, viewportHeight);
-    },
-    (error: unknown) => {
-      if (entry.zoomPreparingRevision === phraseRevision) delete entry.zoomPreparingRevision;
-      if (!(error instanceof DOMException && error.name === 'AbortError')) onError(error);
-    },
-  );
 }
 
 function setZoomTextOpacity(entry: WorkloadEntry, opacity: number): void {
@@ -2096,45 +2157,41 @@ export function comparisonWorkloadRequiresIconWindowSuspension(
 }
 
 interface RetainedWidthText {
-  readonly ready: Promise<void>;
   setProperties(properties: { readonly fontSize?: number; readonly width?: number }): void;
+  updateMatrixWorld(force?: boolean): void;
 }
 
 interface RetainedFontText {
-  readonly ready: Promise<void>;
   setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }): void;
+  updateMatrixWorld(force?: boolean): void;
 }
 
-export async function applyRetainedTextFontFixture(
+export function applyRetainedTextFontFixture(
   texts: readonly RetainedFontText[],
   previous: Pick<LoadedTechniqueFont, 'font' | 'raster'>,
   next: Pick<LoadedTechniqueFont, 'font' | 'raster'>,
-): Promise<void> {
-  for (const text of texts) text.setProperties({ font: next.font, raster: next.raster });
-  const replacements = await Promise.allSettled(texts.map((text) => text.ready));
-  const failures = replacements.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
-  if (failures.length === 0) return;
-
-  // Some Text objects may already have committed while a sibling failed. Roll every slot back before the candidate
-  // font owner is released so the comparison scene never retains a generation backed by a disposed font.
-  for (const text of texts) text.setProperties({ font: previous.font, raster: previous.raster });
-  const rollbacks = await Promise.allSettled(texts.map((text) => text.ready));
-  for (const result of rollbacks) if (result.status === 'rejected') failures.push(result.reason);
-  throw new AggregateError(failures, 'comparison font fixture update failed and was rolled back');
+): void {
+  try {
+    for (const text of texts) text.setProperties({ font: next.font, raster: next.raster });
+    publishRetainedTexts(texts);
+  } catch (error) {
+    // A synchronous staging failure may leave earlier siblings queued. Restore the complete fixture before the
+    // candidate owner is released so no Text can retain a generation backed by a disposed font.
+    for (const text of texts) text.setProperties({ font: previous.font, raster: previous.raster });
+    publishRetainedTexts(texts);
+    throw new Error('comparison font fixture update failed and was rolled back', { cause: error });
+  }
 }
 
-export async function applyRetainedTextWidths(
-  texts: readonly RetainedWidthText[],
-  widths: ArrayLike<number>,
-): Promise<void> {
-  await applyRetainedTextLayout(texts, widths, undefined);
+export function applyRetainedTextWidths(texts: readonly RetainedWidthText[], widths: ArrayLike<number>): void {
+  applyRetainedTextLayout(texts, widths, undefined);
 }
 
-async function applyRetainedTextLayout(
+function applyRetainedTextLayout(
   texts: readonly RetainedWidthText[],
   widths: ArrayLike<number> | undefined,
   fontSize: number | undefined,
-): Promise<void> {
+): void {
   if (widths === undefined && fontSize === undefined) return;
   if (widths !== undefined && texts.length !== widths.length) {
     throw new RangeError('retained text widths must match the text entry count');
@@ -2145,11 +2202,15 @@ async function applyRetainedTextLayout(
       ...(widths === undefined ? {} : { width: widths[index]! }),
     });
   }
-  await Promise.all(texts.map((text) => text.ready));
+  publishRetainedTexts(texts);
 }
 
-export async function applyRetainedTextFontSize(texts: readonly RetainedWidthText[], fontSize: number): Promise<void> {
-  await applyRetainedTextLayout(texts, undefined, fontSize);
+export function applyRetainedTextFontSize(texts: readonly RetainedWidthText[], fontSize: number): void {
+  applyRetainedTextLayout(texts, undefined, fontSize);
+}
+
+function publishRetainedTexts(texts: readonly { updateMatrixWorld(force?: boolean): void }[]): void {
+  for (const text of texts) text.updateMatrixWorld(true);
 }
 
 export function comparisonWorkloadContentWidth(
@@ -2178,11 +2239,10 @@ function animateDynamicLayout(
   viewportWidth: number,
   viewportHeight: number,
   widthsScratch: Float64Array,
-  readyScratch: Promise<void>[],
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
-  if (!configuration.animationEnabled || entries.some(({ reflowPending }) => reflowPending === true)) return;
+  if (!configuration.animationEnabled) return;
   const nextWidths = dynamicLayoutWidths(configuration, viewportWidth, timestamp, widthsScratch);
   if (
     entries.length === nextWidths.length &&
@@ -2191,27 +2251,19 @@ function animateDynamicLayout(
     return;
   }
   const reflowStarted = performance.now();
-  for (const [index, entry] of entries.entries()) {
-    entry.reflowPending = true;
-    entry.lastWidth = nextWidths[index]!;
-    if (entry.widthUpdate === undefined) throw new Error('dynamic layout entry is missing its retained width update');
-    entry.widthUpdate.width = nextWidths[index]!;
-    entry.text.setProperties(entry.widthUpdate);
-    readyScratch[index] = entry.text.ready;
+  try {
+    for (const [index, entry] of entries.entries()) {
+      entry.lastWidth = nextWidths[index]!;
+      if (entry.widthUpdate === undefined) throw new Error('dynamic layout entry is missing its retained width update');
+      entry.widthUpdate.width = nextWidths[index]!;
+      entry.text.setProperties(entry.widthUpdate);
+    }
+    publishEntryUpdates(entries);
+    layoutDynamicEntries(entries, viewportWidth, viewportHeight);
+    onReflow(performance.now() - reflowStarted);
+  } catch (error) {
+    onError(error);
   }
-  void Promise.all(readyScratch).then(
-    () => {
-      if (entries.some(({ disposed }) => disposed === true)) return;
-      for (const entry of entries) entry.reflowPending = false;
-      layoutDynamicEntries(entries, viewportWidth, viewportHeight);
-      onReflow(performance.now() - reflowStarted);
-    },
-    (error: unknown) => {
-      if (entries.some(({ disposed }) => disposed === true)) return;
-      for (const entry of entries) entry.reflowPending = false;
-      onError(error);
-    },
-  );
 }
 
 export function dynamicLayoutWidths(
@@ -2817,6 +2869,12 @@ function iconGridStats(
       scrollX,
       scrollY,
     );
+  let assignedCount = 0;
+  let renderVisibleCount = 0;
+  for (const entry of entries) {
+    if (entry.virtualIconIndex !== undefined) assignedCount += 1;
+    if (entry.node.visible) renderVisibleCount += 1;
+  }
   return {
     iconItemCount: ICON_GRID_ITEMS.length,
     iconLabelCount: ICON_GRID_ITEMS.length,
@@ -2826,8 +2884,8 @@ function iconGridStats(
     iconGridHeight: window.layout.height,
     iconLabelSize: ICON_GRID_LABEL_SIZE,
     iconPoolCapacity: entries.length,
-    iconAssignedCount: entries.filter(({ virtualIconIndex }) => virtualIconIndex !== undefined).length,
-    iconRenderVisibleCount: entries.filter(({ node }) => node.visible).length,
+    iconAssignedCount: assignedCount,
+    iconRenderVisibleCount: renderVisibleCount,
     iconAssignmentSignature: assignmentSignature,
     iconFirstVisibleIndex: window.firstVisibleIndex,
     iconLastVisibleIndex: window.lastVisibleIndex,
@@ -2842,10 +2900,6 @@ function iconGridStats(
   };
 }
 
-function sumLoadedFonts(fonts: readonly LoadedTechniqueFont[], select: (font: LoadedTechniqueFont) => number): number {
-  return fonts.reduce((total, loadedFont) => total + select(loadedFont), 0);
-}
-
 function combineBitmapAtlasPages(fonts: readonly LoadedTechniqueFont[]): BitmapTextLiveStats['atlasPages'] {
   const pagesPerStrike = new Map<number, number>();
   return fonts.flatMap(({ atlasPages }) =>
@@ -2857,11 +2911,43 @@ function combineBitmapAtlasPages(fonts: readonly LoadedTechniqueFont[]): BitmapT
   );
 }
 
-function sumSlugConfigurations(
-  configurations: readonly SlugRasterConfiguration[],
-  select: (configuration: SlugRasterConfiguration) => number,
-): number {
-  return configurations.reduce((total, slugConfiguration) => total + select(slugConfiguration), 0);
+function measureLoadedFonts(fonts: readonly LoadedTechniqueFont[], metrics: MutableLoadedFontMetrics): void {
+  metrics.artifactBytes = 0;
+  metrics.atlasGpuBytes = 0;
+  metrics.coreArtifactBytes = 0;
+  metrics.coreBakeMs = 0;
+  metrics.fontLoadMs = 0;
+  metrics.rasterArtifactBytes = 0;
+  metrics.rasterBakeMs = 0;
+  metrics.slugCurveGpuBytes = 0;
+  metrics.slugCurveTexelCount = 0;
+  metrics.slugGpuBytes = 0;
+  metrics.slugHeaderCount = 0;
+  metrics.slugHeaderGpuBytes = 0;
+  metrics.slugPageCount = 0;
+  metrics.slugReferenceCount = 0;
+  metrics.slugReferenceGpuBytes = 0;
+  metrics.sourceFontBytes = 0;
+  for (const font of fonts) {
+    metrics.artifactBytes += font.artifactBytes;
+    metrics.atlasGpuBytes += font.atlasGpuBytes;
+    metrics.coreArtifactBytes += font.metrics.coreArtifactBytes;
+    metrics.coreBakeMs += font.metrics.coreBakeMs;
+    metrics.fontLoadMs += font.fontLoadMs;
+    metrics.rasterArtifactBytes += font.metrics.rasterArtifactBytes;
+    metrics.rasterBakeMs += font.metrics.rasterBakeMs;
+    metrics.sourceFontBytes += font.metrics.sourceFontBytes;
+    const slug = font.slugConfiguration;
+    if (slug === undefined) continue;
+    metrics.slugCurveGpuBytes += slug.curveGpuBytes;
+    metrics.slugCurveTexelCount += slug.curveTexelCount;
+    metrics.slugGpuBytes += slug.gpuBytes;
+    metrics.slugHeaderCount += slug.headerCount;
+    metrics.slugHeaderGpuBytes += slug.headerGpuBytes;
+    metrics.slugPageCount += slug.pageCount;
+    metrics.slugReferenceCount += slug.referenceCount;
+    metrics.slugReferenceGpuBytes += slug.referenceGpuBytes;
+  }
 }
 
 async function loadTechniqueFont(
@@ -2991,32 +3077,50 @@ function disposeEntries(entries: readonly WorkloadEntry[]): void {
   }
 }
 
-function renderedGlyphCount(object: THREE.Object3D): number {
-  let count = 0;
-  const geometries = new Set<THREE.InstancedBufferGeometry>();
-  object.traverse((child) => {
-    if (
-      child instanceof THREE.Mesh &&
-      child.geometry instanceof THREE.InstancedBufferGeometry &&
-      !geometries.has(child.geometry)
-    ) {
-      geometries.add(child.geometry);
-      count += child.geometry.instanceCount;
+function measureVisibleEntries(
+  entries: readonly WorkloadEntry[],
+  zoomScale: number,
+  metrics: MutableVisibleEntryMetrics,
+  geometries: Set<THREE.InstancedBufferGeometry>,
+): void {
+  metrics.drawCount = 0;
+  metrics.glyphCount = 0;
+  metrics.layoutHeight = 0;
+  metrics.layoutWidth = 0;
+  metrics.lineCount = 0;
+  metrics.missingGlyphCount = 0;
+  metrics.sourceTextLength = 0;
+  for (const entry of entries) {
+    if (!entry.node.visible) continue;
+    geometries.clear();
+    measureVisibleObject(entry.node, metrics, geometries);
+    measureVisibleLayout(committedLayout(entry.text), zoomScale, metrics);
+    if (entry.labelText !== undefined) measureVisibleLayout(committedLayout(entry.labelText), zoomScale, metrics);
+    metrics.sourceTextLength += entry.sourceText.length;
+  }
+}
+
+function measureVisibleObject(
+  object: THREE.Object3D,
+  metrics: MutableVisibleEntryMetrics,
+  geometries: Set<THREE.InstancedBufferGeometry>,
+): void {
+  if (!object.visible) return;
+  if (object instanceof THREE.Mesh) {
+    metrics.drawCount += 1;
+    if (object.geometry instanceof THREE.InstancedBufferGeometry && !geometries.has(object.geometry)) {
+      geometries.add(object.geometry);
+      metrics.glyphCount += object.geometry.instanceCount;
     }
-  });
-  return count;
+  }
+  for (const child of object.children) measureVisibleObject(child, metrics, geometries);
 }
 
-function drawCount(object: THREE.Object3D): number {
-  let count = 0;
-  object.traverseVisible((child) => {
-    if (child instanceof THREE.Mesh) count += 1;
-  });
-  return count;
-}
-
-function missingGlyphCount(layout: ParagraphLayout): number {
-  return layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
+function measureVisibleLayout(layout: ParagraphLayout, scale: number, metrics: MutableVisibleEntryMetrics): void {
+  metrics.layoutWidth = Math.max(metrics.layoutWidth, layout.width * scale);
+  metrics.layoutHeight += layout.height * scale;
+  metrics.lineCount += layout.lineGlyphCounts.length;
+  for (const glyphId of layout.glyphIds) if (glyphId === 0) metrics.missingGlyphCount += 1;
 }
 
 function positive(value: number, label: string): number {

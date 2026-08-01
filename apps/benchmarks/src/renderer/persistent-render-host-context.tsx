@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { createContext, use, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { RuntimeCanvasSettings, useRuntimeWorld } from '../benchmark/runtime-world';
 import type { CanvasViewController } from './canvas-view-controller';
@@ -58,7 +58,7 @@ export function PersistentRenderHostProvider({
   readonly onError: (error: unknown) => void;
 }) {
   const runtimeWorld = useRuntimeWorld();
-  const canvas = useMemo(() => document.createElement('canvas'), []);
+  const [canvas] = useState(() => document.createElement('canvas'));
   const canvasRef = useRef(canvas);
   const dprRef = useRef(dpr);
   const hostRef = useRef<PersistentRenderHost | undefined>(undefined);
@@ -66,11 +66,11 @@ export function PersistentRenderHostProvider({
   const activeAnchorRef = useRef<HTMLElement | undefined>(undefined);
   const interactionRef = useRef<CanvasInteractionBinding | undefined>(undefined);
   const surfaceGenerationRef = useRef(0);
-  const ensureHost = useCallback(
-    async (width: number, height: number): Promise<PersistentRenderHost> => {
-      let host = hostRef.current;
-      if (host !== undefined) return host;
-      hostPromiseRef.current ??= createPersistentRenderHost({
+  const ensureHost = async (width: number, height: number): Promise<PersistentRenderHost> => {
+    let host = hostRef.current;
+    if (host !== undefined) return host;
+    if (hostPromiseRef.current === undefined) {
+      hostPromiseRef.current = createPersistentRenderHost({
         backend,
         canvas: canvasRef.current,
         dpr: dprRef.current,
@@ -78,28 +78,21 @@ export function PersistentRenderHostProvider({
         width,
         onError,
       });
-      host = await hostPromiseRef.current;
-      hostRef.current = host;
-      return host;
-    },
-    // The provider callback is an explicit identity boundary. React Compiler reports these captures as extra while
-    // exhaustive-deps correctly requires the values that create a new renderer generation.
-    // oxlint-disable-next-line react/react-compiler
-    [backend, onError],
-  );
+    }
+    host = await hostPromiseRef.current;
+    hostRef.current = host;
+    return host;
+  };
 
-  const configureSurface = useCallback(
-    (settings: PersistentRenderSurfaceSettings): void => {
-      runtimeWorld.set(RuntimeCanvasSettings, {
-        controller: settings.controller.current,
-        label: settings.label,
-        panEnabled: settings.pan,
-        zoomEnabled: settings.zoom,
-      });
-      prepareCanvas(canvas, settings);
-    },
-    [canvas, runtimeWorld],
-  );
+  const configureSurface = (settings: PersistentRenderSurfaceSettings): void => {
+    runtimeWorld.set(RuntimeCanvasSettings, {
+      controller: settings.controller.current,
+      label: settings.label,
+      panEnabled: settings.pan,
+      zoomEnabled: settings.zoom,
+    });
+    prepareCanvas(canvas, settings);
+  };
 
   useEffect(() => {
     dprRef.current = dpr;
@@ -129,57 +122,56 @@ export function PersistentRenderHostProvider({
     [canvas, onError, runtimeWorld],
   );
 
-  const activateSurface = useCallback(
-    async (request: PersistentRenderSurfaceRequest, signal?: AbortSignal): Promise<PersistentRenderSurfaceLease> => {
-      signal?.throwIfAborted();
-      const generation = ++surfaceGenerationRef.current;
-      activeAnchorRef.current = request.anchor;
-      configureSurface(request);
-      interactionRef.current ??= bindCanvasInteraction(canvas, () => runtimeWorld.get(RuntimeCanvasSettings));
-      interactionRef.current.reset();
-      request.anchor.prepend(canvas);
+  const activateSurface = async (
+    request: PersistentRenderSurfaceRequest,
+    signal?: AbortSignal,
+  ): Promise<PersistentRenderSurfaceLease> => {
+    signal?.throwIfAborted();
+    const generation = ++surfaceGenerationRef.current;
+    activeAnchorRef.current = request.anchor;
+    configureSurface(request);
+    if (interactionRef.current === undefined) {
+      interactionRef.current = bindCanvasInteraction(canvas, () => runtimeWorld.get(RuntimeCanvasSettings));
+    }
+    interactionRef.current.reset();
+    request.anchor.prepend(canvas);
 
-      const width = Math.max(1, request.anchor.clientWidth);
-      const height = Math.max(1, request.anchor.clientHeight);
-      const host = await ensureHost(width, height);
-      signal?.throwIfAborted();
-      if (surfaceGenerationRef.current !== generation) {
-        throw new DOMException('persistent render surface was superseded', 'AbortError');
-      }
-      host.resize(width, height, dprRef.current);
+    const width = Math.max(1, request.anchor.clientWidth);
+    const height = Math.max(1, request.anchor.clientHeight);
+    const host = await ensureHost(width, height);
+    signal?.throwIfAborted();
+    if (surfaceGenerationRef.current !== generation) {
+      throw new DOMException('persistent render surface was superseded', 'AbortError');
+    }
+    host.resize(width, height, dprRef.current);
 
-      const observer = new ResizeObserver(() => {
-        if (surfaceGenerationRef.current !== generation) return;
-        host.resize(Math.max(1, request.anchor.clientWidth), Math.max(1, request.anchor.clientHeight), dprRef.current);
-      });
-      observer.observe(request.anchor);
-      let sceneLease: PersistentRenderSceneLease;
-      try {
-        sceneLease = await host.replaceScene(request.scene, signal);
-      } catch (error) {
-        observer.disconnect();
-        throw error;
-      }
-      return createSurfaceLease(sceneLease, observer, generation, surfaceGenerationRef, activeAnchorRef, runtimeWorld);
-    },
-    [canvas, configureSurface, ensureHost, runtimeWorld],
-  );
+    const observer = new ResizeObserver(() => {
+      if (surfaceGenerationRef.current !== generation) return;
+      host.resize(Math.max(1, request.anchor.clientWidth), Math.max(1, request.anchor.clientHeight), dprRef.current);
+    });
+    observer.observe(request.anchor);
+    let sceneLease: PersistentRenderSceneLease;
+    try {
+      sceneLease = await host.replaceScene(request.scene, signal);
+    } catch (error) {
+      observer.disconnect();
+      throw error;
+    }
+    return createSurfaceLease(sceneLease, observer, generation, surfaceGenerationRef, activeAnchorRef, runtimeWorld);
+  };
 
-  const runExclusiveJob = useCallback(
-    async <T,>(job: PersistentRenderJob<T>, signal?: AbortSignal): Promise<Awaited<T>> => {
-      signal?.throwIfAborted();
-      const anchor = activeAnchorRef.current;
-      const host = await ensureHost(Math.max(1, anchor?.clientWidth ?? 1), Math.max(1, anchor?.clientHeight ?? 1));
-      signal?.throwIfAborted();
-      return host.runExclusiveJob(job, signal);
-    },
-    [ensureHost],
-  );
+  const runExclusiveJob = async <T,>(job: PersistentRenderJob<T>, signal?: AbortSignal): Promise<Awaited<T>> => {
+    signal?.throwIfAborted();
+    const anchor = activeAnchorRef.current;
+    const host = await ensureHost(Math.max(1, anchor?.clientWidth ?? 1), Math.max(1, anchor?.clientHeight ?? 1));
+    signal?.throwIfAborted();
+    return host.runExclusiveJob(job, signal);
+  };
 
-  const value = useMemo<PersistentRenderHostContextValue>(
-    () => ({ activateSurface, configureSurface, runExclusiveJob }),
-    [activateSurface, configureSurface, runExclusiveJob],
-  );
+  const value: PersistentRenderHostContextValue = { activateSurface, configureSurface, runExclusiveJob };
+  // React Compiler retains this context value and its functions. Manual memoization makes React Doctor reject the
+  // provider, while the generic JSX lint rule cannot observe the compiler transform.
+  // oxlint-disable-next-line react/jsx-no-constructed-context-values
   return <PersistentRenderHostContext value={value}>{children}</PersistentRenderHostContext>;
 }
 

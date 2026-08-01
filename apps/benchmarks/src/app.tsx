@@ -3,7 +3,6 @@ import {
   lazy,
   Suspense,
   use,
-  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -104,7 +103,7 @@ import type {
 import type { MtsdfTextConformanceCapture, MtsdfTextLiveStats, MtsdfTextPersistentScene } from './renderer/mtsdf-text';
 import type { SlugTextConformanceCapture, SlugTextLiveStats, SlugTextPersistentScene } from './renderer/slug-text';
 import type { RasterTechniqueComparisonPersistentScene } from './renderer/raster-technique-compare';
-import type { PersistentRenderJob } from './renderer/persistent-render-host';
+import type { PersistentRenderJob, PersistentRenderSceneRenderer } from './renderer/persistent-render-host';
 import { createLatestAsyncQueue, type LatestAsyncQueue } from './renderer/latest-async-queue';
 import type {
   ComparisonWorkloadConfiguration,
@@ -125,12 +124,119 @@ import { Route, Switch, useLocation } from 'wouter';
 
 type LiveTextStats = RuntimeLiveStats;
 type RunExclusiveJob = <T>(job: PersistentRenderJob<T>, signal?: AbortSignal) => Promise<Awaited<T>>;
+type FiniteConformanceCapture =
+  | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
+  | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
+  | { readonly kind: 'slug'; readonly value: SlugTextConformanceCapture }
+  | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
+  | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture };
+
+interface FiniteConformanceCaptureOptions {
+  readonly backend: GraphicsBackend;
+  readonly dpr: 1 | 2;
+  readonly fontFixture: SelectableFontFixture;
+  readonly renderer: PersistentRenderSceneRenderer;
+  readonly signal: AbortSignal;
+  readonly technique: RasterTechnique;
+  readonly workload: string;
+}
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 const liveSceneAssetResources = new Map<string, Promise<void>>();
 
 function importComparisonWorkload() {
   return import('./renderer/comparison-workload');
+}
+
+function loadBitmapTextRenderer() {
+  return import('./renderer/bitmap-text');
+}
+
+function loadMtsdfTextRenderer() {
+  return import('./renderer/mtsdf-text');
+}
+
+function loadSlugTextRenderer() {
+  return import('./renderer/slug-text');
+}
+
+function loadRasterTechniqueComparison() {
+  return import('./renderer/raster-technique-compare');
+}
+
+function loadRuntimeFallbackConformance() {
+  return import('./renderer/runtime-fallback-conformance');
+}
+
+async function reportInitializationFailure(
+  cleanup: () => Promise<void>,
+  caught: unknown,
+  onError: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await cleanup();
+    onError(caught);
+  } catch (cleanupError) {
+    onError(cleanupError);
+  }
+}
+
+async function captureFiniteConformance({
+  backend,
+  dpr,
+  fontFixture,
+  renderer,
+  signal,
+  technique,
+  workload,
+}: FiniteConformanceCaptureOptions): Promise<FiniteConformanceCapture> {
+  if (workload === 'runtime-fallback') {
+    const { captureRuntimeFallbackConformance } = await loadRuntimeFallbackConformance();
+    return {
+      kind: 'runtime-fallback',
+      value: await captureRuntimeFallbackConformance({ backend, dpr, fontFixture, renderer, signal, technique }),
+    };
+  }
+  if (workload === 'cross-technique-fidelity') {
+    if (technique === 'slug') {
+      const { captureSlugSourceOutlineFidelity } = await loadSlugTextRenderer();
+      return {
+        kind: 'source-outline',
+        value: await captureSlugSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
+      };
+    }
+    if (technique === 'mtsdf') {
+      const { captureMtsdfSourceOutlineFidelity } = await loadMtsdfTextRenderer();
+      return {
+        kind: 'source-outline',
+        value: await captureMtsdfSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
+      };
+    }
+    const { captureBitmapSourceOutlineFidelity } = await loadBitmapTextRenderer();
+    return {
+      kind: 'source-outline',
+      value: await captureBitmapSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
+    };
+  }
+  if (technique === 'slug') {
+    const { captureSlugTextConformance } = await loadSlugTextRenderer();
+    return {
+      kind: 'slug',
+      value: await captureSlugTextConformance({ backend, dpr, fontFixture, renderer, signal }),
+    };
+  }
+  if (technique === 'mtsdf') {
+    const { captureMtsdfTextConformance } = await loadMtsdfTextRenderer();
+    return {
+      kind: 'mtsdf',
+      value: await captureMtsdfTextConformance({ backend, dpr, fontFixture, renderer, signal }),
+    };
+  }
+  const { captureBitmapTextConformance } = await loadBitmapTextRenderer();
+  return {
+    kind: 'bitmap',
+    value: await captureBitmapTextConformance({ backend, dpr, fontFixture, renderer, signal }),
+  };
 }
 
 function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {
@@ -163,13 +269,13 @@ async function preloadPresentationAssets(
   if (delivery !== 'baked') return;
   const fixtures = Array.from(new Set<BenchmarkFontFixture>([selectedFont, ...PRESENTATION_FONT_FIXTURES]));
   if (technique === 'bitmap') {
-    const { preloadBitmapFontAssets } = await import('./renderer/bitmap-text');
+    const { preloadBitmapFontAssets } = await loadBitmapTextRenderer();
     await preloadBitmapFontAssets(fixtures, signal);
   } else if (technique === 'mtsdf') {
-    const { preloadMtsdfFontAssets } = await import('./renderer/mtsdf-text');
+    const { preloadMtsdfFontAssets } = await loadMtsdfTextRenderer();
     await preloadMtsdfFontAssets(fixtures, signal);
   } else {
-    const { preloadSlugFontAssets } = await import('./renderer/slug-text');
+    const { preloadSlugFontAssets } = await loadSlugTextRenderer();
     await preloadSlugFontAssets(fixtures, signal);
   }
 }
@@ -189,13 +295,13 @@ function liveSceneAssetResource(
     if (comparison) await preloadComparisonWorkload();
     if (delivery !== 'baked') return;
     if (technique === 'bitmap') {
-      const { preloadBitmapFontAssets } = await import('./renderer/bitmap-text');
+      const { preloadBitmapFontAssets } = await loadBitmapTextRenderer();
       await preloadBitmapFontAssets(fixtures);
     } else if (technique === 'mtsdf') {
-      const { preloadMtsdfFontAssets } = await import('./renderer/mtsdf-text');
+      const { preloadMtsdfFontAssets } = await loadMtsdfTextRenderer();
       await preloadMtsdfFontAssets(fixtures);
     } else {
-      const { preloadSlugFontAssets } = await import('./renderer/slug-text');
+      const { preloadSlugFontAssets } = await loadSlugTextRenderer();
       await preloadSlugFontAssets(fixtures);
     }
   })();
@@ -539,20 +645,22 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       resetRuntimeControlsForWorkload(runtimeWorld, value.workload, value.layout);
     };
     if (transitionsScene) {
-      startTransition(async () => {
-        try {
-          await liveSceneAssetResource(value.technique, value.delivery, value.fontFixture, value.workload);
-          // React does not preserve the transition marker across an await yet. Mark the committed scene update as a
-          // transition as well, so a newly observed resource can suspend without replacing the currently visible scene.
-          startTransition(() => {
-            applyRuntimeDefaults();
-            commitLocation();
-          });
-        } catch (caught) {
-          if (requestRevision !== locationRequestRevisionRef.current) return;
-          requestedLocationRef.current = committedLocationRef.current;
-          setError(caught instanceof Error ? caught.message : String(caught));
-        }
+      startTransition(() => {
+        void liveSceneAssetResource(value.technique, value.delivery, value.fontFixture, value.workload).then(
+          () => {
+            // React does not preserve the transition marker across an await yet. Mark the committed scene update as a
+            // transition as well, so a newly observed resource can suspend without replacing the currently visible scene.
+            startTransition(() => {
+              applyRuntimeDefaults();
+              commitLocation();
+            });
+          },
+          (caught: unknown) => {
+            if (requestRevision !== locationRequestRevisionRef.current) return;
+            requestedLocationRef.current = committedLocationRef.current;
+            setError(caught instanceof Error ? caught.message : String(caught));
+          },
+        );
       });
     } else {
       applyRuntimeDefaults();
@@ -697,9 +805,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     conformanceRunController.current = controller;
     const revision = ++conformanceRunRevision.current;
     setError(undefined);
-    startTransition(async () => {
-      try {
-        const value = await runExclusiveJob(
+    startTransition(() => {
+      const request = Promise.resolve().then(() =>
+        runExclusiveJob(
           ({ renderer, signal }) =>
             runRegisteredBenchmark({
               targetId:
@@ -731,20 +839,25 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
               },
             }),
           controller.signal,
-        );
-        if (revision === conformanceRunRevision.current) {
-          startTransition(() => setSummary(value));
-        }
-      } catch (caught) {
-        if (
-          revision === conformanceRunRevision.current &&
-          !(caught instanceof DOMException && caught.name === 'AbortError')
-        ) {
-          setError(caught instanceof Error ? caught.message : String(caught));
-        }
-      } finally {
-        if (conformanceRunController.current === controller) conformanceRunController.current = undefined;
-      }
+        ),
+      );
+      void request
+        .then(
+          (value) => {
+            if (revision === conformanceRunRevision.current) startTransition(() => setSummary(value));
+          },
+          (caught: unknown) => {
+            if (
+              revision === conformanceRunRevision.current &&
+              !(caught instanceof DOMException && caught.name === 'AbortError')
+            ) {
+              setError(caught instanceof Error ? caught.message : String(caught));
+            }
+          },
+        )
+        .then(() => {
+          if (conformanceRunController.current === controller) conformanceRunController.current = undefined;
+        });
     });
   }
 
@@ -895,10 +1008,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       />
     </Suspense>
   );
-  const reportRendererError = useCallback(
-    (caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)),
-    [],
-  );
+  const reportRendererError = (caught: unknown): void => {
+    setError(caught instanceof Error ? caught.message : String(caught));
+  };
 
   return (
     <PersistentRenderHostProvider
@@ -1787,73 +1899,64 @@ function RasterTechniqueComparisonSurface({
     let comparison: RasterTechniqueComparisonPersistentScene | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
+    const releaseComparison = async (): Promise<void> => {
+      const current = comparison;
+      comparison = undefined;
+      if (comparisonRef.current === current) comparisonRef.current = undefined;
+      await surfaceLease?.release();
+      surfaceLease = undefined;
+    };
     const initialization = (async () => {
-      try {
-        if (cancelled) return;
-        const { createRasterTechniqueComparisonPersistentScene } = await import('./renderer/raster-technique-compare');
-        if (cancelled) return;
-        const optionsText = initialText();
-        const created = createRasterTechniqueComparisonPersistentScene({
-          backend,
-          fontFixture,
-          onError: publishError,
-          onPan: publishPan,
-          onZoom: publishZoom,
-          text: optionsText,
-        });
-        comparison = created;
-        comparisonRef.current = created;
-        surfaceLease = await activatePersistentSurface(
-          {
-            anchor: container,
-            controller: comparisonRef,
-            label: 'Live MSDF and Slug GPU comparison',
-            pan: true,
-            scene: created,
-            zoom: true,
-          },
-          controller.signal,
-        );
-        if (cancelled) {
-          await surfaceLease.release();
-          return;
-        }
-        let text = optionsText;
-        let latestText = initialText();
-        while (latestText !== text) {
-          text = latestText;
-          await created.setText(text);
-          latestText = initialText();
-        }
-        if (cancelled) return;
-        const view = initialView();
-        created.setView(view.zoom, view.panXPercent, view.panYPercent);
-        setCommittedText(text);
-        setReady(true);
-        setError(undefined);
-      } catch (caught) {
-        const failedComparison = comparison;
-        comparison = undefined;
-        if (comparisonRef.current === failedComparison) comparisonRef.current = undefined;
-        await surfaceLease?.release();
-        surfaceLease = undefined;
-        throw caught;
+      if (cancelled) return;
+      const { createRasterTechniqueComparisonPersistentScene } = await loadRasterTechniqueComparison();
+      if (cancelled) return;
+      const optionsText = initialText();
+      const created = createRasterTechniqueComparisonPersistentScene({
+        backend,
+        fontFixture,
+        onError: publishError,
+        onPan: publishPan,
+        onZoom: publishZoom,
+        text: optionsText,
+      });
+      comparison = created;
+      comparisonRef.current = created;
+      surfaceLease = await activatePersistentSurface(
+        {
+          anchor: container,
+          controller: comparisonRef,
+          label: 'Live MSDF and Slug GPU comparison',
+          pan: true,
+          scene: created,
+          zoom: true,
+        },
+        controller.signal,
+      );
+      if (cancelled) {
+        await surfaceLease.release();
+        return;
       }
+      let text = optionsText;
+      let latestText = initialText();
+      while (latestText !== text) {
+        text = latestText;
+        await created.setText(text);
+        latestText = initialText();
+      }
+      if (cancelled) return;
+      const view = initialView();
+      created.setView(view.zoom, view.panXPercent, view.panYPercent);
+      setCommittedText(text);
+      setReady(true);
+      setError(undefined);
     })();
-    void initialization.catch(publishError);
+    void initialization.catch((caught: unknown) =>
+      reportInitializationFailure(releaseComparison, caught, publishError),
+    );
     return () => {
       cancelled = true;
       controller.abort();
-      void initialization.then(
-        async () => {
-          const current = comparison;
-          comparison = undefined;
-          if (comparisonRef.current === current) comparisonRef.current = undefined;
-          await surfaceLease?.release();
-          surfaceLease = undefined;
-        },
-        () => undefined,
-      );
+      void initialization.then(releaseComparison, () => undefined);
     };
   }, [backend, fontFixture]);
 
@@ -1946,27 +2049,12 @@ function FiniteConformanceSurface({
 }) {
   const { runExclusiveJob } = usePersistentRenderHost();
   const runExclusiveCapture = useEffectEvent(runExclusiveJob);
-  const [capture, setCapture] = useState<
-    | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
-    | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
-    | { readonly kind: 'slug'; readonly value: SlugTextConformanceCapture }
-    | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
-    | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture }
-  >();
+  const [capture, setCapture] = useState<FiniteConformanceCapture>();
   const [error, setError] = useState<string>();
-  const publishCapture = useEffectEvent(
-    (
-      value:
-        | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
-        | { readonly kind: 'mtsdf'; readonly value: MtsdfTextConformanceCapture }
-        | { readonly kind: 'slug'; readonly value: SlugTextConformanceCapture }
-        | { readonly kind: 'source-outline'; readonly value: SourceOutlineFidelityCapture }
-        | { readonly kind: 'runtime-fallback'; readonly value: RuntimeFallbackCapture },
-    ) => {
-      setCapture(value);
-      setError(undefined);
-    },
-  );
+  const publishCapture = useEffectEvent((value: FiniteConformanceCapture) => {
+    setCapture(value);
+    setError(undefined);
+  });
   const publishError = useEffectEvent((caught: unknown) => {
     if (caught instanceof DOMException && caught.name === 'AbortError') return;
     setError(caught instanceof Error ? caught.message : String(caught));
@@ -1976,84 +2064,8 @@ function FiniteConformanceSurface({
     const controller = new AbortController();
     let cancelled = false;
     const request = runExclusiveCapture(
-      async ({ renderer, signal }) =>
-        workload === 'runtime-fallback'
-          ? import('./renderer/runtime-fallback-conformance').then(async ({ captureRuntimeFallbackConformance }) => ({
-              kind: 'runtime-fallback' as const,
-              value: await captureRuntimeFallbackConformance({
-                backend,
-                dpr,
-                fontFixture,
-                renderer,
-                signal,
-                technique,
-              }),
-            }))
-          : workload === 'cross-technique-fidelity'
-            ? technique === 'slug'
-              ? import('./renderer/slug-text').then(async ({ captureSlugSourceOutlineFidelity }) => ({
-                  kind: 'source-outline' as const,
-                  value: await captureSlugSourceOutlineFidelity({
-                    backend,
-                    dpr,
-                    fontFixture,
-                    renderer,
-                    signal,
-                  }),
-                }))
-              : technique === 'mtsdf'
-                ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfSourceOutlineFidelity }) => ({
-                    kind: 'source-outline' as const,
-                    value: await captureMtsdfSourceOutlineFidelity({
-                      backend,
-                      dpr,
-                      fontFixture,
-                      renderer,
-                      signal,
-                    }),
-                  }))
-                : import('./renderer/bitmap-text').then(async ({ captureBitmapSourceOutlineFidelity }) => ({
-                    kind: 'source-outline' as const,
-                    value: await captureBitmapSourceOutlineFidelity({
-                      backend,
-                      dpr,
-                      fontFixture,
-                      renderer,
-                      signal,
-                    }),
-                  }))
-            : technique === 'slug'
-              ? import('./renderer/slug-text').then(async ({ captureSlugTextConformance }) => ({
-                  kind: 'slug' as const,
-                  value: await captureSlugTextConformance({
-                    backend,
-                    dpr,
-                    fontFixture,
-                    renderer,
-                    signal,
-                  }),
-                }))
-              : technique === 'mtsdf'
-                ? import('./renderer/mtsdf-text').then(async ({ captureMtsdfTextConformance }) => ({
-                    kind: 'mtsdf' as const,
-                    value: await captureMtsdfTextConformance({
-                      backend,
-                      dpr,
-                      fontFixture,
-                      renderer,
-                      signal,
-                    }),
-                  }))
-                : import('./renderer/bitmap-text').then(async ({ captureBitmapTextConformance }) => ({
-                    kind: 'bitmap' as const,
-                    value: await captureBitmapTextConformance({
-                      backend,
-                      dpr,
-                      fontFixture,
-                      renderer,
-                      signal,
-                    }),
-                  })),
+      ({ renderer, signal }) =>
+        captureFiniteConformance({ backend, dpr, fontFixture, renderer, signal, technique, workload }),
       controller.signal,
     );
     void request
@@ -2691,7 +2703,7 @@ function BitmapTextViewport({
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
-      const { createBitmapTextPersistentScene } = await import('./renderer/bitmap-text');
+      const { createBitmapTextPersistentScene } = await loadBitmapTextRenderer();
       if (cancelled) return;
       const created = createBitmapTextPersistentScene({
         anchor: configuration.anchor,
@@ -3005,7 +3017,7 @@ function MtsdfTextViewport({
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
-      const { createMtsdfTextPersistentScene } = await import('./renderer/mtsdf-text');
+      const { createMtsdfTextPersistentScene } = await loadMtsdfTextRenderer();
       if (cancelled) return;
       const created = createMtsdfTextPersistentScene({
         anchor: configuration.anchor,
@@ -3264,7 +3276,7 @@ function SlugTextViewport({
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
-      const { createSlugTextPersistentScene } = await import('./renderer/slug-text');
+      const { createSlugTextPersistentScene } = await loadSlugTextRenderer();
       if (cancelled) return;
       const created = createSlugTextPersistentScene({
         anchor: configuration.anchor,
@@ -3810,21 +3822,18 @@ function useBakeProgress(label: string): {
   const [value, setValue] = useState<BakeProgress>();
   const [active, setActive] = useState(false);
   const lastConsoleKey = useRef('');
-  const publish = useCallback(
-    (progress: BakeProgress) => {
-      setValue(progress);
-      setActive(true);
-      if (!import.meta.env.DEV) return;
-      const percentage = Math.round((progress.completed / progress.total) * 100);
-      const bucket = Math.floor(percentage / 10) * 10;
-      const key = `${progress.stage}:${progress.phase}:${String(bucket)}`;
-      if (key === lastConsoleKey.current) return;
-      lastConsoleKey.current = key;
-      console.info(`[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
-    },
-    [label],
-  );
-  const finish = useCallback(() => setActive(false), []);
+  const publish = (progress: BakeProgress): void => {
+    setValue(progress);
+    setActive(true);
+    if (!import.meta.env.DEV) return;
+    const percentage = Math.round((progress.completed / progress.total) * 100);
+    const bucket = Math.floor(percentage / 10) * 10;
+    const key = `${progress.stage}:${progress.phase}:${String(bucket)}`;
+    if (key === lastConsoleKey.current) return;
+    lastConsoleKey.current = key;
+    console.info(`[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
+  };
+  const finish = (): void => setActive(false);
   return { value, active, publish, finish };
 }
 
