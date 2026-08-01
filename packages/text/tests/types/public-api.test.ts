@@ -1,5 +1,6 @@
 import {
   defineRaster,
+  defineRasterBatchStage,
   defineRasterBaker,
   defineFont,
   createParagraphEngine,
@@ -124,10 +125,16 @@ const msdf = defineRaster({
     return { texture: {} };
   },
   async prepare() {},
-  buildBatches(_layout, _resource): MsdfBatch {
-    return { instances: 0, object: rasterObject, dispose() {} };
+  stageBatch(previous): import('../../src/index.js').RasterBatchStage<MsdfBatch> {
+    const batch = previous ?? { instances: 0, object: rasterObject, dispose() {} };
+    return defineRasterBatchStage(
+      batch,
+      () => undefined,
+      () => {
+        if (previous === undefined) batch.dispose();
+      },
+    );
   },
-  updatePaint(_batch, _paint, _fontSlot) {},
   dispose(_resource) {},
 });
 
@@ -146,10 +153,16 @@ const external = defineRaster({
     return { custom: true as const };
   },
   async prepare() {},
-  buildBatches() {
-    return { draws: 1, object: rasterObject, dispose() {} };
+  stageBatch(previous) {
+    const batch = previous ?? { draws: 1, dispose() {} };
+    return defineRasterBatchStage(
+      batch,
+      () => undefined,
+      () => {
+        if (previous === undefined) batch.dispose();
+      },
+    );
   },
-  updatePaint() {},
   dispose() {},
 });
 
@@ -164,10 +177,16 @@ const configurable = defineRaster({
     return { configured: true as const };
   },
   async prepare() {},
-  buildBatches() {
-    return { draws: 1, object: rasterObject, dispose() {} };
+  stageBatch(previous) {
+    const batch = previous ?? { draws: 1, object: rasterObject, dispose() {} };
+    return defineRasterBatchStage(
+      batch,
+      () => undefined,
+      () => {
+        if (previous === undefined) batch.dispose();
+      },
+    );
   },
-  updatePaint() {},
   dispose() {},
 });
 type _ConfigurableOptions = Expect<Equal<RasterOptionsOf<typeof configurable>, { readonly quality: 'low' | 'high' }>>;

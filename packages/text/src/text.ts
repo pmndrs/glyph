@@ -4,9 +4,9 @@ import type { FontHandle, FontSlot } from './identity.js';
 import type { ParagraphLayout } from './layout.js';
 import type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 import { createParagraphEngine, type Paragraph, type ParagraphConstraints } from './paragraph.js';
-import type { AnyRasterInput, AnyRasterModule, LoadedRaster, RasterBatchUpdate, RasterDrawBatch } from './raster.js';
+import type { AnyRasterInput, AnyRasterModule, LoadedRaster, RasterBatchStage } from './raster.js';
 import {
-  assertRasterBatch,
+  assertRasterBatchStage,
   EMPTY_TEXT_STATE,
   isFontToken,
   isNormalizedRasterRequest,
@@ -17,6 +17,7 @@ import {
   sameParagraphInput,
   sameTextInput,
   type NormalizedRasterRequest,
+  type ThreeRasterDrawBatch,
   type TextState,
 } from './internal/text-properties.js';
 import {
@@ -149,10 +150,15 @@ interface ResolvedFontRaster {
 
 interface OwnedBatch {
   readonly module: AnyRasterModule;
-  readonly batch: RasterDrawBatch;
+  readonly raster: LoadedRaster<AnyRasterModule>;
+  readonly batch: ThreeRasterDrawBatch;
   readonly fontHandle: FontHandle;
   readonly fontSlot: FontSlot;
-  readonly ownership: 'fresh' | 'retained';
+}
+
+interface StagedBatch {
+  readonly stage: RasterBatchStage<ThreeRasterDrawBatch>;
+  readonly previous: ThreeRasterDrawBatch | undefined;
 }
 
 interface TextGeneration {
@@ -162,8 +168,8 @@ interface TextGeneration {
   readonly createdParagraph: boolean;
   readonly layout: ParagraphLayout;
   readonly paintPlan: GlyphPaintPlan;
-  readonly batches: readonly OwnedBatch[];
-  readonly batchUpdates: RasterBatchUpdate[];
+  batches: OwnedBatch[];
+  readonly batchStages: StagedBatch[];
   readonly releaseFontDisposal: () => void;
 }
 
@@ -222,8 +228,14 @@ export class Text extends THREE.Group {
       prevalidatedPaint = resolveGlyphPaint(next, this.#generation.paintPlan);
       for (const owned of this.#generation.batches) owned.module.validatePaint?.(prevalidatedPaint);
     }
+    const previousState = this.#state;
     this.#state = next;
-    this.#schedule(prevalidatedPaint);
+    try {
+      this.#schedule(prevalidatedPaint);
+    } catch (error) {
+      this.#state = previousState;
+      throw error;
+    }
   }
 
   dispose(): void {
@@ -240,13 +252,11 @@ export class Text extends THREE.Group {
   }
 
   #schedule(prevalidatedPaint?: GlyphPaint): void {
-    this.#invalidatedState = undefined;
-    this.#revision += 1;
-    const revision = this.#revision;
-    this.#pending?.abort();
-    this.#pending = undefined;
-
     if (this.#state.font === undefined) {
+      this.#invalidatedState = undefined;
+      this.#revision += 1;
+      this.#pending?.abort();
+      this.#pending = undefined;
       this.#disposeGeneration(this.#generation);
       this.#generation = undefined;
       this.#ready = Promise.resolve();
@@ -256,15 +266,22 @@ export class Text extends THREE.Group {
     if (this.#generation !== undefined && sameLayoutInput(this.#generation.state, this.#state)) {
       if (!samePaintInput(this.#generation.state, this.#state)) {
         const paint = prevalidatedPaint ?? resolveGlyphPaint(this.#state, this.#generation.paintPlan);
-        for (const owned of this.#generation.batches) {
-          owned.module.updatePaint(owned.batch, paint, owned.fontSlot);
-        }
+        this.#commitBatchStages(this.#generation, paint);
       }
+      this.#invalidatedState = undefined;
+      this.#revision += 1;
+      this.#pending?.abort();
+      this.#pending = undefined;
       this.#generation.state = this.#state;
       this.#ready = Promise.resolve();
       return;
     }
 
+    this.#invalidatedState = undefined;
+    this.#revision += 1;
+    const revision = this.#revision;
+    this.#pending?.abort();
+    this.#pending = undefined;
     const controller = new AbortController();
     this.#pending = controller;
     const state = this.#state;
@@ -276,8 +293,13 @@ export class Text extends THREE.Group {
       }
       this.#pending = undefined;
       const previous = this.#generation;
-      for (const update of generation.batchUpdates) update.commit();
-      generation.batchUpdates.length = 0;
+      try {
+        for (const { stage } of generation.batchStages) stage.commit();
+      } catch (error) {
+        this.#disposeUncommitted(generation);
+        throw error;
+      }
+      generation.batchStages.length = 0;
       generation.state = this.#state;
       this.#generation = generation;
       previous?.releaseFontDisposal();
@@ -311,7 +333,7 @@ export class Text extends THREE.Group {
     let paragraph = reusableParagraph;
     let ownsParagraph = false;
     const batches: OwnedBatch[] = [];
-    const batchUpdates: RasterBatchUpdate[] = [];
+    const batchStages: StagedBatch[] = [];
     try {
       let resolved: ResolvedParagraphInput;
       if (paragraph === undefined) {
@@ -351,44 +373,36 @@ export class Text extends THREE.Group {
         signal.throwIfAborted();
         prepared.push({ fontHandle: handle, fontRaster, fontSlot: slot });
       }
-      let retainAll = this.#generation !== undefined && this.#generation.batches.length === prepared.length;
-      if (retainAll) {
-        for (const { fontHandle, fontRaster, fontSlot } of prepared) {
-          const previous = this.#generation?.batches.find(
-            (owned) => owned.fontHandle === fontHandle && owned.module === fontRaster.raster.module,
-          );
-          const update =
-            previous?.module.stageBatchUpdate?.(
-              previous.batch,
-              layout,
-              fontRaster.raster.resource,
-              fontSlot,
-              paint,
-              state.rasterPixelRatio,
-            ) ?? undefined;
-          if (previous === undefined || update === undefined) {
-            retainAll = false;
-            break;
+      for (const { fontHandle, fontRaster, fontSlot } of prepared) {
+        const previous = this.#generation?.batches.find(
+          (owned) => owned.fontHandle === fontHandle && owned.module === fontRaster.raster.module,
+        );
+        const stage = fontRaster.raster.module.stageBatch(
+          previous?.batch,
+          layout,
+          fontRaster.raster.resource,
+          fontSlot,
+          paint,
+          state.rasterPixelRatio,
+        );
+        try {
+          assertRasterBatchStage(stage);
+        } catch (error) {
+          try {
+            stage.abort();
+          } catch {
+            // The untrusted module returned no usable cleanup surface.
           }
-          batchUpdates.push(update);
-          batches.push({ ...previous, fontSlot, ownership: 'retained' });
+          throw error;
         }
-      }
-      if (!retainAll) {
-        for (const update of batchUpdates) update.dispose();
-        batchUpdates.length = 0;
-        batches.length = 0;
-        for (const { fontHandle, fontRaster, fontSlot } of prepared) {
-          const batch = fontRaster.raster.module.buildBatches(
-            layout,
-            fontRaster.raster.resource,
-            fontSlot,
-            paint,
-            state.rasterPixelRatio,
-          );
-          assertRasterBatch(batch);
-          batches.push({ module: fontRaster.raster.module, batch, fontHandle, fontSlot, ownership: 'fresh' });
-        }
+        batchStages.push({ stage, previous: previous?.batch });
+        batches.push({
+          module: fontRaster.raster.module,
+          raster: fontRaster.raster,
+          batch: stage.batch,
+          fontHandle,
+          fontSlot,
+        });
       }
       const fontHandles = new Set(resolved.fontsByHandle.keys());
       let generation: TextGeneration;
@@ -405,15 +419,12 @@ export class Text extends THREE.Group {
         layout,
         paintPlan,
         batches,
-        batchUpdates,
+        batchStages,
         releaseFontDisposal,
       };
       return generation;
     } catch (error) {
-      for (const update of batchUpdates) update.dispose();
-      for (const owned of batches) {
-        if (owned.ownership === 'fresh') owned.batch.dispose();
-      }
+      for (const staged of batchStages) abortStagedBatch(staged);
       if (ownsParagraph) paragraph?.dispose();
       throw error;
     }
@@ -431,10 +442,7 @@ export class Text extends THREE.Group {
 
   #disposeUncommitted(generation: TextGeneration): void {
     generation.releaseFontDisposal();
-    for (const update of generation.batchUpdates) update.dispose();
-    for (const owned of generation.batches) {
-      if (owned.ownership === 'fresh') owned.batch.dispose();
-    }
+    for (const staged of generation.batchStages) abortStagedBatch(staged);
     if (generation.createdParagraph) generation.paragraph.dispose();
   }
 
@@ -449,6 +457,54 @@ export class Text extends THREE.Group {
     this.#setCancelledReady(reason);
   }
 
+  #commitBatchStages(generation: TextGeneration, paint: GlyphPaint): void {
+    const stages: StagedBatch[] = [];
+    const batches: OwnedBatch[] = [];
+    try {
+      for (const owned of generation.batches) {
+        const stage = owned.module.stageBatch(
+          owned.batch,
+          generation.layout,
+          owned.raster.resource,
+          owned.fontSlot,
+          paint,
+          this.#state.rasterPixelRatio,
+        );
+        try {
+          assertRasterBatchStage(stage);
+        } catch (error) {
+          try {
+            stage.abort();
+          } catch {
+            // The untrusted module returned no usable cleanup surface.
+          }
+          throw error;
+        }
+        stages.push({ stage, previous: owned.batch });
+        batches.push({ ...owned, batch: stage.batch });
+      }
+    } catch (error) {
+      for (const staged of stages) abortStagedBatch(staged);
+      throw error;
+    }
+    try {
+      for (const { stage } of stages) stage.commit();
+    } catch (error) {
+      for (const staged of stages) abortStagedBatch(staged);
+      throw error;
+    }
+    const previous = generation.batches;
+    generation.batches = batches;
+    for (const owned of previous) {
+      if (batches.some(({ batch }) => batch === owned.batch)) continue;
+      this.remove(owned.batch.object);
+      owned.batch.dispose();
+    }
+    for (const owned of batches) {
+      if (owned.batch.object.parent !== this) this.add(owned.batch.object);
+    }
+  }
+
   #setCancelledReady(reason: unknown): void {
     const ready = Promise.reject(reason);
     void ready.catch(() => undefined);
@@ -457,6 +513,20 @@ export class Text extends THREE.Group {
 
   #assertActive(): void {
     if (this.#disposed) throw new Error('text object is disposed');
+  }
+}
+
+function abortStagedBatch({ stage, previous }: StagedBatch): void {
+  try {
+    stage.abort();
+  } catch {
+    // Continue releasing the remaining transaction after a plugin contract violation.
+  }
+  if (stage.batch === previous) return;
+  try {
+    stage.batch.dispose();
+  } catch {
+    // Cleanup remains best-effort at an untrusted renderer boundary.
   }
 }
 

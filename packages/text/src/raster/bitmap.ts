@@ -20,12 +20,7 @@ import {
 import type { RegisteredFont } from '../font.js';
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint } from '../paint.js';
-import {
-  assertParallelRasterLayout,
-  assertParallelRasterPaint,
-  resolvedGlyphColor,
-  unitRasterQuadGeometry,
-} from '../internal/raster-batch.js';
+import { assertParallelRasterLayout, resolvedGlyphColor, unitRasterQuadGeometry } from '../internal/raster-batch.js';
 import {
   ABSENT_GLYPH_PAGE,
   DENSE_GLYPH_RECORD_STRIDE,
@@ -38,8 +33,8 @@ import {
 } from '../internal/raster-atlas.js';
 import {
   defineRaster,
+  defineRasterBatchStage,
   type JsonValue,
-  type RasterBatchUpdate,
   type RasterModule,
   type RasterRequest,
   type RegisteredRaster,
@@ -119,7 +114,6 @@ export interface BitmapDrawBatch {
   readonly drawCount: number;
   /** Selected baked strike in pixels per em. */
   readonly strikePpem: number;
-  updatePaint(paint: GlyphPaint): void;
   dispose(): void;
 }
 
@@ -183,16 +177,22 @@ const bitmapModule: RasterModule<typeof BITMAP_KIND, BitmapResource, BitmapDrawB
       signal?.throwIfAborted();
       assertRasterCoverage(layout, fontSlot, resource.coverage, BITMAP_KIND);
     },
-    buildBatches(layout, resource, fontSlot, paint, rasterPixelRatio) {
-      return buildBitmapBatches(layout, resource, fontSlot, paint, rasterPixelRatio);
-    },
-    stageBatchUpdate(batch, layout, resource, fontSlot, paint, rasterPixelRatio) {
-      return stageBitmapBatchUpdate(batch, layout, resource, fontSlot, paint, rasterPixelRatio);
+    stageBatch(previous, layout, resource, fontSlot, paint, rasterPixelRatio) {
+      assertBitmapPaint(paint);
+      if (previous !== undefined) {
+        const update = stageBitmapBatchUpdate(previous, layout, resource, fontSlot, paint, rasterPixelRatio);
+        if (update !== undefined) {
+          return defineRasterBatchStage(previous, update.commit, update.dispose);
+        }
+      }
+      const batch = buildBitmapBatches(layout, resource, fontSlot, paint, rasterPixelRatio);
+      return defineRasterBatchStage(
+        batch,
+        () => undefined,
+        () => batch.dispose(),
+      );
     },
     validatePaint: assertBitmapPaint,
-    updatePaint(batch, paint) {
-      batch.updatePaint(paint);
-    },
     dispose(resource) {
       disposeBitmapStrikes(resource.strikes);
     },
@@ -573,11 +573,6 @@ function buildBitmapBatches(
     glyphCount,
     drawCount: runs.length,
     strikePpem: strike.ppem,
-    updatePaint(nextPaint) {
-      if (disposed) throw new TypeError('bitmap draw batch has been disposed');
-      assertParallelRasterPaint(layout, nextPaint);
-      for (const run of runs) updateRunPaint(run, nextPaint);
-    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -590,6 +585,11 @@ function buildBitmapBatches(
   };
 }
 
+interface BitmapBatchUpdate {
+  commit(): void;
+  dispose(): void;
+}
+
 function stageBitmapBatchUpdate(
   batch: BitmapDrawBatch,
   layout: ParagraphLayout,
@@ -597,12 +597,13 @@ function stageBitmapBatchUpdate(
   fontSlot: number,
   paint: GlyphPaint,
   rasterPixelRatio: number,
-): RasterBatchUpdate | undefined {
+): BitmapBatchUpdate | undefined {
   assertParallelRasterLayout(layout, paint);
   const presentation = presentableBitmapBatch(batch.object);
   if (presentation.resource !== resource || presentation.fontSlot !== fontSlot) return undefined;
   const strike = selectBitmapStrike(resource.strikes, layout, fontSlot, rasterPixelRatio);
   if (strike !== presentation.strike) return undefined;
+  if (layout === presentation.layout) return stageBitmapPaintUpdate(presentation.runs, paint);
   const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
   let runIndex = 0;
   let instance = 0;
@@ -666,6 +667,30 @@ function stageBitmapBatchUpdate(
       }
       presentation.layout = layout;
       presentation.revision += 1;
+    },
+    dispose() {
+      disposed = true;
+    },
+  };
+}
+
+function stageBitmapPaintUpdate(runs: readonly BitmapBatchRun[], paint: GlyphPaint): BitmapBatchUpdate {
+  const staged = runs.map((run) => {
+    const colors = new Float32Array(run.glyphIndices.length * 4);
+    for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
+      colors.set(resolvedGlyphColor(paint, run.glyphIndices[instance]!), instance * 4);
+    }
+    return {
+      attribute: run.colorAttribute,
+      colors: sameFloatValues(colors, run.colorAttribute.array as Float32Array) ? undefined : colors,
+    };
+  });
+  let disposed = false;
+  return {
+    commit() {
+      if (disposed) return;
+      disposed = true;
+      for (const update of staged) commitAttribute(update.attribute, update.colors);
     },
     dispose() {
       disposed = true;
@@ -805,14 +830,6 @@ function snapClipAxis(clipAxis: Node<'float'>, clipW: Node<'float'>, physicalSiz
   const normalizedPhysicalPosition: Node<'float'> = mul(snappedPhysicalPosition, reciprocal(physicalSize));
   const snappedNormalizedDevicePosition: Node<'float'> = sub(mul(normalizedPhysicalPosition, 2), 1);
   return mul(snappedNormalizedDevicePosition, clipW);
-}
-
-function updateRunPaint(run: BitmapBatchRun, paint: GlyphPaint): void {
-  const values = run.colorAttribute.array as Float32Array;
-  for (let instance = 0; instance < run.glyphIndices.length; instance += 1) {
-    values.set(resolvedGlyphColor(paint, run.glyphIndices[instance]!), instance * 4);
-  }
-  run.colorAttribute.needsUpdate = true;
 }
 
 function assertBitmapPaint(paint: GlyphPaint): void {

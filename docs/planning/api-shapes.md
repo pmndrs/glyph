@@ -484,8 +484,16 @@ interface LoadedFont<Module extends AnyRasterModule, Input extends FontInput = F
 }
 
 interface RasterDrawBatch {
-  readonly object: Object3D;
+  /** Renderer-owned resources; safe to call repeatedly. */
   dispose(): void;
+}
+
+interface RasterBatchStage<DrawBatch extends RasterDrawBatch = RasterDrawBatch> {
+  readonly batch: DrawBatch;
+  /** Synchronous and infallible; transfers target-batch ownership to the caller. */
+  commit(): void;
+  /** Releases unpublished work without touching the live batch; safe to call repeatedly. */
+  abort(): void;
 }
 
 declare class RasterRuntime {
@@ -498,7 +506,7 @@ declare class RasterRuntime {
 }
 ```
 
-Every raster module's draw-batch type extends `RasterDrawBatch`, giving the core one zero-guesswork scene attachment and disposal seam without interpreting module-owned resources. `RasterRuntime` derives the request identity, reuses one decoded resource per font/module/key, evicts failed promises, detaches an aborted consumer without cancelling other consumers, and releases decoded resources when the registered font generation or runtime is disposed. Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
+Every raster module's draw-batch type extends the renderer-neutral `RasterDrawBatch` ownership surface. It does not expose a scene object, shader system, or backend resource. The Three.js `Text` adapter separately requires and validates a Three-backed target batch before attaching it to its group. `RasterRuntime` derives the request identity, reuses one decoded resource per font/module/key, evicts failed promises, detaches an aborted consumer without cancelling other consumers, and releases decoded resources when the registered font generation or runtime is disposed. Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
 
 ## Shared bake core
 
@@ -948,7 +956,7 @@ type RuntimeRasterBakerLoader<Kind extends string, Options> = () => Promise<
   RuntimeRasterBakerModule<Kind, Options> | { default: RuntimeRasterBakerModule<Kind, Options> }
 >;
 
-interface RasterModule<Kind extends string, Resource, DrawBatch, Options = never> {
+interface RasterModule<Kind extends string, Resource, DrawBatch extends RasterDrawBatch, Options = never> {
   readonly kind: Kind;
   readonly extension: string;
   readonly version: number;
@@ -956,9 +964,15 @@ interface RasterModule<Kind extends string, Resource, DrawBatch, Options = never
   descriptor(options: RasterOptionsArgument<Options>): JsonValue;
   decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Resource>;
   prepare(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, signal?: AbortSignal): Promise<void>;
-  buildBatches(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, paint: GlyphPaint): DrawBatch;
+  stageBatch(
+    previous: DrawBatch | undefined,
+    layout: ParagraphLayout,
+    resource: Resource,
+    fontSlot: FontSlot,
+    paint: GlyphPaint,
+    rasterPixelRatio: number,
+  ): RasterBatchStage<DrawBatch>;
   validatePaint?(paint: GlyphPaint): void;
-  updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void;
   dispose(resource: Resource): void;
 }
 
@@ -1089,7 +1103,7 @@ Raster module values and package-created raster definitions are the only public 
 const deferredMsdf = lazyRaster(() => import('@pmndrs/text/raster/msdf').then((module) => module.msdf));
 ```
 
-`decode` validates the raster binding, page directory, and flat records without requiring every external page to become resident. `prepare` examines only glyphs belonging to the supplied font slot, resolves the logical pages they reference, and deduplicates fetch/decode/transcode/upload work. Eager Latin-sized modules may complete it immediately; paged CJK and icon resources may load only the pages required by the positioned run. Core awaits every participating module's `prepare` call before invoking `buildBatches` for a new draw generation.
+`decode` validates the raster binding, page directory, and flat records without requiring every external page to become resident. `prepare` examines only glyphs belonging to the supplied font slot, resolves the logical pages they reference, and deduplicates fetch/decode/transcode/upload work. Eager Latin-sized modules may complete it immediately; paged CJK and icon resources may load only the pages required by the positioned run. Core awaits every participating module's `prepare` call before staging a new draw generation.
 
 Bitmap and distance-field records remain CPU-side typed-array inputs for bulk instance generation; they are not repacked into a second GPU metadata format. Slug's integer grids and every texture payload are direct-upload resources. A module may dynamically import a KTX2 transcoder when the chosen variant requires one. Logical page indexes do not imply texture-array layers, binding slots, or draw counts; each module owns residency and backend batching while preserving glyph order and blending semantics. It cannot alter shaping metrics, glyph identity, line breaks, or layout positions.
 
@@ -1148,7 +1162,7 @@ interface RasterBakePlan<M extends AnyRasterBakerModule> {
 
 The raster module does not statically import its baker. Its optional `runtimeBaker` function is the dynamic boundary and returns a package-owned browser host that MUST execute generation off the main thread. It may reuse `@pmndrs/text/runtime-bake` Worker utilities, but core never resolves a package specifier or transfers a module/function through `postMessage`. If an artifact is absent or its descriptor does not satisfy the configured raster definition, the loader emits one development warning and invokes that package's runtime baker automatically. For bitmap, a baked artifact missing any statically declared strike is therefore an incompatible miss, not a partial success. If the selected module has no runtime-baker capability—or the font was loaded baked-only and has no source bytes—loading rejects with a structured missing-raster error. `options` describes the raster itself and participates in its deterministic key; it is not a fallback policy switch. It is required in `RuntimeRasterBakeRequest` whenever the module's option type is not `never`.
 
-Core resolves root/span paint into a palette and a per-glyph `paintIndices` array by mapping shaped clusters back to source spans. Paint never enters paragraph measurement. Core invokes `buildBatches` once for each `(fontSlot, raster resource)` represented in the paragraph and supplies that `GlyphPaint`. A module MUST emit only glyphs whose `glyphFontSlots` equal the supplied slot. An optional synchronous `validatePaint` rejects a resolved effect combination before a committed batch is repainted and before a new batch is built. `updatePaint` updates module-owned instance data or uniforms without reshaping or relayout. This makes span fonts and future fallback fonts compatible with one non-generic `ParagraphLayout`, including paragraphs whose slots select different raster modules; raster code never interprets another font's local glyph IDs. Bitmap V0 accepts fill and opacity but rejects outline and shadow; Milestone 8's MTSDF module owns those distance-based effects.
+Core resolves root/span paint into a palette and a per-glyph `paintIndices` array by mapping shaped clusters back to source spans. Paint never enters paragraph measurement. Core invokes required `stageBatch` once for each `(fontSlot, raster resource)` represented in the paragraph and supplies both the previous compatible batch, when present, and the complete next `GlyphPaint`. A module MUST emit only glyphs whose `glyphFontSlots` equal the supplied slot. It performs every fallible validation and allocation while staging without mutating the previous batch. Only after every participant stages successfully does core call the synchronous infallible commits and transfer target ownership; failure, cancellation, or stale completion aborts every stage and preserves the live generation. The target may be the previous batch for a retained update or a replacement batch for overflow or incompatible topology. Optional synchronous `validatePaint` remains an early public-input rejection seam, not a second mutation path. This makes span fonts and future fallback fonts compatible with one non-generic `ParagraphLayout`, including paragraphs whose slots select different raster modules; raster code never interprets another font's local glyph IDs. Bitmap V0 accepts fill and opacity but rejects outline and shadow; Milestone 8's MTSDF module owns those distance-based effects.
 
 The Node host receives explicit `RasterBakePlan` values and imports no unselected baker. Matching literal kinds make incorrect pairings visible to TypeScript without merging runtime and Node dependency graphs. External page packaging produces one companion index artifact plus deterministic `raster-page` artifacts whose IDs become relative URIs in the page directory; runtime fallback may request embedded pages while using the same generator and records. Raster-specific descriptor fields do not appear in core. Shader systems also do not appear here: first-party packages use TSL internally, while external packages may use TypeGPU or another implementation.
 

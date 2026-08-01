@@ -3,7 +3,6 @@ import type { ParagraphLayout } from './layout.js';
 import type { FontHandle, FontSlot, RasterHandle, RasterKey, Sha256Hex } from './identity.js';
 import type { BakeProgressListener, RasterBakeArtifact } from './bake.js';
 import type { GlyphPaint } from './paint.js';
-import type { Object3D } from 'three/webgpu';
 
 export type RasterKind = string;
 
@@ -123,24 +122,19 @@ export interface RasterModule<Kind extends string, Resource, DrawBatch extends R
   decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Resource>;
 
   prepare(layout: ParagraphLayout, resource: Resource, fontSlot: FontSlot, signal?: AbortSignal): Promise<void>;
-
-  buildBatches(
+  /**
+   * Stage one complete renderer-owned batch generation. The implementation must not mutate
+   * `previous` before commit and must release partial allocations before throwing.
+   */
+  stageBatch(
+    previous: DrawBatch | undefined,
     layout: ParagraphLayout,
     resource: Resource,
     fontSlot: FontSlot,
     paint: GlyphPaint,
     rasterPixelRatio: number,
-  ): DrawBatch;
-  stageBatchUpdate?(
-    batch: DrawBatch,
-    layout: ParagraphLayout,
-    resource: Resource,
-    fontSlot: FontSlot,
-    paint: GlyphPaint,
-    rasterPixelRatio: number,
-  ): RasterBatchUpdate | undefined;
+  ): RasterBatchStage<DrawBatch>;
   validatePaint?(paint: GlyphPaint): void;
-  updatePaint(batch: DrawBatch, paint: GlyphPaint, fontSlot: FontSlot): void;
   dispose(resource: Resource): void;
 }
 
@@ -188,18 +182,45 @@ export interface LoadedRaster<Module extends AnyRasterModule> {
   readonly resource: RasterResourceOf<Module>;
 }
 
-/** Minimum lifecycle surface core needs from every raster-owned batch. */
+/** Renderer-neutral ownership surface implemented by every raster-owned batch. */
 export interface RasterDrawBatch {
-  readonly object: Object3D;
+  /** Release all renderer resources owned by this batch. Safe to call repeatedly. */
   dispose(): void;
 }
 
-/** Staged CPU-side changes for one live raster batch. Staging must not mutate the committed batch. */
-export interface RasterBatchUpdate {
-  /** Apply the validated update synchronously. A staged commit must not perform fallible work. */
+/**
+ * One unpublished raster generation. The target may retain `previous` or replace it, but staging
+ * must not mutate committed state. Commit is synchronous and infallible; abort is idempotent and
+ * becomes a no-op after commit transfers batch ownership to the caller.
+ */
+export interface RasterBatchStage<DrawBatch extends RasterDrawBatch = RasterDrawBatch> {
+  readonly batch: DrawBatch;
+  /** Publish the fully validated stage. Safe to call repeatedly. */
   commit(): void;
-  /** Release uncommitted staging storage. Safe to call repeatedly. */
-  dispose(): void;
+  /** Release an unpublished stage without touching the live batch. Safe to call repeatedly. */
+  abort(): void;
+}
+
+/** Build the required one-shot ownership state machine around a package-owned staged update. */
+export function defineRasterBatchStage<DrawBatch extends RasterDrawBatch>(
+  batch: DrawBatch,
+  publish: () => void,
+  release: () => void,
+): RasterBatchStage<DrawBatch> {
+  let state: 'staged' | 'committed' | 'aborted' = 'staged';
+  return {
+    batch,
+    commit() {
+      if (state !== 'staged') return;
+      state = 'committed';
+      publish();
+    },
+    abort() {
+      if (state !== 'staged') return;
+      state = 'aborted';
+      release();
+    },
+  };
 }
 
 export function defineRaster<const Kind extends string, Resource, DrawBatch extends RasterDrawBatch, Options = never>(

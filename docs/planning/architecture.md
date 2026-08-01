@@ -335,7 +335,7 @@ sequenceDiagram
   P-->>U: positioned layout
   U->>R: prepare(positioned layout, resource, font slot)
   R-->>U: required logical pages resident
-  U->>R: buildBatches(committed layout, resource, glyph paint)
+  U->>R: stageBatch(previous, committed layout, resource, glyph paint)
 ```
 
 The core modes are `unconstrained`, `at-most`, and `exactly`; each host translates its own constraint vocabulary. Adapters install only after asynchronous font/shaper readiness when their measurement callbacks are synchronous. Final host geometry is authoritative even when measurement was skipped or produced a different candidate. Paragraph positions remain local to the content box; the host applies node transforms and clipping afterward.

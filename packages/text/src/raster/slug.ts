@@ -31,6 +31,7 @@ import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint, ResolvedPaint } from '../paint.js';
 import {
   defineRaster,
+  defineRasterBatchStage,
   type JsonValue,
   type RasterModule,
   type RasterResourceSource,
@@ -112,11 +113,19 @@ export interface SlugDrawBatch {
   readonly object: THREE.Group;
   readonly glyphCount: number;
   readonly drawCount: number;
-  updatePaint(paint: GlyphPaint): void;
   dispose(): void;
 }
 
 const materialStateByCurveTexture = new WeakMap<THREE.DataTexture, SlugMaterialState>();
+const batchContext = new WeakMap<
+  SlugDrawBatch,
+  {
+    readonly layout: ParagraphLayout;
+    readonly resource: SlugResource;
+    readonly fontSlot: number;
+    readonly runs: readonly SlugBatchRun[];
+  }
+>();
 
 const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = defineRaster({
   kind: SLUG_KIND,
@@ -133,13 +142,33 @@ const slugModule: RasterModule<typeof SLUG_KIND, SlugResource, SlugDrawBatch> = 
   async prepare(_layout, _resource, _fontSlot, signal) {
     signal?.throwIfAborted();
   },
-  buildBatches(layout, resource, fontSlot, paint) {
-    return buildSlugBatches(layout, resource, fontSlot, paint);
+  stageBatch(previous, layout, resource, fontSlot, paint) {
+    const context = previous === undefined ? undefined : batchContext.get(previous);
+    if (
+      previous !== undefined &&
+      context?.layout === layout &&
+      context.resource === resource &&
+      context.fontSlot === fontSlot
+    ) {
+      assertParallelRasterPaint(layout, paint);
+      assertSlugPaint(paint);
+      for (const run of context.runs) assertSlugRunPaint(run.glyphIndices, paint);
+      return defineRasterBatchStage(
+        previous,
+        () => {
+          for (const run of context.runs) updateRunPaint(run, paint);
+        },
+        () => undefined,
+      );
+    }
+    const batch = buildSlugBatches(layout, resource, fontSlot, paint);
+    return defineRasterBatchStage(
+      batch,
+      () => undefined,
+      () => batch.dispose(),
+    );
   },
   validatePaint: assertSlugPaint,
-  updatePaint(batch, paint) {
-    batch.updatePaint(paint);
-  },
   dispose(resource) {
     disposeSlugResource(resource);
   },
@@ -488,24 +517,20 @@ function buildSlugBatches(
 
   let disposed = false;
   const glyphCount = runs.reduce((count, run) => count + run.glyphIndices.length, 0);
-  return {
+  const batch: SlugDrawBatch = {
     object: group,
     glyphCount,
     drawCount: runs.length,
-    updatePaint(nextPaint) {
-      if (disposed) throw new TypeError('Slug draw batch has been disposed');
-      assertParallelRasterPaint(layout, nextPaint);
-      assertSlugPaint(nextPaint);
-      for (const run of runs) assertSlugRunPaint(run.glyphIndices, nextPaint);
-      for (const run of runs) updateRunPaint(run, nextPaint);
-    },
     dispose() {
       if (disposed) return;
       disposed = true;
+      batchContext.delete(batch);
       group.clear();
       for (const run of runs) run.geometry.dispose();
     },
   };
+  batchContext.set(batch, { layout, resource, fontSlot, runs });
+  return batch;
 }
 
 function createSlugRun(

@@ -30,10 +30,9 @@ test('the React subpath exposes its React 19 runtime through native ESM', async 
     descriptor: () => null,
     decode: async () => null,
     prepare: async () => undefined,
-    buildBatches: () => {
+    stageBatch: () => {
       throw new Error('not used');
     },
-    updatePaint: () => undefined,
     dispose: () => undefined,
   });
   await suspended;

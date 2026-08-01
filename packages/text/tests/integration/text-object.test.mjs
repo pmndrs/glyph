@@ -85,6 +85,149 @@ test('Text commits layout and draw generations atomically', async () => {
   assert.throws(() => text.setProperties({ opacity: 1 }), /disposed/);
 });
 
+test('Text preserves its live batch across staged success, failure, and stale abort', async () => {
+  const restoreFetch = installFileFetch();
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(await readFile(fixtureUrl));
+  const bitmapRequest = bitmap({ strikes: [16] });
+  let failNext = false;
+  let supersedePatch;
+  let throwOnAbort = false;
+  let commits = 0;
+  let aborts = 0;
+  let fallbackDisposals = 0;
+  let text;
+  const raster = defineRaster({
+    ...bitmapRequest.module,
+    stageBatch(...arguments_) {
+      const inner = bitmapRequest.module.stageBatch(...arguments_);
+      if (failNext) {
+        failNext = false;
+        inner.abort();
+        aborts += 1;
+        throw new Error('injected raster staging failure');
+      }
+      const batch = throwOnAbort
+        ? {
+            ...inner.batch,
+            dispose() {
+              fallbackDisposals += 1;
+              inner.batch.dispose();
+            },
+          }
+        : inner.batch;
+      const stage = {
+        batch,
+        commit() {
+          inner.commit();
+          commits += 1;
+        },
+        abort() {
+          inner.abort();
+          aborts += 1;
+          if (throwOnAbort) throw new Error('injected abort contract violation');
+        },
+      };
+      if (supersedePatch !== undefined) {
+        const patch = supersedePatch;
+        supersedePatch = undefined;
+        queueMicrotask(() => text.setProperties(patch));
+      }
+      return stage;
+    },
+  });
+  text = new Text({
+    text: 'transactional raster publication keeps this generation visible',
+    font,
+    raster: { module: raster, options: bitmapRequest.options },
+    fontSize: 16,
+  });
+  try {
+    await text.ready;
+    const liveBatch = text.children[0];
+    const committedBeforeFailure = commits;
+
+    failNext = true;
+    text.setProperties({ width: 140 });
+    await assert.rejects(text.ready, /injected raster staging failure/);
+    assert.equal(text.children[0], liveBatch);
+    assert.equal(commits, committedBeforeFailure);
+
+    supersedePatch = { width: 180 };
+    text.setProperties({ width: 160 });
+    const stale = text.ready;
+    await assert.rejects(stale, { name: 'AbortError' });
+    await text.ready;
+    assert.equal(text.children[0], liveBatch);
+    assert.ok(aborts >= 2, 'failed and stale stages are both released');
+    assert.equal(commits, committedBeforeFailure + 1);
+
+    throwOnAbort = true;
+    supersedePatch = { text: 'replacement after a throwing stale abort' };
+    text.setProperties({ text: 'fresh batch that must become stale' });
+    const throwingStale = text.ready;
+    await assert.rejects(throwingStale, { name: 'AbortError' });
+    await text.ready;
+    assert.ok(fallbackDisposals >= 1, 'a fresh target is defensively disposed when plugin abort throws');
+    assert.equal(text.children.length, 1);
+  } finally {
+    text.dispose();
+    font.dispose();
+    restoreFetch();
+  }
+});
+
+test('a failed paint transaction preserves an earlier pending layout generation', async () => {
+  const restoreFetch = installFileFetch();
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(await readFile(fixtureUrl));
+  const request = bitmap({ strikes: [16] });
+  const prepareStarted = Promise.withResolvers();
+  const releasePrepare = Promise.withResolvers();
+  let delayNextPrepare = false;
+  const raster = defineRaster({
+    ...request.module,
+    async prepare(...arguments_) {
+      await request.module.prepare(...arguments_);
+      if (!delayNextPrepare) return;
+      delayNextPrepare = false;
+      prepareStarted.resolve();
+      await releasePrepare.promise;
+    },
+    stageBatch(...arguments_) {
+      const paint = arguments_[4];
+      if (paint.palette[0]?.color[3] === 0.123) throw new Error('injected paint staging failure');
+      return request.module.stageBatch(...arguments_);
+    },
+  });
+  const text = new Text({
+    text: 'pending layout survives a failed reversion',
+    font,
+    raster: { module: raster, options: request.options },
+    fontSize: 16,
+    width: 200,
+  });
+  try {
+    await text.ready;
+    const initialLayout = text.layout;
+    delayNextPrepare = true;
+    text.setProperties({ width: 100 });
+    const pendingReady = text.ready;
+    await prepareStarted.promise;
+
+    assert.throws(() => text.setProperties({ width: 200, opacity: 0.123 }), /injected paint staging failure/);
+    assert.equal(text.ready, pendingReady, 'the failed reversion does not cancel or replace pending readiness');
+    releasePrepare.resolve();
+    await pendingReady;
+    assert.notEqual(text.layout, initialLayout, 'the original pending layout still commits');
+  } finally {
+    releasePrepare.resolve();
+    text.dispose();
+    font.dispose();
+    restoreFetch();
+  }
+});
+
 test('Text no-op updates preserve one pending initial generation', async () => {
   const restoreFetch = installFileFetch();
   const registry = new FontRegistry();
@@ -209,6 +352,15 @@ test('bitmap glyph-position transitions preserve authoritative layouts and pixel
     assert.deepEqual(narrowLayout.y, targetY);
     assert.throws(() => transition.setProgress(Number.NaN), /progress must be in \[0, 1\]/);
 
+    text.setProperties({ opacity: 0.5 });
+    await text.ready;
+    transition.setProgress(0.75);
+    assert.deepEqual(
+      bitmapOrigins(narrowObject),
+      lerpedOrigins(wideOrigins, targetOrigins, 0.75),
+      'paint-only transactions preserve a live position transition and its authoritative target',
+    );
+
     const midpointOrigins = bitmapOrigins(narrowObject);
     const midpointSnapshot = captureBitmapGlyphPositions(narrowObject);
     transition.dispose();
@@ -301,14 +453,13 @@ test('a cancelled reflow does not claim ownership of its committed paragraph', a
   let disposeFontAfterBuild = false;
   const raster = defineRaster({
     ...bitmapRequest.module,
-    stageBatchUpdate: undefined,
-    buildBatches(...arguments_) {
-      const batch = bitmapRequest.module.buildBatches(...arguments_);
+    stageBatch(_previous, ...arguments_) {
+      const stage = bitmapRequest.module.stageBatch(undefined, ...arguments_);
       if (disposeFontAfterBuild) {
         disposeFontAfterBuild = false;
         queueMicrotask(() => font.dispose());
       }
-      return batch;
+      return stage;
     },
   });
   const text = new Text({
@@ -419,9 +570,9 @@ test('Text skips semantic no-op paint uploads and bitmap rejects unsupported eff
       bitmapRequest.module.validatePaint?.(paint);
       validatedPaint = paint;
     },
-    updatePaint(batch, paint, fontSlot) {
+    stageBatch(previous, layout, resource, fontSlot, paint, rasterPixelRatio) {
       updatedPaint = paint;
-      bitmapRequest.module.updatePaint(batch, paint, fontSlot);
+      return bitmapRequest.module.stageBatch(previous, layout, resource, fontSlot, paint, rasterPixelRatio);
     },
   });
   const text = new Text({
@@ -539,10 +690,9 @@ test('Text rejects a raster batch without the required Three.js lifecycle surfac
       return {};
     },
     async prepare() {},
-    buildBatches() {
-      return {};
+    stageBatch() {
+      return { batch: {}, commit() {}, abort() {} };
     },
-    updatePaint() {},
     dispose() {},
   };
   const text = new Text({
@@ -572,10 +722,19 @@ test('Text resolves independent raster resources for two fonts in one paragraph'
   ]);
   const amiri = await registry.registerAsset(amiriBytes);
   const content = 'Latin العربية';
+  const request = bitmap({ strikes: [16] });
+  let failFontSlot;
+  const raster = defineRaster({
+    ...request.module,
+    stageBatch(...arguments_) {
+      if (arguments_[3] === failFontSlot) throw new Error('injected second-font staging failure');
+      return request.module.stageBatch(...arguments_);
+    },
+  });
   const text = new Text({
     text: content,
     font: inter,
-    raster: bitmap({ strikes: [16] }),
+    raster: { module: raster, options: request.options },
     fontSize: 16,
     spans: [
       {
@@ -591,6 +750,29 @@ test('Text resolves independent raster resources for two fonts in one paragraph'
     await text.ready;
     assert.equal(text.layout?.fontHandles.length, 2);
     assert.equal(text.children.length, 2);
+    const liveBatches = [...text.children];
+    const paintedSpans = [
+      {
+        start: 6,
+        end: content.length,
+        font: amiri,
+        language: 'ar',
+        direction: 'rtl',
+        color: 0x00ff00,
+      },
+    ];
+    failFontSlot = 1;
+    assert.throws(
+      () => text.setProperties({ text: content, spans: paintedSpans }),
+      /injected second-font staging failure/,
+    );
+    assert.equal(text.children[0], liveBatches[0], 'a later font failure preserves the first live batch');
+    assert.equal(text.children[1], liveBatches[1], 'a later font failure preserves the second live batch');
+    failFontSlot = undefined;
+    text.setProperties({ text: content, spans: paintedSpans });
+    await text.ready;
+    assert.equal(text.children[0], liveBatches[0], 'a successful transaction retains the first batch');
+    assert.equal(text.children[1], liveBatches[1], 'a successful transaction retains the second batch');
   } finally {
     text.dispose();
     inter.dispose();
@@ -678,10 +860,9 @@ test('RasterRuntime caches one decoded resource per font and disposes it with it
       return { decodeCount };
     },
     async prepare() {},
-    buildBatches() {
+    stageBatch() {
       throw new Error('not used by the raster-runtime cache test');
     },
-    updatePaint() {},
     dispose() {
       disposeCount += 1;
     },
@@ -861,10 +1042,9 @@ async function assertPendingRasterInvalidation(invalidate) {
       return { decoded: true };
     },
     async prepare() {},
-    buildBatches() {
+    stageBatch() {
       throw new Error('not used by the raster-runtime disposal test');
     },
-    updatePaint() {},
     dispose() {
       disposeCount += 1;
     },
@@ -891,10 +1071,9 @@ function rasterRuntimeTestModule({ decode, dispose = () => undefined }) {
     },
     decode,
     async prepare() {},
-    buildBatches() {
+    stageBatch() {
       throw new Error('not used by RasterRuntime lifecycle tests');
     },
-    updatePaint() {},
     dispose,
   });
 }

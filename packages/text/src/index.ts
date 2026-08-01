@@ -69,6 +69,7 @@ export type {
   JsonValue,
   LoadedRaster,
   RasterBatchOf,
+  RasterBatchStage,
   RasterKind,
   RasterKindOf,
   RasterLoadOptions,
@@ -92,7 +93,7 @@ export type {
   RuntimeRasterBakerLoader,
   RuntimeRasterBakerModule,
 } from './raster.js';
-export { defineRaster } from './raster.js';
+export { defineRaster, defineRasterBatchStage } from './raster.js';
 export { RasterRuntime } from './raster-runtime.js';
 export type { RasterDrawBatch } from './raster.js';
 

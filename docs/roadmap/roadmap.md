@@ -16,7 +16,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T15:31:00Z'
+  at: '2026-08-01T16:01:26Z'
 ---
 
 # Canonical implementation roadmap
@@ -53,9 +53,9 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     7 |   ✅   | Harden the integration proof                                          | L      | 1–6                 | Identity, cancellation, limits, invalid data, package separation, and baselines pass review.                |
 |     8 |   ✅   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                  |
 |     9 |   ✅   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                       |
-|    10 |   ⬜   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
+|    10 |   🟡   | Harden the first shippable release                                    | L      | 8–9                 | Bitmap, MSDF, and Slug ship as independent modules over one shaping/layout result.                          |
 
-Milestones 0–9 are closed. Milestone 10 is the next authorized implementation milestone.
+Milestones 0–9 are closed. Milestone 10 is active.
 
 Do not start a milestone before its dependencies and exit evidence exist.
 
@@ -118,8 +118,12 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 9.2  |   ✅   | Copy and adapt the version-matched analytic TSL fill runtime, batching, lifecycle, fail-closed paint boundary, and public `Text` integration.                                            |  XL  | 9.1        |
 | 9.3  |   ✅   | Integrate Slug into the shared benchmark/conformance product, release-role scenes, source-outline matrix, and complete two-axis icon-font grid.                                          |  XL  | 9.2        |
 | 9.4  |   ✅   | Reproduce the applicable prior-fork performance baseline, evaluate retained challengers, and close payload, residency, frame-time, and bundle-isolation gates.                           |  XL  | 9.3        |
-| 10.1 |   ⬜   | Prove raster-module switching through core and React without reflow.                                                                                                                     |  M   | 8.6, 9.4   |
-| 10.2 |   ⬜   | Complete release validation, guidance, and migration material.                                                                                                                           |  M   | 10.1       |
+| 10.1 |   🟡   | Replace the optional Three-shaped plugin seam with one required renderer-neutral transactional raster lifecycle and retain Three.js as an adapter.                                       |  L   | 8.6, 9.4   |
+| 10.2 |   ⬜   | Publish warm shaping, layout, paint planning, and raster staging through the Three.js object-update lifecycle without consumer `ready` waits.                                            |  L   | 10.1       |
+| 10.3 |   ⬜   | Add bounded glyph-capacity slack, complete in-place field replacement, authoritative shrink counts, overflow replacement, and coalesced dirty uploads to all three rasters.              |  XL  | 10.2       |
+| 10.4 |   ⬜   | Prove the public extension boundary with a private workspace raster/baker package that owns a new kind, artifact, adapter, retained updates, overflow, abort, and disposal.              |  L   | 10.1, 10.3 |
+| 10.5 |   ⬜   | Remove benchmark recycling workarounds and prove Icon Grid plus every Presentation workload through sequential, timed, allocation, cadence, dual-backend, and React Doctor gates.        |  XL  | 10.2–10.4  |
+| 10.6 |   ⬜   | Complete raster switching, release conformance, public API review, recommendations, migration material, package-size evidence, and signed stacked delivery.                              |  L   | 10.5       |
 
 ## Milestone 0 — accept contracts and versions
 
@@ -679,6 +683,19 @@ Exit only when Slug satisfies its outline-accurate large/zoomed-text role withou
 Milestone 9 is closed. Additional Slug optimization hypotheses are future measured research and do not reopen the accepted V0 renderer unless they change a checked contract.
 
 ## Milestone 10 — harden the first shippable release
+
+Item 10.1 is active. The accepted implementation order is the required renderer-neutral transaction, Three.js adapter parity, lifecycle-owned warm publication, bounded retained capacity, the external raster/baker proof, benchmark cleanup and hardware evidence, then release review. Each layer must remain independently green; renderer-wide batching across separate `Text` objects is explicitly not part of this milestone.
+
+### 10.1–10.6 closure checklist
+
+- [ ] The portable raster contract exposes no Three.js, TSL, WebGPU, WebGL, or closed first-party kind union; every module stages through the same required commit/abort ownership state machine.
+- [ ] Staging never mutates committed state, commit is synchronous and infallible, failure or abort preserves the live generation, and batch/stage cleanup is idempotent across Bitmap, MTSDF, Slug, and the external proof.
+- [ ] Warm resident updates publish before Three.js child traversal without consumer `await text.ready`; cold font, shaper, and raster-page preparation remains asynchronous and Suspense-owned.
+- [ ] Same-capacity replacement updates every glyph identity and parallel instance field in place; shrink, exact-capacity growth, fragmented dirty ranges, overflow replacement, topology changes, and stale generations have deterministic tests.
+- [ ] The private external package bakes, packages, loads, renders, updates, overflows, aborts, and disposes through published entry points without a core kind switch or undocumented import.
+- [ ] Icon Grid reuses its Text pool across all 1,402 glyphs and all three techniques without blank recycling, missing glyphs, warnings, unhandled rejections, or avoidable GPU-object churn.
+- [ ] WebGPU and forced WebGL complete every Presentation workload sequentially and in timed demo mode with visible text, one renderer, retained canvas/graph identity, no warm loader flash, no overlapping jobs, and recovery after success, failure, abort, technique/font changes, and navigation.
+- [ ] Allocation/GC traces, approximately-60-Hz cadence sweeps, React Doctor 100/100, screenshots, complete repository checks, package-size evidence, OKF validation, signed stack history, accurate PR bodies, and green CI are retained.
 
 Deliver:
 

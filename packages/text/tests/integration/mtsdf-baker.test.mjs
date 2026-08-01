@@ -34,6 +34,18 @@ const showcaseShapingHash = '3f8183c0d56b8b225b8a6a7b2fda80966579b46636b96975434
 const publishedAbi = JSON.parse(await readFile(abiUrl, 'utf8'));
 const progressImports = { env: { pmndrs_text_bake_progress() {} } };
 
+function committedBatch(module, ...arguments_) {
+  const stage = module.stageBatch(undefined, ...arguments_);
+  stage.commit();
+  return stage.batch;
+}
+
+function updateCommittedBatch(module, batch, ...arguments_) {
+  const stage = module.stageBatch(batch, ...arguments_);
+  assert.equal(stage.batch, batch);
+  stage.commit();
+}
+
 async function setup() {
   const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(fontUrl)]);
   const module = await WebAssembly.compile(wasm);
@@ -200,14 +212,14 @@ test('bakes and validates authenticated 32 px/em quality policies', async () => 
           paintIndices: Uint16Array.of(0),
           palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 2 } }],
         };
-        const batch = msdf.buildBatches(layout, resource, 0, paint);
+        const batch = committedBatch(msdf, layout, resource, 0, paint);
         try {
           const mesh = batch.object.children[0];
           assert.ok(mesh);
           assert.equal(mesh.geometry.getAttribute('msdfOutlineWidth').getX(0), 0.5);
           assert.throws(
             () =>
-              batch.updatePaint({
+              updateCommittedBatch(msdf, batch, layout, resource, 0, {
                 paintIndices: Uint16Array.of(0),
                 palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 2.0001 } }],
               }),
@@ -674,7 +686,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
       },
     ],
   };
-  const batch = msdf.buildBatches(layout, resource, 0, paint);
+  const batch = committedBatch(msdf, layout, resource, 0, paint);
   assert.equal(batch.glyphCount, resource.pages.length);
   assert.equal(batch.drawCount, 1);
   const mesh = batch.object.children[0];
@@ -692,7 +704,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   }
   const origin = geometry.getAttribute('msdfOrigin');
   origin.setXY(0, 123, 456);
-  batch.updatePaint({
+  updateCommittedBatch(msdf, batch, layout, resource, 0, {
     paintIndices: new Uint16Array(glyphIds.length),
     palette: [
       {
@@ -716,7 +728,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
     ],
     [0.25, 0.5, 1, 0.75],
   );
-  batch.updatePaint({
+  updateCommittedBatch(msdf, batch, layout, resource, 0, {
     paintIndices: new Uint16Array(glyphIds.length),
     palette: [{ color: [0.25, 0.5, 1, 0.75] }],
   });
@@ -727,7 +739,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   );
   assert.equal(geometry.getAttribute('msdfOutlineWidth').getX(0), 0);
   batch.dispose();
-  assert.throws(() => batch.updatePaint(paint), /disposed/);
+  batch.dispose();
   let disposedTextures = 0;
   resource.atlas.texture.addEventListener('dispose', () => disposedTextures++);
   msdf.dispose(resource);

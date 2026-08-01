@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 
 import type { AnyFontToken, FontInput, RegisteredFont } from '../font.js';
-import type { AnyRasterModule, RasterDrawBatch } from '../raster.js';
+import type { AnyRasterModule, RasterBatchStage, RasterDrawBatch } from '../raster.js';
 import type {
   FontFeature,
   TextLayoutProperties,
@@ -300,16 +300,34 @@ function isRasterModule(value: unknown): value is AnyRasterModule {
     typeof readProperty(value, 'descriptor') === 'function' &&
     typeof readProperty(value, 'decode') === 'function' &&
     typeof readProperty(value, 'prepare') === 'function' &&
-    typeof readProperty(value, 'buildBatches') === 'function' &&
-    typeof readProperty(value, 'updatePaint') === 'function' &&
+    typeof readProperty(value, 'stageBatch') === 'function' &&
     typeof readProperty(value, 'dispose') === 'function'
   );
 }
 
-export function assertRasterBatch(value: RasterDrawBatch): void {
-  if (!(value.object instanceof THREE.Object3D) || typeof value.dispose !== 'function') {
+export interface ThreeRasterDrawBatch extends RasterDrawBatch {
+  readonly object: THREE.Object3D;
+}
+
+function assertRasterBatch(value: unknown): asserts value is ThreeRasterDrawBatch {
+  if (
+    !isObject(value) ||
+    !(readProperty(value, 'object') instanceof THREE.Object3D) ||
+    typeof readProperty(value, 'dispose') !== 'function'
+  ) {
     throw new TypeError('raster module returned an invalid draw batch');
   }
+}
+
+export function assertRasterBatchStage(value: unknown): asserts value is RasterBatchStage<ThreeRasterDrawBatch> {
+  if (
+    !isObject(value) ||
+    typeof readProperty(value, 'commit') !== 'function' ||
+    typeof readProperty(value, 'abort') !== 'function'
+  ) {
+    throw new TypeError('raster module returned an invalid batch stage');
+  }
+  assertRasterBatch(readProperty(value, 'batch'));
 }
 
 export function isFontToken(value: AnyFontToken | FontInput | RegisteredFont | undefined): value is AnyFontToken {

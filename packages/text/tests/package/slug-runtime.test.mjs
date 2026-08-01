@@ -79,7 +79,8 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   ]) {
     assert.throws(
       () =>
-        slug.buildBatches(
+        committedBatch(
+          slug,
           layout,
           resource,
           0,
@@ -92,7 +93,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
       /does not support outline paint/,
     );
   }
-  const batch = slug.buildBatches(layout, resource, 0, paint, 1);
+  const batch = committedBatch(slug, layout, resource, 0, paint, 1);
   assert.equal(batch.glyphCount, 3);
   assert.equal(batch.drawCount, 3);
   assert.deepEqual(
@@ -130,7 +131,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   assert.equal(queriedDrawingBuffer, true);
   assert.deepEqual(viewport.toArray(), [0, 0], 'render hook does not retain caller-owned state');
 
-  batch.updatePaint({
+  updateCommittedBatch(slug, batch, layout, resource, 0, {
     paintIndices: Uint16Array.of(0, 0, 0, 0),
     palette: [{ color: [1, 0, 0, 0.5] }],
   });
@@ -140,7 +141,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   const fillMaterial = firstMesh.material;
   assert.throws(
     () =>
-      batch.updatePaint({
+      updateCommittedBatch(slug, batch, layout, resource, 0, {
         paintIndices: Uint16Array.of(0, 0, 0, 0),
         palette: [{ color: [0, 1, 0, 1], outline: { color: [0, 0, 0, 1], width: 0 } }],
       }),
@@ -154,7 +155,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   assert.equal(firstMesh.material, fillMaterial, 'failed paint validation preserves material state');
   assert.throws(
     () =>
-      batch.updatePaint({
+      updateCommittedBatch(slug, batch, layout, resource, 0, {
         paintIndices: Uint16Array.of(0, 0, 0, 0),
         palette: [{ color: [1, 1, 1, 1], shadow: { color: [0, 0, 0, 1], offset: [1, 1] } }],
       }),
@@ -162,7 +163,7 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   );
   assert.throws(
     () =>
-      batch.updatePaint({
+      updateCommittedBatch(slug, batch, layout, resource, 0, {
         paintIndices: Uint16Array.of(0, 0, 0, 0),
         palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 1 } }],
       }),
@@ -172,7 +173,6 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   batch.dispose();
   batch.dispose();
   assert.equal(batch.object.children.length, 0);
-  assert.throws(() => batch.updatePaint(paint), /disposed/);
 
   let disposedTextures = 0;
   for (const pageResource of resource.pages) {
@@ -187,6 +187,18 @@ test('Slug uploads exact integer resources and preserves consecutive page runs',
   assert.equal(warnings.mock.callCount(), 0, 'Three emitted no TSL warnings');
   assert.equal(errors.mock.callCount(), 0, 'Three emitted no TSL errors');
 });
+
+function committedBatch(module, ...arguments_) {
+  const stage = module.stageBatch(undefined, ...arguments_);
+  stage.commit();
+  return stage.batch;
+}
+
+function updateCommittedBatch(module, batch, ...arguments_) {
+  const stage = module.stageBatch(batch, ...arguments_);
+  assert.equal(stage.batch, batch);
+  stage.commit();
+}
 
 test('Slug resolves authenticated external page payloads through raster residency', async () => {
   const records = makeRecords([0]);

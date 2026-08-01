@@ -53,7 +53,13 @@ import {
 } from '../internal/raster-batch.js';
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint, ResolvedPaint } from '../paint.js';
-import { defineRaster, type JsonValue, type RasterModule, type RegisteredRaster } from '../raster.js';
+import {
+  defineRaster,
+  defineRasterBatchStage,
+  type JsonValue,
+  type RasterModule,
+  type RegisteredRaster,
+} from '../raster.js';
 import { assertRasterCoverage, decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
 
 export {
@@ -126,7 +132,6 @@ export interface MsdfDrawBatch {
   readonly object: THREE.Group;
   readonly glyphCount: number;
   readonly drawCount: number;
-  updatePaint(paint: GlyphPaint): void;
   dispose(): void;
 }
 
@@ -135,6 +140,15 @@ interface MsdfMaterialState {
 }
 
 const materialByAtlasTexture = new WeakMap<THREE.DataArrayTexture, MsdfMaterialState>();
+const batchContext = new WeakMap<
+  MsdfDrawBatch,
+  {
+    readonly layout: ParagraphLayout;
+    readonly resource: MsdfResource;
+    readonly fontSlot: number;
+    readonly run: MsdfBatchRun | undefined;
+  }
+>();
 
 const INSTANCE_STRIDE = 28;
 const INSTANCE_OFFSETS = {
@@ -167,13 +181,29 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, Ms
     signal?.throwIfAborted();
     assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
   },
-  buildBatches(layout, resource, fontSlot, paint) {
-    return buildMsdfBatches(layout, resource, fontSlot, paint);
+  stageBatch(previous, layout, resource, fontSlot, paint) {
+    const context = previous === undefined ? undefined : batchContext.get(previous);
+    if (
+      previous !== undefined &&
+      context?.layout === layout &&
+      context.resource === resource &&
+      context.fontSlot === fontSlot
+    ) {
+      assertMsdfBatchPaintUpdate(layout, resource, context.run, paint);
+      return defineRasterBatchStage(
+        previous,
+        () => commitMsdfBatchPaint(context.run, layout, resource, paint),
+        () => undefined,
+      );
+    }
+    const batch = buildMsdfBatches(layout, resource, fontSlot, paint);
+    return defineRasterBatchStage(
+      batch,
+      () => undefined,
+      () => batch.dispose(),
+    );
   },
   validatePaint: assertMsdfPaint,
-  updatePaint(batch, paint) {
-    batch.updatePaint(paint);
-  },
   dispose(resource) {
     disposeMsdfResource(resource);
   },
@@ -369,26 +399,20 @@ function buildMsdfBatches(
   if (run !== undefined) group.add(run.mesh);
 
   let disposed = false;
-  return {
+  const batch: MsdfDrawBatch = {
     object: group,
     glyphCount: glyphIndices.length,
     drawCount: run === undefined ? 0 : 1,
-    updatePaint(nextPaint) {
-      if (disposed) throw new TypeError('MTSDF draw batch has been disposed');
-      assertParallelRasterPaint(layout, nextPaint);
-      assertMsdfPaint(nextPaint);
-      if (run !== undefined) {
-        if (sameMsdfPaintStructure(run, nextPaint)) updateMsdfRunColors(run, nextPaint);
-        else updateMsdfRun(layout, resource, run, nextPaint);
-      }
-    },
     dispose() {
       if (disposed) return;
       disposed = true;
+      batchContext.delete(batch);
       group.clear();
       run?.geometry.dispose();
     },
   };
+  batchContext.set(batch, { layout, resource, fontSlot, run });
+  return batch;
 }
 
 function createMsdfRun(
@@ -487,6 +511,33 @@ function updateMsdfRun(layout: ParagraphLayout, resource: MsdfResource, run: Msd
   run.instanceData.needsUpdate = true;
 }
 
+function assertMsdfBatchPaintUpdate(
+  layout: ParagraphLayout,
+  resource: MsdfResource,
+  run: MsdfBatchRun | undefined,
+  paint: GlyphPaint,
+): void {
+  assertParallelRasterPaint(layout, paint);
+  assertMsdfPaint(paint);
+  if (run === undefined) return;
+  for (const glyphIndex of run.glyphIndices) {
+    const entry = resolvedPaint(paint, glyphIndex);
+    const fontSize = layout.glyphFontSizes[glyphIndex]!;
+    resolveMsdfOutlineAtlasPixels(resource, fontSize, entry.outline?.width ?? 0);
+  }
+}
+
+function commitMsdfBatchPaint(
+  run: MsdfBatchRun | undefined,
+  layout: ParagraphLayout,
+  resource: MsdfResource,
+  paint: GlyphPaint,
+): void {
+  if (run === undefined) return;
+  if (sameMsdfPaintStructure(run, paint)) updateMsdfRunColors(run, paint);
+  else updateMsdfRun(layout, resource, run, paint);
+}
+
 const PAINT_STRUCTURE_STRIDE = 3;
 
 function sameMsdfPaintStructure(run: MsdfBatchRun, next: GlyphPaint): boolean {
@@ -523,9 +574,6 @@ function writeMsdfInstance(
   const glyphId = layout.glyphIds[glyphIndex]!;
   const record = glyphId * RECORD_STRIDE;
   const fontSize = layout.glyphFontSizes[glyphIndex]!;
-  if (!Number.isFinite(fontSize) || fontSize <= 0) {
-    throw new TypeError('MTSDF glyph font sizes must be positive finite values');
-  }
   const scale = fontSize / resource.planeUnitsPerEm;
   const planeLeft = records.getInt16(record, true);
   const planeBottom = records.getInt16(record + 2, true);
@@ -555,11 +603,7 @@ function writeMsdfInstance(
   const uvPerUnitY = baseUvHeight / baseHeight;
   const uvOriginX = baseUvX + (originX - baseOriginX) * uvPerUnitX;
   const uvOriginY = baseUvY + (originY - baseOriginY) * uvPerUnitY;
-  const outlineAtlasPixels = (paint.outline?.width ?? 0) / scale;
-  const maxOutlineAtlasPixels = resource.pixelRange / 2;
-  if (outlineAtlasPixels > maxOutlineAtlasPixels) {
-    throw new RangeError(`MTSDF outline width exceeds the ${maxOutlineAtlasPixels}-atlas-pixel field limit`);
-  }
+  const outlineAtlasPixels = resolveMsdfOutlineAtlasPixels(resource, fontSize, paint.outline?.width ?? 0);
   setAttribute2(run.originAttribute, instance, originX, originY);
   setAttribute2(run.sizeAttribute, instance, width, height);
   setAttribute2(run.uvOriginAttribute, instance, uvOriginX, uvOriginY);
@@ -575,6 +619,18 @@ function writeMsdfInstance(
   run.paintStructure[paintStructureOffset] = paint.outline?.width ?? 0;
   run.paintStructure[paintStructureOffset + 1] = shadowX;
   run.paintStructure[paintStructureOffset + 2] = sourceShadowY;
+}
+
+function resolveMsdfOutlineAtlasPixels(resource: MsdfResource, fontSize: number, outlineWidth: number): number {
+  if (!Number.isFinite(fontSize) || fontSize <= 0) {
+    throw new TypeError('MTSDF glyph font sizes must be positive finite values');
+  }
+  const outlineAtlasPixels = outlineWidth / (fontSize / resource.planeUnitsPerEm);
+  const maximum = resource.pixelRange / 2;
+  if (outlineAtlasPixels > maximum) {
+    throw new RangeError(`MTSDF outline width exceeds the ${maximum}-atlas-pixel field limit`);
+  }
+  return outlineAtlasPixels;
 }
 
 const TRANSPARENT_LINEAR_RGBA = [0, 0, 0, 0] as const;

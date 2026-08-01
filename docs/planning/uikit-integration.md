@@ -96,7 +96,7 @@ flowchart LR
   Yoga --> ContentBox["resolved content-box signals"]
   ContentBox --> Layout["Paragraph.layout"]
   Paragraph --> Layout
-  Layout --> Batches["selected raster buildBatches"]
+  Layout --> Batches["selected raster stageBatch transaction"]
   Batches --> uikitRoot["uikit render groups"]
 ```
 
