@@ -1,5 +1,6 @@
 use core::fmt;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde_json::{Map, Value};
 use std::{string::String, vec::Vec};
 
 pub const MAX_RASTER_COVERAGE_RANGES: usize = 1_024;
@@ -7,14 +8,14 @@ pub const MAX_RASTER_COVERAGE_SCALARS: usize = 65_536;
 pub const MAX_RASTER_COVERAGE_TEXT_CODE_POINTS: usize = 65_536;
 pub const MAX_RASTER_COVERAGE_GLYPH_IDS: usize = 65_535;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RasterUnicodeRangeV0 {
     pub start: u32,
     pub end: u32,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RasterCoverageV0 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -46,27 +47,56 @@ pub enum RasterCoverageError {
 impl fmt::Display for RasterCoverageError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Empty => formatter.write_str("raster coverage requires at least one non-empty seed"),
-            Self::TooManyRanges => formatter.write_str("raster coverage has too many Unicode ranges"),
-            Self::InvalidRange(index) => write!(formatter, "raster coverage Unicode range {index} is invalid"),
-            Self::OverlappingRanges(index) => {
-                write!(formatter, "raster coverage Unicode range {index} overlaps or repeats a scalar")
+            Self::Empty => {
+                formatter.write_str("raster coverage requires at least one non-empty seed")
             }
-            Self::TooManyScalars => formatter.write_str("raster coverage Unicode ranges select too many scalars"),
+            Self::TooManyRanges => {
+                formatter.write_str("raster coverage has too many Unicode ranges")
+            }
+            Self::InvalidRange(index) => {
+                write!(
+                    formatter,
+                    "raster coverage Unicode range {index} is invalid"
+                )
+            }
+            Self::OverlappingRanges(index) => {
+                write!(
+                    formatter,
+                    "raster coverage Unicode range {index} overlaps or repeats a scalar"
+                )
+            }
+            Self::TooManyScalars => {
+                formatter.write_str("raster coverage Unicode ranges select too many scalars")
+            }
             Self::EmptyText => formatter.write_str("raster coverage text must not be empty"),
-            Self::TooMuchText => formatter.write_str("raster coverage text contains too many code points"),
-            Self::EmptyGlyphIds => formatter.write_str("raster coverage glyph IDs must not be empty"),
+            Self::TooMuchText => {
+                formatter.write_str("raster coverage text contains too many code points")
+            }
+            Self::EmptyGlyphIds => {
+                formatter.write_str("raster coverage glyph IDs must not be empty")
+            }
             Self::TooManyGlyphIds => formatter.write_str("raster coverage has too many glyph IDs"),
             Self::UnsortedGlyphIds(index) => {
-                write!(formatter, "raster coverage glyph ID {index} is duplicated or out of order")
+                write!(
+                    formatter,
+                    "raster coverage glyph ID {index} is duplicated or out of order"
+                )
             }
             Self::GlyphIdOutOfRange(glyph_id) => {
-                write!(formatter, "raster coverage glyph ID {glyph_id} is outside the selected face")
+                write!(
+                    formatter,
+                    "raster coverage glyph ID {glyph_id} is outside the selected face"
+                )
             }
             Self::UnmappedTextScalar(scalar) => {
-                write!(formatter, "raster coverage text scalar U+{scalar:04X} is not mapped by the selected face")
+                write!(
+                    formatter,
+                    "raster coverage text scalar U+{scalar:04X} is not mapped by the selected face"
+                )
             }
-            Self::NoSelectedGlyphs => formatter.write_str("raster coverage selects no glyphs in the selected face"),
+            Self::NoSelectedGlyphs => {
+                formatter.write_str("raster coverage selects no glyphs in the selected face")
+            }
             Self::Allocation => formatter.write_str("raster coverage allocation failed"),
         }
     }
@@ -115,7 +145,9 @@ impl ResolvedRasterCoverage {
     pub fn contains(&self, glyph_id: u16) -> bool {
         let byte = usize::from(glyph_id) / 8;
         let bit = glyph_id % 8;
-        self.bits.get(byte).is_some_and(|value| value & (1 << bit) != 0)
+        self.bits
+            .get(byte)
+            .is_some_and(|value| value & (1 << bit) != 0)
     }
 
     pub fn selected_glyphs(&self) -> u16 {
@@ -153,8 +185,9 @@ pub fn resolve_raster_coverage(
     }
     if let Some(text) = &coverage.text {
         for character in text.chars() {
-            let glyph_id = map_scalar(character)
-                .ok_or(RasterCoverageError::UnmappedTextScalar(u32::from(character)))?;
+            let glyph_id = map_scalar(character).ok_or(RasterCoverageError::UnmappedTextScalar(
+                u32::from(character),
+            ))?;
             select_glyph(&mut bits, &mut selected, glyph_count, glyph_id)?;
         }
     }
@@ -174,44 +207,39 @@ pub fn resolve_raster_coverage(
 
 /// RFC 8785 property ordering for the bounded descriptor fragment.
 pub fn canonical_raster_coverage_json(coverage: &RasterCoverageV0) -> String {
-    use core::fmt::Write;
+    serde_json::to_string(&raster_coverage_json_value(coverage))
+        .expect("validated raster coverage serializes to JSON")
+}
 
-    let mut output = String::from("{");
-    let mut needs_comma = false;
+/// Materialize the validated descriptor without a second derived serializer graph.
+pub fn raster_coverage_json_value(coverage: &RasterCoverageV0) -> Value {
+    let mut object = Map::new();
     if let Some(glyph_ids) = &coverage.glyph_ids {
-        output.push_str("\"glyphIds\":[");
-        for (index, glyph_id) in glyph_ids.iter().enumerate() {
-            if index != 0 {
-                output.push(',');
-            }
-            let _ = write!(output, "{glyph_id}");
-        }
-        output.push(']');
-        needs_comma = true;
+        object.insert(
+            "glyphIds".into(),
+            Value::Array(glyph_ids.iter().copied().map(Value::from).collect()),
+        );
     }
     if let Some(text) = &coverage.text {
-        if needs_comma {
-            output.push(',');
-        }
-        output.push_str("\"text\":");
-        output.push_str(&serde_json::to_string(text).expect("strings always serialize to JSON"));
-        needs_comma = true;
+        object.insert("text".into(), Value::String(text.clone()));
     }
     if let Some(ranges) = &coverage.unicode_ranges {
-        if needs_comma {
-            output.push(',');
-        }
-        output.push_str("\"unicodeRanges\":[");
-        for (index, range) in ranges.iter().enumerate() {
-            if index != 0 {
-                output.push(',');
-            }
-            let _ = write!(output, "{{\"end\":{},\"start\":{}}}", range.end, range.start);
-        }
-        output.push(']');
+        object.insert(
+            "unicodeRanges".into(),
+            Value::Array(
+                ranges
+                    .iter()
+                    .map(|range| {
+                        let mut value = Map::new();
+                        value.insert("end".into(), Value::from(range.end));
+                        value.insert("start".into(), Value::from(range.start));
+                        Value::Object(value)
+                    })
+                    .collect(),
+            ),
+        );
     }
-    output.push('}');
-    output
+    Value::Object(object)
 }
 
 fn validate_ranges(ranges: &[RasterUnicodeRangeV0]) -> Result<(), RasterCoverageError> {
@@ -293,7 +321,9 @@ mod tests {
             text: None,
             glyph_ids: None,
         };
-        let resolved = resolve_raster_coverage(&range, 4, |character| (character == 'A').then_some(1)).unwrap();
+        let resolved =
+            resolve_raster_coverage(&range, 4, |character| (character == 'A').then_some(1))
+                .unwrap();
         assert_eq!(resolved.selected_glyphs(), 1);
 
         let text = RasterCoverageV0 {

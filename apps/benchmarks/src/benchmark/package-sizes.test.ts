@@ -79,17 +79,35 @@ describe('independent package-size report', () => {
         gzipBytes: { baseline: 3_893, maximumGrowth: 900 },
         brotliBytes: { baseline: 3_448, maximumGrowth: 800 },
       },
+      'bitmap-baker-wasm': {
+        rawBytes: { baseline: 606_995, maximumGrowth: 20_000 },
+        minifiedBytes: { baseline: 606_995, maximumGrowth: 20_000 },
+        gzipBytes: { baseline: 226_702, maximumGrowth: 8_100 },
+        brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
+      },
+      'bitmap-runtime-js': {
+        rawBytes: { baseline: 361_809, maximumGrowth: 9_500 },
+        minifiedBytes: { baseline: 271_005, maximumGrowth: 6_400 },
+        gzipBytes: { baseline: 78_673, maximumGrowth: 1_400 },
+        brotliBytes: { baseline: 60_857, maximumGrowth: 1_300 },
+      },
       'mtsdf-baker-wasm': {
-        rawBytes: { baseline: 534_709, maximumGrowth: 22_300 },
-        minifiedBytes: { baseline: 534_709, maximumGrowth: 22_300 },
-        gzipBytes: { baseline: 208_474, maximumGrowth: 8_700 },
-        brotliBytes: { baseline: 163_570, maximumGrowth: 6_900 },
+        rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
+        minifiedBytes: { baseline: 534_709, maximumGrowth: 18_500 },
+        gzipBytes: { baseline: 208_474, maximumGrowth: 6_700 },
+        brotliBytes: { baseline: 163_570, maximumGrowth: 5_800 },
       },
       'mtsdf-baker-js': {
         rawBytes: { baseline: 21_809, maximumGrowth: 5_200 },
         minifiedBytes: { baseline: 15_430, maximumGrowth: 3_800 },
         gzipBytes: { baseline: 4_701, maximumGrowth: 900 },
         brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
+      },
+      'mtsdf-runtime-js': {
+        rawBytes: { baseline: 370_255, maximumGrowth: 8_050 },
+        minifiedBytes: { baseline: 275_271, maximumGrowth: 5_500 },
+        gzipBytes: { baseline: 79_993, maximumGrowth: 1_300 },
+        brotliBytes: { baseline: 62_081, maximumGrowth: 1_050 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;

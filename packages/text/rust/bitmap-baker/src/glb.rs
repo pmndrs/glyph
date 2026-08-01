@@ -109,15 +109,9 @@ pub(crate) fn build_bitmap_glb(
         let extension = extension.as_object_mut().expect("extension is an object");
         extension.insert(
             "coverage".into(),
-            serde_json::to_value(
+            pmndrs_text_raster_artifact::raster_coverage_json_value(
                 coverage_descriptor.expect("coverage descriptor accompanies bits"),
-            )
-            .map_err(|error| {
-                crate::error::BitmapBakeError::new(
-                    crate::error::BitmapBakeErrorCode::SerializationFailed,
-                    error,
-                )
-            })?,
+            ),
         );
         extension.insert("coverageBufferView".into(), coverage_view.into());
     }

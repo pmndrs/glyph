@@ -36,7 +36,7 @@ impl MtsdfBakeSettingsV0 {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MtsdfDescriptorV0 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -109,7 +109,7 @@ pub struct MtsdfPackagingV0 {
     pub pages: PagePackaging,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MtsdfBakeRequestV0 {
     pub font_face_index: u32,

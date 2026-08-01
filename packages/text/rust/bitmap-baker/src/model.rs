@@ -15,7 +15,7 @@ pub const BITMAP_GENERATOR_LABEL: &str =
     concat!("@pmndrs/text bitmap baker ", env!("CARGO_PKG_VERSION"));
 pub const MAX_BITMAP_PPEM: u16 = 1022;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BitmapDescriptorV0 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -68,7 +68,7 @@ pub struct BitmapPackagingV0 {
     pub pages: PagePackaging,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BitmapBakeRequestV0 {
     pub font_face_index: u32,

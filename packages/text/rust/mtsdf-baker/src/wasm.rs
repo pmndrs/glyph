@@ -28,8 +28,7 @@ use crate::{MtsdfBakeArtifactV0, MtsdfBakeRequestV0, MtsdfBakeResultV0, bake_mts
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
 #[cfg(feature = "allocation-evidence")]
-static BACKING_ALLOCATOR: talc::wasm::WasmDynamicTalc =
-    talc::wasm::new_wasm_dynamic_allocator();
+static BACKING_ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
 #[cfg(feature = "allocation-evidence")]
 static ALLOCATION_CALLS: AtomicUsize = AtomicUsize::new(0);

@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-08-01
+
+- **Bounded-coverage size remediation** — Removed the second derived Serde serialization graph from Bitmap and MTSDF coverage-capable bakers while preserving strict seed validation and byte-identical canonical descriptors. The measured Darwin arm64 Wasm payloads now occupy 626,940 raw / 234,735 gzip / 180,503 Brotli bytes for Bitmap and 553,190 raw / 215,142 gzip / 169,365 Brotli bytes for MTSDF. Dedicated pre-coverage growth gates bound the remaining strict decoder, cmap-resolution, and canonical-policy cost. Bitmap runtime decode now also derives the canonical policy key from authenticated strikes and coverage before creating GPU resources, matching the existing MTSDF boundary.
+
 ## 2026-07-31
 
 - **Coverage-era size gates** — Reconciled the package-size record and its fail-closed autoresearch provenance with bounded raster coverage. Narrow current-capability ceilings pair with an independent regression that preserves the pre-coverage browser core, Bitmap host, MTSDF host, and MTSDF Wasm baselines and caps each accepted raw, minified, gzip, and Brotli delta.

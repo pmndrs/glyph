@@ -165,6 +165,14 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
     RasterCoverageError,
   );
   module.dispose(resource);
+
+  const mismatchedPolicy = {
+    ...runtimeRaster,
+    extensionData: structuredClone(runtimeRaster.extensionData),
+  };
+  mismatchedPolicy.extensionData.strikes[0].ppemX = 17;
+  mismatchedPolicy.extensionData.strikes[0].ppemY = 17;
+  await assert.rejects(module.decode(font, mismatchedPolicy), /raster key does not match its generation policy/);
 });
 
 test('rejects mismatched shaping context and honors pre-bake cancellation', async () => {
