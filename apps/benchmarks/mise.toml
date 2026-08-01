@@ -1,0 +1,4 @@
+[tools]
+pipx = "1.16.5"
+"pipx:meson" = "1.11.1"
+"aqua:ninja-build/ninja" = "1.13.2"

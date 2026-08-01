@@ -69,8 +69,8 @@ sources:
     resource: https://crates.io/crates/libfuzzer-sys/0.4.13
     title: libfuzzer-sys 0.4.13
 generated:
-  by: openai-codex/gpt-5
-  at: '2026-07-29T17:18:36Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-01T14:20:00Z'
 ---
 
 # V0 toolchain and format version pins
@@ -82,7 +82,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | Surface                               | Pin                                                                               | Source identity                                                                                                                                           |
 | ------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust toolchain                        | `1.97.1`                                                                          | `rust-toolchain.toml`                                                                                                                                     |
-| HarfBuzz build system                 | Meson `1.11.1` + Ninja `1.13.2`                                                   | exact root `mise.toml` pins; used to build the authenticated HarfBuzz oracle utilities from source                                                        |
+| HarfBuzz build system                 | Meson `1.11.1` + Ninja `1.13.2`                                                   | exact workload-scoped `apps/benchmarks/mise.toml` pins; used only to build the authenticated HarfBuzz oracle utilities from source                         |
 | HarfRust                              | `0.12.0`                                                                          | tag commit `60b28ea22b5261710018d69c168a762bcb28794c`                                                                                                     |
 | HarfBuzz oracle                       | `13.0.0`                                                                          | tag commit `a0fc099681a69ae40665fbea74982a2e9d7a5260`                                                                                                     |
 | MTSDF quality oracle                  | Chlumsky `msdfgen` `1.13.0`                                                       | tag `v1.13`, commit `1874bcf7d9624ccc85b4bc9a85d78116f690f35b`; source archive SHA-256 `93cd1ad8918c1a78c5c96e82d4f4c77f0eb86c2e7e8579a0967e54196c4b7167` |
@@ -111,7 +111,7 @@ These values are exact fixture and provenance inputs. “Latest” is never a va
 | KTX2 Rust model/parser                | `ktx2` `0.5.0`                                                                    | compile-time R8 DFD generation plus native artifact validation                                                                                            |
 | KTX2 JavaScript parser                | `ktx-parse` `1.1.0`                                                               | package-owned artifact and runtime page validation                                                                                                        |
 
-GLib development metadata is a native build-host prerequisite, not a fixture identity input. HarfBuzz 13.0.0 gates its `hb-shape` and `hb-subset` targets on `HAVE_GLIB`; the provisioner therefore requires `-Dglib=enabled`, and the pinned Ubuntu 24.04 CI job installs `libglib2.0-dev` explicitly and prints the resolved `glib-2.0` version. Every unrelated optional HarfBuzz backend is disabled explicitly so host-installed FreeType, Cairo, ICU, CoreText, or experimental raster/vector dependencies cannot change the source-build graph. GLib owns the utility frontend, while the authenticated HarfBuzz source and exact generated-byte comparison remain authoritative for fixture semantics.
+GLib development metadata is a native build-host prerequisite for the HarfBuzz benchmark workload, not a root contributor requirement or fixture identity input. HarfBuzz 13.0.0 gates its `hb-shape` and `hb-subset` targets on `HAVE_GLIB`; the provisioner therefore requires `-Dglib=enabled`, and the pinned Ubuntu 24.04 CI job installs `libglib2.0-dev` explicitly and prints the resolved `glib-2.0` version. Every unrelated optional HarfBuzz backend is disabled explicitly so host-installed FreeType, Cairo, ICU, CoreText, or experimental raster/vector dependencies cannot change the source-build graph. GLib owns the utility frontend, while the authenticated HarfBuzz source and exact generated-byte comparison remain authoritative for fixture semantics. Contributors may supply the documented versions directly; the nested mise config is the reproducible installation option and does not create a second task surface.
 
 ## Generated contract
 

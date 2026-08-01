@@ -177,9 +177,17 @@ pnpm install
 pnpm check
 ```
 
-Use mise to install the exact root Node.js, pnpm, stable Rust, pipx, Meson, and Ninja pins. The pinned pipx tool bootstraps the pinned Meson application; Meson and Ninja build the authenticated HarfBuzz oracle utilities used by the clean-checkout fixture gates. HarfBuzz gates those command-line utilities on GLib development metadata, so the build host must also provide `glib-2.0` through `pkg-config` (`libglib2.0-dev` on Ubuntu or `glib` plus `pkgconf` on macOS with Homebrew). CI declares that native prerequisite and prints the selected GLib version before checks run. The canonical mise versions are required; do not substitute merely compatible local toolchains. The optional coverage-guided font-baker fuzzer is isolated
-under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and
-`cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
+The root path requires only the exact Node.js, pnpm, and stable Rust versions declared by the repository. Mise is the convenient reproducible installer, not a required task runner: contributors who already have matching versions may run the same pnpm commands directly. Non-interactive agents should use `mise exec -- pnpm ...` instead of relying on shell activation. The optional coverage-guided font-baker fuzzer is isolated under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and `cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
+
+The authenticated HarfBuzz fixture gate is a benchmark-specific workload, not a root prerequisite. It additionally needs Meson 1.11.1, Ninja 1.13.2, and `glib-2.0` development metadata through `pkg-config` (`libglib2.0-dev` on Ubuntu or `glib` plus `pkgconf` on macOS with Homebrew). Supply matching tools directly, or install the scoped pins and provision the utilities with:
+
+```sh
+mise -C apps/benchmarks install
+mise exec -C apps/benchmarks -- pnpm provision:harfbuzz
+pnpm --filter @pmndrs/text-benchmarks check:japanese-showcase-subset
+```
+
+The ordinary `pnpm check` path validates committed fixtures without provisioning specialized native tooling. CI installs the scoped benchmark tools explicitly and runs the HarfBuzz freshness gate separately.
 
 Run the Figma-backed benchmark product from the monorepo app tree:
 

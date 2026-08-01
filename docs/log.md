@@ -2,6 +2,7 @@
 
 ## 2026-08-01
 
+- **Scoped contributor toolchains** — Reduced the root mise install to Node, pnpm, and stable Rust; moved Meson and Ninja into the benchmark workload that provisions authenticated HarfBuzz utilities. Pnpm remains the single command surface, contributors may supply matching versions directly, non-interactive agents use `mise exec --`, and CI explicitly provisions and verifies the optional fixture gate without hiding downloads inside the ordinary check.
 - **Single coverage validation authority** — Removed unused Bitmap and MTSDF validation-context coverage fields; standalone validators now expose only the authenticated descriptor as expected coverage authority, eliminating a public input that could silently disagree.
 - **Configured MTSDF outline authority** — Qualified the public four-atlas-pixel outline constant as the 64/8 default and proved a real 32/4 artifact accepts exactly two atlas pixels but rejects `2.0001`, discriminating the authenticated runtime limit from the exported default.
 - **Pending Text no-op lifecycle** — Semantic no-op `Text.setProperties` calls now preserve the active cold generation, abort signal, and readiness promise, including callback-only updates that publish to the latest `onLayout`. Failed generations clear their pending ownership so the same semantic input can retry. Deterministic delayed-decode and failure regressions prove both paths without timers.
