@@ -1,6 +1,5 @@
 {
   "$schema": "https://react.doctor/schema/config.json",
-  "noScore": true,
   "supplyChain": {
     "enabled": false
   },

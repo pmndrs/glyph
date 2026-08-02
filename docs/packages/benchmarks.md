@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f5a0690c43786cf30c744ed56a2cf8cdac3a240337b62b3d94015d489a81876c'
+source_digest: 'sha256:a8bb3b0ae86a17b434e688ccb492cc9db07f91514032b850d1e4d212d680edd7'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -202,7 +202,7 @@ Roadmap item 10.3 leaves browser core, every baker host, and every Wasm artifact
 
 ## Package scripts
 
-`pnpm benchmarks:capture:presentation-workloads` retains one MTSDF/WebGPU screenshot for every verified workload under the ignored benchmark cache.
+`pnpm benchmarks:capture:presentation-workloads` retains one MTSDF screenshot for every verified workload on WebGPU and forced WebGL under the ignored benchmark cache.
 
 | Script                                 | Purpose                                                                                                                                                                                                                                                                |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

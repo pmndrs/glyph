@@ -25,7 +25,7 @@
     "check:size": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/measure-package-sizes.mts --check",
     "check:paragraph-bidi-contract": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/generate-paragraph-bidi-contract.mts --check",
     "check:paragraph-cjk-contract": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/generate-paragraph-cjk-contract.mts --check",
-    "check:react-doctor": "pnpm dlx react-doctor@0.7.2 . --scope full --blocking warning --no-supply-chain --no-score --no-color",
+    "check:react-doctor": "pnpm dlx react-doctor@0.7.2 . --scope full --blocking warning --no-supply-chain --no-color",
     "capture:presentation-workloads": "node ./scripts/capture-presentation-workloads.mts",
     "check:mtsdf-render-fixture": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/generate-mtsdf-render-fixture.mts --check",
     "check:slug-render-fixture": "pnpm --filter @pmndrs/text build && pnpm --filter @pmndrs/text-font-baker build && node ./scripts/generate-slug-render-fixture.mts --check",

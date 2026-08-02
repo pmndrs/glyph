@@ -1,5 +1,12 @@
-process.env.PRESENTATION_BACKEND = 'webgpu';
-process.env.PRESENTATION_TECHNIQUE = 'mtsdf';
 process.env.PRESENTATION_SCREENSHOT_DIR ??= './.cache/presentation-screenshots';
 
-await import('./run-presentation-workload-probe.mts');
+const { runPresentationProbeMatrix } = await import('./support/run-presentation-probe-matrix.mts');
+
+await runPresentationProbeMatrix({
+  cases: [
+    { backend: 'webgpu', technique: 'mtsdf' },
+    { backend: 'webgl2', technique: 'mtsdf' },
+  ],
+  label: 'presentation screenshot',
+  script: new URL('./run-presentation-workload-probe.mts', import.meta.url),
+});
