@@ -132,7 +132,9 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
   const drawCount = countDraws(core);
   const paintCount = countUniquePaints(core);
   if (drawCount !== 1 || paintCount !== 2) {
-    throw new Error('React Text did not preserve its nested-span draw and paint contract');
+    throw new Error(
+      `React Text did not preserve its nested-span draw and paint contract: ${drawCount} draws, ${paintCount} paints`,
+    );
   }
   const hash = hashParagraphLayout(restoredLayout);
   return {
@@ -265,7 +267,12 @@ function countUniquePaints(object: CoreText): number {
     if (!(child instanceof THREE.Mesh)) return;
     const colors = child.geometry.getAttribute('bitmapColor');
     if (colors === undefined) return;
-    for (let instance = 0; instance < colors.count; instance += 1) {
+    const instanceCount =
+      child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : colors.count;
+    if (instanceCount > colors.count) {
+      throw new Error(`React Text submits ${instanceCount} instances from a ${colors.count}-entry paint buffer`);
+    }
+    for (let instance = 0; instance < instanceCount; instance += 1) {
       paints.add(
         [colors.getX(instance), colors.getY(instance), colors.getZ(instance), colors.getW(instance)].join(','),
       );
