@@ -18,4 +18,26 @@ describe('live-text viewport renderer boundaries', () => {
     expect(staticImports.every((statement) => statement.startsWith('import type '))).toBe(true);
     expect(source).toContain(`import('${rendererModule}')`);
   });
+
+  it('keeps live renderer modules on persistent-scene contracts', async () => {
+    const renderers = await Promise.all(
+      ['bitmap-text.ts', 'mtsdf-text.ts', 'slug-text.ts'].map(async (file) => ({
+        file,
+        source: await readFile(new URL(`../../renderer/${file}`, import.meta.url), 'utf8'),
+      })),
+    );
+
+    for (const { source } of renderers) {
+      expect(source).not.toContain('createBitmapTextPreview');
+      expect(source).not.toContain('createMtsdfTextPreview');
+      expect(source).not.toContain('createSlugTextPreview');
+      expect(source).not.toContain('TextPreview');
+    }
+
+    expect(renderers.find(({ file }) => file === 'bitmap-text.ts')?.source).toContain(
+      'createBitmapTextPersistentScene',
+    );
+    expect(renderers.find(({ file }) => file === 'mtsdf-text.ts')?.source).toContain('createMtsdfTextPersistentScene');
+    expect(renderers.find(({ file }) => file === 'slug-text.ts')?.source).toContain('createSlugTextPersistentScene');
+  });
 });

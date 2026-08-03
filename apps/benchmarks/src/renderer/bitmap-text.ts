@@ -19,8 +19,7 @@ import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
-import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
-import { createLiveFrameTelemetry, type LiveFrameHistoryCursor } from './live-frame-telemetry';
+import { type LiveFrameHistoryCursor } from './live-frame-telemetry';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
 import {
   createRetainedFontFixtureController,
@@ -28,12 +27,7 @@ import {
   type RetainedFontFixtureController,
 } from './retained-font-fixture';
 import { benchmarkContentWidth, liveTextPosition, type LiveTextAnchor } from '../workloads/shared/text-style';
-import {
-  createConfiguredRenderer,
-  disposeConfiguredRenderer,
-  readRendererViewportState,
-  type RendererBackend,
-} from './webgpu-renderer';
+import { type RendererBackend } from './webgpu-renderer';
 import {
   type PersistentRenderFrameContext,
   type PersistentRenderScene,
@@ -123,18 +117,7 @@ export interface BitmapAtlasPageStats {
   readonly gpuBytes: number;
 }
 
-export interface BitmapTextPreview {
-  resize(width: number, height: number): void;
-  panBy(deltaX: number, deltaY: number): void;
-  resetView(): void;
-  setGridVisible(visible: boolean): void;
-  update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>;
-  setPresentationProgress(revision: number, progress: number): BitmapTextPreviewSnapshot;
-  finishPresentation(revision: number): BitmapTextPreviewSnapshot;
-  dispose(): Promise<void>;
-}
-
-export interface BitmapTextPreviewUpdate extends LiveFontFixtureUpdate {
+export interface BitmapTextSceneUpdate extends LiveFontFixtureUpdate {
   readonly anchor: LiveTextAnchor;
   readonly fontSize: number;
   readonly layoutWidthRatio: number;
@@ -146,7 +129,7 @@ export interface BitmapTextPreviewUpdate extends LiveFontFixtureUpdate {
   readonly expectedGlyphCount?: number | undefined;
 }
 
-export interface BitmapTextPreviewSnapshot {
+export interface BitmapTextSceneSnapshot {
   readonly revision: number;
   readonly presentationProgress: number;
   readonly matchedGlyphs: number;
@@ -177,13 +160,10 @@ type BitmapTextPresentation =
       readonly targetGlyphs: number;
     };
 
-export interface BitmapTextPreviewOptions {
+export interface BitmapTextPersistentSceneOptions {
   readonly anchor?: LiveTextAnchor;
   readonly backend: RendererBackend;
-  readonly canvas: HTMLCanvasElement;
-  readonly dpr: number;
   readonly fontSize: number;
-  readonly height: number;
   readonly showGrid: boolean;
   readonly layoutWidth: number;
   readonly layoutWidthRatio?: number;
@@ -195,27 +175,19 @@ export interface BitmapTextPreviewOptions {
   readonly features?: readonly FontFeature[];
   readonly text: string;
   readonly textAlign?: 'start' | 'center';
-  readonly width: number;
-  readonly signal?: AbortSignal;
   readonly onError: (error: unknown) => void;
   readonly onStats: (stats: BitmapTextLiveStats) => void;
   readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
-}
-
-export type BitmapTextPersistentSceneOptions = Omit<
-  BitmapTextPreviewOptions,
-  'canvas' | 'dpr' | 'height' | 'signal' | 'width'
-> & {
   readonly id?: string;
-};
+}
 
 export interface BitmapTextPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   setGridVisible(visible: boolean): void;
-  update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>;
-  setPresentationProgress(revision: number, progress: number): BitmapTextPreviewSnapshot;
-  finishPresentation(revision: number): BitmapTextPreviewSnapshot;
+  update(options: BitmapTextSceneUpdate): Promise<BitmapTextSceneSnapshot>;
+  setPresentationProgress(revision: number, progress: number): BitmapTextSceneSnapshot;
+  finishPresentation(revision: number): BitmapTextSceneSnapshot;
 }
 
 export async function loadBitmapFont(
@@ -339,18 +311,18 @@ function countMissingGlyphs(layout: ParagraphLayout): number {
 }
 
 interface ActiveBitmapTextPersistentScene {
-  finishPresentation(revision: number): BitmapTextPreviewSnapshot;
+  finishPresentation(revision: number): BitmapTextSceneSnapshot;
   frame(context: PersistentRenderFrameContext): void;
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   resize(viewport: PersistentRenderViewport): void;
   setGridVisible(visible: boolean): void;
-  setPresentationProgress(revision: number, progress: number): BitmapTextPreviewSnapshot;
+  setPresentationProgress(revision: number, progress: number): BitmapTextSceneSnapshot;
   telemetry(
     snapshot: Parameters<NonNullable<PersistentRenderScene['telemetry']>>[0],
     viewport: PersistentRenderViewport,
   ): void;
-  update(options: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot>;
+  update(options: BitmapTextSceneUpdate): Promise<BitmapTextSceneSnapshot>;
   dispose(): void;
 }
 
@@ -537,9 +509,9 @@ async function activateBitmapTextPersistentScene(
       if (presentation.kind !== 'transitioning') return;
       for (const controller of presentation.controllers) controller.dispose();
     };
-    const presentationSnapshot = (): BitmapTextPreviewSnapshot => {
+    const presentationSnapshot = (): BitmapTextSceneSnapshot => {
       const layout = activeLine.object.layout;
-      if (layout === undefined) throw new Error('bitmap preview lost its committed layout');
+      if (layout === undefined) throw new Error('bitmap scene lost its committed layout');
       return {
         revision: presentation.revision,
         presentationProgress: presentation.kind === 'settled' ? 1 : presentation.progress,
@@ -551,16 +523,16 @@ async function activateBitmapTextPersistentScene(
         layoutHeight: layout.height,
       };
     };
-    const setPresentationProgress = (revision: number, progress: number): BitmapTextPreviewSnapshot => {
+    const setPresentationProgress = (revision: number, progress: number): BitmapTextSceneSnapshot => {
       if (!Number.isFinite(progress) || progress < 0 || progress > 1) {
-        throw new RangeError('bitmap preview presentation progress must be in [0, 1]');
+        throw new RangeError('bitmap scene presentation progress must be in [0, 1]');
       }
       if (closing || disposed || presentation.revision !== revision) {
-        throw new DOMException('The bitmap preview presentation is stale', 'AbortError');
+        throw new DOMException('The bitmap scene presentation is stale', 'AbortError');
       }
       if (presentation.kind === 'settled') {
         if (progress !== 1) {
-          throw new DOMException('The bitmap preview presentation is settled', 'InvalidStateError');
+          throw new DOMException('The bitmap scene presentation is settled', 'InvalidStateError');
         }
         return presentationSnapshot();
       }
@@ -584,7 +556,7 @@ async function activateBitmapTextPersistentScene(
       }
       return presentationSnapshot();
     };
-    const reflowToViewport = (update?: BitmapTextPreviewUpdate): Promise<BitmapTextPreviewSnapshot> => {
+    const reflowToViewport = (update?: BitmapTextSceneUpdate): Promise<BitmapTextSceneSnapshot> => {
       const updateStartedAt = performance.now();
       const revision = ++layoutRevision;
       const previousSnapshots: readonly BitmapGlyphPositionSnapshot[] = activeLine.object.children.map((object) =>
@@ -646,7 +618,7 @@ async function activateBitmapTextPersistentScene(
               );
               if (closing || disposed || revision !== layoutRevision) {
                 disposeBitmapLine(replacement);
-                throw new DOMException('The bitmap preview update was superseded', 'AbortError');
+                throw new DOMException('The bitmap scene update was superseded', 'AbortError');
               }
               updateBitmapDrawVisibility(replacement.object);
               scene.add(replacement.object);
@@ -684,9 +656,9 @@ async function activateBitmapTextPersistentScene(
         })
         .then(() => {
           if (closing || disposed || revision !== layoutRevision) {
-            throw new DOMException('The bitmap preview update was superseded', 'AbortError');
+            throw new DOMException('The bitmap scene update was superseded', 'AbortError');
           }
-          if (activeLine.object.layout === undefined) throw new Error('bitmap preview update did not commit a layout');
+          if (activeLine.object.layout === undefined) throw new Error('bitmap scene update did not commit a layout');
           if (
             currentExpectedGlyphCount !== undefined &&
             countRenderedGlyphs(activeLine.object) !== currentExpectedGlyphCount
@@ -810,8 +782,8 @@ async function activateBitmapTextPersistentScene(
       resize,
       panBy(deltaX, deltaY) {
         if (closing || disposed) return;
-        scene.position.x += finiteCanvasDelta(deltaX, 'bitmap preview horizontal pan');
-        scene.position.y -= finiteCanvasDelta(deltaY, 'bitmap preview vertical pan');
+        scene.position.x += finiteCanvasDelta(deltaX, 'bitmap scene horizontal pan');
+        scene.position.y -= finiteCanvasDelta(deltaY, 'bitmap scene vertical pan');
       },
       resetView() {
         scene.position.set(0, 0, 0);
@@ -822,11 +794,11 @@ async function activateBitmapTextPersistentScene(
       },
       update(next) {
         if (closing || disposed) {
-          return Promise.reject(new DOMException('The bitmap preview is disposed', 'AbortError'));
+          return Promise.reject(new DOMException('The bitmap scene is disposed', 'AbortError'));
         }
-        positiveViewportSize(next.fontSize, 'bitmap preview font size');
+        positiveViewportSize(next.fontSize, 'bitmap scene font size');
         if (!Number.isFinite(next.layoutWidthRatio) || next.layoutWidthRatio <= 0 || next.layoutWidthRatio > 1) {
-          throw new RangeError('bitmap preview layout width ratio must be in (0, 1]');
+          throw new RangeError('bitmap scene layout width ratio must be in (0, 1]');
         }
         return reflowToViewport(next);
       },
@@ -850,375 +822,6 @@ async function activateBitmapTextPersistentScene(
     if (fontFixtureController === undefined) font?.dispose();
     else fontFixtureController.dispose();
     canvasSurface.dispose();
-    throw error;
-  }
-}
-
-export async function createBitmapTextPreview(options: BitmapTextPreviewOptions): Promise<BitmapTextPreview> {
-  const {
-    backend,
-    canvas,
-    dpr,
-    expectedGlyphCount,
-    delivery = 'baked',
-    fontFixture = 'inter',
-    fontSize,
-    height,
-    layoutWidth,
-    signal,
-    text,
-    language = 'en',
-    direction = 'ltr',
-    features = [],
-    textAlign = 'start',
-    onError,
-    onStats,
-    onBakeProgress,
-  } = options;
-  const startupStarted = performance.now();
-  let width = positiveViewportSize(options.width, 'bitmap preview width');
-  let viewportHeight = positiveViewportSize(height, 'bitmap preview height');
-  let currentFontSize = fontSize;
-  let layoutWidthRatio = options.layoutWidthRatio ?? layoutWidth / width;
-  let committedContentWidth = layoutWidth;
-  const rendererStarted = performance.now();
-  const renderer = await createConfiguredRenderer({
-    backend,
-    canvas,
-    dpr,
-    height: viewportHeight,
-    trackGpuTimestamps: backend === 'webgpu',
-    width,
-  });
-  let rendererViewport = readRendererViewportState(renderer);
-  const canvasSurface = createCanvasSurface(renderer, width, viewportHeight, options.showGrid);
-  let gridVisible = options.showGrid;
-  const textUpdateTelemetry = createTextUpdateTelemetry();
-  const rendererInitMs = performance.now() - rendererStarted;
-  let font: RegisteredFont | undefined;
-  let line: BitmapLine | undefined;
-  let gpuFrameTimer: GpuFrameTimer | undefined;
-  try {
-    const fontStarted = performance.now();
-    const loadedFont = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress);
-    font = loadedFont.font;
-    const fontLoadMs = performance.now() - fontStarted;
-    signal?.throwIfAborted();
-    const scene = new THREE.Scene();
-    const textStarted = performance.now();
-    line = await createBitmapLine(font, loadedFont.raster, text, fontSize, dpr, signal, layoutWidth, {
-      language,
-      direction,
-      features,
-      textAlign,
-      rejectMissingGlyphs: expectedGlyphCount !== undefined,
-    });
-    if (expectedGlyphCount !== undefined && line.glyphCount !== expectedGlyphCount) {
-      throw new Error(`live workload rendered ${line.glyphCount} glyphs; expected ${expectedGlyphCount}`);
-    }
-    const textReadyMs = performance.now() - textStarted;
-    const startupMs = performance.now() - startupStarted;
-    const activeFont = font;
-    const activeLine = line;
-    const atlas = await registeredBitmapAtlas(activeFont, 'live');
-    const sceneStartedAt = performance.now();
-    scene.add(activeLine.object);
-    const sceneMs = performance.now() - sceneStartedAt;
-    textUpdateTelemetry.record({
-      scheduleMs: activeLine.scheduleMs,
-      readyMs: activeLine.readyMs,
-      sceneMs,
-      totalMs: performance.now() - textStarted,
-    });
-    const camera = new THREE.OrthographicCamera(0, width, 0, -viewportHeight, 0.1, 10);
-    camera.position.z = 1;
-    camera.updateProjectionMatrix();
-    gpuFrameTimer = createGpuFrameTimer({ backend, renderer, onError });
-    const activeGpuFrameTimer = gpuFrameTimer;
-    const gpuTimingSupported = activeGpuFrameTimer.supported;
-    const telemetry = createLiveFrameTelemetry({ gpuTimingSupported });
-    let closing = false;
-    let disposed = false;
-    let disposal: Promise<void> | undefined;
-    let layoutRevision = 0;
-    let firstDrawMs = 0;
-    let anchor = options.anchor ?? 'center';
-    const targetLinePosition = (): readonly [number, number] => {
-      const layout = activeLine.object.layout;
-      const currentLayoutWidth =
-        anchor === 'center' ? (layout?.width ?? activeLine.width) : benchmarkContentWidth(width, layoutWidthRatio);
-      const layoutHeight = layout?.height ?? activeLine.height;
-      return liveTextPosition(anchor, width, viewportHeight, currentLayoutWidth, layoutHeight);
-    };
-    const initialPosition = targetLinePosition();
-    activeLine.object.position.set(initialPosition[0], initialPosition[1], 0);
-    let presentation: BitmapTextPresentation = {
-      kind: 'settled',
-      revision: 0,
-      matchedGlyphs: 0,
-      targetGlyphs: countRenderedGlyphs(activeLine.object),
-    };
-    const disposePresentation = (): void => {
-      if (presentation.kind !== 'transitioning') return;
-      for (const controller of presentation.controllers) controller.dispose();
-    };
-    const presentationSnapshot = (): BitmapTextPreviewSnapshot => {
-      const layout = activeLine.object.layout;
-      if (layout === undefined) throw new Error('bitmap preview lost its committed layout');
-      return {
-        revision: presentation.revision,
-        presentationProgress: presentation.kind === 'settled' ? 1 : presentation.progress,
-        matchedGlyphs: presentation.matchedGlyphs,
-        targetGlyphs: presentation.targetGlyphs,
-        glyphCount: countRenderedGlyphs(activeLine.object),
-        lineCount: layout.lineGlyphCounts.length,
-        layoutWidth: layout.width,
-        layoutHeight: layout.height,
-      };
-    };
-    const setPresentationProgress = (revision: number, progress: number): BitmapTextPreviewSnapshot => {
-      if (!Number.isFinite(progress) || progress < 0 || progress > 1) {
-        throw new RangeError('bitmap preview presentation progress must be in [0, 1]');
-      }
-      if (closing || disposed || presentation.revision !== revision) {
-        throw new DOMException('The bitmap preview presentation is stale', 'AbortError');
-      }
-      if (presentation.kind === 'settled') {
-        if (progress !== 1) {
-          throw new DOMException('The bitmap preview presentation is settled', 'InvalidStateError');
-        }
-        return presentationSnapshot();
-      }
-      for (const controller of presentation.controllers) controller.setProgress(progress);
-      activeLine.object.position.set(
-        presentation.fromX + (presentation.toX - presentation.fromX) * progress,
-        presentation.fromY + (presentation.toY - presentation.fromY) * progress,
-        0,
-      );
-      presentation.progress = progress;
-      if (progress === 1) {
-        for (const controller of presentation.controllers) controller.finish();
-        presentation = {
-          kind: 'settled',
-          revision: presentation.revision,
-          matchedGlyphs: presentation.matchedGlyphs,
-          targetGlyphs: presentation.targetGlyphs,
-        };
-      }
-      return presentationSnapshot();
-    };
-    const reflowToViewport = (
-      update?: Pick<BitmapTextPreviewUpdate, 'text' | 'language' | 'direction' | 'features' | 'textAlign'>,
-    ): Promise<BitmapTextPreviewSnapshot> => {
-      const updateStartedAt = performance.now();
-      const revision = ++layoutRevision;
-      const previousSnapshots: readonly BitmapGlyphPositionSnapshot[] = activeLine.object.children.map((object) =>
-        captureBitmapGlyphPositions(object),
-      );
-      const fromX = activeLine.object.position.x;
-      const fromY = activeLine.object.position.y;
-      disposePresentation();
-      const dimensions = {
-        fontSize: currentFontSize,
-        width: benchmarkContentWidth(width, layoutWidthRatio),
-      };
-      if (update === undefined) activeLine.object.setProperties(dimensions);
-      else activeLine.object.setProperties({ ...dimensions, ...update });
-      const scheduledAt = performance.now();
-      return activeLine.object.ready.then(() => {
-        if (closing || disposed || revision !== layoutRevision) {
-          throw new DOMException('The bitmap preview update was superseded', 'AbortError');
-        }
-        const layout = activeLine.object.layout;
-        if (layout === undefined) throw new Error('bitmap preview update did not commit a layout');
-        committedContentWidth = dimensions.width;
-        const reflowSceneStartedAt = performance.now();
-        const targetPosition = targetLinePosition();
-        const controllers: BitmapGlyphPositionTransition[] = [];
-        for (
-          let batchIndex = 0;
-          batchIndex < activeLine.object.children.length && batchIndex < previousSnapshots.length;
-          batchIndex += 1
-        ) {
-          controllers.push(
-            createBitmapGlyphPositionTransition(
-              activeLine.object.children[batchIndex]!,
-              previousSnapshots[batchIndex]!,
-            ),
-          );
-        }
-        for (const controller of controllers) controller.setProgress(0);
-        activeLine.object.position.set(fromX, fromY, 0);
-        presentation = {
-          kind: 'transitioning',
-          revision,
-          controllers,
-          fromX,
-          fromY,
-          toX: targetPosition[0],
-          toY: targetPosition[1],
-          matchedGlyphs: controllers.reduce((count, controller) => count + controller.matchedGlyphs, 0),
-          targetGlyphs: countRenderedGlyphs(activeLine.object),
-          progress: 0,
-        };
-        const finishedAt = performance.now();
-        textUpdateTelemetry.record({
-          scheduleMs: scheduledAt - updateStartedAt,
-          readyMs: reflowSceneStartedAt - scheduledAt,
-          sceneMs: finishedAt - reflowSceneStartedAt,
-          totalMs: finishedAt - updateStartedAt,
-        });
-        return presentationSnapshot();
-      });
-    };
-    const renderPreviewFrame = (timestamp: number): void => {
-      if (disposed) return;
-      try {
-        const cpuFrameStarted = performance.now();
-        for (const measurement of activeGpuFrameTimer.poll()) {
-          if (measurement.durationMs === undefined) telemetry.discardGpu(measurement.frameId);
-          else telemetry.recordGpu(measurement.frameId, measurement.durationMs);
-        }
-        const frameId = telemetry.beginFrame(timestamp);
-        if (telemetry.gpuTimingSupported) activeGpuFrameTimer.beginFrame(frameId);
-        const started = performance.now();
-        try {
-          canvasSurface.render(scene, camera);
-        } finally {
-          if (telemetry.gpuTimingSupported) activeGpuFrameTimer.endFrame();
-        }
-        if (closing) return;
-        const submitMs = performance.now() - started;
-        if (firstDrawMs === 0) firstDrawMs = submitMs;
-        const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const telemetrySnapshot = telemetry.endFrame(frameId, cpuFrameMs);
-        if (telemetrySnapshot === undefined) return;
-        const framebufferGpuBytes = rendererViewport.drawingBufferWidth * rendererViewport.drawingBufferHeight * 4;
-        const layout = activeLine.object.layout;
-        if (layout === undefined) throw new Error('live bitmap Text lost its committed layout');
-        onStats({
-          technique: 'bitmap',
-          backend,
-          dpr: rendererViewport.pixelRatio,
-          showGrid: gridVisible,
-          ...telemetrySnapshot,
-          glyphCount: countRenderedGlyphs(activeLine.object),
-          missingGlyphCount: countMissingGlyphs(layout),
-          drawCount: countDraws(activeLine.object),
-          layoutWidth: layout.width,
-          layoutHeight: layout.height,
-          lineCount: layout.lineGlyphCounts.length,
-          strikePpem: selectBitmapStrikePpem(atlas.strikes, currentFontSize, rendererViewport.pixelRatio),
-          cssFontSize: currentFontSize,
-          renderedPpem: currentFontSize * rendererViewport.pixelRatio,
-          scaleRatio:
-            (currentFontSize * rendererViewport.pixelRatio) /
-            selectBitmapStrikePpem(atlas.strikes, currentFontSize, rendererViewport.pixelRatio),
-          atlasGpuBytes: atlas.gpuBytes,
-          atlasPages: atlas.pages,
-          framebufferGpuBytes,
-          totalGpuBytes: atlas.gpuBytes + framebufferGpuBytes,
-          artifactBytes: loadedFont.artifactBytes,
-          delivery,
-          sourceFontBytes: loadedFont.metrics.sourceFontBytes,
-          coreArtifactBytes: loadedFont.metrics.coreArtifactBytes,
-          coreBakeMs: loadedFont.metrics.coreBakeMs,
-          rasterArtifactBytes: loadedFont.metrics.rasterArtifactBytes,
-          rasterBakeMs: loadedFont.metrics.rasterBakeMs,
-          rendererInitMs,
-          fontLoadMs,
-          textReadyMs,
-          firstDrawMs,
-          startupMs,
-          gpuTimingSupported,
-          textUpdateTimings: textUpdateTelemetry.summary(),
-        });
-      } catch (error) {
-        onError(error);
-      }
-    };
-    await renderer.setAnimationLoop(renderPreviewFrame);
-    return {
-      resize(nextWidth, nextHeight) {
-        if (closing || disposed) return;
-        width = positiveViewportSize(nextWidth, 'bitmap preview width');
-        viewportHeight = positiveViewportSize(nextHeight, 'bitmap preview height');
-        renderer.setSize(width, viewportHeight, false);
-        rendererViewport = readRendererViewportState(renderer);
-        canvasSurface.resize(width, viewportHeight);
-        camera.right = width;
-        camera.bottom = -viewportHeight;
-        camera.updateProjectionMatrix();
-        const nextContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
-        if (nextContentWidth === committedContentWidth) {
-          const targetPosition = targetLinePosition();
-          activeLine.object.position.set(targetPosition[0], targetPosition[1], 0);
-          return;
-        }
-        void reflowToViewport()
-          .then((snapshot) => setPresentationProgress(snapshot.revision, 1))
-          .catch((error: unknown) => {
-            if (!closing && !disposed && !(error instanceof DOMException && error.name === 'AbortError')) {
-              onError(error);
-            }
-          });
-      },
-      panBy(deltaX, deltaY) {
-        if (closing || disposed) return;
-        scene.position.x += finiteCanvasDelta(deltaX, 'bitmap preview horizontal pan');
-        scene.position.y -= finiteCanvasDelta(deltaY, 'bitmap preview vertical pan');
-      },
-      resetView() {
-        scene.position.set(0, 0, 0);
-      },
-      setGridVisible(visible) {
-        gridVisible = visible;
-        canvasSurface.setGridVisible(visible);
-      },
-      update(next) {
-        if (closing || disposed) {
-          return Promise.reject(new DOMException('The bitmap preview is disposed', 'AbortError'));
-        }
-        currentFontSize = positiveViewportSize(next.fontSize, 'bitmap preview font size');
-        anchor = next.anchor;
-        if (!Number.isFinite(next.layoutWidthRatio) || next.layoutWidthRatio <= 0 || next.layoutWidthRatio > 1) {
-          throw new RangeError('bitmap preview layout width ratio must be in (0, 1]');
-        }
-        layoutWidthRatio = next.layoutWidthRatio;
-        return reflowToViewport({
-          text: next.text,
-          language: next.language,
-          direction: next.direction,
-          features: next.features,
-          textAlign: next.textAlign,
-        });
-      },
-      setPresentationProgress,
-      finishPresentation(revision) {
-        return setPresentationProgress(revision, 1);
-      },
-      dispose() {
-        if (disposal !== undefined) return disposal;
-        closing = true;
-        disposal = (async () => {
-          disposed = true;
-          await renderer.setAnimationLoop(null);
-          await activeGpuFrameTimer.dispose();
-          disposePresentation();
-          disposeBitmapLine(activeLine);
-          activeFont.dispose();
-          canvasSurface.dispose();
-          await disposeConfiguredRenderer(renderer);
-        })();
-        return disposal;
-      },
-    };
-  } catch (error) {
-    await gpuFrameTimer?.dispose();
-    if (line !== undefined) disposeBitmapLine(line);
-    font?.dispose();
-    canvasSurface.dispose();
-    await disposeConfiguredRenderer(renderer);
     throw error;
   }
 }

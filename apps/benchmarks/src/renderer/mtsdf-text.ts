@@ -22,7 +22,6 @@ import {
 } from '../workloads/shared/text-style';
 import { type RendererBackend } from './webgpu-renderer';
 import {
-  createPersistentRenderHost,
   type PersistentRenderScene,
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
@@ -96,7 +95,7 @@ export interface MtsdfTextLiveStats {
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
 }
 
-export interface MtsdfTextPreviewUpdate extends LiveFontFixtureUpdate {
+export interface MtsdfTextSceneUpdate extends LiveFontFixtureUpdate {
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -107,51 +106,31 @@ export interface MtsdfTextPreviewUpdate extends LiveFontFixtureUpdate {
   readonly textAlign: 'start' | 'center';
 }
 
-export interface MtsdfTextPreview {
-  resize(width: number, height: number): void;
-  panBy(deltaX: number, deltaY: number): void;
-  resetView(): void;
-  setGridVisible(visible: boolean): void;
-  update(update: MtsdfTextPreviewUpdate): Promise<void>;
-  dispose(): Promise<void>;
-}
-
-export interface MtsdfTextPreviewOptions {
+export interface MtsdfTextPersistentSceneOptions {
   readonly anchor?: LiveTextAnchor;
   readonly backend: RendererBackend;
-  readonly canvas: HTMLCanvasElement;
   readonly direction?: 'ltr' | 'rtl';
-  readonly dpr: number;
   readonly features?: readonly FontFeature[];
   readonly fontSize: number;
   readonly fontFixture?: BenchmarkFontFixture;
   readonly delivery?: FontDelivery;
-  readonly height: number;
   readonly showGrid: boolean;
   readonly language?: string;
   readonly layoutWidth: number;
   readonly layoutWidthRatio?: number;
-  readonly signal?: AbortSignal;
   readonly text: string;
   readonly textAlign?: 'start' | 'center';
-  readonly width: number;
   readonly onError: (error: unknown) => void;
   readonly onStats: (stats: MtsdfTextLiveStats) => void;
   readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
-}
-
-export type MtsdfTextPersistentSceneOptions = Omit<
-  MtsdfTextPreviewOptions,
-  'canvas' | 'dpr' | 'height' | 'signal' | 'width'
-> & {
   readonly id?: string;
-};
+}
 
 export interface MtsdfTextPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   setGridVisible(visible: boolean): void;
-  update(update: MtsdfTextPreviewUpdate): Promise<void>;
+  update(update: MtsdfTextSceneUpdate): Promise<void>;
 }
 
 interface MtsdfPersistentActivation {
@@ -179,7 +158,7 @@ interface MtsdfPersistentFontFixture {
 }
 
 export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentSceneOptions): MtsdfTextPersistentScene {
-  let fontSize = positiveViewportSize(options.fontSize, 'MSDF preview font size');
+  let fontSize = positiveViewportSize(options.fontSize, 'MSDF scene font size');
   let anchor = options.anchor ?? 'center';
   let layoutWidthRatio = options.layoutWidthRatio ?? 1;
   if (options.layoutWidthRatio !== undefined) assertLayoutWidthRatio(options.layoutWidthRatio);
@@ -385,8 +364,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     },
     panBy(deltaX, deltaY) {
       const resources = active();
-      resources.scene.position.x += finiteCanvasDelta(deltaX, 'MSDF preview horizontal pan');
-      resources.scene.position.y -= finiteCanvasDelta(deltaY, 'MSDF preview vertical pan');
+      resources.scene.position.x += finiteCanvasDelta(deltaX, 'MSDF scene horizontal pan');
+      resources.scene.position.y -= finiteCanvasDelta(deltaY, 'MSDF scene vertical pan');
     },
     resetView() {
       active().scene.position.set(0, 0, 0);
@@ -398,7 +377,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     async update(next) {
       const resources = await activationGate.wait();
       const updateStartedAt = performance.now();
-      const nextFontSize = positiveViewportSize(next.fontSize, 'MSDF preview font size');
+      const nextFontSize = positiveViewportSize(next.fontSize, 'MSDF scene font size');
       assertLayoutWidthRatio(next.layoutWidthRatio);
       const revision = ++updateRevision;
       const nextContentWidth = benchmarkContentWidth(resources.viewport.width, next.layoutWidthRatio);
@@ -455,7 +434,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         },
       });
       if (disposed || activation !== resources || revision !== updateRevision) {
-        throw new DOMException('The MSDF preview update was superseded', 'AbortError');
+        throw new DOMException('The MSDF scene update was superseded', 'AbortError');
       }
       const sceneStartedAt = performance.now();
       positionLiveLine(resources.line, resources.viewport.width, resources.viewport.height, anchor, layoutWidthRatio);
@@ -482,57 +461,6 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       resources.canvasSurface.dispose();
     },
   };
-}
-
-export async function createMtsdfTextPreview(options: MtsdfTextPreviewOptions): Promise<MtsdfTextPreview> {
-  options.signal?.throwIfAborted();
-  const width = positiveViewportSize(options.width, 'MSDF preview width');
-  const height = positiveViewportSize(options.height, 'MSDF preview height');
-  const layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
-  assertLayoutWidthRatio(layoutWidthRatio);
-  const host = await createPersistentRenderHost({
-    backend: options.backend,
-    canvas: options.canvas,
-    dpr: options.dpr,
-    height,
-    width,
-    onError: options.onError,
-  });
-  const scene = createMtsdfTextPersistentScene({
-    ...options,
-    layoutWidthRatio,
-  });
-  try {
-    const lease = await host.replaceScene(scene, options.signal);
-    let disposal: Promise<void> | undefined;
-    return {
-      resize(nextWidth, nextHeight) {
-        host.resize(nextWidth, nextHeight);
-      },
-      panBy(deltaX, deltaY) {
-        scene.panBy(deltaX, deltaY);
-      },
-      resetView() {
-        scene.resetView();
-      },
-      setGridVisible(visible) {
-        scene.setGridVisible(visible);
-      },
-      update(next) {
-        return scene.update(next);
-      },
-      dispose() {
-        disposal ??= (async () => {
-          await lease.release();
-          await host.dispose();
-        })();
-        return disposal;
-      },
-    };
-  } catch (error) {
-    await host.dispose();
-    throw error;
-  }
 }
 
 function createBorrowedCanvasSurface(
@@ -630,7 +558,7 @@ function positiveViewportSize(value: number, name: string): number {
 
 function assertLayoutWidthRatio(value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > 1) {
-    throw new RangeError('MSDF preview layout width ratio must be in (0, 1]');
+    throw new RangeError('MSDF scene layout width ratio must be in (0, 1]');
   }
 }
 
