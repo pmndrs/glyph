@@ -68,6 +68,14 @@ because the harness needs them.
 | Direct baker/shaper ABI targets | Published Wasm/package entry points behind one lazily selected target adapter | Exact ABI timing and byte-level conformance | Keep isolated under benchmark conformance/measurement targets |
 | Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene | Paired offscreen-target publication and rollback after a delayed peer | Keep coordination local; no ordinary consumer proves a grouped public transaction |
 
+The workload pass also tested three plausible additions and found no consumer failure that would justify shipping them:
+
+| Candidate | Evidence | Decision |
+| --- | --- | --- |
+| Public glyph-capacity or slack policy | All three raster modules reuse compatible batches through the required `stageBatch(previous, …)` transaction, reserve bounded internal capacity, and complete the 1,402-glyph Icon Grid recycle sweep without consumer allocation controls | Keep capacity package-owned; exposing the growth policy would couple callers to renderer storage without improving correctness |
+| Public `Text.flush()` or `Text.commit()` | Resident `setProperties()` work publishes before child traversal through the ordinary Three.js `updateMatrixWorld()` lifecycle; authored workloads do not await readiness per frame, and Dynamic Layout can synchronously read the committed layout after matrix publication | Keep one lifecycle rather than adding a second publication path with ambiguous render ordering |
+| Public retained-update diagnostics | Reuse, ranged upload, overflow, and replacement are covered by raster tests and benchmark-only telemetry; applications do not need those classifications to render correctly | Keep investigation/profiling signals outside the thin runtime so production builds retain zero diagnostic cost |
+
 This audit rejects new loader telemetry, generic raster-statistics, Three-specific, and React-specific APIs: each would add
 coupling or shipped code without a demonstrated consumer failure. It also rejects exporting the first-party capacity and dirty-
 range helpers: the portable `stageBatch` contract already lets an external raster own an equivalent policy without inheriting
