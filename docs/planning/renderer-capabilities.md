@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Renderer capability matrix
-description: Compares planned game-text features and limitations across bitmap, MSDF, and Slug rasters.
+description: Compares evidence-backed V1 raster roles and explicitly planned later capabilities across bitmap, MSDF, and Slug.
 tags: [rendering, bitmap, msdf, mtsdf, slug, games]
 sources:
   - id: 'citation-1-1'
@@ -31,20 +31,30 @@ sources:
   - id: 'slug-outline-research'
     resource: 'slug-outline-research.md'
     title: 'Slug outline architecture'
+  - id: 'benchmark-evidence'
+    resource: '../packages/benchmarks.md'
+    title: 'Benchmark and presentation evidence'
+  - id: 'text-package-evidence'
+    resource: '../packages/text.md'
+    title: 'Text and raster package evidence'
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-07-29T13:24:14Z'
+  at: '2026-08-03T15:29:54Z'
 ---
 
 # Renderer capability matrix
 
-This is the intended `pmndrs/text` feature set, not a claim about implemented behavior. The public MSDF raster uses one MTSDF RGBA atlas; MTSDF is its encoding, not another selectable engine.
+This matrix separates the evidence-backed V1 raster roles from explicitly planned later capabilities. The public MSDF
+raster uses one MTSDF RGBA atlas; MTSDF is its encoding, not another selectable engine. The recommendation and current
+scale/effect boundaries below are release claims. Rows describing later color, paging, mixed-raster, or expanded-effect
+work remain intended capabilities rather than claims about the V1 implementation.
 
 | Symbol | Meaning                                                                   |
 | :----: | ------------------------------------------------------------------------- |
 |   ✅   | Natural, fully intended capability                                        |
 |   ⚠️   | Supported with a bounded range, extra pass/data, or documented constraint |
+|   🟡   | Planned additive capability; not implemented in V1                        |
 |   ❌   | Not represented by this technique; choose another raster                  |
 
 ## Styling and effects
@@ -53,19 +63,22 @@ This is the intended `pmndrs/text` feature set, not a claim about implemented be
 | --------------------------- | :----: | :--: | :--: |
 | Runtime solid fill/tint     |   ✅   |  ✅  |  ✅  |
 | Per-span or per-glyph color |   ✅   |  ✅  |  ✅  |
-| Gradient or texture fill    |   ✅   |  ✅  |  ✅  |
+| Gradient or texture fill    |   🟡   |  🟡  |  🟡  |
 | Runtime opacity/fade        |   ✅   |  ✅  |  ✅  |
-| Adjustable outline          |   ⚠️   |  ✅  |  ❌  |
-| Multiple outline bands      |   ⚠️   |  ⚠️  |  ❌  |
-| Hard drop shadow            |   ✅   |  ✅  |  ❌  |
-| Soft shadow or glow         |   ⚠️   |  ✅  |  ❌  |
-| Cosmetic weight adjustment  |   ⚠️   |  ⚠️  |  ❌  |
+| Adjustable outline          |   🟡   |  ✅  |  🟡  |
+| Multiple outline bands      |   🟡   |  🟡  |  🟡  |
+| Hard drop shadow            |   🟡   |  ✅  |  🟡  |
+| Soft shadow or glow         |   🟡   |  🟡  |  🟡  |
+| Cosmetic weight adjustment  |   🟡   |  🟡  |  🟡  |
 | 3D extrusion/bevel          |   ❌   |  ❌  |  ❌  |
 
 Notes:
 
-1. Bitmap outlines require dilation or another strike. MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range. Slug V0 rejects outline and shadow paint while a bounded shared-traversal approximation remains research.[^slug-outline-research]
-2. Soft effects may require extra samples, padding, or an offscreen blur. The API must report limits rather than imply identical output.
+1. Bitmap and Slug V0 accept fill and opacity and reject outline or shadow instead of degrading silently. A future Bitmap
+   outline requires a separate dilated strike; the bounded Slug shared-traversal approximation remains research.[^slug-outline-research]
+   MSDF outlines use the MTSDF alpha channel and are bounded by the encoded distance range.
+2. Planned soft effects require extra samples, padding, or an offscreen blur. Any admitted API must report limits rather
+   than imply identical output.
 3. Cosmetic thickness is not a substitute for shaping a real font weight.
 4. Extruded geometry is a separate mesh-generation feature, outside this 2D raster contract.
 
@@ -74,21 +87,24 @@ Notes:
 | Feature                                             | Bitmap | MSDF | Slug |
 | --------------------------------------------------- | :----: | :--: | :--: |
 | Monochrome OpenType outlines                        |   ✅   |  ✅  |  ✅  |
-| Standalone SVG icon manifest                        |   ✅   |  ⚠️  |  ✅  |
-| OpenType `SVG ` glyphs                              |   ✅   |  ⚠️  |  ⚠️  |
-| COLRv0 layered vectors                              |   ✅   |  ⚠️  |  ✅  |
-| COLRv1 paint graph                                  |   ✅   |  ⚠️  |  ⚠️  |
-| Runtime palette selection                           |   ❌   |  ⚠️  |  ✅  |
-| CBDT/CBLC or `sbix` emoji                           |   ✅   |  ❌  |  ❌  |
-| Mixed vector/raster SVG artwork                     |   ✅   |  ❌  |  ⚠️  |
+| Standalone SVG icon manifest                        |   🟡   |  🟡  |  🟡  |
+| OpenType `SVG ` glyphs                              |   🟡   |  🟡  |  🟡  |
+| COLRv0 layered vectors                              |   🟡   |  🟡  |  🟡  |
+| COLRv1 paint graph                                  |   🟡   |  🟡  |  🟡  |
+| Runtime palette selection                           |   🟡   |  🟡  |  🟡  |
+| CBDT/CBLC or `sbix` emoji                           |   🟡   |  ❌  |  ❌  |
+| Mixed vector/raster SVG artwork                     |   🟡   |  ❌  |  🟡  |
 | SVG scripts, animation, filters, external resources |   ❌   |  ❌  |  ❌  |
 
 Notes:
 
-1. Bitmap can flatten supported source artwork to RGBA strikes, but loses vector palette behavior.
-2. The MSDF raster accepts supported closed paths or layered masks; arbitrary SVG paint and embedded images are not distance fields.
-3. Slug compiles a safe vector/paint subset into flat geometry, layer, palette, and image-reference records. It never executes source SVG at runtime.
-4. Color bitmap emoji uses the bitmap/image raster for that glyph while preserving the paragraph's shaped glyph identity.
+1. V1 bakes monochrome OpenType outlines only. The color and standalone-SVG rows are additive plans, not accepted input
+   paths in the current baker or renderer.
+2. A future Bitmap color path can flatten supported source artwork to RGBA strikes, but loses vector palette behavior.
+3. Arbitrary SVG paint and embedded images are not distance fields. Any future MSDF admission must define a supported
+   closed-path or layered-mask subset.
+4. A future Slug color path may compile a safe vector/paint subset into package-owned records; it will never execute source
+   SVG scripts or external resources at runtime.
 
 ## Scale and workload fit
 
@@ -108,7 +124,7 @@ Notes:
 Notes:
 
 1. Bitmap quality is tied to available strikes; it is preferred for tiny hinted or deliberately pixel-authored text.
-2. MSDF with MTSDF encoding is the proposed general-purpose default, subject to accepted scale, transform, atlas, and effects benchmarks.
+2. MSDF with MTSDF encoding is the general-purpose default established by the accepted scale, transform, atlas, and effects benchmarks.
 3. Slug is preferred when large-size or zoomed fill fidelity dominates. Its cost remains shape- and coverage-dependent.
 4. Payload size depends on glyph coverage, strikes, atlas resolution, layer padding, outline complexity, and compression. It must be measured per corpus.
 
@@ -125,9 +141,14 @@ Switching raster must never reshape text or change line breaks. V1 selects one r
 
 ## Recommendation
 
-- Use **MSDF** for ordinary scalable game and UI text and inexpensive runtime outlines/effects. Its V1 atlas encoding is MTSDF.
-- Use **bitmap strikes** for tiny or intentionally pixel-authored text and embedded color emoji.
-- Use **Slug** for large or deeply zoomed text, high-fidelity vector layers, and SVG icon fonts.
+- Use **MSDF** for ordinary scalable game and UI text and inexpensive runtime outlines/effects. Its V1 MTSDF encoding
+  passed the shared workload, DPR, transform, effects, source-outline error, atlas, and dual-backend gates recorded in the
+  [benchmark evidence](../packages/benchmarks.md).
+- Use **bitmap strikes** for tiny, known-density, or intentionally pixel-authored text. The exact DPR-1/DPR-2 strike and
+  CPU/GPU frame oracles establish this role; bitmap does not silently approximate unsupported outline or shadow effects.
+- Use **Slug** for large or deeply zoomed fill text and intricate monochrome outlines. The 36-cell dual-backend/DPR
+  release-role matrix covers large size, 1,024-ppem magnification, complex scripts, clipping, affine transforms, and
+  projection zoom against source outlines. Slug V0 deliberately rejects outline, shadow, and color-layer paint.
 - Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
 
 [^slug-outline-research]: The rejected exact-distance design, retained measurements, and replacement gate are recorded separately from the capability table.

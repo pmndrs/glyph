@@ -1,7 +1,7 @@
 ---
 type: API Reference
 title: Runtime and bake API fixture V0
-description: Defines the canonical proposed package, loader, baker, shaper, paragraph, raster, and cache interfaces.
+description: Defines the canonical accepted V1 package, loader, baker, shaper, paragraph, raster, and cache interfaces plus explicitly deferred additions.
 tags: [api, loader, baker, shaping, paragraph, raster]
 sources:
   - id: 'citation-1'
@@ -25,12 +25,12 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-03T14:22:00Z'
+  at: '2026-08-03T15:29:54Z'
 ---
 
 # Runtime and bake API fixture V0
 
-Status: contract candidate; names may be polished, ownership and data flow may not remain implicit
+Status: accepted V1 surfaces are implemented; sections labeled deferred remain proposals
 Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScript paragraph layout, and explicit raster loading
 
 ## Milestone 0.1 acceptance evidence
@@ -53,28 +53,28 @@ constraint has a distinguishing test, and runtime-size, Worker, renderer, and ty
 telemetry, fixture authentication, renderer ownership, and direct-ABI measurement do not become product APIs merely
 because the harness needs them.
 
-| Consumer surface | Published API exercised | Observed application-owned concern | Decision |
-| --- | --- | --- | --- |
-| Benchmark Ipsum | Technique adapter constructs public `Text` from a `RegisteredFont`, typed raster input, and authored paragraph properties | Corpus, expected Inter glyph count, and viewport anchor | No API gap |
-| Advanced Shaping | Technique adapter updates public `Text` with language, direction, features, width, and grapheme-safe content | Authored case timeline, editing controls, and fixture selection | No API gap |
-| Text Ladder | Public `Text` objects share one registered font/raster and retain Three.js transforms | Size corpus, marquee layout, and completion timing | No API gap |
-| Zoom Text | Public `Text` objects retain pre-shaped phrases; opacity changes use `Text.setProperties` | Phrase order, viewport-fit scale, and animation sequencing | No API gap |
-| Icon Grid | A fixed public `Text` pool changes icon and label content through `Text.setProperties` | Virtual window, recycling assignments, panning, smoothing, and metrics | No API gap; glyph replacement already uses retained raster capacity |
-| Off-axis / 3D | Public `Text` uses styled spans and retained span updates under ordinary Three.js transforms | Camera, group transform, and color-cycle animation | No API gap |
-| Dynamic Layout | Public `Text.setProperties` updates width and publishes through the Three.js matrix lifecycle | Three independent width curves and benchmark-only bounds geometry | No API gap |
-| Paragraph Stress | Public `Text` renders a workload-sized paragraph and retains camera-only scrolling | Repeated corpus size and scroll motion | No API gap; text-volume changes correctly replace topology |
-| Paint & Effects | Public `TextSpan` values and `Text.setProperties` update fill, opacity, MTSDF outline, and shadow | Color animation and technique-specific control policy | No API gap |
-| Baked and runtime font delivery | Public `FontLoader`, `FontRegistry`, `defineRaster`, raster subpaths, and lazy `runtime-bake` | Fixture authentication, decompression, and payload accounting | Keep instrumentation outside the thin runtime |
-| Direct baker/shaper ABI targets | Published Wasm/package entry points behind one lazily selected target adapter | Exact ABI timing and byte-level conformance | Keep isolated under benchmark conformance/measurement targets |
-| Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene | Paired offscreen-target publication and rollback after a delayed peer | Keep coordination local; no ordinary consumer proves a grouped public transaction |
+| Consumer surface                | Published API exercised                                                                                                   | Observed application-owned concern                                     | Decision                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Benchmark Ipsum                 | Technique adapter constructs public `Text` from a `RegisteredFont`, typed raster input, and authored paragraph properties | Corpus, expected Inter glyph count, and viewport anchor                | No API gap                                                                        |
+| Advanced Shaping                | Technique adapter updates public `Text` with language, direction, features, width, and grapheme-safe content              | Authored case timeline, editing controls, and fixture selection        | No API gap                                                                        |
+| Text Ladder                     | Public `Text` objects share one registered font/raster and retain Three.js transforms                                     | Size corpus, marquee layout, and completion timing                     | No API gap                                                                        |
+| Zoom Text                       | Public `Text` objects retain pre-shaped phrases; opacity changes use `Text.setProperties`                                 | Phrase order, viewport-fit scale, and animation sequencing             | No API gap                                                                        |
+| Icon Grid                       | A fixed public `Text` pool changes icon and label content through `Text.setProperties`                                    | Virtual window, recycling assignments, panning, smoothing, and metrics | No API gap; glyph replacement already uses retained raster capacity               |
+| Off-axis / 3D                   | Public `Text` uses styled spans and retained span updates under ordinary Three.js transforms                              | Camera, group transform, and color-cycle animation                     | No API gap                                                                        |
+| Dynamic Layout                  | Public `Text.setProperties` updates width and publishes through the Three.js matrix lifecycle                             | Three independent width curves and benchmark-only bounds geometry      | No API gap                                                                        |
+| Paragraph Stress                | Public `Text` renders a workload-sized paragraph and retains camera-only scrolling                                        | Repeated corpus size and scroll motion                                 | No API gap; text-volume changes correctly replace topology                        |
+| Paint & Effects                 | Public `TextSpan` values and `Text.setProperties` update fill, opacity, MTSDF outline, and shadow                         | Color animation and technique-specific control policy                  | No API gap                                                                        |
+| Baked and runtime font delivery | Public `FontLoader`, `FontRegistry`, `defineRaster`, raster subpaths, and lazy `runtime-bake`                             | Fixture authentication, decompression, and payload accounting          | Keep instrumentation outside the thin runtime                                     |
+| Direct baker/shaper ABI targets | Published Wasm/package entry points behind one lazily selected target adapter                                             | Exact ABI timing and byte-level conformance                            | Keep isolated under benchmark conformance/measurement targets                     |
+| Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene                                            | Paired offscreen-target publication and rollback after a delayed peer  | Keep coordination local; no ordinary consumer proves a grouped public transaction |
 
 The workload pass also tested three plausible additions and found no consumer failure that would justify shipping them:
 
-| Candidate | Evidence | Decision |
-| --- | --- | --- |
-| Public glyph-capacity or slack policy | All three raster modules reuse compatible batches through the required `stageBatch(previous, …)` transaction, reserve bounded internal capacity, and complete the 1,402-glyph Icon Grid recycle sweep without consumer allocation controls | Keep capacity package-owned; exposing the growth policy would couple callers to renderer storage without improving correctness |
-| Public `Text.flush()` or `Text.commit()` | Resident `setProperties()` work publishes before child traversal through the ordinary Three.js `updateMatrixWorld()` lifecycle; authored workloads do not await readiness per frame, and Dynamic Layout can synchronously read the committed layout after matrix publication | Keep one lifecycle rather than adding a second publication path with ambiguous render ordering |
-| Public retained-update diagnostics | Reuse, ranged upload, overflow, and replacement are covered by raster tests and benchmark-only telemetry; applications do not need those classifications to render correctly | Keep investigation/profiling signals outside the thin runtime so production builds retain zero diagnostic cost |
+| Candidate                                | Evidence                                                                                                                                                                                                                                                                     | Decision                                                                                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Public glyph-capacity or slack policy    | All three raster modules reuse compatible batches through the required `stageBatch(previous, …)` transaction, reserve bounded internal capacity, and complete the 1,402-glyph Icon Grid recycle sweep without consumer allocation controls                                   | Keep capacity package-owned; exposing the growth policy would couple callers to renderer storage without improving correctness |
+| Public `Text.flush()` or `Text.commit()` | Resident `setProperties()` work publishes before child traversal through the ordinary Three.js `updateMatrixWorld()` lifecycle; authored workloads do not await readiness per frame, and Dynamic Layout can synchronously read the committed layout after matrix publication | Keep one lifecycle rather than adding a second publication path with ambiguous render ordering                                 |
+| Public retained-update diagnostics       | Reuse, ranged upload, overflow, and replacement are covered by raster tests and benchmark-only telemetry; applications do not need those classifications to render correctly                                                                                                 | Keep investigation/profiling signals outside the thin runtime so production builds retain zero diagnostic cost                 |
 
 This audit rejects new loader telemetry, generic raster-statistics, Three-specific, and React-specific APIs: each would add
 coupling or shipped code without a demonstrated consumer failure. It also rejects exporting the first-party capacity and dirty-
@@ -980,6 +980,9 @@ Hosts own padding, borders, transforms, clipping, invalidation scheduling, and c
 uikit is the first required third-party integration, but its `CustomLayouting`, Yoga modes, signals, and centered coordinate system remain in a uikit-owned adapter. The evidence from current uikit and its incremental migration are specified separately in [uikit integration](uikit-integration.md).
 
 ## Raster module boundary
+
+External packages moving from the pre-release mutation seams should follow the focused
+[raster plugin migration guide](raster-plugin-migration.md); the signatures and invariants below remain authoritative.
 
 ```ts
 interface RuntimeRasterBakeRequest<Options> {
