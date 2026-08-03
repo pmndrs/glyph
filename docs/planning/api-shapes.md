@@ -58,11 +58,12 @@ because the harness needs them.
 | Text Ladder, Zoom Text, Icon Grid, Off-axis / 3D, Dynamic Layout, Paragraph Stress, and Paint & Effects | Public `Text` with a `RegisteredFont` and typed raster input; retained changes use `Text.setProperties` | Every scene is expressible without direct Wasm, a private shaper, or renderer ownership | No API gap; finish the benchmark-local scene hierarchy |
 | Baked and runtime font delivery | Public `FontLoader`, `FontRegistry`, `defineFont`, raster modules, and lazy `runtime-bake` | Manual manifest authentication and compressed-fixture accounting are benchmark evidence concerns | Keep instrumentation outside the thin runtime |
 | Direct baker/shaper ABI targets | Explicit low-level package and Wasm imports behind one lazily selected shared adapter | The target measures the ABI rather than demonstrating ordinary product usage | Keep isolated under benchmark conformance/measurement targets |
-| Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene | A delayed peer could expose a mixed-generation comparison frame; current immediate-ready tests do not distinguish it | Evidence candidate: first prove or disprove the mixed-frame failure, then prefer benchmark-local detached scene replacement unless another consumer requires renderer-neutral grouped publication |
+| Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene | A deterministic delayed-peer test reproduced a mixed-generation target pair; pausing target refresh, publishing both retained objects in one task, and rolling back failures preserves the last complete pair | Confirmed benchmark-local coordination need; no public grouped transaction because no ordinary consumer requires cross-object atomicity |
 
 This audit rejects new loader telemetry, generic raster-statistics, Three-specific, and React-specific APIs: each would add
-coupling or shipped code without a demonstrated consumer failure. A grouped multi-`Text` transaction remains deliberately
-unaccepted until the delayed-peer probe supplies that missing evidence.
+coupling or shipped code without a demonstrated consumer failure. The delayed-peer failure is real, but its required
+atomicity belongs to one comparison product over two independent render targets. The private retained-target solution closes
+that consumer failure without adding renderer-wide grouped publication to the package.
 
 ## Package boundaries
 
