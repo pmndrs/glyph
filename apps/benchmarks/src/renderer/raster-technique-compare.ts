@@ -66,6 +66,12 @@ interface ComparisonResources {
   viewport: PersistentRenderViewport;
 }
 
+interface ComparisonLineView {
+  readonly fontSize: number;
+  readonly rasterPixelRatio: number;
+  readonly width: number;
+}
+
 /**
  * Keeps candidate rendering and comparison on the GPU. The two technique scenes
  * render into equal RGBA8 targets; a fullscreen TSL pass samples both targets
@@ -140,6 +146,8 @@ export function createRasterTechniqueComparisonPersistentScene(
   let updateRevision = 0;
   let textRevision = 0;
   let committedText = options.text;
+  let committedLineView: ComparisonLineView | undefined;
+  let candidateUpdatesPending = false;
   let mutationQueue = Promise.resolve();
   const renderWaiters: Array<{ readonly reject: (reason?: unknown) => void; readonly resolve: () => void }> = [];
 
@@ -168,22 +176,39 @@ export function createRasterTechniqueComparisonPersistentScene(
     await enqueueMutation(async () => {
       const resources = activation;
       if (disposed || resources === undefined || revision !== updateRevision) return;
-      const nextFontSize = (BASE_PHYSICAL_PPEM * zoom) / resources.viewport.dpr;
-      const nextWidth = Math.max(120, resources.viewport.width / PANEL_COUNT - 36);
-      resources.mtsdfLine.setProperties({
-        fontSize: nextFontSize,
-        rasterPixelRatio: resources.viewport.dpr,
-        width: nextWidth,
-      });
-      resources.slugLine.setProperties({
-        fontSize: nextFontSize,
-        rasterPixelRatio: resources.viewport.dpr,
-        width: nextWidth,
-      });
-      await Promise.all([resources.mtsdfLine.ready, resources.slugLine.ready]);
-      if (disposed || activation !== resources || revision !== updateRevision) return;
-      resources.mtsdfLine.position.set(18 + panX, -42 + panY, 0);
-      resources.slugLine.position.copy(resources.mtsdfLine.position);
+      const previousView = committedLineView;
+      if (previousView === undefined) throw new Error('comparison line view is unavailable');
+      const nextView = comparisonLineView(resources.viewport, zoom);
+      let pairIsRenderable = false;
+      candidateUpdatesPending = true;
+      try {
+        resources.mtsdfLine.setProperties(nextView);
+        resources.slugLine.setProperties(nextView);
+        publishComparisonLines(resources);
+        const results = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
+        if (disposed || activation !== resources || revision !== updateRevision) return;
+        const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failure !== undefined) {
+          resources.mtsdfLine.setProperties(previousView);
+          resources.slugLine.setProperties(previousView);
+          publishComparisonLines(resources);
+          const rollback = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
+          pairIsRenderable = rollback.every((result) => result.status === 'fulfilled');
+          throw failure.reason;
+        }
+        committedLineView = nextView;
+        const nextTargetSize = physicalPanelSize(resources.viewport);
+        resources.mtsdfTarget.setSize(nextTargetSize.width, nextTargetSize.height);
+        resources.slugTarget.setSize(nextTargetSize.width, nextTargetSize.height);
+        resources.camera.right = resources.viewport.width / PANEL_COUNT;
+        resources.camera.bottom = -resources.viewport.height;
+        resources.camera.updateProjectionMatrix();
+        resources.mtsdfLine.position.set(18 + panX, -42 + panY, 0);
+        resources.slugLine.position.copy(resources.mtsdfLine.position);
+        pairIsRenderable = true;
+      } finally {
+        candidateUpdatesPending = !pairIsRenderable;
+      }
     });
   };
   const requestLineUpdate = (): void => {
@@ -201,11 +226,12 @@ export function createRasterTechniqueComparisonPersistentScene(
       }
       context.signal.throwIfAborted();
       activation = await createComparisonResources(context, options.fontFixture, committedText);
+      committedLineView = comparisonLineView(activation.viewport, zoom);
     },
     frame() {
       const resources = active();
       try {
-        renderComparison(resources);
+        renderComparison(resources, !candidateUpdatesPending);
         for (const waiter of renderWaiters.splice(0)) waiter.resolve();
       } catch (error) {
         rejectRenderWaiters(error);
@@ -216,12 +242,6 @@ export function createRasterTechniqueComparisonPersistentScene(
     resize(viewport) {
       const resources = active();
       resources.viewport = viewport;
-      const nextTargetSize = physicalPanelSize(viewport);
-      resources.mtsdfTarget.setSize(nextTargetSize.width, nextTargetSize.height);
-      resources.slugTarget.setSize(nextTargetSize.width, nextTargetSize.height);
-      resources.camera.right = viewport.width / PANEL_COUNT;
-      resources.camera.bottom = -viewport.height;
-      resources.camera.updateProjectionMatrix();
       requestLineUpdate();
     },
     panBy(deltaX, deltaY) {
@@ -248,18 +268,28 @@ export function createRasterTechniqueComparisonPersistentScene(
         const resources = activation;
         if (disposed || resources === undefined || revision !== textRevision) return;
         const previousText = committedText;
-        resources.mtsdfLine.setProperties({ text: nextText });
-        resources.slugLine.setProperties({ text: nextText });
-        const results = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
-        if (disposed || activation !== resources || revision !== textRevision) return;
-        const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-        if (failure !== undefined) {
-          resources.mtsdfLine.setProperties({ text: previousText });
-          resources.slugLine.setProperties({ text: previousText });
-          await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
-          throw failure.reason;
+        let pairIsRenderable = false;
+        candidateUpdatesPending = true;
+        try {
+          resources.mtsdfLine.setProperties({ text: nextText });
+          resources.slugLine.setProperties({ text: nextText });
+          publishComparisonLines(resources);
+          const results = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
+          if (disposed || activation !== resources || revision !== textRevision) return;
+          const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+          if (failure !== undefined) {
+            resources.mtsdfLine.setProperties({ text: previousText });
+            resources.slugLine.setProperties({ text: previousText });
+            publishComparisonLines(resources);
+            const rollback = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
+            pairIsRenderable = rollback.every((result) => result.status === 'fulfilled');
+            throw failure.reason;
+          }
+          committedText = nextText;
+          pairIsRenderable = true;
+        } finally {
+          candidateUpdatesPending = !pairIsRenderable;
         }
-        committedText = nextText;
         await waitForFrame();
       });
     },
@@ -433,12 +463,21 @@ async function compileComparison(resources: ComparisonResources): Promise<void> 
   });
 }
 
-function renderComparison(resources: ComparisonResources): void {
+function publishComparisonLines(resources: ComparisonResources): void {
+  // Both publications occur in one JavaScript task. Candidate target rendering remains paused until every async
+  // preparation settles, so a later frame can never sample one new generation beside one old generation.
+  resources.mtsdfLine.updateMatrixWorld(true);
+  resources.slugLine.updateMatrixWorld(true);
+}
+
+function renderComparison(resources: ComparisonResources, renderCandidates: boolean): void {
   withRendererStateSync(resources.renderer, (renderer) => {
     renderer.autoClear = false;
     renderer.setScissorTest(false);
-    renderCandidate(renderer, resources.mtsdfTarget, resources.mtsdfScene, resources.camera);
-    renderCandidate(renderer, resources.slugTarget, resources.slugScene, resources.camera);
+    if (renderCandidates) {
+      renderCandidate(renderer, resources.mtsdfTarget, resources.mtsdfScene, resources.camera);
+      renderCandidate(renderer, resources.slugTarget, resources.slugScene, resources.camera);
+    }
     renderer.setRenderTarget(null);
     renderer.setClearColor(BACKGROUND, 1);
     renderer.clear();
@@ -500,6 +539,14 @@ function physicalPanelSize(viewport: PersistentRenderViewport): { readonly width
   return {
     width: Math.max(1, Math.round(viewport.drawingBufferWidth / PANEL_COUNT)),
     height: Math.max(1, viewport.drawingBufferHeight),
+  };
+}
+
+function comparisonLineView(viewport: PersistentRenderViewport, zoom: number): ComparisonLineView {
+  return {
+    fontSize: (BASE_PHYSICAL_PPEM * zoom) / viewport.dpr,
+    rasterPixelRatio: viewport.dpr,
+    width: Math.max(120, viewport.width / PANEL_COUNT - 36),
   };
 }
 
