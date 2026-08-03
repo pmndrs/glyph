@@ -20,7 +20,7 @@ sources:
     resource: '../../apps/benchmarks/src/workloads/catalog.ts'
     title: 'Typed benchmark workload catalog'
   - id: 'raster-technique-comparison'
-    resource: '../../apps/benchmarks/src/renderer/raster-technique-compare.ts'
+    resource: '../../apps/benchmarks/src/benchmark/targets/conformance/raster/comparison-scene.ts'
     title: 'Retained MSDF and Slug comparison scene'
 
 generated:
