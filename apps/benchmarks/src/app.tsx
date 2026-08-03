@@ -1,6 +1,5 @@
 import {
   Activity,
-  lazy,
   Suspense,
   use,
   useEffect,
@@ -9,7 +8,6 @@ import {
   useState,
   useSyncExternalStore,
   useTransition,
-  type ComponentProps,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -28,11 +26,9 @@ import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts';
 import { environmentResource } from './benchmark/environment';
 import { runRegisteredBenchmark } from './benchmark/execution';
 import {
-  RuntimeAnimationControls,
   defaultRuntimeFontSizeForWorkload,
   resetRuntimeControlsForWorkload,
   RuntimeLayoutControls,
-  RuntimePaintControls,
   RuntimeTelemetry,
   RuntimeViewControls,
   useRuntimeAnimationControls,
@@ -45,7 +41,6 @@ import {
 } from './benchmark/runtime-world';
 import { RuntimeWorldProvider } from './benchmark/runtime-world-provider';
 import { captureLiveTextStats, type LiveBenchmarkCapture } from './benchmark/product-result';
-import { createPayloadSummary } from './benchmark/payload-summary';
 import {
   adjacentPresentationWorkload,
   presentationFrame,
@@ -57,13 +52,9 @@ import {
   type MutableParagraphStressMotionFrame,
 } from './benchmark/paragraph-stress-motion';
 import {
-  ADVANCED_FONT_FIXTURES,
-  BENCHMARK_FONT_LABELS,
-  SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
   liveWorkloadFontFixtures,
   rasterConformanceSpecimen,
-  selectableFontFixture,
   type BenchmarkFontFixture,
   type SelectableFontFixture,
 } from './benchmark/font-fixtures';
@@ -77,28 +68,16 @@ import {
   type HarnessMode,
   type RasterTechnique,
 } from './benchmark/url-state';
-import { ExportPanel } from './components/export-panel';
-import { Report } from './components/report';
-import { Controls, type ConformanceView } from './components/render-controls';
-import { CompactSheet, CompactWorkloadPanel, MobileNavigation } from './components/responsive-shell';
-import { TechniqueSwitcher } from './components/technique-switcher';
-import { TelemetryCharts } from './components/telemetry-charts';
-import { TopBar } from './components/top-bar';
+import type { ConformanceView } from './components/render-controls';
+import { HarnessLayout as HarnessAppLayout, type HarnessLayoutProps } from './components/harness-layout';
+import { RuntimeControls } from './components/runtime-controls';
 import {
   workloadById,
-  workloadsFor,
   isConformanceWorkloadId,
   type ConformanceWorkloadId,
   type WorkloadOption,
 } from './benchmark/workloads';
-import { WorkloadRail } from './components/workload-rail';
-import { PresentationLayout } from './components/presentation-layout';
-import { PresentationPayloadPills } from './components/presentation-payload-pills';
-import { Chip, Metric } from './components/ui';
-import packageSizes from './generated/package-sizes.json';
-import bitmapFixtures from '../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json';
-import mtsdfFixtures from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
-import slugFixtures from '../fixtures/rendering/showcase-slug-fixtures-v0.json';
+import { Chip } from './components/ui';
 import type {
   BitmapTextLiveStats,
   BitmapTextPersistentScene,
@@ -119,7 +98,6 @@ import {
   benchmarkWorkloadDefinition,
   comparisonWorkloadId,
   isBenchmarkWorkloadId,
-  type BenchmarkWorkloadDefinition,
   type BenchmarkWorkloadId,
 } from './workloads/catalog';
 import {
@@ -129,6 +107,8 @@ import {
 } from './workloads/shared/text-style';
 import { PersistentRenderHostProvider, usePersistentRenderHost } from './renderer/persistent-render-host-context';
 import { ConformanceSurface } from './surfaces/conformance/conformance-surface';
+import { BakeProgressOverlay, useBakeProgress } from './surfaces/benchmark/bake-progress-overlay';
+import { LiveBenchmarkSurface } from './surfaces/benchmark/live-benchmark-surface';
 import type { BakeProgress } from '@pmndrs/text';
 import { Route, Switch, useLocation } from 'wouter';
 
@@ -259,7 +239,6 @@ const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
 
 const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = [];
 const GLYPH_POSITION_TRANSITION_MS = 110;
-const FontNoticesDialog = lazy(() => import('./components/font-notices-dialog'));
 function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
@@ -271,36 +250,6 @@ function isComparisonWorkloadStats(stats: LiveTextStats | undefined): stats is C
 function workloadAmountLabel(workload: BenchmarkWorkloadId, amount: number): string | undefined {
   const range = benchmarkWorkloadDefinition(workload).controls.amount;
   return range === undefined ? undefined : `${range.label} · ${amount}%`;
-}
-
-function liveWorkloadSceneDescription(workload: BenchmarkWorkloadId, showcaseFrame: AdvancedShapingFrame): string {
-  return workload === 'advanced-shaping'
-    ? `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`
-    : benchmarkWorkloadDefinition(workload).description;
-}
-
-function presentationFontOptions(definition: BenchmarkWorkloadDefinition) {
-  const policy = definition.fontPolicy;
-  if (policy.kind === 'advanced-case') {
-    return ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
-  }
-  if (policy.kind === 'icon-grid') {
-    return [{ label: BENCHMARK_FONT_LABELS[policy.iconFixture], value: policy.iconFixture }];
-  }
-  if (policy.kind === 'fixed') {
-    return [{ label: BENCHMARK_FONT_LABELS[policy.defaultFixture], value: policy.defaultFixture }];
-  }
-  return SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
-}
-
-function presentationFontValue(
-  definition: BenchmarkWorkloadDefinition,
-  activeFontFixture: BenchmarkFontFixture,
-): BenchmarkFontFixture {
-  const policy = definition.fontPolicy;
-  if (policy.kind === 'icon-grid') return policy.iconFixture;
-  if (policy.kind === 'fixed') return policy.defaultFixture;
-  return activeFontFixture;
 }
 
 function formatMs(value: number | undefined): string {
@@ -956,318 +905,18 @@ function PersistentHarnessLayout({
   onBenchmarkAction,
   onConformanceAction,
   ...properties
-}: Omit<Parameters<typeof HarnessLayout>[0], 'onAction'> & {
+}: Omit<HarnessLayoutProps, 'onAction'> & {
   readonly onBenchmarkAction: () => void;
   readonly onConformanceAction: (runExclusiveJob: RunExclusiveJob) => void;
 }) {
   const { runExclusiveJob } = usePersistentRenderHost();
   return (
-    <HarnessLayout
+    <HarnessAppLayout
       {...properties}
       onAction={
         properties.location.mode === 'benchmark' ? onBenchmarkAction : () => onConformanceAction(runExclusiveJob)
       }
     />
-  );
-}
-
-type RuntimeControlsProps = Omit<
-  ComponentProps<typeof Controls>,
-  | 'animationEnabled'
-  | 'animationSpeed'
-  | 'fontSize'
-  | 'layoutWidthPercent'
-  | 'liveStats'
-  | 'onAnimationEnabled'
-  | 'onAnimationSpeed'
-  | 'onFontSize'
-  | 'onLayoutWidthPercent'
-  | 'onPaintOpacityPercent'
-  | 'onPaintShadowEnabled'
-  | 'onPaintStrokePercent'
-  | 'onShowGrid'
-  | 'onShowLayoutBounds'
-  | 'onWorkloadAmount'
-  | 'paintOpacityPercent'
-  | 'paintShadowEnabled'
-  | 'paintStrokePercent'
-  | 'showGrid'
-  | 'showLayoutBounds'
-  | 'workloadAmount'
-> & {
-  readonly onBeforeShowGrid: () => void;
-  readonly onRuntimeControl: () => void;
-};
-
-function RuntimeControls({ onBeforeShowGrid, onRuntimeControl, ...props }: RuntimeControlsProps) {
-  const world = useRuntimeWorld();
-  const view = useRuntimeViewControls();
-  const layout = useRuntimeLayoutControls();
-  const animation = useRuntimeAnimationControls();
-  const paint = useRuntimePaintControls();
-  const { stats: liveStats } = useRuntimeTelemetry();
-  const changed = (change: () => void): void => {
-    change();
-    onRuntimeControl();
-  };
-  return (
-    <Controls
-      {...props}
-      {...view}
-      {...layout}
-      {...animation}
-      {...paint}
-      liveStats={liveStats}
-      onAnimationEnabled={(animationEnabled) =>
-        changed(() => world.set(RuntimeAnimationControls, { animationEnabled }))
-      }
-      onAnimationSpeed={(animationSpeed) => changed(() => world.set(RuntimeAnimationControls, { animationSpeed }))}
-      onFontSize={(fontSize) => changed(() => world.set(RuntimeLayoutControls, { fontSize }))}
-      onLayoutWidthPercent={(layoutWidthPercent) =>
-        changed(() => world.set(RuntimeLayoutControls, { layoutWidthPercent }))
-      }
-      onPaintOpacityPercent={(paintOpacityPercent) =>
-        changed(() => world.set(RuntimePaintControls, { paintOpacityPercent }))
-      }
-      onPaintShadowEnabled={(paintShadowEnabled) =>
-        changed(() => world.set(RuntimePaintControls, { paintShadowEnabled }))
-      }
-      onPaintStrokePercent={(paintStrokePercent) =>
-        changed(() => world.set(RuntimePaintControls, { paintStrokePercent }))
-      }
-      onShowGrid={(showGrid) => {
-        onBeforeShowGrid();
-        changed(() => world.set(RuntimeViewControls, { showGrid }));
-      }}
-      onShowLayoutBounds={(showLayoutBounds) => changed(() => world.set(RuntimeViewControls, { showLayoutBounds }))}
-      onWorkloadAmount={(workloadAmount) => changed(() => world.set(RuntimeLayoutControls, { workloadAmount }))}
-    />
-  );
-}
-
-function HarnessLayout({
-  actionEligible,
-  activeFontFixture,
-  controls,
-  desktop,
-  fontNoticesOpen,
-  isPending,
-  liveCapture,
-  liveTechniqueComparison,
-  location,
-  phone,
-  presentationPlaying,
-  scene,
-  showcaseFrame,
-  summary,
-  webgpu,
-  workloadPanelOpen,
-  onAction,
-  onAdvancedFontFixture,
-  onCloseFontNotices,
-  onLocation,
-  onMode,
-  onTechnique,
-  onWorkloadPanelOpen,
-}: {
-  readonly actionEligible: boolean;
-  readonly activeFontFixture: BenchmarkFontFixture;
-  readonly controls: ReactNode;
-  readonly desktop: boolean;
-  readonly fontNoticesOpen: boolean;
-  readonly isPending: boolean;
-  readonly liveCapture: LiveBenchmarkCapture | undefined;
-  readonly liveTechniqueComparison: boolean;
-  readonly location: HarnessLocation;
-  readonly phone: boolean;
-  readonly presentationPlaying: boolean;
-  readonly scene: ReactNode;
-  readonly showcaseFrame: AdvancedShapingFrame;
-  readonly summary: BenchmarkSummary | undefined;
-  readonly webgpu: boolean;
-  readonly workloadPanelOpen: boolean;
-  readonly onAction: () => void;
-  readonly onAdvancedFontFixture: (value: BenchmarkFontFixture) => void;
-  readonly onCloseFontNotices: () => void;
-  readonly onLocation: (value: Partial<HarnessLocation>) => void;
-  readonly onMode: (mode: HarnessMode) => void;
-  readonly onTechnique: (technique: RasterTechnique) => void;
-  readonly onWorkloadPanelOpen: (open: boolean | ((current: boolean) => boolean)) => void;
-}) {
-  const { stats: liveStats } = useRuntimeTelemetry();
-  const actionReady = actionEligible && (location.mode === 'conformance' || liveStats !== undefined);
-  const presentationMode = location.layout === 'presentation' && location.mode === 'benchmark';
-  if (presentationMode) {
-    const presentationWorkload = isBenchmarkWorkloadId(location.workload) ? location.workload : 'benchmark-ipsum';
-    const presentationDefinition = benchmarkWorkloadDefinition(presentationWorkload);
-    const presentationPayload = createPayloadSummary({
-      delivery: location.delivery,
-      fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
-      fontFixture: activeFontFixture,
-      ...(liveStats === undefined ? {} : { liveStats }),
-      packageSizes,
-      technique: location.technique,
-      workload: location.workload,
-    });
-    return (
-      <>
-        <PresentationLayout
-          controls={controls}
-          fontOptions={presentationFontOptions(presentationDefinition)}
-          fontValue={presentationFontValue(presentationDefinition, activeFontFixture)}
-          payload={<PresentationPayloadPills summary={presentationPayload} />}
-          playing={presentationPlaying}
-          scene={scene}
-          techniqueControl={
-            <TechniqueSwitcher
-              className="w-44"
-              presentation="presentation"
-              technique={location.technique}
-              onTechnique={onTechnique}
-            />
-          }
-          telemetry={<TelemetryCharts presentation="presentation" stats={liveStats} />}
-          workloadOptions={workloadsFor('benchmark').map((option) => ({
-            disabled: option.techniques[location.technique].kind !== 'ready',
-            label: option.label,
-            value: option.id,
-          }))}
-          workloadValue={presentationWorkload}
-          onExit={() => onLocation({ layout: 'main' })}
-          onFont={(value) => {
-            const policy = presentationDefinition.fontPolicy;
-            if (policy.kind === 'fixed' || policy.kind === 'icon-grid') return;
-            if (policy.kind === 'advanced-case') {
-              onAdvancedFontFixture(value as BenchmarkFontFixture);
-              return;
-            }
-            onLocation({ fontFixture: selectableFontFixture(value) });
-          }}
-          onWorkload={(workloadId) => onLocation({ workload: workloadId, view: 'scene' })}
-        />
-        {fontNoticesOpen && (
-          <Suspense fallback={null}>
-            <FontNoticesDialog onClose={onCloseFontNotices} />
-          </Suspense>
-        )}
-      </>
-    );
-  }
-
-  return (
-    <div className="relative h-dvh overflow-hidden bg-background text-foreground">
-      <TopBar
-        compact={!desktop}
-        phone={phone}
-        location={location}
-        mode={location.mode}
-        liveTechniqueComparison={liveTechniqueComparison}
-        pending={isPending}
-        ready={Boolean(actionReady)}
-        webgpu={webgpu}
-        onAction={
-          location.mode === 'benchmark'
-            ? location.view === 'report'
-              ? () => onLocation({ view: 'scene' })
-              : onAction
-            : onAction
-        }
-        onControls={() => {
-          onWorkloadPanelOpen(false);
-          onLocation({ view: location.view === 'controls' ? 'scene' : 'controls' });
-        }}
-        onMenu={() => {
-          if (!workloadPanelOpen && location.view === 'controls') {
-            onLocation({ view: 'scene' });
-          }
-          onWorkloadPanelOpen((open) => !open);
-        }}
-        onMode={onMode}
-        onTechnique={onTechnique}
-        onPresentationMode={() => onLocation({ layout: 'presentation', mode: 'benchmark', view: 'scene' })}
-        workloadPanelOpen={workloadPanelOpen}
-      />
-      <div
-        className={
-          desktop
-            ? 'grid h-[calc(100dvh-52px)] transition-[grid-template-columns] duration-200'
-            : phone
-              ? 'h-[calc(100dvh-52px)] pb-[58px]'
-              : 'h-[calc(100dvh-52px)]'
-        }
-        style={
-          desktop
-            ? {
-                gridTemplateColumns: workloadPanelOpen
-                  ? '224px minmax(640px, 1fr) 288px'
-                  : '0 minmax(640px, 1fr) 288px',
-              }
-            : undefined
-        }
-      >
-        <div className={desktop ? 'min-w-0 overflow-hidden' : 'hidden'}>
-          <WorkloadRail
-            activeFontFixture={activeFontFixture}
-            className="h-full w-56"
-            location={location}
-            showcaseFrame={showcaseFrame}
-            onFontFixture={(value) => onLocation({ fontFixture: value })}
-            onAdvancedFontFixture={onAdvancedFontFixture}
-            onLocation={onLocation}
-            onTechnique={onTechnique}
-          />
-        </div>
-        <main
-          className={
-            desktop
-              ? 'min-w-0 overflow-hidden border-r border-border bg-background p-4'
-              : 'h-full min-h-0 overflow-hidden p-3'
-          }
-        >
-          <div className={location.view !== 'report' && location.view !== 'export' ? 'h-full' : 'hidden'}>{scene}</div>
-          {!desktop && location.view === 'controls' && (
-            <CompactSheet phone={phone} title="Controls" onClose={() => onLocation({ view: 'scene' })}>
-              {controls}
-            </CompactSheet>
-          )}
-          {location.view === 'report' && (
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <Report liveCapture={liveCapture} summary={summary} />
-            </div>
-          )}
-          {location.view === 'export' && (
-            <div className="h-full overflow-y-auto overscroll-contain">
-              <ExportPanel liveCapture={liveCapture} summary={summary} />
-            </div>
-          )}
-        </main>
-        <aside className={desktop ? 'overflow-auto overscroll-contain bg-chrome p-4' : 'hidden'}>{controls}</aside>
-        {!desktop && workloadPanelOpen && (
-          <CompactWorkloadPanel phone={phone} onClose={() => onWorkloadPanelOpen(false)}>
-            <WorkloadRail
-              activeFontFixture={activeFontFixture}
-              className="h-full w-full border-r-0"
-              location={location}
-              showcaseFrame={showcaseFrame}
-              showTechnique={false}
-              onFontFixture={(value) => onLocation({ fontFixture: value })}
-              onAdvancedFontFixture={onAdvancedFontFixture}
-              onLocation={(value) => {
-                onLocation({ ...value, view: 'scene' });
-                onWorkloadPanelOpen(false);
-              }}
-              onTechnique={onTechnique}
-            />
-          </CompactWorkloadPanel>
-        )}
-        {!desktop && phone && <MobileNavigation location={location} onLocation={onLocation} />}
-      </div>
-      {fontNoticesOpen && (
-        <Suspense fallback={null}>
-          <FontNoticesDialog onClose={onCloseFontNotices} />
-        </Suspense>
-      )}
-    </div>
   );
 }
 
@@ -1655,62 +1304,15 @@ function BenchmarkSurface({
       />
     );
   return (
-    <div
-      className={
-        presentation === 'presentation'
-          ? 'grid h-full min-h-0 grid-rows-[0_minmax(0,1fr)] overflow-hidden'
-          : 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3'
-      }
-      data-advanced-case={advanced ? showcaseFrame.caseDefinition.id : undefined}
-      data-advanced-progress={advanced ? showcaseFrame.progress : undefined}
-      data-presentation={presentation}
-      data-testid="benchmark-surface"
-    >
-      <div
-        className={
-          presentation === 'main'
-            ? 'grid grid-cols-[repeat(3,minmax(0,1fr))_repeat(2,minmax(0,0.55fr))] gap-px overflow-hidden rounded-md border border-border bg-border'
-            : 'invisible overflow-hidden'
-        }
-      >
-        {presentation === 'main' && (
-          <>
-            <TelemetryCharts stats={stats} />
-            <div className="metric-summary-grid bg-surface">
-              <Metric
-                label="Glyphs / draws"
-                value={stats === undefined ? '—' : `${stats.glyphCount} / ${stats.drawCount}`}
-              />
-            </div>
-            <div className="metric-summary-grid bg-surface">
-              <Metric label="Missing glyphs" value={stats === undefined ? '—' : String(stats.missingGlyphCount)} />
-            </div>
-          </>
-        )}
-      </div>
-      <div
-        className={
-          presentation === 'presentation'
-            ? 'flex min-h-0 flex-col overflow-hidden'
-            : 'flex min-h-0 flex-col rounded-md border border-border bg-surface p-3'
-        }
-      >
-        <div className={presentation === 'main' ? 'mb-3 flex items-start justify-between gap-3' : 'hidden'}>
-          {presentation === 'main' && (
-            <>
-              <div>
-                <p className="eyebrow">Realtime scene</p>
-                <p className="mt-1 text-xs text-muted">{liveWorkloadSceneDescription(workload, showcaseFrame)}</p>
-              </div>
-              <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
-            </>
-          )}
-        </div>
-        <div className="relative min-h-0 flex-1 overflow-hidden" ref={surfaceAnchorRef}>
-          {viewport}
-        </div>
-      </div>
-    </div>
+    <LiveBenchmarkSurface
+      advanced={advanced}
+      presentation={presentation}
+      showcaseFrame={showcaseFrame}
+      stats={stats}
+      surfaceAnchorRef={surfaceAnchorRef}
+      viewport={viewport}
+      workload={workload}
+    />
   );
 }
 
@@ -3037,79 +2639,4 @@ function ComparisonWorkloadViewport({
       )}
     </div>
   );
-}
-
-function useBakeProgress(label: string): {
-  readonly value: BakeProgress | undefined;
-  readonly active: boolean;
-  readonly publish: (progress: BakeProgress) => void;
-  readonly finish: () => void;
-} {
-  const [value, setValue] = useState<BakeProgress>();
-  const [active, setActive] = useState(false);
-  const lastConsoleKey = useRef('');
-  const publish = (progress: BakeProgress): void => {
-    setValue(progress);
-    setActive(true);
-    if (!import.meta.env.DEV) return;
-    const percentage = Math.round((progress.completed / progress.total) * 100);
-    const bucket = Math.floor(percentage / 10) * 10;
-    const key = `${progress.stage}:${progress.phase}:${String(bucket)}`;
-    if (key === lastConsoleKey.current) return;
-    lastConsoleKey.current = key;
-    console.info(`[pmndrs/text] ${label} ${progress.stage} bake: ${progress.phase} ${String(percentage)}%`);
-  };
-  const finish = (): void => setActive(false);
-  return { value, active, publish, finish };
-}
-
-function BakeProgressOverlay({
-  backend,
-  progress,
-  technique,
-}: {
-  readonly backend: GraphicsBackend;
-  readonly progress: BakeProgress | undefined;
-  readonly technique: 'BITMAP' | 'MSDF' | 'SLUG';
-}) {
-  const percentage = bakeProgressPercentage(progress);
-  const label =
-    progress === undefined
-      ? `INITIALIZING ${technique} ${backend.toUpperCase()}`
-      : `${progress.stage === 'font' ? 'FONT' : technique} ${progress.phase.toUpperCase()}`;
-  return (
-    <div className="absolute inset-0 z-10 grid place-items-center bg-background px-8">
-      <div className="w-full max-w-sm" data-testid="bake-progress">
-        <div className="mb-2 flex items-center justify-between font-mono text-[9px] text-dim">
-          <span>{label}</span>
-          <span>{percentage}%</span>
-        </div>
-        <progress
-          aria-label={label}
-          className="h-1.5 w-full overflow-hidden rounded-full bg-surface accent-accent"
-          max={100}
-          value={percentage}
-        />
-      </div>
-    </div>
-  );
-}
-
-function bakeProgressPercentage(progress: BakeProgress | undefined): number {
-  if (progress === undefined) return 0;
-  const ratio = progress.completed / progress.total;
-  if (progress.stage === 'font') {
-    if (progress.phase === 'loading') return 2;
-    if (progress.phase === 'baking') return 8;
-    if (progress.phase === 'packaging') return 16;
-    if (progress.phase === 'transferring') return 19;
-    if (progress.phase === 'complete') return 20;
-    return Math.round(ratio * 20);
-  }
-  if (progress.phase === 'loading') return 22;
-  if (progress.phase === 'rasterizing') return 25 + Math.round(ratio * 65);
-  if (progress.phase === 'packaging') return 92;
-  if (progress.phase === 'transferring') return 97;
-  if (progress.phase === 'complete') return 100;
-  return 20;
 }
