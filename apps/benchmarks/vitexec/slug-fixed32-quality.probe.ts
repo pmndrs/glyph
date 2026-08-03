@@ -1,13 +1,13 @@
 export {};
 
-const slugTextPath = '/src/renderer/slug-text.ts';
+const slugCapturePath = '/src/benchmark/targets/conformance/raster/slug-capture.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const fixturesPath = '/src/benchmark/font-fixtures.ts';
 const fixed32ManifestPath = '/fixtures/autoresearch/slug-fixed32-bands-001/artifacts-v0.json';
 const baselinePath = '/fixtures/results/slug-quality-matrix-chromium149.json';
 const [{ captureSlugTextConformance }, { environmentResource }, { ADVANCED_FONT_FIXTURES }, fixed32Manifest, baseline] =
   await Promise.all([
-    import(/* @vite-ignore */ slugTextPath),
+    import(/* @vite-ignore */ slugCapturePath),
     import(/* @vite-ignore */ environmentPath),
     import(/* @vite-ignore */ fixturesPath),
     fetchJson<Fixed32Manifest>(fixed32ManifestPath),

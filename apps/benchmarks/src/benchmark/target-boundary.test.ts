@@ -54,6 +54,11 @@ describe('benchmark target boundaries', () => {
     const product = await readFile(new URL('./targets/product/index.ts', import.meta.url), 'utf8');
     const mtsdfAdapter = await readFile(new URL('./targets/conformance/raster/mtsdf.ts', import.meta.url), 'utf8');
     const slugAdapter = await readFile(new URL('./targets/conformance/raster/slug.ts', import.meta.url), 'utf8');
+    const slugCaptureProbes = await Promise.all(
+      ['slug-adaptive32-quality', 'slug-external-render-parity', 'slug-fixed32-quality', 'slug-role-scenes'].map(
+        (name) => readFile(new URL(`../../vitexec/${name}.probe.ts`, import.meta.url), 'utf8'),
+      ),
+    );
 
     expect(registry).toContain("import('./product')");
     expect(registry).toContain("import('./measurement/font-baker')");
@@ -73,8 +78,14 @@ describe('benchmark target boundaries', () => {
     expect(product).not.toContain('renderer/mtsdf-text');
     expect(product).not.toContain('renderer/slug-text');
     expect(product).not.toContain('renderer/bitmap-text');
-    expect(mtsdfAdapter).toContain("import('../../../../renderer/mtsdf-text')");
-    expect(slugAdapter).toContain("import('../../../../renderer/slug-text')");
+    expect(mtsdfAdapter).toContain("import { createMtsdfConformanceSession } from './mtsdf-capture'");
+    expect(mtsdfAdapter).not.toContain('renderer/mtsdf-text');
+    expect(slugAdapter).toContain("import { createSlugConformanceSession } from './slug-capture'");
+    expect(slugAdapter).not.toContain('renderer/slug-text');
+    expect(
+      slugCaptureProbes.every((probe) => probe.includes('/benchmark/targets/conformance/raster/slug-capture.ts')),
+    ).toBe(true);
+    expect(slugCaptureProbes.every((probe) => !probe.includes('/renderer/slug-text.ts'))).toBe(true);
     const { createAdvancedShapingConformanceTarget } = await import('./targets/conformance/advanced-shaping');
     expect(createAdvancedShapingConformanceTarget().id).toBe('advanced-shaping-conformance');
     expect(await loadRegisteredTarget('missing')).toBeUndefined();

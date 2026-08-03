@@ -1,10 +1,10 @@
 import type { SelectableFontFixture } from '../../benchmark/font-fixtures';
+import type { MtsdfTextConformanceCapture } from '../../benchmark/targets/conformance/raster/mtsdf-capture';
+import type { SlugTextConformanceCapture } from '../../benchmark/targets/conformance/raster/slug-capture';
 import type { ConformanceWorkloadId } from '../../benchmark/workloads';
 import type { GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
 import type { BitmapTextConformanceCapture } from '../../benchmark/low-level/raster/bitmap-finite-scene';
-import type { MtsdfTextConformanceCapture } from '../../renderer/mtsdf-text';
 import type { PersistentRenderSceneRenderer } from '../../renderer/persistent-render-host';
-import type { SlugTextConformanceCapture } from '../../renderer/slug-text';
 import type { SourceOutlineFidelityCapture } from '../../benchmark/low-level/raster/source-outline-reference';
 import type { RuntimeFallbackCapture } from '../../benchmark/targets/conformance/raster/runtime-fallback';
 
@@ -29,12 +29,12 @@ function loadBitmapTextRenderer() {
   return import('../../renderer/bitmap-text');
 }
 
-function loadMtsdfTextRenderer() {
-  return import('../../renderer/mtsdf-text');
+function loadMtsdfCapture() {
+  return import('../../benchmark/targets/conformance/raster/mtsdf-capture');
 }
 
-function loadSlugTextRenderer() {
-  return import('../../renderer/slug-text');
+function loadSlugCapture() {
+  return import('../../benchmark/targets/conformance/raster/slug-capture');
 }
 
 function loadRuntimeFallbackConformance() {
@@ -60,14 +60,14 @@ export async function captureFiniteConformance({
   }
   if (workload === 'cross-technique-fidelity') {
     if (technique === 'slug') {
-      const { captureSlugSourceOutlineFidelity } = await loadSlugTextRenderer();
+      const { captureSlugSourceOutlineFidelity } = await loadSlugCapture();
       return {
         kind: 'source-outline',
         value: await captureSlugSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
       };
     }
     if (technique === 'mtsdf') {
-      const { captureMtsdfSourceOutlineFidelity } = await loadMtsdfTextRenderer();
+      const { captureMtsdfSourceOutlineFidelity } = await loadMtsdfCapture();
       return {
         kind: 'source-outline',
         value: await captureMtsdfSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
@@ -80,14 +80,14 @@ export async function captureFiniteConformance({
     };
   }
   if (technique === 'slug') {
-    const { captureSlugTextConformance } = await loadSlugTextRenderer();
+    const { captureSlugTextConformance } = await loadSlugCapture();
     return {
       kind: 'slug',
       value: await captureSlugTextConformance({ backend, dpr, fontFixture, renderer, signal }),
     };
   }
   if (technique === 'mtsdf') {
-    const { captureMtsdfTextConformance } = await loadMtsdfTextRenderer();
+    const { captureMtsdfTextConformance } = await loadMtsdfCapture();
     return {
       kind: 'mtsdf',
       value: await captureMtsdfTextConformance({ backend, dpr, fontFixture, renderer, signal }),

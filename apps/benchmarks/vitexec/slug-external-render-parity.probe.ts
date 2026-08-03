@@ -1,9 +1,9 @@
 export {};
 
-const slugTextPath = '/src/renderer/slug-text.ts';
+const slugCapturePath = '/src/benchmark/targets/conformance/raster/slug-capture.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const [{ captureSlugExternalRenderParity }, { environmentResource }] = await Promise.all([
-  import(/* @vite-ignore */ slugTextPath),
+  import(/* @vite-ignore */ slugCapturePath),
   import(/* @vite-ignore */ environmentPath),
 ]);
 

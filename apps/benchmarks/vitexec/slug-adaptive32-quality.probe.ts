@@ -1,6 +1,6 @@
 export {};
 
-const slugTextPath = '/src/renderer/slug-text.ts';
+const slugCapturePath = '/src/benchmark/targets/conformance/raster/slug-capture.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const fixturesPath = '/src/benchmark/font-fixtures.ts';
 const adaptive32ManifestPath = '/fixtures/autoresearch/slug-adaptive32-bands-001/artifacts-v0.json';
@@ -12,7 +12,7 @@ const [
   adaptive32Manifest,
   baseline,
 ] = await Promise.all([
-  import(/* @vite-ignore */ slugTextPath),
+  import(/* @vite-ignore */ slugCapturePath),
   import(/* @vite-ignore */ environmentPath),
   import(/* @vite-ignore */ fixturesPath),
   fetchJson<Adaptive32Manifest>(adaptive32ManifestPath),

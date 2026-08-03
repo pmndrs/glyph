@@ -1,10 +1,10 @@
 export {};
 
-const slugTextPath = '/src/renderer/slug-text.ts';
+const slugCapturePath = '/src/benchmark/targets/conformance/raster/slug-capture.ts';
 const scenesPath = '/src/renderer/slug-role-scenes.ts';
 const environmentPath = '/src/benchmark/environment.ts';
-const [slugText, sceneDefinitions, { environmentResource }] = await Promise.all([
-  import(/* @vite-ignore */ slugTextPath),
+const [slugCapture, sceneDefinitions, { environmentResource }] = await Promise.all([
+  import(/* @vite-ignore */ slugCapturePath),
   import(/* @vite-ignore */ scenesPath),
   import(/* @vite-ignore */ environmentPath),
 ]);
@@ -17,7 +17,7 @@ const dprStableCandidateHashes = new Map<string, string>();
 for (const backend of ['webgpu', 'webgl2'] as const) {
   for (const dpr of [1, 2] as const) {
     for (const scene of sceneDefinitions.SLUG_ROLE_SCENES) {
-      const capture = await slugText.captureSlugRoleScene({ backend, dpr, scene });
+      const capture = await slugCapture.captureSlugRoleScene({ backend, dpr, scene });
       const pixelCount = capture.width * capture.height;
       if (
         capture.candidate.byteLength !== pixelCount * 4 ||
@@ -65,7 +65,7 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
       });
     }
 
-    const affine = await slugText.captureSlugAffineRoleScene({
+    const affine = await slugCapture.captureSlugAffineRoleScene({
       backend,
       dpr,
       scene: sceneDefinitions.SLUG_AFFINE_ROLE_SCENE,
@@ -101,7 +101,7 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
       renderSubmitMs: affine.renderSubmitMs,
     });
 
-    const projectionZoom = await slugText.captureSlugProjectionZoomRoleScene({
+    const projectionZoom = await slugCapture.captureSlugProjectionZoomRoleScene({
       backend,
       dpr,
       scene: sceneDefinitions.SLUG_PROJECTION_ZOOM_SCENE,

@@ -1,9 +1,9 @@
 import type { BenchmarkFontFixture } from '../../../font-fixtures';
 import type { RasterTechnique } from '../../../url-state';
 import { captureBitmapTextConformance } from '../../../../renderer/bitmap-text';
-import { captureMtsdfTextConformance } from '../../../../renderer/mtsdf-text';
 import type { PersistentRenderSceneRenderer } from '../../../../renderer/persistent-render-host';
 import type { RendererBackend } from '../../../../renderer/webgpu-renderer';
+import { captureMtsdfTextConformance } from './mtsdf-capture';
 
 export interface RuntimeFallbackCapture {
   readonly width: number;
@@ -78,7 +78,7 @@ async function captureSlug(options: {
   readonly renderer?: PersistentRenderSceneRenderer;
   readonly signal?: AbortSignal;
 }) {
-  const { captureSlugTextConformance } = await import('../../../../renderer/slug-text');
+  const { captureSlugTextConformance } = await import('./slug-capture');
   return captureSlugTextConformance(options);
 }
 

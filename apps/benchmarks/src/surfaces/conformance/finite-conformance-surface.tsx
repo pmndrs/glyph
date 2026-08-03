@@ -8,9 +8,9 @@ import {
 } from 'react';
 
 import type { BitmapTextConformanceCapture } from '../../benchmark/low-level/raster/bitmap-finite-scene';
-import type { MtsdfTextConformanceCapture } from '../../renderer/mtsdf-text';
+import type { MtsdfTextConformanceCapture } from '../../benchmark/targets/conformance/raster/mtsdf-capture';
+import type { SlugTextConformanceCapture } from '../../benchmark/targets/conformance/raster/slug-capture';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
-import type { SlugTextConformanceCapture } from '../../renderer/slug-text';
 import type { RuntimeFallbackCapture } from '../../benchmark/targets/conformance/raster/runtime-fallback';
 import type { SourceOutlineFidelityCapture } from '../../benchmark/low-level/raster/source-outline-reference';
 import type { ConformanceView } from '../../components/render-controls';

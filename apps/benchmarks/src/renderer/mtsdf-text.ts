@@ -1,9 +1,8 @@
 import { FontRegistry, Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
-import { msdf, msdfDescriptorRasterKey, type MsdfResource } from '@pmndrs/text/raster/msdf';
+import { msdfDescriptorRasterKey } from '@pmndrs/text/raster/msdf';
 import * as THREE from 'three/webgpu';
 
-import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture } from '../benchmark/font-fixtures';
-import type { BenchmarkTarget } from '../benchmark/contracts';
+import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface, type CanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
@@ -21,13 +20,7 @@ import {
   liveTextPosition,
   type LiveTextAnchor,
 } from '../workloads/shared/text-style';
-import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from '../benchmark/low-level/raster/mtsdf-cpu-reference';
-import {
-  captureSourceOutlineFidelity,
-  type SourceOutlineFidelityCapture,
-} from '../benchmark/low-level/raster/source-outline-reference';
-import { compactRgba8Readback } from '../benchmark/low-level/raster/rgba-readback';
-import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
+import { type RendererBackend } from './webgpu-renderer';
 import {
   createPersistentRenderHost,
   type PersistentRenderScene,
@@ -35,11 +28,7 @@ import {
   type PersistentRenderViewport,
 } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
-import { withRendererStateRestored } from './renderer-state-transaction';
 import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../workloads/font-assets/mtsdf';
-
-const WIDTH = 512;
-const FLAT_CONFORMANCE_HEIGHT = 512;
 
 export { preloadMtsdfFontAssets } from '../workloads/font-assets/mtsdf';
 
@@ -187,85 +176,6 @@ interface MtsdfPersistentFontFixture {
   readonly fontLoadMs: number;
   readonly loaded: Awaited<ReturnType<typeof loadMtsdfFont>>;
   readonly rasterConfiguration: MtsdfRasterConfiguration;
-}
-
-export interface MtsdfTextConformanceCapture {
-  readonly width: number;
-  readonly height: number;
-  readonly candidate: Uint8Array;
-  readonly reference: Uint8Array;
-  readonly difference: Uint8Array;
-  readonly meanAbsoluteError: number;
-  readonly maximumError: number;
-  readonly errorPixels: number;
-  readonly glyphCount: number;
-  readonly renderSubmitMs: number;
-}
-
-interface FlatMtsdfConformanceResources {
-  readonly backend: RendererBackend;
-  readonly dpr: number;
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly renderer: PersistentRenderSceneRenderer;
-  readonly ownedRenderer?: THREE.WebGPURenderer;
-  readonly target: THREE.RenderTarget;
-  readonly scene: THREE.Scene;
-  readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly line: Text;
-  readonly resource: MsdfResource;
-}
-
-export function createMtsdfConformanceTarget(backend: RendererBackend): BenchmarkTarget {
-  let resources: FlatMtsdfConformanceResources | undefined;
-  let fontFixture: BenchmarkFontFixture = 'inter';
-  return {
-    id: `mtsdf-conformance-${backend}`,
-    label: backend === 'webgpu' ? 'MTSDF sampling conformance · WebGPU' : 'MTSDF sampling conformance · WebGL',
-    detail: 'GPU TSL candidate · independent scalar CPU reconstruction · visual difference',
-    color: backend === 'webgpu' ? 'cyan' : 'amber',
-    capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
-    configure: (input) => {
-      fontFixture = input.fontFixture ?? 'inter';
-    },
-    status: () => 'ready',
-    load: async (controls, context) => {
-      resources ??= await createFlatMtsdfConformanceResources(
-        backend,
-        controls.dpr,
-        fontFixture,
-        context?.signal,
-        'baked',
-        context?.renderer,
-      );
-    },
-    run: async (_input, _sampleIndex, _controls, context) => {
-      context?.signal?.throwIfAborted();
-      if (resources === undefined) throw new Error('MTSDF conformance target was not loaded');
-      const capture = await captureFlatMtsdfConformance(resources);
-      return {
-        bytes: capture.candidate.byteLength,
-        hash: await sha256(capture.candidate),
-        metrics: {
-          backendWebGpu: backend === 'webgpu' ? 1 : 0,
-          backendWebGl2: backend === 'webgl2' ? 1 : 0,
-          dpr: resources.dpr,
-          fixtureIsInter: fontFixture === 'inter' ? 1 : 0,
-          pixelCount: capture.width * capture.height,
-          glyphCount: capture.glyphCount,
-          meanAbsoluteError: capture.meanAbsoluteError,
-          maximumError: capture.maximumError,
-          errorPixels: capture.errorPixels,
-          renderMs: capture.renderSubmitMs,
-        },
-      };
-    },
-    dispose: async () => {
-      const current = resources;
-      resources = undefined;
-      if (current !== undefined) await disposeFlatMtsdfConformanceResources(current);
-    },
-  };
 }
 
 export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentSceneOptions): MtsdfTextPersistentScene {
@@ -724,210 +634,6 @@ function assertLayoutWidthRatio(value: number): void {
   }
 }
 
-export async function captureMtsdfTextConformance(options: {
-  readonly backend: RendererBackend;
-  readonly delivery?: FontDelivery;
-  readonly dpr: number;
-  readonly fontFixture?: BenchmarkFontFixture;
-  readonly renderer?: PersistentRenderSceneRenderer;
-  readonly signal?: AbortSignal;
-}): Promise<MtsdfTextConformanceCapture> {
-  options.signal?.throwIfAborted();
-  const resources = await createFlatMtsdfConformanceResources(
-    options.backend,
-    options.dpr,
-    options.fontFixture,
-    options.signal,
-    options.delivery,
-    options.renderer,
-  );
-  try {
-    options.signal?.throwIfAborted();
-    const capture = await captureFlatMtsdfConformance(resources);
-    options.signal?.throwIfAborted();
-    return capture;
-  } finally {
-    await disposeFlatMtsdfConformanceResources(resources);
-  }
-}
-
-export async function captureMtsdfSourceOutlineFidelity(options: {
-  readonly backend: RendererBackend;
-  readonly dpr: number;
-  readonly fontFixture: SelectableFontFixture;
-  readonly renderer?: PersistentRenderSceneRenderer;
-  readonly signal?: AbortSignal;
-}): Promise<SourceOutlineFidelityCapture> {
-  options.signal?.throwIfAborted();
-  const resources = await createFlatMtsdfConformanceResources(
-    options.backend,
-    options.dpr,
-    options.fontFixture,
-    options.signal,
-    'baked',
-    options.renderer,
-  );
-  try {
-    const capture = await captureFlatMtsdfConformance(resources);
-    options.signal?.throwIfAborted();
-    return await captureSourceOutlineFidelity({
-      candidate: capture.candidate,
-      width: capture.width,
-      height: capture.height,
-      dpr: options.dpr,
-      fontFixture: options.fontFixture,
-      fontSize: 64 / options.dpr,
-      direction: 'ltr',
-      layout: committedLayout(resources.line),
-      originX: resources.line.position.x,
-      originY: resources.line.position.y,
-      text: conformanceText(),
-      renderSubmitMs: capture.renderSubmitMs,
-    });
-  } finally {
-    await disposeFlatMtsdfConformanceResources(resources);
-  }
-}
-
-async function createFlatMtsdfConformanceResources(
-  backend: RendererBackend,
-  dpr: number,
-  fontFixture: BenchmarkFontFixture = 'inter',
-  signal?: AbortSignal,
-  delivery: FontDelivery = 'baked',
-  borrowedRenderer?: PersistentRenderSceneRenderer,
-): Promise<FlatMtsdfConformanceResources> {
-  signal?.throwIfAborted();
-  const ownedRenderer =
-    borrowedRenderer === undefined
-      ? await createConfiguredRenderer({
-          canvas: document.createElement('canvas'),
-          width: WIDTH,
-          height: FLAT_CONFORMANCE_HEIGHT,
-          backend,
-          dpr,
-        })
-      : undefined;
-  const renderer = borrowedRenderer ?? ownedRenderer!;
-  let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  let line: Text | undefined;
-  let resource: MsdfResource | undefined;
-  try {
-    const loaded = await loadMtsdfFont(signal, fontFixture, delivery);
-    font = loaded.font;
-    const rasterKey = await msdfDescriptorRasterKey();
-    line = new Text({
-      text: conformanceText(),
-      font,
-      raster: loaded.raster,
-      // Match the baked 64 px/em base level in device pixels. Deep minification
-      // is exercised separately with the same authored field and derivative AA.
-      fontSize: 64 / dpr,
-      rasterPixelRatio: dpr,
-      lineHeight: 1.2,
-      width: 476,
-      wrap: 'word',
-      color: 0xffffff,
-    });
-    await line.ready;
-    const raster = await font.loadRaster({ rasterKey, kind: msdf.kind }, signal === undefined ? undefined : { signal });
-    resource = await loaded.raster.decode(font, raster, signal);
-    signal?.throwIfAborted();
-    line.position.set(18, -18, 0);
-    const scene = new THREE.Scene();
-    scene.add(line);
-    const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -FLAT_CONFORMANCE_HEIGHT, 0.1, 1_000);
-    camera.position.z = 500;
-    camera.updateProjectionMatrix();
-    target = new THREE.RenderTarget(Math.round(WIDTH * dpr), Math.round(FLAT_CONFORMANCE_HEIGHT * dpr), {
-      depthBuffer: false,
-      stencilBuffer: false,
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      type: THREE.UnsignedByteType,
-      format: THREE.RGBAFormat,
-    });
-    target.texture.colorSpace = THREE.NoColorSpace;
-    target.texture.generateMipmaps = false;
-    return {
-      backend,
-      dpr,
-      fontFixture,
-      renderer,
-      ...(ownedRenderer === undefined ? {} : { ownedRenderer }),
-      target,
-      scene,
-      camera,
-      font,
-      line,
-      resource,
-    };
-  } catch (error) {
-    line?.dispose();
-    if (resource !== undefined) msdf.dispose(resource);
-    font?.dispose();
-    target?.dispose();
-    if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
-    throw error;
-  }
-}
-
-async function captureFlatMtsdfConformance(
-  resources: FlatMtsdfConformanceResources,
-): Promise<MtsdfTextConformanceCapture> {
-  const width = Math.round(WIDTH * resources.dpr);
-  const height = Math.round(FLAT_CONFORMANCE_HEIGHT * resources.dpr);
-  const { bytes, renderSubmitMs } = await withRendererStateRestored(resources.renderer, async () => {
-    resources.renderer.setRenderTarget(resources.target);
-    resources.renderer.setClearColor(0x000000, 1);
-    resources.renderer.clear();
-    const started = performance.now();
-    resources.renderer.render(resources.scene, resources.camera);
-    const submittedIn = performance.now() - started;
-    const readback = await resources.renderer.readRenderTargetPixelsAsync(resources.target, 0, 0, width, height);
-    return {
-      bytes: new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
-      renderSubmitMs: submittedIn,
-    };
-  });
-  const candidate = compactRgba8Readback(
-    bytes,
-    width,
-    height,
-    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-  );
-  const referenceResult = renderFlatMtsdfCpuReference(resources.resource, committedLayout(resources.line), {
-    width,
-    height,
-    dpr: resources.dpr,
-    originX: resources.line.position.x,
-    originY: resources.line.position.y,
-  });
-  const reference = referenceResult.pixels;
-  const comparison = compareRgba8Coverage(candidate, reference);
-  return {
-    width,
-    height,
-    candidate,
-    reference,
-    difference: comparison.heatmap,
-    meanAbsoluteError: comparison.meanAbsoluteError,
-    maximumError: comparison.maximumError,
-    errorPixels: comparison.errorPixels,
-    glyphCount: referenceResult.glyphCount,
-    renderSubmitMs,
-  };
-}
-
-async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConformanceResources): Promise<void> {
-  resources.line.dispose();
-  msdf.dispose(resources.resource);
-  resources.font.dispose();
-  resources.target.dispose();
-  if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
-}
-
 function renderedGlyphCount(object: THREE.Object3D): number {
   let count = 0;
   object.traverse((child) => {
@@ -960,12 +666,4 @@ function drawCount(object: THREE.Object3D): number {
     if (child instanceof THREE.Mesh) count += 1;
   });
   return count;
-}
-
-function hex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer), (value) => value.toString(16).padStart(2, '0')).join('');
-}
-
-async function sha256(bytes: Uint8Array): Promise<string> {
-  return hex(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes)));
 }
