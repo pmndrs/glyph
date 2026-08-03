@@ -5,6 +5,7 @@ import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
 import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
 import type { SlugTextLiveStats } from '../renderer/slug-text';
 import type { CanvasViewController } from '../renderer/canvas-view-controller';
+import { benchmarkWorkloadDefinition, isBenchmarkWorkloadId } from '../workloads/catalog';
 import type { HarnessLayout } from './url-state';
 
 export type RuntimeLiveStats = BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats;
@@ -47,54 +48,42 @@ export interface RuntimeWorldOptions {
 }
 
 export function defaultRuntimeFontSizeForWorkload(workload: string, layout: HarnessLayout = 'main'): number {
-  if (workload === 'off-axis-3d') return 96;
-  if (layout === 'presentation') {
-    switch (workload) {
-      case 'advanced-shaping':
-        return 48;
-      case 'icon-grid':
-        return 64;
-      case 'paint-effects':
-        return 52;
-      case 'dynamic-layout':
-        return 32;
-      default:
-        return 24;
-    }
-  }
-  switch (workload) {
-    case 'icon-grid':
-      return 56;
-    case 'paint-effects':
-      return 44;
-    case 'dynamic-layout':
-      return 28;
-    default:
-      return 20;
-  }
+  return runtimeDefaultsForWorkload(workload, layout).fontSize;
 }
 
 export function defaultRuntimeLayoutWidthPercentForWorkload(workload: string): number {
-  return workload === 'off-axis-3d' ? 120 : 82;
+  return runtimeDefaultsForWorkload(workload, 'main').layoutWidthPercent;
 }
 
 export function defaultRuntimeWorkloadAmountForWorkload(workload: string): number {
-  return workload === 'off-axis-3d' || workload === 'paragraph-stress' ? 100 : 50;
+  return runtimeDefaultsForWorkload(workload, 'main').workloadAmount;
 }
 
 export function resetRuntimeControlsForWorkload(world: World, workload: string, layout: HarnessLayout): void {
-  world.set(RuntimeViewControls, { showGrid: true, showLayoutBounds: true });
+  const defaults = runtimeDefaultsForWorkload(workload, layout);
+  world.set(RuntimeViewControls, {
+    showGrid: defaults.showGrid,
+    showLayoutBounds: defaults.showLayoutBounds,
+  });
   world.set(RuntimeLayoutControls, {
-    fontSize: defaultRuntimeFontSizeForWorkload(workload, layout),
-    layoutWidthPercent: defaultRuntimeLayoutWidthPercentForWorkload(workload),
-    workloadAmount: defaultRuntimeWorkloadAmountForWorkload(workload),
+    fontSize: defaults.fontSize,
+    layoutWidthPercent: defaults.layoutWidthPercent,
+    workloadAmount: defaults.workloadAmount,
   });
-  world.set(RuntimeAnimationControls, { animationEnabled: true, animationSpeed: 50 });
+  world.set(RuntimeAnimationControls, {
+    animationEnabled: defaults.animationEnabled,
+    animationSpeed: defaults.animationSpeed,
+  });
   world.set(RuntimePaintControls, {
-    paintOpacityPercent: 100,
-    paintShadowEnabled: false,
-    paintStrokePercent: 0,
+    paintOpacityPercent: defaults.paintOpacityPercent,
+    paintShadowEnabled: defaults.paintShadowEnabled,
+    paintStrokePercent: defaults.paintStrokePercent,
   });
+}
+
+function runtimeDefaultsForWorkload(workload: string, layout: HarnessLayout) {
+  const workloadId = isBenchmarkWorkloadId(workload) ? workload : 'benchmark-ipsum';
+  return benchmarkWorkloadDefinition(workloadId).defaults[layout];
 }
 
 export function createRuntimeWorld({

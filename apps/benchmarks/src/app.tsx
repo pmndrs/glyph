@@ -87,7 +87,13 @@ import { CompactSheet, CompactWorkloadPanel, MobileNavigation } from './componen
 import { TechniqueSwitcher } from './components/technique-switcher';
 import { TelemetryCharts } from './components/telemetry-charts';
 import { TopBar } from './components/top-bar';
-import { workloadById, workloadsFor, type WorkloadOption } from './benchmark/workloads';
+import {
+  workloadById,
+  workloadsFor,
+  isConformanceWorkloadId,
+  type ConformanceWorkloadId,
+  type WorkloadOption,
+} from './benchmark/workloads';
 import { WorkloadRail } from './components/workload-rail';
 import { PresentationLayout } from './components/presentation-layout';
 import { PresentationPayloadPills } from './components/presentation-payload-pills';
@@ -114,6 +120,7 @@ import type {
   ComparisonWorkloadPersistentScene,
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload';
+import { comparisonWorkloadId, isBenchmarkWorkloadId, type BenchmarkWorkloadId } from './workloads/catalog';
 import {
   benchmarkContentWidth,
   BENCHMARK_CONTENT_INSET,
@@ -287,10 +294,10 @@ function liveSceneAssetResource(
   technique: RasterTechnique,
   delivery: FontDelivery,
   fontFixture: BenchmarkFontFixture,
-  workload: string,
+  workload: HarnessLocation['workload'],
 ): Promise<void> {
   const fixtures = workload === 'icon-grid' ? [fontFixture, ICON_GRID_FONT_FIXTURE] : [fontFixture];
-  const comparison = comparisonWorkloadId(workload) !== undefined;
+  const comparison = isBenchmarkWorkloadId(workload) && comparisonWorkloadId(workload) !== undefined;
   const key = `${technique}:${delivery}:${fixtures.join(',')}:${String(comparison)}`;
   const existing = liveSceneAssetResources.get(key);
   if (existing !== undefined) return existing;
@@ -322,7 +329,7 @@ interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'
 
 interface RetainedLiveTextUpdate extends BitmapTextPreviewUpdate {
   readonly timelineTick: number | undefined;
-  readonly workload: string;
+  readonly workload: BenchmarkWorkloadId;
 }
 
 interface PresentationEvidence {
@@ -333,8 +340,8 @@ interface PresentationEvidence {
 }
 
 interface ActivityWorkloads {
-  readonly benchmark: string;
-  readonly conformance: string;
+  readonly benchmark: BenchmarkWorkloadId;
+  readonly conformance: ConformanceWorkloadId;
 }
 
 const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
@@ -348,21 +355,6 @@ const GLYPH_POSITION_TRANSITION_MS = 110;
 const FontNoticesDialog = lazy(() => import('./components/font-notices-dialog'));
 function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
-}
-
-function comparisonWorkloadId(workload: string): ComparisonWorkloadId | undefined {
-  switch (workload) {
-    case 'text-ladder':
-    case 'zoom-text':
-    case 'icon-grid':
-    case 'off-axis-3d':
-    case 'dynamic-layout':
-    case 'paragraph-stress':
-    case 'paint-effects':
-      return workload;
-    default:
-      return undefined;
-  }
 }
 
 function isComparisonWorkloadStats(stats: LiveTextStats | undefined): stats is ComparisonWorkloadStats {
@@ -488,8 +480,12 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const [activityWorkloads, setActivityWorkloads] = useState<ActivityWorkloads>(() => {
     const initial = readHarnessLocation(locationSearch(), defaultDeviceDpr(), routeLayout);
     return {
-      benchmark: initial.mode === 'benchmark' ? initial.workload : 'benchmark-ipsum',
-      conformance: initial.mode === 'conformance' ? initial.workload : 'text-accuracy',
+      benchmark:
+        initial.mode === 'benchmark' && isBenchmarkWorkloadId(initial.workload) ? initial.workload : 'benchmark-ipsum',
+      conformance:
+        initial.mode === 'conformance' && isConformanceWorkloadId(initial.workload)
+          ? initial.workload
+          : 'text-accuracy',
     };
   });
   const [summary, setSummary] = useState<BenchmarkSummary>();
@@ -1250,7 +1246,7 @@ function HarnessLayout({
             label: option.label,
             value: option.id,
           }))}
-          workloadValue={location.workload}
+          workloadValue={isBenchmarkWorkloadId(location.workload) ? location.workload : 'benchmark-ipsum'}
           onExit={() => onLocation({ layout: 'main' })}
           onFont={(value) => {
             if (location.workload === 'icon-grid' || location.workload === 'zoom-text') return;
@@ -1661,7 +1657,7 @@ function BenchmarkSurface({
   readonly showcaseFrame: AdvancedShapingFrame;
   readonly stats: LiveTextStats | undefined;
   readonly technique: RasterTechnique;
-  readonly workload: string;
+  readonly workload: BenchmarkWorkloadId;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   use(liveSceneAssetResource(technique, delivery, fontFixture, workload));
@@ -1845,7 +1841,7 @@ function ConformanceSurface({
   readonly fontFixture: SelectableFontFixture;
   readonly summary: BenchmarkSummary | undefined;
   readonly technique: RasterTechnique;
-  readonly workload: string;
+  readonly workload: ConformanceWorkloadId;
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
   readonly onZoom: (zoom: number) => void;
 }) {
@@ -2049,7 +2045,7 @@ function FiniteConformanceSurface({
   readonly fontFixture: SelectableFontFixture;
   readonly summary: BenchmarkSummary | undefined;
   readonly technique: RasterTechnique;
-  readonly workload: string;
+  readonly workload: ConformanceWorkloadId;
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
   readonly onZoom: (zoom: number) => void;
 }) {
@@ -2235,7 +2231,7 @@ function FiniteConformancePanels({
   readonly runtimeFallbackCapture: RuntimeFallbackCapture | undefined;
   readonly sourceOutlineCapture: SourceOutlineFidelityCapture | undefined;
   readonly technique: RasterTechnique;
-  readonly workload: string;
+  readonly workload: ConformanceWorkloadId;
   readonly onPan: (deltaXPercent: number, deltaYPercent: number) => void;
   readonly onZoom: (zoom: number) => void;
 }) {
@@ -2594,7 +2590,7 @@ interface BitmapTextViewportProps {
   readonly stats: BitmapTextLiveStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
   readonly textConfiguration: LiveTextConfiguration;
-  readonly workload: string;
+  readonly workload: BenchmarkWorkloadId;
   readonly onStats: (stats: BitmapTextLiveStats) => void;
 }
 
@@ -2960,7 +2956,7 @@ function MtsdfTextViewport({
   readonly stats: MtsdfTextLiveStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
   readonly textConfiguration: LiveTextConfiguration;
-  readonly workload: string;
+  readonly workload: BenchmarkWorkloadId;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();
@@ -3219,7 +3215,7 @@ function SlugTextViewport({
   readonly stats: SlugTextLiveStats | undefined;
   readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
   readonly textConfiguration: LiveTextConfiguration;
-  readonly workload: string;
+  readonly workload: BenchmarkWorkloadId;
   readonly onStats: (stats: LiveTextStats) => void;
 }) {
   const { activateSurface } = usePersistentRenderHost();

@@ -13,10 +13,13 @@ sources:
   - id: 'citation-3'
     resource: '../../README.md#benchmark-harness-wireframe'
     title: 'Repository benchmark-harness wireframe'
+  - id: 'benchmark-workload-catalog'
+    resource: '../../apps/benchmarks/src/workloads/catalog.ts'
+    title: 'Typed live-workload catalog'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T16:01:26Z'
+  at: '2026-08-03T07:33:52Z'
 ---
 
 # Canonical implementation roadmap
@@ -684,7 +687,7 @@ Milestone 9 is closed. Additional Slug optimization hypotheses are future measur
 
 ## Milestone 10 — harden the first shippable release
 
-Item 10.6 is active. Item 10.1 established the required renderer-neutral transaction and Three.js adapter parity, item 10.2 moved resident shaping, layout, paint planning, raster staging, and atomic publication into the Three.js object-update lifecycle without warm consumer readiness waits, item 10.3 added bounded retained instance capacity to all three first-party rasters, item 10.4 proved the published extension boundary with a private external consumer package, and item 10.5 removed benchmark workarounds and retained complete dual-backend Presentation evidence. The remaining accepted work is release review. Each layer must remain independently green; renderer-wide batching across separate `Text` objects is explicitly not part of this milestone.
+Item 10.6 is active. Item 10.1 established the required renderer-neutral transaction and Three.js adapter parity, item 10.2 moved resident shaping, layout, paint planning, raster staging, and atomic publication into the Three.js object-update lifecycle without warm consumer readiness waits, item 10.3 added bounded retained instance capacity to all three first-party rasters, item 10.4 proved the published extension boundary with a private external consumer package, and item 10.5 removed benchmark workarounds and retained complete dual-backend Presentation evidence. The remaining accepted work is release review. Its current pass makes every live workload a readable consumer example with one typed default/control/font/surface policy, isolates low-level conformance targets, and records any concrete package escape hatch in the API fixture before proposing implementation. The paired MSDF / Slug scene's possible need for grouped publication remains an evidence candidate, not an accepted renderer-wide batching feature. Each layer must remain independently green; renderer-wide batching across separate `Text` objects is explicitly not part of this milestone.
 
 ### 10.1–10.6 closure checklist
 

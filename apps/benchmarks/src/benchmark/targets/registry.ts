@@ -4,7 +4,7 @@ type TargetGroup = 'product' | 'measurement' | 'conformance';
 
 const targetGroups: Readonly<Record<string, TargetGroup>> = {
   synthetic: 'product',
-  'font-loader-worker': 'product',
+  'font-loader-worker': 'conformance',
   'external-raster-proof-webgl2': 'product',
   'external-raster-proof-webgpu': 'product',
   'bitmap-text-webgl2': 'product',

@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, type ReactNode } from 'react';
+import { isBenchmarkWorkloadId, type BenchmarkWorkloadId } from '../workloads/catalog';
 import { CustomSelect, type CustomSelectOption } from './custom-select';
 
 export type PresentationSelectOption = CustomSelectOption;
@@ -13,10 +14,10 @@ export interface PresentationLayoutProps {
   readonly techniqueControl: ReactNode;
   readonly telemetry: ReactNode;
   readonly workloadOptions: readonly PresentationSelectOption[];
-  readonly workloadValue: string;
+  readonly workloadValue: BenchmarkWorkloadId;
   readonly onExit: () => void;
   readonly onFont: (value: string) => void;
-  readonly onWorkload: (value: string) => void;
+  readonly onWorkload: (value: BenchmarkWorkloadId) => void;
 }
 
 export function PresentationLayout({
@@ -60,7 +61,9 @@ export function PresentationLayout({
             options={workloadOptions}
             value={workloadValue}
             variant="presentation"
-            onChange={onWorkload}
+            onChange={(value) => {
+              if (isBenchmarkWorkloadId(value)) onWorkload(value);
+            }}
           />
           <CustomSelect
             ariaLabel="Font fixture"

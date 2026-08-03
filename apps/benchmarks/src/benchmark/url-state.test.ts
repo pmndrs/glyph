@@ -45,6 +45,11 @@ describe('harness URL state', () => {
     });
   });
 
+  it('normalizes an unknown workload inside the selected mode', () => {
+    expect(readHarnessLocation('?mode=benchmark&workload=unknown').workload).toBe('benchmark-ipsum');
+    expect(readHarnessLocation('?mode=conformance&workload=unknown').workload).toBe('mtsdf-slug-compare');
+  });
+
   it('maps old bitmap target and scenario links into conformance', () => {
     expect(readHarnessLocation('?target=bitmap-text-webgl2&scenario=bitmap-text-frame')).toEqual({
       mode: 'conformance',

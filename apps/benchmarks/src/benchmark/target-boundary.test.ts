@@ -2,10 +2,12 @@ import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { loadRegisteredTarget } from './targets';
+import { createConformanceTargets } from './targets/conformance';
+import { createProductTargets } from './targets/product';
 import { registeredTargetIds } from './targets/registry';
 
 const benchmarkDirectory = fileURLToPath(new URL('.', import.meta.url));
-const directWasmDependencyModule = 'targets/measurement/wasm-dependencies.ts';
+const directWasmDependencyModule = 'targets/shared/direct-wasm.ts';
 
 async function sourceFiles(directory: string): Promise<readonly string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -20,7 +22,7 @@ async function sourceFiles(directory: string): Promise<readonly string[]> {
 }
 
 describe('benchmark target boundaries', () => {
-  it('keeps direct font-baker and Wasm URL imports in the explicit measurement adapter', async () => {
+  it('keeps direct font-baker and Wasm URL imports in the shared selected-ABI adapter', async () => {
     const files = await sourceFiles(benchmarkDirectory);
     const offenders = await Promise.all(
       files.map(async (file) => {
@@ -42,6 +44,11 @@ describe('benchmark target boundaries', () => {
     expect(registry).toContain("import('./conformance')");
     expect(execution).toContain('await loadRegisteredTarget(request.targetId)');
     expect(await loadRegisteredTarget('missing')).toBeUndefined();
+  });
+
+  it('classifies public Worker fallback parity as conformance rather than a rendering product target', () => {
+    expect(createProductTargets().some(({ id }) => id === 'font-loader-worker')).toBe(false);
+    expect(createConformanceTargets().some(({ id }) => id === 'font-loader-worker')).toBe(true);
   });
 
   it('resolves every registered identity from its declared target group', async () => {

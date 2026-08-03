@@ -1,3 +1,7 @@
+import { SELECTABLE_FONT_FIXTURE_IDS, type SelectableFontFixture } from './font-fixtures';
+import { isConformanceWorkloadId, type ConformanceWorkloadId } from './workloads';
+import { isBenchmarkWorkloadId, type BenchmarkWorkloadId } from '../workloads/catalog';
+
 export type HarnessMode = 'benchmark' | 'conformance';
 export type HarnessLayout = 'main' | 'presentation';
 export type RasterTechnique = 'bitmap' | 'mtsdf' | 'slug';
@@ -12,7 +16,7 @@ export interface HarnessLocation {
   readonly delivery: FontDelivery;
   readonly dpr: 1 | 2;
   readonly fontFixture: SelectableFontFixture;
-  readonly workload: string;
+  readonly workload: BenchmarkWorkloadId | ConformanceWorkloadId;
   readonly view: 'scene' | 'controls' | 'report' | 'export';
 }
 
@@ -38,12 +42,15 @@ export function readHarnessLocation(
   const legacyTarget = values.get('target');
   const legacyScenario = values.get('scenario');
   const hasLegacySelection = legacyTarget !== null || legacyScenario !== null;
+  const mode = enumValue(
+    values.get('mode'),
+    ['benchmark', 'conformance'],
+    hasLegacySelection ? 'conformance' : defaultLocation.mode,
+  );
+  const requestedWorkload =
+    values.get('workload') ?? (hasLegacySelection ? legacyWorkload(legacyScenario) : defaultLocation.workload);
   return {
-    mode: enumValue(
-      values.get('mode'),
-      ['benchmark', 'conformance'],
-      hasLegacySelection ? 'conformance' : defaultLocation.mode,
-    ),
+    mode,
     layout,
     technique: enumValue(values.get('technique'), ['bitmap', 'mtsdf', 'slug'], 'bitmap'),
     backend: enumValue(
@@ -54,8 +61,7 @@ export function readHarnessLocation(
     delivery: enumValue(values.get('delivery'), ['baked', 'runtime'], defaultLocation.delivery),
     dpr: numericEnumValue(values.get('dpr'), [1, 2], defaultDpr),
     fontFixture: enumValue(values.get('font'), SELECTABLE_FONT_FIXTURE_IDS, defaultLocation.fontFixture),
-    workload:
-      values.get('workload') ?? (hasLegacySelection ? legacyWorkload(legacyScenario) : defaultLocation.workload),
+    workload: normalizedWorkload(mode, requestedWorkload),
     view: enumValue(view, ['scene', 'controls', 'report', 'export'], defaultLocation.view),
   };
 }
@@ -91,6 +97,11 @@ function legacyWorkload(scenario: string | null): string {
   return scenario === 'bitmap-text-frame' ? 'text-accuracy' : (scenario ?? 'runner-contract');
 }
 
+function normalizedWorkload(mode: HarnessMode, workload: string): BenchmarkWorkloadId | ConformanceWorkloadId {
+  if (mode === 'benchmark') return isBenchmarkWorkloadId(workload) ? workload : defaultLocation.workload;
+  return isConformanceWorkloadId(workload) ? workload : 'mtsdf-slug-compare';
+}
+
 function enumValue<const Value extends string>(
   value: string | null,
   allowed: readonly Value[],
@@ -98,4 +109,3 @@ function enumValue<const Value extends string>(
 ): Value {
   return allowed.find((candidate) => candidate === value) ?? fallback;
 }
-import { SELECTABLE_FONT_FIXTURE_IDS, type SelectableFontFixture } from './font-fixtures';

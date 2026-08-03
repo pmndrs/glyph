@@ -1,6 +1,7 @@
 import type { BenchmarkInput, BenchmarkTarget, Capability } from '../../contracts';
 import { selectableFontFixture } from '../../font-fixtures';
 import { createShapingConformanceTargets } from './direct-runtime';
+import { createFontLoaderWorkerConformanceTarget } from './font-loader-worker';
 import { createDeferredTarget, sha256 } from '../shared';
 
 type Backend = 'webgpu' | 'webgl2';
@@ -176,6 +177,7 @@ function runtimeFallbackTarget(technique: Technique, backend: Backend): Benchmar
 
 export function createConformanceTargets(): readonly BenchmarkTarget[] {
   return [
+    createFontLoaderWorkerConformanceTarget(),
     ...createShapingConformanceTargets(),
     tslBaselineTarget('webgl2'),
     tslBaselineTarget('webgpu'),

@@ -24,7 +24,7 @@ import {
   shapingFixtureBatch,
   type ShapingOracleCase,
 } from '../../shaping-fixture';
-import { loadDirectWasmDependencies } from '../measurement/wasm-dependencies';
+import { loadDirectWasmDependencies } from '../shared/direct-wasm';
 
 interface ContractCase {
   readonly text: string;

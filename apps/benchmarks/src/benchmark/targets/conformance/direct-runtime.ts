@@ -27,7 +27,7 @@ import {
   type ShapingOracleCase,
 } from '../../shaping-fixture';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../../uikit-layout-fixture';
-import { loadDirectWasmDependencies } from '../measurement/wasm-dependencies';
+import { loadDirectWasmDependencies } from '../shared/direct-wasm';
 
 const shapingCases = canonicalShapingOracle.cases as readonly ShapingOracleCase[];
 let runtimeShaper: RuntimeShaper | undefined;

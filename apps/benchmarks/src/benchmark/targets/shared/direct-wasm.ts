@@ -1,8 +1,8 @@
 /**
  * Direct Wasm ABI dependencies are intentionally isolated from the application entry graph.
  *
- * Product demos use the public @pmndrs/text loader. Measurement targets opt into these
- * module and asset imports only after the operator selects an ABI-level benchmark.
+ * Selected measurement and conformance targets opt into these module and asset imports only
+ * after an operator chooses an ABI-level benchmark. Product demos use public loader surfaces.
  */
 export interface DirectWasmDependencies {
   readonly createFontBaker: typeof import('@pmndrs/text-font-baker').createFontBaker;

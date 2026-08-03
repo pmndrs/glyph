@@ -16,10 +16,16 @@ sources:
   - id: 'citation-4'
     resource: 'https://threejs.org/docs/pages/Object3D.html'
     title: 'Three.js Object3D'
+  - id: 'benchmark-workload-catalog'
+    resource: '../../apps/benchmarks/src/workloads/catalog.ts'
+    title: 'Typed benchmark workload catalog'
+  - id: 'raster-technique-comparison'
+    resource: '../../apps/benchmarks/src/renderer/raster-technique-compare.ts'
+    title: 'Retained MSDF and Slug comparison scene'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T20:19:48Z'
+  at: '2026-08-03T07:33:52Z'
 ---
 
 # Runtime and bake API fixture V0
@@ -38,6 +44,25 @@ This table reports contract evidence; it does not turn implementation or prose i
 | Typed raster capabilities  | ✅ accepted | Positive and negative fixtures preserve external literal kinds, resources, batches, options, runtime bakers, and baker descriptors.                                                    | Concrete first-party packages remain later milestones.                             |
 | Canonical URL resolution   | ✅ accepted | String, `URL`, source/override, baked-only, and invalid combinations have type fixtures; normalization and fallback rules are specified below.                                         | Runtime behavior belongs to milestone 3.                                           |
 | ESM-only package contract  | ✅ accepted | The existing `@pmndrs/text` root export is ESM-only and has no `require` condition.                                                                                                    | 0.2 must add a package-contract fixture without publishing unimplemented subpaths. |
+
+## Benchmark consumer API discovery
+
+The Milestone-10 benchmark cleanup treats every live workload as executable consumer evidence. A public API candidate is
+admitted here only when the desired consumer snippet cannot be expressed through the shipped package, the missing
+constraint has a distinguishing test, and runtime-size, Worker, renderer, and type consequences are stated. Benchmark
+telemetry, fixture authentication, renderer ownership, and direct-ABI measurement do not become product APIs merely
+because the harness needs them.
+
+| Consumer surface | Observed package path | Finding | Decision |
+| --- | --- | --- | --- |
+| Text Ladder, Zoom Text, Icon Grid, Off-axis / 3D, Dynamic Layout, Paragraph Stress, and Paint & Effects | Public `Text` with a `RegisteredFont` and typed raster input; retained changes use `Text.setProperties` | Every scene is expressible without direct Wasm, a private shaper, or renderer ownership | No API gap; finish the benchmark-local scene hierarchy |
+| Baked and runtime font delivery | Public `FontLoader`, `FontRegistry`, `defineFont`, raster modules, and lazy `runtime-bake` | Manual manifest authentication and compressed-fixture accounting are benchmark evidence concerns | Keep instrumentation outside the thin runtime |
+| Direct baker/shaper ABI targets | Explicit low-level package and Wasm imports behind one lazily selected shared adapter | The target measures the ABI rather than demonstrating ordinary product usage | Keep isolated under benchmark conformance/measurement targets |
+| Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene | A delayed peer could expose a mixed-generation comparison frame; current immediate-ready tests do not distinguish it | Evidence candidate: first prove or disprove the mixed-frame failure, then prefer benchmark-local detached scene replacement unless another consumer requires renderer-neutral grouped publication |
+
+This audit rejects new loader telemetry, generic raster-statistics, Three-specific, and React-specific APIs: each would add
+coupling or shipped code without a demonstrated consumer failure. A grouped multi-`Text` transaction remains deliberately
+unaccepted until the delayed-peer probe supplies that missing evidence.
 
 ## Package boundaries
 
@@ -269,7 +294,7 @@ type RasterKind = string;
 
 interface FontSourceOverride {
   source: string | URL;
-  baked?: string | URL;
+  baked?: string | URL | null;
 }
 
 interface BakedFontSource {

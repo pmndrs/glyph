@@ -1,7 +1,14 @@
 import type { HarnessMode, RasterTechnique } from './url-state';
+import { BENCHMARK_WORKLOAD_IDS, BENCHMARK_WORKLOADS, type BenchmarkWorkloadId } from '../workloads/catalog';
 
-export interface WorkloadOption {
-  readonly id: string;
+export type ConformanceWorkloadId =
+  | 'mtsdf-slug-compare'
+  | 'runtime-fallback'
+  | 'text-accuracy'
+  | 'cross-technique-fidelity';
+
+export interface WorkloadOption<Id extends string = string> {
+  readonly id: Id;
   readonly label: string;
   readonly description: string;
   readonly techniques: Readonly<Record<RasterTechnique, WorkloadTechniqueStatus>>;
@@ -16,64 +23,11 @@ type WorkloadTechniqueStatus = { readonly kind: 'ready' } | { readonly kind: 'pl
 
 const READY: WorkloadTechniqueStatus = { kind: 'ready' };
 
-const benchmarkWorkloads: readonly WorkloadOption[] = [
-  {
-    id: 'benchmark-ipsum',
-    label: 'Benchmark ipsum',
-    description: 'Tests the everyday cost of rendering and reflowing a full paragraph.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'advanced-shaping',
-    label: 'Advanced shaping',
-    description: 'Tests whether complex text stays correct as it types and wraps.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'text-ladder',
-    label: 'Text ladder',
-    description: 'Tests how text quality holds up from 8 to 1024 pixels.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'zoom-text',
-    label: 'Zoom text',
-    description: 'Cycles through translations of “Shape” while scaling from 8 pt to the largest size that fits.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'icon-grid',
-    label: 'Icon grid',
-    description: 'Tests a labeled icon font across scale, movement, and raster techniques.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'off-axis-3d',
-    label: 'Off-axis / 3D',
-    description: 'Tests text quality and cost at steep, moving viewing angles.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'dynamic-layout',
-    label: 'Dynamic layout',
-    description: 'Tests whether animated containers reflow text smoothly and correctly.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'paragraph-stress',
-    label: 'Paragraph stress',
-    description: 'Tests rendering cost as paragraphs, glyphs, and atlas pressure grow.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-  {
-    id: 'paint-effects',
-    label: 'Paint & effects',
-    description: 'Tests the live cost and visual quality of animated text effects.',
-    techniques: { bitmap: READY, mtsdf: READY, slug: READY },
-  },
-];
+const benchmarkWorkloads: readonly WorkloadOption<BenchmarkWorkloadId>[] = BENCHMARK_WORKLOAD_IDS.map(
+  (id) => BENCHMARK_WORKLOADS[id],
+);
 
-const conformanceWorkloads: readonly WorkloadOption[] = [
+const conformanceWorkloads: readonly WorkloadOption<ConformanceWorkloadId>[] = [
   {
     id: 'mtsdf-slug-compare',
     label: 'MSDF / Slug compare',
@@ -116,11 +70,29 @@ export function workloadScrollEdges({
   };
 }
 
-export function workloadsFor(mode: HarnessMode): readonly WorkloadOption[] {
+export function workloadsFor(mode: 'benchmark'): readonly WorkloadOption<BenchmarkWorkloadId>[];
+export function workloadsFor(mode: 'conformance'): readonly WorkloadOption<ConformanceWorkloadId>[];
+export function workloadsFor(mode: HarnessMode): readonly WorkloadOption<BenchmarkWorkloadId | ConformanceWorkloadId>[];
+export function workloadsFor(
+  mode: HarnessMode,
+): readonly WorkloadOption<BenchmarkWorkloadId | ConformanceWorkloadId>[] {
   return mode === 'benchmark' ? benchmarkWorkloads : conformanceWorkloads;
 }
 
-export function workloadById(mode: HarnessMode, id: string): WorkloadOption {
+export function workloadById(mode: 'benchmark', id: string): WorkloadOption<BenchmarkWorkloadId>;
+export function workloadById(mode: 'conformance', id: string): WorkloadOption<ConformanceWorkloadId>;
+export function workloadById(
+  mode: HarnessMode,
+  id: string,
+): WorkloadOption<BenchmarkWorkloadId | ConformanceWorkloadId>;
+export function workloadById(
+  mode: HarnessMode,
+  id: string,
+): WorkloadOption<BenchmarkWorkloadId | ConformanceWorkloadId> {
   const workloads = workloadsFor(mode);
   return workloads.find((workload) => workload.id === id) ?? workloads[0]!;
+}
+
+export function isConformanceWorkloadId(value: string): value is ConformanceWorkloadId {
+  return conformanceWorkloads.some(({ id }) => id === value);
 }

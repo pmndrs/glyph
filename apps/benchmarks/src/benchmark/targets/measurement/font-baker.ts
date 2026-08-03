@@ -1,6 +1,6 @@
 import canonicalFontUrl from '../../../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
 import type { BenchmarkTarget } from '../../contracts';
-import { loadDirectWasmDependencies, type DirectFontBaker } from './wasm-dependencies';
+import { loadDirectWasmDependencies, type DirectFontBaker } from '../shared/direct-wasm';
 
 /** The only throughput target that invokes the direct font-baker ABI. */
 let baker: DirectFontBaker | undefined;
