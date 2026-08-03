@@ -1,6 +1,8 @@
 {
   "name": "pmndrs-text-workspace",
   "private": true,
+  "license": "MIT",
+  "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
   "scripts": {
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",

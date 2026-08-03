@@ -32,7 +32,15 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
   assert.equal(packedFiles.includes('dist/mtsdf-baker-abi-v1.json'), true);
   assert.equal(packedFiles.includes('dist/slug-baker-abi-v1.json'), false);
   assert.equal(packedFiles.includes('dist/slug-baker-abi-v0.json'), true);
-  assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), ['dist', 'package.json']);
+  assert.deepEqual([...new Set(packedFiles.map((path) => path.split('/')[0]))].sort(), [
+    'LICENSE',
+    'dist',
+    'package.json',
+  ]);
+  assert.equal(
+    await readFile(join(installedDirectory, 'LICENSE'), 'utf8'),
+    await readFile(join(packageDirectory, '..', '..', 'LICENSE'), 'utf8'),
+  );
   const consumerEntry = pathToFileURL(join(temporaryDirectory, 'consumer', 'entry.mjs')).href;
   const moduleSubpaths = Object.entries(manifest.exports)
     .filter(([, target]) => typeof target === 'object' && target !== null)
