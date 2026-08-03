@@ -40,4 +40,17 @@ describe('benchmark font-asset boundaries', () => {
       expect(renderer).not.toContain('@pmndrs/text-font-baker');
     }
   });
+
+  it('keeps loading and raster metadata ownership out of retained renderer exports', async () => {
+    const renderers = await Promise.all(
+      ['../../renderer/bitmap-text.ts', '../../renderer/mtsdf-text.ts', '../../renderer/slug-text.ts'].map((name) =>
+        readFile(new URL(name, fontAssetsRoot), 'utf8'),
+      ),
+    );
+
+    for (const renderer of renderers) {
+      expect(renderer).not.toMatch(/export (?:async )?function (?:load|registered)/);
+      expect(renderer).not.toMatch(/export \{ preload(?:Bitmap|Mtsdf|Slug)FontAssets \}/);
+    }
+  });
 });

@@ -31,7 +31,16 @@ import type {
   ComparisonWorkloadId,
 } from '../workloads/contracts';
 import { committedTextLayout, type ComparisonWorkloadEntry } from '../workloads/factory-contracts';
-import { registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
+import { registeredBitmapAtlas } from '../benchmark/low-level/raster/bitmap-atlas';
+import {
+  registeredMtsdfConfiguration,
+  type MtsdfRasterConfiguration,
+} from '../benchmark/low-level/raster/mtsdf-configuration';
+import {
+  registeredSlugConfiguration,
+  type SlugRasterConfiguration,
+} from '../benchmark/low-level/raster/slug-configuration';
+import type { BitmapTextLiveStats } from './bitmap-text';
 import { createCanvasSurface } from './canvas-surface';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry, type LiveFrameTelemetrySnapshot } from './live-frame-telemetry';
@@ -42,8 +51,8 @@ import {
   type FontDeliveryMetrics,
 } from '../workloads/font-assets';
 import { benchmarkContentWidth } from '../workloads/shared/text-style';
-import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration, type MtsdfTextLiveStats } from './mtsdf-text';
-import type { SlugRasterConfiguration, SlugTextLiveStats } from './slug-text';
+import type { MtsdfTextLiveStats } from './mtsdf-text';
+import type { SlugTextLiveStats } from './slug-text';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,
@@ -1476,7 +1485,6 @@ async function loadTechniqueFont(
       raster: loaded.raster,
     };
   }
-  const { registeredSlugConfiguration } = await import('./slug-text');
   const loaded = await loadBenchmarkFontAsset(
     delivery === 'runtime'
       ? {

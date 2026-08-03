@@ -6,15 +6,17 @@ import {
   type ParagraphLayout,
   type RegisteredFont,
 } from '@pmndrs/text';
-import { slug, slugDescriptorRasterKey, type SlugResource } from '@pmndrs/text/raster/slug';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import {
+  registeredSlugConfiguration,
+  type SlugRasterConfiguration,
+} from '../benchmark/low-level/raster/slug-configuration';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
 import { loadSlugFontAsset } from '../workloads/font-assets/slug';
-import type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../workloads/font-assets';
 import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
 import {
   benchmarkContentWidth,
@@ -32,21 +34,6 @@ import {
   type RetainedFontFixtureController,
 } from './retained-font-fixture';
 import type { RendererBackend } from './webgpu-renderer';
-
-export { preloadSlugFontAssets } from '../workloads/font-assets/slug';
-export type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../workloads/font-assets/slug';
-
-export interface SlugRasterConfiguration {
-  readonly planeUnitsPerEm: number;
-  readonly pageCount: number;
-  readonly curveTexelCount: number;
-  readonly curveGpuBytes: number;
-  readonly headerCount: number;
-  readonly headerGpuBytes: number;
-  readonly referenceCount: number;
-  readonly referenceGpuBytes: number;
-  readonly gpuBytes: number;
-}
 
 export interface SlugTextLiveStats {
   readonly technique: 'slug';
@@ -149,7 +136,7 @@ export interface SlugTextPersistentSceneOptions {
 interface SlugPersistentFontFixture {
   readonly font: RegisteredFont;
   readonly fontLoadMs: number;
-  readonly loaded: Awaited<ReturnType<typeof loadSlugFont>>;
+  readonly loaded: Awaited<ReturnType<typeof loadSlugFontAsset>>;
   readonly rasterConfiguration: SlugRasterConfiguration;
 }
 
@@ -271,7 +258,14 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       // CanvasSurface consumes only render-state methods; the host still withholds renderer lifecycle ownership.
       canvasSurface = createCanvasSurface(context.renderer as THREE.WebGPURenderer, width, height, gridVisible);
       const fontStarted = performance.now();
-      const loaded = await loadSlugFont(context.signal, initialFontFixture, delivery, onBakeProgress, registry);
+      const loaded = await loadSlugFontAsset({
+        technique: 'slug',
+        fixture: initialFontFixture,
+        delivery,
+        registry,
+        signal: context.signal,
+        ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
+      });
       font = loaded.font;
       const fontLoadMs = performance.now() - fontStarted;
       context.signal.throwIfAborted();
@@ -407,7 +401,14 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         isCurrent: () => !closing && !disposed && revision === updateRevision,
         load: async (fixture, fixtureRegistry) => {
           const fontStartedAt = performance.now();
-          const loaded = await loadSlugFont(signal, fixture, delivery, onBakeProgress, fixtureRegistry);
+          const loaded = await loadSlugFontAsset({
+            technique: 'slug',
+            fixture,
+            delivery,
+            registry: fixtureRegistry,
+            signal,
+            ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
+          });
           try {
             const rasterConfiguration = await registeredSlugConfiguration(loaded.font, signal);
             return { font: loaded.font, fontLoadMs: performance.now() - fontStartedAt, loaded, rasterConfiguration };
@@ -474,99 +475,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       camera = undefined;
       scene = undefined;
     },
-  };
-}
-
-export async function loadSlugFont(
-  signal?: AbortSignal,
-  fixture: BenchmarkFontFixture = 'inter',
-  delivery: FontDelivery = 'baked',
-  onProgress?: BakeProgressListener,
-  registry?: FontRegistry,
-): Promise<Awaited<ReturnType<typeof loadSlugFontAsset>>> {
-  return loadSlugFontAsset(
-    delivery === 'runtime'
-      ? {
-          technique: 'slug',
-          fixture,
-          delivery,
-          ...(registry === undefined ? {} : { registry }),
-          ...(signal === undefined ? {} : { signal }),
-          ...(onProgress === undefined ? {} : { onProgress }),
-        }
-      : {
-          technique: 'slug',
-          fixture,
-          delivery,
-          ...(registry === undefined ? {} : { registry }),
-          ...(signal === undefined ? {} : { signal }),
-          ...(onProgress === undefined ? {} : { onProgress }),
-        },
-  );
-}
-
-/** Load a retained non-production Slug candidate through the ordinary registry boundary. */
-export async function loadSlugBakedArtifact(
-  source: SlugBakedArtifactSource,
-  signal?: AbortSignal,
-  registry?: FontRegistry,
-): Promise<Awaited<ReturnType<typeof loadSlugFontAsset>>> {
-  return loadSlugFontAsset({
-    technique: 'slug',
-    fixture: 'inter',
-    delivery: 'baked',
-    bakedArtifact: source,
-    ...(registry === undefined ? {} : { registry }),
-    ...(signal === undefined ? {} : { signal }),
-  });
-}
-
-export async function registeredSlugConfiguration(
-  font: RegisteredFont,
-  signal?: AbortSignal,
-): Promise<SlugRasterConfiguration> {
-  const rasterKey = await slugDescriptorRasterKey();
-  const raster = await font.loadRaster({ kind: slug.kind, rasterKey }, signal === undefined ? undefined : { signal });
-  const resource = await slug.decode(font, raster, signal);
-  try {
-    return slugResourceConfiguration(resource);
-  } finally {
-    slug.dispose(resource);
-  }
-}
-
-function slugResourceConfiguration(resource: SlugResource): SlugRasterConfiguration {
-  let curveTexelCount = 0;
-  let curveGpuBytes = 0;
-  let headerCount = 0;
-  let headerGpuBytes = 0;
-  let referenceCount = 0;
-  let referenceGpuBytes = 0;
-  for (const page of resource.pages) {
-    const curveAllocation = page.curveWidth * page.curveHeight * 8;
-    const headerAllocation = page.headerWidth * page.headerHeight * 4;
-    const referenceAllocation = page.referenceWidth * page.referenceHeight * 4;
-    curveTexelCount += page.curveWidth * page.curveHeight;
-    curveGpuBytes += curveAllocation;
-    headerCount += page.headerCount;
-    headerGpuBytes += headerAllocation;
-    referenceCount += page.referenceCount;
-    referenceGpuBytes += referenceAllocation;
-  }
-  const allocationTotal = curveGpuBytes + headerGpuBytes + referenceGpuBytes;
-  if (allocationTotal !== resource.gpuBytes) {
-    throw new Error('Slug page allocations do not match the decoded resource GPU byte total');
-  }
-  return {
-    planeUnitsPerEm: resource.planeUnitsPerEm,
-    pageCount: resource.pages.length,
-    curveTexelCount,
-    curveGpuBytes,
-    headerCount,
-    headerGpuBytes,
-    referenceCount,
-    referenceGpuBytes,
-    gpuBytes: resource.gpuBytes,
   };
 }
 

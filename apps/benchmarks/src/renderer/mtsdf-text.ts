@@ -1,8 +1,11 @@
 import { FontRegistry, Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
-import { msdfDescriptorRasterKey } from '@pmndrs/text/raster/msdf';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import {
+  registeredMtsdfConfiguration,
+  type MtsdfRasterConfiguration,
+} from '../benchmark/low-level/raster/mtsdf-configuration';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface, type CanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
@@ -28,8 +31,6 @@ import {
 } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../workloads/font-assets/mtsdf';
-
-export { preloadMtsdfFontAssets } from '../workloads/font-assets/mtsdf';
 
 export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf';
@@ -153,7 +154,7 @@ interface MtsdfPersistentActivation {
 interface MtsdfPersistentFontFixture {
   readonly font: RegisteredFont;
   readonly fontLoadMs: number;
-  readonly loaded: Awaited<ReturnType<typeof loadMtsdfFont>>;
+  readonly loaded: Awaited<ReturnType<typeof loadMtsdfFontAsset>>;
   readonly rasterConfiguration: MtsdfRasterConfiguration;
 }
 
@@ -234,13 +235,14 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       let line: Text | undefined;
       try {
         const fontStartedAt = performance.now();
-        const loaded = await loadMtsdfFont(
-          context.signal,
-          options.fontFixture ?? 'inter',
-          options.delivery ?? 'baked',
-          options.onBakeProgress,
+        const loaded = await loadMtsdfFontAsset({
+          technique: 'mtsdf',
+          fixture: options.fontFixture ?? 'inter',
+          delivery: options.delivery ?? 'baked',
           registry,
-        );
+          signal: context.signal,
+          ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
+        });
         font = loaded.font;
         const fontLoadMs = performance.now() - fontStartedAt;
         context.signal.throwIfAborted();
@@ -387,13 +389,14 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         isCurrent: () => !disposed && activation === resources && revision === updateRevision,
         load: async (fixture, registry) => {
           const fontStartedAt = performance.now();
-          const loaded = await loadMtsdfFont(
-            resources.signal,
+          const loaded = await loadMtsdfFontAsset({
+            technique: 'mtsdf',
             fixture,
-            options.delivery ?? 'baked',
-            options.onBakeProgress,
+            delivery: options.delivery ?? 'baked',
             registry,
-          );
+            signal: resources.signal,
+            ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
+          });
           try {
             const rasterConfiguration = await registeredMtsdfConfiguration(loaded.font, resources.signal);
             return { font: loaded.font, fontLoadMs: performance.now() - fontStartedAt, loaded, rasterConfiguration };
@@ -478,54 +481,6 @@ function persistentGpuTimingSupported(backend: RendererBackend, renderer: Persis
   if (backend === 'webgpu') return renderer.hasFeature('timestamp-query');
   const context = renderer.domElement.getContext('webgl2');
   return context !== null && context.getExtension('EXT_disjoint_timer_query_webgl2') !== null;
-}
-
-export async function loadMtsdfFont(
-  signal?: AbortSignal,
-  fixture: BenchmarkFontFixture = 'inter',
-  delivery: FontDelivery = 'baked',
-  onProgress?: import('@pmndrs/text').BakeProgressListener,
-  registry?: FontRegistry,
-): Promise<Awaited<ReturnType<typeof loadMtsdfFontAsset>>> {
-  return loadMtsdfFontAsset({
-    technique: 'mtsdf',
-    fixture,
-    delivery,
-    ...(registry === undefined ? {} : { registry }),
-    ...(signal === undefined ? {} : { signal }),
-    ...(onProgress === undefined ? {} : { onProgress }),
-  });
-}
-
-export interface MtsdfRasterConfiguration {
-  readonly emSize: number;
-  readonly pixelRange: number;
-}
-
-export async function registeredMtsdfConfiguration(
-  font: RegisteredFont,
-  signal?: AbortSignal,
-): Promise<MtsdfRasterConfiguration> {
-  const rasterKey = await msdfDescriptorRasterKey();
-  const raster =
-    font.getRaster(rasterKey) ??
-    (await font.loadRaster({ kind: 'msdf', rasterKey }, signal === undefined ? undefined : { signal }));
-  const extension = raster.extensionData;
-  if (typeof extension !== 'object' || extension === null || Array.isArray(extension)) {
-    throw new TypeError('MTSDF extension must be an object');
-  }
-  if (!('emSize' in extension) || !('pixelRange' in extension)) {
-    throw new TypeError('MTSDF extension must declare emSize and pixelRange');
-  }
-  const emSize = extension.emSize;
-  const pixelRange = extension.pixelRange;
-  if (typeof emSize !== 'number' || !Number.isSafeInteger(emSize) || emSize <= 0) {
-    throw new TypeError('MTSDF emSize must be a positive safe integer');
-  }
-  if (typeof pixelRange !== 'number' || !Number.isFinite(pixelRange) || pixelRange <= 0) {
-    throw new TypeError('MTSDF pixelRange must be positive and finite');
-  }
-  return { emSize, pixelRange };
 }
 
 function positionLiveLine(

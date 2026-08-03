@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { mul, saturate, sub, texture, vec4 } from 'three/tsl';
 
 import { rasterConformanceSpecimen, type SelectableFontFixture } from '../../../font-fixtures';
-import { loadMtsdfFont } from '../../../../renderer/mtsdf-text';
+import { loadMtsdfFontAsset } from '../../../../workloads/font-assets/mtsdf';
 import {
   createPersistentRenderHost,
   type PersistentRenderScene,
@@ -12,7 +12,7 @@ import {
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from '../../../../renderer/persistent-render-host';
-import { loadSlugFont } from '../../../../renderer/slug-text';
+import { loadSlugFontAsset } from '../../../../workloads/font-assets/slug';
 import type { RendererBackend } from '../../../../renderer/webgpu-renderer';
 
 const BACKGROUND = 0x070709;
@@ -340,8 +340,8 @@ async function createComparisonResources(
   let heatmapMaterial: THREE.NodeMaterial | undefined;
   try {
     const [mtsdfResult, slugResult] = await Promise.allSettled([
-      loadMtsdfFont(context.signal, fontFixture),
-      loadSlugFont(context.signal, fontFixture),
+      loadMtsdfFontAsset({ technique: 'mtsdf', fixture: fontFixture, delivery: 'baked', signal: context.signal }),
+      loadSlugFontAsset({ technique: 'slug', fixture: fontFixture, delivery: 'baked', signal: context.signal }),
     ]);
     if (mtsdfResult.status === 'rejected') {
       if (slugResult.status === 'fulfilled') slugResult.value.font.dispose();
