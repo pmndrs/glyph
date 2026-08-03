@@ -7,7 +7,7 @@ import type {
   BitmapTextPersistentScene,
   BitmapTextSceneSnapshot,
 } from '../../renderer/bitmap-text';
-import { createLatestAsyncQueue, type LatestAsyncQueue } from '../../renderer/latest-async-queue';
+import { createLatestAsyncQueue, type LatestAsyncQueue } from './latest-async-queue';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import {
   benchmarkContentWidth,
