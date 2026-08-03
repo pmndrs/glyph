@@ -6,7 +6,7 @@ import type {
   BitmapTextLiveStats,
   BitmapTextPersistentScene,
   BitmapTextSceneSnapshot,
-} from '../../renderer/bitmap-text';
+} from '../../techniques/bitmap/persistent-scene';
 import { createLatestAsyncQueue, type LatestAsyncQueue } from './latest-async-queue';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import {
@@ -27,7 +27,7 @@ import type {
 const GLYPH_POSITION_TRANSITION_MS = 110;
 
 function loadBitmapTextRenderer() {
-  return import('../../renderer/bitmap-text');
+  return import('../../techniques/bitmap/persistent-scene');
 }
 
 function bitmapViewportEvidence({

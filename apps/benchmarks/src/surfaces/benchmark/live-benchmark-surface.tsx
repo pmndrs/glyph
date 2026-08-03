@@ -3,7 +3,7 @@ import type { ReactNode, RefObject } from 'react';
 import type { RuntimeLiveStats } from '../../benchmark/runtime-world';
 import { TelemetryCharts } from '../../components/telemetry-charts';
 import { Metric } from '../../components/ui';
-import type { AdvancedShapingFrame } from '../../workloads/advanced-shaping';
+import type { AdvancedShapingFrame } from '../../workloads/advanced-shaping/scene';
 import { benchmarkWorkloadDefinition, type BenchmarkWorkloadId } from '../../workloads/catalog';
 
 export function LiveBenchmarkSurface({

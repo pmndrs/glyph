@@ -1,10 +1,9 @@
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 
-import type { AdvancedShapingFrame } from './advanced-shaping';
-import { advancedShapingLiveTextScene } from './advanced-shaping';
-import { benchmarkIpsumLiveTextScene } from './benchmark-ipsum';
+import { advancedShapingLiveTextScene, type AdvancedShapingFrame } from './advanced-shaping/scene';
+import { benchmarkIpsumLiveTextScene } from './benchmark-ipsum/scene';
 import type { BenchmarkWorkloadId } from './catalog';
-import type { LiveTextScene } from './live-text-scene';
+import type { LiveTextScene } from './shared/live-text-scene';
 
 export interface LiveTextSceneInput {
   readonly fontFixture: BenchmarkFontFixture;
@@ -24,7 +23,7 @@ const LIVE_TEXT_SCENES: Partial<
   Readonly<Record<BenchmarkWorkloadId, { readonly create: (input: LiveTextSceneInput) => LiveTextScene }>>
 > = {
   'advanced-shaping': {
-    create: ({ showcaseFrame }) => advancedShapingLiveTextScene(showcaseFrame),
+    create: ({ fontFixture, showcaseFrame }) => advancedShapingLiveTextScene(showcaseFrame, fontFixture),
   },
   'benchmark-ipsum': {
     create: ({ fontFixture, layoutWidthRatio }) => benchmarkIpsumLiveTextScene(fontFixture, layoutWidthRatio),

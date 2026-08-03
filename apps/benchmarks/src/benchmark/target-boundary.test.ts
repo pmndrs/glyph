@@ -36,13 +36,15 @@ describe('benchmark target boundaries', () => {
     expect(offenders.filter((file): file is string => file !== undefined)).toEqual([directWasmDependencyModule]);
   });
 
-  it('keeps low-level targets downstream from renderer infrastructure', async () => {
+  it('keeps renderer infrastructure independent of benchmark targets, low-level references, and techniques', async () => {
     const files = await sourceFiles(rendererDirectory);
     expect(files.map((file) => file.slice(rendererDirectory.length + 1))).not.toContain('tsl-baseline.ts');
     const offenders = await Promise.all(
       files.map(async (file) => {
         const source = await readFile(file, 'utf8');
-        return /benchmark\/targets/.test(source) ? file.slice(rendererDirectory.length + 1) : undefined;
+        return /benchmark\/(?:targets|low-level)|techniques\//.test(source)
+          ? file.slice(rendererDirectory.length + 1)
+          : undefined;
       }),
     );
     expect(offenders.filter((file): file is string => file !== undefined)).toEqual([]);
@@ -81,7 +83,7 @@ describe('benchmark target boundaries', () => {
     expect(conformance).not.toContain('renderer/advanced-shaping-conformance');
     expect(conformance).not.toContain('renderer/tsl-baseline');
     expect(conformance).not.toContain('renderer/runtime-fallback-conformance');
-    expect(conformance).not.toContain('renderer/bitmap-text');
+    expect(conformance).not.toContain('techniques/bitmap/persistent-scene');
     expect(product).toContain("import('./external-raster-proof')");
     expect(product).toContain("import('./react-text')");
     expect(product).toContain("import('./mtsdf-text')");
@@ -89,23 +91,23 @@ describe('benchmark target boundaries', () => {
     expect(product).toContain("import('./bitmap-text')");
     expect(product).not.toContain('renderer/external-raster-proof');
     expect(product).not.toContain('renderer/react-text');
-    expect(product).not.toContain('renderer/mtsdf-text');
-    expect(product).not.toContain('renderer/slug-text');
-    expect(product).not.toContain('renderer/bitmap-text');
+    expect(product).not.toContain('techniques/mtsdf/persistent-scene');
+    expect(product).not.toContain('techniques/slug/persistent-scene');
+    expect(product).not.toContain('techniques/bitmap/persistent-scene');
     expect(mtsdfAdapter).toContain("import { createMtsdfConformanceSession } from './mtsdf-capture'");
-    expect(mtsdfAdapter).not.toContain('renderer/mtsdf-text');
+    expect(mtsdfAdapter).not.toContain('techniques/mtsdf/persistent-scene');
     expect(slugAdapter).toContain("import { createSlugConformanceSession } from './slug-capture'");
-    expect(slugAdapter).not.toContain('renderer/slug-text');
+    expect(slugAdapter).not.toContain('techniques/slug/persistent-scene');
     expect(bitmapCapture).toContain('createBitmapFiniteScene');
-    expect(bitmapCapture).not.toContain('renderer/bitmap-text');
+    expect(bitmapCapture).not.toContain('techniques/bitmap/persistent-scene');
     expect(runtimeFallback).toContain("from './bitmap-capture'");
-    expect(runtimeFallback).not.toContain('renderer/bitmap-text');
+    expect(runtimeFallback).not.toContain('techniques/bitmap/persistent-scene');
     expect(finiteCaptureSurface).toContain("import('../../benchmark/targets/conformance/raster/bitmap-capture')");
-    expect(finiteCaptureSurface).not.toContain('renderer/bitmap-text');
+    expect(finiteCaptureSurface).not.toContain('techniques/bitmap/persistent-scene');
     expect(
       slugCaptureProbes.every((probe) => probe.includes('/benchmark/targets/conformance/raster/slug-capture.ts')),
     ).toBe(true);
-    expect(slugCaptureProbes.every((probe) => !probe.includes('/renderer/slug-text.ts'))).toBe(true);
+    expect(slugCaptureProbes.every((probe) => !probe.includes('/techniques/slug/persistent-scene.ts'))).toBe(true);
     expect(slugCaptureProbes.every((probe) => !probe.includes('/renderer/slug-role-scenes.ts'))).toBe(true);
     const { createAdvancedShapingConformanceTarget } = await import('./targets/conformance/advanced-shaping');
     expect(createAdvancedShapingConformanceTarget().id).toBe('advanced-shaping-conformance');

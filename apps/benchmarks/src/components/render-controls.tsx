@@ -5,7 +5,7 @@ import {
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
   type AdvancedShapingState,
-} from '../workloads/advanced-shaping';
+} from '../workloads/advanced-shaping/scene';
 import {
   BENCHMARK_FONT_LABELS,
   ICON_GRID_FONT_FIXTURE,
@@ -17,9 +17,9 @@ import {
 } from '../benchmark/font-fixtures';
 import type { FontDelivery, GraphicsBackend, HarnessMode, RasterTechnique } from '../benchmark/url-state';
 import packageSizes from '../generated/package-sizes.json';
-import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
-import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
-import type { SlugTextLiveStats } from '../renderer/slug-text';
+import type { BitmapTextLiveStats } from '../techniques/bitmap/persistent-scene';
+import type { MtsdfTextLiveStats } from '../techniques/mtsdf/persistent-scene';
+import type { SlugTextLiveStats } from '../techniques/slug/persistent-scene';
 import { FontFixtureButtons } from './font-fixture-buttons';
 import { Button, Field, SelectField, TextareaField, Toggle } from './ui';
 import { PresentationControlDock } from './presentation-control-dock';

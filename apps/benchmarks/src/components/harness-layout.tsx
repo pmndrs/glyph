@@ -4,7 +4,7 @@ import type { BenchmarkSummary } from '../benchmark/contracts';
 import { createPayloadSummary } from '../benchmark/payload-summary';
 import { useRuntimeTelemetry } from '../benchmark/runtime-world';
 import type { LiveBenchmarkCapture } from '../benchmark/product-result';
-import type { AdvancedShapingFrame } from '../workloads/advanced-shaping';
+import type { AdvancedShapingFrame } from '../workloads/advanced-shaping/scene';
 import {
   benchmarkWorkloadDefinition,
   isBenchmarkWorkloadId,

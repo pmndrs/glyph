@@ -1,14 +1,14 @@
 import { Text } from '@pmndrs/text';
 import type * as THREE from 'three/webgpu';
 
-import type { RasterConformanceSpecimen } from '../benchmark/font-fixtures';
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import type { RasterConformanceSpecimen } from '../../benchmark/font-fixtures';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
-} from './factory-contracts';
+} from '../shared/scene-entry';
 
 export const LADDER_CSS_SIZES = [
   8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512, 1024,

@@ -7,7 +7,7 @@ import {
   BENCHMARK_IPSUM_PARAGRAPHS,
   BENCHMARK_IPSUM_TEXT,
   benchmarkIpsumLiveTextScene,
-} from './benchmark-ipsum';
+} from './benchmark-ipsum/scene';
 
 describe('Benchmark Ipsum workload', () => {
   it('keeps five independently diagnosable conformance lanes', () => {

@@ -1,6 +1,6 @@
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 
-import type { LiveTextScene } from './live-text-scene';
+import type { LiveTextScene } from '../shared/live-text-scene';
 
 /**
  * Stable Benchmark Ipsum workload corpus for native-strike rendering checks.

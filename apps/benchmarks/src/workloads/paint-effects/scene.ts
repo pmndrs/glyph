@@ -1,13 +1,13 @@
 import { Text, type TextSpan } from '@pmndrs/text';
 
-import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { RasterTechnique } from '../benchmark/url-state';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import type { RasterTechnique } from '../../benchmark/url-state';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
-} from './factory-contracts';
+} from '../shared/scene-entry';
 
 export interface MutablePaintSpan extends TextSpan {
   color: number;

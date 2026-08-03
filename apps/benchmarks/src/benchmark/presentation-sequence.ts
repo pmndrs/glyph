@@ -1,4 +1,4 @@
-import { ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS } from '../workloads/advanced-shaping';
+import { ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS } from '../workloads/advanced-shaping/scene';
 
 export const TEXT_LADDER_PRESENTATION_DURATION_MS = 7_200;
 // Three complete 3.5-second base cycles at the default 1.125× animation rate, rounded up to the next millisecond.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { advancedShapingFrame, initialAdvancedShapingState } from './advanced-shaping';
+import { advancedShapingFrame, initialAdvancedShapingState } from './advanced-shaping/scene';
 import { liveTextSceneForWorkload } from './live-text-scenes';
 
 describe('live Text scene registry', () => {

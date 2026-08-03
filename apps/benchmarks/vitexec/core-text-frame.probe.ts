@@ -2,7 +2,7 @@ import { FontRegistry, Text } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
-const benchmarkIpsumPath = '/src/workloads/benchmark-ipsum.ts';
+const benchmarkIpsumPath = '/src/workloads/benchmark-ipsum/scene.ts';
 const compactRgba8ReadbackPath = '/src/benchmark/low-level/raster/rgba-readback.ts';
 const rendererPath = '/src/renderer/webgpu-renderer.ts';
 const [{ BENCHMARK_IPSUM_CONFORMANCE_TEXT }, { compactRgba8Readback }, { createConfiguredRenderer }] =

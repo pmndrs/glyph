@@ -4,8 +4,8 @@ import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../../../workloads/benchmark-ipsum';
-import { registeredSlugConfiguration } from '../../low-level/raster/slug-configuration';
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../../../workloads/benchmark-ipsum/scene';
+import { registeredSlugConfiguration } from '../../../techniques/slug/metadata';
 import { loadSlugFontAsset } from '../../../workloads/font-assets/slug';
 import {
   createConfiguredRenderer,

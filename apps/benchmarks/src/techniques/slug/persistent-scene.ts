@@ -8,32 +8,29 @@ import {
 } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
-import {
-  registeredSlugConfiguration,
-  type SlugRasterConfiguration,
-} from '../benchmark/low-level/raster/slug-configuration';
-import type { FontDelivery } from '../benchmark/url-state';
-import { createCanvasSurface } from './canvas-surface';
-import { finiteCanvasDelta } from './canvas-view';
-import { loadSlugFontAsset } from '../workloads/font-assets/slug';
-import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
+import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { FontDelivery } from '../../benchmark/url-state';
+import { createCanvasSurface } from '../../renderer/canvas-surface';
+import { finiteCanvasDelta } from '../../renderer/canvas-view';
+import { loadSlugFontAsset } from '../../workloads/font-assets/slug';
+import type { LiveFrameHistoryCursor } from '../../renderer/live-frame-telemetry';
 import {
   benchmarkContentWidth,
   LIVE_TEXT_COLOR,
   LIVE_TEXT_LINE_HEIGHT,
   liveTextPosition,
   type LiveTextAnchor,
-} from '../workloads/shared/text-style';
-import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
-import { type PersistentRenderScene, type PersistentRenderViewport } from './persistent-render-host';
-import { createPersistentSceneActivation } from './persistent-scene-activation';
+} from '../../workloads/shared/text-style';
+import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from '../../renderer/text-update-telemetry';
+import { type PersistentRenderScene, type PersistentRenderViewport } from '../../renderer/persistent-render-host';
+import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
 import {
   createRetainedFontFixtureController,
   type LiveFontFixtureUpdate,
   type RetainedFontFixtureController,
-} from './retained-font-fixture';
-import type { RendererBackend } from './webgpu-renderer';
+} from '../../renderer/retained-font-fixture';
+import type { RendererBackend } from '../../renderer/webgpu-renderer';
+import { registeredSlugConfiguration, type SlugRasterConfiguration } from './metadata';
 
 export interface SlugTextLiveStats {
   readonly technique: 'slug';

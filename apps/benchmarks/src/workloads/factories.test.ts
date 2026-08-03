@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { setDynamicLayoutBoundsVisibility } from './dynamic-layout';
-import { iconGridEntryAssignment } from './icon-grid';
+import { setDynamicLayoutBoundsVisibility } from './dynamic-layout/scene';
+import { iconGridEntryAssignment } from './icon-grid/scene';
 
 describe('comparison workload factory invariants', () => {
   it('keeps an unassigned Icon Grid pool slot hidden instead of assigning icon zero', () => {

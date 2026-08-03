@@ -1,16 +1,16 @@
 import { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import { createOklabColorCycle } from './shared/oklab-color-cycle';
-import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { createOklabColorCycle } from '../shared/oklab-color-cycle';
+import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
 import {
   committedTextLayout,
   type ComparisonWorkloadEntry,
   type MutablePaintSpan,
   type WorkloadTextFactoryContext,
-} from './factory-contracts';
+} from '../shared/scene-entry';
 
 export const OFF_AXIS_HORIZONTAL_BIAS_RATIO = 0.075;
 export const OFF_AXIS_TEXT =

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { COMPARISON_WORKLOAD_IDS, COMPARISON_WORKLOADS, comparisonWorkloadDefinition } from './registry';
+import { COMPARISON_WORKLOAD_IDS, COMPARISON_WORKLOADS, comparisonWorkloadDefinition } from './comparison/registry';
 
 describe('comparison workload registry', () => {
   it('owns every retained comparison example exactly once', () => {

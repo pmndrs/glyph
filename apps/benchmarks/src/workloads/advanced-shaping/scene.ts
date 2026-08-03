@@ -1,7 +1,8 @@
 /** Authored Advanced Shaping workload state and timeline. */
 import { graphemeSegments } from 'unicode-segmenter/grapheme';
 
-import type { LiveTextScene } from './live-text-scene';
+import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { LiveTextScene } from '../shared/live-text-scene';
 
 export type AdvancedShapingCaseId =
   | 'latin-features'
@@ -290,14 +291,17 @@ export function advancedShapingFrame(state: AdvancedShapingState): AdvancedShapi
 }
 
 /** Projects a timeline frame into the live scene's public Text inputs. */
-export function advancedShapingLiveTextScene(frame: AdvancedShapingFrame): LiveTextScene {
+export function advancedShapingLiveTextScene(
+  frame: AdvancedShapingFrame,
+  fontFixture: BenchmarkFontFixture = frame.caseDefinition.fontFixture,
+): LiveTextScene {
   return {
     anchor: 'measure-center',
     animatePresentation: false,
     direction: frame.caseDefinition.direction,
     expectedGlyphCount: undefined,
     features: frame.caseDefinition.features,
-    fontFixture: frame.caseDefinition.fontFixture,
+    fontFixture,
     language: frame.caseDefinition.language,
     layoutWidthRatio: frame.widthPermille / 1_000,
     presentation: 'timeline',

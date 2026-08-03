@@ -2,14 +2,14 @@ import type { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ComparisonWorkloadConfiguration } from './contracts';
-import type { ComparisonWorkloadEntry } from './factory-contracts';
+import type { ComparisonWorkloadConfiguration } from './comparison/contracts';
+import type { ComparisonWorkloadEntry } from './shared/scene-entry';
 import {
   createIconGridWorkloadInstance,
   iconGridContent,
   type IconGridEntryPool,
   type IconGridVirtualWindow,
-} from './icon-grid';
+} from './icon-grid/scene';
 
 const viewport = { height: 360, width: 720 };
 const configuration: ComparisonWorkloadConfiguration = {

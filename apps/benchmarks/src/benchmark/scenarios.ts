@@ -1,5 +1,5 @@
 import type { BenchmarkScenario } from './contracts';
-import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping';
+import { ADVANCED_SHAPING_CASES } from '../workloads/advanced-shaping/scene';
 import paragraphBidiContract from '../../fixtures/contracts/paragraph-bidi-layout-v0.json';
 import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json';
 import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json';

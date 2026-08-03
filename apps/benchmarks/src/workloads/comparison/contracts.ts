@@ -1,9 +1,9 @@
 import type { AnyRasterInput, RegisteredFont } from '@pmndrs/text';
 import type * as THREE from 'three/webgpu';
 
-import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../benchmark/font-fixtures';
-import type { RasterTechnique } from '../benchmark/url-state';
-import type { ComparisonWorkloadEntry } from './factory-contracts';
+import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { RasterTechnique } from '../../benchmark/url-state';
+import type { ComparisonWorkloadEntry } from '../shared/scene-entry';
 
 /** The comparison workloads that share the retained benchmark render host. */
 export type ComparisonWorkloadId =

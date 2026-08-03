@@ -172,12 +172,13 @@ describe('comparison workload updates', () => {
     expect(publications).toBe(1);
   });
 
-  it('rolls every retained Text back before a failed candidate font can be released', () => {
+  it('rolls every retained Text back before a failed candidate font can be released', async () => {
     const previous = fakeFontFixture();
     const next = fakeFontFixture();
     const updates: Array<Array<RegisteredFont>> = [[], []];
     const publications: number[] = [];
     const texts = updates.map((fontUpdates, index) => ({
+      ready: Promise.resolve(),
       setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }) {
         fontUpdates.push(properties.font);
         if (properties.font === next.font && index === 1) throw new Error('candidate failed');
@@ -187,7 +188,7 @@ describe('comparison workload updates', () => {
       },
     }));
 
-    expect(() => applyRetainedTextFontFixture(texts, previous, next)).toThrow('rolled back');
+    await expect(applyRetainedTextFontFixture(texts, previous, next)).rejects.toThrow('rolled back');
     expect(updates).toEqual([
       [next.font, previous.font],
       [next.font, previous.font],

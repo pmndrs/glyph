@@ -9,7 +9,6 @@ import {
   useSyncExternalStore,
   useTransition,
   type ReactNode,
-  type RefObject,
 } from 'react';
 
 import {
@@ -20,7 +19,7 @@ import {
   updateAdvancedShaping,
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
-} from './workloads/advanced-shaping';
+} from './workloads/advanced-shaping/scene';
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts';
 import { environmentResource } from './benchmark/environment';
 import { runRegisteredBenchmark } from './benchmark/execution';
@@ -60,7 +59,6 @@ import {
   readHarnessLocation,
   writeHarnessUrl,
   type FontDelivery,
-  type GraphicsBackend,
   type HarnessLayout,
   type HarnessLocation,
   type HarnessMode,
@@ -77,56 +75,16 @@ import {
 } from './benchmark/workloads';
 import { Chip } from './components/ui';
 import type { PersistentRenderJob } from './renderer/persistent-render-host';
-import type {
-  ComparisonWorkloadConfiguration,
-  ComparisonWorkloadId,
-  ComparisonWorkloadPersistentScene,
-  ComparisonWorkloadStats,
-} from './workloads/comparison/scene';
-import {
-  benchmarkWorkloadDefinition,
-  comparisonWorkloadId,
-  isBenchmarkWorkloadId,
-  type BenchmarkWorkloadId,
-} from './workloads/catalog';
-import { BENCHMARK_CONTENT_INSET, BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH } from './workloads/shared/text-style';
-import type { LiveTextScene } from './workloads/live-text-scene';
-import { liveTextSceneForWorkload } from './workloads/live-text-scenes';
+import { isBenchmarkWorkloadId, type BenchmarkWorkloadId } from './workloads/catalog';
 import { PersistentRenderHostProvider, usePersistentRenderHost } from './renderer/persistent-render-host-context';
 import { ConformanceSurface } from './surfaces/conformance/conformance-surface';
-import { BakeProgressOverlay, useBakeProgress } from './surfaces/benchmark/bake-progress-overlay';
-import { BitmapTextViewport } from './surfaces/benchmark/bitmap-text-viewport';
-import { MtsdfTextViewport, SlugTextViewport } from './surfaces/benchmark/sdf-text-viewports';
-import type { LiveTextConfiguration } from './surfaces/benchmark/live-text-viewport-contracts';
-import { LiveBenchmarkSurface } from './surfaces/benchmark/live-benchmark-surface';
+import { BenchmarkSurface } from './surfaces/benchmark/benchmark-surface';
+import { techniqueLabel } from './surfaces/benchmark/labels';
+import { liveSceneAssetResource, loadBenchmarkFontAssets } from './surfaces/benchmark/scene-preload';
 import { Route, Switch, useLocation } from 'wouter';
 
-type LiveTextStats = RuntimeLiveStats;
 type RunExclusiveJob = <T>(job: PersistentRenderJob<T>, signal?: AbortSignal) => Promise<Awaited<T>>;
-
-let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
-const liveSceneAssetResources = new Map<string, Promise<void>>();
-
-function importComparisonWorkload() {
-  return import('./workloads/comparison/scene');
-}
-
-function loadBenchmarkFontAssets() {
-  return import('./workloads/font-assets');
-}
-
-function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {
-  comparisonWorkloadModule ??= importComparisonWorkload();
-  return comparisonWorkloadModule;
-}
-
-function scheduleComparisonWorkloadPreload(): () => void {
-  if (globalThis.requestIdleCallback === undefined) return () => undefined;
-  const request = globalThis.requestIdleCallback(() => {
-    void preloadComparisonWorkload();
-  });
-  return () => globalThis.cancelIdleCallback(request);
-}
+type LiveTextStats = RuntimeLiveStats;
 
 const PRESENTATION_FONT_FIXTURES = [
   'inter',
@@ -148,30 +106,6 @@ async function preloadPresentationAssets(
   await preloadBenchmarkFontAssets({ technique, fixtures, signal, bitmapDensity: 'live' });
 }
 
-function liveSceneAssetResource(
-  technique: RasterTechnique,
-  delivery: FontDelivery,
-  fontFixture: BenchmarkFontFixture,
-  workload: HarnessLocation['workload'],
-): Promise<void> {
-  const definition = isBenchmarkWorkloadId(workload) ? benchmarkWorkloadDefinition(workload) : undefined;
-  const fixtures =
-    definition?.fontPolicy.kind === 'icon-grid' ? [fontFixture, definition.fontPolicy.iconFixture] : [fontFixture];
-  const comparison = definition?.surface === 'comparison';
-  const key = `${technique}:${delivery}:${fixtures.join(',')}:${String(comparison)}`;
-  const existing = liveSceneAssetResources.get(key);
-  if (existing !== undefined) return existing;
-  const resource = (async () => {
-    if (comparison) await preloadComparisonWorkload();
-    if (delivery !== 'baked') return;
-    const { preloadBenchmarkFontAssets } = await loadBenchmarkFontAssets();
-    await preloadBenchmarkFontAssets({ technique, fixtures, bitmapDensity: 'live' });
-  })();
-  liveSceneAssetResources.set(key, resource);
-  void resource.catch(() => liveSceneAssetResources.delete(key));
-  return resource;
-}
-
 interface ActivityWorkloads {
   readonly benchmark: BenchmarkWorkloadId;
   readonly conformance: ConformanceWorkloadId;
@@ -182,19 +116,6 @@ const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
   panXPercent: 0,
   panYPercent: 0,
 };
-
-function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
-  return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
-}
-
-function isComparisonWorkloadStats(stats: LiveTextStats | undefined): stats is ComparisonWorkloadStats {
-  return stats !== undefined && 'workload' in stats;
-}
-
-function workloadAmountLabel(workload: BenchmarkWorkloadId, amount: number): string | undefined {
-  const range = benchmarkWorkloadDefinition(workload).controls.amount;
-  return range === undefined ? undefined : `${range.label} · ${amount}%`;
-}
 
 function formatMs(value: number | undefined): string {
   return value === undefined ? '—' : `${value.toFixed(2)} ms`;
@@ -301,6 +222,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
   const committedLocationRef = useRef(location);
   const requestedLocationRef = useRef(location);
   const locationRequestRevisionRef = useRef(0);
+  const advancedFontRequestRevisionRef = useRef(0);
   const presentationPlayback = useRef<
     | {
         preset: PresentationPreset | undefined;
@@ -395,6 +317,16 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const value = { ...previous, ...next };
     const requestRevision = ++locationRequestRevisionRef.current;
     requestedLocationRef.current = value;
+    const entersAdvancedShaping = value.workload === 'advanced-shaping' && previous.workload !== 'advanced-shaping';
+    const nextAdvancedShapingState = entersAdvancedShaping ? initialAdvancedShapingState() : undefined;
+    const sceneFontFixture =
+      value.workload === 'advanced-shaping'
+        ? nextAdvancedShapingState === undefined
+          ? advancedFontFixture
+          : advancedShapingCase(nextAdvancedShapingState.caseId).fontFixture
+        : value.workload === 'zoom-text'
+          ? 'inter'
+          : value.fontFixture;
     const updatesRuntimeDefaults =
       (next.workload !== undefined && next.workload !== previous.workload) ||
       (next.layout !== undefined && next.layout !== previous.layout);
@@ -436,10 +368,15 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     const applyRuntimeDefaults = (): void => {
       if (!updatesRuntimeDefaults) return;
       resetRuntimeControlsForWorkload(runtimeWorld, value.workload, value.layout);
+      if (nextAdvancedShapingState !== undefined) {
+        advancedFontRequestRevisionRef.current += 1;
+        setShowcaseState(nextAdvancedShapingState);
+        setAdvancedFontFixture(advancedShapingCase(nextAdvancedShapingState.caseId).fontFixture);
+      }
     };
     if (transitionsScene) {
       startTransition(() => {
-        void liveSceneAssetResource(value.technique, value.delivery, value.fontFixture, value.workload).then(
+        void liveSceneAssetResource(value.technique, value.delivery, sceneFontFixture, value.workload).then(
           () => {
             // React does not preserve the transition marker across an await yet. Mark the committed scene update as a
             // transition as well, so a newly observed resource can suspend without replacing the currently visible scene.
@@ -481,6 +418,33 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
     setLocation({
       technique,
       workload: selectedWorkload,
+    });
+  }
+
+  function selectAdvancedFontFixture(nextFontFixture: BenchmarkFontFixture): void {
+    const requestRevision = ++advancedFontRequestRevisionRef.current;
+    const { delivery, technique } = requestedLocationRef.current;
+    startTransition(() => {
+      void liveSceneAssetResource(technique, delivery, nextFontFixture, 'advanced-shaping').then(
+        () => {
+          if (
+            requestRevision !== advancedFontRequestRevisionRef.current ||
+            requestedLocationRef.current.workload !== 'advanced-shaping' ||
+            requestedLocationRef.current.technique !== technique ||
+            requestedLocationRef.current.delivery !== delivery
+          ) {
+            return;
+          }
+          startTransition(() => {
+            setAdvancedFontFixture(nextFontFixture);
+            invalidateLiveCapture();
+          });
+        },
+        (caught: unknown) => {
+          if (requestRevision !== advancedFontRequestRevisionRef.current) return;
+          setError(caught instanceof Error ? caught.message : String(caught));
+        },
+      );
     });
   }
 
@@ -831,10 +795,7 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
         workloadPanelOpen={workloadPanelOpen}
         onBenchmarkAction={captureWindow}
         onConformanceAction={runConformance}
-        onAdvancedFontFixture={(value) => {
-          setAdvancedFontFixture(value);
-          invalidateLiveCapture();
-        }}
+        onAdvancedFontFixture={selectAdvancedFontFixture}
         onCloseFontNotices={() => setFontNoticesOpen(false)}
         onLocation={setLocation}
         onMode={selectMode}
@@ -1089,532 +1050,6 @@ function PlannedWorkloadSurface({
         </h2>
         <p className="mt-2 text-xs leading-relaxed text-muted">{workload.description}</p>
       </div>
-    </div>
-  );
-}
-
-function BenchmarkSurface({
-  animationEnabled,
-  animationSpeed,
-  backend,
-  delivery,
-  demoMode,
-  dpr,
-  fontFixture,
-  fontSize,
-  grid,
-  layoutWidthPercent,
-  paintOpacityPercent,
-  paintShadowEnabled,
-  paintStrokePercent,
-  presentation,
-  presentationPreset,
-  showLayoutBounds,
-  workloadAmount,
-  showcaseFrame,
-  stats,
-  technique,
-  workload,
-  onStats,
-}: {
-  readonly animationEnabled: boolean;
-  readonly animationSpeed: number;
-  readonly backend: GraphicsBackend;
-  readonly delivery: FontDelivery;
-  readonly demoMode: boolean;
-  readonly dpr: 1 | 2;
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly fontSize: number;
-  readonly grid: boolean;
-  readonly layoutWidthPercent: number;
-  readonly paintOpacityPercent: number;
-  readonly paintShadowEnabled: boolean;
-  readonly paintStrokePercent: number;
-  readonly presentation: 'main' | 'presentation';
-  readonly presentationPreset: PresentationPreset | undefined;
-  readonly showLayoutBounds: boolean;
-  readonly workloadAmount: number;
-  readonly showcaseFrame: AdvancedShapingFrame;
-  readonly stats: LiveTextStats | undefined;
-  readonly technique: RasterTechnique;
-  readonly workload: BenchmarkWorkloadId;
-  readonly onStats: (stats: LiveTextStats) => void;
-}) {
-  use(liveSceneAssetResource(technique, delivery, fontFixture, workload));
-  const surfaceAnchorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    return scheduleComparisonWorkloadPreload();
-  }, []);
-  const comparisonWorkload = comparisonWorkloadId(workload);
-  const bitmapStats = stats?.technique === 'bitmap' ? stats : undefined;
-  const mtsdfStats = stats?.technique === 'mtsdf' ? stats : undefined;
-  const slugStats = stats?.technique === 'slug' ? stats : undefined;
-  const comparisonStats = isComparisonWorkloadStats(stats) ? stats : undefined;
-  const textConfiguration = liveTextSceneForWorkload(workload, {
-    fontFixture,
-    layoutWidthRatio: layoutWidthPercent / 100,
-    showcaseFrame,
-  });
-  if (comparisonWorkload === undefined && textConfiguration === undefined) {
-    throw new Error(`Live workload ${workload} has no authored Text scene`);
-  }
-  const viewport =
-    comparisonWorkload !== undefined ? (
-      <ComparisonWorkloadViewport
-        amount={workloadAmount}
-        animationEnabled={animationEnabled}
-        animationSpeed={animationSpeed}
-        backend={backend}
-        delivery={delivery}
-        demoMode={demoMode}
-        suppressLoading={demoMode || presentation === 'presentation'}
-        dpr={dpr}
-        fontSize={fontSize}
-        fontFixture={fontFixture}
-        grid={grid}
-        layoutWidthRatio={layoutWidthPercent / 100}
-        paintOpacity={paintOpacityPercent / 100}
-        paintShadowEnabled={paintShadowEnabled}
-        paintStrokeWidth={paintStrokePercent / 100}
-        presentationPreset={presentationPreset}
-        showLayoutBounds={showLayoutBounds}
-        stats={comparisonStats}
-        technique={technique}
-        workload={comparisonWorkload}
-        surfaceAnchorRef={surfaceAnchorRef}
-        onStats={onStats}
-      />
-    ) : technique === 'slug' ? (
-      <SlugTextViewport
-        backend={backend}
-        delivery={delivery}
-        suppressLoading={demoMode || presentation === 'presentation'}
-        dpr={dpr}
-        fontSize={fontSize}
-        grid={grid}
-        surfaceAnchorRef={surfaceAnchorRef}
-        stats={slugStats}
-        textConfiguration={withLiveTextFontSize(textConfiguration, fontSize)}
-        workload={workload}
-        onStats={onStats}
-      />
-    ) : technique === 'mtsdf' ? (
-      <MtsdfTextViewport
-        backend={backend}
-        delivery={delivery}
-        suppressLoading={demoMode || presentation === 'presentation'}
-        dpr={dpr}
-        fontSize={fontSize}
-        grid={grid}
-        surfaceAnchorRef={surfaceAnchorRef}
-        stats={mtsdfStats}
-        textConfiguration={withLiveTextFontSize(textConfiguration, fontSize)}
-        workload={workload}
-        onStats={onStats}
-      />
-    ) : (
-      <BitmapTextViewport
-        backend={backend}
-        delivery={delivery}
-        suppressLoading={demoMode || presentation === 'presentation'}
-        dpr={dpr}
-        fontSize={fontSize}
-        grid={grid}
-        surfaceAnchorRef={surfaceAnchorRef}
-        stats={bitmapStats}
-        textConfiguration={withLiveTextFontSize(textConfiguration, fontSize)}
-        workload={workload}
-        onStats={onStats}
-      />
-    );
-  return (
-    <LiveBenchmarkSurface
-      advanced={textConfiguration?.presentation === 'timeline'}
-      presentation={presentation}
-      showcaseFrame={showcaseFrame}
-      stats={stats}
-      surfaceAnchorRef={surfaceAnchorRef}
-      viewport={viewport}
-      workload={workload}
-    />
-  );
-}
-
-function withLiveTextFontSize(scene: LiveTextScene | undefined, fontSize: number): LiveTextConfiguration {
-  if (scene === undefined) throw new Error('A single-paragraph live surface requires an authored Text scene');
-  return { ...scene, fontSize };
-}
-
-function comparisonViewportEvidence({
-  layoutWidthRatio,
-  stats,
-  technique,
-  workload,
-  workloadFonts,
-}: {
-  readonly layoutWidthRatio: number;
-  readonly stats: ComparisonWorkloadStats | undefined;
-  readonly technique: RasterTechnique;
-  readonly workload: ComparisonWorkloadId;
-  readonly workloadFonts: ReturnType<typeof liveWorkloadFontFixtures>;
-}): Record<`data-${string}`, string | number | boolean | undefined> {
-  const iconStats = stats?.workload === 'icon-grid' ? stats : undefined;
-  const paintStats = stats?.workload === 'paint-effects' ? stats : undefined;
-  const zoomStats = stats?.workload === 'zoom-text' ? stats : undefined;
-  const appliedWorkloadFonts =
-    stats === undefined ? undefined : liveWorkloadFontFixtures(stats.workload, stats.appliedFontFixture);
-  const requestedFontFixture = workloadFonts.kind === 'icon-grid' ? workloadFonts.labels : workloadFonts.primary;
-  const animatedStats = stats;
-  return {
-    'data-canvas-grid': stats === undefined ? undefined : String(stats.showGrid),
-    'data-artifact-bytes': stats?.artifactBytes,
-    'data-atlas-gpu-bytes': stats?.atlasGpuBytes,
-    'data-backend': stats?.backend,
-    'data-dpr': stats?.dpr,
-    'data-font-delivery': stats?.delivery,
-    'data-core-bake-ms': stats?.coreBakeMs,
-    'data-raster-bake-ms': stats?.rasterBakeMs,
-    'data-source-font-bytes': stats?.sourceFontBytes,
-    'data-core-artifact-bytes': stats?.coreArtifactBytes,
-    'data-raster-artifact-bytes': stats?.rasterArtifactBytes,
-    'data-draw-count': stats?.drawCount,
-    'data-first-draw-ms': stats?.firstDrawMs,
-    'data-font-fixture': appliedWorkloadFonts?.primary,
-    'data-label-font-fixture': appliedWorkloadFonts?.kind === 'icon-grid' ? appliedWorkloadFonts.labels : undefined,
-    'data-font-load-ms': stats?.fontLoadMs,
-    'data-frames-per-second': stats?.framesPerSecond,
-    'data-glyph-count': stats?.glyphCount,
-    'data-gpu-history-length': stats?.gpuHistoryLength,
-    'data-gpu-timing-supported': stats?.gpuTimingSupported,
-    'data-layout-width': stats?.layoutWidth,
-    'data-content-inset': BENCHMARK_CONTENT_INSET,
-    'data-content-min-width':
-      workload === 'text-ladder' || workload === 'icon-grid' || workload === 'zoom-text'
-        ? undefined
-        : (workload === 'dynamic-layout' ? 1_000 : BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH) * layoutWidthRatio,
-    'data-content-policy':
-      workload === 'text-ladder' || workload === 'icon-grid' ? 'pan' : workload === 'zoom-text' ? 'fit' : 'bounded-pan',
-    'data-icon-item-count': iconStats?.iconItemCount,
-    'data-icon-label-count': iconStats?.iconLabelCount,
-    'data-icon-column-count': iconStats?.iconColumnCount,
-    'data-icon-row-count': iconStats?.iconRowCount,
-    'data-icon-size': iconStats?.appliedFontSize,
-    'data-icon-grid-width': iconStats?.iconGridWidth,
-    'data-icon-grid-height': iconStats?.iconGridHeight,
-    'data-icon-label-size': iconStats?.iconLabelSize,
-    'data-icon-pool-capacity': iconStats?.iconPoolCapacity,
-    'data-icon-assigned-count': iconStats?.iconAssignedCount,
-    'data-icon-render-visible-count': iconStats?.iconRenderVisibleCount,
-    'data-icon-assignment-signature': iconStats?.iconAssignmentSignature,
-    'data-icon-first-visible-index': iconStats?.iconFirstVisibleIndex,
-    'data-icon-last-visible-index': iconStats?.iconLastVisibleIndex,
-    'data-icon-recycle-count': iconStats?.iconRecycleCount,
-    'data-icon-window-revision': iconStats?.iconWindowRevision,
-    'data-icon-overscan-rows': iconStats?.iconOverscanRows,
-    'data-icon-overscan-columns': iconStats?.iconOverscanColumns,
-    'data-icon-scroll-x': iconStats?.iconScrollX,
-    'data-icon-scroll-y': iconStats?.iconScrollY,
-    'data-icon-maximum-scroll-x': iconStats?.iconMaximumScrollX,
-    'data-icon-maximum-scroll-y': iconStats?.iconMaximumScrollY,
-    'data-line-count': stats?.lineCount,
-    'data-median-gpu-ms': stats?.medianGpuMs,
-    'data-median-submit-ms': stats?.medianSubmitMs,
-    'data-missing-glyph-count': stats?.missingGlyphCount,
-    'data-p95-gpu-ms': stats?.p95GpuMs,
-    'data-p95-submit-ms': stats?.p95SubmitMs,
-    'data-renderer-init-ms': stats?.rendererInitMs,
-    'data-configuration-revision': stats?.configurationRevision,
-    'data-camera-kind': stats?.cameraKind,
-    'data-applied-font-size': stats?.appliedFontSize,
-    'data-applied-workload-amount': stats?.appliedAmount,
-    'data-layout-width-ratio': stats?.appliedLayoutWidthRatio,
-    'data-paint-opacity': paintStats?.appliedPaintOpacity,
-    'data-paint-shadow-enabled': paintStats === undefined ? undefined : String(paintStats.appliedPaintShadowEnabled),
-    'data-paint-stroke-width': paintStats?.appliedPaintStrokeWidth,
-    'data-paint-revision': paintStats?.paintRevision,
-    'data-paint-update-ms': paintStats?.lastPaintUpdateMs,
-    'data-presentation-pending':
-      stats !== undefined &&
-      (stats.technique !== technique ||
-        stats.workload !== workload ||
-        stats.appliedFontFixture !== requestedFontFixture),
-    'data-layout-bounds-visible':
-      stats?.workload === 'dynamic-layout' ? String(stats.appliedShowLayoutBounds) : undefined,
-    'data-reflow-count': stats?.reflowCount,
-    'data-reflow-ms': stats?.lastReflowMs,
-    'data-rendered-device-px': stats?.renderedPpem,
-    'data-raster-em-size': stats?.technique === 'mtsdf' ? stats.rasterEmSize : undefined,
-    'data-raster-pixel-range': stats?.technique === 'mtsdf' ? stats.rasterPixelRange : undefined,
-    'data-scale-ratio': stats?.technique === 'slug' ? undefined : stats?.scaleRatio,
-    'data-slug-curve-gpu-bytes': stats?.technique === 'slug' ? stats.slugCurveGpuBytes : undefined,
-    'data-slug-header-gpu-bytes': stats?.technique === 'slug' ? stats.slugHeaderGpuBytes : undefined,
-    'data-slug-page-count': stats?.technique === 'slug' ? stats.slugPageCount : undefined,
-    'data-slug-reference-gpu-bytes': stats?.technique === 'slug' ? stats.slugReferenceGpuBytes : undefined,
-    'data-slug-gpu-bytes': stats?.technique === 'slug' ? stats.slugGpuBytes : undefined,
-    'data-startup-ms': stats?.startupMs,
-    'data-source-text-length': stats?.sourceTextLength,
-    'data-submit-history-length': stats?.submitHistoryLength,
-    'data-text-ready-ms': stats?.textReadyMs,
-    'data-text-update-sample-count': stats?.textUpdateTimings.sampleCount,
-    'data-technique': technique,
-    'data-total-gpu-bytes': stats?.totalGpuBytes,
-    'data-upload-frame-gpu-ms': stats?.uploadFrameGpuMs,
-    'data-upload-frame-complete-ms': stats?.uploadFrameCompleteMs,
-    'data-workload': stats?.workload,
-    'data-zoom-text': zoomStats?.zoomText,
-    'data-zoom-language': zoomStats?.zoomLanguage,
-    'data-zoom-phrase-index': zoomStats?.zoomPhraseIndex,
-    'data-zoom-phrase-revision': zoomStats?.zoomPhraseRevision,
-    'data-zoom-base-css-px': zoomStats?.zoomBaseCssPx,
-    'data-zoom-effective-css-px': zoomStats?.zoomEffectiveCssPx,
-    'data-zoom-maximum-css-px': zoomStats?.zoomMaximumCssPx,
-    'data-zoom-scale': zoomStats?.zoomScale,
-    'data-zoom-maximum-scale': zoomStats?.zoomMaximumScale,
-    'data-workload-amount':
-      stats === undefined || workloadAmountLabel(stats.workload, stats.appliedAmount) === undefined
-        ? undefined
-        : stats.appliedAmount,
-    'data-animation-enabled': animatedStats === undefined ? undefined : String(animatedStats.appliedAnimationEnabled),
-    'data-animation-speed': animatedStats?.appliedAnimationSpeed,
-  };
-}
-
-function ComparisonWorkloadViewport({
-  amount,
-  animationEnabled,
-  animationSpeed,
-  backend,
-  delivery,
-  demoMode,
-  dpr,
-  fontFixture,
-  fontSize,
-  grid,
-  layoutWidthRatio,
-  paintOpacity,
-  paintShadowEnabled,
-  paintStrokeWidth,
-  presentationPreset,
-  showLayoutBounds,
-  suppressLoading,
-  stats,
-  surfaceAnchorRef,
-  technique,
-  workload,
-  onStats,
-}: {
-  readonly amount: number;
-  readonly animationEnabled: boolean;
-  readonly animationSpeed: number;
-  readonly backend: GraphicsBackend;
-  readonly delivery: FontDelivery;
-  readonly demoMode: boolean;
-  readonly dpr: 1 | 2;
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly fontSize: number;
-  readonly grid: boolean;
-  readonly layoutWidthRatio: number;
-  readonly paintOpacity: number;
-  readonly paintShadowEnabled: boolean;
-  readonly paintStrokeWidth: number;
-  readonly presentationPreset: PresentationPreset | undefined;
-  readonly showLayoutBounds: boolean;
-  readonly suppressLoading: boolean;
-  readonly stats: ComparisonWorkloadStats | undefined;
-  readonly surfaceAnchorRef: RefObject<HTMLDivElement | null>;
-  readonly technique: RasterTechnique;
-  readonly workload: ComparisonWorkloadId;
-  readonly onStats: (stats: LiveTextStats) => void;
-}) {
-  const { activateSurface, configureSurface } = usePersistentRenderHost();
-  const activatePersistentSurface = useEffectEvent(activateSurface);
-  const configurePersistentSurface = useEffectEvent(configureSurface);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<ComparisonWorkloadPersistentScene>(undefined);
-  const workloadDefinition = benchmarkWorkloadDefinition(workload);
-  const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture);
-  const [error, setError] = useState<string>();
-  const {
-    active: bakeProgressActive,
-    finish: finishBakeProgress,
-    publish: publishBakeProgress,
-    value: bakeProgressValue,
-  } = useBakeProgress(techniqueLabel(technique));
-  const publishStats = useEffectEvent((next: ComparisonWorkloadStats) => {
-    finishBakeProgress();
-    onStats(next);
-    setError(undefined);
-  });
-  const publishError = useEffectEvent((caught: unknown) => {
-    if (caught instanceof DOMException && caught.name === 'AbortError') return;
-    finishBakeProgress();
-    setError(caught instanceof Error ? caught.message : String(caught));
-  });
-  const currentConfiguration = useEffectEvent(
-    (): ComparisonWorkloadConfiguration => ({
-      amount,
-      animationEnabled,
-      animationSpeed,
-      fontFixture,
-      fontSize,
-      iconGridView: presentationPreset === 'icon-grid-return' ? 'alternate' : 'origin',
-      layoutWidthRatio,
-      paintOpacity,
-      paintShadowEnabled,
-      paintStrokeWidth,
-      showGrid: grid,
-      showLayoutBounds,
-      textLadderExitEnabled: demoMode && workload === 'text-ladder',
-      workload,
-    }),
-  );
-
-  useEffect(() => {
-    const container = containerRef.current;
-    const surfaceAnchor = surfaceAnchorRef.current;
-    if (container === null || surfaceAnchor === null) return;
-    const controller = new AbortController();
-    let preview: ComparisonWorkloadPersistentScene | undefined;
-    let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
-    let cancelled = false;
-    const initialization = (async () => {
-      const { createComparisonWorkloadPersistentScene } = await preloadComparisonWorkload();
-      if (cancelled) return;
-      const configuration = currentConfiguration();
-      const interaction = benchmarkWorkloadDefinition(configuration.workload).interaction;
-      const created = createComparisonWorkloadPersistentScene({
-        ...configuration,
-        backend,
-        delivery,
-        technique,
-        onError: publishError,
-        onStats: publishStats,
-        onBakeProgress: publishBakeProgress,
-      });
-      preview = created;
-      previewRef.current = created;
-      surfaceLease = await activatePersistentSurface(
-        {
-          anchor: surfaceAnchor,
-          controller: previewRef,
-          label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
-          pan: interaction.pan,
-          scene: created,
-          zoom: interaction.zoom,
-        },
-        controller.signal,
-      );
-      if (cancelled) await surfaceLease.release();
-    })();
-    void initialization.catch(publishError);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      void initialization.then(
-        async () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
-          await surfaceLease?.release();
-        },
-        () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
-        },
-      );
-    };
-  }, [backend, delivery, publishBakeProgress, surfaceAnchorRef, technique]);
-
-  useEffect(() => {
-    const interaction = benchmarkWorkloadDefinition(workload).interaction;
-    configurePersistentSurface({
-      controller: previewRef,
-      label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
-      pan: interaction.pan,
-      zoom: interaction.zoom,
-    });
-  }, [backend, technique, workload]);
-
-  useEffect(() => {
-    const preview = previewRef.current;
-    if (preview === undefined) return;
-    void preview.update(currentConfiguration()).catch(publishError);
-  }, [
-    amount,
-    animationEnabled,
-    animationSpeed,
-    dpr,
-    demoMode,
-    fontFixture,
-    fontSize,
-    layoutWidthRatio,
-    paintOpacity,
-    paintShadowEnabled,
-    paintStrokeWidth,
-    presentationPreset,
-    grid,
-    showLayoutBounds,
-    workload,
-  ]);
-
-  const rangeLabel =
-    workload === 'text-ladder'
-      ? '8–1024 CSS PX'
-      : workload === 'zoom-text'
-        ? '8 PT · 10.67 CSS PX → VIEWPORT FIT'
-        : workload === 'icon-grid'
-          ? `${fontSize} CSS PX ICONS`
-          : `${fontSize} CSS PX`;
-  return (
-    <div
-      className="pointer-events-none absolute inset-0 overflow-hidden rounded border border-border"
-      {...comparisonViewportEvidence({ stats, technique, workload, workloadFonts, layoutWidthRatio })}
-      data-testid="comparison-live-viewport"
-      ref={containerRef}
-    >
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-3 py-2 font-mono text-[9px] text-muted"
-        data-testid="canvas-render-status"
-      >
-        <span>
-          {stats?.technique === 'mtsdf'
-            ? `MTSDF ${String(stats.rasterEmSize)} PX/EM`
-            : stats?.technique === 'slug'
-              ? `SLUG ANALYTIC · ${String(stats.slugPageCount)} PAGE${stats.slugPageCount === 1 ? '' : 'S'}`
-              : stats?.technique === 'bitmap'
-                ? `BITMAP ${String(stats.strikePpem)} PX STRIKE`
-                : technique === 'mtsdf'
-                  ? 'MTSDF — PX/EM'
-                  : technique === 'slug'
-                    ? 'SLUG ANALYTIC · — PAGES'
-                    : 'BITMAP — PX STRIKE'}{' '}
-          · {rangeLabel}
-        </span>
-      </div>
-      <div
-        className="pointer-events-none absolute bottom-0 left-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 font-mono text-[9px] text-muted"
-        data-testid="canvas-navigation-status"
-      >
-        {workloadDefinition.interaction.zoom
-          ? 'PAN · PINCH/WHEEL ZOOM'
-          : workloadDefinition.interaction.pan
-            ? 'PAN'
-            : 'AUTO FIT'}{' '}
-        · {dpr}× DPR
-      </div>
-      {!suppressLoading && (stats === undefined || bakeProgressActive) && error === undefined && (
-        <BakeProgressOverlay
-          backend={backend}
-          progress={bakeProgressValue}
-          technique={technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'SLUG' : 'BITMAP'}
-        />
-      )}
-      {error !== undefined && (
-        <div className="absolute inset-0 z-10 grid place-items-center bg-background p-3 text-center text-[10px] text-danger">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

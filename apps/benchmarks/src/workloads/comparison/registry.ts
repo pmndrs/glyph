@@ -1,11 +1,11 @@
+import { dynamicLayoutWorkload } from '../dynamic-layout/scene';
+import { iconGridWorkload } from '../icon-grid/scene';
+import { offAxis3dWorkload } from '../off-axis-3d/scene';
+import { paintEffectsWorkload } from '../paint-effects/scene';
+import { paragraphStressWorkload } from '../paragraph-stress/scene';
+import { textLadderWorkload } from '../text-ladder/scene';
+import { zoomTextWorkload } from '../zoom-text/scene';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition, ComparisonWorkloadId } from './contracts';
-import { dynamicLayoutWorkload } from './dynamic-layout';
-import { iconGridWorkload } from './icon-grid';
-import { offAxis3dWorkload } from './off-axis-3d';
-import { paintEffectsWorkload } from './paint-effects';
-import { paragraphStressWorkload } from './paragraph-stress';
-import { textLadderWorkload } from './text-ladder';
-import { zoomTextWorkload } from './zoom-text';
 
 /**
  * The one complete map from a comparison workload ID to its canonical example.

@@ -8,29 +8,29 @@ import {
 } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
-import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../benchmark/low-level/raster/bitmap-atlas';
-import type { FontDelivery } from '../benchmark/url-state';
-import { createCanvasSurface } from './canvas-surface';
-import { finiteCanvasDelta } from './canvas-view';
-import { type LiveFrameHistoryCursor } from './live-frame-telemetry';
-import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
+import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { FontDelivery } from '../../benchmark/url-state';
+import { createCanvasSurface } from '../../renderer/canvas-surface';
+import { finiteCanvasDelta } from '../../renderer/canvas-view';
+import { type LiveFrameHistoryCursor } from '../../renderer/live-frame-telemetry';
+import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from '../../renderer/text-update-telemetry';
 import {
   createRetainedFontFixtureController,
   type LiveFontFixtureUpdate,
   type RetainedFontFixtureController,
-} from './retained-font-fixture';
-import { benchmarkContentWidth, liveTextPosition, type LiveTextAnchor } from '../workloads/shared/text-style';
-import { type RendererBackend } from './webgpu-renderer';
+} from '../../renderer/retained-font-fixture';
+import { benchmarkContentWidth, liveTextPosition, type LiveTextAnchor } from '../../workloads/shared/text-style';
+import { type RendererBackend } from '../../renderer/webgpu-renderer';
 import {
   type PersistentRenderFrameContext,
   type PersistentRenderScene,
   type PersistentRenderSceneContext,
   type PersistentRenderViewport,
-} from './persistent-render-host';
-import { createPersistentSceneActivation } from './persistent-scene-activation';
-import { loadBitmapFontAsset } from '../workloads/font-assets/bitmap';
-import { createBitmapLine, disposeBitmapLine, type BitmapLine } from './bitmap-line';
+} from '../../renderer/persistent-render-host';
+import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
+import { loadBitmapFontAsset } from '../../workloads/font-assets/bitmap';
+import { createBitmapLine, disposeBitmapLine, type BitmapLine } from './line';
+import { registeredBitmapAtlas, type BitmapAtlasPageStats } from './metadata';
 
 export interface BitmapTextLiveStats {
   readonly technique: 'bitmap';

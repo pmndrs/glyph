@@ -10,8 +10,8 @@ import {
   comparisonWorkloadDefinition,
   comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
   comparisonWorkloadUpdateKind as registryUpdateKind,
-} from '../registry';
-import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../dynamic-layout';
+} from './registry';
+import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../dynamic-layout/scene';
 import {
   ICON_GRID_ITEMS,
   ICON_GRID_LABEL_SIZE,
@@ -22,25 +22,18 @@ import {
   resizeIconGridEntries,
   type IconGridEntryPool,
   type IconGridWorkloadInstance,
-} from '../icon-grid';
-import type { MutableTextLadderScenePosition } from '../text-ladder';
-import { ZOOM_TEXT_BASE_CSS_PX } from '../zoom-text';
-import type { ZoomTextAnimationState } from '../zoom-text';
+} from '../icon-grid/scene';
+import type { MutableTextLadderScenePosition } from '../text-ladder/scene';
+import { ZOOM_TEXT_BASE_CSS_PX, type ZoomTextAnimationState } from '../zoom-text/scene';
 import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
-} from '../contracts';
-import { committedTextLayout, type ComparisonWorkloadEntry } from '../factory-contracts';
-import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../benchmark/low-level/raster/bitmap-atlas';
-import {
-  registeredMtsdfConfiguration,
-  type MtsdfRasterConfiguration,
-} from '../../benchmark/low-level/raster/mtsdf-configuration';
-import {
-  registeredSlugConfiguration,
-  type SlugRasterConfiguration,
-} from '../../benchmark/low-level/raster/slug-configuration';
+} from './contracts';
+import { committedTextLayout, type ComparisonWorkloadEntry } from '../shared/scene-entry';
+import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../techniques/bitmap/metadata';
+import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from '../../techniques/mtsdf/metadata';
+import { registeredSlugConfiguration, type SlugRasterConfiguration } from '../../techniques/slug/metadata';
 import { createCanvasSurface } from '../../renderer/canvas-surface';
 import type { LiveFrameTelemetrySnapshot } from '../../renderer/live-frame-telemetry';
 import { createTextUpdateTelemetry } from '../../renderer/text-update-telemetry';
@@ -61,8 +54,8 @@ import {
 
 type WorkloadEntry = ComparisonWorkloadEntry;
 
-export type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from '../contracts';
-export type { MutableTextLadderScenePosition } from '../text-ladder';
+export type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from './contracts';
+export type { MutableTextLadderScenePosition } from '../text-ladder/scene';
 export {
   advanceIconGridAutoPan,
   iconGridAssignmentSignature,
@@ -72,23 +65,20 @@ export {
   iconGridVirtualWindow,
   iconGridViewportUpdateKind,
   smoothIconGridFrameDelta,
-} from '../icon-grid';
-export type { IconGridAutoPanState } from '../icon-grid';
+} from '../icon-grid/scene';
+export type { IconGridAutoPanState } from '../icon-grid/scene';
+export { dynamicLayoutWidths } from '../dynamic-layout/scene';
+export { ladderCssSizes, setTextLadderScenePosition, textLadderScenePosition } from '../text-ladder/scene';
+export { OFF_AXIS_SPANS, OFF_AXIS_TEXT } from '../off-axis-3d/scene';
+export { paintWordHue } from '../paint-effects/scene';
 export {
-  dynamicLayoutWidths,
-  ladderCssSizes,
-  OFF_AXIS_SPANS,
-  OFF_AXIS_TEXT,
-  paintWordHue,
-  setTextLadderScenePosition,
   shuffleZoomTextPhrases,
-  textLadderScenePosition,
   ZOOM_TEXT_BASE_CSS_PX,
   ZOOM_TEXT_CORPUS,
   ZOOM_TEXT_PHRASES,
   zoomTextAnimationState,
   zoomTextMaximumScale,
-} from '../index';
+} from '../zoom-text/scene';
 
 export type ComparisonWorkloadStats = RuntimeLiveStats & {
   readonly configurationRevision: number;
@@ -504,7 +494,7 @@ async function createComparisonWorkloadRuntime(
             scheduledAt = performance.now();
             fontFixtureCommitting = true;
             try {
-              applyRetainedTextFontFixture(targetTexts, activeSelectedFont.current.asset, nextFont);
+              await applyRetainedTextFontFixture(targetTexts, activeSelectedFont.current.asset, nextFont);
             } finally {
               fontFixtureCommitting = false;
             }
@@ -1132,23 +1122,26 @@ interface RetainedWidthText {
 }
 
 interface RetainedFontText {
+  readonly ready: Promise<void>;
   setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }): void;
   updateMatrixWorld(force?: boolean): void;
 }
 
-export function applyRetainedTextFontFixture(
+export async function applyRetainedTextFontFixture(
   texts: readonly RetainedFontText[],
   previous: Pick<LoadedTechniqueFont, 'font' | 'raster'>,
   next: Pick<LoadedTechniqueFont, 'font' | 'raster'>,
-): void {
+): Promise<void> {
   try {
     for (const text of texts) text.setProperties({ font: next.font, raster: next.raster });
     publishRetainedTexts(texts);
+    await Promise.all(texts.map(({ ready }) => ready));
   } catch (error) {
-    // A synchronous staging failure may leave earlier siblings queued. Restore the complete fixture before the
+    // A staging or readiness failure may leave earlier siblings queued. Restore the complete fixture before the
     // candidate owner is released so no Text can retain a generation backed by a disposed font.
     for (const text of texts) text.setProperties({ font: previous.font, raster: previous.raster });
     publishRetainedTexts(texts);
+    await Promise.allSettled(texts.map(({ ready }) => ready));
     throw new Error('comparison font fixture update failed and was rolled back', { cause: error });
   }
 }

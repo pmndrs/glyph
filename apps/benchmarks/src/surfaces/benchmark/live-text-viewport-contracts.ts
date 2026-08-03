@@ -1,4 +1,4 @@
-import type { BitmapTextSceneUpdate } from '../../renderer/bitmap-text';
+import type { BitmapTextSceneUpdate } from '../../techniques/bitmap/persistent-scene';
 import type { BenchmarkWorkloadId } from '../../workloads/catalog';
 import type { LiveTextScene } from '../../workloads/live-text-scene';
 

@@ -4,8 +4,8 @@ import {
   type ComparisonWorkloadId,
   type ComparisonWorkloadPersistentSceneOptions,
   type ComparisonWorkloadStats,
-} from '../../../workloads/comparison/scene';
-import { createPersistentRenderHost } from '../../../renderer/persistent-render-host';
+} from '../../workloads/comparison/scene';
+import { createPersistentRenderHost } from '../../renderer/persistent-render-host';
 
 /**
  * Measurement-only adapter for probes that need an isolated canvas. The retained

@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   PersistentRenderSceneContext,
   PersistentRenderSceneRenderer,
-} from '../../../../renderer/persistent-render-host';
-import { createRasterTechniqueComparisonPersistentScene } from './comparison-scene';
+} from '../../../renderer/persistent-render-host';
+import { createRasterTechniqueComparisonPersistentScene } from './raster-technique-comparison';
 
 const mocks = vi.hoisted(() => ({
   fontDisposals: [] as string[],
@@ -75,7 +75,7 @@ vi.mock('@pmndrs/text', async () => {
   return { Text: MockText };
 });
 
-vi.mock('../../../../workloads/font-assets/mtsdf', () => ({
+vi.mock('../../../workloads/font-assets/mtsdf', () => ({
   loadMtsdfFontAsset: async ({ signal }: { readonly signal?: AbortSignal }) => {
     signal?.throwIfAborted();
     return {
@@ -85,7 +85,7 @@ vi.mock('../../../../workloads/font-assets/mtsdf', () => ({
   },
 }));
 
-vi.mock('../../../../workloads/font-assets/slug', () => ({
+vi.mock('../../../workloads/font-assets/slug', () => ({
   loadSlugFontAsset: async ({ signal }: { readonly signal?: AbortSignal }) => {
     signal?.throwIfAborted();
     return {

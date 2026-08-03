@@ -2,7 +2,7 @@ import { Text, type FontFeature, type ParagraphLayout, type RegisteredFont } fro
 import { bitmap, selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../workloads/shared/text-style';
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../../workloads/shared/text-style';
 
 export interface BitmapLine {
   readonly object: Text;

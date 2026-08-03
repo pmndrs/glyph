@@ -1,13 +1,13 @@
 import { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
-} from './factory-contracts';
+} from '../shared/scene-entry';
 
 export const ZOOM_TEXT_BASE_CSS_PX = 8 * (96 / 72);
 export const ZOOM_TEXT_INSET_CSS_PX = 24;

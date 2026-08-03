@@ -2,28 +2,33 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
-describe('live-text viewport renderer boundaries', () => {
+describe('live-text viewport technique boundaries', () => {
   it.each([
-    ['bitmap-text-viewport.tsx', '../../renderer/bitmap-text'],
-    ['sdf-text-viewports.tsx', '../../renderer/mtsdf-text'],
-    ['sdf-text-viewports.tsx', '../../renderer/slug-text'],
-  ] as const)('keeps %s references to %s lazy or type-only', async (file, rendererModule) => {
+    ['bitmap-text-viewport.tsx', '../../techniques/bitmap/persistent-scene'],
+    ['sdf-text-viewports.tsx', '../../techniques/mtsdf/persistent-scene'],
+    ['sdf-text-viewports.tsx', '../../techniques/slug/persistent-scene'],
+  ] as const)('keeps %s references to %s lazy or type-only', async (file, techniqueModule) => {
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
     const staticImports = source
       .split(';')
       .map((statement) => statement.trim())
-      .filter((statement) => statement.startsWith('import ') && statement.includes(`'${rendererModule}'`));
+      .filter((statement) => statement.startsWith('import ') && statement.includes(`'${techniqueModule}'`));
 
     expect(staticImports).not.toHaveLength(0);
     expect(staticImports.every((statement) => statement.startsWith('import type '))).toBe(true);
-    expect(source).toContain(`import('${rendererModule}')`);
+    expect(source).toContain(`import('${techniqueModule}')`);
   });
 
-  it('keeps live renderer modules on persistent-scene contracts', async () => {
+  it('keeps live technique modules on persistent-scene contracts', async () => {
     const renderers = await Promise.all(
-      ['bitmap-text.ts', 'mtsdf-text.ts', 'slug-text.ts'].map(async (file) => ({
+      [
+        ['bitmap', 'persistent-scene.ts'],
+        ['mtsdf', 'persistent-scene.ts'],
+        ['slug', 'persistent-scene.ts'],
+      ].map(async ([technique, file]) => ({
         file,
-        source: await readFile(new URL(`../../renderer/${file}`, import.meta.url), 'utf8'),
+        technique,
+        source: await readFile(new URL(`../../techniques/${technique}/${file}`, import.meta.url), 'utf8'),
       })),
     );
 
@@ -34,10 +39,29 @@ describe('live-text viewport renderer boundaries', () => {
       expect(source).not.toContain('TextPreview');
     }
 
-    expect(renderers.find(({ file }) => file === 'bitmap-text.ts')?.source).toContain(
+    expect(renderers.find(({ technique }) => technique === 'bitmap')?.source).toContain(
       'createBitmapTextPersistentScene',
     );
-    expect(renderers.find(({ file }) => file === 'mtsdf-text.ts')?.source).toContain('createMtsdfTextPersistentScene');
-    expect(renderers.find(({ file }) => file === 'slug-text.ts')?.source).toContain('createSlugTextPersistentScene');
+    expect(renderers.find(({ technique }) => technique === 'mtsdf')?.source).toContain(
+      'createMtsdfTextPersistentScene',
+    );
+    expect(renderers.find(({ technique }) => technique === 'slug')?.source).toContain('createSlugTextPersistentScene');
+  });
+
+  it('keeps the harness separate from benchmark surface implementations', async () => {
+    const [appSource, surfaceSource, comparisonSource, preloadSource] = await Promise.all([
+      readFile(new URL('../../app.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./benchmark-surface.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./comparison-workload-viewport.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./scene-preload.ts', import.meta.url), 'utf8'),
+    ]);
+
+    expect(appSource).toContain("import { BenchmarkSurface } from './surfaces/benchmark/benchmark-surface';");
+    expect(appSource).not.toContain('function BenchmarkSurface(');
+    expect(appSource).not.toContain('function ComparisonWorkloadViewport(');
+    expect(surfaceSource).toContain("import { ComparisonWorkloadViewport } from './comparison-workload-viewport';");
+    expect(comparisonSource).toContain("import { preloadComparisonWorkload } from './scene-preload';");
+    expect(preloadSource).toContain('let comparisonWorkloadModule');
+    expect(preloadSource).toContain('const liveSceneAssetResources = new Map<string, Promise<void>>()');
   });
 });

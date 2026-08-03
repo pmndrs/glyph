@@ -8,7 +8,7 @@
       "vitexec/**",
       "src/benchmark/bake-host-baseline.ts",
       "src/benchmark/worker-queue-evidence.ts",
-      "src/benchmark/targets/measurement/comparison-preview.ts"
+      "src/benchmark/probes/comparison-workload-preview.ts"
     ],
     "overrides": [
       {

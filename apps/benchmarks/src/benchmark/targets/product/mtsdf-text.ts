@@ -3,7 +3,7 @@ import { msdf } from '@pmndrs/text/raster/msdf';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../../../workloads/benchmark-ipsum';
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../../../workloads/benchmark-ipsum/scene';
 import { loadMtsdfFontAsset } from '../../../workloads/font-assets/mtsdf';
 import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
 import {

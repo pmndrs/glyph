@@ -1,14 +1,14 @@
 import { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
 import {
   committedTextLayout,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
-} from './factory-contracts';
+} from '../shared/scene-entry';
 
 export const DYNAMIC_LAYOUT_TEXT = [
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Left-aligned lines narrow and open while every word reshapes into its changing measure.',

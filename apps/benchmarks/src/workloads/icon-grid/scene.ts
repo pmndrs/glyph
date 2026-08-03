@@ -1,10 +1,10 @@
 import { Text, type AnyRasterInput, type RegisteredFont } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
-import { committedTextLayout, type ComparisonWorkloadEntry } from './factory-contracts';
+import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
+import { committedTextLayout, type ComparisonWorkloadEntry } from '../shared/scene-entry';
 
 export const ICON_GRID_LABEL_SIZE = 11;
 const ICON_GRID_LABEL_WIDTH = 112;

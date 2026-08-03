@@ -1,36 +1,33 @@
 import { FontRegistry, Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
-import {
-  registeredMtsdfConfiguration,
-  type MtsdfRasterConfiguration,
-} from '../benchmark/low-level/raster/mtsdf-configuration';
-import type { FontDelivery } from '../benchmark/url-state';
-import { createCanvasSurface, type CanvasSurface } from './canvas-surface';
-import { finiteCanvasDelta } from './canvas-view';
-import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
-import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
+import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
+import type { FontDelivery } from '../../benchmark/url-state';
+import { createCanvasSurface, type CanvasSurface } from '../../renderer/canvas-surface';
+import { finiteCanvasDelta } from '../../renderer/canvas-view';
+import type { LiveFrameHistoryCursor } from '../../renderer/live-frame-telemetry';
+import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from '../../renderer/text-update-telemetry';
 import {
   createRetainedFontFixtureController,
   type LiveFontFixtureUpdate,
   type RetainedFontFixtureController,
-} from './retained-font-fixture';
+} from '../../renderer/retained-font-fixture';
 import {
   benchmarkContentWidth,
   LIVE_TEXT_COLOR,
   LIVE_TEXT_LINE_HEIGHT,
   liveTextPosition,
   type LiveTextAnchor,
-} from '../workloads/shared/text-style';
-import { type RendererBackend } from './webgpu-renderer';
+} from '../../workloads/shared/text-style';
+import { type RendererBackend } from '../../renderer/webgpu-renderer';
 import {
   type PersistentRenderScene,
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
-} from './persistent-render-host';
-import { createPersistentSceneActivation } from './persistent-scene-activation';
-import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../workloads/font-assets/mtsdf';
+} from '../../renderer/persistent-render-host';
+import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
+import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../../workloads/font-assets/mtsdf';
+import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from './metadata';
 
 export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf';

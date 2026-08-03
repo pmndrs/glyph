@@ -247,7 +247,7 @@ await waitForElementState('[data-testid="comparison-live-viewport"]', {
   'data-technique': 'bitmap',
 });
 
-const advancedShapingPath = '/src/workloads/advanced-shaping.ts';
+const advancedShapingPath = '/src/workloads/advanced-shaping/scene.ts';
 const { ADVANCED_SHAPING_CASES } = await import(/* @vite-ignore */ advancedShapingPath);
 const advancedShapingButton = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
   (candidate) => candidate.textContent?.includes('Advanced shaping') === true && !candidate.disabled,

@@ -1,7 +1,7 @@
 import { type JsonValue, type RegisteredFont } from '@pmndrs/text';
 import { bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
 
-import type { BitmapFixtureDensity } from '../../../workloads/font-assets';
+import type { BitmapFixtureDensity } from '../../workloads/font-assets';
 
 const CONFORMANCE_BITMAP_STRIKES = [16] as const;
 const LIVE_BITMAP_STRIKES = [16, 32] as const;

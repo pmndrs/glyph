@@ -1,15 +1,15 @@
 import { Text } from '@pmndrs/text';
 import type * as THREE from 'three/webgpu';
 
-import { benchmarkIpsumText } from '../benchmark/font-fixtures';
-import { paragraphStressScrollProgress } from '../benchmark/paragraph-stress-motion';
-import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import { benchmarkIpsumText } from '../../benchmark/font-fixtures';
+import { paragraphStressScrollProgress } from '../../benchmark/paragraph-stress-motion';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
+import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
-} from './factory-contracts';
+} from '../shared/scene-entry';
 
 export const paragraphStressWorkload = {
   animate(entries, configuration, elapsedMs, _viewportWidth, viewportHeight, scene) {
