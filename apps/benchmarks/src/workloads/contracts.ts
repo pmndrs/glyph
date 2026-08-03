@@ -1,4 +1,8 @@
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import type { AnyRasterInput, RegisteredFont } from '@pmndrs/text';
+
+import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import type { RasterTechnique } from '../benchmark/url-state';
+import type { ComparisonWorkloadEntry } from './factory-contracts';
 
 /** The comparison workloads that share the retained benchmark render host. */
 export type ComparisonWorkloadId =
@@ -32,8 +36,28 @@ export interface ComparisonWorkloadConfiguration {
 export type ComparisonWorkloadUpdateKind = 'rebuild' | 'retained';
 export type WorkloadCameraKind = 'orthographic' | 'perspective';
 
+/** App-private inputs made available to a workload's layout hook. */
+export interface ComparisonWorkloadLayoutContext {
+  readonly configuration: ComparisonWorkloadConfiguration;
+  readonly viewportHeight: number;
+  readonly viewportWidth: number;
+}
+
+/** App-private inputs made available to a workload's scene factory. */
+export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayoutContext {
+  readonly animationElapsedMs: number;
+  readonly dpr: number;
+  readonly font: RegisteredFont;
+  readonly iconFont?: { readonly font: RegisteredFont; readonly raster: AnyRasterInput };
+  readonly iconScrollX: number;
+  readonly iconScrollY: number;
+  readonly raster: AnyRasterInput;
+  readonly technique: RasterTechnique;
+  readonly textLadderSpecimen?: RasterConformanceSpecimen;
+}
+
 /**
- * Per-workload policy only. The retained host remains responsible for renderer,
+ * App-private workload policy and scene hooks. The retained host remains responsible for renderer,
  * scene activation, cancellation, telemetry, and transactional Text publication.
  */
 export interface ComparisonWorkloadDefinition {
@@ -41,6 +65,8 @@ export interface ComparisonWorkloadDefinition {
   readonly contentWidth: 'none' | { readonly maximumWidth?: number; readonly multiplier?: number };
   readonly id: ComparisonWorkloadId;
   readonly suspendsIconWindow: boolean;
+  create(context: ComparisonWorkloadCreateContext): readonly ComparisonWorkloadEntry[];
+  layout(entries: readonly ComparisonWorkloadEntry[], context: ComparisonWorkloadLayoutContext): void;
   updateKind(
     previous: ComparisonWorkloadConfiguration,
     next: ComparisonWorkloadConfiguration,

@@ -33,7 +33,19 @@ const colorAt = createOklabColorCycle(OFF_AXIS_WORD_COLORS.map(({ color }) => co
 export const offAxis3dWorkload = {
   cameraKind: 'perspective',
   contentWidth: { multiplier: 2 },
+  create(context) {
+    return createOffAxis3dEntries({
+      ...context.configuration,
+      dpr: context.dpr,
+      font: context.font,
+      raster: context.raster,
+      viewportWidth: context.viewportWidth,
+    });
+  },
   id: 'off-axis-3d',
+  layout(entries, context) {
+    layoutOffAxis3dEntries(entries, context.viewportWidth, context.viewportHeight);
+  },
   suspendsIconWindow: false,
   updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;

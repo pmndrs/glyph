@@ -19,7 +19,20 @@ export const DYNAMIC_LAYOUT_TEXT = [
 export const dynamicLayoutWorkload = {
   cameraKind: 'orthographic',
   contentWidth: { maximumWidth: 1_000 },
+  create(context) {
+    return createDynamicLayoutEntries({
+      ...context.configuration,
+      animationElapsedMs: context.animationElapsedMs,
+      dpr: context.dpr,
+      font: context.font,
+      raster: context.raster,
+      viewportWidth: context.viewportWidth,
+    });
+  },
   id: 'dynamic-layout',
+  layout(entries, context) {
+    layoutDynamicLayoutEntries(entries, context.viewportWidth, context.viewportHeight);
+  },
   suspendsIconWindow: false,
   updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;

@@ -16,12 +16,14 @@ describe('comparison workload registry', () => {
     expect(Object.values(COMPARISON_WORKLOADS).map(({ id }) => id)).toEqual(COMPARISON_WORKLOAD_IDS);
   });
 
-  it('gives every example one host-safe update, camera, and content-width policy', () => {
+  it('gives every example host-safe construction, layout, update, camera, and content-width behavior', () => {
     for (const id of COMPARISON_WORKLOAD_IDS) {
       const definition = comparisonWorkloadDefinition(id);
       expect(definition.id).toBe(id);
       expect(['orthographic', 'perspective']).toContain(definition.cameraKind);
       expect(definition.contentWidth === 'none' || typeof definition.contentWidth === 'object').toBe(true);
+      expect(typeof definition.create).toBe('function');
+      expect(typeof definition.layout).toBe('function');
       expect(typeof definition.updateKind).toBe('function');
     }
   });

@@ -43,7 +43,13 @@ export interface ZoomTextAnimationState {
 export const zoomTextWorkload = {
   cameraKind: 'orthographic',
   contentWidth: 'none',
+  create(context) {
+    return createZoomTextEntries({ dpr: context.dpr, font: context.font, raster: context.raster });
+  },
   id: 'zoom-text',
+  layout(entries, context) {
+    layoutZoomTextEntries(entries, context.viewportWidth, context.viewportHeight);
+  },
   suspendsIconWindow: false,
   updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;

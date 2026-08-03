@@ -25,7 +25,19 @@ export interface MutableTextLadderScenePosition {
 export const textLadderWorkload = {
   cameraKind: 'orthographic',
   contentWidth: 'none',
+  create(context) {
+    return createTextLadderEntries({
+      dpr: context.dpr,
+      font: context.font,
+      raster: context.raster,
+      ...(context.textLadderSpecimen === undefined ? {} : { specimen: context.textLadderSpecimen }),
+      viewportHeight: context.viewportHeight,
+    });
+  },
   id: 'text-ladder',
+  layout(entries, context) {
+    layoutTextLadderEntries(entries, context.viewportWidth);
+  },
   suspendsIconWindow: false,
   updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;

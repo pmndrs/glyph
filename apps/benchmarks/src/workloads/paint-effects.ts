@@ -25,7 +25,20 @@ const PAINT_WORD_RANGES = Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match
 export const paintEffectsWorkload = {
   cameraKind: 'orthographic',
   contentWidth: {},
+  create(context) {
+    return createPaintEffectsEntries({
+      ...context.configuration,
+      dpr: context.dpr,
+      font: context.font,
+      raster: context.raster,
+      technique: context.technique,
+      viewportWidth: context.viewportWidth,
+    });
+  },
   id: 'paint-effects',
+  layout(entries, context) {
+    layoutPaintEffectsEntries(entries, context.viewportWidth, context.viewportHeight);
+  },
   suspendsIconWindow: false,
   updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;

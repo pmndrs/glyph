@@ -14,7 +14,19 @@ import {
 export const paragraphStressWorkload = {
   cameraKind: 'orthographic',
   contentWidth: {},
+  create(context) {
+    return createParagraphStressEntries({
+      ...context.configuration,
+      dpr: context.dpr,
+      font: context.font,
+      raster: context.raster,
+      viewportWidth: context.viewportWidth,
+    });
+  },
   id: 'paragraph-stress',
+  layout(entries, context) {
+    layoutParagraphStressEntries(entries, context.viewportWidth, context.viewportHeight);
+  },
   suspendsIconWindow: false,
   updateKind: (previous: ComparisonWorkloadConfiguration, next: ComparisonWorkloadConfiguration) =>
     previous.amount === next.amount ? 'retained' : 'rebuild',
