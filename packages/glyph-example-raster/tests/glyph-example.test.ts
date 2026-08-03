@@ -18,9 +18,9 @@ import { bakeFont } from '@pmndrs/text/bake';
 import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
-import glyphDebugBaker from '../src/baker.js';
+import glyphExampleBaker from '../src/baker.js';
 import { dirtyRanges, retainedCapacity } from '../src/capacity.js';
-import { GLYPH_DEBUG_KIND, glyphDebug, glyphDebugDescriptor, glyphDebugModule } from '../src/index.js';
+import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor, glyphExampleModule } from '../src/index.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const temporaryDirectories: string[] = [];
@@ -52,12 +52,12 @@ describe('public external raster proof', () => {
       },
       rasterKey: '2'.repeat(64) as RasterKey,
       packaging: { artifact: 'external', pages: 'external' } as const,
-      descriptor: glyphDebugDescriptor({ paletteSeed: 7, inset: 0.1 }),
+      descriptor: glyphExampleDescriptor({ paletteSeed: 7, inset: 0.1 }),
     };
-    const [left, right] = await Promise.all([glyphDebugBaker.bake(request), glyphDebugBaker.bake(request)]);
+    const [left, right] = await Promise.all([glyphExampleBaker.bake(request), glyphExampleBaker.bake(request)]);
 
     expect(left).toEqual(right);
-    expect(left.kind).toBe(GLYPH_DEBUG_KIND);
+    expect(left.kind).toBe(GLYPH_EXAMPLE_KIND);
     expect(left.artifacts.map(({ role }) => role)).toEqual(['raster', 'raster-page']);
     expect(left.artifacts[0]?.bytes.subarray(0, 4)).toEqual(Uint8Array.of(0x67, 0x6c, 0x54, 0x46));
   });
@@ -75,12 +75,12 @@ describe('public external raster proof', () => {
     const resolveResource = vi.fn(async (_context: RasterResourceResolverContext) => readFile(records.file));
 
     try {
-      const loaded = await runtime.load(font, glyphDebug({ paletteSeed: 7 }), { resolve, resolveResource });
-      expect(loaded.artifact.kind).toBe(GLYPH_DEBUG_KIND);
+      const loaded = await runtime.load(font, glyphExample({ paletteSeed: 7 }), { resolve, resolveResource });
+      expect(loaded.artifact.kind).toBe(GLYPH_EXAMPLE_KIND);
       expect(loaded.resource.colors.byteLength).toBe(font.glyphCount * 4);
       expect(resolve).toHaveBeenCalledOnce();
       expect(resolveResource).toHaveBeenCalledOnce();
-      expect(resolve.mock.calls[0]?.[0].reference.kind).toBe(GLYPH_DEBUG_KIND);
+      expect(resolve.mock.calls[0]?.[0].reference.kind).toBe(GLYPH_EXAMPLE_KIND);
       expect(resolveResource.mock.calls[0]?.[0].source.artifactHash).toMatch(/^[0-9a-f]{64}$/);
     } finally {
       runtime.dispose();
@@ -95,24 +95,24 @@ describe('public external raster proof', () => {
     const registry = new FontRegistry();
     const font = await registry.registerAsset(await readFile(core.file));
     const runtime = new RasterRuntime();
-    const loaded = await runtime.load(font, glyphDebug({ paletteSeed: 7 }));
+    const loaded = await runtime.load(font, glyphExample({ paletteSeed: 7 }));
     let resourceDisposals = 0;
     loaded.resource.material.addEventListener('dispose', () => {
       resourceDisposals += 1;
     });
 
-    const emptyStage = glyphDebugModule.stageBatch(undefined, layout([]), loaded.resource, 0, paint(0), 1);
+    const emptyStage = glyphExampleModule.stageBatch(undefined, layout([]), loaded.resource, 0, paint(0), 1);
     emptyStage.commit();
     expect(emptyStage.batch.glyphCount).toBe(0);
     expect(emptyStage.batch.capacity).toBe(0);
     expect(emptyStage.batch.object.children).toHaveLength(0);
-    const growFromEmpty = glyphDebugModule.stageBatch(emptyStage.batch, layout([1]), loaded.resource, 0, paint(1), 1);
+    const growFromEmpty = glyphExampleModule.stageBatch(emptyStage.batch, layout([1]), loaded.resource, 0, paint(1), 1);
     expect(growFromEmpty.batch).not.toBe(emptyStage.batch);
     growFromEmpty.abort();
     expect(emptyStage.batch.object.children).toHaveLength(0);
     emptyStage.batch.dispose();
 
-    const initialStage = glyphDebugModule.stageBatch(undefined, layout([1, 2]), loaded.resource, 0, paint(2), 1);
+    const initialStage = glyphExampleModule.stageBatch(undefined, layout([1, 2]), loaded.resource, 0, paint(2), 1);
     initialStage.commit();
     const initial = initialStage.batch;
     const geometry = meshGeometry(initial.object);
@@ -120,25 +120,25 @@ describe('public external raster proof', () => {
     expect(initial.glyphCount).toBe(2);
     expect(geometry.instanceCount).toBe(2);
 
-    const aborted = glyphDebugModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
+    const aborted = glyphExampleModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
     expect(aborted.batch).toBe(initial);
     aborted.abort();
     expect(initial.glyphCount).toBe(2);
     expect(geometry.instanceCount).toBe(2);
 
-    const shrink = glyphDebugModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
+    const shrink = glyphExampleModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
     shrink.commit();
     expect(shrink.batch).toBe(initial);
     expect(initial.glyphCount).toBe(1);
     expect(geometry.instanceCount).toBe(1);
 
     expect(() =>
-      glyphDebugModule.stageBatch(initial, layout([font.glyphCount]), loaded.resource, 0, paint(1), 1),
+      glyphExampleModule.stageBatch(initial, layout([font.glyphCount]), loaded.resource, 0, paint(1), 1),
     ).toThrow(/unavailable glyph/);
     expect(initial.glyphCount).toBe(1);
     expect(geometry.instanceCount).toBe(1);
 
-    const exact = glyphDebugModule.stageBatch(
+    const exact = glyphExampleModule.stageBatch(
       initial,
       layout(Array.from({ length: initialCapacity }, (_, index) => index + 1)),
       loaded.resource,
@@ -151,7 +151,7 @@ describe('public external raster proof', () => {
     expect(initial.glyphCount).toBe(initialCapacity);
 
     const overflowCount = initialCapacity + 1;
-    const overflow = glyphDebugModule.stageBatch(
+    const overflow = glyphExampleModule.stageBatch(
       initial,
       layout(Array.from({ length: overflowCount }, (_, index) => index + 1)),
       loaded.resource,
@@ -181,9 +181,9 @@ describe('public external raster proof', () => {
     const font = await registry.registerAsset(await readFile(core.file));
     const runtime = new RasterRuntime();
     const controller = new AbortController();
-    controller.abort(new DOMException('cancel glyph-debug load', 'AbortError'));
+    controller.abort(new DOMException('cancel glyph-example load', 'AbortError'));
 
-    expect(() => runtime.load(font, glyphDebug(), { signal: controller.signal })).toThrowError(
+    expect(() => runtime.load(font, glyphExample(), { signal: controller.signal })).toThrowError(
       expect.objectContaining({ name: 'AbortError' }),
     );
     runtime.dispose();
@@ -195,13 +195,13 @@ async function bakeFixture(packaging: {
   readonly artifact: 'embedded' | 'external';
   readonly pages: 'embedded' | 'external';
 }) {
-  const directory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-debug-'));
+  const directory = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-example-'));
   temporaryDirectories.push(directory);
   return bakeFont({
     input: source,
     output: join(directory, 'inter.font.glb'),
     font: { fontFaceIndex: 0 },
-    rasters: [rasterBake(glyphDebugBaker, { packaging, options: { paletteSeed: 7 } })],
+    rasters: [rasterBake(glyphExampleBaker, { packaging, options: { paletteSeed: 7 } })],
   });
 }
 

@@ -1,27 +1,27 @@
 ---
 type: Workspace Package
-title: '@pmndrs/text-glyph-debug-raster'
+title: '@pmndrs/text-glyph-example-raster'
 description: Proves the published raster and baker extension boundary with a private diagnostic technique.
-resource: ../../packages/glyph-debug-raster
-workspace_package: '@pmndrs/text-glyph-debug-raster'
+resource: ../../packages/glyph-example-raster
+workspace_package: '@pmndrs/text-glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:c7858e0246a2d0c068144dc8e86875e586c61ab02284c5178cf2f1027758cbcf'
+source_digest: 'sha256:c84d1105482db3358c974f1c6bbefadc1510f9985021e004faaaa1525b9f2ef2'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest
-    resource: ../../packages/glyph-debug-raster/package.json
+    resource: ../../packages/glyph-example-raster/package.json
     title: Package manifest and static discovery mapping
   - id: runtime
-    resource: ../../packages/glyph-debug-raster/src/raster.ts
+    resource: ../../packages/glyph-example-raster/src/raster.ts
     title: Public-contract decoder and retained Three.js adapter
   - id: baker
-    resource: ../../packages/glyph-debug-raster/src/baker.ts
+    resource: ../../packages/glyph-example-raster/src/baker.ts
     title: Package-owned baker module
   - id: artifact
-    resource: ../../packages/glyph-debug-raster/src/artifact.ts
+    resource: ../../packages/glyph-example-raster/src/artifact.ts
     title: Package-owned companion GLB and record payload
   - id: lifecycle-tests
-    resource: ../../packages/glyph-debug-raster/tests/glyph-debug.test.ts
+    resource: ../../packages/glyph-example-raster/tests/glyph-example.test.ts
     title: Public bake, load, resolver, and lifecycle tests
   - id: browser-proof
     resource: ../../apps/benchmarks/vitexec/external-raster-proof.probe.ts
@@ -31,12 +31,12 @@ generated:
   at: '2026-08-01T21:10:00Z'
 ---
 
-# Package reference: `@pmndrs/text-glyph-debug-raster`
+# Package reference: `@pmndrs/text-glyph-example-raster`
 
 Status: ✅ Milestone 10.4 external extension proof
 
 This private workspace package is a consumer proof, not a fourth recommended production raster. It imports only published
-`@pmndrs/text` entry points and its own pinned Three.js dependency. It owns the literal `glyphDebug` kind, companion
+`@pmndrs/text` entry points and its own pinned Three.js dependency. It owns the literal `glyphExample` kind, companion
 extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
 records, decoder validation, runtime baker, TSL material, retained instance storage, dirty upload policy, overflow replacement,
 abort behavior, and disposal. A source boundary test rejects imports from core internals or the three first-party raster and

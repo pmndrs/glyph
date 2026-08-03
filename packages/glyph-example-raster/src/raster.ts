@@ -14,33 +14,33 @@ import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { add, attribute, min, mul, positionLocal, step, sub, uv, vec3 } from 'three/tsl';
 
-import { isGlyphDebugHeader, type GlyphDebugExtensionV0 } from './artifact.js';
+import { isGlyphExampleHeader, type GlyphExampleExtensionV0 } from './artifact.js';
 import { dirtyRanges, retainedCapacity } from './capacity.js';
 import {
-  GLYPH_DEBUG_EXTENSION,
-  GLYPH_DEBUG_FORMAT_VERSION,
-  GLYPH_DEBUG_GENERATOR_VERSION,
-  GLYPH_DEBUG_KIND,
-  glyphDebugDescriptor,
-  type GlyphDebugOptions,
+  GLYPH_EXAMPLE_EXTENSION,
+  GLYPH_EXAMPLE_FORMAT_VERSION,
+  GLYPH_EXAMPLE_GENERATOR_VERSION,
+  GLYPH_EXAMPLE_KIND,
+  glyphExampleDescriptor,
+  type GlyphExampleOptions,
 } from './contract.js';
 
 const INSTANCE_STRIDE = 8;
 
-export interface GlyphDebugResource {
+export interface GlyphExampleResource {
   readonly colors: Uint8Array;
   readonly glyphCount: number;
   readonly inset: number;
   readonly material: THREE.MeshBasicNodeMaterial;
 }
 
-export interface GlyphDebugDrawBatch extends RasterObjectDrawBatch<THREE.Group> {
+export interface GlyphExampleDrawBatch extends RasterObjectDrawBatch<THREE.Group> {
   readonly capacity: number;
   readonly glyphCount: number;
 }
 
 interface BatchContext {
-  readonly resource: GlyphDebugResource;
+  readonly resource: GlyphExampleResource;
   readonly fontSlot: number;
   readonly geometry?: THREE.InstancedBufferGeometry;
   readonly instances?: THREE.InstancedInterleavedBuffer;
@@ -49,29 +49,29 @@ interface BatchContext {
   disposed: boolean;
 }
 
-const batchContexts = new WeakMap<GlyphDebugDrawBatch, BatchContext>();
+const batchContexts = new WeakMap<GlyphExampleDrawBatch, BatchContext>();
 
-export const glyphDebugModule: RasterModule<
-  typeof GLYPH_DEBUG_KIND,
-  GlyphDebugResource,
-  GlyphDebugDrawBatch,
-  GlyphDebugOptions | undefined
+export const glyphExampleModule: RasterModule<
+  typeof GLYPH_EXAMPLE_KIND,
+  GlyphExampleResource,
+  GlyphExampleDrawBatch,
+  GlyphExampleOptions | undefined
 > = defineRaster({
-  kind: GLYPH_DEBUG_KIND,
-  extension: GLYPH_DEBUG_EXTENSION,
-  version: GLYPH_DEBUG_FORMAT_VERSION,
+  kind: GLYPH_EXAMPLE_KIND,
+  extension: GLYPH_EXAMPLE_EXTENSION,
+  version: GLYPH_EXAMPLE_FORMAT_VERSION,
   runtimeBaker: () => import('./runtime-baker.js'),
-  descriptor: glyphDebugDescriptor,
+  descriptor: glyphExampleDescriptor,
   async decode(font, raster, signal) {
     signal?.throwIfAborted();
     const extension = decodeExtension(font, raster);
-    if (!isGlyphDebugHeader(raster.view(extension.headerBufferView))) {
-      throw new TypeError('glyph-debug artifact has an invalid package header');
+    if (!isGlyphExampleHeader(raster.view(extension.headerBufferView))) {
+      throw new TypeError('glyph-example artifact has an invalid package header');
     }
     const colors = Uint8Array.from(await raster.resource(extension.records, signal));
     signal?.throwIfAborted();
     if (colors.byteLength !== font.glyphCount * extension.recordStride) {
-      throw new RangeError('glyph-debug record payload length does not match the font glyph count');
+      throw new RangeError('glyph-example record payload length does not match the font glyph count');
     }
     return {
       colors,
@@ -108,10 +108,10 @@ export const glyphDebugModule: RasterModule<
   validatePaint(paint) {
     for (const entry of paint.palette) {
       if (entry.color.length !== 4 || entry.color.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) {
-        throw new TypeError('glyph-debug fill color must contain four finite linear values in [0, 1]');
+        throw new TypeError('glyph-example fill color must contain four finite linear values in [0, 1]');
       }
       if (entry.outline !== undefined || entry.shadow !== undefined) {
-        throw new TypeError('glyph-debug supports fill color and opacity only');
+        throw new TypeError('glyph-example supports fill color and opacity only');
       }
     }
   },
@@ -121,34 +121,34 @@ export const glyphDebugModule: RasterModule<
   },
 });
 
-export function glyphDebug(options: GlyphDebugOptions = {}): {
-  readonly module: typeof glyphDebugModule;
-  readonly options: GlyphDebugOptions;
+export function glyphExample(options: GlyphExampleOptions = {}): {
+  readonly module: typeof glyphExampleModule;
+  readonly options: GlyphExampleOptions;
 } {
-  return { module: glyphDebugModule, options } as const;
+  return { module: glyphExampleModule, options } as const;
 }
 
 function decodeExtension(
   font: RegisteredFont,
-  raster: RegisteredRaster<typeof GLYPH_DEBUG_KIND>,
-): GlyphDebugExtensionV0 {
-  const extension = objectValue(raster.extensionData, 'glyph-debug extension');
+  raster: RegisteredRaster<typeof GLYPH_EXAMPLE_KIND>,
+): GlyphExampleExtensionV0 {
+  const extension = objectValue(raster.extensionData, 'glyph-example extension');
   if (
-    extension.version !== GLYPH_DEBUG_FORMAT_VERSION ||
+    extension.version !== GLYPH_EXAMPLE_FORMAT_VERSION ||
     extension.rasterKey !== raster.rasterKey ||
     extension.shapingHash !== font.shapingHash ||
     extension.glyphCount !== font.glyphCount ||
     extension.glyphIdWidth !== 16 ||
     extension.recordStride !== 4
   ) {
-    throw new TypeError('glyph-debug extension identity does not match its registered font');
+    throw new TypeError('glyph-example extension identity does not match its registered font');
   }
-  const descriptorValue = objectValue(extension.descriptor, 'glyph-debug descriptor');
-  if (descriptorValue.generatorVersion !== GLYPH_DEBUG_GENERATOR_VERSION) {
-    throw new TypeError('glyph-debug descriptor has an unsupported generator version');
+  const descriptorValue = objectValue(extension.descriptor, 'glyph-example descriptor');
+  if (descriptorValue.generatorVersion !== GLYPH_EXAMPLE_GENERATOR_VERSION) {
+    throw new TypeError('glyph-example descriptor has an unsupported generator version');
   }
-  const descriptor = glyphDebugDescriptor(descriptorValue);
-  const headerBufferView = nonnegativeInteger(extension.headerBufferView, 'glyph-debug headerBufferView');
+  const descriptor = glyphExampleDescriptor(descriptorValue);
+  const headerBufferView = nonnegativeInteger(extension.headerBufferView, 'glyph-example headerBufferView');
   const records = resourceSource(extension.records);
   return {
     version: 0,
@@ -164,34 +164,37 @@ function decodeExtension(
 }
 
 function resourceSource(value: unknown): RasterResourceSource {
-  const source = objectValue(value, 'glyph-debug records');
+  const source = objectValue(value, 'glyph-example records');
   if (source.type === 'bufferView') {
-    return { type: 'bufferView', bufferView: nonnegativeInteger(source.bufferView, 'glyph-debug records.bufferView') };
+    return {
+      type: 'bufferView',
+      bufferView: nonnegativeInteger(source.bufferView, 'glyph-example records.bufferView'),
+    };
   }
-  if (source.type !== 'external') throw new TypeError('glyph-debug record source has an unsupported type');
+  if (source.type !== 'external') throw new TypeError('glyph-example record source has an unsupported type');
   if (typeof source.uri !== 'string' || source.uri.length === 0) {
-    throw new TypeError('glyph-debug external record source must have a URI');
+    throw new TypeError('glyph-example external record source must have a URI');
   }
   if (typeof source.artifactHash !== 'string' || !/^[0-9a-f]{64}$/.test(source.artifactHash)) {
-    throw new TypeError('glyph-debug external record source must have a SHA-256 hash');
+    throw new TypeError('glyph-example external record source must have a SHA-256 hash');
   }
   return {
     type: 'external',
     uri: source.uri,
-    byteLength: nonnegativeInteger(source.byteLength, 'glyph-debug records.byteLength'),
+    byteLength: nonnegativeInteger(source.byteLength, 'glyph-example records.byteLength'),
     artifactHash: source.artifactHash as Sha256Hex,
   };
 }
 
 function createBatch(
-  resource: GlyphDebugResource,
+  resource: GlyphExampleResource,
   fontSlot: number,
   glyphIndices: Uint32Array,
   values: Float32Array,
-): GlyphDebugDrawBatch {
+): GlyphExampleDrawBatch {
   const capacity = retainedCapacity(glyphIndices.length);
   const object = new THREE.Group();
-  object.name = 'pmndrs.text.glyph-debug';
+  object.name = 'pmndrs.text.glyph-example';
   const geometry = capacity === 0 ? undefined : unitQuad();
   const instances =
     capacity === 0
@@ -203,15 +206,15 @@ function createBatch(
   if (geometry !== undefined && instances !== undefined) {
     geometry.instanceCount = glyphIndices.length;
     instances.array.set(values);
-    instanceAttribute(geometry, instances, 'glyphDebugOrigin', 2, 0);
-    instanceAttribute(geometry, instances, 'glyphDebugSize', 2, 2);
-    instanceAttribute(geometry, instances, 'glyphDebugColor', 4, 4);
+    instanceAttribute(geometry, instances, 'glyphExampleOrigin', 2, 0);
+    instanceAttribute(geometry, instances, 'glyphExampleSize', 2, 2);
+    instanceAttribute(geometry, instances, 'glyphExampleColor', 4, 4);
     instances.needsUpdate = true;
     mesh = new THREE.Mesh(geometry, resource.material);
     mesh.frustumCulled = false;
     object.add(mesh);
   }
-  let batch!: GlyphDebugDrawBatch;
+  let batch!: GlyphExampleDrawBatch;
   batch = {
     object,
     capacity,
@@ -240,7 +243,7 @@ function createBatch(
 }
 
 function stageRetained(
-  batch: GlyphDebugDrawBatch,
+  batch: GlyphExampleDrawBatch,
   context: BatchContext,
   glyphIndices: Uint32Array,
   values: Float32Array,
@@ -283,7 +286,7 @@ function stageRetained(
 
 function writeInstances(
   layout: ParagraphLayout,
-  resource: GlyphDebugResource,
+  resource: GlyphExampleResource,
   glyphIndices: Uint32Array,
   paint: GlyphPaint,
 ): Float32Array {
@@ -295,7 +298,7 @@ function writeInstances(
     const inset = resource.inset * fontSize;
     const paintIndex = paint.paintIndices[glyphIndex]!;
     const resolved = paint.palette[paintIndex];
-    if (resolved === undefined) throw new TypeError('glyph-debug paint references a missing palette entry');
+    if (resolved === undefined) throw new TypeError('glyph-example paint references a missing palette entry');
     const recordOffset = glyphId * 4;
     const offset = instance * INSTANCE_STRIDE;
     values[offset] = layout.x[glyphIndex]! + inset;
@@ -322,27 +325,27 @@ function collectGlyphIndices(layout: ParagraphLayout, fontSlot: number): Uint32A
 
 function validateInputs(
   layout: ParagraphLayout,
-  resource: GlyphDebugResource,
+  resource: GlyphExampleResource,
   fontSlot: number,
   paint: GlyphPaint,
 ): void {
   const count = layout.glyphIds.length;
   for (const values of [layout.glyphFontSlots, layout.glyphFontSizes, layout.x, layout.y, paint.paintIndices]) {
-    if (values.length !== count) throw new TypeError('glyph-debug layout and paint arrays must be parallel');
+    if (values.length !== count) throw new TypeError('glyph-example layout and paint arrays must be parallel');
   }
-  if (!Number.isSafeInteger(fontSlot) || fontSlot < 0) throw new RangeError('glyph-debug font slot is invalid');
+  if (!Number.isSafeInteger(fontSlot) || fontSlot < 0) throw new RangeError('glyph-example font slot is invalid');
   for (let index = 0; index < count; index += 1) {
     if (!Number.isFinite(layout.glyphFontSizes[index]) || layout.glyphFontSizes[index]! <= 0) {
-      throw new TypeError('glyph-debug font sizes must be positive finite values');
+      throw new TypeError('glyph-example font sizes must be positive finite values');
     }
     if (!Number.isFinite(layout.x[index]) || !Number.isFinite(layout.y[index])) {
-      throw new TypeError('glyph-debug positions must be finite values');
+      throw new TypeError('glyph-example positions must be finite values');
     }
   }
   for (const glyphId of layout.glyphIds) {
-    if (glyphId >= resource.glyphCount) throw new RangeError('glyph-debug layout references an unavailable glyph');
+    if (glyphId >= resource.glyphCount) throw new RangeError('glyph-example layout references an unavailable glyph');
   }
-  glyphDebugModule.validatePaint?.(paint);
+  glyphExampleModule.validatePaint?.(paint);
 }
 
 function createMaterial(): THREE.MeshBasicNodeMaterial {
@@ -352,9 +355,9 @@ function createMaterial(): THREE.MeshBasicNodeMaterial {
     side: THREE.DoubleSide,
     transparent: true,
   });
-  const origin: Node<'vec2'> = attribute<'vec2'>('glyphDebugOrigin', 'vec2');
-  const size: Node<'vec2'> = attribute<'vec2'>('glyphDebugSize', 'vec2');
-  const color: Node<'vec4'> = attribute<'vec4'>('glyphDebugColor', 'vec4');
+  const origin: Node<'vec2'> = attribute<'vec2'>('glyphExampleOrigin', 'vec2');
+  const size: Node<'vec2'> = attribute<'vec2'>('glyphExampleSize', 'vec2');
+  const color: Node<'vec4'> = attribute<'vec4'>('glyphExampleColor', 'vec4');
   const unit = uv();
   const edgeDistance = min(min(unit.x, sub(1, unit.x)), min(unit.y, sub(1, unit.y)));
   const frame = sub(1, step(0.08, edgeDistance));

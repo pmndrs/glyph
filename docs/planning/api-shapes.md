@@ -1103,8 +1103,8 @@ Three.js for modules rendered through `Text`. The `Text` adapter validates the o
 publication. This makes the runtime requirement statically visible to external Three adapters without importing Three.js into
 the renderer-neutral raster contract.
 
-The private `@pmndrs/text-glyph-debug-raster` workspace package is the accepted external proof. Its `glyphDebug` factory,
-literal kind, `PMNDRS_text_glyph_debug` extension, descriptor, baker, standalone companion GLB, embedded/external record
+The private `@pmndrs/text-glyph-example-raster` workspace package is the accepted external proof. Its `glyphExample` factory,
+literal kind, `PMNDRS_text_glyph_example` extension, descriptor, baker, standalone companion GLB, embedded/external record
 payload, decoder, runtime generator, retained TSL adapter, overflow, abort, and disposal are package-owned. Its source imports
 only the root and public Node-bake entry points from `@pmndrs/text`, plus its own Three.js dependency. Static discovery maps
 the imported factory export name through `package.json#pmndrs.text[exportName]`; that key and the default baker's `kind` must

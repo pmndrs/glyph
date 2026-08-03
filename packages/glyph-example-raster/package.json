@@ -1,7 +1,9 @@
 {
-  "name": "@pmndrs/text-glyph-debug-raster",
+  "name": "@pmndrs/text-glyph-example-raster",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
+  "author": "Justin Walsh (https://github.com/thejustinwalsh)",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -39,7 +41,7 @@
   },
   "pmndrs": {
     "text": {
-      "glyphDebug": "./baker"
+      "glyphExample": "./baker"
     }
   }
 }

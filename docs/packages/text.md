@@ -150,7 +150,7 @@ generated:
 Status: ✅ Milestone 9 Slug integration is complete
 
 Milestone 10.4 proves that the open contract is implementable outside this package. The private
-`@pmndrs/text-glyph-debug-raster` consumer owns a new literal kind, companion GLB, embedded/external records, static and runtime
+`@pmndrs/text-glyph-example-raster` consumer owns a new literal kind, companion GLB, embedded/external records, static and runtime
 bakers, decoder, retained Three.js/TSL adapter, dirty uploads, overflow, abort, and disposal without importing this package's
 internals or first-party raster modules. The proof made the Three adapter requirement explicit through public
 `RasterObjectDrawBatch<Object>` and `ThreeRasterDrawBatch` types while keeping portable `RasterDrawBatch` renderer-neutral. It

@@ -37,9 +37,9 @@ importers:
       '@pmndrs/text-font-baker':
         specifier: workspace:*
         version: link:../../packages/font-baker
-      '@pmndrs/text-glyph-debug-raster':
+      '@pmndrs/text-glyph-example-raster':
         specifier: workspace:*
-        version: link:../../packages/glyph-debug-raster
+        version: link:../../packages/glyph-example-raster
       '@react-three/fiber':
         specifier: 10.0.0-alpha.2
         version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
@@ -151,7 +151,7 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
-  packages/glyph-debug-raster:
+  packages/glyph-example-raster:
     dependencies:
       '@pmndrs/text':
         specifier: workspace:*

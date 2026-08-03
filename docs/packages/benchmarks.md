@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:75389813b6ca1c9ef2662c4569840573c1555291f70bf48fcf95bbb9190e588a'
+source_digest: 'sha256:71648583772fbd9306a43e45383141f251c44ccbb63a2ad8993e3db4c1ce6a83'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -75,7 +75,7 @@ The primary product surface is organized for humans by mode, technique, backend,
 
 The MSDF / Slug comparison workload owns one renderer, two equal RGBA8 render targets, and one fullscreen TSL composition graph. Both candidates share authored text, layout dimensions, camera, physical target size, zoom, and pan. The heatmap samples both candidate textures directly with no readback or CPU composition: black agrees, red marks extra MSDF coverage, cyan marks extra Slug coverage, and intensity is amplified eight times. Editable comparison text updates both retained `Text` objects and publishes a new comparison only after both layouts are ready. Explicit conformance runs and their follow-up visual captures execute as serialized jobs borrowing the route renderer; the retained scene pauses during each job and resumes after success, failure, or abort without replacing its canvas or leaking finite renderer state into the next frame. The permanent hardware-browser probe proves custom text, 4× zoom, responsive tab switching, zero automatic finite capture, abort and successful-capture recovery, a peak renderer concurrency of one, exact WebGPU backend initialization, and a live canvas; forced WebGL2 proves the same lifecycle without shader or validation errors. Run both backend lanes with `pnpm benchmarks:test:raster-technique-compare`.[^raster-technique-compare-probe]
 
-The external-raster target is the product gate for the private `glyphDebug` extension package. It starts from the public
+The external-raster target is the product gate for the private `glyphExample` extension package. It starts from the public
 source-font fallback so source bytes are legitimately available, runs the package runtime baker and generic artifact
 attachment, publishes a cold `Text`, then replaces its text through the warm matrix-update lifecycle. WebGPU and forced WebGL2
 must retain the draw object and geometry, submit one draw, produce visible pixels, and return the same deterministic readback

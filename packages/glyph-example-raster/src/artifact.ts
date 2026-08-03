@@ -7,45 +7,45 @@ import type {
 } from '@pmndrs/text';
 
 import {
-  GLYPH_DEBUG_EXTENSION,
-  GLYPH_DEBUG_FORMAT_VERSION,
-  GLYPH_DEBUG_KIND,
-  type GlyphDebugDescriptor,
+  GLYPH_EXAMPLE_EXTENSION,
+  GLYPH_EXAMPLE_FORMAT_VERSION,
+  GLYPH_EXAMPLE_KIND,
+  type GlyphExampleDescriptor,
 } from './contract.js';
 
 const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;
 const BIN_CHUNK = 0x004e_4942;
-const HEADER = Uint8Array.of(0x47, 0x44, 0x42, GLYPH_DEBUG_FORMAT_VERSION);
+const HEADER = Uint8Array.of(0x47, 0x44, 0x42, GLYPH_EXAMPLE_FORMAT_VERSION);
 const GLTF_WITNESS = new Uint8Array(12);
 
-export interface GlyphDebugExtensionV0 {
+export interface GlyphExampleExtensionV0 {
   readonly version: 0;
   readonly rasterKey: string;
   readonly shapingHash: string;
   readonly glyphCount: number;
   readonly glyphIdWidth: 16;
-  readonly descriptor: GlyphDebugDescriptor;
+  readonly descriptor: GlyphExampleDescriptor;
   readonly headerBufferView: number;
   readonly records: RasterResourceSource;
   readonly recordStride: 4;
 }
 
-export async function bakeGlyphDebugArtifact(
-  request: RasterBakeRequest<GlyphDebugDescriptor>,
-): Promise<RasterBakeArtifact<typeof GLYPH_DEBUG_KIND>> {
+export async function bakeGlyphExampleArtifact(
+  request: RasterBakeRequest<GlyphExampleDescriptor>,
+): Promise<RasterBakeArtifact<typeof GLYPH_EXAMPLE_KIND>> {
   request.signal?.throwIfAborted();
   const records = glyphColorRecords(request.font.glyphCount, request.descriptor.paletteSeed);
   const external = request.packaging.pages === 'external';
   const recordHash = await sha256(records);
   request.signal?.throwIfAborted();
-  const recordId = `${request.rasterKey}.glyph-debug.rgba`;
+  const recordId = `${request.rasterKey}.glyph-example.rgba`;
   const binary = external ? concatenate(GLTF_WITNESS, HEADER) : concatenate(GLTF_WITNESS, HEADER, records);
   const recordSource: RasterResourceSource = external
     ? { type: 'external', uri: recordId, byteLength: records.byteLength, artifactHash: recordHash }
     : { type: 'bufferView', bufferView: 2 };
-  const extension: GlyphDebugExtensionV0 = {
-    version: GLYPH_DEBUG_FORMAT_VERSION,
+  const extension: GlyphExampleExtensionV0 = {
+    version: GLYPH_EXAMPLE_FORMAT_VERSION,
     rasterKey: request.rasterKey,
     shapingHash: request.font.shapingHash,
     glyphCount: request.font.glyphCount,
@@ -56,7 +56,7 @@ export async function bakeGlyphDebugArtifact(
     recordStride: 4,
   };
   const document = {
-    asset: { generator: '@pmndrs/text-glyph-debug-raster', version: '2.0' },
+    asset: { generator: '@pmndrs/text-glyph-example-raster', version: '2.0' },
     buffers: [{ byteLength: binary.byteLength }],
     bufferViews: [
       { buffer: 0, byteOffset: 0, byteLength: GLTF_WITNESS.byteLength, target: 34962 },
@@ -85,15 +85,15 @@ export async function bakeGlyphDebugArtifact(
     nodes: [{ mesh: 0 }],
     scenes: [{ nodes: [0] }],
     scene: 0,
-    extensions: { [GLYPH_DEBUG_EXTENSION]: extension },
-    extensionsUsed: [GLYPH_DEBUG_EXTENSION],
+    extensions: { [GLYPH_EXAMPLE_EXTENSION]: extension },
+    extensionsUsed: [GLYPH_EXAMPLE_EXTENSION],
   };
   const bytes = encodeGlb(document, binary);
   const metadataBytes = HEADER.byteLength + new TextEncoder().encode(JSON.stringify(extension)).byteLength;
   const artifacts: BakeArtifactV0[] = [
     {
       role: 'raster',
-      id: `${request.rasterKey}.glyph-debug.glb`,
+      id: `${request.rasterKey}.glyph-example.glb`,
       bytes,
       sha256: await sha256(bytes),
     },
@@ -102,9 +102,9 @@ export async function bakeGlyphDebugArtifact(
   request.signal?.throwIfAborted();
   return {
     rasterKey: request.rasterKey,
-    kind: GLYPH_DEBUG_KIND,
-    extension: GLYPH_DEBUG_EXTENSION,
-    version: GLYPH_DEBUG_FORMAT_VERSION,
+    kind: GLYPH_EXAMPLE_KIND,
+    extension: GLYPH_EXAMPLE_EXTENSION,
+    version: GLYPH_EXAMPLE_FORMAT_VERSION,
     artifacts,
     report: {
       metadataBytes,
@@ -124,13 +124,13 @@ export async function bakeGlyphDebugArtifact(
   };
 }
 
-export function isGlyphDebugHeader(bytes: Uint8Array): boolean {
+export function isGlyphExampleHeader(bytes: Uint8Array): boolean {
   return bytes.byteLength === HEADER.byteLength && bytes.every((value, index) => value === HEADER[index]);
 }
 
 function glyphColorRecords(glyphCount: number, paletteSeed: number): Uint8Array {
   if (!Number.isSafeInteger(glyphCount) || glyphCount < 1 || glyphCount > 0xffff) {
-    throw new RangeError('glyph-debug glyphCount must be in 1..65535');
+    throw new RangeError('glyph-example glyphCount must be in 1..65535');
   }
   const records = new Uint8Array(glyphCount * 4);
   for (let glyphId = 0; glyphId < glyphCount; glyphId += 1) {

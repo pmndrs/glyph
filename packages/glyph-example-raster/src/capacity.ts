@@ -10,7 +10,7 @@ export interface UpdateRange {
 
 export function retainedCapacity(required: number): number {
   if (!Number.isSafeInteger(required) || required < 0) {
-    throw new RangeError('glyph-debug instance count must be a non-negative safe integer');
+    throw new RangeError('glyph-example instance count must be a non-negative safe integer');
   }
   if (required === 0) return 0;
   return required + Math.min(Math.ceil(required / SLACK_DIVISOR), MAX_SLACK);

@@ -1,12 +1,12 @@
 import type { RasterKey, RuntimeRasterBakerModule } from '@pmndrs/text';
 
-import { bakeGlyphDebugArtifact } from './artifact.js';
-import { GLYPH_DEBUG_KIND, glyphDebugDescriptor, type GlyphDebugOptions } from './contract.js';
+import { bakeGlyphExampleArtifact } from './artifact.js';
+import { GLYPH_EXAMPLE_KIND, glyphExampleDescriptor, type GlyphExampleOptions } from './contract.js';
 
-const runtimeBaker: RuntimeRasterBakerModule<typeof GLYPH_DEBUG_KIND, GlyphDebugOptions | undefined> = {
-  kind: GLYPH_DEBUG_KIND,
+const runtimeBaker: RuntimeRasterBakerModule<typeof GLYPH_EXAMPLE_KIND, GlyphExampleOptions | undefined> = {
+  kind: GLYPH_EXAMPLE_KIND,
   async bake(request) {
-    return bakeGlyphDebugArtifact({
+    return bakeGlyphExampleArtifact({
       font: {
         source: request.source,
         fontFaceIndex: request.fontFaceIndex,
@@ -15,7 +15,7 @@ const runtimeBaker: RuntimeRasterBakerModule<typeof GLYPH_DEBUG_KIND, GlyphDebug
       },
       rasterKey: request.rasterKey as RasterKey,
       packaging: { artifact: 'embedded', pages: 'embedded' },
-      descriptor: glyphDebugDescriptor(request.options),
+      descriptor: glyphExampleDescriptor(request.options),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
       ...(request.onProgress === undefined ? {} : { onProgress: request.onProgress }),
     });

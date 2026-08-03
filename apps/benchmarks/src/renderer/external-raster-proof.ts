@@ -1,5 +1,5 @@
 import { Text } from '@pmndrs/text';
-import { glyphDebug } from '@pmndrs/text-glyph-debug-raster';
+import { glyphExample } from '@pmndrs/text-glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
@@ -102,7 +102,7 @@ async function createResources(
     text = new Text({
       text: INITIAL_TEXT,
       font,
-      raster: glyphDebug({ paletteSeed: 17, inset: 0.1 }),
+      raster: glyphExample({ paletteSeed: 17, inset: 0.1 }),
       fontSize: 48,
       color: 0xffffff,
     });

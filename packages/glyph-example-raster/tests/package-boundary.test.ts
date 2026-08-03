@@ -31,7 +31,7 @@ describe('package boundary', () => {
     const sources = await Promise.all(
       entries.filter((entry) => entry.endsWith('.ts')).map((entry) => readFile(join(core, entry), 'utf8')),
     );
-    expect(sources.join('\n')).not.toContain('glyphDebug');
-    expect(sources.join('\n')).not.toContain('PMNDRS_text_glyph_debug');
+    expect(sources.join('\n')).not.toContain('glyphExample');
+    expect(sources.join('\n')).not.toContain('PMNDRS_text_glyph_example');
   });
 });
