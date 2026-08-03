@@ -32,10 +32,13 @@ describe('paragraph stress presentation motion', () => {
 
   it('updates caller-owned state and keeps scalar scroll output aligned with the complete frame', () => {
     const reusable = { fontSize: -1, layoutWidthPercent: -1, scrollProgress: -1 };
+    const identity = reusable;
     const result = setParagraphStressMotionFrame(reusable, 5_500, 50, 24);
 
     expect(result).toBeUndefined();
     expect(reusable).toEqual(paragraphStressMotionFrame(5_500, 50, 24));
     expect(paragraphStressScrollProgress(5_500, 50)).toBe(reusable.scrollProgress);
+    setParagraphStressMotionFrame(reusable, 6_000, 50, 24);
+    expect(reusable).toBe(identity);
   });
 });

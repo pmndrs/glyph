@@ -1,27 +1,45 @@
-import {
-  FontRegistry,
-  Text,
-  type AnyRasterInput,
-  type ParagraphLayout,
-  type RegisteredFont,
-  type TextSpan,
-} from '@pmndrs/text';
+import { FontRegistry, Text, type AnyRasterInput, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 
-import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures';
-import { benchmarkIpsumText, ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fixtures';
+import { ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fixtures';
 import { paragraphStressScrollProgress } from '../benchmark/paragraph-stress-motion';
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state';
+import {
+  comparisonWorkloadDefinition,
+  comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
+  comparisonWorkloadUpdateKind as registryUpdateKind,
+} from '../workloads/registry';
+import { DYNAMIC_LAYOUT_TEXT, createDynamicLayoutEntries, dynamicLayoutWidths } from '../workloads/dynamic-layout';
+import { ICON_GRID_ITEMS, createIconGridEntries, iconGridContent, iconGridLabel } from '../workloads/icon-grid';
+import { OFF_AXIS_HORIZONTAL_BIAS_RATIO, createOffAxis3dEntries, offAxisColorAt } from '../workloads/off-axis-3d';
+import { PAINT_EFFECTS_TEXT, createPaintEffectsEntries, updatePaintSpans } from '../workloads/paint-effects';
+import { createParagraphStressEntries } from '../workloads/paragraph-stress';
+import {
+  LADDER_GAP_CSS_PX,
+  LADDER_INSET_CSS_PX,
+  createTextLadderEntries,
+  setTextLadderScenePosition,
+} from '../workloads/text-ladder';
+import type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
+import {
+  ZOOM_TEXT_BASE_CSS_PX,
+  ZOOM_TEXT_PHRASES,
+  createZoomTextEntries,
+  updateZoomTextAnimationState,
+  zoomTextMaximumScale,
+} from '../workloads/zoom-text';
+import type { ZoomTextAnimationState } from '../workloads/zoom-text';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from '../workloads/contracts';
+import type { ComparisonWorkloadEntry } from '../workloads/factory-contracts';
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
 import { createCanvasSurface } from './canvas-surface';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry, type LiveFrameTelemetrySnapshot } from './live-frame-telemetry';
 import { createTextUpdateTelemetry } from './text-update-telemetry';
 import type { FontDeliveryMetrics } from './font-delivery';
-import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './live-text-style';
-import { createOklabColorCycle } from './oklab-color-cycle';
+import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from './live-text-style';
 import {
   loadMtsdfFont,
   registeredMtsdfConfiguration,
@@ -44,14 +62,25 @@ import type {
 import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { createRetainedFontFixtureController, type RetainedFontFixtureController } from './retained-font-fixture';
 
-export type ComparisonWorkloadId =
-  | 'text-ladder'
-  | 'zoom-text'
-  | 'icon-grid'
-  | 'off-axis-3d'
-  | 'dynamic-layout'
-  | 'paragraph-stress'
-  | 'paint-effects';
+type WorkloadEntry = ComparisonWorkloadEntry;
+
+export type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from '../workloads/contracts';
+export type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
+export {
+  dynamicLayoutWidths,
+  ladderCssSizes,
+  OFF_AXIS_SPANS,
+  OFF_AXIS_TEXT,
+  paintWordHue,
+  setTextLadderScenePosition,
+  shuffleZoomTextPhrases,
+  textLadderScenePosition,
+  ZOOM_TEXT_BASE_CSS_PX,
+  ZOOM_TEXT_CORPUS,
+  ZOOM_TEXT_PHRASES,
+  zoomTextAnimationState,
+  zoomTextMaximumScale,
+} from '../workloads/index';
 
 export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats) & {
   readonly configurationRevision: number;
@@ -104,25 +133,6 @@ export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats 
   readonly zoomMaximumScale: number;
 };
 
-export interface ComparisonWorkloadConfiguration {
-  readonly amount: number;
-  readonly animationEnabled: boolean;
-  readonly animationSpeed: number;
-  readonly fontSize: number;
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly iconGridView?: IconGridView;
-  readonly layoutWidthRatio: number;
-  readonly paintOpacity: number;
-  readonly paintShadowEnabled: boolean;
-  readonly paintStrokeWidth: number;
-  readonly showGrid: boolean;
-  readonly showLayoutBounds: boolean;
-  readonly textLadderExitEnabled: boolean;
-  readonly workload: ComparisonWorkloadId;
-}
-
-export type IconGridView = 'alternate' | 'origin';
-
 export interface ComparisonWorkloadPreview {
   resize(width: number, height: number): void;
   panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;
@@ -173,50 +183,6 @@ export interface ComparisonWorkloadPersistentScene extends PersistentRenderScene
   update(configuration: ComparisonWorkloadConfiguration): Promise<void>;
 }
 
-interface WorkloadEntry {
-  readonly node: THREE.Object3D;
-  sourceText: string;
-  readonly text: Text;
-  readonly labelText?: Text;
-  readonly bounds?: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>;
-  readonly role: 'primary' | 'secondary';
-  virtualIconIndex?: number;
-  disposed?: boolean;
-  readonly alignment?: 'start' | 'center' | 'end';
-  readonly animationPhase?: number;
-  lastPaintFrame?: number;
-  paintPhase?: number;
-  paintRevision?: number;
-  lastPaintUpdateMs?: number;
-  paintOutlineWidth?: number;
-  paintShadowOffset?: readonly [number, number];
-  readonly paintSpans?: MutablePaintSpan[];
-  readonly paintUpdate?: { text: string; spans: readonly TextSpan[] };
-  readonly offAxisSpans?: MutablePaintSpan[];
-  readonly offAxisPaintUpdate?: { text: string; spans: readonly TextSpan[] };
-  lastWidth?: number;
-  readonly widthUpdate?: { width: number };
-  zoomLanguage?: string;
-  zoomOpacity?: number;
-  readonly zoomOpacityUpdate?: { opacity: number };
-  zoomMaximumScale?: number;
-  zoomPhraseIndex?: number;
-}
-
-interface MutablePaintSpan {
-  color: number;
-  readonly end: number;
-  outline?: { color: number; width: number };
-  shadow?: { color: number; offset: readonly [number, number] };
-  readonly start: number;
-}
-
-interface ZoomTextAnimationState {
-  phraseIndex: number;
-  phraseRevision: number;
-  progress: number;
-}
-
 interface MutableVisibleEntryMetrics {
   drawCount: number;
   glyphCount: number;
@@ -246,11 +212,6 @@ interface MutableLoadedFontMetrics {
   sourceFontBytes: number;
 }
 
-export interface MutableTextLadderScenePosition {
-  x: number;
-  y: number;
-}
-
 interface LoadedTechniqueFont {
   readonly artifactBytes: number;
   readonly atlasGpuBytes: number;
@@ -273,74 +234,6 @@ interface PendingConfigurationUpdate {
   }>;
 }
 
-const LADDER_CSS_SIZES = [8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512, 1024] as const;
-const LADDER_SENTENCE = 'The quick brown fox jumps over the lazy dog.';
-const LADDER_GAP_CSS_PX = 10;
-const LADDER_INSET_CSS_PX = 20;
-export const ZOOM_TEXT_BASE_CSS_PX = 8 * (96 / 72);
-const ZOOM_TEXT_INSET_CSS_PX = 24;
-const ZOOM_TEXT_CYCLES_PER_MS = 1 / 3_500;
-const OFF_AXIS_HORIZONTAL_BIAS_RATIO = 0.075;
-export const OFF_AXIS_TEXT =
-  'Render shaped text directly in your canvas, without the DOM. It reflows at runtime and uses the scene camera and depth. Bitmap, MSDF, Slug.';
-const OFF_AXIS_WORD_COLORS = [
-  { color: 0xa855f7, word: 'shaped' },
-  { color: 0x22d3ee, word: 'canvas' },
-  { color: 0x34d399, word: 'reflows' },
-  { color: 0xf59e0b, word: 'Bitmap' },
-  { color: 0xfb7185, word: 'MSDF' },
-  { color: 0xff4dc4, word: 'Slug' },
-] as const;
-export const OFF_AXIS_SPANS: readonly MutablePaintSpan[] = OFF_AXIS_WORD_COLORS.map(({ color, word }) => {
-  const start = OFF_AXIS_TEXT.indexOf(word);
-  if (start === -1) throw new Error(`off-axis callout is missing its ${word} color span`);
-  return { color, end: start + word.length, start };
-});
-const offAxisColorAt = createOklabColorCycle(OFF_AXIS_WORD_COLORS.map(({ color }) => color));
-export const ZOOM_TEXT_CORPUS = [
-  { language: 'en', text: 'Shape' },
-  { language: 'fr', text: 'Forme' },
-  { language: 'es', text: 'Figura' },
-  { language: 'de', text: 'Form' },
-  { language: 'pt', text: 'Formato' },
-  { language: 'pl', text: 'Kształt' },
-  { language: 'tr', text: 'Şekil' },
-  { language: 'el', text: 'Σχήμα' },
-  { language: 'ru', text: 'Форма' },
-  { language: 'uk', text: 'Обрис' },
-  { language: 'vi', text: 'Hình dạng' },
-  { language: 'is', text: 'Lögun' },
-  { language: 'ro', text: 'Formă' },
-  { language: 'cy', text: 'Siâp' },
-  { language: 'sr', text: 'Облик' },
-  { language: 'kk', text: 'Пішін' },
-] as const;
-
-export type ZoomTextPhrase = (typeof ZOOM_TEXT_CORPUS)[number];
-
-export function shuffleZoomTextPhrases(
-  phrases: readonly ZoomTextPhrase[],
-  random: () => number = Math.random,
-): readonly ZoomTextPhrase[] {
-  const shuffled = [...phrases];
-  if (shuffled.length < 3) return shuffled;
-  for (let index = shuffled.length - 1; index > 1; index -= 1) {
-    const sample = random();
-    if (!Number.isFinite(sample) || sample < 0 || sample >= 1) {
-      throw new RangeError('zoom text shuffle source must return a value in [0, 1)');
-    }
-    const swapIndex = 1 + Math.floor(sample * index);
-    const current = shuffled[index];
-    shuffled[index] = shuffled[swapIndex] as ZoomTextPhrase;
-    shuffled[swapIndex] = current as ZoomTextPhrase;
-  }
-  if (shuffled.every((phrase, index) => phrase === phrases[index])) {
-    [shuffled[1], shuffled[2]] = [shuffled[2] as ZoomTextPhrase, shuffled[1] as ZoomTextPhrase];
-  }
-  return shuffled;
-}
-
-export const ZOOM_TEXT_PHRASES = shuffleZoomTextPhrases(ZOOM_TEXT_CORPUS);
 const ICON_GRID_LABEL_SIZE = 11;
 const ICON_GRID_LABEL_WIDTH = 112;
 const ICON_GRID_INSET = 24;
@@ -357,22 +250,6 @@ const ICON_GRID_MAX_FRAME_DELTA_MULTIPLIER = 2;
 const ICON_GRID_FONT_UNITS_PER_EM = 512;
 const ICON_GRID_MAX_ADVANCE = 640;
 const ICON_GRID_MAX_ADVANCE_EM = ICON_GRID_MAX_ADVANCE / ICON_GRID_FONT_UNITS_PER_EM;
-const ICON_GRID_ITEMS = fontAwesomeIcons.icons;
-const ICON_GRID_CONTENT = ICON_GRID_ITEMS.map((icon) => {
-  const glyph = String.fromCodePoint(icon.codePoint);
-  return { content: `${glyph}\n${icon.name}`, glyph, label: icon.name };
-});
-const PAINT_EFFECTS_TEXT =
-  'Color begins as light, then the human eye turns wavelength into sensation. Our cones negotiate red, green, and blue while the brain invents every violet, amber, and electric cyan between them. Here each word carries its own chromatic phase, flowing through a continuous spectrum while opacity and contour remain live.';
-const PAINT_WORD_RANGES = Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match) => ({
-  start: match.index,
-  end: match.index + match[0].length,
-}));
-const DYNAMIC_LAYOUT_TEXT = [
-  'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Left-aligned lines narrow and open while every word reshapes into its changing measure.',
-  'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. This centered paragraph breathes independently while preserving its typographic rhythm.',
-  'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris. Right-aligned lines reflow on their own cadence and remain anchored to the far edge.',
-] as const;
 
 interface ComparisonWorkloadRuntime extends ComparisonWorkloadPreview {
   persistentFrame(context: PersistentRenderFrameContext): void;
@@ -858,14 +735,14 @@ async function createComparisonWorkloadRuntime(
     async function resizeIconPool(poolCapacity: number, iconSize: number, layout: IconGridLayout): Promise<void> {
       if (iconFont === undefined) throw new Error('icon grid lost its icon font fixture');
       if (poolCapacity > entries.length) {
-        const additions = createIconGridEntries(
-          activeFont().font,
-          activeFont().raster,
+        const additions = createIconGridEntries({
+          count: poolCapacity - entries.length,
+          dpr: rendererViewport.pixelRatio,
           iconFont,
-          rendererViewport.pixelRatio,
           iconSize,
-          poolCapacity - entries.length,
-        );
+          labelFont: activeFont().font,
+          labelRaster: activeFont().raster,
+        });
         try {
           await Promise.all(additions.flatMap(entryReadyPromises));
         } catch (error) {
@@ -1496,228 +1373,46 @@ function createEntries(
   iconScrollX = 0,
   iconScrollY = 0,
 ): readonly WorkloadEntry[] {
-  const base = {
-    font,
-    raster,
-    rasterPixelRatio: dpr,
-    lineHeight: LIVE_TEXT_LINE_HEIGHT,
-  };
-  if (configuration.workload === 'text-ladder') {
-    const specimen = textLadderSpecimen ?? {
-      text: LADDER_SENTENCE,
-      language: 'en',
-      direction: 'ltr',
-    };
-    return ladderCssSizes(viewportHeight).map((cssSize) => {
-      const content = textLadderSpecimen === undefined ? `${cssSize} px  ${specimen.text}` : specimen.text;
-      const text = new Text({
-        ...base,
-        text: content,
-        fontSize: cssSize,
-        language: specimen.language,
-        direction: specimen.direction,
-        color: LIVE_TEXT_COLOR,
+  switch (configuration.workload) {
+    case 'text-ladder':
+      return createTextLadderEntries({
+        dpr,
+        font,
+        raster,
+        ...(textLadderSpecimen === undefined ? {} : { specimen: textLadderSpecimen }),
+        viewportHeight,
       });
-      return textEntry('primary', text, content);
-    });
-  }
-  if (configuration.workload === 'zoom-text') {
-    return ZOOM_TEXT_PHRASES.map((phrase, zoomPhraseIndex) => {
-      const opacity = zoomPhraseIndex === 0 ? 1 : 0;
-      const text = new Text({
-        ...base,
-        text: phrase.text,
-        fontSize: ZOOM_TEXT_BASE_CSS_PX,
-        language: phrase.language,
-        direction: 'ltr',
-        color: LIVE_TEXT_COLOR,
-        opacity,
+    case 'zoom-text':
+      return createZoomTextEntries({ dpr, font, raster });
+    case 'icon-grid': {
+      if (iconFont === undefined) throw new Error('icon grid requires its icon font fixture');
+      const window = iconGridVirtualWindow(
+        ICON_GRID_ITEMS.length,
+        configuration.fontSize,
+        viewportWidth,
+        viewportHeight,
+        iconScrollX,
+        iconScrollY,
+      );
+      return createIconGridEntries({
+        count: window.poolCapacity,
+        dpr,
+        iconFont,
+        iconSize: configuration.fontSize,
+        indices: window.indices,
+        labelFont: font,
+        labelRaster: raster,
       });
-      const node = new THREE.Group();
-      node.add(text);
-      node.visible = zoomPhraseIndex === 0;
-      const entry: WorkloadEntry = {
-        ...textEntry('primary', text, phrase.text),
-        node,
-        zoomOpacity: opacity,
-        zoomOpacityUpdate: { opacity },
-        zoomLanguage: phrase.language,
-        zoomMaximumScale: 1,
-        zoomPhraseIndex,
-      };
-      return entry;
-    });
+    }
+    case 'paint-effects':
+      return createPaintEffectsEntries({ ...configuration, dpr, font, raster, technique, viewportWidth });
+    case 'dynamic-layout':
+      return createDynamicLayoutEntries({ ...configuration, animationElapsedMs, dpr, font, raster, viewportWidth });
+    case 'off-axis-3d':
+      return createOffAxis3dEntries({ ...configuration, dpr, font, raster, viewportWidth });
+    case 'paragraph-stress':
+      return createParagraphStressEntries({ ...configuration, dpr, font, raster, viewportWidth });
   }
-  if (configuration.workload === 'icon-grid') {
-    if (iconFont === undefined) throw new Error('icon grid requires its icon font fixture');
-    const window = iconGridVirtualWindow(
-      ICON_GRID_ITEMS.length,
-      configuration.fontSize,
-      viewportWidth,
-      viewportHeight,
-      iconScrollX,
-      iconScrollY,
-    );
-    return createIconGridEntries(
-      font,
-      raster,
-      iconFont,
-      dpr,
-      configuration.fontSize,
-      window.poolCapacity,
-      window.indices,
-    );
-  }
-  if (configuration.workload === 'paint-effects') {
-    const maximumOutlineWidth = configuration.fontSize / 16;
-    const paintOutlineWidth = technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined;
-    const paintShadowOffset =
-      technique === 'mtsdf' && configuration.paintShadowEnabled
-        ? ([Math.max(3, configuration.fontSize / 10), Math.max(3, configuration.fontSize / 10)] as const)
-        : undefined;
-    const spans = createPaintSpans(0, configuration.amount, paintOutlineWidth, paintShadowOffset);
-    const paintUpdate = { text: PAINT_EFFECTS_TEXT, spans };
-    const text = new Text({
-      ...base,
-      text: PAINT_EFFECTS_TEXT,
-      spans,
-      fontSize: configuration.fontSize,
-      opacity: configuration.paintOpacity,
-      width: benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio),
-      wrap: 'word',
-    });
-    return [
-      {
-        ...textEntry('primary', text, PAINT_EFFECTS_TEXT),
-        paintSpans: spans,
-        paintUpdate,
-        ...(paintOutlineWidth === undefined ? {} : { paintOutlineWidth }),
-        ...(paintShadowOffset === undefined ? {} : { paintShadowOffset }),
-      },
-    ];
-  }
-  if (configuration.workload === 'dynamic-layout') {
-    const initialWidths = dynamicLayoutWidths(configuration, viewportWidth, animationElapsedMs);
-    return DYNAMIC_LAYOUT_TEXT.map((content, index) => {
-      const alignment = (['start', 'center', 'end'] as const)[index]!;
-      const animationPhase = index * ((Math.PI * 2) / 3);
-      const initialWidth = initialWidths[index]!;
-      const text = new Text({
-        ...base,
-        text: content,
-        fontSize: configuration.fontSize,
-        color: LIVE_TEXT_COLOR,
-        width: initialWidth,
-        wrap: 'word',
-        textAlign: alignment,
-      });
-      const bounds = createLayoutBounds();
-      bounds.visible = configuration.showLayoutBounds;
-      const node = new THREE.Group();
-      node.add(bounds, text);
-      return {
-        ...textEntry(index === 0 ? 'primary' : 'secondary', text, content),
-        node,
-        bounds,
-        alignment,
-        animationPhase,
-        lastWidth: initialWidth,
-        widthUpdate: { width: initialWidth },
-      };
-    });
-  }
-  const text =
-    configuration.workload === 'paragraph-stress'
-      ? Array.from({ length: Math.max(2, Math.round(configuration.amount / 10)) }, () => benchmarkIpsumText()).join(
-          '\n',
-        )
-      : configuration.workload === 'off-axis-3d'
-        ? OFF_AXIS_TEXT
-        : benchmarkIpsumText();
-  const contentWidth = comparisonWorkloadContentWidth(configuration, viewportWidth);
-  if (contentWidth === undefined) throw new Error(`${configuration.workload} requires a content width`);
-  const offAxisSpans =
-    configuration.workload === 'off-axis-3d' ? OFF_AXIS_SPANS.map((span) => ({ ...span })) : undefined;
-  const textObject = new Text({
-    ...base,
-    text,
-    ...(offAxisSpans === undefined ? {} : { spans: offAxisSpans }),
-    fontSize: configuration.fontSize,
-    color: LIVE_TEXT_COLOR,
-    width: contentWidth,
-    wrap: 'word',
-    ...(configuration.workload === 'off-axis-3d' ? { textAlign: 'center' as const } : {}),
-  });
-  if (configuration.workload === 'off-axis-3d') {
-    const pivot = new THREE.Group();
-    pivot.add(textObject);
-    if (offAxisSpans === undefined) throw new Error('off-axis text requires retained color spans');
-    return [
-      {
-        node: pivot,
-        role: 'primary',
-        sourceText: text,
-        text: textObject,
-        offAxisSpans,
-        offAxisPaintUpdate: { text, spans: offAxisSpans },
-      },
-    ];
-  }
-  return [textEntry('primary', textObject, text)];
-}
-
-function textEntry(role: WorkloadEntry['role'], text: Text, sourceText: string): WorkloadEntry {
-  return { node: text, role, sourceText, text };
-}
-
-function createIconGridEntries(
-  labelFont: RegisteredFont,
-  labelRaster: AnyRasterInput,
-  iconFont: LoadedTechniqueFont,
-  dpr: number,
-  iconSize: number,
-  count: number,
-  indices: readonly number[] = [],
-): readonly WorkloadEntry[] {
-  return Array.from({ length: count }, (_, poolIndex) => {
-    const assignedIndex = indices[poolIndex];
-    const iconIndex = assignedIndex ?? 0;
-    const { content, glyph } = iconGridContent(iconIndex);
-    const text = new Text({
-      font: iconFont.font,
-      raster: iconFont.raster,
-      rasterPixelRatio: dpr,
-      text: glyph,
-      fontSize: iconSize,
-      color: LIVE_TEXT_COLOR,
-    });
-    const labelText = new Text({
-      font: labelFont,
-      raster: labelRaster,
-      rasterPixelRatio: dpr,
-      text: iconGridLabel(iconIndex),
-      fontSize: ICON_GRID_LABEL_SIZE,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
-      color: LIVE_TEXT_COLOR,
-      width: ICON_GRID_LABEL_WIDTH,
-      maxLines: 2,
-      overflow: 'ellipsis',
-      wrap: 'none',
-      textAlign: 'center',
-    });
-    const node = new THREE.Group();
-    node.add(text, labelText);
-    const entry: WorkloadEntry = {
-      node,
-      role: 'primary',
-      sourceText: content,
-      text,
-      labelText,
-    };
-    if (assignedIndex === undefined) node.visible = false;
-    else entry.virtualIconIndex = assignedIndex;
-    return entry;
-  });
 }
 
 function entryReadyPromises(entry: WorkloadEntry): readonly Promise<void>[] {
@@ -1859,71 +1554,6 @@ function animateTextLadderScene(
   scene.position.set(positionScratch.x, positionScratch.y, 0);
 }
 
-export function textLadderScenePosition({
-  animationSpeed,
-  elapsedMs,
-  exitEnabled,
-  finalCenterY,
-  finalEntryWidth,
-  finalEntryX,
-  viewportHeight,
-  viewportWidth,
-}: {
-  readonly animationSpeed: number;
-  readonly elapsedMs: number;
-  readonly exitEnabled: boolean;
-  readonly finalCenterY: number;
-  readonly finalEntryWidth: number;
-  readonly finalEntryX: number;
-  readonly viewportHeight: number;
-  readonly viewportWidth: number;
-}): Readonly<{ x: number; y: number }> {
-  const position: MutableTextLadderScenePosition = { x: 0, y: 0 };
-  setTextLadderScenePosition(position, {
-    animationSpeed,
-    elapsedMs,
-    exitEnabled,
-    finalCenterY,
-    finalEntryWidth,
-    finalEntryX,
-    viewportHeight,
-    viewportWidth,
-  });
-  return position;
-}
-
-/** Updates caller-owned scene-position storage for the text-ladder render loop. */
-export function setTextLadderScenePosition(
-  position: MutableTextLadderScenePosition,
-  {
-    animationSpeed,
-    elapsedMs,
-    exitEnabled,
-    finalCenterY,
-    finalEntryWidth,
-    finalEntryX,
-    viewportHeight,
-    viewportWidth,
-  }: {
-    readonly animationSpeed: number;
-    readonly elapsedMs: number;
-    readonly exitEnabled: boolean;
-    readonly finalCenterY: number;
-    readonly finalEntryWidth: number;
-    readonly finalEntryX: number;
-    readonly viewportHeight: number;
-    readonly viewportWidth: number;
-  },
-): void {
-  const cycle = modulo((elapsedMs / 9_000) * animationRate({ animationSpeed }), 1);
-  const scrollProgress = smoothstep(Math.min(1, cycle / 0.52));
-  const marqueeProgress = exitEnabled ? smoothstep(Math.max(0, Math.min(1, (cycle - 0.52) / 0.38))) : 0;
-  const centeredScrollY = -viewportHeight / 2 - finalCenterY;
-  const offscreenLeftX = -finalEntryX - finalEntryWidth - viewportWidth * 0.05;
-  position.x = marqueeProgress === 0 ? 0 : offscreenLeftX * marqueeProgress;
-  position.y = centeredScrollY * scrollProgress;
-}
-
 function animateParagraphStressScene(
   scene: THREE.Scene,
   entries: readonly WorkloadEntry[],
@@ -1937,67 +1567,6 @@ function animateParagraphStressScene(
   const scrollProgress = paragraphStressScrollProgress(elapsedMs, configuration.animationSpeed);
   const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
   scene.position.y = maximumScrollY * scrollProgress;
-}
-
-export function zoomTextMaximumScale(
-  layoutWidth: number,
-  layoutHeight: number,
-  viewportWidth: number,
-  viewportHeight: number,
-): number {
-  positive(layoutWidth, 'zoom text layout width');
-  positive(layoutHeight, 'zoom text layout height');
-  positive(viewportWidth, 'zoom text viewport width');
-  positive(viewportHeight, 'zoom text viewport height');
-  const availableWidth = Math.max(1, viewportWidth - ZOOM_TEXT_INSET_CSS_PX * 2);
-  const availableHeight = Math.max(1, viewportHeight - ZOOM_TEXT_INSET_CSS_PX * 2);
-  return Math.max(1, Math.min(availableWidth / layoutWidth, availableHeight / layoutHeight));
-}
-
-export function zoomTextAnimationState(
-  elapsedMs: number,
-  animationSpeed: number,
-  phraseCount: number = ZOOM_TEXT_PHRASES.length,
-): Readonly<ZoomTextAnimationState> {
-  const state: ZoomTextAnimationState = { phraseIndex: 0, phraseRevision: 0, progress: 0 };
-  updateZoomTextAnimationState(state, elapsedMs, animationSpeed, phraseCount);
-  return state;
-}
-
-function updateZoomTextAnimationState(
-  state: ZoomTextAnimationState,
-  elapsedMs: number,
-  animationSpeed: number,
-  phraseCount: number,
-): void {
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) throw new RangeError('zoom text elapsed time must be nonnegative');
-  if (!Number.isSafeInteger(phraseCount) || phraseCount <= 0) {
-    throw new RangeError('zoom text phrase count must be a positive safe integer');
-  }
-  if (!Number.isFinite(animationSpeed) || animationSpeed < 0 || animationSpeed > 100) {
-    throw new RangeError('zoom text animation speed must be in [0, 100]');
-  }
-  const cycle = elapsedMs * ZOOM_TEXT_CYCLES_PER_MS * animationRate({ animationSpeed });
-  const phraseRevision = Math.floor(cycle);
-  const phase = cycle - phraseRevision;
-  state.phraseIndex = phraseRevision % phraseCount;
-  state.phraseRevision = phraseRevision;
-  state.progress = phase;
-}
-
-function iconGridContent(iconIndex: number): {
-  readonly content: string;
-  readonly glyph: string;
-} {
-  const content = ICON_GRID_CONTENT[iconIndex];
-  if (content === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`);
-  return content;
-}
-
-function iconGridLabel(iconIndex: number): string {
-  const content = ICON_GRID_CONTENT[iconIndex];
-  if (content === undefined) throw new RangeError(`Unknown Font Awesome icon index: ${iconIndex}`);
-  return content.label;
 }
 
 function animateEntries(
@@ -2144,16 +1713,14 @@ export function comparisonWorkloadUpdateKind(
   next: ComparisonWorkloadConfiguration,
   _contentWidthChanged = false,
 ): 'rebuild' | 'retained' {
-  if (previous.workload !== next.workload) return 'rebuild';
-  const paragraphVolumeChanged = next.workload === 'paragraph-stress' && previous.amount !== next.amount;
-  return paragraphVolumeChanged ? 'rebuild' : 'retained';
+  return registryUpdateKind(previous, next);
 }
 
 export function comparisonWorkloadRequiresIconWindowSuspension(
   previous: ComparisonWorkloadConfiguration,
   next: ComparisonWorkloadConfiguration,
 ): boolean {
-  return previous.workload === 'icon-grid' || next.workload === 'icon-grid';
+  return registryRequiresIconWindowSuspension(previous, next);
 }
 
 interface RetainedWidthText {
@@ -2217,18 +1784,13 @@ export function comparisonWorkloadContentWidth(
   configuration: Pick<ComparisonWorkloadConfiguration, 'layoutWidthRatio' | 'workload'>,
   viewportWidth: number,
 ): number | undefined {
-  if (
-    configuration.workload === 'text-ladder' ||
-    configuration.workload === 'zoom-text' ||
-    configuration.workload === 'icon-grid'
-  ) {
-    return undefined;
-  }
+  const policy = comparisonWorkloadDefinition(configuration.workload).contentWidth;
+  if (policy === 'none') return undefined;
   return benchmarkContentWidth(
     viewportWidth,
     configuration.layoutWidthRatio,
-    configuration.workload === 'dynamic-layout' ? 1_000 : undefined,
-    configuration.workload === 'off-axis-3d' ? 2 : 1,
+    policy.maximumWidth,
+    policy.multiplier ?? 1,
   );
 }
 
@@ -2266,24 +1828,6 @@ function animateDynamicLayout(
   }
 }
 
-export function dynamicLayoutWidths(
-  configuration: Pick<ComparisonWorkloadConfiguration, 'amount' | 'animationSpeed' | 'layoutWidthRatio'>,
-  viewportWidth: number,
-  animationElapsedMs: number,
-  target: Float64Array = new Float64Array(DYNAMIC_LAYOUT_TEXT.length),
-): Float64Array {
-  const phase = animationElapsedMs * 0.00045 * animationRate(configuration);
-  const amplitude = 0.08 + (configuration.amount / 100) * 0.28;
-  const baseWidth = benchmarkContentWidth(viewportWidth, configuration.layoutWidthRatio, 1_000);
-  if (target.length !== DYNAMIC_LAYOUT_TEXT.length) {
-    throw new RangeError(`dynamic layout width target must contain ${String(DYNAMIC_LAYOUT_TEXT.length)} values`);
-  }
-  for (let index = 0; index < DYNAMIC_LAYOUT_TEXT.length; index += 1) {
-    target[index] = Math.max(160, baseWidth * (0.72 + Math.sin(phase + index * ((Math.PI * 2) / 3)) * amplitude));
-  }
-  return target;
-}
-
 function layoutDynamicEntries(entries: readonly WorkloadEntry[], viewportWidth: number, viewportHeight: number): void {
   const inset = 20;
   const laneHeight = viewportHeight / Math.max(1, entries.length);
@@ -2299,19 +1843,6 @@ function layoutDynamicEntries(entries: readonly WorkloadEntry[], viewportWidth: 
     entry.text.position.set(x, -y, 0);
     if (entry.bounds !== undefined) updateLayoutBounds(entry.bounds, x, y, layout.width, layout.height);
   }
-}
-
-function createLayoutBounds(): THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial> {
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3));
-  const material = new THREE.LineBasicNodeMaterial({
-    color: 0xb6bac3,
-    depthTest: false,
-    depthWrite: false,
-    opacity: 0.55,
-    transparent: true,
-  });
-  return new THREE.LineSegments(geometry, material);
 }
 
 function updateLayoutBounds(
@@ -2359,83 +1890,12 @@ function updateLayoutBounds(
   bounds.geometry.computeBoundingSphere();
 }
 
-function createPaintSpans(
-  phase: number,
-  amount: number,
-  outlineWidth?: number,
-  shadowOffset?: readonly [number, number],
-): MutablePaintSpan[] {
-  const spans = PAINT_WORD_RANGES.map((range) => ({ ...range, color: 0 }));
-  updatePaintSpans(spans, phase, amount, outlineWidth, shadowOffset);
-  return spans;
-}
-
-function updatePaintSpans(
-  spans: MutablePaintSpan[],
-  phase: number,
-  amount: number,
-  outlineWidth?: number,
-  shadowOffset?: readonly [number, number],
-): void {
-  for (let index = 0; index < spans.length; index += 1) {
-    const span = spans[index]!;
-    const hue = paintWordHue(index, PAINT_WORD_RANGES.length, phase, amount);
-    span.color = hslColor(hue, 0.88, 0.53);
-    if (outlineWidth === undefined || outlineWidth === 0) {
-      delete span.outline;
-    } else if (span.outline === undefined) {
-      span.outline = { color: 0xffffff, width: outlineWidth };
-    } else {
-      span.outline.width = outlineWidth;
-    }
-    if (shadowOffset === undefined) {
-      delete span.shadow;
-    } else if (span.shadow === undefined) {
-      span.shadow = { color: hslColor(hue, 0.68, 0.28), offset: shadowOffset };
-    } else {
-      span.shadow.color = hslColor(hue, 0.68, 0.28);
-      span.shadow.offset = shadowOffset;
-    }
-  }
-}
-
-export function paintWordHue(wordIndex: number, wordCount: number, phase: number, amount: number): number {
-  if (!Number.isSafeInteger(wordIndex) || wordIndex < 0 || wordIndex >= wordCount) {
-    throw new RangeError('paint word index must address the word sequence');
-  }
-  if (!Number.isSafeInteger(wordCount) || wordCount <= 0) {
-    throw new RangeError('paint word count must be a positive safe integer');
-  }
-  const cycles = 0.5 + (amount / 100) * 1.5;
-  const hue = phase + (wordIndex / wordCount) * cycles;
-  return ((hue % 1) + 1) % 1;
-}
-
-function hslColor(hue: number, saturation: number, lightness: number): number {
-  const channel = (offset: number): number => {
-    const value = (offset + hue * 12) % 12;
-    return (
-      lightness - saturation * Math.min(lightness, 1 - lightness) * Math.max(-1, Math.min(value - 3, 9 - value, 1))
-    );
-  };
-  return (Math.round(channel(0) * 255) << 16) | (Math.round(channel(8) * 255) << 8) | Math.round(channel(4) * 255);
-}
-
 function animationRate(configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>): number {
   return 0.25 + configuration.animationSpeed * 0.0175;
 }
 
 function smoothstep(value: number): number {
   return value * value * (3 - 2 * value);
-}
-
-function modulo(value: number, divisor: number): number {
-  return ((value % divisor) + divisor) % divisor;
-}
-
-export function ladderCssSizes(viewportHeight: number): readonly number[] {
-  positive(viewportHeight, 'text ladder viewport height');
-  return LADDER_CSS_SIZES;
 }
 
 export interface IconGridLayout {
@@ -3138,7 +2598,7 @@ function createWorkloadCamera(
   width: number,
   height: number,
 ): THREE.OrthographicCamera | THREE.PerspectiveCamera {
-  if (workload === 'off-axis-3d') {
+  if (comparisonWorkloadDefinition(workload).cameraKind === 'perspective') {
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 4_000);
     resizeWorkloadCamera(camera, width, height);
     return camera;

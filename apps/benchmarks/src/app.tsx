@@ -54,7 +54,10 @@ import {
   type PresentationPreset,
   type PresentationWorkload,
 } from './benchmark/presentation-sequence';
-import { paragraphStressMotionFrame } from './benchmark/paragraph-stress-motion';
+import {
+  setParagraphStressMotionFrame,
+  type MutableParagraphStressMotionFrame,
+} from './benchmark/paragraph-stress-motion';
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,
@@ -520,6 +523,11 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
       }
     | undefined
   >(undefined);
+  const paragraphStressMotionScratch = useRef<MutableParagraphStressMotionFrame>({
+    fontSize: 0,
+    layoutWidthPercent: 0,
+    scrollProgress: 0,
+  });
 
   const workload = workloadById(location.mode, location.workload);
   const fontFixture = location.fontFixture;
@@ -562,11 +570,9 @@ function useHarnessController(routeLayout: HarnessLayout): ReactNode {
 
   const animateParagraphStressControls = useEffectEvent((elapsedMs: number) => {
     const startFontSize = defaultRuntimeFontSizeForWorkload('paragraph-stress', location.layout);
-    const { fontSize, layoutWidthPercent } = paragraphStressMotionFrame(
-      elapsedMs,
-      presentationAnimation.animationSpeed,
-      startFontSize,
-    );
+    const frame = paragraphStressMotionScratch.current;
+    setParagraphStressMotionFrame(frame, elapsedMs, presentationAnimation.animationSpeed, startFontSize);
+    const { fontSize, layoutWidthPercent } = frame;
     const current = runtimeWorld.get(RuntimeLayoutControls);
     if (current?.fontSize === fontSize && current.layoutWidthPercent === layoutWidthPercent) return;
     runtimeWorld.set(RuntimeLayoutControls, { fontSize, layoutWidthPercent, workloadAmount: 100 });
