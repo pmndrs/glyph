@@ -1,8 +1,11 @@
 import * as THREE from 'three/webgpu';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PersistentRenderSceneContext, PersistentRenderSceneRenderer } from './persistent-render-host';
-import { createRasterTechniqueComparisonPersistentScene } from './raster-technique-compare';
+import type {
+  PersistentRenderSceneContext,
+  PersistentRenderSceneRenderer,
+} from '../../../../renderer/persistent-render-host';
+import { createRasterTechniqueComparisonPersistentScene } from './comparison-scene';
 
 const mocks = vi.hoisted(() => ({
   fontDisposals: [] as string[],
@@ -72,7 +75,7 @@ vi.mock('@pmndrs/text', async () => {
   return { Text: MockText };
 });
 
-vi.mock('./mtsdf-text', () => ({
+vi.mock('../../../../renderer/mtsdf-text', () => ({
   loadMtsdfFont: async (signal?: AbortSignal) => {
     signal?.throwIfAborted();
     return {
@@ -82,7 +85,7 @@ vi.mock('./mtsdf-text', () => ({
   },
 }));
 
-vi.mock('./slug-text', () => ({
+vi.mock('../../../../renderer/slug-text', () => ({
   loadSlugFont: async (signal?: AbortSignal) => {
     signal?.throwIfAborted();
     return {

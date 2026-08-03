@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assertSourceOutlineTransform } from './source-outline-reference';
 
-describe('source-outline transform validation', () => {
+describe('conformance source-outline transform validation', () => {
   it('accepts a finite invertible affine transform', () => {
     expect(() => assertSourceOutlineTransform({ a: 2, b: 0.5, c: -0.25, d: 3, e: 12, f: -8 })).not.toThrow();
   });

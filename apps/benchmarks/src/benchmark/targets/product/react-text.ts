@@ -6,11 +6,11 @@ import { Text as CoreText, defineFont, type ParagraphLayout } from '@pmndrs/text
 import { Text, useFont } from '@pmndrs/text/react';
 import { bitmap } from '@pmndrs/text/raster/bitmap';
 
-import canonicalParagraphLayout from '../../fixtures/contracts/paragraph-layout-v0.json';
-import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url';
-import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
-import { hashParagraphLayout } from '../benchmark/paragraph-layout-digest';
-import { createConfiguredRenderer, disposeConfiguredRenderer } from './webgpu-renderer';
+import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json';
+import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
+import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
+import { hashParagraphLayout } from '../../paragraph-layout-digest';
+import { createConfiguredRenderer, disposeConfiguredRenderer } from '../../../renderer/webgpu-renderer';
 
 const FRAME_WIDTH = 384;
 const FRAME_HEIGHT = 128;

@@ -5,8 +5,8 @@ import type { BitmapTextConformanceCapture } from '../../renderer/bitmap-text';
 import type { MtsdfTextConformanceCapture } from '../../renderer/mtsdf-text';
 import type { PersistentRenderSceneRenderer } from '../../renderer/persistent-render-host';
 import type { SlugTextConformanceCapture } from '../../renderer/slug-text';
-import type { SourceOutlineFidelityCapture } from '../../renderer/source-outline-reference';
-import type { RuntimeFallbackCapture } from '../../renderer/runtime-fallback-conformance';
+import type { SourceOutlineFidelityCapture } from '../../benchmark/low-level/raster/source-outline-reference';
+import type { RuntimeFallbackCapture } from '../../benchmark/targets/conformance/raster/runtime-fallback';
 
 export type FiniteConformanceCapture =
   | { readonly kind: 'bitmap'; readonly value: BitmapTextConformanceCapture }
@@ -38,7 +38,7 @@ function loadSlugTextRenderer() {
 }
 
 function loadRuntimeFallbackConformance() {
-  return import('../../renderer/runtime-fallback-conformance');
+  return import('../../benchmark/targets/conformance/raster/runtime-fallback');
 }
 
 /** Captures through the caller-provided persistent host renderer; this module never owns a second renderer. */

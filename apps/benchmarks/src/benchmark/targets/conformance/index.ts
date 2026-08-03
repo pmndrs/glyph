@@ -126,7 +126,7 @@ function runtimeFallbackTarget(technique: Technique, backend: Backend): Benchmar
     load: async () => undefined,
     run: async (input, _sampleIndex, controls, context) => {
       const fontFixture = selectableFontFixture(input.fontFixture ?? configuredInput.fontFixture ?? 'inter');
-      const { captureRuntimeFallbackConformance } = await import('../../../renderer/runtime-fallback-conformance');
+      const { captureRuntimeFallbackConformance } = await import('./raster/runtime-fallback');
       const capture = await captureRuntimeFallbackConformance({
         backend,
         dpr: controls.dpr,

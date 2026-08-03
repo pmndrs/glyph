@@ -28,7 +28,7 @@ import {
   type LiveTextAnchor,
 } from '../workloads/shared/text-style';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
-import { compareRgba8Coverage } from './mtsdf-cpu-reference';
+import { compareRgba8Coverage } from '../benchmark/low-level/raster/mtsdf-cpu-reference';
 import {
   createPersistentRenderHost,
   type PersistentRenderScene,
@@ -42,13 +42,16 @@ import {
   type LiveFontFixtureUpdate,
   type RetainedFontFixtureController,
 } from './retained-font-fixture';
-import { renderFlatSlugCpuReference } from './slug-cpu-reference';
+import { renderFlatSlugCpuReference } from '../benchmark/low-level/raster/slug-cpu-reference';
 import type {
   SlugAffineRoleSceneDefinition,
   SlugProjectionZoomSceneDefinition,
   SlugRoleSceneDefinition,
 } from './slug-role-scenes';
-import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
+import {
+  captureSourceOutlineFidelity,
+  type SourceOutlineFidelityCapture,
+} from '../benchmark/low-level/raster/source-outline-reference';
 import { compactRgba8Readback } from './tsl-baseline';
 import {
   createConfiguredRenderer,

@@ -30,7 +30,7 @@ export interface Rgba8CoverageDifference {
 }
 
 /**
- * Compares opaque grayscale coverage frames. Red marks candidate-only coverage,
+ * Pure-CPU comparison of opaque grayscale coverage frames. Red marks candidate-only coverage,
  * cyan marks reference-only coverage, and black marks agreement.
  */
 export function compareRgba8Coverage(

@@ -84,7 +84,7 @@ function externalRasterProofTarget(backend: Backend): BenchmarkTarget {
       capabilities: rasterCapabilities,
       status: () => 'ready',
     },
-    async () => (await import('../../../renderer/external-raster-proof')).createExternalRasterProofTarget(backend),
+    async () => (await import('./external-raster-proof')).createExternalRasterProofTarget(backend),
   );
 }
 
@@ -98,7 +98,7 @@ const reactTextTarget = () =>
       capabilities: new Set(['deterministic', 'loader', 'shaping', 'paragraph', 'raster']),
       status: () => 'ready',
     },
-    async () => (await import('../../../renderer/react-text')).createReactTextTarget(),
+    async () => (await import('./react-text')).createReactTextTarget(),
   );
 
 export function createProductTargets(): readonly BenchmarkTarget[] {

@@ -1,14 +1,14 @@
 import type { ParagraphLayout } from '@pmndrs/text';
 
-import amiriSourceUrl from '../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url';
-import dancingScriptSourceUrl from '../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url';
-import dotGothicSourceUrl from '../../fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf?url';
-import fontAwesomeSourceUrl from '../../fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf?url';
-import interSourceUrl from '../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
-import notoCjkSourceUrl from '../../fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf?url';
-import devanagariSourceUrl from '../../fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf?url';
-import sourceSerifSourceUrl from '../../fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf?url';
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import amiriSourceUrl from '../../../../fixtures/fonts/amiri-1.002/Amiri-Regular.ttf?url';
+import dancingScriptSourceUrl from '../../../../fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf?url';
+import dotGothicSourceUrl from '../../../../fixtures/fonts/dot-gothic-16/DotGothic16-Regular.ttf?url';
+import fontAwesomeSourceUrl from '../../../../fixtures/fonts/font-awesome-free-6.7.2/fa-solid-900.ttf?url';
+import interSourceUrl from '../../../../fixtures/fonts/inter-v4.1/Inter-Regular.ttf?url';
+import notoCjkSourceUrl from '../../../../fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf?url';
+import devanagariSourceUrl from '../../../../fixtures/fonts/noto-sans-devanagari/NotoSansDevanagari.ttf?url';
+import sourceSerifSourceUrl from '../../../../fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf?url';
+import type { BenchmarkFontFixture } from '../../font-fixtures';
 import { compareRgba8Coverage } from './mtsdf-cpu-reference';
 
 const sourceFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {

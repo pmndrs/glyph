@@ -35,7 +35,7 @@ export interface FlatSlugCpuReferenceOptions {
 }
 
 /**
- * Reconstruct the fixed flat Slug specimen from exact decoded curve, header,
+ * Reconstruct the fixed flat Slug specimen on the CPU from exact decoded curve, header,
  * and reference resources without invoking Three.js, TSL, or browser fonts.
  */
 export function renderFlatSlugCpuReference(

@@ -22,8 +22,11 @@ import {
   liveTextPosition,
   type LiveTextAnchor,
 } from '../workloads/shared/text-style';
-import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';
-import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
+import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from '../benchmark/low-level/raster/mtsdf-cpu-reference';
+import {
+  captureSourceOutlineFidelity,
+  type SourceOutlineFidelityCapture,
+} from '../benchmark/low-level/raster/source-outline-reference';
 import { compactRgba8Readback } from './tsl-baseline';
 import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
 import {

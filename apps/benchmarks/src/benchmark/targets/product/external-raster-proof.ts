@@ -2,12 +2,16 @@ import { FontRegistry, Text } from '@pmndrs/text';
 import { glyphExample } from '@pmndrs/text-glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
-import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
-import { compactRgba8Readback } from './tsl-baseline';
-import { loadBenchmarkFontAsset } from '../workloads/font-assets';
-import type { PersistentRenderSceneRenderer } from './persistent-render-host';
-import { withRendererStateRestored } from './renderer-state-transaction';
-import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
+import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
+import { compactRgba8Readback } from '../../../renderer/tsl-baseline';
+import { loadBenchmarkFontAsset } from '../../../workloads/font-assets';
+import type { PersistentRenderSceneRenderer } from '../../../renderer/persistent-render-host';
+import { withRendererStateRestored } from '../../../renderer/renderer-state-transaction';
+import {
+  createConfiguredRenderer,
+  disposeConfiguredRenderer,
+  type RendererBackend,
+} from '../../../renderer/webgpu-renderer';
 
 const WIDTH = 384;
 const HEIGHT = 128;

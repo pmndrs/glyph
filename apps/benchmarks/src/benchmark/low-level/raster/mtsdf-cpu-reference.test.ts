@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';
 
-describe('RGBA8 coverage comparison', () => {
+describe('CPU RGBA8 coverage comparison', () => {
   it('uses red for extra candidate coverage and cyan for extra reference coverage', () => {
     const comparison = compareRgba8Coverage(
       Uint8Array.from([20, 20, 20, 255, 10, 10, 10, 255, 7, 7, 7, 255]),

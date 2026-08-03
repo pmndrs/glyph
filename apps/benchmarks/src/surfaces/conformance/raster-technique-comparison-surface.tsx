@@ -2,11 +2,11 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { Metric } from '../../components/ui';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
-import type { RasterTechniqueComparisonPersistentScene } from '../../renderer/raster-technique-compare';
+import type { RasterTechniqueComparisonPersistentScene } from '../../benchmark/targets/conformance/raster/comparison-scene';
 import type { ConformanceSurfaceProps } from './types';
 
 function loadRasterTechniqueComparison() {
-  return import('../../renderer/raster-technique-compare');
+  return import('../../benchmark/targets/conformance/raster/comparison-scene');
 }
 
 async function reportInitializationFailure(

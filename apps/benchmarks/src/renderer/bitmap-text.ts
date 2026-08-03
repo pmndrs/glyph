@@ -39,7 +39,10 @@ import {
   liveTextPosition,
   type LiveTextAnchor,
 } from '../workloads/shared/text-style';
-import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
+import {
+  captureSourceOutlineFidelity,
+  type SourceOutlineFidelityCapture,
+} from '../benchmark/low-level/raster/source-outline-reference';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,

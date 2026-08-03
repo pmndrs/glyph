@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { renderFlatSlugCpuReference } from './slug-cpu-reference';
 
-describe('flat Slug CPU reference', () => {
+describe('conformance flat Slug CPU reference', () => {
   it('reconstructs an exact quadratic square at physical pixel centers', () => {
     const result = renderFlatSlugCpuReference(squareResource(), specimenLayout(), {
       width: 4,

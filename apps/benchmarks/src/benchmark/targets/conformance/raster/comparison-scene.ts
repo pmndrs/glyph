@@ -3,17 +3,17 @@ import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';
 import { mul, saturate, sub, texture, vec4 } from 'three/tsl';
 
-import { rasterConformanceSpecimen, type SelectableFontFixture } from '../benchmark/font-fixtures';
-import { loadMtsdfFont } from './mtsdf-text';
+import { rasterConformanceSpecimen, type SelectableFontFixture } from '../../../font-fixtures';
+import { loadMtsdfFont } from '../../../../renderer/mtsdf-text';
 import {
   createPersistentRenderHost,
   type PersistentRenderScene,
   type PersistentRenderSceneContext,
   type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
-} from './persistent-render-host';
-import { loadSlugFont } from './slug-text';
-import type { RendererBackend } from './webgpu-renderer';
+} from '../../../../renderer/persistent-render-host';
+import { loadSlugFont } from '../../../../renderer/slug-text';
+import type { RendererBackend } from '../../../../renderer/webgpu-renderer';
 
 const BACKGROUND = 0x070709;
 const BASE_PHYSICAL_PPEM = 64;
