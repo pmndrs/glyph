@@ -89,13 +89,4 @@ describe('workload source boundaries', () => {
       expect(rendererDependencies(scene)).toEqual([]);
     }
   });
-
-  it('keeps the retained comparison scene local and the standalone adapter target-owned', async () => {
-    const source = await readFile(new URL('./comparison/scene.ts', import.meta.url), 'utf8');
-
-    expect(source).not.toContain('createComparisonWorkloadPreview');
-    expect(source).not.toContain('createConfiguredRenderer');
-    expect(source).not.toContain('setAnimationLoop');
-    expect(source).not.toContain('createGpuFrameTimer');
-  });
 });

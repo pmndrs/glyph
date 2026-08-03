@@ -4,7 +4,7 @@ import {
   type ComparisonWorkloadId,
   type ComparisonWorkloadPersistentSceneOptions,
   type ComparisonWorkloadStats,
-} from '../../workloads/comparison/scene';
+} from '../../surfaces/benchmark/scenes/comparison-workload';
 import { createPersistentRenderHost } from '../../renderer/persistent-render-host';
 
 /**

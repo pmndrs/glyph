@@ -6,7 +6,7 @@ let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | unde
 const liveSceneAssetResources = new Map<string, Promise<void>>();
 
 function importComparisonWorkload() {
-  return import('../../workloads/comparison/scene');
+  return import('./scenes/comparison-workload');
 }
 
 export function loadBenchmarkFontAssets() {

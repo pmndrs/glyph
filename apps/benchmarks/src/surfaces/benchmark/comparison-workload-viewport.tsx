@@ -11,7 +11,7 @@ import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPersistentScene,
   ComparisonWorkloadStats,
-} from '../../workloads/comparison/scene';
+} from './scenes/comparison-workload';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import { BakeProgressOverlay, useBakeProgress } from './bake-progress-overlay';
 import { techniqueLabel, workloadAmountLabel } from './labels';

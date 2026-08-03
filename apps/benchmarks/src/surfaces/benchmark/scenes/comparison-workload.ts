@@ -2,16 +2,16 @@ import { FontRegistry, type AnyRasterInput, type ParagraphLayout, type Registere
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 
-import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../benchmark/font-fixtures';
-import { ICON_GRID_FONT_FIXTURE } from '../../benchmark/font-fixtures';
-import type { RuntimeLiveStats } from '../../benchmark/runtime-world';
-import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';
+import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
+import { ICON_GRID_FONT_FIXTURE } from '../../../benchmark/font-fixtures';
+import type { RuntimeLiveStats } from '../../../benchmark/runtime-world';
+import type { FontDelivery, RasterTechnique } from '../../../benchmark/url-state';
 import {
   comparisonWorkloadDefinition,
   comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
   comparisonWorkloadUpdateKind as registryUpdateKind,
-} from './registry';
-import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../dynamic-layout/scene';
+} from '../../../workloads/comparison/registry';
+import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../../../workloads/dynamic-layout/scene';
 import {
   ICON_GRID_ITEMS,
   ICON_GRID_LABEL_SIZE,
@@ -22,40 +22,48 @@ import {
   resizeIconGridEntries,
   type IconGridEntryPool,
   type IconGridWorkloadInstance,
-} from '../icon-grid/scene';
-import type { MutableTextLadderScenePosition } from '../text-ladder/scene';
-import { ZOOM_TEXT_BASE_CSS_PX, type ZoomTextAnimationState } from '../zoom-text/scene';
+} from '../../../workloads/icon-grid/scene';
+import type { MutableTextLadderScenePosition } from '../../../workloads/text-ladder/scene';
+import { ZOOM_TEXT_BASE_CSS_PX, type ZoomTextAnimationState } from '../../../workloads/zoom-text/scene';
 import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
-} from './contracts';
-import { committedTextLayout, type ComparisonWorkloadEntry } from '../shared/scene-entry';
-import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../techniques/bitmap/metadata';
-import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from '../../techniques/mtsdf/metadata';
-import { registeredSlugConfiguration, type SlugRasterConfiguration } from '../../techniques/slug/metadata';
-import { createCanvasSurface } from '../../renderer/canvas-surface';
-import type { LiveFrameTelemetrySnapshot } from '../../renderer/live-frame-telemetry';
-import { createTextUpdateTelemetry } from '../../renderer/text-update-telemetry';
-import { loadBenchmarkFontAsset, type BakedSlugArtifactSource, type FontDeliveryMetrics } from '../font-assets';
-import { benchmarkContentWidth } from '../shared/text-style';
-import type { RendererBackend } from '../../renderer/webgpu-renderer';
+} from '../../../workloads/comparison/contracts';
+import { committedTextLayout, type ComparisonWorkloadEntry } from '../../../workloads/shared/scene-entry';
+import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../../techniques/bitmap/metadata';
+import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from '../../../techniques/mtsdf/metadata';
+import { registeredSlugConfiguration, type SlugRasterConfiguration } from '../../../techniques/slug/metadata';
+import { createCanvasSurface } from '../../../renderer/canvas-surface';
+import type { LiveFrameTelemetrySnapshot } from '../../../renderer/live-frame-telemetry';
+import { createTextUpdateTelemetry } from '../../../renderer/text-update-telemetry';
+import {
+  loadBenchmarkFontAsset,
+  type BakedSlugArtifactSource,
+  type FontDeliveryMetrics,
+} from '../../../workloads/font-assets';
+import { benchmarkContentWidth } from '../../../workloads/shared/text-style';
+import type { RendererBackend } from '../../../renderer/webgpu-renderer';
 import type {
   PersistentRenderFrameContext,
   PersistentRenderScene,
   PersistentRenderSceneContext,
   PersistentRenderViewport,
-} from '../../renderer/persistent-render-host';
-import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
+} from '../../../renderer/persistent-render-host';
+import { createPersistentSceneActivation } from '../../../renderer/persistent-scene-activation';
 import {
   createRetainedFontFixtureController,
   type RetainedFontFixtureController,
-} from '../../renderer/retained-font-fixture';
+} from '../../../renderer/retained-font-fixture';
 
 type WorkloadEntry = ComparisonWorkloadEntry;
 
-export type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from './contracts';
-export type { MutableTextLadderScenePosition } from '../text-ladder/scene';
+export type {
+  ComparisonWorkloadConfiguration,
+  ComparisonWorkloadId,
+  IconGridView,
+} from '../../../workloads/comparison/contracts';
+export type { MutableTextLadderScenePosition } from '../../../workloads/text-ladder/scene';
 export {
   advanceIconGridAutoPan,
   iconGridAssignmentSignature,
@@ -65,12 +73,16 @@ export {
   iconGridVirtualWindow,
   iconGridViewportUpdateKind,
   smoothIconGridFrameDelta,
-} from '../icon-grid/scene';
-export type { IconGridAutoPanState } from '../icon-grid/scene';
-export { dynamicLayoutWidths } from '../dynamic-layout/scene';
-export { ladderCssSizes, setTextLadderScenePosition, textLadderScenePosition } from '../text-ladder/scene';
-export { OFF_AXIS_SPANS, OFF_AXIS_TEXT } from '../off-axis-3d/scene';
-export { paintWordHue } from '../paint-effects/scene';
+} from '../../../workloads/icon-grid/scene';
+export type { IconGridAutoPanState } from '../../../workloads/icon-grid/scene';
+export { dynamicLayoutWidths } from '../../../workloads/dynamic-layout/scene';
+export {
+  ladderCssSizes,
+  setTextLadderScenePosition,
+  textLadderScenePosition,
+} from '../../../workloads/text-ladder/scene';
+export { OFF_AXIS_SPANS, OFF_AXIS_TEXT } from '../../../workloads/off-axis-3d/scene';
+export { paintWordHue } from '../../../workloads/paint-effects/scene';
 export {
   shuffleZoomTextPhrases,
   ZOOM_TEXT_BASE_CSS_PX,
@@ -78,7 +90,7 @@ export {
   ZOOM_TEXT_PHRASES,
   zoomTextAnimationState,
   zoomTextMaximumScale,
-} from '../zoom-text/scene';
+} from '../../../workloads/zoom-text/scene';
 
 export type ComparisonWorkloadStats = RuntimeLiveStats & {
   readonly configurationRevision: number;

@@ -6,7 +6,7 @@ import type { FontDelivery, GraphicsBackend, RasterTechnique } from '../../bench
 import type { PresentationPreset } from '../../benchmark/presentation-sequence';
 import { comparisonWorkloadId, type BenchmarkWorkloadId } from '../../workloads/catalog';
 import type { AdvancedShapingFrame } from '../../workloads/advanced-shaping/scene';
-import type { ComparisonWorkloadStats } from '../../workloads/comparison/scene';
+import type { ComparisonWorkloadStats } from './scenes/comparison-workload';
 import type { LiveTextScene } from '../../workloads/live-text-scene';
 import { liveTextSceneForWorkload } from '../../workloads/live-text-scenes';
 import { BitmapTextViewport } from './bitmap-text-viewport';

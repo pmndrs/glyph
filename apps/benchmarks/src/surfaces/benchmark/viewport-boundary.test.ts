@@ -3,6 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('live-text viewport technique boundaries', () => {
+  it('keeps the retained comparison scene host-owned and renderer-borrowing', async () => {
+    const source = await readFile(new URL('./scenes/comparison-workload.ts', import.meta.url), 'utf8');
+
+    expect(source).not.toContain('createComparisonWorkloadPreview');
+    expect(source).not.toContain('createConfiguredRenderer');
+    expect(source).not.toContain('setAnimationLoop');
+    expect(source).not.toContain('createGpuFrameTimer');
+  });
+
   it.each([
     ['bitmap-text-viewport.tsx', '../../techniques/bitmap/persistent-scene'],
     ['sdf-text-viewports.tsx', '../../techniques/mtsdf/persistent-scene'],
@@ -49,16 +58,16 @@ describe('live-text viewport technique boundaries', () => {
   });
 
   it('keeps the harness separate from benchmark surface implementations', async () => {
-    const [appSource, surfaceSource, comparisonSource, preloadSource] = await Promise.all([
-      readFile(new URL('../../app.tsx', import.meta.url), 'utf8'),
+    const [sceneSource, surfaceSource, comparisonSource, preloadSource] = await Promise.all([
+      readFile(new URL('../harness/scene.tsx', import.meta.url), 'utf8'),
       readFile(new URL('./benchmark-surface.tsx', import.meta.url), 'utf8'),
       readFile(new URL('./comparison-workload-viewport.tsx', import.meta.url), 'utf8'),
       readFile(new URL('./scene-preload.ts', import.meta.url), 'utf8'),
     ]);
 
-    expect(appSource).toContain("import { BenchmarkSurface } from './surfaces/benchmark/benchmark-surface';");
-    expect(appSource).not.toContain('function BenchmarkSurface(');
-    expect(appSource).not.toContain('function ComparisonWorkloadViewport(');
+    expect(sceneSource).toContain("import { BenchmarkSurface } from '../benchmark/benchmark-surface';");
+    expect(sceneSource).not.toContain('function BenchmarkSurface(');
+    expect(sceneSource).not.toContain('function ComparisonWorkloadViewport(');
     expect(surfaceSource).toContain("import { ComparisonWorkloadViewport } from './comparison-workload-viewport';");
     expect(comparisonSource).toContain("import { preloadComparisonWorkload } from './scene-preload';");
     expect(preloadSource).toContain('let comparisonWorkloadModule');
