@@ -2,15 +2,16 @@ import { FontRegistry, type AnyRasterInput, type ParagraphLayout, type Registere
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 
-import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures';
-import { ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fixtures';
-import type { FontDelivery, RasterTechnique } from '../benchmark/url-state';
+import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../benchmark/font-fixtures';
+import { ICON_GRID_FONT_FIXTURE } from '../../benchmark/font-fixtures';
+import type { RuntimeLiveStats } from '../../benchmark/runtime-world';
+import type { FontDelivery, RasterTechnique } from '../../benchmark/url-state';
 import {
   comparisonWorkloadDefinition,
   comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
   comparisonWorkloadUpdateKind as registryUpdateKind,
-} from '../workloads/registry';
-import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../workloads/dynamic-layout';
+} from '../registry';
+import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../dynamic-layout';
 import {
   ICON_GRID_ITEMS,
   ICON_GRID_LABEL_SIZE,
@@ -21,57 +22,47 @@ import {
   resizeIconGridEntries,
   type IconGridEntryPool,
   type IconGridWorkloadInstance,
-} from '../workloads/icon-grid';
-import type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
-import { ZOOM_TEXT_BASE_CSS_PX } from '../workloads/zoom-text';
-import type { ZoomTextAnimationState } from '../workloads/zoom-text';
+} from '../icon-grid';
+import type { MutableTextLadderScenePosition } from '../text-ladder';
+import { ZOOM_TEXT_BASE_CSS_PX } from '../zoom-text';
+import type { ZoomTextAnimationState } from '../zoom-text';
 import type {
   ComparisonWorkloadAnimationScratch,
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
-} from '../workloads/contracts';
-import { committedTextLayout, type ComparisonWorkloadEntry } from '../workloads/factory-contracts';
-import { registeredBitmapAtlas } from '../benchmark/low-level/raster/bitmap-atlas';
+} from '../contracts';
+import { committedTextLayout, type ComparisonWorkloadEntry } from '../factory-contracts';
+import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../benchmark/low-level/raster/bitmap-atlas';
 import {
   registeredMtsdfConfiguration,
   type MtsdfRasterConfiguration,
-} from '../benchmark/low-level/raster/mtsdf-configuration';
+} from '../../benchmark/low-level/raster/mtsdf-configuration';
 import {
   registeredSlugConfiguration,
   type SlugRasterConfiguration,
-} from '../benchmark/low-level/raster/slug-configuration';
-import type { BitmapTextLiveStats } from './bitmap-text';
-import { createCanvasSurface } from './canvas-surface';
-import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
-import { createLiveFrameTelemetry, type LiveFrameTelemetrySnapshot } from './live-frame-telemetry';
-import { createTextUpdateTelemetry } from './text-update-telemetry';
-import {
-  loadBenchmarkFontAsset,
-  type BakedSlugArtifactSource,
-  type FontDeliveryMetrics,
-} from '../workloads/font-assets';
-import { benchmarkContentWidth } from '../workloads/shared/text-style';
-import type { MtsdfTextLiveStats } from './mtsdf-text';
-import type { SlugTextLiveStats } from './slug-text';
-import {
-  createConfiguredRenderer,
-  disposeConfiguredRenderer,
-  readRendererViewportState,
-  type RendererBackend,
-} from './webgpu-renderer';
+} from '../../benchmark/low-level/raster/slug-configuration';
+import { createCanvasSurface } from '../../renderer/canvas-surface';
+import type { LiveFrameTelemetrySnapshot } from '../../renderer/live-frame-telemetry';
+import { createTextUpdateTelemetry } from '../../renderer/text-update-telemetry';
+import { loadBenchmarkFontAsset, type BakedSlugArtifactSource, type FontDeliveryMetrics } from '../font-assets';
+import { benchmarkContentWidth } from '../shared/text-style';
+import type { RendererBackend } from '../../renderer/webgpu-renderer';
 import type {
   PersistentRenderFrameContext,
   PersistentRenderScene,
   PersistentRenderSceneContext,
   PersistentRenderViewport,
-} from './persistent-render-host';
-import { createPersistentSceneActivation } from './persistent-scene-activation';
-import { createRetainedFontFixtureController, type RetainedFontFixtureController } from './retained-font-fixture';
+} from '../../renderer/persistent-render-host';
+import { createPersistentSceneActivation } from '../../renderer/persistent-scene-activation';
+import {
+  createRetainedFontFixtureController,
+  type RetainedFontFixtureController,
+} from '../../renderer/retained-font-fixture';
 
 type WorkloadEntry = ComparisonWorkloadEntry;
 
-export type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from '../workloads/contracts';
-export type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
+export type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from '../contracts';
+export type { MutableTextLadderScenePosition } from '../text-ladder';
 export {
   advanceIconGridAutoPan,
   iconGridAssignmentSignature,
@@ -81,8 +72,8 @@ export {
   iconGridVirtualWindow,
   iconGridViewportUpdateKind,
   smoothIconGridFrameDelta,
-} from '../workloads/icon-grid';
-export type { IconGridAutoPanState } from '../workloads/icon-grid';
+} from '../icon-grid';
+export type { IconGridAutoPanState } from '../icon-grid';
 export {
   dynamicLayoutWidths,
   ladderCssSizes,
@@ -97,9 +88,9 @@ export {
   ZOOM_TEXT_PHRASES,
   zoomTextAnimationState,
   zoomTextMaximumScale,
-} from '../workloads/index';
+} from '../index';
 
-export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats | SlugTextLiveStats) & {
+export type ComparisonWorkloadStats = RuntimeLiveStats & {
   readonly configurationRevision: number;
   readonly appliedFontFixture: BenchmarkFontFixture;
   readonly cameraKind: 'orthographic' | 'perspective';
@@ -150,26 +141,14 @@ export type ComparisonWorkloadStats = (BitmapTextLiveStats | MtsdfTextLiveStats 
   readonly zoomMaximumScale: number;
 };
 
-export interface ComparisonWorkloadPreview {
-  resize(width: number, height: number): void;
-  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;
-  resetView(): void;
-  zoomBy(factor: number): void;
-  update(configuration: ComparisonWorkloadConfiguration): Promise<void>;
-  dispose(): Promise<void>;
-}
-
-export interface ComparisonWorkloadPreviewOptions {
+export interface ComparisonWorkloadPersistentSceneOptions {
   readonly amount: number;
   readonly animationEnabled: boolean;
   readonly animationSpeed: number;
   readonly backend: RendererBackend;
-  readonly canvas: HTMLCanvasElement;
-  readonly dpr: number;
   readonly fontSize: number;
   readonly fontFixture: BenchmarkFontFixture;
   readonly delivery: FontDelivery;
-  readonly height: number;
   readonly layoutWidthRatio: number;
   readonly paintOpacity: number;
   readonly paintShadowEnabled: boolean;
@@ -177,21 +156,15 @@ export interface ComparisonWorkloadPreviewOptions {
   readonly showGrid: boolean;
   readonly showLayoutBounds: boolean;
   readonly textLadderExitEnabled: boolean;
-  readonly signal?: AbortSignal;
   readonly slugBakedArtifact?: BakedSlugArtifactSource;
   readonly technique: RasterTechnique;
   readonly textLadderSpecimen?: RasterConformanceSpecimen;
-  readonly width: number;
   readonly workload: ComparisonWorkloadId;
   readonly onError: (error: unknown) => void;
   readonly onStats: (stats: ComparisonWorkloadStats) => void;
   readonly onBakeProgress?: import('@pmndrs/text').BakeProgressListener;
+  readonly id?: string;
 }
-
-export type ComparisonWorkloadPersistentSceneOptions = Omit<
-  ComparisonWorkloadPreviewOptions,
-  'canvas' | 'dpr' | 'height' | 'signal' | 'width'
-> & { readonly id?: string };
 
 export interface ComparisonWorkloadPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;
@@ -232,7 +205,7 @@ interface MutableLoadedFontMetrics {
 interface LoadedTechniqueFont {
   readonly artifactBytes: number;
   readonly atlasGpuBytes: number;
-  readonly atlasPages: BitmapTextLiveStats['atlasPages'];
+  readonly atlasPages: readonly BitmapAtlasPageStats[];
   readonly bitmapStrikes: readonly { readonly ppem: number }[];
   readonly font: RegisteredFont;
   readonly fontLoadMs: number;
@@ -251,14 +224,16 @@ interface PendingConfigurationUpdate {
   }>;
 }
 
-interface ComparisonWorkloadRuntime extends ComparisonWorkloadPreview {
-  persistentFrame(context: PersistentRenderFrameContext): void;
-  persistentTelemetry(snapshot: LiveFrameTelemetrySnapshot, viewport: PersistentRenderViewport): void;
+interface ComparisonWorkloadRuntime {
+  dispose(): Promise<void>;
+  frame(context: PersistentRenderFrameContext): void;
+  panBy(deltaX: number, deltaY: number): { readonly deltaX: number; readonly deltaY: number } | void;
+  resetView(): void;
+  resize(width: number, height: number): void;
+  telemetry(snapshot: LiveFrameTelemetrySnapshot, viewport: PersistentRenderViewport): void;
+  update(configuration: ComparisonWorkloadConfiguration): Promise<void>;
+  zoomBy(factor: number): void;
 }
-
-type ComparisonWorkloadRuntimeOptions = Omit<ComparisonWorkloadPreviewOptions, 'canvas'> & {
-  readonly canvas?: HTMLCanvasElement;
-};
 
 export function createComparisonWorkloadPersistentScene(
   options: ComparisonWorkloadPersistentSceneOptions,
@@ -280,16 +255,7 @@ export function createComparisonWorkloadPersistentScene(
         throw new DOMException('The comparison workload scene cannot be activated twice', 'InvalidStateError');
       activated = true;
       try {
-        runtime = await createComparisonWorkloadRuntime(
-          {
-            ...options,
-            dpr: context.viewport.dpr,
-            height: context.viewport.height,
-            signal: context.signal,
-            width: context.viewport.width,
-          },
-          context,
-        );
+        runtime = await createComparisonWorkloadRuntime(options, context);
         activation.resolve(runtime);
       } catch (error) {
         activation.reject(error);
@@ -297,10 +263,10 @@ export function createComparisonWorkloadPersistentScene(
       }
     },
     frame(context) {
-      active().persistentFrame(context);
+      active().frame(context);
     },
     telemetry(snapshot, viewport) {
-      active().persistentTelemetry(snapshot, viewport);
+      active().telemetry(snapshot, viewport);
     },
     resize(viewport) {
       active().resize(viewport.width, viewport.height);
@@ -327,20 +293,13 @@ export function createComparisonWorkloadPersistentScene(
   };
 }
 
-export async function createComparisonWorkloadPreview(
-  options: ComparisonWorkloadPreviewOptions,
-): Promise<ComparisonWorkloadPreview> {
-  return createComparisonWorkloadRuntime(options);
-}
-
 async function createComparisonWorkloadRuntime(
-  options: ComparisonWorkloadRuntimeOptions,
-  persistentContext?: PersistentRenderSceneContext,
+  options: ComparisonWorkloadPersistentSceneOptions,
+  persistentContext: PersistentRenderSceneContext,
 ): Promise<ComparisonWorkloadRuntime> {
-  const persistent = persistentContext !== undefined;
   const { backend, onError, onStats, technique } = options;
-  const signal = persistentContext?.signal ?? options.signal;
-  const dpr = persistentContext?.viewport.dpr ?? options.dpr;
+  const { signal } = persistentContext;
+  const { height: viewportHeight, width: viewportWidth } = persistentContext.viewport;
   signal?.throwIfAborted();
   if (options.slugBakedArtifact !== undefined && technique !== 'slug') {
     throw new TypeError('a Slug candidate artifact requires the Slug technique');
@@ -348,36 +307,18 @@ async function createComparisonWorkloadRuntime(
   if (options.slugBakedArtifact !== undefined && options.delivery !== 'baked') {
     throw new TypeError('a retained Slug candidate artifact requires baked delivery');
   }
-  let width = positive(persistentContext?.viewport.width ?? options.width, 'comparison workload width');
-  let height = positive(persistentContext?.viewport.height ?? options.height, 'comparison workload height');
+  let width = positive(viewportWidth, 'comparison workload width');
+  let height = positive(viewportHeight, 'comparison workload height');
   let configuration = validateConfiguration(options);
   const startupStarted = performance.now();
-  const rendererStarted = performance.now();
-  if (!persistent && options.canvas === undefined) {
-    throw new TypeError('a standalone comparison workload requires a canvas');
-  }
-  const renderer =
-    persistentContext === undefined
-      ? await createConfiguredRenderer({
-          backend,
-          canvas: options.canvas!,
-          dpr,
-          height,
-          trackGpuTimestamps: backend === 'webgpu',
-          width,
-        })
-      : (persistentContext.renderer as THREE.WebGPURenderer);
-  let rendererViewport =
-    persistentContext === undefined
-      ? readRendererViewportState(renderer)
-      : {
-          drawingBufferHeight: persistentContext.viewport.drawingBufferHeight,
-          drawingBufferWidth: persistentContext.viewport.drawingBufferWidth,
-          pixelRatio: persistentContext.viewport.dpr,
-        };
+  const renderer = persistentContext.renderer as THREE.WebGPURenderer;
+  let rendererViewport = {
+    drawingBufferHeight: persistentContext.viewport.drawingBufferHeight,
+    drawingBufferWidth: persistentContext.viewport.drawingBufferWidth,
+    pixelRatio: persistentContext.viewport.dpr,
+  };
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid);
-  let gpuFrameTimer: GpuFrameTimer | undefined;
-  const rendererInitMs = persistentContext?.rendererInitMs ?? performance.now() - rendererStarted;
+  const rendererInitMs = persistentContext.rendererInitMs;
   let font: LoadedTechniqueFont | undefined;
   let iconFont: LoadedTechniqueFont | undefined;
   let selectedFontController: RetainedFontFixtureController<LoadedTechniqueFont> | undefined;
@@ -403,10 +344,6 @@ async function createComparisonWorkloadRuntime(
   };
   const scene = new THREE.Scene();
   let camera = createWorkloadCamera(configuration.workload, width, height);
-  gpuFrameTimer = persistent ? undefined : createGpuFrameTimer({ backend, renderer, onError });
-  const telemetry = persistent
-    ? undefined
-    : createLiveFrameTelemetry({ gpuTimingSupported: gpuFrameTimer?.supported ?? false });
   const textUpdateTelemetry = createTextUpdateTelemetry();
   const visibleEntryMetrics: MutableVisibleEntryMetrics = {
     drawCount: 0,
@@ -486,8 +423,8 @@ async function createComparisonWorkloadRuntime(
     };
     let cachedBitmapAtlasPrimary: LoadedTechniqueFont | undefined;
     let cachedBitmapAtlasSecondary: LoadedTechniqueFont | undefined;
-    let cachedBitmapAtlasPages: BitmapTextLiveStats['atlasPages'] = [];
-    const bitmapAtlasPages = (fonts: readonly LoadedTechniqueFont[]): BitmapTextLiveStats['atlasPages'] => {
+    let cachedBitmapAtlasPages: readonly BitmapAtlasPageStats[] = [];
+    const bitmapAtlasPages = (fonts: readonly LoadedTechniqueFont[]): readonly BitmapAtlasPageStats[] => {
       const primary = fonts[0];
       const secondary = fonts[1];
       if (primary !== cachedBitmapAtlasPrimary || secondary !== cachedBitmapAtlasSecondary) {
@@ -791,7 +728,7 @@ async function createComparisonWorkloadRuntime(
 
     function enqueueUpdate(next: ComparisonWorkloadConfiguration, viewportChanged = false): Promise<void> {
       if (closing || disposed) {
-        return Promise.reject(new DOMException('The comparison preview is disposed', 'AbortError'));
+        return Promise.reject(new DOMException('The comparison workload scene is disposed', 'AbortError'));
       }
       requestedConfiguration = next;
       if (
@@ -812,15 +749,6 @@ async function createComparisonWorkloadRuntime(
         startUpdateDrain();
       });
     }
-    const uploadFrameStarted = performance.now();
-    if (!persistent) {
-      canvasSurface.render(scene, camera);
-      firstDrawMs = performance.now() - uploadFrameStarted;
-      if (backend === 'webgpu' && gpuTimingSupported) {
-        uploadFrameGpuMs = await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER);
-        uploadFrameCompleteMs = performance.now() - uploadFrameStarted;
-      }
-    }
     const startupMs = performance.now() - startupStarted;
     const recordReflow = (duration: number): void => {
       reflowCount += 1;
@@ -830,14 +758,6 @@ async function createComparisonWorkloadRuntime(
     const renderFrame = (timestamp: number, renderScene = true): void => {
       if (closing || disposed) return;
       try {
-        const cpuFrameStarted = performance.now();
-        if (gpuFrameTimer !== undefined) {
-          for (const measurement of gpuFrameTimer.poll()) {
-            if (measurement.durationMs === undefined) telemetry?.discardGpu(measurement.frameId);
-            else telemetry?.recordGpu(measurement.frameId, measurement.durationMs);
-          }
-        }
-        const frameId = telemetry?.beginFrame(timestamp);
         if (renderScene && configuration.workload === 'icon-grid') {
           iconGridInstance?.frame(
             configuration,
@@ -884,19 +804,17 @@ async function createComparisonWorkloadRuntime(
             );
           }
           const started = performance.now();
-          if (frameId !== undefined && telemetry?.gpuTimingSupported === true) gpuFrameTimer?.beginFrame(frameId);
-          try {
-            canvasSurface.render(scene, camera);
-          } finally {
-            if (frameId !== undefined && telemetry?.gpuTimingSupported === true) gpuFrameTimer?.endFrame();
-          }
+          canvasSurface.render(scene, camera);
           const submitMs = performance.now() - started;
-          if (firstDrawMs === 0) firstDrawMs = submitMs;
+          if (firstDrawMs === 0) {
+            firstDrawMs = submitMs;
+            uploadFrameCompleteMs = submitMs;
+          }
         }
-        const cpuFrameMs = performance.now() - cpuFrameStarted;
-        const snapshot = frameId === undefined ? persistentSnapshot : telemetry?.endFrame(frameId, cpuFrameMs);
+        const snapshot = persistentSnapshot;
         if (snapshot === undefined) return;
-        if (persistent) persistentSnapshot = undefined;
+        persistentSnapshot = undefined;
+        uploadFrameGpuMs ??= snapshot.gpuFrameMs;
         const activeZoomEntry =
           configuration.workload === 'zoom-text' ? entries[zoomAnimationState.phraseIndex] : undefined;
         const zoomScale = activeZoomEntry?.node.scale.x ?? 1;
@@ -1031,7 +949,6 @@ async function createComparisonWorkloadRuntime(
       }
     };
     animationEpoch = performance.now();
-    if (!persistent) await renderer.setAnimationLoop((timestamp) => renderFrame(timestamp));
 
     return {
       resize(nextWidth, nextHeight) {
@@ -1041,10 +958,6 @@ async function createComparisonWorkloadRuntime(
         if (validatedWidth === width && validatedHeight === height) return;
         width = validatedWidth;
         height = validatedHeight;
-        if (!persistent) {
-          renderer.setSize(width, height, false);
-          rendererViewport = readRendererViewportState(renderer);
-        }
         canvasSurface.resize(width, height);
         resizeWorkloadCamera(camera, width, height);
         void enqueueUpdate(requestedConfiguration, true).catch(onError);
@@ -1076,12 +989,10 @@ async function createComparisonWorkloadRuntime(
       update(next) {
         return enqueueUpdate(validateConfiguration(next));
       },
-      persistentFrame(context) {
-        if (!persistent) return;
+      frame(context) {
         renderFrame(context.timestamp);
       },
-      persistentTelemetry(snapshot, viewport) {
-        if (!persistent) return;
+      telemetry(snapshot, viewport) {
         rendererViewport = {
           drawingBufferHeight: viewport.drawingBufferHeight,
           drawingBufferWidth: viewport.drawingBufferWidth,
@@ -1095,38 +1006,28 @@ async function createComparisonWorkloadRuntime(
         if (disposal !== undefined) return disposal;
         closing = true;
         revision += 1;
-        const stopRendering = persistent ? Promise.resolve() : renderer.setAnimationLoop(null);
-        const disposalReason = new DOMException('The comparison preview is disposed', 'AbortError');
+        const disposalReason = new DOMException('The comparison workload scene is disposed', 'AbortError');
         for (const waiter of pendingUpdate?.waiters ?? []) waiter.reject(disposalReason);
         pendingUpdate = undefined;
         disposal = (async () => {
-          await stopRendering;
           await updateDrain;
           disposed = true;
           iconGridInstance?.dispose();
-          await gpuFrameTimer?.dispose();
-          if (!persistent) {
-            renderer.setRenderTarget(null);
-            renderer.clear();
-          }
           disposeEntries(entries);
           entries = [];
           activeSelectedFont.dispose();
           iconFont?.font.dispose();
           canvasSurface.dispose();
-          if (!persistent) await disposeConfiguredRenderer(renderer);
         })();
         return disposal;
       },
     };
   } catch (error) {
-    await gpuFrameTimer?.dispose();
     disposeEntries(entries);
     iconFont?.font.dispose();
     if (selectedFontController === undefined) font?.font.dispose();
     else selectedFontController.dispose();
     canvasSurface.dispose();
-    if (!persistent) await disposeConfiguredRenderer(renderer);
     throw error;
   }
 }
@@ -1381,7 +1282,7 @@ function iconGridStats(
   };
 }
 
-function combineBitmapAtlasPages(fonts: readonly LoadedTechniqueFont[]): BitmapTextLiveStats['atlasPages'] {
+function combineBitmapAtlasPages(fonts: readonly LoadedTechniqueFont[]): readonly BitmapAtlasPageStats[] {
   const pagesPerStrike = new Map<number, number>();
   return fonts.flatMap(({ atlasPages }) =>
     atlasPages.map((page) => {

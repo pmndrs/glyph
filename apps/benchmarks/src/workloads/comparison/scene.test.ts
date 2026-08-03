@@ -32,7 +32,7 @@ import {
   zoomTextMaximumScale,
   type ComparisonWorkloadConfiguration,
   type IconGridAutoPanState,
-} from './comparison-workload';
+} from './scene';
 
 const baseConfiguration: ComparisonWorkloadConfiguration = {
   amount: 50,

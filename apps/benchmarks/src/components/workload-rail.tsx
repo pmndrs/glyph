@@ -24,7 +24,7 @@ import { TechniqueSwitcher } from './technique-switcher';
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 
 function importComparisonWorkload() {
-  return import('../renderer/comparison-workload');
+  return import('../workloads/comparison/scene');
 }
 
 function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {

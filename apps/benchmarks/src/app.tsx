@@ -82,7 +82,7 @@ import type {
   ComparisonWorkloadId,
   ComparisonWorkloadPersistentScene,
   ComparisonWorkloadStats,
-} from './renderer/comparison-workload';
+} from './workloads/comparison/scene';
 import {
   benchmarkWorkloadDefinition,
   comparisonWorkloadId,
@@ -108,7 +108,7 @@ let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | unde
 const liveSceneAssetResources = new Map<string, Promise<void>>();
 
 function importComparisonWorkload() {
-  return import('./renderer/comparison-workload');
+  return import('./workloads/comparison/scene');
 }
 
 function loadBenchmarkFontAssets() {
