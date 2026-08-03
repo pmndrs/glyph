@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:64ff511cf7545a06d2efc9d942a22b1be8b2aa62b2f75f7aab5da4ad728b3a0f'
+source_digest: 'sha256:6c6d99db4edf86b72b37772cf56b37edee4c486f2af7275e3a1376c114c8b892'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -134,6 +134,12 @@ sources:
   - id: comparison-measurement-preview
     resource: ../../apps/benchmarks/src/benchmark/targets/measurement/comparison-preview.ts
     title: Isolated-canvas adapter for Slug performance measurements
+  - id: tsl-conformance-target
+    resource: ../../apps/benchmarks/src/benchmark/targets/conformance/tsl-baseline.ts
+    title: Deterministic TSL renderer conformance target
+  - id: latest-scene-update-queue
+    resource: ../../apps/benchmarks/src/surfaces/benchmark/latest-async-queue.ts
+    title: Latest-value React viewport update coordinator
   - id: conformance-surface
     resource: ../../apps/benchmarks/src/surfaces/conformance/conformance-surface.tsx
     title: Host-borrowing conformance surface hierarchy
@@ -261,6 +267,8 @@ Bitmap, MTSDF, and Slug renderer modules expose only persistent-scene constructi
 Canonical font loading is owned exclusively by `workloads/font-assets`, and renderer-neutral Bitmap atlas, MTSDF configuration, and Slug allocation inspection is owned by `benchmark/low-level/raster`. Product targets, conformance targets, retained comparison scenes, and live technique scenes call those owners directly; renderer modules no longer re-export loader, preload, baked-artifact, or raster-configuration compatibility facades.
 
 The multi-technique retained implementation lives beside its authored definitions under `workloads/comparison/scene`. It can use only an allowlisted set of generic host, canvas, telemetry, and activation primitives from `renderer`; it cannot create a renderer, animation loop, or GPU timer. Slug performance observations that require an isolated canvas enter through `benchmark/targets/measurement/comparison-preview`, which owns one `PersistentRenderHost`, activates the same workload scene, and guarantees host disposal after release. The app and workload rail preserve the literal lazy scene chunk boundary.
+
+The deterministic TSL renderer baseline is an executable conformance target under `benchmark/targets/conformance`, not renderer infrastructure. The latest-value async queue is local to `surfaces/benchmark`, where the three React viewport controllers use it to serialize scene commits and collapse obsolete pending inputs.
 
 ### Benchmark ipsum corpus
 
