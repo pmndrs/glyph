@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:9f283a698266447ee391195fa38e059f0be8135c7798573e14c34c1d57eda243'
+source_digest: 'sha256:64ff511cf7545a06d2efc9d942a22b1be8b2aa62b2f75f7aab5da4ad728b3a0f'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -129,8 +129,11 @@ sources:
     resource: ../../apps/benchmarks/src/benchmark/targets/conformance/raster/slug-capture.ts
     title: Target-owned finite Slug capture lifecycle and role proofs
   - id: comparison-workload
-    resource: ../../apps/benchmarks/src/renderer/comparison-workload.ts
-    title: Retained comparison-workload renderer
+    resource: ../../apps/benchmarks/src/workloads/comparison/scene.ts
+    title: Retained multi-technique workload scene
+  - id: comparison-measurement-preview
+    resource: ../../apps/benchmarks/src/benchmark/targets/measurement/comparison-preview.ts
+    title: Isolated-canvas adapter for Slug performance measurements
   - id: conformance-surface
     resource: ../../apps/benchmarks/src/surfaces/conformance/conformance-surface.tsx
     title: Host-borrowing conformance surface hierarchy
@@ -256,6 +259,8 @@ Six authenticated full-font fixtures cover sans, serif, script, Arabic, Devanaga
 Bitmap, MTSDF, and Slug renderer modules expose only persistent-scene construction and scene-update contracts. The obsolete standalone preview constructors and their duplicate renderer, RAF, GPU-timer, telemetry, resize, and disposal lifecycles are removed; one source-boundary regression rejects their return.
 
 Canonical font loading is owned exclusively by `workloads/font-assets`, and renderer-neutral Bitmap atlas, MTSDF configuration, and Slug allocation inspection is owned by `benchmark/low-level/raster`. Product targets, conformance targets, retained comparison scenes, and live technique scenes call those owners directly; renderer modules no longer re-export loader, preload, baked-artifact, or raster-configuration compatibility facades.
+
+The multi-technique retained implementation lives beside its authored definitions under `workloads/comparison/scene`. It can use only an allowlisted set of generic host, canvas, telemetry, and activation primitives from `renderer`; it cannot create a renderer, animation loop, or GPU timer. Slug performance observations that require an isolated canvas enter through `benchmark/targets/measurement/comparison-preview`, which owns one `PersistentRenderHost`, activates the same workload scene, and guarantees host disposal after release. The app and workload rail preserve the literal lazy scene chunk boundary.
 
 ### Benchmark ipsum corpus
 
