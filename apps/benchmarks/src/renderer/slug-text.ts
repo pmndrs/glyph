@@ -2,34 +2,23 @@ import {
   FontLoader,
   FontRegistry,
   Text,
-  defineRaster,
   type BakeProgressListener,
   type FontFeature,
   type ParagraphLayout,
-  type RasterBakeArtifact,
   type RegisteredFont,
-  type RuntimeRasterBakerModule,
   type TextSpan,
 } from '@pmndrs/text';
 import { slug, slugDescriptorRasterKey, type SlugModule, type SlugResource } from '@pmndrs/text/raster/slug';
 import * as THREE from 'three/webgpu';
 
-import amiriCompressedFontUrl from '../../fixtures/rendering/amiri-slug.font.glb.gz?url';
-import dancingScriptCompressedFontUrl from '../../fixtures/rendering/dancing-script-slug.font.glb.gz?url';
-import dotGothicCompressedFontUrl from '../../fixtures/rendering/dot-gothic-16-slug.font.glb.gz?url';
-import fontAwesomeCompressedFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-slug.font.glb.gz?url';
-import interCompressedFontUrl from '../../fixtures/rendering/inter-slug.font.glb.gz?url';
-import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-devanagari-slug.font.glb.gz?url';
-import notoCjkShowcaseCompressedFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-slug.font.glb.gz?url';
-import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-4-slug.font.glb.gz?url';
-import showcaseManifest from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../workloads/benchmark-ipsum';
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
 import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
-import { createFontDeliveryMetrics, loadRuntimeFont, type FontDeliveryMetrics } from './font-delivery';
+import { loadSlugFontAsset } from '../workloads/font-assets/slug';
+import type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../workloads/font-assets';
 import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
 import {
   benchmarkContentWidth,
@@ -72,48 +61,8 @@ const WIDTH = 512;
 const HEIGHT = 320;
 const FLAT_CONFORMANCE_HEIGHT = 512;
 
-interface SlugFixtureManifest {
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly compressed: { readonly bytes: number; readonly sha256: string };
-  readonly uncompressed: { readonly bytes: number; readonly sha256: string };
-}
-
-export interface SlugBakedArtifactSource {
-  readonly url: string;
-  readonly compressed: { readonly bytes: number; readonly sha256: string };
-  readonly uncompressed: { readonly bytes: number; readonly sha256: string };
-}
-
-const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
-  inter: interCompressedFontUrl,
-  amiri: amiriCompressedFontUrl,
-  'noto-sans-devanagari': devanagariCompressedFontUrl,
-  'noto-sans-cjk-showcase': notoCjkShowcaseCompressedFontUrl,
-  'dot-gothic-16': dotGothicCompressedFontUrl,
-  'font-awesome-free-6.7.2': fontAwesomeCompressedFontUrl,
-  'source-serif-4': sourceSerifCompressedFontUrl,
-  'dancing-script': dancingScriptCompressedFontUrl,
-};
-
-export async function preloadSlugFontAssets(
-  fixtures: readonly BenchmarkFontFixture[],
-  signal?: AbortSignal,
-): Promise<void> {
-  await Promise.all(
-    fixtures.map(async (fixture) => {
-      const response = await fetch(compressedFontUrls[fixture], signal === undefined ? undefined : { signal });
-      if (!response.ok) throw new Error(`Unable to preload Slug font fixture (${response.status})`);
-      await response.arrayBuffer();
-    }),
-  );
-}
-
-const slugFixtureManifests = new Map(
-  (showcaseManifest as { readonly artifacts: readonly SlugFixtureManifest[] }).artifacts.map((artifact) => [
-    artifact.fontFixture,
-    artifact,
-  ]),
-) as ReadonlyMap<BenchmarkFontFixture, SlugFixtureManifest>;
+export { preloadSlugFontAssets } from '../workloads/font-assets/slug';
+export type { BakedSlugArtifactSource as SlugBakedArtifactSource } from '../workloads/font-assets/slug';
 
 export interface SlugRasterConfiguration {
   readonly planeUnitsPerEm: number;
@@ -1707,29 +1656,26 @@ export async function loadSlugFont(
   delivery: FontDelivery = 'baked',
   onProgress?: BakeProgressListener,
   registry?: FontRegistry,
-): Promise<{
-  readonly artifactBytes: number;
-  readonly compressedBytes: number;
-  readonly font: RegisteredFont;
-  readonly metrics: FontDeliveryMetrics;
-  readonly raster: SlugModule;
-}> {
-  signal?.throwIfAborted();
-  const metrics = createFontDeliveryMetrics(delivery);
-  const manifest = slugFixtureManifests.get(fixture);
-  if (manifest === undefined) throw new RangeError(`Unknown Slug font fixture: ${fixture}`);
-  if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress, registry ?? new FontRegistry());
-    return {
-      artifactBytes: metrics.coreArtifactBytes,
-      compressedBytes: metrics.sourceFontBytes,
-      font: loaded.font,
-      metrics,
-      raster: measuredSlugRaster(metrics, onProgress),
-    };
-  }
-  const response = await fetch(compressedFontUrls[fixture], signal === undefined ? undefined : { signal });
-  return loadSlugFontResponse(response, manifest, metrics, signal, registry);
+): Promise<Awaited<ReturnType<typeof loadSlugFontAsset>>> {
+  return loadSlugFontAsset(
+    delivery === 'runtime'
+      ? {
+          technique: 'slug',
+          fixture,
+          delivery,
+          ...(registry === undefined ? {} : { registry }),
+          ...(signal === undefined ? {} : { signal }),
+          ...(onProgress === undefined ? {} : { onProgress }),
+        }
+      : {
+          technique: 'slug',
+          fixture,
+          delivery,
+          ...(registry === undefined ? {} : { registry }),
+          ...(signal === undefined ? {} : { signal }),
+          ...(onProgress === undefined ? {} : { onProgress }),
+        },
+  );
 }
 
 /** Load a retained non-production Slug candidate through the ordinary registry boundary. */
@@ -1737,46 +1683,15 @@ export async function loadSlugBakedArtifact(
   source: SlugBakedArtifactSource,
   signal?: AbortSignal,
   registry?: FontRegistry,
-): Promise<{
-  readonly artifactBytes: number;
-  readonly compressedBytes: number;
-  readonly font: RegisteredFont;
-  readonly metrics: FontDeliveryMetrics;
-  readonly raster: SlugModule;
-}> {
-  signal?.throwIfAborted();
-  const response = await fetch(source.url, signal === undefined ? undefined : { signal });
-  return loadSlugFontResponse(response, source, createFontDeliveryMetrics('baked'), signal, registry);
-}
-
-async function loadSlugFontResponse(
-  response: Response,
-  manifest: Pick<SlugBakedArtifactSource, 'compressed' | 'uncompressed'>,
-  metrics: FontDeliveryMetrics,
-  signal?: AbortSignal,
-  registry?: FontRegistry,
-): Promise<{
-  readonly artifactBytes: number;
-  readonly compressedBytes: number;
-  readonly font: RegisteredFont;
-  readonly metrics: FontDeliveryMetrics;
-  readonly raster: SlugModule;
-}> {
-  if (!response.ok) throw new Error(`Unable to load Slug font fixture (${response.status})`);
-  const received = new Uint8Array(await response.arrayBuffer());
-  signal?.throwIfAborted();
-  const artifact =
-    received.byteLength === manifest.uncompressed.bytes ? received : await decompressFixture(received, manifest);
-  await assertFixtureBytes(artifact, manifest.uncompressed, 'uncompressed');
-  signal?.throwIfAborted();
-  const activeRegistry = registry ?? new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes });
-  return {
-    artifactBytes: artifact.byteLength,
-    compressedBytes: manifest.compressed.bytes,
-    font: await activeRegistry.registerAsset(artifact),
-    metrics,
-    raster: slug,
-  };
+): Promise<Awaited<ReturnType<typeof loadSlugFontAsset>>> {
+  return loadSlugFontAsset({
+    technique: 'slug',
+    fixture: 'inter',
+    delivery: 'baked',
+    bakedArtifact: source,
+    ...(registry === undefined ? {} : { registry }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 export async function registeredSlugConfiguration(
@@ -1828,48 +1743,6 @@ function slugResourceConfiguration(resource: SlugResource): SlugRasterConfigurat
   };
 }
 
-function measuredSlugRaster(metrics: FontDeliveryMetrics, onProgress?: BakeProgressListener): SlugModule {
-  const runtimeBaker = measuredRuntimeBaker(slug.runtimeBaker, metrics, onProgress);
-  return defineRaster({
-    ...slug,
-    ...(runtimeBaker === undefined ? {} : { runtimeBaker }),
-  });
-}
-
-function measuredRuntimeBaker<Kind extends string, Options>(
-  load:
-    | (() => Promise<
-        RuntimeRasterBakerModule<Kind, Options> | { readonly default: RuntimeRasterBakerModule<Kind, Options> }
-      >)
-    | undefined,
-  metrics: FontDeliveryMetrics,
-  onProgress?: BakeProgressListener,
-) {
-  if (load === undefined) return undefined;
-  return async (): Promise<RuntimeRasterBakerModule<Kind, Options>> => {
-    const started = performance.now();
-    const imported = await load();
-    const baker = 'default' in imported ? imported.default : imported;
-    return {
-      kind: baker.kind,
-      async bake(request) {
-        const artifact = await baker.bake({
-          ...request,
-          ...(onProgress === undefined ? {} : { onProgress }),
-        });
-        metrics.rasterBakeMs = performance.now() - started;
-        metrics.rasterArtifactBytes = rasterArtifactBytes(artifact);
-        metrics.rasterGpuBytes = artifact.report.gpuBytes;
-        return artifact;
-      },
-    };
-  };
-}
-
-function rasterArtifactBytes(artifact: RasterBakeArtifact<string>): number {
-  return artifact.artifacts.reduce((total, entry) => total + entry.bytes.byteLength, 0);
-}
-
 function positionLiveLine(
   line: Text,
   viewportWidth: number,
@@ -1902,31 +1775,6 @@ function assertLayoutWidthRatio(value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > 1) {
     throw new RangeError('Slug preview layout width ratio must be in (0, 1]');
   }
-}
-
-async function decompressFixture(
-  compressed: Uint8Array<ArrayBuffer>,
-  manifest: Pick<SlugBakedArtifactSource, 'compressed'>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  await assertFixtureBytes(compressed, manifest.compressed, 'compressed');
-  return decompressGzip(compressed);
-}
-
-async function decompressGzip(compressed: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-async function assertFixtureBytes(
-  bytes: Uint8Array<ArrayBuffer>,
-  expected: { readonly bytes: number; readonly sha256: string },
-  label: string,
-): Promise<void> {
-  if (bytes.byteLength !== expected.bytes) {
-    throw new Error(`Slug ${label} fixture has ${bytes.byteLength} bytes; expected ${expected.bytes}`);
-  }
-  const hash = hex(await crypto.subtle.digest('SHA-256', bytes));
-  if (hash !== expected.sha256) throw new Error(`Slug ${label} fixture failed SHA-256`);
 }
 
 async function renderSlugText(resources: SlugTextResources): Promise<TargetRunOutput> {

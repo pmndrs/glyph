@@ -111,16 +111,8 @@ function importComparisonWorkload() {
   return import('./renderer/comparison-workload');
 }
 
-function loadBitmapTextRenderer() {
-  return import('./renderer/bitmap-text');
-}
-
-function loadMtsdfTextRenderer() {
-  return import('./renderer/mtsdf-text');
-}
-
-function loadSlugTextRenderer() {
-  return import('./renderer/slug-text');
+function loadBenchmarkFontAssets() {
+  return import('./workloads/font-assets');
 }
 
 function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {
@@ -152,16 +144,8 @@ async function preloadPresentationAssets(
 ): Promise<void> {
   if (delivery !== 'baked') return;
   const fixtures = Array.from(new Set<BenchmarkFontFixture>([selectedFont, ...PRESENTATION_FONT_FIXTURES]));
-  if (technique === 'bitmap') {
-    const { preloadBitmapFontAssets } = await loadBitmapTextRenderer();
-    await preloadBitmapFontAssets(fixtures, signal);
-  } else if (technique === 'mtsdf') {
-    const { preloadMtsdfFontAssets } = await loadMtsdfTextRenderer();
-    await preloadMtsdfFontAssets(fixtures, signal);
-  } else {
-    const { preloadSlugFontAssets } = await loadSlugTextRenderer();
-    await preloadSlugFontAssets(fixtures, signal);
-  }
+  const { preloadBenchmarkFontAssets } = await loadBenchmarkFontAssets();
+  await preloadBenchmarkFontAssets({ technique, fixtures, signal, bitmapDensity: 'live' });
 }
 
 function liveSceneAssetResource(
@@ -180,16 +164,8 @@ function liveSceneAssetResource(
   const resource = (async () => {
     if (comparison) await preloadComparisonWorkload();
     if (delivery !== 'baked') return;
-    if (technique === 'bitmap') {
-      const { preloadBitmapFontAssets } = await loadBitmapTextRenderer();
-      await preloadBitmapFontAssets(fixtures);
-    } else if (technique === 'mtsdf') {
-      const { preloadMtsdfFontAssets } = await loadMtsdfTextRenderer();
-      await preloadMtsdfFontAssets(fixtures);
-    } else {
-      const { preloadSlugFontAssets } = await loadSlugTextRenderer();
-      await preloadSlugFontAssets(fixtures);
-    }
+    const { preloadBenchmarkFontAssets } = await loadBenchmarkFontAssets();
+    await preloadBenchmarkFontAssets({ technique, fixtures, bitmapDensity: 'live' });
   })();
   liveSceneAssetResources.set(key, resource);
   void resource.catch(() => liveSceneAssetResources.delete(key));

@@ -18,22 +18,6 @@ import {
 } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
-import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
-import amiriBitmapDensityFontUrl from '../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url';
-import dotGothicBitmapFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16.font.glb?url';
-import dotGothicBitmapDensityFontUrl from '../../fixtures/rendering/dot-gothic-16-bitmap-16-32.font.glb?url';
-import dancingScriptBitmapFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16.font.glb?url';
-import dancingScriptBitmapDensityFontUrl from '../../fixtures/rendering/dancing-script-bitmap-16-32.font.glb?url';
-import fontAwesomeBitmapFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-bitmap-16.font.glb?url';
-import fontAwesomeBitmapDensityFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-bitmap-16-32.font.glb?url';
-import bitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url';
-import bitmapDensityFontUrl from '../../fixtures/rendering/inter-bitmap-16-32.font.glb?url';
-import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url';
-import devanagariBitmapDensityFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16-32.font.glb?url';
-import notoCjkShowcaseBitmapFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb?url';
-import notoCjkShowcaseBitmapDensityFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16-32.font.glb?url';
-import sourceSerifBitmapFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16.font.glb?url';
-import sourceSerifBitmapDensityFontUrl from '../../fixtures/rendering/source-serif-4-bitmap-16-32.font.glb?url';
 import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
@@ -71,12 +55,8 @@ import {
 } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { withRendererStateRestored } from './renderer-state-transaction';
-import {
-  createFontDeliveryMetrics,
-  loadRuntimeFont,
-  measuredBitmapRaster,
-  type FontDeliveryMetrics,
-} from './font-delivery';
+import { loadBitmapFontAsset } from '../workloads/font-assets/bitmap';
+import type { BitmapFixtureDensity } from '../workloads/font-assets';
 
 const WIDTH = 384;
 const HEIGHT = 128;
@@ -86,38 +66,8 @@ const BITMAP_FONT_SIZE = 16;
 const CONFORMANCE_BITMAP_STRIKES = [16] as const;
 const LIVE_BITMAP_STRIKES = [16, 32] as const;
 const bitmapRequest = bitmap({ strikes: CONFORMANCE_BITMAP_STRIKES });
-const liveBitmapRequest = bitmap({ strikes: LIVE_BITMAP_STRIKES });
-export type BitmapFixtureDensity = 'conformance' | 'live';
-const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
-  inter: bitmapFontUrl,
-  amiri: amiriBitmapFontUrl,
-  'noto-sans-devanagari': devanagariBitmapFontUrl,
-  'noto-sans-cjk-showcase': notoCjkShowcaseBitmapFontUrl,
-  'dot-gothic-16': dotGothicBitmapFontUrl,
-  'font-awesome-free-6.7.2': fontAwesomeBitmapFontUrl,
-  'source-serif-4': sourceSerifBitmapFontUrl,
-  'dancing-script': dancingScriptBitmapFontUrl,
-};
-const bitmapDensityFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
-  inter: bitmapDensityFontUrl,
-  amiri: amiriBitmapDensityFontUrl,
-  'noto-sans-devanagari': devanagariBitmapDensityFontUrl,
-  'noto-sans-cjk-showcase': notoCjkShowcaseBitmapDensityFontUrl,
-  'dot-gothic-16': dotGothicBitmapDensityFontUrl,
-  'font-awesome-free-6.7.2': fontAwesomeBitmapDensityFontUrl,
-  'source-serif-4': sourceSerifBitmapDensityFontUrl,
-  'dancing-script': dancingScriptBitmapDensityFontUrl,
-};
-
-export async function preloadBitmapFontAssets(
-  fixtures: readonly BenchmarkFontFixture[],
-  signal?: AbortSignal,
-): Promise<void> {
-  await preloadFontUrls(
-    fixtures.map((fixture) => bitmapDensityFontUrls[fixture]),
-    signal,
-  );
-}
+export { preloadBitmapFontAssets } from '../workloads/font-assets/bitmap';
+export type { BitmapFixtureDensity } from '../workloads/font-assets/bitmap';
 
 interface BitmapTextResources {
   readonly backend: RendererBackend;
@@ -489,50 +439,16 @@ export async function loadBitmapFont(
   density: BitmapFixtureDensity = 'conformance',
   onProgress?: import('@pmndrs/text').BakeProgressListener,
   registry = new FontRegistry(),
-): Promise<{
-  readonly artifactBytes: number;
-  readonly font: RegisteredFont;
-  readonly metrics: FontDeliveryMetrics;
-  readonly raster: ReturnType<typeof bitmap>;
-}> {
-  signal?.throwIfAborted();
-  const metrics = createFontDeliveryMetrics(delivery);
-  const raster = density === 'live' ? liveBitmapRequest : bitmapRequest;
-  if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress, registry);
-    return {
-      artifactBytes: metrics.coreArtifactBytes,
-      font: loaded.font,
-      metrics,
-      raster: measuredBitmapRaster(metrics, density, onProgress),
-    };
-  }
-  let font: RegisteredFont | undefined;
-  try {
-    const fontResponse = await fetch(
-      (density === 'live' ? bitmapDensityFontUrls : bitmapFontUrls)[fixture],
-      signal === undefined ? undefined : { signal },
-    );
-    if (!fontResponse.ok) throw new Error(`Unable to load bitmap font fixture (${fontResponse.status})`);
-    const fontBytes = await fontResponse.arrayBuffer();
-    signal?.throwIfAborted();
-    font = await registry.registerAsset(new Uint8Array(fontBytes));
-    signal?.throwIfAborted();
-    return { artifactBytes: fontBytes.byteLength, font, metrics, raster };
-  } catch (error) {
-    font?.dispose();
-    throw error;
-  }
-}
-
-async function preloadFontUrls(urls: readonly string[], signal?: AbortSignal): Promise<void> {
-  await Promise.all(
-    urls.map(async (url) => {
-      const response = await fetch(url, signal === undefined ? undefined : { signal });
-      if (!response.ok) throw new Error(`Unable to preload bitmap font fixture (${response.status})`);
-      await response.arrayBuffer();
-    }),
-  );
+): Promise<Awaited<ReturnType<typeof loadBitmapFontAsset>>> {
+  return loadBitmapFontAsset({
+    technique: 'bitmap',
+    fixture,
+    delivery,
+    bitmapDensity: density,
+    ...(registry === undefined ? {} : { registry }),
+    ...(signal === undefined ? {} : { signal }),
+    ...(onProgress === undefined ? {} : { onProgress }),
+  });
 }
 
 async function createBitmapLine(

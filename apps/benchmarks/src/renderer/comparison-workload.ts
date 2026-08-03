@@ -31,19 +31,18 @@ import type {
   ComparisonWorkloadId,
 } from '../workloads/contracts';
 import { committedTextLayout, type ComparisonWorkloadEntry } from '../workloads/factory-contracts';
-import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
+import { registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
 import { createCanvasSurface } from './canvas-surface';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry, type LiveFrameTelemetrySnapshot } from './live-frame-telemetry';
 import { createTextUpdateTelemetry } from './text-update-telemetry';
-import type { FontDeliveryMetrics } from './font-delivery';
-import { benchmarkContentWidth } from '../workloads/shared/text-style';
 import {
-  loadMtsdfFont,
-  registeredMtsdfConfiguration,
-  type MtsdfRasterConfiguration,
-  type MtsdfTextLiveStats,
-} from './mtsdf-text';
+  loadBenchmarkFontAsset,
+  type BakedSlugArtifactSource,
+  type FontDeliveryMetrics,
+} from '../workloads/font-assets';
+import { benchmarkContentWidth } from '../workloads/shared/text-style';
+import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration, type MtsdfTextLiveStats } from './mtsdf-text';
 import type { SlugRasterConfiguration, SlugTextLiveStats } from './slug-text';
 import {
   createConfiguredRenderer,
@@ -170,7 +169,7 @@ export interface ComparisonWorkloadPreviewOptions {
   readonly showLayoutBounds: boolean;
   readonly textLadderExitEnabled: boolean;
   readonly signal?: AbortSignal;
-  readonly slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource;
+  readonly slugBakedArtifact?: BakedSlugArtifactSource;
   readonly technique: RasterTechnique;
   readonly textLadderSpecimen?: RasterConformanceSpecimen;
   readonly width: number;
@@ -1429,12 +1428,20 @@ async function loadTechniqueFont(
   delivery: FontDelivery,
   signal?: AbortSignal,
   onBakeProgress?: import('@pmndrs/text').BakeProgressListener,
-  slugBakedArtifact?: import('./slug-text').SlugBakedArtifactSource,
+  slugBakedArtifact?: BakedSlugArtifactSource,
   registry?: FontRegistry,
 ): Promise<LoadedTechniqueFont> {
   const startedAt = performance.now();
   if (technique === 'bitmap') {
-    const loaded = await loadBitmapFont(signal, fontFixture, delivery, 'live', onBakeProgress, registry);
+    const loaded = await loadBenchmarkFontAsset({
+      technique,
+      fixture: fontFixture,
+      delivery,
+      bitmapDensity: 'live',
+      ...(registry === undefined ? {} : { registry }),
+      signal,
+      onProgress: onBakeProgress,
+    });
     const atlas = await registeredBitmapAtlas(loaded.font, 'live');
     return {
       artifactBytes: loaded.artifactBytes,
@@ -1448,7 +1455,14 @@ async function loadTechniqueFont(
     };
   }
   if (technique === 'mtsdf') {
-    const loaded = await loadMtsdfFont(signal, fontFixture, delivery, onBakeProgress, registry);
+    const loaded = await loadBenchmarkFontAsset({
+      technique,
+      fixture: fontFixture,
+      delivery,
+      ...(registry === undefined ? {} : { registry }),
+      signal,
+      onProgress: onBakeProgress,
+    });
     const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.font, signal);
     return {
       artifactBytes: loaded.compressedBytes,
@@ -1462,11 +1476,27 @@ async function loadTechniqueFont(
       raster: loaded.raster,
     };
   }
-  const { loadSlugBakedArtifact, loadSlugFont, registeredSlugConfiguration } = await import('./slug-text');
-  const loaded =
-    slugBakedArtifact === undefined
-      ? await loadSlugFont(signal, fontFixture, delivery, onBakeProgress, registry)
-      : await loadSlugBakedArtifact(slugBakedArtifact, signal, registry);
+  const { registeredSlugConfiguration } = await import('./slug-text');
+  const loaded = await loadBenchmarkFontAsset(
+    delivery === 'runtime'
+      ? {
+          technique,
+          fixture: fontFixture,
+          delivery,
+          ...(registry === undefined ? {} : { registry }),
+          signal,
+          onProgress: onBakeProgress,
+        }
+      : {
+          technique,
+          fixture: fontFixture,
+          delivery,
+          ...(slugBakedArtifact === undefined ? {} : { bakedArtifact: slugBakedArtifact }),
+          ...(registry === undefined ? {} : { registry }),
+          signal,
+          onProgress: onBakeProgress,
+        },
+  );
   const slugConfiguration = await registeredSlugConfiguration(loaded.font, signal);
   return {
     artifactBytes: loaded.compressedBytes,

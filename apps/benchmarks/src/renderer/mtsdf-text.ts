@@ -1,16 +1,7 @@
 import { FontRegistry, Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
-import { msdf, msdfDescriptorRasterKey, type MsdfModule, type MsdfResource } from '@pmndrs/text/raster/msdf';
+import { msdf, msdfDescriptorRasterKey, type MsdfResource } from '@pmndrs/text/raster/msdf';
 import * as THREE from 'three/webgpu';
 
-import amiriCompressedFontUrl from '../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
-import dancingScriptCompressedFontUrl from '../../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';
-import dotGothicCompressedFontUrl from '../../fixtures/rendering/dot-gothic-16-mtsdf.font.glb.gz?url';
-import fontAwesomeCompressedFontUrl from '../../fixtures/rendering/font-awesome-free-6.7.2-mtsdf.font.glb.gz?url';
-import interCompressedFontUrl from '../../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
-import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-devanagari-mtsdf.font.glb.gz?url';
-import notoCjkShowcaseCompressedFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-mtsdf.font.glb.gz?url';
-import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-4-mtsdf.font.glb.gz?url';
-import showcaseManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json';
 import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture } from '../benchmark/font-fixtures';
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
 import type { FontDelivery } from '../benchmark/url-state';
@@ -43,55 +34,13 @@ import {
 } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { withRendererStateRestored } from './renderer-state-transaction';
-import {
-  createFontDeliveryMetrics,
-  loadRuntimeFont,
-  measuredMsdfRaster,
-  type FontDeliveryMetrics,
-} from './font-delivery';
+import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../workloads/font-assets/mtsdf';
 
 const WIDTH = 512;
 const HEIGHT = 320;
 const FLAT_CONFORMANCE_HEIGHT = 512;
 
-interface MtsdfFixtureManifest {
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly compressed: { readonly bytes: number; readonly sha256: string };
-  readonly uncompressed: { readonly bytes: number; readonly sha256: string };
-  readonly raster: {
-    readonly runtimeTextureArray: { readonly basePaddedGpuBytes: number };
-  };
-}
-
-const compressedFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
-  inter: interCompressedFontUrl,
-  amiri: amiriCompressedFontUrl,
-  'noto-sans-devanagari': devanagariCompressedFontUrl,
-  'noto-sans-cjk-showcase': notoCjkShowcaseCompressedFontUrl,
-  'dot-gothic-16': dotGothicCompressedFontUrl,
-  'font-awesome-free-6.7.2': fontAwesomeCompressedFontUrl,
-  'source-serif-4': sourceSerifCompressedFontUrl,
-  'dancing-script': dancingScriptCompressedFontUrl,
-};
-
-export async function preloadMtsdfFontAssets(
-  fixtures: readonly BenchmarkFontFixture[],
-  signal?: AbortSignal,
-): Promise<void> {
-  await Promise.all(
-    fixtures.map(async (fixture) => {
-      const response = await fetch(compressedFontUrls[fixture], signal === undefined ? undefined : { signal });
-      if (!response.ok) throw new Error(`Unable to preload MTSDF font fixture (${response.status})`);
-      await response.arrayBuffer();
-    }),
-  );
-}
-const mtsdfFixtureManifests = new Map(
-  showcaseManifest.artifacts.map((artifact) => [artifact.fontFixture, artifact]),
-) as ReadonlyMap<BenchmarkFontFixture, MtsdfFixtureManifest>;
-const MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT = Math.max(
-  ...Array.from(mtsdfFixtureManifests.values(), ({ uncompressed }) => uncompressed.bytes),
-);
+export { preloadMtsdfFontAssets } from '../workloads/font-assets/mtsdf';
 
 interface MtsdfTextResources {
   readonly backend: RendererBackend;
@@ -866,46 +815,15 @@ export async function loadMtsdfFont(
   delivery: FontDelivery = 'baked',
   onProgress?: import('@pmndrs/text').BakeProgressListener,
   registry?: FontRegistry,
-): Promise<{
-  readonly artifactBytes: number;
-  readonly atlasGpuBytes: number;
-  readonly compressedBytes: number;
-  readonly font: RegisteredFont;
-  readonly metrics: FontDeliveryMetrics;
-  readonly raster: MsdfModule;
-}> {
-  signal?.throwIfAborted();
-  const metrics = createFontDeliveryMetrics(delivery);
-  const manifest = mtsdfFixtureManifests.get(fixture);
-  if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`);
-  if (delivery === 'runtime') {
-    const loaded = await loadRuntimeFont(fixture, metrics, signal, onProgress, registry ?? new FontRegistry());
-    return {
-      artifactBytes: metrics.coreArtifactBytes,
-      atlasGpuBytes: 0,
-      compressedBytes: metrics.sourceFontBytes,
-      font: loaded.font,
-      metrics,
-      raster: measuredMsdfRaster(metrics, onProgress),
-    };
-  }
-  const response = await fetch(compressedFontUrls[fixture], signal === undefined ? undefined : { signal });
-  if (!response.ok) throw new Error(`Unable to load MTSDF font fixture (${response.status})`);
-  const received = new Uint8Array(await response.arrayBuffer());
-  signal?.throwIfAborted();
-  const artifact =
-    received.byteLength === manifest.uncompressed.bytes ? received : await decompressFixture(received, manifest);
-  await assertFixtureBytes(artifact, manifest.uncompressed, 'uncompressed');
-  signal?.throwIfAborted();
-  const activeRegistry = registry ?? new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes });
-  return {
-    artifactBytes: artifact.byteLength,
-    atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
-    compressedBytes: manifest.compressed.bytes,
-    font: await activeRegistry.registerAsset(artifact),
-    metrics,
-    raster: msdf,
-  };
+): Promise<Awaited<ReturnType<typeof loadMtsdfFontAsset>>> {
+  return loadMtsdfFontAsset({
+    technique: 'mtsdf',
+    fixture,
+    delivery,
+    ...(registry === undefined ? {} : { registry }),
+    ...(signal === undefined ? {} : { signal }),
+    ...(onProgress === undefined ? {} : { onProgress }),
+  });
 }
 
 export interface MtsdfRasterConfiguration {
@@ -971,31 +889,6 @@ function assertLayoutWidthRatio(value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > 1) {
     throw new RangeError('MSDF preview layout width ratio must be in (0, 1]');
   }
-}
-
-async function decompressFixture(
-  compressed: Uint8Array<ArrayBuffer>,
-  manifest: MtsdfFixtureManifest,
-): Promise<Uint8Array<ArrayBuffer>> {
-  await assertFixtureBytes(compressed, manifest.compressed, 'compressed');
-  return decompressGzip(compressed);
-}
-
-async function decompressGzip(compressed: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
-async function assertFixtureBytes(
-  bytes: Uint8Array<ArrayBuffer>,
-  expected: { readonly bytes: number; readonly sha256: string },
-  label: string,
-): Promise<void> {
-  if (bytes.byteLength !== expected.bytes) {
-    throw new Error(`MTSDF ${label} fixture has ${bytes.byteLength} bytes; expected ${expected.bytes}`);
-  }
-  const hash = hex(await crypto.subtle.digest('SHA-256', bytes));
-  if (hash !== expected.sha256) throw new Error(`MTSDF ${label} fixture failed SHA-256`);
 }
 
 async function renderMtsdfText(resources: MtsdfTextResources): Promise<TargetRunOutput> {

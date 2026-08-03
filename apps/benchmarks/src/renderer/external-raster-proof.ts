@@ -1,10 +1,10 @@
-import { Text } from '@pmndrs/text';
+import { FontRegistry, Text } from '@pmndrs/text';
 import { glyphExample } from '@pmndrs/text-glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
 import { compactRgba8Readback } from './tsl-baseline';
-import { createFontDeliveryMetrics, loadRuntimeFont } from './font-delivery';
+import { loadBenchmarkFontAsset } from '../workloads/font-assets';
 import type { PersistentRenderSceneRenderer } from './persistent-render-host';
 import { withRendererStateRestored } from './renderer-state-transaction';
 import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
@@ -97,7 +97,14 @@ async function createResources(
     });
     target.texture.colorSpace = THREE.NoColorSpace;
     target.texture.generateMipmaps = false;
-    ({ font } = await loadRuntimeFont('inter', createFontDeliveryMetrics('runtime'), signal));
+    ({ font } = await loadBenchmarkFontAsset({
+      technique: 'bitmap',
+      fixture: 'inter',
+      delivery: 'runtime',
+      bitmapDensity: 'conformance',
+      registry: new FontRegistry(),
+      signal,
+    }));
     signal?.throwIfAborted();
     text = new Text({
       text: INITIAL_TEXT,
