@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:6c6d99db4edf86b72b37772cf56b37edee4c486f2af7275e3a1376c114c8b892'
+source_digest: 'sha256:7dc76667986f53d5e57c835c576c243e885d4609321b9a5ff1d8ad7662ef26dc'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -18,13 +18,13 @@ sources:
     resource: ../planning/benchmark-plan.md
     title: Benchmark plan
   - id: benchmark-ipsum
-    resource: ../../apps/benchmarks/src/workloads/benchmark-ipsum.ts
+    resource: ../../apps/benchmarks/src/workloads/benchmark-ipsum/scene.ts
     title: Canonical benchmark ipsum corpus
   - id: advanced-shaping-workload
-    resource: ../../apps/benchmarks/src/workloads/advanced-shaping.ts
+    resource: ../../apps/benchmarks/src/workloads/advanced-shaping/scene.ts
     title: Authored Advanced Shaping workload timeline
   - id: live-text-scene
-    resource: ../../apps/benchmarks/src/workloads/live-text-scene.ts
+    resource: ../../apps/benchmarks/src/workloads/shared/live-text-scene.ts
     title: Public-API-facing live Text scene contract
   - id: live-text-scene-registry
     resource: ../../apps/benchmarks/src/workloads/live-text-scenes.ts
@@ -60,8 +60,8 @@ sources:
     resource: ../../apps/benchmarks/fixtures/results/icon-grid-retained-evidence-chromium149.json
     title: Retained complete icon-grid traversal evidence
   - id: raster-technique-compare
-    resource: ../../apps/benchmarks/src/benchmark/targets/conformance/raster/comparison-scene.ts
-    title: Target-owned realtime MSDF and Slug GPU comparison
+    resource: ../../apps/benchmarks/src/surfaces/conformance/scenes/raster-technique-comparison.ts
+    title: Surface-owned realtime MSDF and Slug GPU comparison
   - id: low-level-raster-reference
     resource: ../../apps/benchmarks/src/benchmark/low-level/raster/source-outline-reference.ts
     title: Shared low-level source-outline oracle
@@ -90,14 +90,23 @@ sources:
     resource: ../../apps/benchmarks/src/benchmark/low-level/raster/rgba-readback.ts
     title: Renderer-neutral RGBA8 readback normalization
   - id: bitmap-atlas-metadata
-    resource: ../../apps/benchmarks/src/benchmark/low-level/raster/bitmap-atlas.ts
-    title: Renderer-neutral Bitmap atlas metadata inspection
+    resource: ../../apps/benchmarks/src/techniques/bitmap/metadata.ts
+    title: Bitmap technique atlas metadata inspection
   - id: mtsdf-raster-configuration
-    resource: ../../apps/benchmarks/src/benchmark/low-level/raster/mtsdf-configuration.ts
-    title: Renderer-neutral MTSDF configuration inspection
+    resource: ../../apps/benchmarks/src/techniques/mtsdf/metadata.ts
+    title: MTSDF technique configuration inspection
   - id: slug-raster-configuration
-    resource: ../../apps/benchmarks/src/benchmark/low-level/raster/slug-configuration.ts
-    title: Renderer-neutral Slug configuration inspection
+    resource: ../../apps/benchmarks/src/techniques/slug/metadata.ts
+    title: Slug technique allocation inspection
+  - id: bitmap-persistent-scene
+    resource: ../../apps/benchmarks/src/techniques/bitmap/persistent-scene.ts
+    title: Bitmap live Text technique adapter
+  - id: mtsdf-persistent-scene
+    resource: ../../apps/benchmarks/src/techniques/mtsdf/persistent-scene.ts
+    title: MTSDF live Text technique adapter
+  - id: slug-persistent-scene
+    resource: ../../apps/benchmarks/src/techniques/slug/persistent-scene.ts
+    title: Slug live Text technique adapter
   - id: renderer-lifecycle
     resource: ../../apps/benchmarks/src/renderer/webgpu-renderer.ts
     title: Shared renderer creation and disposal lifecycle
@@ -108,7 +117,7 @@ sources:
     resource: ../../apps/benchmarks/src/workloads/catalog.ts
     title: Typed live-workload policy catalog
   - id: icon-grid-workload
-    resource: ../../apps/benchmarks/src/workloads/icon-grid.ts
+    resource: ../../apps/benchmarks/src/workloads/icon-grid/scene.ts
     title: Retained Icon Grid workload instance and public Text example
   - id: harness-layout
     resource: ../../apps/benchmarks/src/components/harness-layout.tsx
@@ -119,6 +128,12 @@ sources:
   - id: sdf-live-viewports
     resource: ../../apps/benchmarks/src/surfaces/benchmark/sdf-text-viewports.tsx
     title: MTSDF and Slug persistent live-text viewport controllers
+  - id: benchmark-surface
+    resource: ../../apps/benchmarks/src/surfaces/benchmark/benchmark-surface.tsx
+    title: Authored workload and technique surface dispatcher
+  - id: comparison-workload-viewport
+    resource: ../../apps/benchmarks/src/surfaces/benchmark/comparison-workload-viewport.tsx
+    title: Retained comparison workload React viewport
   - id: raster-conformance-session
     resource: ../../apps/benchmarks/src/benchmark/targets/conformance/raster/contracts.ts
     title: Low-level raster conformance session contract
@@ -132,7 +147,7 @@ sources:
     resource: ../../apps/benchmarks/src/workloads/comparison/scene.ts
     title: Retained multi-technique workload scene
   - id: comparison-measurement-preview
-    resource: ../../apps/benchmarks/src/benchmark/targets/measurement/comparison-preview.ts
+    resource: ../../apps/benchmarks/src/benchmark/probes/comparison-workload-preview.ts
     title: Isolated-canvas adapter for Slug performance measurements
   - id: tsl-conformance-target
     resource: ../../apps/benchmarks/src/benchmark/targets/conformance/tsl-baseline.ts
@@ -154,7 +169,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-03T12:06:43Z'
+  at: '2026-08-03T14:22:00Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -262,11 +277,17 @@ The first retained challenger doubles every glyph from 16 to 32 bands without ch
 
 Six authenticated full-font fixtures cover sans, serif, script, Arabic, Devanagari, and Japanese stress. A seventh deterministic Noto Sans CJK JP subset covers only the authored Advanced Shaping Japanese corpus so the visual default uses a conventional sans rather than DotGothic16's intentional pixel style. Its source is `38,092 B`; its Bitmap GLB is `65,996 B` on one page; and its MTSDF artifact is `1,044,110 B` gzip / `3,172,756 B` raw / one page / `3,162,112 B` exact padded base-level GPU memory. The full Noto CJK font remains the shaping oracle and Milestone 13 paging target. DotGothic16 remains an explicit full-face raster stress fixture, not the representative CJK visual default. A streaming test authenticates all fourteen artifacts, embedded source hashes, complete fixture-local glyph counts, page totals, and exact padded base-array allocations without rebaking them. The production build emits and links one exact font-notices artifact containing every redistributed license.
 
-Bitmap, MTSDF, and Slug renderer modules expose only persistent-scene construction and scene-update contracts. The obsolete standalone preview constructors and their duplicate renderer, RAF, GPU-timer, telemetry, resize, and disposal lifecycles are removed; one source-boundary regression rejects their return.
+Bitmap, MTSDF, and Slug technique modules expose only persistent-scene construction, scene-update contracts, and their own raster metadata. The obsolete standalone preview constructors and their duplicate renderer, RAF, GPU-timer, telemetry, resize, and disposal lifecycles are removed; one source-boundary regression rejects their return.
 
-Canonical font loading is owned exclusively by `workloads/font-assets`, and renderer-neutral Bitmap atlas, MTSDF configuration, and Slug allocation inspection is owned by `benchmark/low-level/raster`. Product targets, conformance targets, retained comparison scenes, and live technique scenes call those owners directly; renderer modules no longer re-export loader, preload, baked-artifact, or raster-configuration compatibility facades.
+Canonical font loading is owned exclusively by `workloads/font-assets`. Bitmap atlas, MTSDF configuration, and Slug allocation inspection live beside the corresponding persistent adapter under `techniques`; finite scenes, CPU references, readback normalization, and direct ABI work remain under `benchmark/low-level` and `benchmark/targets`. Generic `renderer` modules own only the persistent host, canvas/view state, activation, telemetry, timing, renderer configuration, and state restoration.
 
-The multi-technique retained implementation lives beside its authored definitions under `workloads/comparison/scene`. It can use only an allowlisted set of generic host, canvas, telemetry, and activation primitives from `renderer`; it cannot create a renderer, animation loop, or GPU timer. Slug performance observations that require an isolated canvas enter through `benchmark/targets/measurement/comparison-preview`, which owns one `PersistentRenderHost`, activates the same workload scene, and guarantees host disposal after release. The app and workload rail preserve the literal lazy scene chunk boundary.
+Each runnable example owns one `workloads/<id>/` directory. Its `definition.ts` declares route metadata, controls, font policy, interaction, and Main/Presentation defaults; `scene.ts` is the framework-neutral public `@pmndrs/text` and Three.js example. Consumers import the exact file they need rather than routing through workload barrels, and the root catalog only preserves order and lookup. Shared structural contracts live under `workloads/shared`, while comparison-only contracts and registry wiring live under `workloads/comparison`.
+
+The multi-technique retained implementation lives under `workloads/comparison/scene` and consumes those authored scene factories. It can use only an allowlisted set of generic host, canvas, telemetry, and activation primitives from `renderer`; it cannot create a renderer, animation loop, or GPU timer. Slug performance observations that require an isolated canvas enter through `benchmark/probes/comparison-workload-preview`, which owns one `PersistentRenderHost`, activates the same workload scene, and guarantees host disposal after release. The app and workload rail preserve the literal lazy scene chunk boundary.
+
+True product, conformance, and measurement targets remain under `benchmark/targets`. Reusable finite scenes, CPU references, and readback primitives remain under `benchmark/low-level`. The realtime raster comparison is a route-owned retained scene under `surfaces/conformance/scenes`, not a benchmark target.
+
+`app.tsx` owns route and controller state but no live viewport implementation. `surfaces/benchmark/benchmark-surface` dispatches an authored workload to the selected technique, while `comparison-workload-viewport` owns the retained comparison activation, progress, errors, and causal probe attributes. Main and Presentation intentionally keep the same `Harness` component identity: route wrappers would remount the provider and violate canvas, renderer, and telemetry retention.
 
 The deterministic TSL renderer baseline is an executable conformance target under `benchmark/targets/conformance`, not renderer infrastructure. The latest-value async queue is local to `surfaces/benchmark`, where the three React viewport controllers use it to serialize scene commits and collapse obsolete pending inputs.
 
