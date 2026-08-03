@@ -1,8 +1,8 @@
 import type { BenchmarkFontFixture } from '../../../font-fixtures';
 import type { RasterTechnique } from '../../../url-state';
-import { captureBitmapTextConformance } from '../../../../renderer/bitmap-text';
 import type { PersistentRenderSceneRenderer } from '../../../../renderer/persistent-render-host';
 import type { RendererBackend } from '../../../../renderer/webgpu-renderer';
+import { captureBitmapTextConformance } from './bitmap-capture';
 import { captureMtsdfTextConformance } from './mtsdf-capture';
 
 export interface RuntimeFallbackCapture {

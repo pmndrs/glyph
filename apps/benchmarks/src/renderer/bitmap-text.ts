@@ -15,17 +15,8 @@ import {
 } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
-import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture } from '../benchmark/font-fixtures';
+import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';
-import {
-  captureBitmapFiniteScene,
-  BITMAP_FINITE_HEIGHT,
-  BITMAP_FINITE_WIDTH,
-  createBitmapFiniteScene,
-  disposeBitmapFiniteScene,
-  renderBitmapFiniteFrame,
-  type BitmapTextConformanceCapture,
-} from '../benchmark/low-level/raster/bitmap-finite-scene';
 import { createCanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
@@ -38,10 +29,6 @@ import {
 } from './retained-font-fixture';
 import { benchmarkContentWidth, liveTextPosition, type LiveTextAnchor } from '../workloads/shared/text-style';
 import {
-  captureSourceOutlineFidelity,
-  type SourceOutlineFidelityCapture,
-} from '../benchmark/low-level/raster/source-outline-reference';
-import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,
   readRendererViewportState,
@@ -51,7 +38,6 @@ import {
   type PersistentRenderFrameContext,
   type PersistentRenderScene,
   type PersistentRenderSceneContext,
-  type PersistentRenderSceneRenderer,
   type PersistentRenderViewport,
 } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
@@ -1234,59 +1220,6 @@ export async function createBitmapTextPreview(options: BitmapTextPreviewOptions)
     canvasSurface.dispose();
     await disposeConfiguredRenderer(renderer);
     throw error;
-  }
-}
-
-export async function captureBitmapTextConformance(options: {
-  readonly backend: RendererBackend;
-  readonly delivery?: FontDelivery;
-  readonly dpr: number;
-  readonly fontFixture?: BenchmarkFontFixture;
-  readonly renderer?: PersistentRenderSceneRenderer;
-  readonly signal?: AbortSignal;
-}): Promise<BitmapTextConformanceCapture> {
-  options.signal?.throwIfAborted();
-  const resources = await createBitmapFiniteScene(options);
-  try {
-    options.signal?.throwIfAborted();
-    const capture = await captureBitmapFiniteScene(resources);
-    options.signal?.throwIfAborted();
-    return capture;
-  } finally {
-    await disposeBitmapFiniteScene(resources);
-  }
-}
-
-export async function captureBitmapSourceOutlineFidelity(options: {
-  readonly backend: RendererBackend;
-  readonly dpr: number;
-  readonly fontFixture: SelectableFontFixture;
-  readonly renderer?: PersistentRenderSceneRenderer;
-  readonly signal?: AbortSignal;
-}): Promise<SourceOutlineFidelityCapture> {
-  options.signal?.throwIfAborted();
-  const resources = await createBitmapFiniteScene({ ...options, delivery: 'baked' });
-  try {
-    const width = Math.round(BITMAP_FINITE_WIDTH * options.dpr);
-    const height = Math.round(BITMAP_FINITE_HEIGHT * options.dpr);
-    const rendered = await renderBitmapFiniteFrame(resources, width, height);
-    options.signal?.throwIfAborted();
-    return await captureSourceOutlineFidelity({
-      candidate: rendered.bytes,
-      width,
-      height,
-      dpr: options.dpr,
-      fontFixture: options.fontFixture,
-      fontSize: resources.line.cssFontSize,
-      direction: 'ltr',
-      layout: resources.line.layout,
-      originX: resources.line.object.position.x,
-      originY: resources.line.object.position.y,
-      text: conformanceText(),
-      renderSubmitMs: rendered.renderMs,
-    });
-  } finally {
-    await disposeBitmapFiniteScene(resources);
   }
 }
 

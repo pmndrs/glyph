@@ -52,8 +52,17 @@ describe('benchmark target boundaries', () => {
     const execution = await readFile(new URL('./execution.ts', import.meta.url), 'utf8');
     const conformance = await readFile(new URL('./targets/conformance/index.ts', import.meta.url), 'utf8');
     const product = await readFile(new URL('./targets/product/index.ts', import.meta.url), 'utf8');
+    const bitmapCapture = await readFile(
+      new URL('./targets/conformance/raster/bitmap-capture.ts', import.meta.url),
+      'utf8',
+    );
     const mtsdfAdapter = await readFile(new URL('./targets/conformance/raster/mtsdf.ts', import.meta.url), 'utf8');
     const slugAdapter = await readFile(new URL('./targets/conformance/raster/slug.ts', import.meta.url), 'utf8');
+    const runtimeFallback = await readFile(
+      new URL('./targets/conformance/raster/runtime-fallback.ts', import.meta.url),
+      'utf8',
+    );
+    const finiteCaptureSurface = await readFile(new URL('../surfaces/conformance/capture.ts', import.meta.url), 'utf8');
     const slugCaptureProbes = await Promise.all(
       ['slug-adaptive32-quality', 'slug-external-render-parity', 'slug-fixed32-quality', 'slug-role-scenes'].map(
         (name) => readFile(new URL(`../../vitexec/${name}.probe.ts`, import.meta.url), 'utf8'),
@@ -66,8 +75,10 @@ describe('benchmark target boundaries', () => {
     expect(execution).toContain('await loadRegisteredTarget(request.targetId)');
     expect(conformance).toContain("import('./advanced-shaping')");
     expect(conformance).toContain("import('./raster/runtime-fallback')");
+    expect(conformance).toContain("import('./raster/bitmap-capture')");
     expect(conformance).not.toContain('renderer/advanced-shaping-conformance');
     expect(conformance).not.toContain('renderer/runtime-fallback-conformance');
+    expect(conformance).not.toContain('renderer/bitmap-text');
     expect(product).toContain("import('./external-raster-proof')");
     expect(product).toContain("import('./react-text')");
     expect(product).toContain("import('./mtsdf-text')");
@@ -82,6 +93,12 @@ describe('benchmark target boundaries', () => {
     expect(mtsdfAdapter).not.toContain('renderer/mtsdf-text');
     expect(slugAdapter).toContain("import { createSlugConformanceSession } from './slug-capture'");
     expect(slugAdapter).not.toContain('renderer/slug-text');
+    expect(bitmapCapture).toContain('createBitmapFiniteScene');
+    expect(bitmapCapture).not.toContain('renderer/bitmap-text');
+    expect(runtimeFallback).toContain("from './bitmap-capture'");
+    expect(runtimeFallback).not.toContain('renderer/bitmap-text');
+    expect(finiteCaptureSurface).toContain("import('../../benchmark/targets/conformance/raster/bitmap-capture')");
+    expect(finiteCaptureSurface).not.toContain('renderer/bitmap-text');
     expect(
       slugCaptureProbes.every((probe) => probe.includes('/benchmark/targets/conformance/raster/slug-capture.ts')),
     ).toBe(true);

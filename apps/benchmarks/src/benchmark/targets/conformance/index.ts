@@ -78,7 +78,7 @@ function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): Be
     load: async () => undefined,
     run: async (input, _sampleIndex, controls, context) => {
       const fontFixture = input.fontFixture ?? configuredInput.fontFixture ?? 'inter';
-      const capture = await import('../../../renderer/bitmap-text').then(({ captureBitmapSourceOutlineFidelity }) =>
+      const capture = await import('./raster/bitmap-capture').then(({ captureBitmapSourceOutlineFidelity }) =>
         captureBitmapSourceOutlineFidelity({
           backend,
           dpr: controls.dpr,

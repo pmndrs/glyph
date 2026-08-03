@@ -58,7 +58,8 @@ export interface BitmapFiniteScene {
   readonly fontFixture: BenchmarkFontFixture;
 }
 
-export interface BitmapTextConformanceCapture {
+/** Exact finite-scene readback and CPU atlas reference, independent of its conformance consumer. */
+export interface BitmapFiniteSceneCapture {
   readonly width: number;
   readonly height: number;
   readonly candidate: Uint8Array;
@@ -177,7 +178,7 @@ export async function createBitmapFiniteScene({
   }
 }
 
-export async function captureBitmapFiniteScene(resources: BitmapFiniteScene): Promise<BitmapTextConformanceCapture> {
+export async function captureBitmapFiniteScene(resources: BitmapFiniteScene): Promise<BitmapFiniteSceneCapture> {
   const width = Math.round(BITMAP_FINITE_WIDTH * resources.dpr);
   const height = Math.round(BITMAP_FINITE_HEIGHT * resources.dpr);
   const rendered = await renderBitmapFiniteFrame(resources, width, height);

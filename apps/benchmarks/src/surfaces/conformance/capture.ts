@@ -3,7 +3,7 @@ import type { MtsdfTextConformanceCapture } from '../../benchmark/targets/confor
 import type { SlugTextConformanceCapture } from '../../benchmark/targets/conformance/raster/slug-capture';
 import type { ConformanceWorkloadId } from '../../benchmark/workloads';
 import type { GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
-import type { BitmapTextConformanceCapture } from '../../benchmark/low-level/raster/bitmap-finite-scene';
+import type { BitmapTextConformanceCapture } from '../../benchmark/targets/conformance/raster/bitmap-capture';
 import type { PersistentRenderSceneRenderer } from '../../renderer/persistent-render-host';
 import type { SourceOutlineFidelityCapture } from '../../benchmark/low-level/raster/source-outline-reference';
 import type { RuntimeFallbackCapture } from '../../benchmark/targets/conformance/raster/runtime-fallback';
@@ -25,8 +25,8 @@ interface FiniteConformanceCaptureOptions {
   readonly workload: ConformanceWorkloadId;
 }
 
-function loadBitmapTextRenderer() {
-  return import('../../renderer/bitmap-text');
+function loadBitmapCapture() {
+  return import('../../benchmark/targets/conformance/raster/bitmap-capture');
 }
 
 function loadMtsdfCapture() {
@@ -73,7 +73,7 @@ export async function captureFiniteConformance({
         value: await captureMtsdfSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
       };
     }
-    const { captureBitmapSourceOutlineFidelity } = await loadBitmapTextRenderer();
+    const { captureBitmapSourceOutlineFidelity } = await loadBitmapCapture();
     return {
       kind: 'source-outline',
       value: await captureBitmapSourceOutlineFidelity({ backend, dpr, fontFixture, renderer, signal }),
@@ -93,7 +93,7 @@ export async function captureFiniteConformance({
       value: await captureMtsdfTextConformance({ backend, dpr, fontFixture, renderer, signal }),
     };
   }
-  const { captureBitmapTextConformance } = await loadBitmapTextRenderer();
+  const { captureBitmapTextConformance } = await loadBitmapCapture();
   return {
     kind: 'bitmap',
     value: await captureBitmapTextConformance({ backend, dpr, fontFixture, renderer, signal }),
