@@ -2,6 +2,9 @@ import type { BenchmarkInput, BenchmarkTarget, Capability } from '../../contract
 import { selectableFontFixture } from '../../font-fixtures';
 import { createShapingConformanceTargets } from './direct-runtime';
 import { createFontLoaderWorkerConformanceTarget } from './font-loader-worker';
+import { mtsdfRasterConformanceAdapter } from './raster/mtsdf';
+import { slugRasterConformanceAdapter } from './raster/slug';
+import { createRasterSamplingConformanceTarget, createRasterSourceOutlineConformanceTarget } from './raster/target';
 import { createDeferredTarget, sha256 } from '../shared';
 
 type Backend = 'webgpu' | 'webgl2';
@@ -35,21 +38,9 @@ function tslBaselineTarget(backend: Backend): BenchmarkTarget {
 }
 
 function samplingTarget(technique: Extract<Technique, 'mtsdf' | 'slug'>, backend: Backend): BenchmarkTarget {
-  return createDeferredTarget(
-    {
-      id: `${technique}-conformance-${backend}`,
-      label: `${technique === 'mtsdf' ? 'MTSDF' : 'Slug'} sampling conformance · ${backendLabel(backend)}`,
-      detail: 'GPU TSL candidate · independent scalar CPU reconstruction',
-      color: technique === 'slug' && backend === 'webgpu' ? 'green' : backendColor(backend),
-      capabilities: rasterCapabilities,
-      status: () => 'ready',
-    },
-    async () => {
-      if (technique === 'mtsdf')
-        return (await import('../../../renderer/mtsdf-text')).createMtsdfConformanceTarget(backend);
-      return (await import('../../../renderer/slug-text')).createSlugConformanceTarget(backend);
-    },
-    { forwardsConfiguration: true },
+  return createRasterSamplingConformanceTarget(
+    technique === 'mtsdf' ? mtsdfRasterConformanceAdapter : slugRasterConformanceAdapter,
+    backend,
   );
 }
 
@@ -67,6 +58,12 @@ const advancedShapingTarget = () =>
   );
 
 function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): BenchmarkTarget {
+  if (technique === 'mtsdf' || technique === 'slug') {
+    return createRasterSourceOutlineConformanceTarget(
+      technique === 'mtsdf' ? mtsdfRasterConformanceAdapter : slugRasterConformanceAdapter,
+      backend,
+    );
+  }
   let configuredInput: BenchmarkInput = {};
   return {
     id: `source-outline-${technique}-${backend}`,
@@ -81,43 +78,22 @@ function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): Be
     load: async () => undefined,
     run: async (input, _sampleIndex, controls, context) => {
       const fontFixture = input.fontFixture ?? configuredInput.fontFixture ?? 'inter';
-      const capture =
-        technique === 'slug'
-          ? await import('../../../renderer/slug-text').then(({ captureSlugSourceOutlineFidelity }) =>
-              captureSlugSourceOutlineFidelity({
-                backend,
-                dpr: controls.dpr,
-                fontFixture,
-                ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
-                ...(context?.signal === undefined ? {} : { signal: context.signal }),
-              }),
-            )
-          : technique === 'mtsdf'
-            ? await import('../../../renderer/mtsdf-text').then(({ captureMtsdfSourceOutlineFidelity }) =>
-                captureMtsdfSourceOutlineFidelity({
-                  backend,
-                  dpr: controls.dpr,
-                  fontFixture: selectableFontFixture(fontFixture),
-                  ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
-                  ...(context?.signal === undefined ? {} : { signal: context.signal }),
-                }),
-              )
-            : await import('../../../renderer/bitmap-text').then(({ captureBitmapSourceOutlineFidelity }) =>
-                captureBitmapSourceOutlineFidelity({
-                  backend,
-                  dpr: controls.dpr,
-                  fontFixture: selectableFontFixture(fontFixture),
-                  ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
-                  ...(context?.signal === undefined ? {} : { signal: context.signal }),
-                }),
-              );
+      const capture = await import('../../../renderer/bitmap-text').then(({ captureBitmapSourceOutlineFidelity }) =>
+        captureBitmapSourceOutlineFidelity({
+          backend,
+          dpr: controls.dpr,
+          fontFixture: selectableFontFixture(fontFixture),
+          ...(context?.renderer === undefined ? {} : { renderer: context.renderer }),
+          ...(context?.signal === undefined ? {} : { signal: context.signal }),
+        }),
+      );
       return {
         bytes: capture.candidate.byteLength,
         hash: await sha256(capture.candidate),
         metrics: {
           techniqueBitmap: technique === 'bitmap' ? 1 : 0,
-          techniqueMtsdf: technique === 'mtsdf' ? 1 : 0,
-          techniqueSlug: technique === 'slug' ? 1 : 0,
+          techniqueMtsdf: 0,
+          techniqueSlug: 0,
           fixtureIsDotGothic: fontFixture === 'dot-gothic-16' ? 1 : 0,
           backendWebGpu: backend === 'webgpu' ? 1 : 0,
           backendWebGl2: backend === 'webgl2' ? 1 : 0,

@@ -39,6 +39,8 @@ describe('benchmark target boundaries', () => {
     const registry = await readFile(new URL('./targets/registry.ts', import.meta.url), 'utf8');
     const execution = await readFile(new URL('./execution.ts', import.meta.url), 'utf8');
     const conformance = await readFile(new URL('./targets/conformance/index.ts', import.meta.url), 'utf8');
+    const mtsdfAdapter = await readFile(new URL('./targets/conformance/raster/mtsdf.ts', import.meta.url), 'utf8');
+    const slugAdapter = await readFile(new URL('./targets/conformance/raster/slug.ts', import.meta.url), 'utf8');
 
     expect(registry).toContain("import('./product')");
     expect(registry).toContain("import('./measurement/font-baker')");
@@ -46,6 +48,10 @@ describe('benchmark target boundaries', () => {
     expect(execution).toContain('await loadRegisteredTarget(request.targetId)');
     expect(conformance).toContain("import('./advanced-shaping')");
     expect(conformance).not.toContain('renderer/advanced-shaping-conformance');
+    expect(conformance).not.toContain("import('../../../renderer/mtsdf-text')");
+    expect(conformance).not.toContain("import('../../../renderer/slug-text')");
+    expect(mtsdfAdapter).toContain("import('../../../../renderer/mtsdf-text')");
+    expect(slugAdapter).toContain("import('../../../../renderer/slug-text')");
     const { createAdvancedShapingConformanceTarget } = await import('./targets/conformance/advanced-shaping');
     expect(createAdvancedShapingConformanceTarget().id).toBe('advanced-shaping-conformance');
     expect(await loadRegisteredTarget('missing')).toBeUndefined();
