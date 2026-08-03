@@ -63,8 +63,7 @@ const advancedShapingTarget = () =>
       capabilities: rasterCapabilities,
       status: () => 'ready',
     },
-    async () =>
-      (await import('../../../renderer/advanced-shaping-conformance')).createAdvancedShapingConformanceTarget(),
+    async () => (await import('./advanced-shaping')).createAdvancedShapingConformanceTarget(),
   );
 
 function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): BenchmarkTarget {

@@ -38,11 +38,16 @@ describe('benchmark target boundaries', () => {
   it('resolves targets through the lazy group registry without importing the monolithic implementation facade', async () => {
     const registry = await readFile(new URL('./targets/registry.ts', import.meta.url), 'utf8');
     const execution = await readFile(new URL('./execution.ts', import.meta.url), 'utf8');
+    const conformance = await readFile(new URL('./targets/conformance/index.ts', import.meta.url), 'utf8');
 
     expect(registry).toContain("import('./product')");
     expect(registry).toContain("import('./measurement/font-baker')");
     expect(registry).toContain("import('./conformance')");
     expect(execution).toContain('await loadRegisteredTarget(request.targetId)');
+    expect(conformance).toContain("import('./advanced-shaping')");
+    expect(conformance).not.toContain('renderer/advanced-shaping-conformance');
+    const { createAdvancedShapingConformanceTarget } = await import('./targets/conformance/advanced-shaping');
+    expect(createAdvancedShapingConformanceTarget().id).toBe('advanced-shaping-conformance');
     expect(await loadRegisteredTarget('missing')).toBeUndefined();
   });
 

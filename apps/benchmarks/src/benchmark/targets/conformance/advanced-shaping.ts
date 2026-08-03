@@ -2,17 +2,17 @@ import { FontRegistry, Text, type RegisteredFont } from '@pmndrs/text';
 import { bitmap } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
-import amiriBitmapFontUrl from '../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
-import notoCjkShowcaseBitmapFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb?url';
-import interBitmapFontUrl from '../../fixtures/rendering/inter-bitmap-16.font.glb?url';
-import devanagariBitmapFontUrl from '../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url';
+import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
+import notoCjkShowcaseBitmapFontUrl from '../../../../fixtures/rendering/noto-sans-cjk-showcase-bitmap-16.font.glb?url';
+import interBitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
+import devanagariBitmapFontUrl from '../../../../fixtures/rendering/noto-sans-devanagari-bitmap-16.font.glb?url';
 import {
   ADVANCED_SHAPING_CASES,
   advancedShapingFrames,
   type AdvancedShapingFontFixture,
-} from '../benchmark/advanced-shaping';
-import type { BenchmarkTarget } from '../benchmark/contracts';
-import { hashParagraphLayout, paragraphLayoutBytes } from '../benchmark/paragraph-layout-digest';
+} from '../../../workloads/advanced-shaping';
+import type { BenchmarkTarget } from '../../contracts';
+import { hashParagraphLayout, paragraphLayoutBytes } from '../../paragraph-layout-digest';
 
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
