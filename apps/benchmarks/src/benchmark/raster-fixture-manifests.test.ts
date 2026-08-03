@@ -93,34 +93,35 @@ describe('checked raster fixture manifests', () => {
     }
   });
 
-  it('authenticates every complete MTSDF font artifact and page total', async () => {
+  it('covers every complete MTSDF font fixture', () => {
     expect(mtsdfManifest.artifacts.map(({ fontFixture }) => fontFixture)).toEqual(Object.keys(fixtureIdentities));
-    for (const artifact of mtsdfManifest.artifacts) {
-      const fixtureId = checkedFixtureId(artifact.fontFixture);
-      const identity = fixtureIdentities[fixtureId];
-      const compressed = await readFile(new URL(`rendering/${artifact.file}`, fixtureRoot));
-      expect(compressed.byteLength).toBe(artifact.compressed.bytes);
-      expect(sha256(compressed)).toBe(artifact.compressed.sha256);
-      const expanded = await authenticateGzipGlb(compressed);
-      expect(expanded.bytes).toBe(artifact.uncompressed.bytes);
-      expect(expanded.sha256).toBe(artifact.uncompressed.sha256);
-      const document = glbDocument(expanded.jsonPrefix, artifact.file);
-      await expectCompleteFont(document, identity, fixtureId);
-      const raster = objectProperty(
-        objectProperty(document, 'extensions', artifact.file),
-        'PMNDRS_font_distance_field',
-        artifact.file,
-      );
-      expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
-      expect(arrayProperty(raster, 'pages', artifact.file)).toHaveLength(artifact.raster.pages.length);
-      expect(sum(artifact.raster.pages.map(({ decodedGpuBytes }) => decodedGpuBytes))).toBe(
-        artifact.raster.decodedGpuBytes,
-      );
-      const textureArray = artifact.raster.runtimeTextureArray;
-      expect(exactBaseTextureArrayBytes(textureArray.width, textureArray.height, textureArray.layers, 4)).toBe(
-        textureArray.basePaddedGpuBytes,
-      );
-    }
+  });
+
+  it.each(mtsdfManifest.artifacts)('authenticates MTSDF artifact $fontFixture and its page total', async (artifact) => {
+    const fixtureId = checkedFixtureId(artifact.fontFixture);
+    const identity = fixtureIdentities[fixtureId];
+    const compressed = await readFile(new URL(`rendering/${artifact.file}`, fixtureRoot));
+    expect(compressed.byteLength).toBe(artifact.compressed.bytes);
+    expect(sha256(compressed)).toBe(artifact.compressed.sha256);
+    const expanded = await authenticateGzipGlb(compressed);
+    expect(expanded.bytes).toBe(artifact.uncompressed.bytes);
+    expect(expanded.sha256).toBe(artifact.uncompressed.sha256);
+    const document = glbDocument(expanded.jsonPrefix, artifact.file);
+    await expectCompleteFont(document, identity, fixtureId);
+    const raster = objectProperty(
+      objectProperty(document, 'extensions', artifact.file),
+      'PMNDRS_font_distance_field',
+      artifact.file,
+    );
+    expect(integerProperty(raster, 'glyphCount', artifact.file)).toBe(identity.glyphCount);
+    expect(arrayProperty(raster, 'pages', artifact.file)).toHaveLength(artifact.raster.pages.length);
+    expect(sum(artifact.raster.pages.map(({ decodedGpuBytes }) => decodedGpuBytes))).toBe(
+      artifact.raster.decodedGpuBytes,
+    );
+    const textureArray = artifact.raster.runtimeTextureArray;
+    expect(exactBaseTextureArrayBytes(textureArray.width, textureArray.height, textureArray.layers, 4)).toBe(
+      textureArray.basePaddedGpuBytes,
+    );
   });
 });
 
