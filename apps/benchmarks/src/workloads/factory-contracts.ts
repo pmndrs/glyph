@@ -1,4 +1,4 @@
-import type { AnyRasterInput, RegisteredFont, Text, TextSpan } from '@pmndrs/text';
+import type { AnyRasterInput, ParagraphLayout, RegisteredFont, Text, TextSpan } from '@pmndrs/text';
 import type * as THREE from 'three/webgpu';
 
 export interface MutablePaintSpan {
@@ -47,4 +47,11 @@ export interface WorkloadTextFactoryContext {
   readonly dpr: number;
   readonly font: RegisteredFont;
   readonly raster: AnyRasterInput;
+}
+
+/** Returns the layout committed by the Text lifecycle before a workload positions its scene. */
+export function committedTextLayout(text: Text): ParagraphLayout {
+  const layout = text.layout;
+  if (layout === undefined) throw new Error('workload Text lost its committed layout');
+  return layout;
 }

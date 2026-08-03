@@ -2,8 +2,12 @@ import { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadDefinition } from './contracts';
-import type { ComparisonWorkloadEntry, WorkloadTextFactoryContext } from './factory-contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import {
+  committedTextLayout,
+  type ComparisonWorkloadEntry,
+  type WorkloadTextFactoryContext,
+} from './factory-contracts';
 
 export const ZOOM_TEXT_BASE_CSS_PX = 8 * (96 / 72);
 export const ZOOM_TEXT_INSET_CSS_PX = 24;
@@ -146,8 +150,62 @@ export function updateZoomTextAnimationState(
   state.progress = phase;
 }
 
+export function layoutZoomTextEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  viewportWidth: number,
+  viewportHeight: number,
+): void {
+  for (const entry of entries) layoutZoomTextEntry(entry, viewportWidth, viewportHeight);
+}
+
+export function animateZoomTextEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  configuration: Pick<ComparisonWorkloadConfiguration, 'animationEnabled' | 'animationSpeed'>,
+  timestamp: number,
+  state: ZoomTextAnimationState,
+): void {
+  if (!configuration.animationEnabled) return;
+  if (entries.length !== ZOOM_TEXT_PHRASES.length) {
+    throw new Error(
+      `zoom text requires one retained Text per phrase; received ${String(entries.length)} for ${String(ZOOM_TEXT_PHRASES.length)} phrases`,
+    );
+  }
+  updateZoomTextAnimationState(state, timestamp, configuration.animationSpeed, ZOOM_TEXT_PHRASES.length);
+  const current = entries[state.phraseIndex]!;
+  const incoming = entries[(state.phraseIndex + 1) % entries.length]!;
+  const previous = entries[(state.phraseIndex + entries.length - 1) % entries.length]!;
+  const fadeProgress = smoothstep(Math.max(0, Math.min(1, (state.progress - 0.82) / 0.18)));
+  const zoomProgress = state.progress ** 3;
+  previous.node.visible = false;
+  current.node.visible = true;
+  incoming.node.visible = fadeProgress > 0;
+  current.node.scale.setScalar(1 + ((current.zoomMaximumScale ?? 1) - 1) * zoomProgress);
+  incoming.node.scale.setScalar(1);
+  setZoomTextOpacity(current, 1 - fadeProgress);
+  setZoomTextOpacity(incoming, fadeProgress);
+}
+
+function layoutZoomTextEntry(entry: ComparisonWorkloadEntry, viewportWidth: number, viewportHeight: number): void {
+  const layout = committedTextLayout(entry.text);
+  entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
+  entry.node.position.set(viewportWidth / 2, -viewportHeight / 2, 0);
+  entry.node.scale.setScalar(1);
+  entry.zoomMaximumScale = zoomTextMaximumScale(layout.width, layout.height, viewportWidth, viewportHeight);
+}
+
+function setZoomTextOpacity(entry: ComparisonWorkloadEntry, opacity: number): void {
+  if (entry.zoomOpacityUpdate === undefined || Math.abs((entry.zoomOpacity ?? -1) - opacity) < 0.002) return;
+  entry.zoomOpacity = opacity;
+  entry.zoomOpacityUpdate.opacity = opacity;
+  entry.text.setProperties(entry.zoomOpacityUpdate);
+}
+
 function animationRate(animationSpeed: number): number {
   return 0.25 + animationSpeed * 0.0175;
+}
+
+function smoothstep(value: number): number {
+  return value * value * (3 - 2 * value);
 }
 
 function positive(value: number, label: string): number {

@@ -1,9 +1,14 @@
 import { Text } from '@pmndrs/text';
+import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen } from '../benchmark/font-fixtures';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadDefinition } from './contracts';
-import type { ComparisonWorkloadEntry, WorkloadTextFactoryContext } from './factory-contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import {
+  committedTextLayout,
+  type ComparisonWorkloadEntry,
+  type WorkloadTextFactoryContext,
+} from './factory-contracts';
 
 export const LADDER_CSS_SIZES = [
   8, 10, 12, 14, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 512, 1024,
@@ -119,6 +124,44 @@ export function setTextLadderScenePosition(
   const offscreenLeftX = -finalEntryX - finalEntryWidth - viewportWidth * 0.05;
   position.x = marqueeProgress === 0 ? 0 : offscreenLeftX * marqueeProgress;
   position.y = centeredScrollY * scrollProgress;
+}
+
+export function layoutTextLadderEntries(entries: readonly ComparisonWorkloadEntry[], viewportWidth: number): void {
+  const layouts = entries.map(({ text }) => committedTextLayout(text));
+  const widestLine = layouts.reduce((maximum, layout) => Math.max(maximum, layout.width), 0);
+  const centeredColumnWidth = Math.min(widestLine, viewportWidth * 0.94);
+  const x = Math.max(LADDER_INSET_CSS_PX, (viewportWidth - centeredColumnWidth) / 2);
+  let y = LADDER_INSET_CSS_PX + 18;
+  for (const [index, { text }] of entries.entries()) {
+    const layout = layouts[index]!;
+    text.position.set(x, -y, 0);
+    y += layout.height + LADDER_GAP_CSS_PX;
+  }
+}
+
+export function animateTextLadderScene(
+  scene: THREE.Scene,
+  entries: readonly ComparisonWorkloadEntry[],
+  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed' | 'textLadderExitEnabled'>,
+  elapsedMs: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  positionScratch: MutableTextLadderScenePosition,
+): void {
+  const finalEntry = entries[entries.length - 1];
+  if (finalEntry === undefined) return;
+  const layout = committedTextLayout(finalEntry.text);
+  setTextLadderScenePosition(positionScratch, {
+    animationSpeed: configuration.animationSpeed,
+    elapsedMs,
+    exitEnabled: configuration.textLadderExitEnabled,
+    finalCenterY: finalEntry.text.position.y - layout.height / 2,
+    finalEntryX: finalEntry.text.position.x,
+    finalEntryWidth: layout.width,
+    viewportHeight,
+    viewportWidth,
+  });
+  scene.position.set(positionScratch.x, positionScratch.y, 0);
 }
 
 function animationRate(animationSpeed: number): number {

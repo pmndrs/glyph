@@ -2,8 +2,12 @@ import { Text, type TextSpan } from '@pmndrs/text';
 
 import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
 import type { RasterTechnique } from '../benchmark/url-state';
-import type { ComparisonWorkloadDefinition } from './contracts';
-import type { ComparisonWorkloadEntry, WorkloadTextFactoryContext } from './factory-contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import {
+  committedTextLayout,
+  type ComparisonWorkloadEntry,
+  type WorkloadTextFactoryContext,
+} from './factory-contracts';
 
 export interface MutablePaintSpan extends TextSpan {
   color: number;
@@ -105,6 +109,79 @@ export function updatePaintSpans(
   }
 }
 
+export function layoutPaintEffectsEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  viewportWidth: number,
+  viewportHeight: number,
+): void {
+  const entry = entries[0];
+  if (entry === undefined) return;
+  const layout = committedTextLayout(entry.text);
+  entry.text.position.set(
+    Math.max(12, (viewportWidth - layout.width) / 2),
+    -Math.max(18, (viewportHeight - layout.height) / 2),
+    0,
+  );
+}
+
+export function animatePaintEffectsEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  configuration: Pick<ComparisonWorkloadConfiguration, 'amount' | 'animationEnabled' | 'animationSpeed'>,
+  timestamp: number,
+): void {
+  const entry = entries[0];
+  if (entry === undefined || !configuration.animationEnabled) return;
+  const paintFrame = Math.floor(timestamp / 16);
+  if (entry.lastPaintFrame === paintFrame) return;
+  entry.lastPaintFrame = paintFrame;
+  const started = performance.now();
+  // Identical text and shaping-span ranges keep Text on its synchronous paint-only batch path.
+  const phase = timestamp * 0.0002 * animationRate(configuration.animationSpeed);
+  entry.paintPhase = phase;
+  if (entry.paintSpans === undefined || entry.paintUpdate === undefined) {
+    throw new Error('paint effects entry is missing its retained span buffer');
+  }
+  updatePaintSpans(entry.paintSpans, phase, configuration.amount, entry.paintOutlineWidth, entry.paintShadowOffset);
+  entry.text.setProperties(entry.paintUpdate);
+  entry.paintRevision = (entry.paintRevision ?? 0) + 1;
+  entry.lastPaintUpdateMs = performance.now() - started;
+}
+
+export function applyPaintEffectsRetainedConfiguration(
+  entries: readonly ComparisonWorkloadEntry[],
+  technique: RasterTechnique,
+  configuration: Pick<
+    ComparisonWorkloadConfiguration,
+    'amount' | 'fontSize' | 'paintOpacity' | 'paintShadowEnabled' | 'paintStrokeWidth'
+  >,
+): void {
+  const maximumOutlineWidth = configuration.fontSize / 16;
+  const paintOutlineWidth = technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined;
+  const paintShadowOffset =
+    technique === 'mtsdf' && configuration.paintShadowEnabled
+      ? ([Math.max(3, configuration.fontSize / 10), Math.max(3, configuration.fontSize / 10)] as const)
+      : undefined;
+  for (const entry of entries) {
+    if (paintOutlineWidth === undefined) delete entry.paintOutlineWidth;
+    else entry.paintOutlineWidth = paintOutlineWidth;
+    if (paintShadowOffset === undefined) delete entry.paintShadowOffset;
+    else entry.paintShadowOffset = paintShadowOffset;
+    if (entry.paintSpans === undefined) throw new Error('paint effects entry is missing its retained span buffer');
+    updatePaintSpans(
+      entry.paintSpans,
+      entry.paintPhase ?? 0,
+      configuration.amount,
+      paintOutlineWidth,
+      paintShadowOffset,
+    );
+    entry.text.setProperties({
+      opacity: configuration.paintOpacity,
+      text: PAINT_EFFECTS_TEXT,
+      spans: entry.paintSpans,
+    });
+  }
+}
+
 export function paintWordHue(wordIndex: number, wordCount: number, phase: number, amount: number): number {
   if (!Number.isSafeInteger(wordIndex) || wordIndex < 0 || wordIndex >= wordCount) {
     throw new RangeError('paint word index must address the word sequence');
@@ -125,4 +202,8 @@ function hslColor(hue: number, saturation: number, lightness: number): number {
     );
   };
   return (Math.round(channel(0) * 255) << 16) | (Math.round(channel(8) * 255) << 8) | Math.round(channel(4) * 255);
+}
+
+function animationRate(animationSpeed: number): number {
+  return 0.25 + animationSpeed * 0.0175;
 }

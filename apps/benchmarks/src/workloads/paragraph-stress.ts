@@ -1,9 +1,15 @@
 import { Text } from '@pmndrs/text';
+import type * as THREE from 'three/webgpu';
 
 import { benchmarkIpsumText } from '../benchmark/font-fixtures';
+import { paragraphStressScrollProgress } from '../benchmark/paragraph-stress-motion';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
-import type { ComparisonWorkloadEntry, WorkloadTextFactoryContext } from './factory-contracts';
+import {
+  committedTextLayout,
+  type ComparisonWorkloadEntry,
+  type WorkloadTextFactoryContext,
+} from './factory-contracts';
 
 export const paragraphStressWorkload = {
   cameraKind: 'orthographic',
@@ -37,4 +43,34 @@ export function createParagraphStressEntries(
     wrap: 'word',
   });
   return [{ node: text, role: 'primary', sourceText, text }];
+}
+
+export function layoutParagraphStressEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  viewportWidth: number,
+  viewportHeight: number,
+): void {
+  const entry = entries[0];
+  if (entry === undefined) return;
+  const layout = committedTextLayout(entry.text);
+  entry.text.position.set(
+    Math.max(12, (viewportWidth - layout.width) / 2),
+    -Math.max(12, (viewportHeight - layout.height) / 2),
+    0,
+  );
+}
+
+export function animateParagraphStressScene(
+  scene: THREE.Scene,
+  entries: readonly ComparisonWorkloadEntry[],
+  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>,
+  elapsedMs: number,
+  viewportHeight: number,
+): void {
+  const entry = entries[0];
+  if (entry === undefined) return;
+  const layout = committedTextLayout(entry.text);
+  const scrollProgress = paragraphStressScrollProgress(elapsedMs, configuration.animationSpeed);
+  const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
+  scene.position.y = maximumScrollY * scrollProgress;
 }

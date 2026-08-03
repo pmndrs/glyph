@@ -1,38 +1,46 @@
-import { FontRegistry, Text, type AnyRasterInput, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
+import { FontRegistry, type AnyRasterInput, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../benchmark/font-fixtures';
 import { ICON_GRID_FONT_FIXTURE } from '../benchmark/font-fixtures';
-import { paragraphStressScrollProgress } from '../benchmark/paragraph-stress-motion';
 import type { FontDelivery, RasterTechnique } from '../benchmark/url-state';
 import {
   comparisonWorkloadDefinition,
   comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
   comparisonWorkloadUpdateKind as registryUpdateKind,
 } from '../workloads/registry';
-import { DYNAMIC_LAYOUT_TEXT, createDynamicLayoutEntries, dynamicLayoutWidths } from '../workloads/dynamic-layout';
-import { ICON_GRID_ITEMS, createIconGridEntries, iconGridContent, iconGridLabel } from '../workloads/icon-grid';
-import { OFF_AXIS_HORIZONTAL_BIAS_RATIO, createOffAxis3dEntries, offAxisColorAt } from '../workloads/off-axis-3d';
-import { PAINT_EFFECTS_TEXT, createPaintEffectsEntries, updatePaintSpans } from '../workloads/paint-effects';
-import { createParagraphStressEntries } from '../workloads/paragraph-stress';
 import {
-  LADDER_GAP_CSS_PX,
-  LADDER_INSET_CSS_PX,
-  createTextLadderEntries,
-  setTextLadderScenePosition,
-} from '../workloads/text-ladder';
+  DYNAMIC_LAYOUT_TEXT,
+  animateDynamicLayoutEntries,
+  createDynamicLayoutEntries,
+  dynamicLayoutWidths,
+  layoutDynamicLayoutEntries,
+} from '../workloads/dynamic-layout';
+import { ICON_GRID_ITEMS, createIconGridEntries, iconGridContent, iconGridLabel } from '../workloads/icon-grid';
+import { animateOffAxis3dEntries, createOffAxis3dEntries, layoutOffAxis3dEntries } from '../workloads/off-axis-3d';
+import {
+  animatePaintEffectsEntries,
+  applyPaintEffectsRetainedConfiguration,
+  createPaintEffectsEntries,
+  layoutPaintEffectsEntries,
+} from '../workloads/paint-effects';
+import {
+  animateParagraphStressScene,
+  createParagraphStressEntries,
+  layoutParagraphStressEntries,
+} from '../workloads/paragraph-stress';
+import { animateTextLadderScene, createTextLadderEntries, layoutTextLadderEntries } from '../workloads/text-ladder';
 import type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
 import {
   ZOOM_TEXT_BASE_CSS_PX,
-  ZOOM_TEXT_PHRASES,
+  animateZoomTextEntries,
   createZoomTextEntries,
-  updateZoomTextAnimationState,
-  zoomTextMaximumScale,
+  layoutZoomTextEntries,
 } from '../workloads/zoom-text';
 import type { ZoomTextAnimationState } from '../workloads/zoom-text';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadId, IconGridView } from '../workloads/contracts';
-import type { ComparisonWorkloadEntry } from '../workloads/factory-contracts';
+import { committedTextLayout, type ComparisonWorkloadEntry } from '../workloads/factory-contracts';
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
 import { createCanvasSurface } from './canvas-surface';
 import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
@@ -1441,7 +1449,7 @@ function positionIconGridEntry(
   row: number,
   iconSize: number,
 ): void {
-  const iconLayout = committedLayout(entry.text);
+  const iconLayout = committedTextLayout(entry.text);
   entry.node.position.set(
     layout.inset + column * (layout.cellWidth + layout.gap),
     -(layout.inset + row * (layout.cellHeight + layout.gap)),
@@ -1470,16 +1478,7 @@ function layoutEntries(
   height: number,
 ): void {
   if (configuration.workload === 'text-ladder') {
-    const layouts = entries.map(({ text }) => committedLayout(text));
-    const widestLine = layouts.reduce((maximum, layout) => Math.max(maximum, layout.width), 0);
-    const centeredColumnWidth = Math.min(widestLine, width * 0.94);
-    const x = Math.max(LADDER_INSET_CSS_PX, (width - centeredColumnWidth) / 2);
-    let y = LADDER_INSET_CSS_PX + 18;
-    for (const [index, { text }] of entries.entries()) {
-      const layout = layouts[index]!;
-      text.position.set(x, -y, 0);
-      y += layout.height + LADDER_GAP_CSS_PX;
-    }
+    layoutTextLadderEntries(entries, width);
     return;
   }
   if (configuration.workload === 'zoom-text') {
@@ -1497,76 +1496,18 @@ function layoutEntries(
     return;
   }
   if (configuration.workload === 'paint-effects') {
-    const entry = entries[0];
-    if (entry === undefined) return;
-    const layout = committedLayout(entry.text);
-    entry.text.position.set(Math.max(12, (width - layout.width) / 2), -Math.max(18, (height - layout.height) / 2), 0);
+    layoutPaintEffectsEntries(entries, width, height);
     return;
   }
   if (configuration.workload === 'dynamic-layout') {
-    layoutDynamicEntries(entries, width, height);
+    layoutDynamicLayoutEntries(entries, width, height);
     return;
   }
-  const entry = entries[0];
-  if (entry === undefined) return;
-  const layout = committedLayout(entry.text);
-  entry.text.position.set(Math.max(12, (width - layout.width) / 2), -Math.max(12, (height - layout.height) / 2), 0);
   if (configuration.workload === 'off-axis-3d') {
-    entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
-    entry.node.position.set(width * (0.5 + OFF_AXIS_HORIZONTAL_BIAS_RATIO), -height / 2, 0);
+    layoutOffAxis3dEntries(entries, width, height);
+    return;
   }
-}
-
-function layoutZoomTextEntries(entries: readonly WorkloadEntry[], viewportWidth: number, viewportHeight: number): void {
-  for (const entry of entries) layoutZoomTextEntry(entry, viewportWidth, viewportHeight);
-}
-
-function layoutZoomTextEntry(entry: WorkloadEntry, viewportWidth: number, viewportHeight: number): void {
-  const layout = committedLayout(entry.text);
-  entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
-  entry.node.position.set(viewportWidth / 2, -viewportHeight / 2, 0);
-  entry.node.scale.setScalar(1);
-  entry.zoomMaximumScale = zoomTextMaximumScale(layout.width, layout.height, viewportWidth, viewportHeight);
-}
-
-function animateTextLadderScene(
-  scene: THREE.Scene,
-  entries: readonly WorkloadEntry[],
-  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed' | 'textLadderExitEnabled'>,
-  elapsedMs: number,
-  viewportWidth: number,
-  viewportHeight: number,
-  positionScratch: MutableTextLadderScenePosition,
-): void {
-  const finalEntry = entries[entries.length - 1];
-  if (finalEntry === undefined) return;
-  const layout = committedLayout(finalEntry.text);
-  setTextLadderScenePosition(positionScratch, {
-    animationSpeed: configuration.animationSpeed,
-    elapsedMs,
-    exitEnabled: configuration.textLadderExitEnabled,
-    finalCenterY: finalEntry.text.position.y - layout.height / 2,
-    finalEntryX: finalEntry.text.position.x,
-    finalEntryWidth: layout.width,
-    viewportHeight,
-    viewportWidth,
-  });
-  scene.position.set(positionScratch.x, positionScratch.y, 0);
-}
-
-function animateParagraphStressScene(
-  scene: THREE.Scene,
-  entries: readonly WorkloadEntry[],
-  configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>,
-  elapsedMs: number,
-  viewportHeight: number,
-): void {
-  const entry = entries[0];
-  if (entry === undefined) return;
-  const layout = committedLayout(entry.text);
-  const scrollProgress = paragraphStressScrollProgress(elapsedMs, configuration.animationSpeed);
-  const maximumScrollY = Math.max(0, layout.height - viewportHeight + 24);
-  scene.position.y = maximumScrollY * scrollProgress;
+  layoutParagraphStressEntries(entries, width, height);
 }
 
 function animateEntries(
@@ -1581,95 +1522,29 @@ function animateEntries(
   onReflow: (duration: number) => void,
 ): void {
   if (configuration.workload === 'zoom-text') {
-    animateZoomText(entries, configuration, timestamp, zoomAnimationState);
+    animateZoomTextEntries(entries, configuration, timestamp, zoomAnimationState);
     return;
   }
   if (configuration.workload === 'paint-effects') {
-    animatePaint(entries, configuration, timestamp);
+    animatePaintEffectsEntries(entries, configuration, timestamp);
     return;
   }
   if (configuration.workload === 'dynamic-layout') {
-    animateDynamicLayout(entries, configuration, timestamp, width, height, dynamicWidthsScratch, onError, onReflow);
+    animateDynamicLayoutEntries(
+      entries,
+      configuration,
+      timestamp,
+      width,
+      height,
+      dynamicWidthsScratch,
+      onError,
+      onReflow,
+    );
     return;
   }
-  if (configuration.workload !== 'off-axis-3d') return;
-  const entry = entries[0];
-  if (entry === undefined) return;
-  const motionTimestamp = configuration.animationEnabled ? timestamp : 0;
-  const strength = 0.7 + (configuration.amount / 100) * 0.3;
-  const phase = motionTimestamp * 0.00055 * animationRate(configuration);
-  entry.node.rotation.set(
-    (-0.08 + Math.sin(phase * 0.83) * 0.18) * strength,
-    (0.62 + Math.sin(phase + Math.PI / 2) * 0.2) * strength,
-    Math.sin(phase * 0.47) * 0.06 * strength,
-  );
-  entry.node.position.z = -(320 + Math.sin(phase * 0.61) * 60) * strength;
-  if (!configuration.animationEnabled) return;
-  if (entry.offAxisSpans === undefined || entry.offAxisPaintUpdate === undefined) {
-    throw new Error('off-axis text is missing its retained color spans');
+  if (configuration.workload === 'off-axis-3d') {
+    animateOffAxis3dEntries(entries, configuration, timestamp);
   }
-  const colorPhase = (timestamp / 32_000) * animationRate(configuration);
-  for (let index = 0; index < entry.offAxisSpans.length; index += 1) {
-    entry.offAxisSpans[index]!.color = offAxisColorAt(index, colorPhase);
-  }
-  entry.text.setProperties(entry.offAxisPaintUpdate);
-}
-
-function animateZoomText(
-  entries: readonly WorkloadEntry[],
-  configuration: ComparisonWorkloadConfiguration,
-  timestamp: number,
-  state: ZoomTextAnimationState,
-): void {
-  if (!configuration.animationEnabled) return;
-  if (entries.length !== ZOOM_TEXT_PHRASES.length) {
-    throw new Error(
-      `zoom text requires one retained Text per phrase; received ${String(entries.length)} for ${String(ZOOM_TEXT_PHRASES.length)} phrases`,
-    );
-  }
-  updateZoomTextAnimationState(state, timestamp, configuration.animationSpeed, ZOOM_TEXT_PHRASES.length);
-  const current = entries[state.phraseIndex]!;
-  const incoming = entries[(state.phraseIndex + 1) % entries.length]!;
-  const previous = entries[(state.phraseIndex + entries.length - 1) % entries.length]!;
-  const fadeProgress = smoothstep(Math.max(0, Math.min(1, (state.progress - 0.82) / 0.18)));
-  const zoomProgress = state.progress ** 3;
-  previous.node.visible = false;
-  current.node.visible = true;
-  incoming.node.visible = fadeProgress > 0;
-  current.node.scale.setScalar(1 + ((current.zoomMaximumScale ?? 1) - 1) * zoomProgress);
-  incoming.node.scale.setScalar(1);
-  setZoomTextOpacity(current, 1 - fadeProgress);
-  setZoomTextOpacity(incoming, fadeProgress);
-}
-
-function setZoomTextOpacity(entry: WorkloadEntry, opacity: number): void {
-  if (entry.zoomOpacityUpdate === undefined || Math.abs((entry.zoomOpacity ?? -1) - opacity) < 0.002) return;
-  entry.zoomOpacity = opacity;
-  entry.zoomOpacityUpdate.opacity = opacity;
-  entry.text.setProperties(entry.zoomOpacityUpdate);
-}
-
-function animatePaint(
-  entries: readonly WorkloadEntry[],
-  configuration: ComparisonWorkloadConfiguration,
-  timestamp: number,
-): void {
-  const entry = entries[0];
-  if (entry === undefined || !configuration.animationEnabled) return;
-  const paintFrame = Math.floor(timestamp / 16);
-  if (entry.lastPaintFrame === paintFrame) return;
-  entry.lastPaintFrame = paintFrame;
-  const started = performance.now();
-  // Identical text and shaping-span ranges keep Text on its synchronous paint-only batch path.
-  const phase = timestamp * 0.0002 * animationRate(configuration);
-  entry.paintPhase = phase;
-  if (entry.paintSpans === undefined || entry.paintUpdate === undefined) {
-    throw new Error('paint effects entry is missing its retained span buffer');
-  }
-  updatePaintSpans(entry.paintSpans, phase, configuration.amount, entry.paintOutlineWidth, entry.paintShadowOffset);
-  entry.text.setProperties(entry.paintUpdate);
-  entry.paintRevision = (entry.paintRevision ?? 0) + 1;
-  entry.lastPaintUpdateMs = performance.now() - started;
 }
 
 function applyRetainedConfiguration(
@@ -1681,31 +1556,7 @@ function applyRetainedConfiguration(
     if (entry.bounds !== undefined) entry.bounds.visible = configuration.showLayoutBounds;
   }
   if (configuration.workload !== 'paint-effects') return;
-  const maximumOutlineWidth = configuration.fontSize / 16;
-  const paintOutlineWidth = technique === 'mtsdf' ? maximumOutlineWidth * configuration.paintStrokeWidth : undefined;
-  const paintShadowOffset =
-    technique === 'mtsdf' && configuration.paintShadowEnabled
-      ? ([Math.max(3, configuration.fontSize / 10), Math.max(3, configuration.fontSize / 10)] as const)
-      : undefined;
-  for (const entry of entries) {
-    if (paintOutlineWidth === undefined) delete entry.paintOutlineWidth;
-    else entry.paintOutlineWidth = paintOutlineWidth;
-    if (paintShadowOffset === undefined) delete entry.paintShadowOffset;
-    else entry.paintShadowOffset = paintShadowOffset;
-    if (entry.paintSpans === undefined) throw new Error('paint effects entry is missing its retained span buffer');
-    updatePaintSpans(
-      entry.paintSpans,
-      entry.paintPhase ?? 0,
-      configuration.amount,
-      paintOutlineWidth,
-      paintShadowOffset,
-    );
-    entry.text.setProperties({
-      opacity: configuration.paintOpacity,
-      text: PAINT_EFFECTS_TEXT,
-      spans: entry.paintSpans,
-    });
-  }
+  applyPaintEffectsRetainedConfiguration(entries, technique, configuration);
 }
 
 export function comparisonWorkloadUpdateKind(
@@ -1794,108 +1645,8 @@ export function comparisonWorkloadContentWidth(
   );
 }
 
-function animateDynamicLayout(
-  entries: readonly WorkloadEntry[],
-  configuration: ComparisonWorkloadConfiguration,
-  timestamp: number,
-  viewportWidth: number,
-  viewportHeight: number,
-  widthsScratch: Float64Array,
-  onError: (error: unknown) => void,
-  onReflow: (duration: number) => void,
-): void {
-  if (!configuration.animationEnabled) return;
-  const nextWidths = dynamicLayoutWidths(configuration, viewportWidth, timestamp, widthsScratch);
-  if (
-    entries.length === nextWidths.length &&
-    entries.every((entry, index) => entry.lastWidth !== undefined && Math.abs(nextWidths[index]! - entry.lastWidth) < 1)
-  ) {
-    return;
-  }
-  const reflowStarted = performance.now();
-  try {
-    for (const [index, entry] of entries.entries()) {
-      entry.lastWidth = nextWidths[index]!;
-      if (entry.widthUpdate === undefined) throw new Error('dynamic layout entry is missing its retained width update');
-      entry.widthUpdate.width = nextWidths[index]!;
-      entry.text.setProperties(entry.widthUpdate);
-    }
-    publishEntryUpdates(entries);
-    layoutDynamicEntries(entries, viewportWidth, viewportHeight);
-    onReflow(performance.now() - reflowStarted);
-  } catch (error) {
-    onError(error);
-  }
-}
-
-function layoutDynamicEntries(entries: readonly WorkloadEntry[], viewportWidth: number, viewportHeight: number): void {
-  const inset = 20;
-  const laneHeight = viewportHeight / Math.max(1, entries.length);
-  for (const [index, entry] of entries.entries()) {
-    const layout = committedLayout(entry.text);
-    const x =
-      entry.alignment === 'end'
-        ? viewportWidth - inset - layout.width
-        : entry.alignment === 'center'
-          ? (viewportWidth - layout.width) / 2
-          : inset;
-    const y = index * laneHeight + Math.max(inset, (laneHeight - layout.height) / 2);
-    entry.text.position.set(x, -y, 0);
-    if (entry.bounds !== undefined) updateLayoutBounds(entry.bounds, x, y, layout.width, layout.height);
-  }
-}
-
-function updateLayoutBounds(
-  bounds: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicNodeMaterial>,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  const positions = bounds.geometry.getAttribute('position');
-  const right = x + width;
-  const bottom = -(y + height);
-  const top = -y;
-  const vertices = [
-    x,
-    top,
-    0,
-    right,
-    top,
-    0,
-    right,
-    top,
-    0,
-    right,
-    bottom,
-    0,
-    right,
-    bottom,
-    0,
-    x,
-    bottom,
-    0,
-    x,
-    bottom,
-    0,
-    x,
-    top,
-    0,
-  ];
-  if (!(positions.array instanceof Float32Array)) {
-    throw new TypeError('dynamic layout bounds require a Float32 position buffer');
-  }
-  positions.array.set(vertices);
-  positions.needsUpdate = true;
-  bounds.geometry.computeBoundingSphere();
-}
-
 function animationRate(configuration: Pick<ComparisonWorkloadConfiguration, 'animationSpeed'>): number {
   return 0.25 + configuration.animationSpeed * 0.0175;
-}
-
-function smoothstep(value: number): number {
-  return value * value * (3 - 2 * value);
 }
 
 export interface IconGridLayout {
@@ -2521,12 +2272,6 @@ function validateConfiguration(configuration: ComparisonWorkloadConfiguration): 
   return configuration;
 }
 
-function committedLayout(text: Text): ParagraphLayout {
-  const layout = text.layout;
-  if (layout === undefined) throw new Error('comparison Text lost its committed layout');
-  return layout;
-}
-
 function disposeEntries(entries: readonly WorkloadEntry[]): void {
   for (const entry of entries) {
     entry.disposed = true;
@@ -2554,8 +2299,8 @@ function measureVisibleEntries(
     if (!entry.node.visible) continue;
     geometries.clear();
     measureVisibleObject(entry.node, metrics, geometries);
-    measureVisibleLayout(committedLayout(entry.text), zoomScale, metrics);
-    if (entry.labelText !== undefined) measureVisibleLayout(committedLayout(entry.labelText), zoomScale, metrics);
+    measureVisibleLayout(committedTextLayout(entry.text), zoomScale, metrics);
+    if (entry.labelText !== undefined) measureVisibleLayout(committedTextLayout(entry.labelText), zoomScale, metrics);
     metrics.sourceTextLength += entry.sourceText.length;
   }
 }

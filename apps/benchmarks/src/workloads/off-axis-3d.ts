@@ -4,8 +4,13 @@ import * as THREE from 'three/webgpu';
 import { createOklabColorCycle } from './shared/oklab-color-cycle';
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
 
-import type { ComparisonWorkloadDefinition } from './contracts';
-import type { ComparisonWorkloadEntry, MutablePaintSpan, WorkloadTextFactoryContext } from './factory-contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
+import {
+  committedTextLayout,
+  type ComparisonWorkloadEntry,
+  type MutablePaintSpan,
+  type WorkloadTextFactoryContext,
+} from './factory-contracts';
 
 export const OFF_AXIS_HORIZONTAL_BIAS_RATIO = 0.075;
 export const OFF_AXIS_TEXT =
@@ -70,4 +75,47 @@ export function createOffAxis3dEntries(
       offAxisPaintUpdate: { text: OFF_AXIS_TEXT, spans },
     },
   ];
+}
+
+export function layoutOffAxis3dEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  viewportWidth: number,
+  viewportHeight: number,
+): void {
+  const entry = entries[0];
+  if (entry === undefined) return;
+  const layout = committedTextLayout(entry.text);
+  entry.text.position.set(-layout.width / 2, layout.height / 2, 0);
+  entry.node.position.set(viewportWidth * (0.5 + OFF_AXIS_HORIZONTAL_BIAS_RATIO), -viewportHeight / 2, 0);
+}
+
+export function animateOffAxis3dEntries(
+  entries: readonly ComparisonWorkloadEntry[],
+  configuration: Pick<ComparisonWorkloadConfiguration, 'amount' | 'animationEnabled' | 'animationSpeed'>,
+  timestamp: number,
+): void {
+  const entry = entries[0];
+  if (entry === undefined) return;
+  const motionTimestamp = configuration.animationEnabled ? timestamp : 0;
+  const strength = 0.7 + (configuration.amount / 100) * 0.3;
+  const phase = motionTimestamp * 0.00055 * animationRate(configuration.animationSpeed);
+  entry.node.rotation.set(
+    (-0.08 + Math.sin(phase * 0.83) * 0.18) * strength,
+    (0.62 + Math.sin(phase + Math.PI / 2) * 0.2) * strength,
+    Math.sin(phase * 0.47) * 0.06 * strength,
+  );
+  entry.node.position.z = -(320 + Math.sin(phase * 0.61) * 60) * strength;
+  if (!configuration.animationEnabled) return;
+  if (entry.offAxisSpans === undefined || entry.offAxisPaintUpdate === undefined) {
+    throw new Error('off-axis text is missing its retained color spans');
+  }
+  const colorPhase = (timestamp / 32_000) * animationRate(configuration.animationSpeed);
+  for (let index = 0; index < entry.offAxisSpans.length; index += 1) {
+    entry.offAxisSpans[index]!.color = offAxisColorAt(index, colorPhase);
+  }
+  entry.text.setProperties(entry.offAxisPaintUpdate);
+}
+
+function animationRate(animationSpeed: number): number {
+  return 0.25 + animationSpeed * 0.0175;
 }
