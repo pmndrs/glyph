@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:8cbd748db9555d6a27651b20d5ed8e9cd74eab016668ce37b08c345a0340af9a'
+source_digest: 'sha256:9f283a698266447ee391195fa38e059f0be8135c7798573e14c34c1d57eda243'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -89,6 +89,15 @@ sources:
   - id: rgba-readback
     resource: ../../apps/benchmarks/src/benchmark/low-level/raster/rgba-readback.ts
     title: Renderer-neutral RGBA8 readback normalization
+  - id: bitmap-atlas-metadata
+    resource: ../../apps/benchmarks/src/benchmark/low-level/raster/bitmap-atlas.ts
+    title: Renderer-neutral Bitmap atlas metadata inspection
+  - id: mtsdf-raster-configuration
+    resource: ../../apps/benchmarks/src/benchmark/low-level/raster/mtsdf-configuration.ts
+    title: Renderer-neutral MTSDF configuration inspection
+  - id: slug-raster-configuration
+    resource: ../../apps/benchmarks/src/benchmark/low-level/raster/slug-configuration.ts
+    title: Renderer-neutral Slug configuration inspection
   - id: renderer-lifecycle
     resource: ../../apps/benchmarks/src/renderer/webgpu-renderer.ts
     title: Shared renderer creation and disposal lifecycle
@@ -245,6 +254,8 @@ The first retained challenger doubles every glyph from 16 to 32 bands without ch
 Six authenticated full-font fixtures cover sans, serif, script, Arabic, Devanagari, and Japanese stress. A seventh deterministic Noto Sans CJK JP subset covers only the authored Advanced Shaping Japanese corpus so the visual default uses a conventional sans rather than DotGothic16's intentional pixel style. Its source is `38,092 B`; its Bitmap GLB is `65,996 B` on one page; and its MTSDF artifact is `1,044,110 B` gzip / `3,172,756 B` raw / one page / `3,162,112 B` exact padded base-level GPU memory. The full Noto CJK font remains the shaping oracle and Milestone 13 paging target. DotGothic16 remains an explicit full-face raster stress fixture, not the representative CJK visual default. A streaming test authenticates all fourteen artifacts, embedded source hashes, complete fixture-local glyph counts, page totals, and exact padded base-array allocations without rebaking them. The production build emits and links one exact font-notices artifact containing every redistributed license.
 
 Bitmap, MTSDF, and Slug renderer modules expose only persistent-scene construction and scene-update contracts. The obsolete standalone preview constructors and their duplicate renderer, RAF, GPU-timer, telemetry, resize, and disposal lifecycles are removed; one source-boundary regression rejects their return.
+
+Canonical font loading is owned exclusively by `workloads/font-assets`, and renderer-neutral Bitmap atlas, MTSDF configuration, and Slug allocation inspection is owned by `benchmark/low-level/raster`. Product targets, conformance targets, retained comparison scenes, and live technique scenes call those owners directly; renderer modules no longer re-export loader, preload, baked-artifact, or raster-configuration compatibility facades.
 
 ### Benchmark ipsum corpus
 
