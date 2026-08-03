@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 
 import fontAwesomeIcons from '../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
-import type { ComparisonWorkloadDefinition } from './contracts';
+import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from './contracts';
 import { committedTextLayout, type ComparisonWorkloadEntry } from './factory-contracts';
 
 export const ICON_GRID_LABEL_SIZE = 11;
@@ -256,6 +256,542 @@ export function smoothIconGridFrameDelta(state: IconGridFrameDeltaState, elapsed
   const smoothedElapsedMs = previous + (boundedElapsedMs - previous) * ICON_GRID_FRAME_DELTA_RESPONSE;
   state.smoothedElapsedMs = smoothedElapsedMs;
   return smoothedElapsedMs;
+}
+
+const ICON_GRID_AUTO_PAN_PX_PER_SECOND = 160;
+
+export interface IconGridViewport {
+  readonly height: number;
+  readonly width: number;
+}
+
+/**
+ * The renderer owns Text readiness, scene attachment, and disposal. Icon Grid owns which of those retained Texts
+ * represent the current virtual window, including its scroll, recycling, and metrics state.
+ */
+export interface IconGridEntryPool {
+  entries(): readonly ComparisonWorkloadEntry[];
+  resize(poolCapacity: number, iconSize: number, layout: IconGridLayout): Promise<void>;
+}
+
+export interface IconGridWorkloadMetrics {
+  readonly assignedCount: number;
+  readonly assignmentSignature: string;
+  readonly firstVisibleIndex: number;
+  readonly gridHeight: number;
+  readonly gridWidth: number;
+  readonly lastVisibleIndex: number;
+  readonly maximumScrollX: number;
+  readonly maximumScrollY: number;
+  readonly poolCapacity: number;
+  readonly recycleCount: number;
+  readonly renderVisibleCount: number;
+  readonly scrollX: number;
+  readonly scrollY: number;
+  readonly windowRevision: number;
+  readonly columnCount: number;
+  readonly rowCount: number;
+}
+
+export interface IconGridWorkloadInstance {
+  activate(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport): IconGridVirtualWindow;
+  dispose(): void;
+  frame(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    timestamp: number,
+    animationRate: number,
+    onError: (error: unknown) => void,
+  ): void;
+  metrics(viewport: IconGridViewport, scene: THREE.Scene): IconGridWorkloadMetrics;
+  panBy(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    deltaX: number,
+    deltaY: number,
+    onError: (error: unknown) => void,
+  ): { readonly deltaX: number; readonly deltaY: number };
+  reconfigure(
+    previous: ComparisonWorkloadConfiguration,
+    next: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+  ): Promise<void>;
+  requestRefresh(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    onError: (error: unknown) => void,
+  ): void;
+  resetView(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    onError: (error: unknown) => void,
+  ): void;
+  resume(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    onError: (error: unknown) => void,
+  ): void;
+  settle(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport, scene: THREE.Scene): void;
+  suspend(): void;
+}
+
+export function createIconGridWorkloadInstance(
+  pool: IconGridEntryPool,
+  isCurrent: () => boolean,
+): IconGridWorkloadInstance {
+  return new RetainedIconGridWorkload(pool, isCurrent);
+}
+
+class RetainedIconGridWorkload implements IconGridWorkloadInstance {
+  readonly #autoPan: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
+  readonly #frameDelta: IconGridFrameDeltaState = { smoothedElapsedMs: undefined };
+  readonly #desiredEpochs = new Uint32Array(ICON_GRID_ITEMS.length);
+  readonly #retainedEpochs = new Uint32Array(ICON_GRID_ITEMS.length);
+  readonly #availableEntries: ComparisonWorkloadEntry[] = [];
+  readonly #pendingEntries: ComparisonWorkloadEntry[] = [];
+  readonly #missingIndices: number[] = [];
+  #assignmentEpoch = 0;
+  #assignmentSignature = '[]';
+  #autoPanTimestamp: number | undefined;
+  #disposed = false;
+  #iconSize = 1;
+  #pendingWindow: IconGridVirtualWindow | undefined;
+  #refreshDeferred = false;
+  #refreshing = false;
+  #requestScrollX = 0;
+  #requestScrollY = 0;
+  #recycleCount = 0;
+  #settledWindow: IconGridVirtualWindow | undefined;
+  #suspended = false;
+  #windowRevision = 0;
+  readonly #pool: IconGridEntryPool;
+  readonly #isCurrent: () => boolean;
+
+  constructor(pool: IconGridEntryPool, isCurrent: () => boolean) {
+    this.#pool = pool;
+    this.#isCurrent = isCurrent;
+  }
+
+  activate(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport): IconGridVirtualWindow {
+    this.#assertLive();
+    this.#iconSize = configuration.fontSize;
+    const origin = iconGridVirtualWindow(
+      ICON_GRID_ITEMS.length,
+      configuration.fontSize,
+      viewport.width,
+      viewport.height,
+      0,
+      0,
+    );
+    const start = iconGridAutoPanStart(
+      configuration.iconGridView ?? 'origin',
+      origin.maximumScrollX,
+      origin.maximumScrollY,
+    );
+    this.#autoPan.directionX = start.directionX;
+    this.#autoPan.directionY = start.directionY;
+    this.#autoPan.scrollX = start.scrollX;
+    this.#autoPan.scrollY = start.scrollY;
+    this.#autoPanTimestamp = undefined;
+    this.#frameDelta.smoothedElapsedMs = undefined;
+    this.#requestScrollX = start.scrollX;
+    this.#requestScrollY = start.scrollY;
+    this.#settledWindow = undefined;
+    return iconGridVirtualWindow(
+      ICON_GRID_ITEMS.length,
+      configuration.fontSize,
+      viewport.width,
+      viewport.height,
+      start.scrollX,
+      start.scrollY,
+    );
+  }
+
+  dispose(): void {
+    this.#disposed = true;
+    this.#pendingWindow = undefined;
+    this.#availableEntries.length = 0;
+    this.#pendingEntries.length = 0;
+    this.#missingIndices.length = 0;
+  }
+
+  frame(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    timestamp: number,
+    animationRate: number,
+    onError: (error: unknown) => void,
+  ): void {
+    if (this.#disposed) return;
+    const elapsedMs = this.#autoPanTimestamp === undefined ? 0 : Math.max(0, timestamp - this.#autoPanTimestamp);
+    this.#autoPanTimestamp = timestamp;
+    const window = this.#settledWindow;
+    if (!configuration.animationEnabled || window === undefined) return;
+    advanceIconGridAutoPan(
+      this.#autoPan,
+      -scene.position.x,
+      scene.position.y,
+      window.maximumScrollX,
+      window.maximumScrollY,
+      smoothIconGridFrameDelta(this.#frameDelta, elapsedMs),
+      ICON_GRID_AUTO_PAN_PX_PER_SECOND * animationRate,
+    );
+    scene.position.set(-this.#autoPan.scrollX, this.#autoPan.scrollY, 0);
+    updateIconGridEntryVisibility(
+      this.#pool.entries(),
+      window.layout,
+      this.#autoPan.scrollX,
+      this.#autoPan.scrollY,
+      viewport,
+    );
+    const pitchX = window.layout.cellWidth + window.layout.gap;
+    const pitchY = window.layout.cellHeight + window.layout.gap;
+    if (
+      Math.abs(this.#autoPan.scrollX - this.#requestScrollX) >= pitchX ||
+      Math.abs(this.#autoPan.scrollY - this.#requestScrollY) >= pitchY
+    ) {
+      this.requestRefresh(configuration, viewport, scene, onError);
+    }
+  }
+
+  metrics(viewport: IconGridViewport, scene: THREE.Scene): IconGridWorkloadMetrics {
+    const window =
+      this.#settledWindow ??
+      iconGridVirtualWindow(
+        ICON_GRID_ITEMS.length,
+        this.#iconSize,
+        viewport.width,
+        viewport.height,
+        -scene.position.x,
+        scene.position.y,
+      );
+    let assignedCount = 0;
+    let renderVisibleCount = 0;
+    const entries = this.#pool.entries();
+    for (const entry of entries) {
+      if (entry.virtualIconIndex !== undefined) assignedCount += 1;
+      if (entry.node.visible) renderVisibleCount += 1;
+    }
+    return {
+      assignedCount,
+      assignmentSignature: this.#assignmentSignature,
+      columnCount: window.layout.columns,
+      firstVisibleIndex: window.firstVisibleIndex,
+      gridHeight: window.layout.height,
+      gridWidth: window.layout.width,
+      lastVisibleIndex: window.lastVisibleIndex,
+      maximumScrollX: window.maximumScrollX,
+      maximumScrollY: window.maximumScrollY,
+      poolCapacity: entries.length,
+      recycleCount: this.#recycleCount,
+      renderVisibleCount,
+      rowCount: window.layout.rows,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      windowRevision: this.#windowRevision,
+    };
+  }
+
+  panBy(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    deltaX: number,
+    deltaY: number,
+    onError: (error: unknown) => void,
+  ): { readonly deltaX: number; readonly deltaY: number } {
+    this.#assertLive();
+    const horizontal = finite(deltaX, 'workload horizontal pan');
+    const vertical = finite(deltaY, 'workload vertical pan');
+    const previousX = scene.position.x;
+    const previousY = scene.position.y;
+    scene.position.x += horizontal;
+    scene.position.y -= vertical;
+    this.#clampScene(configuration.fontSize, viewport, scene);
+    this.requestRefresh(configuration, viewport, scene, onError);
+    return { deltaX: scene.position.x - previousX, deltaY: previousY - scene.position.y };
+  }
+
+  async reconfigure(
+    previous: ComparisonWorkloadConfiguration,
+    next: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+  ): Promise<void> {
+    this.#assertLive();
+    const viewChanged = next.iconGridView !== previous.iconGridView;
+    const nextAutoPan = viewChanged ? iconGridViewStart(next, viewport) : undefined;
+    const [requestedScrollX, requestedScrollY] =
+      nextAutoPan !== undefined
+        ? [nextAutoPan.scrollX, nextAutoPan.scrollY]
+        : next.fontSize === previous.fontSize
+          ? [-scene.position.x, scene.position.y]
+          : iconGridCenteredScroll(
+              ICON_GRID_ITEMS.length,
+              previous.fontSize,
+              next.fontSize,
+              viewport.width,
+              viewport.height,
+              -scene.position.x,
+              scene.position.y,
+            );
+    const nextWindow = iconGridVirtualWindow(
+      ICON_GRID_ITEMS.length,
+      next.fontSize,
+      viewport.width,
+      viewport.height,
+      requestedScrollX,
+      requestedScrollY,
+    );
+    await this.#pool.resize(nextWindow.poolCapacity, next.fontSize, nextWindow.layout);
+    if (!this.#isLive()) return;
+    if (nextAutoPan !== undefined) {
+      this.#autoPan.directionX = nextAutoPan.directionX;
+      this.#autoPan.directionY = nextAutoPan.directionY;
+      this.#frameDelta.smoothedElapsedMs = undefined;
+    }
+    this.#iconSize = next.fontSize;
+    scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
+    this.#applyWindow(nextWindow, next.fontSize, viewport, scene);
+  }
+
+  requestRefresh(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    onError: (error: unknown) => void,
+  ): void {
+    if (!this.#isLive()) return;
+    this.#requestScrollX = -scene.position.x;
+    this.#requestScrollY = scene.position.y;
+    if (this.#suspended) {
+      this.#refreshDeferred = true;
+      return;
+    }
+    this.#pendingWindow = iconGridVirtualWindow(
+      ICON_GRID_ITEMS.length,
+      configuration.fontSize,
+      viewport.width,
+      viewport.height,
+      this.#requestScrollX,
+      this.#requestScrollY,
+    );
+    if (this.#refreshing) return;
+    this.#refreshing = true;
+    try {
+      while (this.#pendingWindow !== undefined && this.#isLive()) {
+        const nextWindow = this.#pendingWindow;
+        this.#pendingWindow = undefined;
+        this.#applyWindow(nextWindow, configuration.fontSize, viewport, scene);
+      }
+    } catch (error) {
+      onError(error);
+    } finally {
+      this.#refreshing = false;
+    }
+    if (this.#pendingWindow !== undefined && this.#isLive()) {
+      this.requestRefresh(configuration, viewport, scene, onError);
+    }
+  }
+
+  resetView(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    onError: (error: unknown) => void,
+  ): void {
+    if (this.#disposed) return;
+    this.#autoPan.directionX = 1;
+    this.#autoPan.directionY = 1;
+    this.#autoPan.scrollX = 0;
+    this.#autoPan.scrollY = 0;
+    this.#autoPanTimestamp = undefined;
+    this.#frameDelta.smoothedElapsedMs = undefined;
+    scene.position.set(0, 0, 0);
+    this.requestRefresh(configuration, viewport, scene, onError);
+  }
+
+  resume(
+    configuration: ComparisonWorkloadConfiguration,
+    viewport: IconGridViewport,
+    scene: THREE.Scene,
+    onError: (error: unknown) => void,
+  ): void {
+    if (this.#disposed) return;
+    this.#suspended = false;
+    if (!this.#refreshDeferred) return;
+    this.#refreshDeferred = false;
+    this.requestRefresh(configuration, viewport, scene, onError);
+  }
+
+  suspend(): void {
+    if (this.#disposed) return;
+    this.#suspended = true;
+    this.#refreshDeferred = true;
+  }
+
+  settle(configuration: ComparisonWorkloadConfiguration, viewport: IconGridViewport, scene: THREE.Scene): void {
+    this.#iconSize = configuration.fontSize;
+    this.#settleWindow(
+      iconGridVirtualWindow(
+        ICON_GRID_ITEMS.length,
+        configuration.fontSize,
+        viewport.width,
+        viewport.height,
+        -scene.position.x,
+        scene.position.y,
+      ),
+      viewport,
+      scene,
+    );
+  }
+
+  #applyWindow(window: IconGridVirtualWindow, iconSize: number, viewport: IconGridViewport, scene: THREE.Scene): void {
+    const entries = this.#pool.entries();
+    if (window.poolCapacity !== entries.length) {
+      throw new Error('icon grid pool capacity changed without a scene rebuild');
+    }
+    this.#assignmentEpoch = (this.#assignmentEpoch + 1) >>> 0;
+    if (this.#assignmentEpoch === 0) {
+      this.#desiredEpochs.fill(0);
+      this.#retainedEpochs.fill(0);
+      this.#assignmentEpoch = 1;
+    }
+    this.#availableEntries.length = 0;
+    this.#pendingEntries.length = 0;
+    this.#missingIndices.length = 0;
+    for (const index of window.indices) this.#desiredEpochs[index] = this.#assignmentEpoch;
+    for (const entry of entries) {
+      const iconIndex = entry.virtualIconIndex;
+      if (
+        iconIndex !== undefined &&
+        this.#desiredEpochs[iconIndex] === this.#assignmentEpoch &&
+        this.#retainedEpochs[iconIndex] !== this.#assignmentEpoch
+      ) {
+        this.#retainedEpochs[iconIndex] = this.#assignmentEpoch;
+        continue;
+      }
+      this.#availableEntries.push(entry);
+    }
+    for (const index of window.indices) {
+      if (this.#retainedEpochs[index] !== this.#assignmentEpoch) this.#missingIndices.push(index);
+    }
+    if (this.#missingIndices.length > this.#availableEntries.length) {
+      throw new Error('icon grid window exceeds its recyclable tile pool');
+    }
+    for (const [poolIndex, iconIndex] of this.#missingIndices.entries()) {
+      const entry = this.#availableEntries[poolIndex]!;
+      const { glyph } = iconGridContent(iconIndex);
+      entry.text.setProperties({ text: glyph });
+      entry.labelText?.setProperties({ text: iconGridLabel(iconIndex) });
+      this.#pendingEntries.push(entry);
+    }
+    for (const entry of this.#pendingEntries) entry.node.updateMatrixWorld(true);
+    if (!this.#isLive()) return;
+    for (const [poolIndex, entry] of this.#pendingEntries.entries()) {
+      if (entry.disposed) continue;
+      const iconIndex = this.#missingIndices[poolIndex]!;
+      const { content } = iconGridContent(iconIndex);
+      entry.virtualIconIndex = iconIndex;
+      entry.sourceText = content;
+      const column = iconIndex % window.layout.columns;
+      const row = Math.floor(iconIndex / window.layout.columns);
+      positionIconGridEntry(entry, window.layout, column, row, iconSize);
+    }
+    for (let index = this.#missingIndices.length; index < this.#availableEntries.length; index += 1) {
+      const entry = this.#availableEntries[index]!;
+      entry.node.visible = false;
+      delete entry.virtualIconIndex;
+    }
+    this.#recycleCount += this.#missingIndices.length;
+    this.#settleWindow(window, viewport, scene);
+  }
+
+  #assertLive(): void {
+    if (!this.#isLive()) throw new DOMException('The Icon Grid workload instance is disposed', 'AbortError');
+  }
+
+  #clampScene(iconSize: number, viewport: IconGridViewport, scene: THREE.Scene): void {
+    const layout = iconGridLayout(ICON_GRID_ITEMS.length, iconSize, viewport.width);
+    const maximumScrollX = Math.max(0, layout.width - viewport.width);
+    const maximumScrollY = Math.max(0, layout.height - viewport.height);
+    scene.position.x = Math.min(0, Math.max(-maximumScrollX, scene.position.x));
+    scene.position.y = Math.min(maximumScrollY, Math.max(0, scene.position.y));
+  }
+
+  #isLive(): boolean {
+    return !this.#disposed && this.#isCurrent();
+  }
+
+  #settleWindow(window: IconGridVirtualWindow, viewport: IconGridViewport, scene: THREE.Scene): void {
+    const assignments = iconGridAssignments(this.#pool.entries());
+    if (
+      assignments.length !== window.indices.length ||
+      assignments.some(({ index }, assignmentIndex) => index !== window.indices[assignmentIndex])
+    ) {
+      throw new Error('icon grid cannot publish a window before every assignment is coherent');
+    }
+    updateIconGridEntryVisibility(this.#pool.entries(), window.layout, -scene.position.x, scene.position.y, viewport);
+    this.#settledWindow = window;
+    this.#assignmentSignature = JSON.stringify(assignments);
+    this.#windowRevision += 1;
+  }
+}
+
+function iconGridViewStart(
+  configuration: ComparisonWorkloadConfiguration,
+  viewport: IconGridViewport,
+): IconGridAutoPanState {
+  const origin = iconGridVirtualWindow(
+    ICON_GRID_ITEMS.length,
+    configuration.fontSize,
+    viewport.width,
+    viewport.height,
+    0,
+    0,
+  );
+  return iconGridAutoPanStart(configuration.iconGridView ?? 'origin', origin.maximumScrollX, origin.maximumScrollY);
+}
+
+function updateIconGridEntryVisibility(
+  entries: readonly ComparisonWorkloadEntry[],
+  layout: IconGridLayout,
+  scrollX: number,
+  scrollY: number,
+  viewport: IconGridViewport,
+): void {
+  const pitchX = layout.cellWidth + layout.gap;
+  const pitchY = layout.cellHeight + layout.gap;
+  const viewportRight = scrollX + viewport.width;
+  const viewportBottom = scrollY + viewport.height;
+  for (const entry of entries) {
+    const index = entry.virtualIconIndex;
+    if (index === undefined) {
+      entry.node.visible = false;
+      continue;
+    }
+    const column = index % layout.columns;
+    const row = Math.floor(index / layout.columns);
+    const left = layout.inset + column * pitchX;
+    const top = layout.inset + row * pitchY;
+    entry.node.visible =
+      left + layout.cellWidth > scrollX &&
+      left < viewportRight &&
+      top + layout.cellHeight > scrollY &&
+      top < viewportBottom;
+  }
+}
+
+function finite(value: number, label: string): number {
+  if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
+  return value;
 }
 
 export function advanceIconGridAutoPan(

@@ -16,22 +16,11 @@ import {
   ICON_GRID_LABEL_SIZE,
   ICON_GRID_OVERSCAN_COLUMNS,
   ICON_GRID_OVERSCAN_ROWS,
-  advanceIconGridAutoPan,
+  createIconGridWorkloadInstance,
   createIconGridEntries,
-  iconGridAssignments,
-  iconGridAutoPanStart,
-  iconGridCenteredScroll,
-  iconGridContent,
-  iconGridLabel,
-  iconGridLayout,
-  iconGridVirtualWindow,
-  positionIconGridEntry,
   resizeIconGridEntries,
-  smoothIconGridFrameDelta,
-  type IconGridAutoPanState,
-  type IconGridFrameDeltaState,
-  type IconGridLayout,
-  type IconGridVirtualWindow,
+  type IconGridEntryPool,
+  type IconGridWorkloadInstance,
 } from '../workloads/icon-grid';
 import type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
 import { ZOOM_TEXT_BASE_CSS_PX } from '../workloads/zoom-text';
@@ -254,8 +243,6 @@ interface PendingConfigurationUpdate {
   }>;
 }
 
-const ICON_GRID_AUTO_PAN_PX_PER_SECOND = 160;
-
 interface ComparisonWorkloadRuntime extends ComparisonWorkloadPreview {
   persistentFrame(context: PersistentRenderFrameContext): void;
   persistentTelemetry(snapshot: LiveFrameTelemetrySnapshot, viewport: PersistentRenderViewport): void;
@@ -406,11 +393,6 @@ async function createComparisonWorkloadRuntime(
     textLadderPosition: textLadderPositionScratch,
     zoomText: zoomAnimationState,
   };
-  const iconAutoPanState: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
-  const iconFrameDeltaState: IconGridFrameDeltaState = { smoothedElapsedMs: undefined };
-  let iconAutoPanTimestamp: number | undefined;
-  let iconWindowRequestScrollX = 0;
-  let iconWindowRequestScrollY = 0;
   const scene = new THREE.Scene();
   let camera = createWorkloadCamera(configuration.workload, width, height);
   gpuFrameTimer = persistent ? undefined : createGpuFrameTimer({ backend, renderer, onError });
@@ -507,24 +489,48 @@ async function createComparisonWorkloadRuntime(
       }
       return cachedBitmapAtlasPages;
     };
-    const statsFont = (): LoadedTechniqueFont => iconFont ?? activeFont();
-    let iconRecycleCount = 0;
-    let iconWindowRevision = 0;
-    let iconAssignmentSignature = '[]';
-    let settledIconWindow: IconGridVirtualWindow | undefined;
-    let pendingIconWindow: IconGridVirtualWindow | undefined;
-    let iconWindowRefreshing = false;
-    let iconWindowSuspended = false;
-    let iconWindowRefreshDeferred = false;
+    // Keep the companion icon font resident for warm return visits, but never let that retained resource become
+    // the visible workload's density/configuration source after navigation away from Icon Grid.
+    const statsFont = (): LoadedTechniqueFont =>
+      configuration.workload === 'icon-grid' ? (iconFont ?? activeFont()) : activeFont();
     let fontFixtureSwitching = false;
     let fontFixtureCommitting = false;
     let committedContentWidth = comparisonWorkloadContentWidth(configuration, width);
-    const desiredIconEpochs = new Uint32Array(ICON_GRID_ITEMS.length);
-    const retainedIconEpochs = new Uint32Array(ICON_GRID_ITEMS.length);
-    const availableIconEntries: WorkloadEntry[] = [];
-    const pendingIconEntries: WorkloadEntry[] = [];
-    const missingIconIndices: number[] = [];
-    let iconAssignmentEpoch = 0;
+    const iconGridEntryPool: IconGridEntryPool = {
+      entries: () => entries,
+      async resize(poolCapacity, iconSize, layout) {
+        if (iconFont === undefined) throw new Error('icon grid lost its icon font fixture');
+        if (poolCapacity > entries.length) {
+          const additions = createIconGridEntries({
+            count: poolCapacity - entries.length,
+            dpr: rendererViewport.pixelRatio,
+            iconFont,
+            iconSize,
+            labelFont: activeFont().font,
+            labelRaster: activeFont().raster,
+          });
+          try {
+            await Promise.all(additions.flatMap(entryReadyPromises));
+          } catch (error) {
+            disposeEntries(additions);
+            throw error;
+          }
+          if (closing || disposed) {
+            disposeEntries(additions);
+            return;
+          }
+          entries = [...entries, ...additions];
+          for (const { node } of additions) scene.add(node);
+        } else if (poolCapacity < entries.length) {
+          const removed = entries.slice(poolCapacity);
+          entries = entries.slice(0, poolCapacity);
+          for (const { node } of removed) scene.remove(node);
+          disposeEntries(removed);
+        }
+        resizeIconGridEntries(entries, iconSize, layout);
+      },
+    };
+    let iconGridInstance: IconGridWorkloadInstance | undefined;
 
     async function switchSelectedFontFixture(nextFixture: BenchmarkFontFixture): Promise<void> {
       if (nextFixture === activeSelectedFont.current.fixture) return;
@@ -586,23 +592,19 @@ async function createComparisonWorkloadRuntime(
           sharedRegistry,
         );
       }
-      if (next.workload === 'icon-grid' && !workloadChanged) {
-        clampIconGridScene(scene, next.fontSize, width, height);
-      }
       const commitRevision = ++revision;
       const readyStarted = performance.now();
-      const initialIconWindow =
-        workloadChanged && next.workload === 'icon-grid'
-          ? iconGridVirtualWindow(ICON_GRID_ITEMS.length, next.fontSize, width, height, 0, 0)
-          : undefined;
-      const initialIconPan =
-        initialIconWindow === undefined
+      const nextIconGridInstance =
+        next.workload !== 'icon-grid'
           ? undefined
-          : iconGridAutoPanStart(
-              next.iconGridView ?? 'origin',
-              initialIconWindow.maximumScrollX,
-              initialIconWindow.maximumScrollY,
-            );
+          : workloadChanged || iconGridInstance === undefined
+            ? createIconGridWorkloadInstance(iconGridEntryPool, () => !closing && !disposed)
+            : iconGridInstance;
+      const iconGridInstanceChanged = nextIconGridInstance !== iconGridInstance;
+      const initialIconWindow =
+        next.workload === 'icon-grid' && nextIconGridInstance !== undefined
+          ? nextIconGridInstance.activate(next, { height, width })
+          : undefined;
       const nextEntries = createEntries(
         activeFont().font,
         activeFont().raster,
@@ -614,8 +616,8 @@ async function createComparisonWorkloadRuntime(
         workloadChanged ? 0 : performance.now() - animationEpoch,
         options.textLadderSpecimen,
         iconFont,
-        initialIconPan?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
-        initialIconPan?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
+        initialIconWindow?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
+        initialIconWindow?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
       );
       const scheduledAt = performance.now();
       try {
@@ -632,25 +634,22 @@ async function createComparisonWorkloadRuntime(
         configuration = next;
         committedContentWidth = comparisonWorkloadContentWidth(next, width);
         if (workloadChanged) {
-          scene.position.set(-(initialIconPan?.scrollX ?? 0), initialIconPan?.scrollY ?? 0, 0);
+          // Scene transforms belong to the outgoing workload. Text Ladder exits by translating the shared scene,
+          // while Icon Grid pans it; every newly mounted workload must start from its own explicit view defaults.
+          scene.position.set(-(initialIconWindow?.scrollX ?? 0), initialIconWindow?.scrollY ?? 0, 0);
           camera = nextCamera;
           animationEpoch = performance.now();
           zoomAnimationState.phraseIndex = 0;
           zoomAnimationState.phraseRevision = 0;
           zoomAnimationState.progress = 0;
-          iconAutoPanState.directionX = initialIconPan?.directionX ?? 1;
-          iconAutoPanState.directionY = initialIconPan?.directionY ?? 1;
-          iconAutoPanState.scrollX = initialIconPan?.scrollX ?? 0;
-          iconAutoPanState.scrollY = initialIconPan?.scrollY ?? 0;
-          iconAutoPanTimestamp = undefined;
-          iconFrameDeltaState.smoothedElapsedMs = undefined;
-          iconWindowRequestScrollX = initialIconPan?.scrollX ?? 0;
-          iconWindowRequestScrollY = initialIconPan?.scrollY ?? 0;
-          settledIconWindow = undefined;
         }
         scene.clear();
         for (const { node } of entries) scene.add(node);
         disposeEntries(previous);
+        if (iconGridInstanceChanged) {
+          iconGridInstance?.dispose();
+          iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
+        }
         const finishedAt = performance.now();
         textReadyMs = finishedAt - readyStarted;
         textUpdateTelemetry.record({
@@ -660,167 +659,13 @@ async function createComparisonWorkloadRuntime(
           totalMs: finishedAt - readyStarted,
         });
         if (next.workload === 'icon-grid') {
-          settleIconWindow(
-            iconGridVirtualWindow(
-              ICON_GRID_ITEMS.length,
-              next.fontSize,
-              width,
-              height,
-              -scene.position.x,
-              scene.position.y,
-            ),
-          );
+          iconGridInstance?.settle(next, { height, width }, scene);
         }
       } catch (error) {
         disposeEntries(nextEntries);
+        if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }
-    }
-
-    function applyIconWindow(window: IconGridVirtualWindow): void {
-      if (iconFont === undefined || configuration.workload !== 'icon-grid') return;
-      if (window.poolCapacity !== entries.length) {
-        throw new Error('icon grid pool capacity changed without a scene rebuild');
-      }
-      let recycled = 0;
-      iconAssignmentEpoch = (iconAssignmentEpoch + 1) >>> 0;
-      if (iconAssignmentEpoch === 0) {
-        desiredIconEpochs.fill(0);
-        retainedIconEpochs.fill(0);
-        iconAssignmentEpoch = 1;
-      }
-      availableIconEntries.length = 0;
-      pendingIconEntries.length = 0;
-      missingIconIndices.length = 0;
-      for (const index of window.indices) desiredIconEpochs[index] = iconAssignmentEpoch;
-      for (const entry of entries) {
-        const iconIndex = entry.virtualIconIndex;
-        if (
-          iconIndex !== undefined &&
-          desiredIconEpochs[iconIndex] === iconAssignmentEpoch &&
-          retainedIconEpochs[iconIndex] !== iconAssignmentEpoch
-        ) {
-          retainedIconEpochs[iconIndex] = iconAssignmentEpoch;
-          continue;
-        }
-        availableIconEntries.push(entry);
-      }
-      for (const index of window.indices) {
-        if (retainedIconEpochs[index] !== iconAssignmentEpoch) missingIconIndices.push(index);
-      }
-      if (missingIconIndices.length > availableIconEntries.length) {
-        throw new Error('icon grid window exceeds its recyclable tile pool');
-      }
-      for (const [missingIndex, iconIndex] of missingIconIndices.entries()) {
-        const entry = availableIconEntries[missingIndex]!;
-        const { glyph } = iconGridContent(iconIndex);
-        // Keep the old assignment visible while every warm replacement is staged. The Three.js lifecycle publishes
-        // the staged generations together below; no consumer promise coordinates ordinary warm recycling.
-        entry.text.setProperties({ text: glyph });
-        entry.labelText?.setProperties({ text: iconGridLabel(iconIndex) });
-        recycled += 1;
-        pendingIconEntries.push(entry);
-      }
-      publishEntryUpdates(pendingIconEntries);
-      if (closing || disposed) return;
-      for (const [index, entry] of pendingIconEntries.entries()) {
-        if (entry.disposed) continue;
-        const iconIndex = missingIconIndices[index]!;
-        const { content } = iconGridContent(iconIndex);
-        entry.virtualIconIndex = iconIndex;
-        entry.sourceText = content;
-        const column = iconIndex % window.layout.columns;
-        const row = Math.floor(iconIndex / window.layout.columns);
-        positionIconGridEntry(entry, window.layout, column, row, configuration.fontSize);
-      }
-      for (let index = missingIconIndices.length; index < availableIconEntries.length; index += 1) {
-        const entry = availableIconEntries[index]!;
-        entry.node.visible = false;
-        delete entry.virtualIconIndex;
-      }
-      iconRecycleCount += recycled;
-      settleIconWindow(window);
-    }
-
-    async function resizeIconPool(poolCapacity: number, iconSize: number, layout: IconGridLayout): Promise<void> {
-      if (iconFont === undefined) throw new Error('icon grid lost its icon font fixture');
-      if (poolCapacity > entries.length) {
-        const additions = createIconGridEntries({
-          count: poolCapacity - entries.length,
-          dpr: rendererViewport.pixelRatio,
-          iconFont,
-          iconSize,
-          labelFont: activeFont().font,
-          labelRaster: activeFont().raster,
-        });
-        try {
-          await Promise.all(additions.flatMap(entryReadyPromises));
-        } catch (error) {
-          disposeEntries(additions);
-          throw error;
-        }
-        if (closing || disposed) {
-          disposeEntries(additions);
-          return;
-        }
-        entries = [...entries, ...additions];
-        for (const { node } of additions) scene.add(node);
-      } else if (poolCapacity < entries.length) {
-        const removed = entries.slice(poolCapacity);
-        entries = entries.slice(0, poolCapacity);
-        for (const { node } of removed) scene.remove(node);
-        disposeEntries(removed);
-      }
-      resizeIconGridEntries(entries, iconSize, layout);
-    }
-
-    function settleIconWindow(window: IconGridVirtualWindow): void {
-      const assignments = iconGridAssignments(entries);
-      if (
-        assignments.length !== window.indices.length ||
-        assignments.some(({ index }, assignmentIndex) => index !== window.indices[assignmentIndex])
-      ) {
-        throw new Error('icon grid cannot publish a window before every assignment is coherent');
-      }
-      // The scene keeps moving while offscreen replacements shape asynchronously. Publish their assignment against
-      // the live scroll position; using the request-time window here flashes the visible set one frame backward.
-      updateIconGridEntryVisibility(entries, window.layout, -scene.position.x, scene.position.y, width, height);
-      settledIconWindow = window;
-      iconAssignmentSignature = JSON.stringify(assignments);
-      iconWindowRevision += 1;
-    }
-
-    function requestIconWindowRefresh(): void {
-      if (configuration.workload !== 'icon-grid' || closing || disposed) return;
-      iconWindowRequestScrollX = -scene.position.x;
-      iconWindowRequestScrollY = scene.position.y;
-      if (iconWindowSuspended) {
-        iconWindowRefreshDeferred = true;
-        return;
-      }
-      pendingIconWindow = iconGridVirtualWindow(
-        ICON_GRID_ITEMS.length,
-        configuration.fontSize,
-        width,
-        height,
-        -scene.position.x,
-        scene.position.y,
-      );
-      if (iconWindowRefreshing) return;
-      iconWindowRefreshing = true;
-      try {
-        while (pendingIconWindow !== undefined) {
-          if (closing || disposed) break;
-          const nextWindow = pendingIconWindow;
-          pendingIconWindow = undefined;
-          applyIconWindow(nextWindow);
-        }
-      } catch (error) {
-        onError(error);
-      } finally {
-        iconWindowRefreshing = false;
-      }
-      if (pendingIconWindow !== undefined && !closing && !disposed) requestIconWindowRefresh();
     }
 
     await commit(configuration);
@@ -851,44 +696,8 @@ async function createComparisonWorkloadRuntime(
           next.fontSize !== configuration.fontSize ||
           next.iconGridView !== configuration.iconGridView)
       ) {
-        const viewChanged = next.iconGridView !== configuration.iconGridView;
-        const [requestedScrollX, requestedScrollY] = viewChanged
-          ? (() => {
-              const origin = iconGridVirtualWindow(ICON_GRID_ITEMS.length, next.fontSize, width, height, 0, 0);
-              const start = iconGridAutoPanStart(
-                next.iconGridView ?? 'origin',
-                origin.maximumScrollX,
-                origin.maximumScrollY,
-              );
-              iconAutoPanState.directionX = start.directionX;
-              iconAutoPanState.directionY = start.directionY;
-              iconFrameDeltaState.smoothedElapsedMs = undefined;
-              return [start.scrollX, start.scrollY] as const;
-            })()
-          : next.fontSize === configuration.fontSize
-            ? [-scene.position.x, scene.position.y]
-            : iconGridCenteredScroll(
-                ICON_GRID_ITEMS.length,
-                configuration.fontSize,
-                next.fontSize,
-                width,
-                height,
-                -scene.position.x,
-                scene.position.y,
-              );
-        const nextWindow = iconGridVirtualWindow(
-          ICON_GRID_ITEMS.length,
-          next.fontSize,
-          width,
-          height,
-          requestedScrollX,
-          requestedScrollY,
-        );
-        await resizeIconPool(nextWindow.poolCapacity, next.fontSize, nextWindow.layout);
-        // Pool growth is genuinely cold and stays detached while it loads. Publish size, position, and assignments
-        // in one continuation so the live scene never exposes new camera coordinates with the old tile defaults.
-        scene.position.set(-nextWindow.scrollX, nextWindow.scrollY, 0);
-        await applyIconWindow(nextWindow);
+        if (iconGridInstance === undefined) throw new Error('icon grid retained update lost its workload instance');
+        await iconGridInstance.reconfigure(configuration, next, { height, width }, scene);
         configuration = next;
         committedContentWidth = undefined;
         revision += 1;
@@ -968,13 +777,7 @@ async function createComparisonWorkloadRuntime(
           startUpdateDrain();
           return;
         }
-        if (iconWindowSuspended) {
-          iconWindowSuspended = false;
-          if (iconWindowRefreshDeferred) {
-            iconWindowRefreshDeferred = false;
-            requestIconWindowRefresh();
-          }
-        }
+        iconGridInstance?.resume(configuration, { height, width }, scene, onError);
       });
     }
 
@@ -988,8 +791,7 @@ async function createComparisonWorkloadRuntime(
         comparisonWorkloadUpdateKind(configuration, next, viewportChanged) === 'rebuild' ||
         next.fontFixture !== configuration.fontFixture
       ) {
-        iconWindowSuspended = true;
-        iconWindowRefreshDeferred = true;
+        iconGridInstance?.suspend();
       }
       return new Promise<void>((resolve, reject) => {
         if (pendingUpdate === undefined) {
@@ -1029,42 +831,14 @@ async function createComparisonWorkloadRuntime(
         }
         const frameId = telemetry?.beginFrame(timestamp);
         if (renderScene && configuration.workload === 'icon-grid') {
-          const elapsedMs = iconAutoPanTimestamp === undefined ? 0 : Math.max(0, timestamp - iconAutoPanTimestamp);
-          iconAutoPanTimestamp = timestamp;
-          const window = settledIconWindow;
-          if (configuration.animationEnabled && window !== undefined) {
-            // Keep the per-frame path to numeric motion, transforms, and visibility toggles. Content reassignment is
-            // requested only after crossing a complete cell pitch and commits against the overscanned pool.
-            advanceIconGridAutoPan(
-              iconAutoPanState,
-              -scene.position.x,
-              scene.position.y,
-              window.maximumScrollX,
-              window.maximumScrollY,
-              smoothIconGridFrameDelta(iconFrameDeltaState, elapsedMs),
-              ICON_GRID_AUTO_PAN_PX_PER_SECOND * animationRate(configuration),
-            );
-            scene.position.set(-iconAutoPanState.scrollX, iconAutoPanState.scrollY, 0);
-            updateIconGridEntryVisibility(
-              entries,
-              window.layout,
-              iconAutoPanState.scrollX,
-              iconAutoPanState.scrollY,
-              width,
-              height,
-            );
-            const pitchX = window.layout.cellWidth + window.layout.gap;
-            const pitchY = window.layout.cellHeight + window.layout.gap;
-            if (
-              Math.abs(iconAutoPanState.scrollX - iconWindowRequestScrollX) >= pitchX ||
-              Math.abs(iconAutoPanState.scrollY - iconWindowRequestScrollY) >= pitchY
-            ) {
-              requestIconWindowRefresh();
-            }
-          }
-        } else if (renderScene) {
-          iconAutoPanTimestamp = undefined;
-          iconFrameDeltaState.smoothedElapsedMs = undefined;
+          iconGridInstance?.frame(
+            configuration,
+            { height, width },
+            scene,
+            timestamp,
+            animationRate(configuration),
+            onError,
+          );
         }
         if (
           renderScene &&
@@ -1193,18 +967,7 @@ async function createComparisonWorkloadRuntime(
               : 0,
           zoomScale: configuration.workload === 'zoom-text' ? zoomScale : 0,
           zoomMaximumScale: configuration.workload === 'zoom-text' ? (activeZoomEntry?.zoomMaximumScale ?? 1) : 0,
-          ...iconGridStats(
-            configuration,
-            width,
-            height,
-            -scene.position.x,
-            scene.position.y,
-            entries,
-            iconRecycleCount,
-            iconWindowRevision,
-            iconAssignmentSignature,
-            settledIconWindow,
-          ),
+          ...iconGridStats(configuration, iconGridInstance, { height, width }, scene),
         };
         if (technique === 'bitmap') {
           const strikePpem = selectBitmapStrikePpem(
@@ -1280,33 +1043,22 @@ async function createComparisonWorkloadRuntime(
       },
       panBy(deltaX, deltaY) {
         if (closing || disposed) return;
+        if (configuration.workload === 'icon-grid') {
+          return iconGridInstance?.panBy(configuration, { height, width }, scene, deltaX, deltaY, onError);
+        }
         const horizontal = finite(deltaX, 'workload horizontal pan');
         const vertical = finite(deltaY, 'workload vertical pan');
-        if (configuration.workload === 'icon-grid') {
-          const previousX = scene.position.x;
-          const previousY = scene.position.y;
-          scene.position.x += horizontal;
-          scene.position.y -= vertical;
-          clampIconGridScene(scene, configuration.fontSize, width, height);
-          requestIconWindowRefresh();
-          return {
-            deltaX: scene.position.x - previousX,
-            deltaY: previousY - scene.position.y,
-          };
-        }
         scene.position.x += horizontal;
         scene.position.y -= vertical;
       },
       resetView() {
-        scene.position.set(0, 0, 0);
-        iconAutoPanState.directionX = 1;
-        iconAutoPanState.directionY = 1;
-        iconAutoPanState.scrollX = 0;
-        iconAutoPanState.scrollY = 0;
-        iconFrameDeltaState.smoothedElapsedMs = undefined;
+        if (configuration.workload === 'icon-grid') {
+          iconGridInstance?.resetView(configuration, { height, width }, scene, onError);
+        } else {
+          scene.position.set(0, 0, 0);
+        }
         camera.zoom = 1;
         camera.updateProjectionMatrix();
-        requestIconWindowRefresh();
       },
       zoomBy(factor) {
         if (closing || disposed || configuration.workload !== 'off-axis-3d') return;
@@ -1343,6 +1095,7 @@ async function createComparisonWorkloadRuntime(
           await stopRendering;
           await updateDrain;
           disposed = true;
+          iconGridInstance?.dispose();
           await gpuFrameTimer?.dispose();
           if (!persistent) {
             renderer.setRenderTarget(null);
@@ -1402,10 +1155,6 @@ function createEntries(
 
 function entryReadyPromises(entry: WorkloadEntry): readonly Promise<void>[] {
   return entry.labelText === undefined ? [entry.text.ready] : [entry.text.ready, entry.labelText.ready];
-}
-
-function publishEntryUpdates(entries: readonly WorkloadEntry[]): void {
-  for (const { node } of entries) node.updateMatrixWorld(true);
 }
 
 function layoutEntries(
@@ -1543,55 +1292,11 @@ function animationRate(configuration: Pick<ComparisonWorkloadConfiguration, 'ani
   return 0.25 + configuration.animationSpeed * 0.0175;
 }
 
-function updateIconGridEntryVisibility(
-  entries: readonly WorkloadEntry[],
-  layout: IconGridLayout,
-  scrollX: number,
-  scrollY: number,
-  viewportWidth: number,
-  viewportHeight: number,
-): void {
-  const pitchX = layout.cellWidth + layout.gap;
-  const pitchY = layout.cellHeight + layout.gap;
-  const viewportRight = scrollX + viewportWidth;
-  const viewportBottom = scrollY + viewportHeight;
-  for (const entry of entries) {
-    const index = entry.virtualIconIndex;
-    if (index === undefined) {
-      entry.node.visible = false;
-      continue;
-    }
-    const column = index % layout.columns;
-    const row = Math.floor(index / layout.columns);
-    const left = layout.inset + column * pitchX;
-    const top = layout.inset + row * pitchY;
-    entry.node.visible =
-      left + layout.cellWidth > scrollX &&
-      left < viewportRight &&
-      top + layout.cellHeight > scrollY &&
-      top < viewportBottom;
-  }
-}
-
-function clampIconGridScene(scene: THREE.Scene, iconSize: number, viewportWidth: number, viewportHeight: number): void {
-  const layout = iconGridLayout(ICON_GRID_ITEMS.length, iconSize, viewportWidth);
-  const maximumScrollX = Math.max(0, layout.width - viewportWidth);
-  const maximumScrollY = Math.max(0, layout.height - viewportHeight);
-  scene.position.x = Math.min(0, Math.max(-maximumScrollX, scene.position.x));
-  scene.position.y = Math.min(maximumScrollY, Math.max(0, scene.position.y));
-}
-
 function iconGridStats(
-  configuration: Pick<ComparisonWorkloadConfiguration, 'fontSize' | 'workload'>,
-  viewportWidth: number,
-  viewportHeight: number,
-  scrollX: number,
-  scrollY: number,
-  entries: readonly WorkloadEntry[],
-  recycleCount: number,
-  windowRevision: number,
-  assignmentSignature: string,
-  settledWindow: IconGridVirtualWindow | undefined,
+  configuration: Pick<ComparisonWorkloadConfiguration, 'workload'>,
+  instance: IconGridWorkloadInstance | undefined,
+  viewport: { readonly height: number; readonly width: number },
+  scene: THREE.Scene,
 ): Pick<
   ComparisonWorkloadStats,
   | 'iconItemCount'
@@ -1641,44 +1346,30 @@ function iconGridStats(
       iconMaximumScrollY: 0,
     };
   }
-  const window =
-    settledWindow ??
-    iconGridVirtualWindow(
-      ICON_GRID_ITEMS.length,
-      configuration.fontSize,
-      viewportWidth,
-      viewportHeight,
-      scrollX,
-      scrollY,
-    );
-  let assignedCount = 0;
-  let renderVisibleCount = 0;
-  for (const entry of entries) {
-    if (entry.virtualIconIndex !== undefined) assignedCount += 1;
-    if (entry.node.visible) renderVisibleCount += 1;
-  }
+  if (instance === undefined) throw new Error('icon grid telemetry lost its workload instance');
+  const metrics = instance.metrics(viewport, scene);
   return {
     iconItemCount: ICON_GRID_ITEMS.length,
     iconLabelCount: ICON_GRID_ITEMS.length,
-    iconColumnCount: window.layout.columns,
-    iconRowCount: window.layout.rows,
-    iconGridWidth: window.layout.width,
-    iconGridHeight: window.layout.height,
+    iconColumnCount: metrics.columnCount,
+    iconRowCount: metrics.rowCount,
+    iconGridWidth: metrics.gridWidth,
+    iconGridHeight: metrics.gridHeight,
     iconLabelSize: ICON_GRID_LABEL_SIZE,
-    iconPoolCapacity: entries.length,
-    iconAssignedCount: assignedCount,
-    iconRenderVisibleCount: renderVisibleCount,
-    iconAssignmentSignature: assignmentSignature,
-    iconFirstVisibleIndex: window.firstVisibleIndex,
-    iconLastVisibleIndex: window.lastVisibleIndex,
-    iconRecycleCount: recycleCount,
-    iconWindowRevision: windowRevision,
+    iconPoolCapacity: metrics.poolCapacity,
+    iconAssignedCount: metrics.assignedCount,
+    iconRenderVisibleCount: metrics.renderVisibleCount,
+    iconAssignmentSignature: metrics.assignmentSignature,
+    iconFirstVisibleIndex: metrics.firstVisibleIndex,
+    iconLastVisibleIndex: metrics.lastVisibleIndex,
+    iconRecycleCount: metrics.recycleCount,
+    iconWindowRevision: metrics.windowRevision,
     iconOverscanRows: ICON_GRID_OVERSCAN_ROWS,
     iconOverscanColumns: ICON_GRID_OVERSCAN_COLUMNS,
-    iconScrollX: window.scrollX,
-    iconScrollY: window.scrollY,
-    iconMaximumScrollX: window.maximumScrollX,
-    iconMaximumScrollY: window.maximumScrollY,
+    iconScrollX: metrics.scrollX,
+    iconScrollY: metrics.scrollY,
+    iconMaximumScrollX: metrics.maximumScrollX,
+    iconMaximumScrollY: metrics.maximumScrollY,
   };
 }
 
