@@ -5,7 +5,7 @@ import {
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
   type AdvancedShapingState,
-} from '../benchmark/advanced-shaping';
+} from '../workloads/advanced-shaping';
 import {
   BENCHMARK_FONT_LABELS,
   ICON_GRID_FONT_FIXTURE,

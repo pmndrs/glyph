@@ -1,3 +1,4 @@
+/** Authored Advanced Shaping workload state and timeline. */
 import { graphemeSegments } from 'unicode-segmenter/grapheme';
 
 export type AdvancedShapingCaseId =

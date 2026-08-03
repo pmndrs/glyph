@@ -23,7 +23,7 @@ import devanagariCompressedFontUrl from '../../fixtures/rendering/noto-sans-deva
 import notoCjkShowcaseCompressedFontUrl from '../../fixtures/rendering/noto-sans-cjk-showcase-slug.font.glb.gz?url';
 import sourceSerifCompressedFontUrl from '../../fixtures/rendering/source-serif-4-slug.font.glb.gz?url';
 import showcaseManifest from '../../fixtures/rendering/showcase-slug-fixtures-v0.json';
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum';
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../workloads/benchmark-ipsum';
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
 import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';

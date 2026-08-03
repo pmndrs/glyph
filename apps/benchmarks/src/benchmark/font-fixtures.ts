@@ -1,5 +1,5 @@
-import type { AdvancedShapingFontFixture } from './advanced-shaping';
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT, BENCHMARK_IPSUM_TEXT } from './benchmark-ipsum';
+import type { AdvancedShapingFontFixture } from '../workloads/advanced-shaping';
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT, BENCHMARK_IPSUM_TEXT } from '../workloads/benchmark-ipsum';
 
 export type BenchmarkFontFixture =
   | AdvancedShapingFontFixture

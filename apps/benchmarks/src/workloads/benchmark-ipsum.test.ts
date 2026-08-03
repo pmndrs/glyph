@@ -8,7 +8,7 @@ import {
   BENCHMARK_IPSUM_TEXT,
 } from './benchmark-ipsum';
 
-describe('benchmark ipsum', () => {
+describe('Benchmark Ipsum workload', () => {
   it('keeps five independently diagnosable conformance lanes', () => {
     expect(BENCHMARK_IPSUM_CONFORMANCE_LINES).toHaveLength(5);
     expect(BENCHMARK_IPSUM_CONFORMANCE_TEXT).toBe(BENCHMARK_IPSUM_CONFORMANCE_LINES.join('\n'));

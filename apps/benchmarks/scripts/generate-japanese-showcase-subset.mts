@@ -4,7 +4,7 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { ADVANCED_SHAPING_CASES } from '../src/benchmark/advanced-shaping.ts';
+import { ADVANCED_SHAPING_CASES } from '../src/workloads/advanced-shaping.ts';
 
 const harfBuzzVersion = '13.0.0';
 const sourceDirectory = resolve('fixtures/fonts/noto-sans-cjk-2.004');

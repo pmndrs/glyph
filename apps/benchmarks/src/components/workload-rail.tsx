@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import type { AdvancedShapingFrame } from '../benchmark/advanced-shaping';
+import type { AdvancedShapingFrame } from '../workloads/advanced-shaping';
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,

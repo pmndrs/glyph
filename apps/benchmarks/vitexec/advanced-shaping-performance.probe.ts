@@ -1,4 +1,4 @@
-const advancedShapingPath = '/src/benchmark/advanced-shaping.ts';
+const advancedShapingPath = '/src/workloads/advanced-shaping.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const STEADY_STATE_REPORT_COUNT = 12;
 const [{ ADVANCED_SHAPING_CASES }, { environmentResource }] = await Promise.all([

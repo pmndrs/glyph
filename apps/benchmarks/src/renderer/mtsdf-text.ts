@@ -14,7 +14,7 @@ import showcaseManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v
 import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture } from '../benchmark/font-fixtures';
 import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
 import type { FontDelivery } from '../benchmark/url-state';
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../benchmark/benchmark-ipsum';
+import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../workloads/benchmark-ipsum';
 import { createCanvasSurface, type CanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
 import type { LiveFrameHistoryCursor } from './live-frame-telemetry';

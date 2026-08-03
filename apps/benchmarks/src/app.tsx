@@ -14,7 +14,7 @@ import {
   type RefObject,
 } from 'react';
 
-import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './benchmark/benchmark-ipsum';
+import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './workloads/benchmark-ipsum';
 import {
   advanceAdvancedShapingByTime,
   advancedShapingCase,
@@ -23,7 +23,7 @@ import {
   updateAdvancedShaping,
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
-} from './benchmark/advanced-shaping';
+} from './workloads/advanced-shaping';
 import type { BenchmarkSummary, RunnerEvent } from './benchmark/contracts';
 import { environmentResource } from './benchmark/environment';
 import { runRegisteredBenchmark } from './benchmark/execution';

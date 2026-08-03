@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { BenchmarkMeasurement } from './contracts';
-import { scenarioById } from './scenarios';
+import type { BenchmarkMeasurement } from '../benchmark/contracts';
+import { scenarioById } from '../benchmark/scenarios';
 
 import {
   ADVANCED_SHAPING_CASES,
@@ -14,7 +14,7 @@ import {
   updateAdvancedShaping,
 } from './advanced-shaping';
 
-describe('advanced-shaping timeline', () => {
+describe('Advanced Shaping workload timeline', () => {
   it('starts the live showcase on CJK without publishing an empty playing frame', () => {
     expect(initialAdvancedShapingState()).toMatchObject({
       playing: true,

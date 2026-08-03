@@ -21,7 +21,7 @@ import {
   type AdvancedShapingCommand,
   type AdvancedShapingFrame,
   type AdvancedShapingState,
-} from '../benchmark/advanced-shaping';
+} from '../workloads/advanced-shaping';
 /*
  * The dock intentionally consumes the same typed control state as the main panel.
  * shadcn/Base UI owns interaction semantics; this component only maps state to a compact presentation.

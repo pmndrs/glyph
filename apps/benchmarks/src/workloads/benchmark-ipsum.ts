@@ -1,5 +1,5 @@
 /**
- * Stable product-demo corpus for native-strike rendering checks.
+ * Stable Benchmark Ipsum workload corpus for native-strike rendering checks.
  *
  * Keep each concern on its own line so a visual failure can be localized without
  * changing the corpus. Missing fixture coverage is reported rather than hidden by
