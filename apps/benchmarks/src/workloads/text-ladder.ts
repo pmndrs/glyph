@@ -23,6 +23,19 @@ export interface MutableTextLadderScenePosition {
 }
 
 export const textLadderWorkload = {
+  animate(entries, configuration, elapsedMs, viewportWidth, viewportHeight, scene, scratch) {
+    if (!configuration.animationEnabled) return;
+    animateTextLadderScene(
+      scene,
+      entries,
+      configuration,
+      elapsedMs,
+      viewportWidth,
+      viewportHeight,
+      scratch.textLadderPosition,
+    );
+  },
+  applyRetainedConfiguration() {},
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {

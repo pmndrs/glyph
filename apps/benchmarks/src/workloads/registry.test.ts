@@ -22,6 +22,8 @@ describe('comparison workload registry', () => {
       expect(definition.id).toBe(id);
       expect(['orthographic', 'perspective']).toContain(definition.cameraKind);
       expect(definition.contentWidth === 'none' || typeof definition.contentWidth === 'object').toBe(true);
+      expect(typeof definition.animate).toBe('function');
+      expect(typeof definition.applyRetainedConfiguration).toBe('function');
       expect(typeof definition.create).toBe('function');
       expect(typeof definition.layout).toBe('function');
       expect(typeof definition.updateKind).toBe('function');

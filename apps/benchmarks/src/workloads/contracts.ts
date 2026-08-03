@@ -1,4 +1,5 @@
 import type { AnyRasterInput, RegisteredFont } from '@pmndrs/text';
+import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { RasterTechnique } from '../benchmark/url-state';
@@ -56,6 +57,13 @@ export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayou
   readonly textLadderSpecimen?: RasterConformanceSpecimen;
 }
 
+/** Reused host-owned scratch storage exposed to workload frame hooks without per-frame allocation. */
+export interface ComparisonWorkloadAnimationScratch {
+  readonly dynamicWidths: Float64Array;
+  readonly textLadderPosition: { x: number; y: number };
+  readonly zoomText: { phraseIndex: number; phraseRevision: number; progress: number };
+}
+
 /**
  * App-private workload policy and scene hooks. The retained host remains responsible for renderer,
  * scene activation, cancellation, telemetry, and transactional Text publication.
@@ -67,6 +75,22 @@ export interface ComparisonWorkloadDefinition {
   readonly suspendsIconWindow: boolean;
   create(context: ComparisonWorkloadCreateContext): readonly ComparisonWorkloadEntry[];
   layout(entries: readonly ComparisonWorkloadEntry[], context: ComparisonWorkloadLayoutContext): void;
+  animate(
+    entries: readonly ComparisonWorkloadEntry[],
+    configuration: ComparisonWorkloadConfiguration,
+    elapsedMs: number,
+    viewportWidth: number,
+    viewportHeight: number,
+    scene: THREE.Scene,
+    scratch: ComparisonWorkloadAnimationScratch,
+    onError: (error: unknown) => void,
+    onReflow: (duration: number) => void,
+  ): void;
+  applyRetainedConfiguration(
+    entries: readonly ComparisonWorkloadEntry[],
+    configuration: ComparisonWorkloadConfiguration,
+    technique: RasterTechnique,
+  ): void;
   updateKind(
     previous: ComparisonWorkloadConfiguration,
     next: ComparisonWorkloadConfiguration,

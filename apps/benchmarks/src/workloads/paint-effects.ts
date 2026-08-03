@@ -23,6 +23,12 @@ const PAINT_WORD_RANGES = Array.from(PAINT_EFFECTS_TEXT.matchAll(/\S+/g), (match
 }));
 
 export const paintEffectsWorkload = {
+  animate(entries, configuration, elapsedMs) {
+    animatePaintEffectsEntries(entries, configuration, elapsedMs);
+  },
+  applyRetainedConfiguration(entries, configuration, technique) {
+    applyPaintEffectsRetainedConfiguration(entries, technique, configuration);
+  },
   cameraKind: 'orthographic',
   contentWidth: {},
   create(context) {

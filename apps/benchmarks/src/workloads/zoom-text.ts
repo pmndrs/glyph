@@ -41,6 +41,10 @@ export interface ZoomTextAnimationState {
 }
 
 export const zoomTextWorkload = {
+  animate(entries, configuration, elapsedMs, _viewportWidth, _viewportHeight, _scene, scratch) {
+    animateZoomTextEntries(entries, configuration, elapsedMs, scratch.zoomText);
+  },
+  applyRetainedConfiguration() {},
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {

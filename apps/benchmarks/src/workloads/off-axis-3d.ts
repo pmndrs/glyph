@@ -31,6 +31,10 @@ export const OFF_AXIS_SPANS: readonly MutablePaintSpan[] = OFF_AXIS_WORD_COLORS.
 const colorAt = createOklabColorCycle(OFF_AXIS_WORD_COLORS.map(({ color }) => color));
 
 export const offAxis3dWorkload = {
+  animate(entries, configuration, elapsedMs) {
+    animateOffAxis3dEntries(entries, configuration, elapsedMs);
+  },
+  applyRetainedConfiguration() {},
   cameraKind: 'perspective',
   contentWidth: { multiplier: 2 },
   create(context) {

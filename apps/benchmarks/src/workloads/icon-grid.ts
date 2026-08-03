@@ -29,6 +29,8 @@ const ICON_GRID_CONTENT = ICON_GRID_ITEMS.map((icon) => {
 
 /** Icon Grid keeps a retained, virtualized pool and therefore owns suspension policy. */
 export const iconGridWorkload = {
+  animate() {},
+  applyRetainedConfiguration() {},
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {

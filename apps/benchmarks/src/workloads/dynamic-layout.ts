@@ -17,6 +17,23 @@ export const DYNAMIC_LAYOUT_TEXT = [
 ] as const;
 
 export const dynamicLayoutWorkload = {
+  animate(entries, configuration, elapsedMs, viewportWidth, viewportHeight, _scene, scratch, onError, onReflow) {
+    animateDynamicLayoutEntries(
+      entries,
+      configuration,
+      elapsedMs,
+      viewportWidth,
+      viewportHeight,
+      scratch.dynamicWidths,
+      onError,
+      onReflow,
+    );
+  },
+  applyRetainedConfiguration(entries, configuration) {
+    for (const entry of entries) {
+      if (entry.bounds !== undefined) entry.bounds.visible = configuration.showLayoutBounds;
+    }
+  },
   cameraKind: 'orthographic',
   contentWidth: { maximumWidth: 1_000 },
   create(context) {

@@ -12,6 +12,11 @@ import {
 } from './factory-contracts';
 
 export const paragraphStressWorkload = {
+  animate(entries, configuration, elapsedMs, _viewportWidth, viewportHeight, scene) {
+    if (!configuration.animationEnabled) return;
+    animateParagraphStressScene(scene, entries, configuration, elapsedMs, viewportHeight);
+  },
+  applyRetainedConfiguration() {},
   cameraKind: 'orthographic',
   contentWidth: {},
   create(context) {

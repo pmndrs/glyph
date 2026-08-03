@@ -10,7 +10,7 @@ import {
   comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
   comparisonWorkloadUpdateKind as registryUpdateKind,
 } from '../workloads/registry';
-import { DYNAMIC_LAYOUT_TEXT, animateDynamicLayoutEntries, dynamicLayoutWidths } from '../workloads/dynamic-layout';
+import { DYNAMIC_LAYOUT_TEXT, dynamicLayoutWidths } from '../workloads/dynamic-layout';
 import {
   ICON_GRID_ITEMS,
   ICON_GRID_LABEL_SIZE,
@@ -33,14 +33,14 @@ import {
   type IconGridLayout,
   type IconGridVirtualWindow,
 } from '../workloads/icon-grid';
-import { animateOffAxis3dEntries } from '../workloads/off-axis-3d';
-import { animatePaintEffectsEntries, applyPaintEffectsRetainedConfiguration } from '../workloads/paint-effects';
-import { animateParagraphStressScene } from '../workloads/paragraph-stress';
-import { animateTextLadderScene } from '../workloads/text-ladder';
 import type { MutableTextLadderScenePosition } from '../workloads/text-ladder';
-import { ZOOM_TEXT_BASE_CSS_PX, animateZoomTextEntries } from '../workloads/zoom-text';
+import { ZOOM_TEXT_BASE_CSS_PX } from '../workloads/zoom-text';
 import type { ZoomTextAnimationState } from '../workloads/zoom-text';
-import type { ComparisonWorkloadConfiguration, ComparisonWorkloadId } from '../workloads/contracts';
+import type {
+  ComparisonWorkloadAnimationScratch,
+  ComparisonWorkloadConfiguration,
+  ComparisonWorkloadId,
+} from '../workloads/contracts';
 import { committedTextLayout, type ComparisonWorkloadEntry } from '../workloads/factory-contracts';
 import { loadBitmapFont, registeredBitmapAtlas, type BitmapTextLiveStats } from './bitmap-text';
 import { createCanvasSurface } from './canvas-surface';
@@ -401,6 +401,11 @@ async function createComparisonWorkloadRuntime(
   const zoomAnimationState: ZoomTextAnimationState = { phraseIndex: 0, phraseRevision: 0, progress: 0 };
   const textLadderPositionScratch: MutableTextLadderScenePosition = { x: 0, y: 0 };
   const dynamicWidthsScratch = new Float64Array(DYNAMIC_LAYOUT_TEXT.length);
+  const workloadAnimationScratch: ComparisonWorkloadAnimationScratch = {
+    dynamicWidths: dynamicWidthsScratch,
+    textLadderPosition: textLadderPositionScratch,
+    zoomText: zoomAnimationState,
+  };
   const iconAutoPanState: IconGridAutoPanState = { directionX: 1, directionY: 1, scrollX: 0, scrollY: 0 };
   const iconFrameDeltaState: IconGridFrameDeltaState = { smoothedElapsedMs: undefined };
   let iconAutoPanTimestamp: number | undefined;
@@ -1064,37 +1069,34 @@ async function createComparisonWorkloadRuntime(
         if (
           renderScene &&
           !fontFixtureSwitching &&
-          configuration.workload === 'text-ladder' &&
-          configuration.animationEnabled
+          (configuration.workload === 'text-ladder' || configuration.workload === 'paragraph-stress')
         ) {
-          animateTextLadderScene(
-            scene,
+          animateEntries(
             entries,
             configuration,
             Math.max(0, timestamp - animationEpoch),
             width,
             height,
-            textLadderPositionScratch,
+            scene,
+            workloadAnimationScratch,
+            onError,
+            recordReflow,
           );
         }
-        if (
-          renderScene &&
-          !fontFixtureSwitching &&
-          configuration.workload === 'paragraph-stress' &&
-          configuration.animationEnabled
-        ) {
-          animateParagraphStressScene(scene, entries, configuration, Math.max(0, timestamp - animationEpoch), height);
-        }
         if (renderScene && !fontFixtureCommitting) {
-          if (!fontFixtureSwitching) {
+          if (
+            !fontFixtureSwitching &&
+            configuration.workload !== 'text-ladder' &&
+            configuration.workload !== 'paragraph-stress'
+          ) {
             animateEntries(
               entries,
               configuration,
               Math.max(0, timestamp - animationEpoch),
-              zoomAnimationState,
-              dynamicWidthsScratch,
               width,
               height,
+              scene,
+              workloadAnimationScratch,
               onError,
               recordReflow,
             );
@@ -1422,38 +1424,25 @@ function layoutEntries(
 function animateEntries(
   entries: readonly WorkloadEntry[],
   configuration: ComparisonWorkloadConfiguration,
-  timestamp: number,
-  zoomAnimationState: ZoomTextAnimationState,
-  dynamicWidthsScratch: Float64Array,
+  elapsedMs: number,
   width: number,
   height: number,
+  scene: THREE.Scene,
+  scratch: ComparisonWorkloadAnimationScratch,
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
 ): void {
-  if (configuration.workload === 'zoom-text') {
-    animateZoomTextEntries(entries, configuration, timestamp, zoomAnimationState);
-    return;
-  }
-  if (configuration.workload === 'paint-effects') {
-    animatePaintEffectsEntries(entries, configuration, timestamp);
-    return;
-  }
-  if (configuration.workload === 'dynamic-layout') {
-    animateDynamicLayoutEntries(
-      entries,
-      configuration,
-      timestamp,
-      width,
-      height,
-      dynamicWidthsScratch,
-      onError,
-      onReflow,
-    );
-    return;
-  }
-  if (configuration.workload === 'off-axis-3d') {
-    animateOffAxis3dEntries(entries, configuration, timestamp);
-  }
+  comparisonWorkloadDefinition(configuration.workload).animate(
+    entries,
+    configuration,
+    elapsedMs,
+    width,
+    height,
+    scene,
+    scratch,
+    onError,
+    onReflow,
+  );
 }
 
 function applyRetainedConfiguration(
@@ -1461,11 +1450,7 @@ function applyRetainedConfiguration(
   technique: RasterTechnique,
   configuration: ComparisonWorkloadConfiguration,
 ): void {
-  for (const entry of entries) {
-    if (entry.bounds !== undefined) entry.bounds.visible = configuration.showLayoutBounds;
-  }
-  if (configuration.workload !== 'paint-effects') return;
-  applyPaintEffectsRetainedConfiguration(entries, technique, configuration);
+  comparisonWorkloadDefinition(configuration.workload).applyRetainedConfiguration(entries, configuration, technique);
 }
 
 export function comparisonWorkloadUpdateKind(
