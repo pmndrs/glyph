@@ -1,0 +1,51 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { loadRegisteredTarget } from './targets';
+import { registeredTargetIds } from './targets/registry';
+
+const benchmarkDirectory = fileURLToPath(new URL('.', import.meta.url));
+const directWasmDependencyModule = 'targets/measurement/wasm-dependencies.ts';
+
+async function sourceFiles(directory: string): Promise<readonly string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) return sourceFiles(path);
+      return entry.isFile() && entry.name.endsWith('.ts') ? [path] : [];
+    }),
+  );
+  return nested.flat();
+}
+
+describe('benchmark target boundaries', () => {
+  it('keeps direct font-baker and Wasm URL imports in the explicit measurement adapter', async () => {
+    const files = await sourceFiles(benchmarkDirectory);
+    const offenders = await Promise.all(
+      files.map(async (file) => {
+        const source = await readFile(file, 'utf8');
+        return /@pmndrs\/text-font-baker(?:\/font-baker\.wasm\?url)?|@pmndrs\/text\/text-shaper\.wasm\?url/.test(source)
+          ? file.slice(benchmarkDirectory.length + 1)
+          : undefined;
+      }),
+    );
+    expect(offenders.filter((file): file is string => file !== undefined)).toEqual([directWasmDependencyModule]);
+  });
+
+  it('resolves targets through the lazy group registry without importing the monolithic implementation facade', async () => {
+    const registry = await readFile(new URL('./targets/registry.ts', import.meta.url), 'utf8');
+    const execution = await readFile(new URL('./execution.ts', import.meta.url), 'utf8');
+
+    expect(registry).toContain("import('./product')");
+    expect(registry).toContain("import('./measurement/font-baker')");
+    expect(registry).toContain("import('./conformance')");
+    expect(execution).toContain('await loadRegisteredTarget(request.targetId)');
+    expect(await loadRegisteredTarget('missing')).toBeUndefined();
+  });
+
+  it('resolves every registered identity from its declared target group', async () => {
+    const resolved = await Promise.all(registeredTargetIds.map((targetId) => loadRegisteredTarget(targetId)));
+    expect(resolved.map((target) => target?.id)).toEqual(registeredTargetIds);
+  });
+});

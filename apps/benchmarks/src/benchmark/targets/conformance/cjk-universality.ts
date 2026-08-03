@@ -10,24 +10,21 @@ import {
   type RuntimeShaper,
   type ShapeBatchRequest,
 } from '@pmndrs/text';
-import { createFontBaker } from '@pmndrs/text-font-baker';
-import bakerWasmUrl from '@pmndrs/text-font-baker/font-baker.wasm?url';
-import shaperWasmUrl from '@pmndrs/text/text-shaper.wasm?url';
-
-import cjkContract from '../../fixtures/contracts/paragraph-cjk-layout-v0.json';
-import cjkFontUrl from '../../fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf?url';
-import cjkManifest from '../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json';
-import cjkOracle from '../../fixtures/shaping/noto-sans-cjk/harfrust.json';
-import type { BenchmarkTarget } from './contracts';
-import { exactValue } from './exact-value';
-import { hashParagraphLayouts, paragraphLayoutContract } from './paragraph-layout-digest';
+import cjkContract from '../../../../fixtures/contracts/paragraph-cjk-layout-v0.json';
+import cjkFontUrl from '../../../../fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf?url';
+import cjkManifest from '../../../../fixtures/fonts/noto-sans-cjk-2.004/manifest.json';
+import cjkOracle from '../../../../fixtures/shaping/noto-sans-cjk/harfrust.json';
+import type { BenchmarkTarget } from '../../contracts';
+import { exactValue } from '../../exact-value';
+import { hashParagraphLayouts, paragraphLayoutContract } from '../../paragraph-layout-digest';
 import {
   assertShapingFixture,
   hashShapedFixture,
   shapedFixtureBytes,
   shapingFixtureBatch,
   type ShapingOracleCase,
-} from './shaping-fixture';
+} from '../../shaping-fixture';
+import { loadDirectWasmDependencies } from '../measurement/wasm-dependencies';
 
 interface ContractCase {
   readonly text: string;
@@ -58,6 +55,7 @@ export const cjkUniversalityTarget: BenchmarkTarget = {
   status: (input) => (input.fontBytes === undefined ? 'ready' : 'needs-fixture'),
   load: async () => {
     if (state !== undefined) return;
+    const { bakerWasmUrl, createFontBaker, shaperWasmUrl } = await loadDirectWasmDependencies();
     const [bakerResponse, shaperResponse, fontResponse] = await Promise.all([
       fetch(bakerWasmUrl),
       fetch(shaperWasmUrl),

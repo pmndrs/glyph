@@ -8,7 +8,7 @@ import type {
 } from './contracts';
 import { runBenchmark } from './runner';
 import { scenarios } from './scenarios';
-import { targets } from './targets';
+import { loadRegisteredTarget } from './targets';
 
 export interface RegisteredBenchmarkRequest {
   readonly targetId: string;
@@ -21,7 +21,7 @@ export interface RegisteredBenchmarkRequest {
 }
 
 export async function runRegisteredBenchmark(request: RegisteredBenchmarkRequest): Promise<BenchmarkSummary> {
-  const target = targets.find((candidate) => candidate.id === request.targetId);
+  const target = await loadRegisteredTarget(request.targetId);
   if (target === undefined) throw new Error(`Unknown benchmark target: ${request.targetId}`);
   const scenario = scenarios.find((candidate) => candidate.id === request.scenarioId);
   if (scenario === undefined) throw new Error(`Unknown benchmark scenario: ${request.scenarioId}`);
