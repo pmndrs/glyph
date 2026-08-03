@@ -1,12 +1,10 @@
-import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { BitmapTextPreviewUpdate } from '../../renderer/bitmap-text';
 import type { BenchmarkWorkloadId } from '../../workloads/catalog';
+import type { LiveTextScene } from '../../workloads/live-text-scene';
 
-export interface LiveTextConfiguration extends Omit<BitmapTextPreviewUpdate, 'fontSize'> {
-  readonly animatePresentation: boolean;
-  readonly fontFixture: BenchmarkFontFixture;
-  readonly expectedGlyphCount: number | undefined;
-  readonly timelineTick: number | undefined;
+/** Renderer-facing extension of a workload-owned Text scene. */
+export interface LiveTextConfiguration extends LiveTextScene {
+  readonly fontSize: number;
 }
 
 export interface RetainedLiveTextUpdate extends BitmapTextPreviewUpdate {

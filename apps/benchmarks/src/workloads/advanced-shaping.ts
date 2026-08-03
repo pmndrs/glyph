@@ -1,6 +1,8 @@
 /** Authored Advanced Shaping workload state and timeline. */
 import { graphemeSegments } from 'unicode-segmenter/grapheme';
 
+import type { LiveTextScene } from './live-text-scene';
+
 export type AdvancedShapingCaseId =
   | 'latin-features'
   | 'arabic-joining'
@@ -284,6 +286,24 @@ export function advancedShapingFrame(state: AdvancedShapingState): AdvancedShapi
     widthPermille: caseDefinition.showcaseWidthPermille,
     progress: tickCount === 0 ? 1 : tick / tickCount,
     isEdited: state.editedText !== undefined,
+  };
+}
+
+/** Projects a timeline frame into the live scene's public Text inputs. */
+export function advancedShapingLiveTextScene(frame: AdvancedShapingFrame): LiveTextScene {
+  return {
+    anchor: 'measure-center',
+    animatePresentation: false,
+    direction: frame.caseDefinition.direction,
+    expectedGlyphCount: undefined,
+    features: frame.caseDefinition.features,
+    fontFixture: frame.caseDefinition.fontFixture,
+    language: frame.caseDefinition.language,
+    layoutWidthRatio: frame.widthPermille / 1_000,
+    presentation: 'timeline',
+    text: frame.text,
+    textAlign: 'start',
+    timelineTick: frame.tick,
   };
 }
 

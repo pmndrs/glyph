@@ -12,7 +12,6 @@ import {
   type RefObject,
 } from 'react';
 
-import { BENCHMARK_IPSUM_INTER_GLYPH_COUNT } from './workloads/benchmark-ipsum';
 import {
   advanceAdvancedShapingByTime,
   advancedShapingCase,
@@ -52,7 +51,6 @@ import {
   type MutableParagraphStressMotionFrame,
 } from './benchmark/paragraph-stress-motion';
 import {
-  benchmarkIpsumText,
   liveWorkloadFontFixtures,
   rasterConformanceSpecimen,
   type BenchmarkFontFixture,
@@ -78,7 +76,6 @@ import {
   type WorkloadOption,
 } from './benchmark/workloads';
 import { Chip } from './components/ui';
-import type { BitmapTextPreviewUpdate } from './renderer/bitmap-text';
 import type { PersistentRenderJob } from './renderer/persistent-render-host';
 import type {
   ComparisonWorkloadConfiguration,
@@ -93,6 +90,8 @@ import {
   type BenchmarkWorkloadId,
 } from './workloads/catalog';
 import { BENCHMARK_CONTENT_INSET, BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH } from './workloads/shared/text-style';
+import type { LiveTextScene } from './workloads/live-text-scene';
+import { liveTextSceneForWorkload } from './workloads/live-text-scenes';
 import { PersistentRenderHostProvider, usePersistentRenderHost } from './renderer/persistent-render-host-context';
 import { ConformanceSurface } from './surfaces/conformance/conformance-surface';
 import { BakeProgressOverlay, useBakeProgress } from './surfaces/benchmark/bake-progress-overlay';
@@ -208,7 +207,6 @@ const INITIAL_CONFORMANCE_VIEW: ConformanceView = {
   panYPercent: 0,
 };
 
-const EMPTY_FONT_FEATURES: BitmapTextPreviewUpdate['features'] = [];
 function techniqueLabel(technique: RasterTechnique): 'Bitmap' | 'MSDF' | 'Slug' {
   return technique === 'mtsdf' ? 'MSDF' : technique === 'slug' ? 'Slug' : 'Bitmap';
 }
@@ -1171,39 +1169,19 @@ function BenchmarkSurface({
   useEffect(() => {
     return scheduleComparisonWorkloadPreload();
   }, []);
-  const advanced = workload === 'advanced-shaping';
   const comparisonWorkload = comparisonWorkloadId(workload);
   const bitmapStats = stats?.technique === 'bitmap' ? stats : undefined;
   const mtsdfStats = stats?.technique === 'mtsdf' ? stats : undefined;
   const slugStats = stats?.technique === 'slug' ? stats : undefined;
   const comparisonStats = isComparisonWorkloadStats(stats) ? stats : undefined;
-  const textConfiguration: LiveTextConfiguration = advanced
-    ? {
-        anchor: 'measure-center',
-        direction: showcaseFrame.caseDefinition.direction,
-        expectedGlyphCount: undefined,
-        animatePresentation: false,
-        features: showcaseFrame.caseDefinition.features,
-        fontFixture,
-        language: showcaseFrame.caseDefinition.language,
-        layoutWidthRatio: showcaseFrame.widthPermille / 1000,
-        text: showcaseFrame.text,
-        textAlign: 'start',
-        timelineTick: showcaseFrame.tick,
-      }
-    : {
-        anchor: 'center',
-        direction: 'ltr',
-        expectedGlyphCount: fontFixture === 'inter' ? BENCHMARK_IPSUM_INTER_GLYPH_COUNT : undefined,
-        animatePresentation: false,
-        features: EMPTY_FONT_FEATURES,
-        fontFixture,
-        language: 'en',
-        layoutWidthRatio: layoutWidthPercent / 100,
-        text: benchmarkIpsumText(),
-        textAlign: 'start',
-        timelineTick: undefined,
-      };
+  const textConfiguration = liveTextSceneForWorkload(workload, {
+    fontFixture,
+    layoutWidthRatio: layoutWidthPercent / 100,
+    showcaseFrame,
+  });
+  if (comparisonWorkload === undefined && textConfiguration === undefined) {
+    throw new Error(`Live workload ${workload} has no authored Text scene`);
+  }
   const viewport =
     comparisonWorkload !== undefined ? (
       <ComparisonWorkloadViewport
@@ -1240,7 +1218,7 @@ function BenchmarkSurface({
         grid={grid}
         surfaceAnchorRef={surfaceAnchorRef}
         stats={slugStats}
-        textConfiguration={textConfiguration}
+        textConfiguration={withLiveTextFontSize(textConfiguration, fontSize)}
         workload={workload}
         onStats={onStats}
       />
@@ -1254,7 +1232,7 @@ function BenchmarkSurface({
         grid={grid}
         surfaceAnchorRef={surfaceAnchorRef}
         stats={mtsdfStats}
-        textConfiguration={textConfiguration}
+        textConfiguration={withLiveTextFontSize(textConfiguration, fontSize)}
         workload={workload}
         onStats={onStats}
       />
@@ -1268,14 +1246,14 @@ function BenchmarkSurface({
         grid={grid}
         surfaceAnchorRef={surfaceAnchorRef}
         stats={bitmapStats}
-        textConfiguration={textConfiguration}
+        textConfiguration={withLiveTextFontSize(textConfiguration, fontSize)}
         workload={workload}
         onStats={onStats}
       />
     );
   return (
     <LiveBenchmarkSurface
-      advanced={advanced}
+      advanced={textConfiguration?.presentation === 'timeline'}
       presentation={presentation}
       showcaseFrame={showcaseFrame}
       stats={stats}
@@ -1284,6 +1262,11 @@ function BenchmarkSurface({
       workload={workload}
     />
   );
+}
+
+function withLiveTextFontSize(scene: LiveTextScene | undefined, fontSize: number): LiveTextConfiguration {
+  if (scene === undefined) throw new Error('A single-paragraph live surface requires an authored Text scene');
+  return { ...scene, fontSize };
 }
 
 function comparisonViewportEvidence({

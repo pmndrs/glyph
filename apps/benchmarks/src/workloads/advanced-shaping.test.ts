@@ -8,6 +8,7 @@ import {
   ADVANCED_SHAPING_PRESENTATION_CASE_IDS,
   advanceAdvancedShaping,
   advanceAdvancedShapingByTime,
+  advancedShapingLiveTextScene,
   advancedShapingFrame,
   advancedShapingFrames,
   initialAdvancedShapingState,
@@ -22,6 +23,24 @@ describe('Advanced Shaping workload timeline', () => {
       caseId: 'cjk-line-breaks',
       revealUnitsPerSecond: 180,
       tick: 1,
+    });
+  });
+
+  it('projects each authored frame into the exact live Text scene', () => {
+    const frame = advancedShapingFrame(initialAdvancedShapingState());
+    expect(advancedShapingLiveTextScene(frame)).toEqual({
+      anchor: 'measure-center',
+      animatePresentation: false,
+      direction: 'ltr',
+      expectedGlyphCount: undefined,
+      features: [],
+      fontFixture: 'noto-sans-cjk-showcase',
+      language: 'ja',
+      layoutWidthRatio: 0.7,
+      presentation: 'timeline',
+      text: '文',
+      textAlign: 'start',
+      timelineTick: 1,
     });
   });
 

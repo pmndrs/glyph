@@ -6,6 +6,7 @@ import {
   BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
   BENCHMARK_IPSUM_PARAGRAPHS,
   BENCHMARK_IPSUM_TEXT,
+  benchmarkIpsumLiveTextScene,
 } from './benchmark-ipsum';
 
 describe('Benchmark Ipsum workload', () => {
@@ -23,5 +24,23 @@ describe('Benchmark Ipsum workload', () => {
     expect(BENCHMARK_IPSUM_TEXT).toContain('0123456789');
     expect(BENCHMARK_IPSUM_TEXT).toContain('x²+y²≈z²');
     expect(BENCHMARK_IPSUM_INTER_GLYPH_COUNT).toBe(1_151);
+  });
+
+  it('projects its exact live Text defaults without renderer policy', () => {
+    expect(benchmarkIpsumLiveTextScene('inter', 0.82)).toEqual({
+      anchor: 'center',
+      animatePresentation: false,
+      direction: 'ltr',
+      expectedGlyphCount: BENCHMARK_IPSUM_INTER_GLYPH_COUNT,
+      features: [],
+      fontFixture: 'inter',
+      language: 'en',
+      layoutWidthRatio: 0.82,
+      presentation: 'static',
+      text: BENCHMARK_IPSUM_TEXT,
+      textAlign: 'start',
+      timelineTick: undefined,
+    });
+    expect(benchmarkIpsumLiveTextScene('dancing-script', 0.5).expectedGlyphCount).toBeUndefined();
   });
 });

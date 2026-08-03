@@ -1,3 +1,7 @@
+import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+
+import type { LiveTextScene } from './live-text-scene';
+
 /**
  * Stable Benchmark Ipsum workload corpus for native-strike rendering checks.
  *
@@ -34,3 +38,26 @@ export const BENCHMARK_IPSUM_TEXT = BENCHMARK_IPSUM_PARAGRAPHS.join('\n\n');
 
 /** Exact rendered glyph count for the pinned Inter 4.1 fixture with default features. */
 export const BENCHMARK_IPSUM_INTER_GLYPH_COUNT = 1_151;
+
+const EMPTY_FONT_FEATURES = [] as const;
+
+/** Projects the paragraph example's authored Text inputs for the live surface. */
+export function benchmarkIpsumLiveTextScene(
+  fontFixture: BenchmarkFontFixture,
+  layoutWidthRatio: number,
+): LiveTextScene {
+  return {
+    anchor: 'center',
+    animatePresentation: false,
+    direction: 'ltr',
+    expectedGlyphCount: fontFixture === 'inter' ? BENCHMARK_IPSUM_INTER_GLYPH_COUNT : undefined,
+    features: EMPTY_FONT_FEATURES,
+    fontFixture,
+    language: 'en',
+    layoutWidthRatio,
+    presentation: 'static',
+    text: BENCHMARK_IPSUM_TEXT,
+    textAlign: 'start',
+    timelineTick: undefined,
+  };
+}
