@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:b8bff40a525909b92d99699e6f2e4c5b257ede6bf15fa36570d43846e9c560fb'
+source_digest: 'sha256:194ab5d165f6c30cd8142d8cec7f3aa1a9697b2c7ace5b1611aff5367cb9a8a9'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -62,6 +62,12 @@ sources:
   - id: harness-layout
     resource: ../../apps/benchmarks/src/components/harness-layout.tsx
     title: Main and Presentation route composition
+  - id: bitmap-live-viewport
+    resource: ../../apps/benchmarks/src/surfaces/benchmark/bitmap-text-viewport.tsx
+    title: Bitmap persistent live-text viewport controller
+  - id: sdf-live-viewports
+    resource: ../../apps/benchmarks/src/surfaces/benchmark/sdf-text-viewports.tsx
+    title: MTSDF and Slug persistent live-text viewport controllers
   - id: raster-conformance-session
     resource: ../../apps/benchmarks/src/benchmark/targets/conformance/raster/contracts.ts
     title: Low-level raster conformance session contract
@@ -82,7 +88,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-03T09:23:50Z'
+  at: '2026-08-03T09:51:35Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -120,7 +126,7 @@ Main and Presentation are exclusive URL-selected root presentations. Presentatio
 
 Every live benchmark identity resolves through one typed catalog under `apps/benchmarks/src/workloads/`. The catalog owns labels, descriptions, exact Main and Presentation defaults, font policy, controls and ranges, pan/zoom capability, preload policy, and surface kind; URL parsing normalizes an unknown workload inside its selected mode before font or control policy executes. Main and Presentation derive scene descriptions, amount labels, font selection, preload grouping, and pan/zoom capability from that authority rather than repeating workload-ID switches. Benchmark Ipsum and Advanced Shaping keep their authored corpus and timeline in the same workload hierarchy as Text Ladder, Zoom Text, Icon Grid, Off-axis / 3D, Dynamic Layout, Paragraph Stress, and Paint & Effects. The seven retained comparison definitions own construction, layout, animation, and retained configuration hooks; no workload-specific dispatch switch remains for those phases. Icon Grid additionally owns one per-mount instance containing virtual-window epochs, pool assignment and recycling, scroll and auto-pan state, frame smoothing, refresh suspension, visibility, and metrics. The host exposes only generic cold pool resize/readiness, scene attachment, and disposal; renderer, canvas, RAF, GPU timer, font transactions, and telemetry history remain route infrastructure. Each workload mount explicitly initializes the shared scene transform, preventing Text Ladder's authored offscreen exit or Icon Grid pan from polluting the next workload. Their technique-invariant content-width, text-style, and color-cycle utilities live below `workloads/shared`; a source-boundary test rejects static or dynamic imports from any workload module back into renderer implementation files.
 
-Main and Presentation composition now lives in `components/harness-layout.tsx`, runtime control binding in `components/runtime-controls.tsx`, and benchmark surface/bake status in `surfaces/benchmark`; the root application remains the route coordinator rather than the sole component hierarchy. Conformance React composition lives under `surfaces/conformance`: both the retained comparison and finite captures can receive only the host-owned renderer, while finite low-level dispatch stays below `benchmark/targets/conformance` and `benchmark/targets/measurement`. Advanced Shaping lives in that target hierarchy behind the registry's literal selected-target dynamic import. MTSDF and Slug sampling plus source-outline targets share a target-owned raster conformance session that preserves warm `load → run → dispose` reuse and forwards the borrowed renderer and abort signal unchanged; renderer-private capture resources remain inside their adapters. The targets share the explicitly named `targets/shared/direct-wasm.ts` dependency adapter only after target selection. The public missing-sibling loader Worker is conformance because it proves authenticated Worker bytes and loader fallback behavior; it is not a rendering product target. Boundary tests reject workload imports back into renderer implementation, isolate renderer imports to the raster adapters, authenticate the literal Advanced Shaping target import, and reject direct font-baker or Wasm URL imports outside the shared adapter, preventing raw tooling from leaking into the normal Presentation module graph.
+Main and Presentation composition lives in `components/harness-layout.tsx`, runtime control binding in `components/runtime-controls.tsx`, and benchmark surface/bake status in `surfaces/benchmark`; the root application remains the route coordinator rather than the sole component hierarchy. The three persistent Bitmap, MTSDF, and Slug live-text viewport controllers also live under `surfaces/benchmark`, keeping their host lease, warm update queue, loading state, telemetry, and probe contract beside the rendered surface. Their renderer imports remain literal dynamic boundaries: type-only references use `import type`, so the production build retains separate technique chunks rather than pulling renderer implementations into the route entry. Conformance React composition lives under `surfaces/conformance`: both the retained comparison and finite captures can receive only the host-owned renderer, while finite low-level dispatch stays below `benchmark/targets/conformance` and `benchmark/targets/measurement`. Advanced Shaping lives in that target hierarchy behind the registry's literal selected-target dynamic import. MTSDF and Slug sampling plus source-outline targets share a target-owned raster conformance session that preserves warm `load → run → dispose` reuse and forwards the borrowed renderer and abort signal unchanged; renderer-private capture resources remain inside their adapters. The targets share the explicitly named `targets/shared/direct-wasm.ts` dependency adapter only after target selection. The public missing-sibling loader Worker is conformance because it proves authenticated Worker bytes and loader fallback behavior; it is not a rendering product target. Boundary tests reject workload imports back into renderer implementation, isolate renderer imports to the raster adapters, authenticate the literal Advanced Shaping target import, and reject direct font-baker or Wasm URL imports outside the shared adapter, preventing raw tooling from leaking into the normal Presentation module graph.
 
 Timed playback compares each frame with the latest requested location rather than the last committed scene, so an in-flight preload receives exactly one request and cannot be superseded by a duplicate transition that skips workload-default initialization. Presentation captures Space at the window capture boundary to start or stop timed playback even while a button, switch, slider, select, or combobox owns focus; matching key-up activation is suppressed, while inputs, textareas, and editable text retain ordinary space entry. Arrow navigation remains disabled on interactive controls.
 
