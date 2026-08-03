@@ -981,8 +981,8 @@ uikit is the first required third-party integration, but its `CustomLayouting`, 
 
 ## Raster module boundary
 
-External packages moving from the pre-release mutation seams should follow the focused
-[raster plugin migration guide](raster-plugin-migration.md); the signatures and invariants below remain authoritative.
+External package authors should follow the focused [raster and baker plugin guide](raster-baker-plugin.md); the signatures
+and invariants below remain authoritative.
 
 ```ts
 interface RuntimeRasterBakeRequest<Options> {

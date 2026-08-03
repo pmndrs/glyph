@@ -4,7 +4,7 @@
 
 - [Project brief](project-brief.md) — product intent, current integration slice, V1, and later horizon.
 - [Runtime and bake API V0](api-shapes.md) — public and internal TypeScript contract fixture.
-- [Raster plugin migration](raster-plugin-migration.md) — replace the pre-release build, retained-update, and repaint seams with one required transaction.
+- [Raster and baker plugin guide](raster-baker-plugin.md) — build an external technique through the public runtime, baker, artifact, discovery, and lifecycle contracts.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
