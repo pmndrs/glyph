@@ -59,7 +59,6 @@ import {
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,
-  ICON_GRID_FONT_FIXTURE,
   SELECTABLE_FONT_FIXTURES,
   benchmarkIpsumText,
   liveWorkloadFontFixtures,
@@ -116,7 +115,13 @@ import type {
   ComparisonWorkloadPersistentScene,
   ComparisonWorkloadStats,
 } from './renderer/comparison-workload';
-import { comparisonWorkloadId, isBenchmarkWorkloadId, type BenchmarkWorkloadId } from './workloads/catalog';
+import {
+  benchmarkWorkloadDefinition,
+  comparisonWorkloadId,
+  isBenchmarkWorkloadId,
+  type BenchmarkWorkloadDefinition,
+  type BenchmarkWorkloadId,
+} from './workloads/catalog';
 import {
   benchmarkContentWidth,
   BENCHMARK_CONTENT_INSET,
@@ -196,8 +201,10 @@ function liveSceneAssetResource(
   fontFixture: BenchmarkFontFixture,
   workload: HarnessLocation['workload'],
 ): Promise<void> {
-  const fixtures = workload === 'icon-grid' ? [fontFixture, ICON_GRID_FONT_FIXTURE] : [fontFixture];
-  const comparison = isBenchmarkWorkloadId(workload) && comparisonWorkloadId(workload) !== undefined;
+  const definition = isBenchmarkWorkloadId(workload) ? benchmarkWorkloadDefinition(workload) : undefined;
+  const fixtures =
+    definition?.fontPolicy.kind === 'icon-grid' ? [fontFixture, definition.fontPolicy.iconFixture] : [fontFixture];
+  const comparison = definition?.surface === 'comparison';
   const key = `${technique}:${delivery}:${fixtures.join(',')}:${String(comparison)}`;
   const existing = liveSceneAssetResources.get(key);
   if (existing !== undefined) return existing;
@@ -261,48 +268,39 @@ function isComparisonWorkloadStats(stats: LiveTextStats | undefined): stats is C
   return stats !== undefined && 'workload' in stats;
 }
 
-function workloadAmountLabel(workload: string, amount: number): string | undefined {
-  switch (workload) {
-    case 'off-axis-3d':
-      return `Perspective intensity · ${amount}%`;
-    case 'dynamic-layout':
-      return `Reflow amplitude · ${amount}%`;
-    case 'paragraph-stress':
-      return `Text volume · ${amount}%`;
-    case 'paint-effects':
-      return `Hue spread · ${amount}%`;
-    default:
-      return undefined;
-  }
+function workloadAmountLabel(workload: BenchmarkWorkloadId, amount: number): string | undefined {
+  const range = benchmarkWorkloadDefinition(workload).controls.amount;
+  return range === undefined ? undefined : `${range.label} · ${amount}%`;
 }
 
-function liveWorkloadSceneDescription(
-  workload: string,
-  showcaseFrame: AdvancedShapingFrame,
-  technique: RasterTechnique,
-): string {
-  switch (workload) {
-    case 'advanced-shaping':
-      return `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`;
-    case 'text-ladder':
-      return 'Tests one sentence at every size from 8 through 1024 pixels.';
-    case 'zoom-text':
-      return 'Tests retained center scaling from 8 pt to viewport fit while authenticated Inter translations of “Shape” cycle by language.';
-    case 'icon-grid':
-      return 'Tests a virtualized grid spanning all 1,402 named Font Awesome Solid icons with fixed font-rendered labels.';
-    case 'off-axis-3d':
-      return 'Tests readability and frame cost as a paragraph leans deep into the scene.';
-    case 'dynamic-layout':
-      return 'Tests whether three animated paragraphs reflow without stretching their glyphs.';
-    case 'paragraph-stress':
-      return 'Tests glyph, line, draw, memory, CPU, and GPU cost under paragraph pressure.';
-    case 'paint-effects':
-      return technique === 'slug'
-        ? 'Tests the live cost and quality of Slug V0 animated fill color and opacity.'
-        : 'Tests the live cost and quality of animated color, opacity, stroke, and shadow.';
-    default:
-      return 'Tests paragraph rendering cost while the viewport reflows the text.';
+function liveWorkloadSceneDescription(workload: BenchmarkWorkloadId, showcaseFrame: AdvancedShapingFrame): string {
+  return workload === 'advanced-shaping'
+    ? `Tests whether ${showcaseFrame.caseDefinition.label.toLowerCase()} stay correct while the paragraph types and wraps.`
+    : benchmarkWorkloadDefinition(workload).description;
+}
+
+function presentationFontOptions(definition: BenchmarkWorkloadDefinition) {
+  const policy = definition.fontPolicy;
+  if (policy.kind === 'advanced-case') {
+    return ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
   }
+  if (policy.kind === 'icon-grid') {
+    return [{ label: BENCHMARK_FONT_LABELS[policy.iconFixture], value: policy.iconFixture }];
+  }
+  if (policy.kind === 'fixed') {
+    return [{ label: BENCHMARK_FONT_LABELS[policy.defaultFixture], value: policy.defaultFixture }];
+  }
+  return SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
+}
+
+function presentationFontValue(
+  definition: BenchmarkWorkloadDefinition,
+  activeFontFixture: BenchmarkFontFixture,
+): BenchmarkFontFixture {
+  const policy = definition.fontPolicy;
+  if (policy.kind === 'icon-grid') return policy.iconFixture;
+  if (policy.kind === 'fixed') return policy.defaultFixture;
+  return activeFontFixture;
 }
 
 function formatMs(value: number | undefined): string {
@@ -1100,14 +1098,8 @@ function HarnessLayout({
   const actionReady = actionEligible && (location.mode === 'conformance' || liveStats !== undefined);
   const presentationMode = location.layout === 'presentation' && location.mode === 'benchmark';
   if (presentationMode) {
-    const presentationFontOptions =
-      location.workload === 'icon-grid'
-        ? [{ label: BENCHMARK_FONT_LABELS[ICON_GRID_FONT_FIXTURE], value: ICON_GRID_FONT_FIXTURE }]
-        : location.workload === 'zoom-text'
-          ? [{ label: BENCHMARK_FONT_LABELS.inter, value: 'inter' }]
-          : location.workload === 'advanced-shaping'
-            ? ADVANCED_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }))
-            : SELECTABLE_FONT_FIXTURES.map((fixture) => ({ label: fixture.label, value: fixture.id }));
+    const presentationWorkload = isBenchmarkWorkloadId(location.workload) ? location.workload : 'benchmark-ipsum';
+    const presentationDefinition = benchmarkWorkloadDefinition(presentationWorkload);
     const presentationPayload = createPayloadSummary({
       delivery: location.delivery,
       fixtureManifests: { bitmap: bitmapFixtures, mtsdf: mtsdfFixtures, slug: slugFixtures },
@@ -1121,14 +1113,8 @@ function HarnessLayout({
       <>
         <PresentationLayout
           controls={controls}
-          fontOptions={presentationFontOptions}
-          fontValue={
-            location.workload === 'icon-grid'
-              ? ICON_GRID_FONT_FIXTURE
-              : location.workload === 'zoom-text'
-                ? 'inter'
-                : activeFontFixture
-          }
+          fontOptions={presentationFontOptions(presentationDefinition)}
+          fontValue={presentationFontValue(presentationDefinition, activeFontFixture)}
           payload={<PresentationPayloadPills summary={presentationPayload} />}
           playing={presentationPlaying}
           scene={scene}
@@ -1146,11 +1132,12 @@ function HarnessLayout({
             label: option.label,
             value: option.id,
           }))}
-          workloadValue={isBenchmarkWorkloadId(location.workload) ? location.workload : 'benchmark-ipsum'}
+          workloadValue={presentationWorkload}
           onExit={() => onLocation({ layout: 'main' })}
           onFont={(value) => {
-            if (location.workload === 'icon-grid' || location.workload === 'zoom-text') return;
-            if (location.workload === 'advanced-shaping') {
+            const policy = presentationDefinition.fontPolicy;
+            if (policy.kind === 'fixed' || policy.kind === 'icon-grid') return;
+            if (policy.kind === 'advanced-case') {
               onAdvancedFontFixture(value as BenchmarkFontFixture);
               return;
             }
@@ -1713,9 +1700,7 @@ function BenchmarkSurface({
             <>
               <div>
                 <p className="eyebrow">Realtime scene</p>
-                <p className="mt-1 text-xs text-muted">
-                  {liveWorkloadSceneDescription(workload, showcaseFrame, technique)}
-                </p>
+                <p className="mt-1 text-xs text-muted">{liveWorkloadSceneDescription(workload, showcaseFrame)}</p>
               </div>
               <span className="shrink-0 font-mono text-[9px] text-success">LIVE</span>
             </>
@@ -2866,6 +2851,7 @@ function ComparisonWorkloadViewport({
   const configurePersistentSurface = useEffectEvent(configureSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<ComparisonWorkloadPersistentScene>(undefined);
+  const workloadDefinition = benchmarkWorkloadDefinition(workload);
   const workloadFonts = liveWorkloadFontFixtures(workload, fontFixture);
   const [error, setError] = useState<string>();
   const {
@@ -2915,6 +2901,7 @@ function ComparisonWorkloadViewport({
       const { createComparisonWorkloadPersistentScene } = await preloadComparisonWorkload();
       if (cancelled) return;
       const configuration = currentConfiguration();
+      const interaction = benchmarkWorkloadDefinition(configuration.workload).interaction;
       const created = createComparisonWorkloadPersistentScene({
         ...configuration,
         backend,
@@ -2931,9 +2918,9 @@ function ComparisonWorkloadViewport({
           anchor: surfaceAnchor,
           controller: previewRef,
           label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
-          pan: configuration.workload !== 'zoom-text',
+          pan: interaction.pan,
           scene: created,
-          zoom: configuration.workload === 'off-axis-3d',
+          zoom: interaction.zoom,
         },
         controller.signal,
       );
@@ -2960,11 +2947,12 @@ function ComparisonWorkloadViewport({
   }, [backend, delivery, publishBakeProgress, surfaceAnchorRef, technique]);
 
   useEffect(() => {
+    const interaction = benchmarkWorkloadDefinition(workload).interaction;
     configurePersistentSurface({
       controller: previewRef,
       label: `Live ${techniqueLabel(technique)} benchmark using ${backend}`,
-      pan: workload !== 'zoom-text',
-      zoom: workload === 'off-axis-3d',
+      pan: interaction.pan,
+      zoom: interaction.zoom,
     });
   }, [backend, technique, workload]);
 
@@ -3028,8 +3016,12 @@ function ComparisonWorkloadViewport({
         className="pointer-events-none absolute bottom-0 left-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 font-mono text-[9px] text-muted"
         data-testid="canvas-navigation-status"
       >
-        {workload === 'off-axis-3d' ? 'PAN · PINCH/WHEEL ZOOM' : workload === 'zoom-text' ? 'AUTO FIT' : 'PAN'} · {dpr}×
-        DPR
+        {workloadDefinition.interaction.zoom
+          ? 'PAN · PINCH/WHEEL ZOOM'
+          : workloadDefinition.interaction.pan
+            ? 'PAN'
+            : 'AUTO FIT'}{' '}
+        · {dpr}× DPR
       </div>
       {!suppressLoading && (stats === undefined || bakeProgressActive) && error === undefined && (
         <BakeProgressOverlay
