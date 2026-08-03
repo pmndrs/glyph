@@ -17,7 +17,7 @@ import type {
   SlugAffineRoleSceneDefinition,
   SlugProjectionZoomSceneDefinition,
   SlugRoleSceneDefinition,
-} from '../../../../renderer/slug-role-scenes';
+} from './slug-role-scenes';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,

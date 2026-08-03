@@ -103,6 +103,7 @@ describe('benchmark target boundaries', () => {
       slugCaptureProbes.every((probe) => probe.includes('/benchmark/targets/conformance/raster/slug-capture.ts')),
     ).toBe(true);
     expect(slugCaptureProbes.every((probe) => !probe.includes('/renderer/slug-text.ts'))).toBe(true);
+    expect(slugCaptureProbes.every((probe) => !probe.includes('/renderer/slug-role-scenes.ts'))).toBe(true);
     const { createAdvancedShapingConformanceTarget } = await import('./targets/conformance/advanced-shaping');
     expect(createAdvancedShapingConformanceTarget().id).toBe('advanced-shaping-conformance');
     expect(await loadRegisteredTarget('missing')).toBeUndefined();

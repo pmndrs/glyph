@@ -6,7 +6,7 @@ import {
   SLUG_AFFINE_ROLE_SCENE,
   SLUG_PROJECTION_ZOOM_SCENE,
   SLUG_ROLE_SCENES,
-} from '../src/renderer/slug-role-scenes.ts';
+} from '../src/benchmark/targets/conformance/raster/slug-role-scenes.ts';
 
 const executable = fileURLToPath(new URL('../node_modules/.bin/vitexec', import.meta.url));
 const cwd = fileURLToPath(new URL('..', import.meta.url));

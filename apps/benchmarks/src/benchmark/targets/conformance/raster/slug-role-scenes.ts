@@ -1,4 +1,4 @@
-import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import type { BenchmarkFontFixture } from '../../../font-fixtures';
 
 export type SlugRoleSceneKind = 'large-size' | 'extreme-zoom' | 'complex-outline' | 'clipping';
 
