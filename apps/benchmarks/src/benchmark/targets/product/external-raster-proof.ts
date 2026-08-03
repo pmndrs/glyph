@@ -3,7 +3,7 @@ import { glyphExample } from '@pmndrs/text-glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
-import { compactRgba8Readback } from '../../../renderer/tsl-baseline';
+import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
 import { loadBenchmarkFontAsset } from '../../../workloads/font-assets';
 import type { PersistentRenderSceneRenderer } from '../../../renderer/persistent-render-host';
 import { withRendererStateRestored } from '../../../renderer/renderer-state-transaction';

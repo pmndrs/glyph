@@ -3,9 +3,8 @@ import { msdf, msdfDescriptorRasterKey, type MsdfResource } from '@pmndrs/text/r
 import * as THREE from 'three/webgpu';
 
 import { conformanceText, type BenchmarkFontFixture, type SelectableFontFixture } from '../benchmark/font-fixtures';
-import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
+import type { BenchmarkTarget } from '../benchmark/contracts';
 import type { FontDelivery } from '../benchmark/url-state';
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../workloads/benchmark-ipsum';
 import { createCanvasSurface, type CanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
 import type { LiveFrameHistoryCursor } from './live-frame-telemetry';
@@ -27,7 +26,7 @@ import {
   captureSourceOutlineFidelity,
   type SourceOutlineFidelityCapture,
 } from '../benchmark/low-level/raster/source-outline-reference';
-import { compactRgba8Readback } from './tsl-baseline';
+import { compactRgba8Readback } from '../benchmark/low-level/raster/rgba-readback';
 import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
 import {
   createPersistentRenderHost,
@@ -40,25 +39,9 @@ import { withRendererStateRestored } from './renderer-state-transaction';
 import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../workloads/font-assets/mtsdf';
 
 const WIDTH = 512;
-const HEIGHT = 320;
 const FLAT_CONFORMANCE_HEIGHT = 512;
 
 export { preloadMtsdfFontAssets } from '../workloads/font-assets/mtsdf';
-
-interface MtsdfTextResources {
-  readonly backend: RendererBackend;
-  readonly dpr: number;
-  readonly renderer: THREE.WebGPURenderer;
-  readonly target: THREE.RenderTarget;
-  readonly scene: THREE.Scene;
-  readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly lines: readonly Text[];
-  readonly artifactBytes: number;
-  readonly compressedBytes: number;
-  readonly fontLoadMs: number;
-  readonly firstDrawMs: number;
-}
 
 export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf';
@@ -231,37 +214,6 @@ interface FlatMtsdfConformanceResources {
   readonly font: RegisteredFont;
   readonly line: Text;
   readonly resource: MsdfResource;
-}
-
-type MtsdfTextState = { readonly kind: 'empty' } | { readonly kind: 'ready'; readonly resources: MtsdfTextResources };
-
-export function createMtsdfTextTarget(backend: RendererBackend): BenchmarkTarget {
-  let state: MtsdfTextState = { kind: 'empty' };
-  return {
-    id: `mtsdf-text-${backend}`,
-    label: backend === 'webgpu' ? 'MTSDF text · WebGPU' : 'MTSDF text · WebGL',
-    detail: 'Inter GLB · HarfRust layout · RGBA8 KTX2 · shared TSL graph',
-    color: backend === 'webgpu' ? 'cyan' : 'amber',
-    capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
-    status: () => 'ready',
-    load: async (controls) => {
-      if (state.kind === 'ready') return;
-      state = { kind: 'ready', resources: await createResources(backend, controls.dpr) };
-    },
-    run: async () => {
-      if (state.kind !== 'ready') throw new Error('MTSDF text target was not loaded');
-      return renderMtsdfText(state.resources);
-    },
-    dispose: async () => {
-      if (state.kind !== 'ready') return;
-      const resources = state.resources;
-      state = { kind: 'empty' };
-      for (const line of resources.lines) line.dispose();
-      resources.font.dispose();
-      resources.target.dispose();
-      await disposeConfiguredRenderer(resources.renderer);
-    },
-  };
 }
 
 export function createMtsdfConformanceTarget(backend: RendererBackend): BenchmarkTarget {
@@ -690,128 +642,6 @@ function persistentGpuTimingSupported(backend: RendererBackend, renderer: Persis
   return context !== null && context.getExtension('EXT_disjoint_timer_query_webgl2') !== null;
 }
 
-async function createResources(backend: RendererBackend, dpr: number): Promise<MtsdfTextResources> {
-  const canvas = document.createElement('canvas');
-  const renderer = await createConfiguredRenderer({
-    canvas,
-    width: WIDTH,
-    height: HEIGHT,
-    backend,
-    dpr,
-  });
-  let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  const lines: Text[] = [];
-  try {
-    const fontStarted = performance.now();
-    const loaded = await loadMtsdfFont();
-    font = loaded.font;
-    const fontLoadMs = performance.now() - fontStarted;
-    const scene = new THREE.Scene();
-
-    const resizeLine = new Text({
-      text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
-      font,
-      raster: msdf,
-      fontSize: 18,
-      lineHeight: 1.2,
-      width: 280,
-      wrap: 'word',
-      color: 0xf2f5ff,
-    });
-    lines.push(resizeLine);
-    await resizeLine.ready;
-    resizeLine.setProperties({ width: 476 });
-    resizeLine.updateMatrixWorld();
-    resizeLine.position.set(18, -24, 0);
-    scene.add(resizeLine);
-
-    const mipLine = new Text({
-      text: 'mip 12 px  ffi  AV  0123456789',
-      font,
-      raster: msdf,
-      fontSize: 12,
-      color: 0x7dd3fc,
-    });
-    lines.push(mipLine);
-    await mipLine.ready;
-    mipLine.position.set(18, -142, 0);
-    scene.add(mipLine);
-
-    const transformLine = new Text({
-      text: 'TRANSFORM / MTSDF',
-      font,
-      raster: msdf,
-      fontSize: 30,
-      color: 0xc4b5fd,
-    });
-    lines.push(transformLine);
-    await transformLine.ready;
-    transformLine.position.set(252, -194, 0);
-    transformLine.rotation.set(-0.2, 0.18, -0.1);
-    transformLine.scale.setScalar(0.7);
-    scene.add(transformLine);
-
-    const effectsLine = new Text({
-      text: 'Fill  Outline  Shadow',
-      font,
-      raster: msdf,
-      fontSize: 26,
-      color: 0xf8fafc,
-      opacity: 0.92,
-      outline: { color: 0x22d3ee, width: 1.5 },
-      shadow: { color: 0x6d28d9, offset: [3, 3] },
-    });
-    lines.push(effectsLine);
-    await effectsLine.ready;
-    effectsLine.position.set(18, -236, 0);
-    scene.add(effectsLine);
-
-    const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
-    camera.position.z = 500;
-    camera.updateProjectionMatrix();
-    const physicalWidth = Math.round(WIDTH * dpr);
-    const physicalHeight = Math.round(HEIGHT * dpr);
-    target = new THREE.RenderTarget(physicalWidth, physicalHeight, {
-      depthBuffer: false,
-      stencilBuffer: false,
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      type: THREE.UnsignedByteType,
-      format: THREE.RGBAFormat,
-    });
-    target.texture.colorSpace = THREE.NoColorSpace;
-    target.texture.generateMipmaps = false;
-    renderer.setRenderTarget(target);
-    renderer.setClearColor(0x05070d, 1);
-    renderer.clear();
-    const firstDrawStarted = performance.now();
-    renderer.render(scene, camera);
-    const firstDrawMs = performance.now() - firstDrawStarted;
-    renderer.setRenderTarget(null);
-    return {
-      backend,
-      dpr,
-      renderer,
-      target,
-      scene,
-      camera,
-      font,
-      lines,
-      artifactBytes: loaded.artifactBytes,
-      compressedBytes: loaded.compressedBytes,
-      fontLoadMs,
-      firstDrawMs,
-    };
-  } catch (error) {
-    for (const line of lines) line.dispose();
-    font?.dispose();
-    target?.dispose();
-    await disposeConfiguredRenderer(renderer);
-    throw error;
-  }
-}
-
 export async function loadMtsdfFont(
   signal?: AbortSignal,
   fixture: BenchmarkFontFixture = 'inter',
@@ -892,32 +722,6 @@ function assertLayoutWidthRatio(value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > 1) {
     throw new RangeError('MSDF preview layout width ratio must be in (0, 1]');
   }
-}
-
-async function renderMtsdfText(resources: MtsdfTextResources): Promise<TargetRunOutput> {
-  const rendered = await renderMtsdfFrame(resources);
-  const { bytes, renderMs, pixelEvidence } = rendered;
-  return {
-    bytes: bytes.byteLength,
-    hash: await sha256(bytes),
-    metrics: {
-      backendWebGpu: resources.backend === 'webgpu' ? 1 : 0,
-      backendWebGl2: resources.backend === 'webgl2' ? 1 : 0,
-      dpr: resources.dpr,
-      sceneCount: 4,
-      textObjectCount: resources.lines.length,
-      glyphCount: resources.lines.reduce((sum, line) => sum + renderedGlyphCount(line), 0),
-      drawCount: resources.lines.reduce((sum, line) => sum + drawCount(line), 0),
-      changedPixels: pixelEvidence.changedPixels,
-      distinctRgbColors: pixelEvidence.distinctRgbColors,
-      artifactBytes: resources.artifactBytes,
-      compressedArtifactBytes: resources.compressedBytes,
-      renderTargetGpuBytes: bytes.byteLength,
-      fontLoadMs: resources.fontLoadMs,
-      firstDrawMs: resources.firstDrawMs,
-      renderMs,
-    },
-  };
 }
 
 export async function captureMtsdfTextConformance(options: {
@@ -1122,59 +926,6 @@ async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConforma
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
-}
-
-async function renderMtsdfFrame(resources: MtsdfTextResources): Promise<{
-  readonly bytes: Uint8Array;
-  readonly renderMs: number;
-  readonly pixelEvidence: ReturnType<typeof inspectPixels>;
-}> {
-  const { renderer, target, scene, camera } = resources;
-  const width = Math.round(WIDTH * resources.dpr);
-  const height = Math.round(HEIGHT * resources.dpr);
-  renderer.setRenderTarget(target);
-  renderer.setClearColor(0x05070d, 1);
-  renderer.clear();
-  const started = performance.now();
-  renderer.render(scene, camera);
-  const renderMs = performance.now() - started;
-  const readback = await renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height);
-  renderer.setRenderTarget(null);
-  const bytes = compactRgba8Readback(
-    new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
-    width,
-    height,
-    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-  );
-  const pixelEvidence = inspectPixels(bytes);
-  if (pixelEvidence.changedPixels < 500 || pixelEvidence.distinctRgbColors < 4) {
-    throw new Error('MTSDF conformance scene did not render its expected visible content');
-  }
-  return { bytes, renderMs, pixelEvidence };
-}
-
-function inspectPixels(bytes: Uint8Array): {
-  readonly changedPixels: number;
-  readonly distinctRgbColors: number;
-} {
-  let changedPixels = 0;
-  const colors = new Set<number>();
-  const backgroundRed = bytes[0]!;
-  const backgroundGreen = bytes[1]!;
-  const backgroundBlue = bytes[2]!;
-  const backgroundAlpha = bytes[3]!;
-  for (let offset = 0; offset < bytes.byteLength; offset += 4) {
-    const red = bytes[offset]!;
-    const green = bytes[offset + 1]!;
-    const blue = bytes[offset + 2]!;
-    const alpha = bytes[offset + 3]!;
-    if (red === backgroundRed && green === backgroundGreen && blue === backgroundBlue && alpha === backgroundAlpha) {
-      continue;
-    }
-    changedPixels += 1;
-    colors.add((red << 16) | (green << 8) | blue);
-  }
-  return { changedPixels, distinctRgbColors: colors.size };
 }
 
 function renderedGlyphCount(object: THREE.Object3D): number {

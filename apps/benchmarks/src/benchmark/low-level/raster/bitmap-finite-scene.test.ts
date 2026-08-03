@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertBitmapTextPixels } from './bitmap-text';
+import { assertBitmapTextPixels } from './bitmap-finite-scene';
 
 describe('bitmap text readback oracle', () => {
   it('accepts visible coverage that stays inside the render target', () => {

@@ -1,7 +1,7 @@
 import type { SelectableFontFixture } from '../../benchmark/font-fixtures';
 import type { ConformanceWorkloadId } from '../../benchmark/workloads';
 import type { GraphicsBackend, RasterTechnique } from '../../benchmark/url-state';
-import type { BitmapTextConformanceCapture } from '../../renderer/bitmap-text';
+import type { BitmapTextConformanceCapture } from '../../benchmark/low-level/raster/bitmap-finite-scene';
 import type { MtsdfTextConformanceCapture } from '../../renderer/mtsdf-text';
 import type { PersistentRenderSceneRenderer } from '../../renderer/persistent-render-host';
 import type { SlugTextConformanceCapture } from '../../renderer/slug-text';

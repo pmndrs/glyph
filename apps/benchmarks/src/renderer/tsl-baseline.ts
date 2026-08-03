@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+
+import { compactRgba8Readback } from '../benchmark/low-level/raster/rgba-readback';
 import type { Node } from 'three/webgpu';
 import { float, mul, vec3 } from 'three/tsl';
 
@@ -133,31 +135,6 @@ async function renderBaseline(resources: BaselineResources): Promise<TargetRunOu
       renderTargetGpuBytes: bytes.byteLength,
     },
   };
-}
-
-export function compactRgba8Readback(
-  source: Uint8Array,
-  width: number,
-  height: number,
-  rowOrder: 'top-to-bottom' | 'bottom-to-top' = 'top-to-bottom',
-): Uint8Array {
-  const rowBytes = width * 4;
-  const compactLength = rowBytes * height;
-  const sourceRowBytes = source.byteLength === compactLength ? rowBytes : Math.ceil(rowBytes / 256) * 256;
-  const expectedLength = (height - 1) * sourceRowBytes + rowBytes;
-  if (source.byteLength !== expectedLength) {
-    throw new Error(
-      `RGBA8 readback returned ${source.byteLength} bytes; expected ${compactLength} compact or ${expectedLength} aligned bytes`,
-    );
-  }
-  const compact = new Uint8Array(compactLength);
-  // WebGPU copies rows from the top-left; WebGL readPixels returns bottom-left rows.
-  for (let row = 0; row < height; row += 1) {
-    const sourceRow = rowOrder === 'bottom-to-top' ? height - row - 1 : row;
-    const sourceOffset = sourceRow * sourceRowBytes;
-    compact.set(source.subarray(sourceOffset, sourceOffset + rowBytes), row * rowBytes);
-  }
-  return compact;
 }
 
 export function assertTslBaselinePixels(bytes: Uint8Array, physicalSize = TARGET_SIZE): void {

@@ -65,8 +65,14 @@ describe('benchmark target boundaries', () => {
     expect(conformance).not.toContain('renderer/runtime-fallback-conformance');
     expect(product).toContain("import('./external-raster-proof')");
     expect(product).toContain("import('./react-text')");
+    expect(product).toContain("import('./mtsdf-text')");
+    expect(product).toContain("import('./slug-text')");
+    expect(product).toContain("import('./bitmap-text')");
     expect(product).not.toContain('renderer/external-raster-proof');
     expect(product).not.toContain('renderer/react-text');
+    expect(product).not.toContain('renderer/mtsdf-text');
+    expect(product).not.toContain('renderer/slug-text');
+    expect(product).not.toContain('renderer/bitmap-text');
     expect(mtsdfAdapter).toContain("import('../../../../renderer/mtsdf-text')");
     expect(slugAdapter).toContain("import('../../../../renderer/slug-text')");
     const { createAdvancedShapingConformanceTarget } = await import('./targets/conformance/advanced-shaping');

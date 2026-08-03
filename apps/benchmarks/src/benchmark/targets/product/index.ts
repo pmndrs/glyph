@@ -41,7 +41,7 @@ function bitmapTextTarget(backend: Backend): BenchmarkTarget {
       capabilities: rasterCapabilities,
       status: () => 'ready',
     },
-    async () => (await import('../../../renderer/bitmap-text')).createBitmapTextTarget(backend),
+    async () => (await import('./bitmap-text')).createBitmapTextTarget(backend),
     { forwardsConfiguration: true },
   );
 }
@@ -56,7 +56,7 @@ function mtsdfTextTarget(backend: Backend): BenchmarkTarget {
       capabilities: rasterCapabilities,
       status: () => 'ready',
     },
-    async () => (await import('../../../renderer/mtsdf-text')).createMtsdfTextTarget(backend),
+    async () => (await import('./mtsdf-text')).createMtsdfTextTarget(backend),
   );
 }
 
@@ -70,7 +70,7 @@ function slugTextTarget(backend: Backend): BenchmarkTarget {
       capabilities: rasterCapabilities,
       status: () => 'ready',
     },
-    async () => (await import('../../../renderer/slug-text')).createSlugTextTarget(backend),
+    async () => (await import('./slug-text')).createSlugTextTarget(backend),
   );
 }
 

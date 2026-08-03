@@ -11,8 +11,7 @@ import {
 import { slug, slugDescriptorRasterKey, type SlugModule, type SlugResource } from '@pmndrs/text/raster/slug';
 import * as THREE from 'three/webgpu';
 
-import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../workloads/benchmark-ipsum';
-import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
+import type { BenchmarkTarget } from '../benchmark/contracts';
 import { rasterConformanceSpecimen, type BenchmarkFontFixture } from '../benchmark/font-fixtures';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface } from './canvas-surface';
@@ -52,7 +51,7 @@ import {
   captureSourceOutlineFidelity,
   type SourceOutlineFidelityCapture,
 } from '../benchmark/low-level/raster/source-outline-reference';
-import { compactRgba8Readback } from './tsl-baseline';
+import { compactRgba8Readback } from '../benchmark/low-level/raster/rgba-readback';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,
@@ -61,7 +60,6 @@ import {
 } from './webgpu-renderer';
 
 const WIDTH = 512;
-const HEIGHT = 320;
 const FLAT_CONFORMANCE_HEIGHT = 512;
 
 export { preloadSlugFontAssets } from '../workloads/font-assets/slug';
@@ -77,22 +75,6 @@ export interface SlugRasterConfiguration {
   readonly referenceCount: number;
   readonly referenceGpuBytes: number;
   readonly gpuBytes: number;
-}
-
-interface SlugTextResources {
-  readonly backend: RendererBackend;
-  readonly dpr: number;
-  readonly renderer: THREE.WebGPURenderer;
-  readonly target: THREE.RenderTarget;
-  readonly scene: THREE.Scene;
-  readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly lines: readonly Text[];
-  readonly configuration: SlugRasterConfiguration;
-  readonly artifactBytes: number;
-  readonly compressedBytes: number;
-  readonly fontLoadMs: number;
-  readonly firstDrawMs: number;
 }
 
 export interface SlugTextConformanceCapture {
@@ -296,37 +278,6 @@ export interface SlugTextPreview {
   setGridVisible(visible: boolean): void;
   update(update: SlugTextPreviewUpdate): Promise<void>;
   dispose(): Promise<void>;
-}
-
-type SlugTextState = { readonly kind: 'empty' } | { readonly kind: 'ready'; readonly resources: SlugTextResources };
-
-export function createSlugTextTarget(backend: RendererBackend): BenchmarkTarget {
-  let state: SlugTextState = { kind: 'empty' };
-  return {
-    id: `slug-text-${backend}`,
-    label: backend === 'webgpu' ? 'Slug text · WebGPU' : 'Slug text · WebGL',
-    detail: 'Inter GLB · HarfRust layout · analytic curves · shared TSL graph',
-    color: backend === 'webgpu' ? 'green' : 'amber',
-    capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
-    status: () => 'ready',
-    load: async (controls) => {
-      if (state.kind === 'ready') return;
-      state = { kind: 'ready', resources: await createResources(backend, controls.dpr) };
-    },
-    run: async () => {
-      if (state.kind !== 'ready') throw new Error('Slug text target was not loaded');
-      return renderSlugText(state.resources);
-    },
-    dispose: async () => {
-      if (state.kind !== 'ready') return;
-      const resources = state.resources;
-      state = { kind: 'empty' };
-      for (const line of resources.lines) line.dispose();
-      resources.font.dispose();
-      resources.target.dispose();
-      await disposeConfiguredRenderer(resources.renderer);
-    },
-  };
 }
 
 export function createSlugConformanceTarget(backend: RendererBackend): BenchmarkTarget {
@@ -813,128 +764,6 @@ export async function createSlugTextPreview(options: {
     };
   } catch (error) {
     await host.dispose();
-    throw error;
-  }
-}
-
-async function createResources(backend: RendererBackend, dpr: number): Promise<SlugTextResources> {
-  const canvas = document.createElement('canvas');
-  const renderer = await createConfiguredRenderer({
-    canvas,
-    width: WIDTH,
-    height: HEIGHT,
-    backend,
-    dpr,
-  });
-  let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  const lines: Text[] = [];
-  try {
-    const fontStarted = performance.now();
-    const loaded = await loadSlugFont();
-    font = loaded.font;
-    const fontLoadMs = performance.now() - fontStarted;
-    const scene = new THREE.Scene();
-
-    const resizeLine = new Text({
-      text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
-      font,
-      raster: slug,
-      fontSize: 18,
-      lineHeight: 1.2,
-      width: 280,
-      wrap: 'word',
-      color: 0xf2f5ff,
-    });
-    lines.push(resizeLine);
-    await resizeLine.ready;
-    resizeLine.setProperties({ width: 476 });
-    resizeLine.updateMatrixWorld();
-    resizeLine.position.set(18, -24, 0);
-    scene.add(resizeLine);
-
-    const smallLine = new Text({
-      text: 'analytic 12 px  ffi  AV  0123456789',
-      font,
-      raster: slug,
-      fontSize: 12,
-      color: 0x7dd3fc,
-    });
-    lines.push(smallLine);
-    await smallLine.ready;
-    smallLine.position.set(18, -142, 0);
-    scene.add(smallLine);
-
-    const transformLine = new Text({
-      text: 'TRANSFORM / SLUG',
-      font,
-      raster: slug,
-      fontSize: 30,
-      color: 0xc4b5fd,
-    });
-    lines.push(transformLine);
-    await transformLine.ready;
-    transformLine.position.set(252, -194, 0);
-    transformLine.rotation.set(-0.2, 0.18, -0.1);
-    transformLine.scale.setScalar(0.7);
-    scene.add(transformLine);
-
-    const opacityLine = new Text({
-      text: 'Fill  Opacity',
-      font,
-      raster: slug,
-      fontSize: 26,
-      color: 0xf8fafc,
-      opacity: 0.72,
-    });
-    lines.push(opacityLine);
-    await opacityLine.ready;
-    opacityLine.position.set(18, -236, 0);
-    scene.add(opacityLine);
-
-    const configuration = await registeredSlugConfiguration(font);
-    const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
-    camera.position.z = 500;
-    camera.updateProjectionMatrix();
-    const physicalWidth = Math.round(WIDTH * dpr);
-    const physicalHeight = Math.round(HEIGHT * dpr);
-    target = new THREE.RenderTarget(physicalWidth, physicalHeight, {
-      depthBuffer: false,
-      stencilBuffer: false,
-      minFilter: THREE.NearestFilter,
-      magFilter: THREE.NearestFilter,
-      type: THREE.UnsignedByteType,
-      format: THREE.RGBAFormat,
-    });
-    target.texture.colorSpace = THREE.NoColorSpace;
-    target.texture.generateMipmaps = false;
-    renderer.setRenderTarget(target);
-    renderer.setClearColor(0x05070d, 1);
-    renderer.clear();
-    const firstDrawStarted = performance.now();
-    renderer.render(scene, camera);
-    const firstDrawMs = performance.now() - firstDrawStarted;
-    renderer.setRenderTarget(null);
-    return {
-      backend,
-      dpr,
-      renderer,
-      target,
-      scene,
-      camera,
-      font,
-      lines,
-      configuration,
-      artifactBytes: loaded.artifactBytes,
-      compressedBytes: loaded.compressedBytes,
-      fontLoadMs,
-      firstDrawMs,
-    };
-  } catch (error) {
-    for (const line of lines) line.dispose();
-    font?.dispose();
-    target?.dispose();
-    await disposeConfiguredRenderer(renderer);
     throw error;
   }
 }
@@ -1778,90 +1607,6 @@ function assertLayoutWidthRatio(value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > 1) {
     throw new RangeError('Slug preview layout width ratio must be in (0, 1]');
   }
-}
-
-async function renderSlugText(resources: SlugTextResources): Promise<TargetRunOutput> {
-  const rendered = await renderSlugFrame(resources);
-  const { bytes, renderMs, pixelEvidence } = rendered;
-  return {
-    bytes: bytes.byteLength,
-    hash: await sha256(bytes),
-    metrics: {
-      backendWebGpu: resources.backend === 'webgpu' ? 1 : 0,
-      backendWebGl2: resources.backend === 'webgl2' ? 1 : 0,
-      dpr: resources.dpr,
-      sceneCount: 4,
-      textObjectCount: resources.lines.length,
-      glyphCount: resources.lines.reduce((sum, line) => sum + renderedGlyphCount(line), 0),
-      drawCount: resources.lines.reduce((sum, line) => sum + drawCount(line), 0),
-      changedPixels: pixelEvidence.changedPixels,
-      distinctRgbColors: pixelEvidence.distinctRgbColors,
-      artifactBytes: resources.artifactBytes,
-      compressedArtifactBytes: resources.compressedBytes,
-      slugPageCount: resources.configuration.pageCount,
-      slugCurveGpuBytes: resources.configuration.curveGpuBytes,
-      slugHeaderGpuBytes: resources.configuration.headerGpuBytes,
-      slugReferenceGpuBytes: resources.configuration.referenceGpuBytes,
-      slugGpuBytes: resources.configuration.gpuBytes,
-      renderTargetGpuBytes: bytes.byteLength,
-      fontLoadMs: resources.fontLoadMs,
-      firstDrawMs: resources.firstDrawMs,
-      renderMs,
-    },
-  };
-}
-
-async function renderSlugFrame(resources: SlugTextResources): Promise<{
-  readonly bytes: Uint8Array;
-  readonly renderMs: number;
-  readonly pixelEvidence: ReturnType<typeof inspectPixels>;
-}> {
-  const { renderer, target, scene, camera } = resources;
-  const width = Math.round(WIDTH * resources.dpr);
-  const height = Math.round(HEIGHT * resources.dpr);
-  renderer.setRenderTarget(target);
-  renderer.setClearColor(0x05070d, 1);
-  renderer.clear();
-  const started = performance.now();
-  renderer.render(scene, camera);
-  const renderMs = performance.now() - started;
-  const readback = await renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height);
-  renderer.setRenderTarget(null);
-  const bytes = compactRgba8Readback(
-    new Uint8Array(readback.buffer, readback.byteOffset, readback.byteLength),
-    width,
-    height,
-    resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-  );
-  const pixelEvidence = inspectPixels(bytes);
-  if (pixelEvidence.changedPixels < 500 || pixelEvidence.distinctRgbColors < 4) {
-    throw new Error('Slug conformance scene did not render its expected visible content');
-  }
-  return { bytes, renderMs, pixelEvidence };
-}
-
-function inspectPixels(bytes: Uint8Array): {
-  readonly changedPixels: number;
-  readonly distinctRgbColors: number;
-} {
-  let changedPixels = 0;
-  const colors = new Set<number>();
-  const backgroundRed = bytes[0]!;
-  const backgroundGreen = bytes[1]!;
-  const backgroundBlue = bytes[2]!;
-  const backgroundAlpha = bytes[3]!;
-  for (let offset = 0; offset < bytes.byteLength; offset += 4) {
-    const red = bytes[offset]!;
-    const green = bytes[offset + 1]!;
-    const blue = bytes[offset + 2]!;
-    const alpha = bytes[offset + 3]!;
-    if (red === backgroundRed && green === backgroundGreen && blue === backgroundBlue && alpha === backgroundAlpha) {
-      continue;
-    }
-    changedPixels += 1;
-    colors.add((red << 16) | (green << 8) | blue);
-  }
-  return { changedPixels, distinctRgbColors: colors.size };
 }
 
 function renderedGlyphCount(object: THREE.Object3D): number {

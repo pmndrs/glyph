@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 
-import type { BitmapTextConformanceCapture } from '../../renderer/bitmap-text';
+import type { BitmapTextConformanceCapture } from '../../benchmark/low-level/raster/bitmap-finite-scene';
 import type { MtsdfTextConformanceCapture } from '../../renderer/mtsdf-text';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import type { SlugTextConformanceCapture } from '../../renderer/slug-text';
