@@ -1,8 +1,8 @@
 import { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../renderer/live-text-style';
-import { createOklabColorCycle } from '../renderer/oklab-color-cycle';
+import { createOklabColorCycle } from './shared/oklab-color-cycle';
+import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
 
 import type { ComparisonWorkloadDefinition } from './contracts';
 import type { ComparisonWorkloadEntry, MutablePaintSpan, WorkloadTextFactoryContext } from './factory-contracts';

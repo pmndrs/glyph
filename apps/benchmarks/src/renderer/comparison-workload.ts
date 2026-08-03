@@ -39,7 +39,7 @@ import { createGpuFrameTimer, type GpuFrameTimer } from './gpu-frame-timer';
 import { createLiveFrameTelemetry, type LiveFrameTelemetrySnapshot } from './live-frame-telemetry';
 import { createTextUpdateTelemetry } from './text-update-telemetry';
 import type { FontDeliveryMetrics } from './font-delivery';
-import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from './live-text-style';
+import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../workloads/shared/text-style';
 import {
   loadMtsdfFont,
   registeredMtsdfConfiguration,

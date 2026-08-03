@@ -30,7 +30,7 @@ import {
   LIVE_TEXT_LINE_HEIGHT,
   liveTextPosition,
   type LiveTextAnchor,
-} from './live-text-style';
+} from '../workloads/shared/text-style';
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';
 import { captureSourceOutlineFidelity, type SourceOutlineFidelityCapture } from './source-outline-reference';
 import { compactRgba8Readback } from './tsl-baseline';

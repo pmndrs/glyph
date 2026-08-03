@@ -1,7 +1,7 @@
 import { Text } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
 
-import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../renderer/live-text-style';
+import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
 import type { ComparisonWorkloadDefinition } from './contracts';
 import type { ComparisonWorkloadEntry, WorkloadTextFactoryContext } from './factory-contracts';
 

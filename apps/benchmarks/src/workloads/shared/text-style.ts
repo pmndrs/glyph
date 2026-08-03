@@ -1,4 +1,4 @@
-/** Technique-invariant visual inputs for comparative live text workloads. */
+/** Technique-invariant visual inputs shared by benchmark workload examples and renderer adapters. */
 export const LIVE_TEXT_COLOR = 0xffffff;
 export const LIVE_TEXT_LINE_HEIGHT = 1.25;
 export const BENCHMARK_CONTENT_INSET = 24;

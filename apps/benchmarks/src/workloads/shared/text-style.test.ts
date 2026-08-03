@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { benchmarkContentWidth, liveTextPosition } from './live-text-style';
+import { benchmarkContentWidth, liveTextPosition } from './text-style';
 
 describe('benchmark content width', () => {
   it('holds the authored minimum below the reference viewport and grows inside larger viewports', () => {

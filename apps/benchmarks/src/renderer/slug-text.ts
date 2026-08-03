@@ -37,7 +37,7 @@ import {
   LIVE_TEXT_LINE_HEIGHT,
   liveTextPosition,
   type LiveTextAnchor,
-} from './live-text-style';
+} from '../workloads/shared/text-style';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
 import { compareRgba8Coverage } from './mtsdf-cpu-reference';
 import {

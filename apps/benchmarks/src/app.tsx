@@ -125,7 +125,7 @@ import {
   benchmarkContentWidth,
   BENCHMARK_CONTENT_INSET,
   BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH,
-} from './renderer/live-text-style';
+} from './workloads/shared/text-style';
 import type { SourceOutlineFidelityCapture } from './renderer/source-outline-reference';
 import type { RuntimeFallbackCapture } from './renderer/runtime-fallback-conformance';
 import { PersistentRenderHostProvider, usePersistentRenderHost } from './renderer/persistent-render-host-context';

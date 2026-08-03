@@ -1,6 +1,6 @@
 import { Text, type TextSpan } from '@pmndrs/text';
 
-import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../renderer/live-text-style';
+import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from './shared/text-style';
 import type { RasterTechnique } from '../benchmark/url-state';
 import type { ComparisonWorkloadDefinition } from './contracts';
 import type { ComparisonWorkloadEntry, WorkloadTextFactoryContext } from './factory-contracts';
