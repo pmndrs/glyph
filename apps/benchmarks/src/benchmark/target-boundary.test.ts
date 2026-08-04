@@ -38,6 +38,7 @@ describe('benchmark target boundaries', () => {
 
   it('keeps low-level targets downstream from renderer infrastructure', async () => {
     const files = await sourceFiles(rendererDirectory);
+    expect(files.map((file) => file.slice(rendererDirectory.length + 1))).not.toContain('tsl-baseline.ts');
     const offenders = await Promise.all(
       files.map(async (file) => {
         const source = await readFile(file, 'utf8');
@@ -74,9 +75,11 @@ describe('benchmark target boundaries', () => {
     expect(registry).toContain("import('./conformance')");
     expect(execution).toContain('await loadRegisteredTarget(request.targetId)');
     expect(conformance).toContain("import('./advanced-shaping')");
+    expect(conformance).toContain("import('./tsl-baseline')");
     expect(conformance).toContain("import('./raster/runtime-fallback')");
     expect(conformance).toContain("import('./raster/bitmap-capture')");
     expect(conformance).not.toContain('renderer/advanced-shaping-conformance');
+    expect(conformance).not.toContain('renderer/tsl-baseline');
     expect(conformance).not.toContain('renderer/runtime-fallback-conformance');
     expect(conformance).not.toContain('renderer/bitmap-text');
     expect(product).toContain("import('./external-raster-proof')");

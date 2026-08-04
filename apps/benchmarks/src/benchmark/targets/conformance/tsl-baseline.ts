@@ -1,11 +1,14 @@
 import * as THREE from 'three/webgpu';
-
-import { compactRgba8Readback } from '../benchmark/low-level/raster/rgba-readback';
 import type { Node } from 'three/webgpu';
 import { float, mul, vec3 } from 'three/tsl';
 
-import type { BenchmarkTarget, TargetRunOutput } from '../benchmark/contracts';
-import { createConfiguredRenderer, disposeConfiguredRenderer, type RendererBackend } from './webgpu-renderer';
+import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
+import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
+import {
+  createConfiguredRenderer,
+  disposeConfiguredRenderer,
+  type RendererBackend,
+} from '../../../renderer/webgpu-renderer';
 
 const TARGET_SIZE = 4;
 const EXPECTED_PIXEL = [255, 0, 0, 255] as const;

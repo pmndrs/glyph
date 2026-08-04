@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'react';
 
 import type { FontDelivery, GraphicsBackend } from '../../benchmark/url-state';
-import { createLatestAsyncQueue, type LatestAsyncQueue } from '../../renderer/latest-async-queue';
+import { createLatestAsyncQueue, type LatestAsyncQueue } from './latest-async-queue';
 import type { MtsdfTextLiveStats, MtsdfTextPersistentScene } from '../../renderer/mtsdf-text';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import type { SlugTextLiveStats, SlugTextPersistentScene } from '../../renderer/slug-text';

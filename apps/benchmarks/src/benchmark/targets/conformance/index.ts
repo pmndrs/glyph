@@ -33,7 +33,7 @@ function tslBaselineTarget(backend: Backend): BenchmarkTarget {
       capabilities: new Set<Capability>(['deterministic', 'raster']),
       status: () => 'ready',
     },
-    async () => (await import('../../../renderer/tsl-baseline')).createTslBaselineTarget(backend),
+    async () => (await import('./tsl-baseline')).createTslBaselineTarget(backend),
   );
 }
 
