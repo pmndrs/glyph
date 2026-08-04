@@ -1,7 +1,7 @@
 export {};
 
 const slugCapturePath = '/src/benchmark/targets/conformance/raster/slug-capture.ts';
-const scenesPath = '/src/renderer/slug-role-scenes.ts';
+const scenesPath = '/src/benchmark/targets/conformance/raster/slug-role-scenes.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const [slugCapture, sceneDefinitions, { environmentResource }] = await Promise.all([
   import(/* @vite-ignore */ slugCapturePath),

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:b2e15cd5e8b2f8996b1fe6b4b8cc6ea4c09cd2b47c574cf63f57fbc855ae22df'
+source_digest: 'sha256:c1177178e6fa116cb0c21977e8dad330a1800d247beab18ae479897a26ddf2e9'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -39,7 +39,7 @@ sources:
     resource: ../../apps/benchmarks/src/workloads/font-assets/runtime.ts
     title: Public FontLoader runtime source-font path
   - id: slug-role-scenes
-    resource: ../../apps/benchmarks/src/renderer/slug-role-scenes.ts
+    resource: ../../apps/benchmarks/src/benchmark/targets/conformance/raster/slug-role-scenes.ts
     title: Slug release-role scene definitions
   - id: slug-role-scene-evidence
     resource: ../../apps/benchmarks/fixtures/results/slug-role-scenes-chromium149.json
