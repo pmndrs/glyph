@@ -10,15 +10,15 @@ The nested mise configuration consumes this directory's `rust-toolchain.toml` an
 `cargo-fuzz` 0.13.2. From the repository root:
 
 ```sh
-pnpm --filter @pmndrs/text-font-baker fuzz:rust
-pnpm --filter @pmndrs/text-font-baker fuzz:mtsdf
+pnpm --filter @pmndrs/text-font-baker run fuzz rust
+pnpm --filter @pmndrs/text-font-baker run fuzz mtsdf
 ```
 
 For a bounded verification run:
 
 ```sh
-pnpm --filter @pmndrs/text-font-baker fuzz:rust -- -- -runs=1000 -max_len=1048576
-pnpm --filter @pmndrs/text-font-baker fuzz:mtsdf -- -- -runs=1000 -max_len=1666
+pnpm --filter @pmndrs/text-font-baker run fuzz rust -- -runs=1000 -max_len=1048576
+pnpm --filter @pmndrs/text-font-baker run fuzz mtsdf -- -runs=1000 -max_len=1666
 ```
 
 The nightly exception is confined to this workspace and never builds the distributed Wasm or product

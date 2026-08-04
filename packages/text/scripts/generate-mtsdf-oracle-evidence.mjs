@@ -1,3 +1,22 @@
+/* @workflow
+{
+  "name": "text:mtsdf-oracle:generate",
+  "summary": "Regenerate native msdfgen comparison evidence for the production MTSDF kernel.",
+  "requirements": "Stable Rust, CMake, a C++ compiler, tar, and network access to the pinned msdfgen source.",
+  "writes": "Checked-in native MTSDF oracle evidence and an ignored pinned-tool cache.",
+  "args": []
+}
+*/
+/* @workflow
+{
+  "name": "text:mtsdf-oracle:check",
+  "summary": "Verify the production MTSDF kernel against checked-in native oracle evidence.",
+  "requirements": "Stable Rust and the checked-in native oracle evidence.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/
+
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -21,7 +40,7 @@ const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
 if (checkOnly) {
   const expected = await readFile(manifestPath, 'utf8');
   if (serialized !== expected) {
-    throw new Error('MTSDF oracle evidence is stale; run pnpm generate:mtsdf-oracle');
+    throw new Error('MTSDF oracle evidence is stale; run pnpm scripts run text:mtsdf-oracle:generate');
   }
 } else {
   await writeFile(manifestPath, serialized);

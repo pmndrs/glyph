@@ -1,3 +1,13 @@
+/* @workflow
+{
+  "name": "text:mtsdf-generator-profile",
+  "summary": "Measure compile, initialization, cold-corpus, and warm-corpus MTSDF generator cost.",
+  "requirements": "A built Text package.",
+  "writes": "Standard output only.",
+  "args": []
+}
+*/
+
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';

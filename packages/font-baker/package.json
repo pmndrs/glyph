@@ -32,20 +32,8 @@
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
-    "build:rust": "cargo build --manifest-path rust/Cargo.toml --target wasm32-unknown-unknown --release --locked --no-default-features",
-    "generate:abi": "cargo run --manifest-path rust/Cargo.toml --bin generate-abi --locked --quiet",
-    "generate:shaping-oracle": "cargo run --manifest-path rust/Cargo.toml --bin generate-shaping-oracle --features oracle --locked --quiet --",
-    "inspect:font-fixture": "cargo run --manifest-path rust/Cargo.toml --bin inspect-font-fixture --features oracle --locked --quiet --",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build && pnpm test:unit && pnpm test:integration && pnpm test:fuzz-smoke && pnpm test:e2e",
-    "test:unit": "cargo test --manifest-path rust/Cargo.toml --lib --locked",
-    "test:integration": "cargo test --manifest-path rust/Cargo.toml --tests --locked && node --test tests/integration/*.test.mjs",
-    "test:fuzz-smoke": "node --test tests/fuzz/*.test.mjs",
-    "test:e2e": "node --test tests/e2e/*.test.mjs",
-    "fuzz:validator": "pnpm build && node scripts/fuzz-validator.mjs",
-    "fuzz:rust": "node scripts/fuzz-rust.mjs",
-    "fuzz:mtsdf": "node scripts/fuzz-rust.mjs mtsdf_outline",
-    "fuzz:rust-mutation": "node scripts/fuzz-rust-mutation.mjs"
+    "test": "node ./scripts/test.mts",
+    "check": "node ./scripts/check.mts"
   },
   "dependencies": {
     "ajv": "6.15.0",

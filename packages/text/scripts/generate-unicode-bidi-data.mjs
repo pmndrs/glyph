@@ -103,7 +103,7 @@ if (check) {
     existing = undefined;
   }
   if (existing !== source) {
-    console.error('generated Unicode bidi data is stale; run pnpm generate:unicode-data');
+    console.error('generated Unicode bidi data is stale; run pnpm run unicode generate-data');
     process.exitCode = 1;
   }
 } else {

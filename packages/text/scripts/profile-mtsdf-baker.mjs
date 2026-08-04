@@ -1,3 +1,13 @@
+/* @workflow
+{
+  "name": "text:mtsdf-baker-profile",
+  "summary": "Profile native, direct, and worker MTSDF baker phases against accepted evidence.",
+  "requirements": "Stable Rust, the profiling feature, and built Text and Font Baker packages.",
+  "writes": "Standard output, or checked-in phase evidence when passed --write.",
+  "args": []
+}
+*/
+
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';

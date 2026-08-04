@@ -5,7 +5,7 @@ description: Implements the internal portable Rust/Wasm shaping-resource bake co
 resource: ../../packages/font-baker
 workspace_package: '@pmndrs/text-font-baker'
 documentation_type: reference
-source_digest: 'sha256:eee9ea57d7a9c47bc3483963aa2dd206c66647d3d72422cd534a4c12d185728e'
+source_digest: 'sha256:6706451558782945bb3855dff6fd4cd22936bc112133b4e09216dc376bbc0e7a'
 tags: [package, rust, wasm, baking, internal]
 sources:
   - id: manifest
@@ -25,7 +25,7 @@ sources:
     title: Fontations
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T21:23:04Z'
+  at: '2026-08-04T12:55:07Z'
 ---
 
 # Package reference: `@pmndrs/text-font-baker`
@@ -54,20 +54,13 @@ The isolated nightly fuzz workspace also hosts the repository-owned MTSDF outlin
 
 ## Package scripts
 
-| Script                    | Purpose                                                                                                                                                                                                   |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build`                   | Derive ABI JSON and typed TypeScript from Rust compiler facts, compile the `no_std` Wasm module, apply pinned `wasm-opt -Oz`, and emit the package. CI checks that the committed typed contract is fresh. |
-| `test:unit`               | Run Rust unit tests.                                                                                                                                                                                      |
-| `test:integration`        | Run public Rust, compiled Wasm/TypeScript, package-isolation, schema, and malformed-artifact tests.                                                                                                       |
-| `test:fuzz-smoke`         | Run deterministic artifact-mutation smoke; Rust arbitrary-byte smoke is part of `test:integration`.                                                                                                       |
-| `test:e2e`                | Verify, bake, validate, inspect, and shape the canonical licensed Inter, Amiri, and Noto CJK fixtures through packaged APIs.                                                                              |
-| `test`                    | Build and run unit, integration, fuzz-smoke, and real-font end-to-end layers.                                                                                                                             |
-| `fuzz:validator`          | Run the longer seeded TypeScript validator mutation driver locally.                                                                                                                                       |
-| `fuzz:rust`               | Run pinned cargo-fuzz/libFuzzer against the public bake boundary using the nested mise-owned nightly workspace.                                                                                           |
-| `fuzz:mtsdf`              | Run pinned cargo-fuzz/libFuzzer against bounded repository-owned MTSDF outline generation.                                                                                                                |
-| `fuzz:rust-mutation`      | Run the longer deterministic stable-Rust source-font mutation driver.                                                                                                                                     |
-| `generate:shaping-oracle` | Produce the pinned HarfRust shaping oracle from explicit font/corpus paths.                                                                                                                               |
-| `inspect:font-fixture`    | Emit deterministic Fontations-owned glyph, table, cmap-format, nominal, SVS, and IVS facts for an explicit fixture.                                                                                       |
+| Script  | Purpose                                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build` | Derive the ABI contract, compile and optimize the `no_std` Wasm module, and emit the package. CI checks that committed generated output is fresh. |
+| `check` | Run the complete package test and type-check gates.                                                                                               |
+| `test`  | Build and run Rust unit/integration, compiled Wasm/TypeScript, deterministic fuzz-smoke, and licensed real-font end-to-end tests.                 |
+
+Run `pnpm scripts list font-baker` from the workspace root to discover shaping-oracle, inspection, validator-fuzz, mutation-fuzz, and isolated nightly cargo-fuzz workflows.
 
 See the [implementation evidence](../planning/font-baker-implementation.md) for package-owned proof; the roadmap owns cross-package milestone status.[^implementation-status]
 
