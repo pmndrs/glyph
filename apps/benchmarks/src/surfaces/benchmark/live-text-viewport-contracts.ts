@@ -1,4 +1,4 @@
-import type { BitmapTextPreviewUpdate } from '../../renderer/bitmap-text';
+import type { BitmapTextSceneUpdate } from '../../renderer/bitmap-text';
 import type { BenchmarkWorkloadId } from '../../workloads/catalog';
 import type { LiveTextScene } from '../../workloads/live-text-scene';
 
@@ -7,7 +7,7 @@ export interface LiveTextConfiguration extends LiveTextScene {
   readonly fontSize: number;
 }
 
-export interface RetainedLiveTextUpdate extends BitmapTextPreviewUpdate {
+export interface RetainedLiveTextUpdate extends BitmapTextSceneUpdate {
   readonly timelineTick: number | undefined;
   readonly workload: BenchmarkWorkloadId;
 }

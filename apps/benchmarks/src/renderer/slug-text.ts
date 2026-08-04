@@ -24,11 +24,7 @@ import {
   type LiveTextAnchor,
 } from '../workloads/shared/text-style';
 import { createTextUpdateTelemetry, type TextUpdateTimingSummary } from './text-update-telemetry';
-import {
-  createPersistentRenderHost,
-  type PersistentRenderScene,
-  type PersistentRenderViewport,
-} from './persistent-render-host';
+import { type PersistentRenderScene, type PersistentRenderViewport } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
 import {
   createRetainedFontFixtureController,
@@ -121,7 +117,7 @@ export interface SlugTextLiveStats {
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
 }
 
-export interface SlugTextPreviewUpdate extends LiveFontFixtureUpdate {
+export interface SlugTextSceneUpdate extends LiveFontFixtureUpdate {
   readonly anchor: LiveTextAnchor;
   readonly direction: 'ltr' | 'rtl';
   readonly features: readonly FontFeature[];
@@ -132,16 +128,7 @@ export interface SlugTextPreviewUpdate extends LiveFontFixtureUpdate {
   readonly textAlign: 'start' | 'center';
 }
 
-export interface SlugTextPreview {
-  resize(width: number, height: number): void;
-  panBy(deltaX: number, deltaY: number): void;
-  resetView(): void;
-  setGridVisible(visible: boolean): void;
-  update(update: SlugTextPreviewUpdate): Promise<void>;
-  dispose(): Promise<void>;
-}
-
-interface SlugTextPersistentSceneOptions {
+export interface SlugTextPersistentSceneOptions {
   readonly anchor?: LiveTextAnchor;
   readonly backend: RendererBackend;
   readonly direction?: 'ltr' | 'rtl';
@@ -170,7 +157,7 @@ export interface SlugTextPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   setGridVisible(visible: boolean): void;
-  update(update: SlugTextPreviewUpdate): Promise<void>;
+  update(update: SlugTextSceneUpdate): Promise<void>;
 }
 
 export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOptions): SlugTextPersistentScene {
@@ -191,7 +178,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   const startupStarted = performance.now();
   let width = 0;
   let height = 0;
-  let fontSize = positiveViewportSize(options.fontSize, 'Slug preview font size');
+  let fontSize = positiveViewportSize(options.fontSize, 'Slug scene font size');
   let anchor = options.anchor ?? 'center';
   let layoutWidthRatio = options.layoutWidthRatio;
   let committedContentWidth = 0;
@@ -223,15 +210,15 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     readonly scene: THREE.Scene;
   } => {
     if (canvasSurface === undefined || camera === undefined || line === undefined || scene === undefined) {
-      throw new DOMException('The Slug preview scene is not active', 'InvalidStateError');
+      throw new DOMException('The Slug scene is not active', 'InvalidStateError');
     }
     return { canvasSurface, camera, line, scene };
   };
 
   const resizeScene = (viewport: PersistentRenderViewport): void => {
     if (closing || disposed || line === undefined || camera === undefined || canvasSurface === undefined) return;
-    width = positiveViewportSize(viewport.width, 'Slug preview width');
-    height = positiveViewportSize(viewport.height, 'Slug preview height');
+    width = positiveViewportSize(viewport.width, 'Slug scene width');
+    height = positiveViewportSize(viewport.height, 'Slug scene height');
     canvasSurface.resize(width, height);
     camera.right = width;
     camera.bottom = -height;
@@ -266,15 +253,15 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   };
 
   return {
-    id: `slug-text-preview-${backend}`,
+    id: `slug-text-scene-${backend}`,
     async activate(context) {
-      if (disposed) throw new DOMException('The Slug preview scene is disposed', 'InvalidStateError');
-      if (scene !== undefined) throw new DOMException('The Slug preview scene is already active', 'InvalidStateError');
+      if (disposed) throw new DOMException('The Slug scene is disposed', 'InvalidStateError');
+      if (scene !== undefined) throw new DOMException('The Slug scene is already active', 'InvalidStateError');
       context.signal.throwIfAborted();
       activationSignal = context.signal;
       rendererInitMs = context.rendererInitMs;
-      width = positiveViewportSize(context.viewport.width, 'Slug preview width');
-      height = positiveViewportSize(context.viewport.height, 'Slug preview height');
+      width = positiveViewportSize(context.viewport.width, 'Slug scene width');
+      height = positiveViewportSize(context.viewport.height, 'Slug scene height');
       committedContentWidth = benchmarkContentWidth(width, layoutWidthRatio);
       committedRasterPixelRatio = context.viewport.dpr;
       scene = new THREE.Scene();
@@ -388,8 +375,8 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     panBy(deltaX, deltaY) {
       if (closing || disposed) return;
       const activeScene = activeResources().scene;
-      activeScene.position.x += finiteCanvasDelta(deltaX, 'Slug preview horizontal pan');
-      activeScene.position.y -= finiteCanvasDelta(deltaY, 'Slug preview vertical pan');
+      activeScene.position.x += finiteCanvasDelta(deltaX, 'Slug scene horizontal pan');
+      activeScene.position.y -= finiteCanvasDelta(deltaY, 'Slug scene vertical pan');
     },
     resetView() {
       if (closing || disposed) return;
@@ -402,15 +389,15 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     },
     async update(next) {
       await activationGate.wait();
-      if (closing || disposed) throw new DOMException('The Slug preview is disposed', 'AbortError');
+      if (closing || disposed) throw new DOMException('The Slug scene is disposed', 'AbortError');
       const activeLine = activeResources().line;
       const activeFontFixture = fontFixture;
       const signal = activationSignal;
       if (activeFontFixture === undefined || signal === undefined) {
-        throw new DOMException('The Slug preview scene is not active', 'InvalidStateError');
+        throw new DOMException('The Slug scene is not active', 'InvalidStateError');
       }
       const updateStartedAt = performance.now();
-      const nextFontSize = positiveViewportSize(next.fontSize, 'Slug preview font size');
+      const nextFontSize = positiveViewportSize(next.fontSize, 'Slug scene font size');
       assertLayoutWidthRatio(next.layoutWidthRatio);
       const revision = ++updateRevision;
       const nextContentWidth = benchmarkContentWidth(width, next.layoutWidthRatio);
@@ -455,7 +442,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         },
       });
       if (closing || disposed || revision !== updateRevision) {
-        throw new DOMException('The Slug preview update was superseded', 'AbortError');
+        throw new DOMException('The Slug scene update was superseded', 'AbortError');
       }
       const updateSceneStartedAt = performance.now();
       positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
@@ -488,87 +475,6 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       scene = undefined;
     },
   };
-}
-
-export async function createSlugTextPreview(options: {
-  readonly anchor?: LiveTextAnchor;
-  readonly backend: RendererBackend;
-  readonly canvas: HTMLCanvasElement;
-  readonly direction?: 'ltr' | 'rtl';
-  readonly dpr: number;
-  readonly features?: readonly FontFeature[];
-  readonly fontSize: number;
-  readonly fontFixture?: BenchmarkFontFixture;
-  readonly delivery?: FontDelivery;
-  readonly height: number;
-  readonly showGrid: boolean;
-  readonly language?: string;
-  readonly layoutWidth: number;
-  readonly layoutWidthRatio?: number;
-  readonly signal?: AbortSignal;
-  readonly text: string;
-  readonly textAlign?: 'start' | 'center';
-  readonly width: number;
-  readonly onError: (error: unknown) => void;
-  readonly onStats: (stats: SlugTextLiveStats) => void;
-  readonly onBakeProgress?: BakeProgressListener;
-}): Promise<SlugTextPreview> {
-  options.signal?.throwIfAborted();
-  const width = positiveViewportSize(options.width, 'Slug preview width');
-  const height = positiveViewportSize(options.height, 'Slug preview height');
-  const layoutWidthRatio = options.layoutWidthRatio ?? options.layoutWidth / width;
-  assertLayoutWidthRatio(layoutWidthRatio);
-  const scene = createSlugTextPersistentScene({
-    anchor: options.anchor ?? 'center',
-    backend: options.backend,
-    direction: options.direction ?? 'ltr',
-    features: options.features ?? [],
-    fontSize: options.fontSize,
-    fontFixture: options.fontFixture ?? 'inter',
-    delivery: options.delivery ?? 'baked',
-    showGrid: options.showGrid,
-    language: options.language ?? 'en',
-    layoutWidthRatio,
-    text: options.text,
-    textAlign: options.textAlign ?? 'start',
-    onError: options.onError,
-    onStats: options.onStats,
-    ...(options.onBakeProgress === undefined ? {} : { onBakeProgress: options.onBakeProgress }),
-  });
-  const host = await createPersistentRenderHost({
-    backend: options.backend,
-    canvas: options.canvas,
-    dpr: options.dpr,
-    height,
-    width,
-    onError: options.onError,
-  });
-  try {
-    const lease = await host.replaceScene(scene, options.signal);
-    let disposal: Promise<void> | undefined;
-    return {
-      resize(nextWidth, nextHeight) {
-        host.resize(nextWidth, nextHeight);
-      },
-      panBy: (deltaX, deltaY) => scene.panBy(deltaX, deltaY),
-      resetView: () => scene.resetView(),
-      setGridVisible: (visible) => scene.setGridVisible(visible),
-      update: (update) => scene.update(update),
-      dispose() {
-        disposal ??= (async () => {
-          try {
-            await lease.release();
-          } finally {
-            await host.dispose();
-          }
-        })();
-        return disposal;
-      },
-    };
-  } catch (error) {
-    await host.dispose();
-    throw error;
-  }
 }
 
 export async function loadSlugFont(
@@ -694,7 +600,7 @@ function positiveViewportSize(value: number, name: string): number {
 
 function assertLayoutWidthRatio(value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > 1) {
-    throw new RangeError('Slug preview layout width ratio must be in (0, 1]');
+    throw new RangeError('Slug scene layout width ratio must be in (0, 1]');
   }
 }
 

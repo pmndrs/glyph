@@ -54,7 +54,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<MtsdfTextPersistentScene>(undefined);
+  const sceneRef = useRef<MtsdfTextPersistentScene>(undefined);
   const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, void>>(undefined);
   const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [error, setError] = useState<string>();
@@ -82,7 +82,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     finishBakeProgress();
     setError(caught instanceof Error ? caught.message : String(caught));
   });
-  const previewConfiguration = useEffectEvent(() => ({
+  const sceneConfiguration = useEffectEvent(() => ({
     anchor,
     direction,
     features,
@@ -104,8 +104,8 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     const surfaceAnchor = surfaceAnchorRef.current;
     if (container === null || surfaceAnchor === null) return;
     const controller = new AbortController();
-    const configuration = previewConfiguration();
-    let preview: MtsdfTextPersistentScene | undefined;
+    const configuration = sceneConfiguration();
+    let scene: MtsdfTextPersistentScene | undefined;
     let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, void> | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
@@ -130,14 +130,14 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
         onStats: publishStats,
         onBakeProgress: publishBakeProgress,
       });
-      preview = created;
-      previewRef.current = created;
+      scene = created;
+      sceneRef.current = created;
       updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
       updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
-          controller: previewRef,
+          controller: sceneRef,
           label: `Live MSDF benchmark using ${backend}`,
           pan: true,
           scene: created,
@@ -147,7 +147,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       );
       if (cancelled) await surfaceLease.release();
       else {
-        const committed = await updateQueue.enqueue(previewConfiguration());
+        const committed = await updateQueue.enqueue(sceneConfiguration());
         publishSettledWorkload(committed.input.workload);
       }
     })();
@@ -157,23 +157,23 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       controller.abort();
       void initialization.then(
         async () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
+          const current = scene;
+          scene = undefined;
+          if (sceneRef.current === current) sceneRef.current = undefined;
           if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
+          const current = scene;
+          scene = undefined;
+          if (sceneRef.current === current) sceneRef.current = undefined;
           if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
         },
       );
     };
   }, [backend, delivery, publishBakeProgress, surfaceAnchorRef]);
   useEffect(() => {
-    previewRef.current?.setGridVisible(grid);
+    sceneRef.current?.setGridVisible(grid);
   }, [grid]);
   useEffect(() => {
     const updateQueue = updateQueueRef.current;
@@ -361,7 +361,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<SlugTextPersistentScene>(undefined);
+  const sceneRef = useRef<SlugTextPersistentScene>(undefined);
   const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, void>>(undefined);
   const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [error, setError] = useState<string>();
@@ -389,7 +389,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     finishBakeProgress();
     setError(caught instanceof Error ? caught.message : String(caught));
   });
-  const previewConfiguration = useEffectEvent(() => ({
+  const sceneConfiguration = useEffectEvent(() => ({
     anchor,
     direction,
     features,
@@ -411,8 +411,8 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     const surfaceAnchor = surfaceAnchorRef.current;
     if (container === null || surfaceAnchor === null) return;
     const controller = new AbortController();
-    const configuration = previewConfiguration();
-    let preview: SlugTextPersistentScene | undefined;
+    const configuration = sceneConfiguration();
+    let scene: SlugTextPersistentScene | undefined;
     let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, void> | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
@@ -436,14 +436,14 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
         onStats: publishStats,
         onBakeProgress: publishBakeProgress,
       });
-      preview = created;
-      previewRef.current = created;
+      scene = created;
+      sceneRef.current = created;
       updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
       updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
-          controller: previewRef,
+          controller: sceneRef,
           label: `Live Slug benchmark using ${backend}`,
           pan: true,
           scene: created,
@@ -453,7 +453,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       );
       if (cancelled) await surfaceLease.release();
       else {
-        const committed = await updateQueue.enqueue(previewConfiguration());
+        const committed = await updateQueue.enqueue(sceneConfiguration());
         publishSettledWorkload(committed.input.workload);
       }
     })();
@@ -463,23 +463,23 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       controller.abort();
       void initialization.then(
         async () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
+          const current = scene;
+          scene = undefined;
+          if (sceneRef.current === current) sceneRef.current = undefined;
           if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
+          const current = scene;
+          scene = undefined;
+          if (sceneRef.current === current) sceneRef.current = undefined;
           if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
         },
       );
     };
   }, [backend, delivery, publishBakeProgress, surfaceAnchorRef]);
   useEffect(() => {
-    previewRef.current?.setGridVisible(grid);
+    sceneRef.current?.setGridVisible(grid);
   }, [grid]);
   useEffect(() => {
     const updateQueue = updateQueueRef.current;

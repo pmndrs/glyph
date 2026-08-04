@@ -5,7 +5,7 @@ import type { FontDelivery, GraphicsBackend } from '../../benchmark/url-state';
 import type {
   BitmapTextLiveStats,
   BitmapTextPersistentScene,
-  BitmapTextPreviewSnapshot,
+  BitmapTextSceneSnapshot,
 } from '../../renderer/bitmap-text';
 import { createLatestAsyncQueue, type LatestAsyncQueue } from '../../renderer/latest-async-queue';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
@@ -143,8 +143,8 @@ export function BitmapTextViewport({
   const { activateSurface } = usePersistentRenderHost();
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<BitmapTextPersistentScene>(undefined);
-  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextPreviewSnapshot>>(undefined);
+  const sceneRef = useRef<BitmapTextPersistentScene>(undefined);
+  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextSceneSnapshot>>(undefined);
   const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [settledRevision, setSettledRevision] = useState(0);
   const [settledTextLength, setSettledTextLength] = useState(0);
@@ -191,7 +191,7 @@ export function BitmapTextViewport({
     finishBakeProgress();
     setError(caught instanceof Error ? caught.message : String(caught));
   });
-  const previewConfiguration = useEffectEvent(() => ({
+  const sceneConfiguration = useEffectEvent(() => ({
     anchor,
     direction,
     expectedGlyphCount,
@@ -218,7 +218,7 @@ export function BitmapTextViewport({
   const publishSettledWorkload = useEffectEvent((value: string) => {
     pendingSettledWorkloadRef.current = value;
   });
-  const publishPresentation = useEffectEvent((snapshot: BitmapTextPreviewSnapshot, progress: 0 | 1) => {
+  const publishPresentation = useEffectEvent((snapshot: BitmapTextSceneSnapshot, progress: 0 | 1) => {
     setPresentationEvidence({
       revision: snapshot.revision,
       progress,
@@ -232,9 +232,9 @@ export function BitmapTextViewport({
     const surfaceAnchor = surfaceAnchorRef.current;
     if (container === null || surfaceAnchor === null) return;
     const controller = new AbortController();
-    const configuration = previewConfiguration();
-    let preview: BitmapTextPersistentScene | undefined;
-    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextPreviewSnapshot> | undefined;
+    const configuration = sceneConfiguration();
+    let scene: BitmapTextPersistentScene | undefined;
+    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextSceneSnapshot> | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -261,14 +261,14 @@ export function BitmapTextViewport({
         onStats: publishStats,
         onBakeProgress: publishBakeProgress,
       });
-      preview = created;
-      previewRef.current = created;
+      scene = created;
+      sceneRef.current = created;
       updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
       updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
-          controller: previewRef,
+          controller: sceneRef,
           label: `Live bitmap benchmark using ${backend}`,
           pan: true,
           scene: created,
@@ -280,7 +280,7 @@ export function BitmapTextViewport({
         await surfaceLease.release();
         return;
       }
-      const committed = await updateQueue.enqueue(previewConfiguration());
+      const committed = await updateQueue.enqueue(sceneConfiguration());
       publishSettledTimelineTick(committed.input.timelineTick);
       publishSettledTextLength(committed.input.text.length);
       publishSettledWorkload(committed.input.workload);
@@ -291,16 +291,16 @@ export function BitmapTextViewport({
       controller.abort();
       void initialization.then(
         async () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
+          const current = scene;
+          scene = undefined;
+          if (sceneRef.current === current) sceneRef.current = undefined;
           if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
-          const current = preview;
-          preview = undefined;
-          if (previewRef.current === current) previewRef.current = undefined;
+          const current = scene;
+          scene = undefined;
+          if (sceneRef.current === current) sceneRef.current = undefined;
           if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
         },
       );
@@ -308,16 +308,16 @@ export function BitmapTextViewport({
   }, [backend, delivery, publishBakeProgress, surfaceAnchorRef]);
 
   useEffect(() => {
-    previewRef.current?.setGridVisible(grid);
+    sceneRef.current?.setGridVisible(grid);
   }, [grid]);
 
   useEffect(() => {
-    const preview = previewRef.current;
+    const scene = sceneRef.current;
     const updateQueue = updateQueueRef.current;
-    if (preview === undefined || updateQueue === undefined) return;
+    if (scene === undefined || updateQueue === undefined) return;
     let cancelled = false;
     let animationFrame: number | undefined;
-    const publishSettled = (snapshot: BitmapTextPreviewSnapshot, input: RetainedLiveTextUpdate): void => {
+    const publishSettled = (snapshot: BitmapTextSceneSnapshot, input: RetainedLiveTextUpdate): void => {
       if (cancelled) return;
       publishPresentation(snapshot, 1);
       publishSettledRevision(snapshot.revision);
@@ -344,7 +344,7 @@ export function BitmapTextViewport({
         if (cancelled) return;
         publishPresentation(snapshot, 0);
         if (!animatePresentation) {
-          publishSettled(preview.finishPresentation(snapshot.revision), input);
+          publishSettled(scene.finishPresentation(snapshot.revision), input);
           return;
         }
         const startedAt = performance.now();
@@ -352,7 +352,7 @@ export function BitmapTextViewport({
           if (cancelled) return;
           const linearProgress = Math.min(1, Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS));
           const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
-          const presented = preview.setPresentationProgress(snapshot.revision, easedProgress);
+          const presented = scene.setPresentationProgress(snapshot.revision, easedProgress);
           if (linearProgress === 1) {
             publishSettled(presented, input);
             return;
