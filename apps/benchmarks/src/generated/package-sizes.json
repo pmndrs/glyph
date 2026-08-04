@@ -44,7 +44,7 @@
       "status": "measured",
       "format": "javascript",
       "sha256": "31dc8dd13f3eefcbb497ac666911a8a402de2a32dde89544b91b288b0037110a",
-      "rawBytes": 12908,
+      "rawBytes": 12822,
       "minifiedBytes": 8936,
       "gzipBytes": 3003,
       "brotliBytes": 2671
@@ -198,7 +198,7 @@
       "status": "measured",
       "format": "javascript",
       "sha256": "077bf3546c43678e8b01512302c80b511bd11bd6ee2913ff9fdfc3d4a38a0055",
-      "rawBytes": 9012,
+      "rawBytes": 8926,
       "minifiedBytes": 6077,
       "gzipBytes": 2175,
       "brotliBytes": 1937

@@ -193,3 +193,20 @@ if (check) {
 } else {
   await writeFile(output, `${JSON.stringify(document, undefined, 2)}\n`);
 }
+/* @workflow
+{
+  "name": "fixture:paragraph-bidi:generate",
+  "summary": "Regenerate the public paragraph bidi contract fixture.",
+  "requirements": "Built runtime packages and authenticated fonts.",
+  "writes": "Checked-in paragraph bidi contract."
+}
+*/
+/* @workflow
+{
+  "name": "fixture:paragraph-bidi:check",
+  "summary": "Verify the public paragraph bidi contract fixture.",
+  "requirements": "Built runtime packages and authenticated fonts.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

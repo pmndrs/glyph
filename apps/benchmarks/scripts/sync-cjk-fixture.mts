@@ -23,3 +23,20 @@ await syncImmutableFixture({
     },
   ],
 });
+/* @workflow
+{
+  "name": "font:cjk:sync",
+  "summary": "Synchronize the authenticated Noto CJK fixture.",
+  "requirements": "Network access to the pinned source.",
+  "writes": "Checked-in font, metadata, and license."
+}
+*/
+/* @workflow
+{
+  "name": "font:cjk:check",
+  "summary": "Verify the authenticated Noto CJK fixture.",
+  "requirements": "Checked-in authenticated fixture.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

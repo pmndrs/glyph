@@ -181,3 +181,20 @@ function formatBytes(bytes: number): string {
 function formatDuration(milliseconds: number): string {
   return `${(milliseconds / 1_000).toFixed(1)} s`;
 }
+/* @workflow
+{
+  "name": "fixture:mtsdf-render:generate",
+  "summary": "Regenerate the canonical MTSDF render fixture.",
+  "requirements": "Built runtime packages and authenticated Inter.",
+  "writes": "Checked-in MTSDF render fixture."
+}
+*/
+/* @workflow
+{
+  "name": "fixture:mtsdf-render:check",
+  "summary": "Verify the canonical MTSDF render fixture.",
+  "requirements": "Built runtime packages and authenticated Inter.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

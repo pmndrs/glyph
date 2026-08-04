@@ -15,11 +15,11 @@ sources:
     resource: ../../packages/text/src/raster/bitmap.ts
     title: Bitmap runtime renderer
   - id: benchmark-evidence
-    resource: ../../apps/benchmarks/vitexec/bitmap-text.probe.ts
-    title: Bitmap GPU conformance probe
+    resource: ../../apps/benchmarks/src/benchmark/targets/product/bitmap-text.ts
+    title: Bitmap public-Text product target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-26T15:45:00Z'
+  at: '2026-08-04T12:55:07Z'
 ---
 
 # Grayscale bitmap hinting and phase packing research

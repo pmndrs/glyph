@@ -167,3 +167,20 @@ function formatBytes(bytes: number): string {
 function formatDuration(milliseconds: number): string {
   return `${(milliseconds / 1_000).toFixed(1)} s`;
 }
+/* @workflow
+{
+  "name": "fixture:slug-render:generate",
+  "summary": "Regenerate the canonical Slug render fixture.",
+  "requirements": "Built runtime packages and authenticated Inter.",
+  "writes": "Checked-in Slug render fixture."
+}
+*/
+/* @workflow
+{
+  "name": "fixture:slug-render:check",
+  "summary": "Verify the canonical Slug render fixture.",
+  "requirements": "Built runtime packages and authenticated Inter.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

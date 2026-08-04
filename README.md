@@ -174,17 +174,33 @@ Repository agents consult the local `evidence-first` skill as default style guid
 ```sh
 mise install
 pnpm install
-pnpm check
+pnpm dev
 ```
 
-The root path requires only the exact Node.js, pnpm, and stable Rust versions declared by the repository. Mise is the convenient reproducible installer, not a required task runner: contributors who already have matching versions may run the same pnpm commands directly. Non-interactive agents should use `mise exec -- pnpm ...` instead of relying on shell activation. The optional coverage-guided font-baker fuzzer is isolated under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and `cargo-fuzz` release required by that workspace when `fuzz:rust` runs.
+The contributor command surface is deliberately small:
+
+| Command        | Purpose                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| `pnpm bake`    | Build and run the published font-baking CLI.                     |
+| `pnpm dev`     | Start the benchmark and Presentation application.                |
+| `pnpm build`   | Build every package and application.                             |
+| `pnpm test`    | Run deterministic package and product tests.                     |
+| `pnpm check`   | Run the complete merge gate, including tests and documentation.  |
+| `pnpm scripts` | Discover specialized maintenance workflows from source metadata. |
+
+Use `pnpm scripts list [query]` to search, `pnpm scripts show <name>` to inspect prerequisites and writes, and
+`pnpm scripts run <name> -- [arguments]` to execute a specialized workflow. Fixture generation, authenticated font
+synchronization, release evidence, fuzzing, profiling, screenshots, and hardware-browser probes live in this index instead
+of package manifests.
+
+The root path requires only the exact Node.js, pnpm, and stable Rust versions declared by the repository. Mise is the convenient reproducible installer, not a required task runner: contributors who already have matching versions may run the same pnpm commands directly. Non-interactive agents should use `mise exec -- pnpm ...` instead of relying on shell activation. The optional coverage-guided font-baker fuzzer is isolated under `packages/font-baker/fuzz`; its nested mise configuration provisions the exact dated nightly and `cargo-fuzz` release required by that workspace when `pnpm scripts run font-baker:fuzz-rust` runs.
 
 The authenticated HarfBuzz fixture gate is a benchmark-specific workload, not a root prerequisite. It additionally needs Meson 1.11.1, Ninja 1.13.2, and `glib-2.0` development metadata through `pkg-config` (`libglib2.0-dev` on Ubuntu or `glib` plus `pkgconf` on macOS with Homebrew). Supply matching tools directly, or install the scoped pins and provision the utilities with:
 
 ```sh
 mise -C apps/benchmarks install
-mise exec -C apps/benchmarks -- pnpm provision:harfbuzz
-pnpm --filter @pmndrs/text-benchmarks check:japanese-showcase-subset
+pnpm scripts run fixture:harfbuzz:provision
+pnpm scripts run fixture:japanese-showcase:check
 ```
 
 The ordinary `pnpm check` path validates committed fixtures without provisioning specialized native tooling. CI installs the scoped benchmark tools explicitly and runs the HarfBuzz freshness gate separately.
@@ -192,25 +208,24 @@ The ordinary `pnpm check` path validates committed fixtures without provisioning
 Run the Figma-backed benchmark product from the monorepo app tree:
 
 ```sh
-pnpm benchmarks
+pnpm dev
 ```
 
 The pinned [GitHub Actions workflow](.github/workflows/ci.yml) runs the ordinary `pnpm check` path on pull requests and `main`. This deterministic CI-safe lane includes headless Chromium product scenarios but makes no hardware-GPU claim. The maintainer-local browser lane is intentionally explicit because it starts real GPU-enabled browsers:
 
 ```sh
-pnpm benchmarks:test:live
+pnpm scripts run benchmark:presentation
 ```
 
-The benchmark app also owns reproducible performance probes for the retained Paragraph Stress layout path and the complete Presentation workload matrix:
+The benchmark app also owns explicit screenshot and performance workflows:
 
 ```sh
-pnpm benchmarks:profile:paragraph-layout
-pnpm benchmarks:profile:paragraph-font-size:bitmap
-pnpm benchmarks:profile:presentation-sweep
+pnpm scripts run benchmark:presentation-screenshots
+pnpm scripts run benchmark:presentation-performance
 ```
 
 Run the package-owned coverage-guided Rust fuzzer locally with:
 
 ```sh
-pnpm --filter @pmndrs/text-font-baker fuzz:rust
+pnpm scripts run font-baker:fuzz-rust
 ```

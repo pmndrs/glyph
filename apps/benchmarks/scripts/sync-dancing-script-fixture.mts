@@ -23,3 +23,20 @@ await syncImmutableFixture({
     },
   ],
 });
+/* @workflow
+{
+  "name": "font:dancing-script:sync",
+  "summary": "Synchronize the authenticated Dancing Script fixture.",
+  "requirements": "Network access to the pinned source.",
+  "writes": "Checked-in font, metadata, and license."
+}
+*/
+/* @workflow
+{
+  "name": "font:dancing-script:check",
+  "summary": "Verify the authenticated Dancing Script fixture.",
+  "requirements": "Checked-in authenticated fixture.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

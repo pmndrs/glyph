@@ -80,3 +80,12 @@ for (const [targetId, backendMetric] of [
 }
 
 export {};
+/* @workflow
+{
+  "name": "benchmark:external-raster",
+  "summary": "Prove the published third-party raster and baker extension contract in a browser.",
+  "requirements": "GPU-enabled Chromium and Vitexec.",
+  "writes": "Ignored browser caches only.",
+  "args": ["--gpu"]
+}
+*/

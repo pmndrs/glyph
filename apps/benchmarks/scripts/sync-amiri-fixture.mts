@@ -29,3 +29,20 @@ await syncImmutableFixture({
   directory,
   files,
 });
+/* @workflow
+{
+  "name": "font:amiri:sync",
+  "summary": "Synchronize the authenticated Amiri fixture.",
+  "requirements": "Network access to the pinned source.",
+  "writes": "Checked-in font, metadata, and license."
+}
+*/
+/* @workflow
+{
+  "name": "font:amiri:check",
+  "summary": "Verify the authenticated Amiri fixture.",
+  "requirements": "Checked-in authenticated fixture.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

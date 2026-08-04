@@ -212,3 +212,16 @@ for (const technique of techniques) {
   }
 }
 console.log('presentation-fps-sweep-ready', JSON.stringify(results));
+/* @workflow
+{
+  "name": "benchmark:presentation-performance",
+  "summary": "Measure the complete Presentation workload cadence on hardware WebGPU.",
+  "requirements": "GPU-enabled Chromium and Vitexec.",
+  "writes": "Standard output only.",
+  "args": [
+    "--gpu",
+    "--path",
+    "/presentation?mode=benchmark&technique=bitmap&backend=webgpu&delivery=baked&dpr=2&font=inter&workload=benchmark-ipsum"
+  ]
+}
+*/

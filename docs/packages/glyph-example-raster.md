@@ -28,7 +28,7 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T21:10:00Z'
+  at: '2026-08-04T12:55:07Z'
 ---
 
 # Package reference: `@pmndrs/text-glyph-example-raster`
@@ -60,7 +60,7 @@ and forced WebGL2 each produced two deterministic samples with visible glyph fra
 identity, and the same RGBA SHA-256 `4c664f22222b8a4fce66a1c2921a0f131500280b029664a82833c33393b57826`.
 When the benchmark route supplies an exclusive execution context, the target borrows that renderer, restores render target,
 clear, viewport, scissor, and scissor-test state, and never creates or disposes a parallel renderer. Run the focused lane with
-`pnpm benchmarks:test:external-raster-proof`.
+`pnpm scripts run benchmark:external-raster`.
 
 ## Boundary findings
 

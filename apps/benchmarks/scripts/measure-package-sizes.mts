@@ -481,3 +481,20 @@ if (process.argv.includes('--check')) {
   await writeFile(output, serialized);
 }
 process.stdout.write(serialized);
+/* @workflow
+{
+  "name": "release:size:generate",
+  "summary": "Regenerate reviewed package-size evidence.",
+  "requirements": "Built runtime packages and Binaryen.",
+  "writes": "Checked-in package-size evidence."
+}
+*/
+/* @workflow
+{
+  "name": "release:size:check",
+  "summary": "Verify package-size identity and reviewed ceilings.",
+  "requirements": "Built runtime packages and Binaryen.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

@@ -103,3 +103,20 @@ async function run(command: string, arguments_: readonly string[]): Promise<void
     });
   });
 }
+/* @workflow
+{
+  "name": "fixture:harfbuzz:provision",
+  "summary": "Provision authenticated HarfBuzz command-line tools.",
+  "requirements": "Scoped benchmark mise tools, Meson, Ninja, GLib, and network access.",
+  "writes": "Ignored HarfBuzz tool cache."
+}
+*/
+/* @workflow
+{
+  "name": "fixture:harfbuzz:check",
+  "summary": "Verify the provisioned HarfBuzz command-line tools.",
+  "requirements": "Previously provisioned HarfBuzz tools.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

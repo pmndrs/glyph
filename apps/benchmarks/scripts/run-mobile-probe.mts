@@ -1,3 +1,11 @@
+/* @workflow
+{
+  "name": "benchmark:responsive",
+  "summary": "Verify phone, tablet, and desktop benchmark layouts in a real browser.",
+  "requirements": "GPU-enabled Chromium and authenticated benchmark fixtures.",
+  "writes": "Temporary screenshots under /tmp."
+}
+*/
 import { fileURLToPath } from 'node:url';
 import type { Browser, Page } from 'playwright';
 import { createServer } from 'vite';

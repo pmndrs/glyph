@@ -28,3 +28,20 @@ await syncImmutableFixture({
     },
   ],
 });
+/* @workflow
+{
+  "name": "font:devanagari:sync",
+  "summary": "Synchronize the authenticated Devanagari fixture.",
+  "requirements": "Network access to the pinned source.",
+  "writes": "Checked-in font, metadata, and license."
+}
+*/
+/* @workflow
+{
+  "name": "font:devanagari:check",
+  "summary": "Verify the authenticated Devanagari fixture.",
+  "requirements": "Checked-in authenticated fixture.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-04T01:17:43Z'
+  at: '2026-08-04T12:55:07Z'
 ---
 
 # Build a raster and baker plugin
@@ -192,11 +192,7 @@ factory export name used by static discovery.
 Use `defineRaster` for decoding, cold preparation, transactional batch staging, paint validation, and resource disposal:
 
 ```ts
-import {
-  defineRaster,
-  defineRasterBatchStage,
-  type RasterObjectDrawBatch,
-} from '@pmndrs/text';
+import { defineRaster, defineRasterBatchStage, type RasterObjectDrawBatch } from '@pmndrs/text';
 import type { Group } from 'three/webgpu';
 
 interface ExampleBatch extends RasterObjectDrawBatch<Group> {
@@ -351,7 +347,7 @@ The workspace proof runs with:
 
 ```sh
 mise exec -- pnpm --filter @pmndrs/text-glyph-example-raster test
-mise exec -- pnpm benchmarks:test:external-raster-proof
+mise exec -- pnpm scripts run benchmark:external-raster
 ```
 
 Success means the package bakes, packages, authenticates, loads, renders, updates, overflows, aborts, and disposes through

@@ -127,3 +127,20 @@ function observeShaper(runtime: RuntimeShaper, counts: { shape: number; reshape:
     dispose: () => runtime.dispose(),
   };
 }
+/* @workflow
+{
+  "name": "fixture:paragraph-cjk:generate",
+  "summary": "Regenerate the public paragraph CJK contract fixture.",
+  "requirements": "Built runtime packages and authenticated CJK font.",
+  "writes": "Checked-in paragraph CJK contract."
+}
+*/
+/* @workflow
+{
+  "name": "fixture:paragraph-cjk:check",
+  "summary": "Verify the public paragraph CJK contract fixture.",
+  "requirements": "Built runtime packages and authenticated CJK font.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

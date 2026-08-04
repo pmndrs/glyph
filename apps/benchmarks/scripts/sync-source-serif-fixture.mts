@@ -23,3 +23,20 @@ await syncImmutableFixture({
     },
   ],
 });
+/* @workflow
+{
+  "name": "font:source-serif:sync",
+  "summary": "Synchronize the authenticated Source Serif fixture.",
+  "requirements": "Network access to the pinned source.",
+  "writes": "Checked-in font, metadata, and license."
+}
+*/
+/* @workflow
+{
+  "name": "font:source-serif:check",
+  "summary": "Verify the authenticated Source Serif fixture.",
+  "requirements": "Checked-in authenticated fixture.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

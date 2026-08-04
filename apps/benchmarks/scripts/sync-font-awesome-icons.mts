@@ -64,3 +64,20 @@ if (check) {
 } else {
   await writeFile(OUTPUT, generated);
 }
+/* @workflow
+{
+  "name": "font:icons:sync",
+  "summary": "Synchronize the authenticated Font Awesome icon fixture.",
+  "requirements": "Network access to the pinned source.",
+  "writes": "Checked-in font, icon catalog, metadata, and license."
+}
+*/
+/* @workflow
+{
+  "name": "font:icons:check",
+  "summary": "Verify the authenticated Font Awesome icon fixture.",
+  "requirements": "Checked-in authenticated fixture.",
+  "writes": "Nothing.",
+  "args": ["--check"]
+}
+*/

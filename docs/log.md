@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-08-04
+
+- **Contributor workflow cleanup** — Limited the root command surface to `bake`, `dev`, `build`, `test`, `check`, and `scripts`; library manifests now expose only build, test, and check, while the benchmark app additionally exposes dev. Replaced duplicated command-family routers with one source-metadata index that validates and describes specialized fixture, release-evidence, fuzz, profiling, capture, and hardware-browser workflows. Removed closed-milestone probes, rejected experiment runners, and implementation-shaped benchmark tests superseded by public package integration, headless product, sequential Presentation, timed-demo, and exclusive finite-job recovery gates. Agent guidance now requires `pnpm scripts list/show` before inventing a maintenance command.
+
 ## 2026-08-03
 
 - **Benchmark verification consolidation** — Folded the standalone Presentation-control smoke into the maintained all-workloads route probe, preserving Icon Grid slider, outside-dismissal, workload-label, missing-glyph, and Off-axis layout-width checks while deleting the duplicate entrypoint. Removed a brittle conformance source-string test in favor of the exact persistent-host, renderer-state transaction, target-resolution, and dual-backend product gates; shared one source-boundary scanner across the remaining static dependency rules and removed a duplicate registry workload list.

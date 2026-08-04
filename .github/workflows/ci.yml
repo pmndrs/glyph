@@ -44,7 +44,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Provision authenticated HarfBuzz utilities
-        run: mise exec -C apps/benchmarks -- pnpm provision:harfbuzz
+        run: pnpm scripts run fixture:harfbuzz:provision
 
       - name: Select rolling runner Chromium
         shell: bash
@@ -66,7 +66,7 @@ jobs:
       - name: Run deterministic repository checks
         run: |
           pnpm check
-          pnpm --filter @pmndrs/text-benchmarks check:japanese-showcase-subset
+          pnpm scripts run fixture:japanese-showcase:check
 
       - name: Retain Wasm failure evidence
         if: failure()
