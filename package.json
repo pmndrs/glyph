@@ -24,7 +24,6 @@
     "benchmarks:test:external-raster-proof": "pnpm --filter @pmndrs/text-benchmarks test:external-raster-proof",
     "benchmarks:test:presentation": "pnpm --filter @pmndrs/text-benchmarks test:presentation",
     "benchmarks:test:presentation-demo": "pnpm --filter @pmndrs/text-benchmarks test:presentation-demo",
-    "benchmarks:test:presentation-controls": "pnpm --filter @pmndrs/text-benchmarks test:presentation-controls",
     "benchmarks:test:raster-technique-compare": "pnpm --filter @pmndrs/text-benchmarks test:raster-technique-compare",
     "benchmarks:profile:paragraph-layout": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-layout",
     "benchmarks:profile:paragraph-font-size:bitmap": "pnpm --filter @pmndrs/text-benchmarks profile:paragraph-font-size:bitmap",

@@ -431,6 +431,37 @@ for (const technique of ['slug', 'bitmap', 'mtsdf'] as const) {
 }
 console.log('presentation-exclusive-renderer-ready');
 
+await selectPresentationOption('Live workload', 'Icon grid');
+const presentationIconViewport = await waitForReadyViewport('mtsdf', 'icon-grid');
+const workloadTrigger = document.querySelector<HTMLButtonElement>('button[aria-label="Live workload"]');
+if (workloadTrigger?.textContent?.includes('Icon grid') !== true) {
+  throw new Error('Presentation workload trigger did not expose the selected workload label');
+}
+const iconSizeTrigger = await presentationRangeTrigger('Icon size');
+iconSizeTrigger.click();
+const iconSizeSlider = await presentationRangeInput('Icon size');
+const iconSizeBefore = presentationIconViewport.getAttribute('data-rendered-device-px');
+setNativeInputValue(iconSizeSlider, '0.8');
+await observeDocument(() => {
+  const value = presentationIconViewport.getAttribute('data-rendered-device-px');
+  return value !== iconSizeBefore ? presentationIconViewport : undefined;
+});
+presentationIconViewport.click();
+await waitForAttribute(iconSizeTrigger, 'aria-expanded', 'false');
+
+await selectPresentationOption('Live workload', 'Off-axis / 3D');
+const presentationOffAxisViewport = await waitForReadyViewport('mtsdf', 'off-axis-3d');
+if (presentationOffAxisViewport.getAttribute('data-missing-glyph-count') !== '0') {
+  throw new Error('Presentation Off-axis / 3D specimen contains missing glyphs');
+}
+const layoutWidthTrigger = await presentationRangeTrigger('Layout width');
+layoutWidthTrigger.click();
+const layoutWidthSlider = await presentationRangeInput('Layout width');
+if (layoutWidthSlider.max !== '200') {
+  throw new Error(`Presentation Off-axis layout width maximum is ${layoutWidthSlider.max}, expected 200`);
+}
+console.log('presentation-controls-ready');
+
 console.log('comparison-workloads-ready', JSON.stringify({ techniques: 3, workloads: 7 }));
 
 function nextPaint(): Promise<void> {
@@ -527,6 +558,44 @@ async function clickAriaButton(label: string): Promise<void> {
   const button = find() ?? (await observeDocument(find));
   if (button.disabled) throw new Error(`${label} button is disabled`);
   button.click();
+}
+
+async function selectPresentationOption(triggerLabel: string, optionLabel: string): Promise<void> {
+  const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label="${triggerLabel}"]`);
+  if (trigger === null) throw new Error(`${triggerLabel} Presentation trigger is unavailable`);
+  trigger.click();
+  const option = await observeDocument(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-slot="select-item"]')].find(
+      (candidate) => candidate.offsetParent !== null && candidate.textContent?.includes(optionLabel) === true,
+    ),
+  );
+  option.click();
+}
+
+function presentationRangeTrigger(label: string): Promise<HTMLButtonElement> {
+  return observeDocument(() =>
+    [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (candidate) =>
+        candidate.offsetParent !== null && candidate.getAttribute('aria-label')?.startsWith(`${label}:`) === true,
+    ),
+  );
+}
+
+function presentationRangeInput(label: string): Promise<HTMLInputElement> {
+  return observeDocument(
+    () =>
+      document
+        .querySelector<HTMLElement>(`[data-slot="slider"][aria-label="${label}"]`)
+        ?.querySelector<HTMLInputElement>('input[type="range"]') ?? undefined,
+  );
+}
+
+function setNativeInputValue(control: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (setter === undefined) throw new Error('Native input value setter is unavailable');
+  setter.call(control, value);
+  control.dispatchEvent(new Event('input', { bubbles: true }));
+  control.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function waitForElement(selector: string): Promise<HTMLElement> {
