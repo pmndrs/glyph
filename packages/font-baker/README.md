@@ -26,8 +26,9 @@ runtime shaping.
 
 ```ts
 import { createFontBaker } from '@pmndrs/text-font-baker';
+import { fontBakerWasmUrl } from '@pmndrs/text-font-baker/wasm-url';
 
-const wasm = await fetch(wasmUrl).then((response) => response.arrayBuffer());
+const wasm = await fetch(fontBakerWasmUrl).then((response) => response.arrayBuffer());
 const baker = await createFontBaker(wasm);
 const result = baker.bake({
   source: sourceBytes,
@@ -43,11 +44,11 @@ import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 const validated = await validateFontArtifact(result.artifacts[0].bytes);
 ```
 
-Build and verify the package from the repository root:
+Build and verify the workspace from the repository root:
 
 ```sh
-pnpm --filter @pmndrs/text-font-baker build
-pnpm --filter @pmndrs/text-font-baker test
+pnpm build
+pnpm test
 ```
 
 The test command keeps four lanes explicit: Rust unit tests, public Rust and
@@ -58,19 +59,12 @@ it always verifies and bakes the checked-in, licensed, hash-pinned Inter 4.1
 fixture. The resulting reduced SFNT is validated structurally and shaped through
 the complete checked-in corpus with HarfRust 0.12.0.
 
-Run longer seeded validator and source-font mutation campaigns locally with
-`pnpm run fuzz validator` and `pnpm run fuzz mutation`. The primary coverage-guided `pnpm run fuzz rust`
-lane uses nested mise configuration to isolate exact `nightly-2026-06-01`,
+Discover longer seeded validator and source-font mutation campaigns with `pnpm scripts list font-baker`. Run the primary
+coverage-guided lane with `pnpm scripts run font-baker:fuzz-rust`; its nested mise configuration isolates exact
+`nightly-2026-06-01`,
 cargo-fuzz 0.13.2, and libfuzzer-sys 0.4.13 from the stable product toolchain.
 Any minimized finding must become a checked-in malformed fixture and ordinary
 stable-toolchain regression test.
 
-Emit the exact ABI JSON generated into the current Rust build:
-
-```sh
-pnpm --filter @pmndrs/text-font-baker generate:abi
-```
-
-The package is internal. The planned public Node surface remains
-`@pmndrs/text/bake`, which will orchestrate this core without exposing its Wasm
-memory protocol.
+The package remains an internal portable core. The public Node surface is `@pmndrs/text/bake`, which orchestrates this
+package without exposing its Wasm memory protocol.
