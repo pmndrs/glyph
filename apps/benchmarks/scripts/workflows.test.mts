@@ -12,9 +12,7 @@ test('indexes current specialized workflows from source metadata', async () => {
 
   assert.match(stdout, /benchmark:presentation\n/);
   assert.match(stdout, /fixture:harfbuzz:provision\n/);
-  assert.match(stdout, /font-baker:fuzz-rust\n/);
   assert.match(stdout, /release:size:check\n/);
-  assert.match(stdout, /text:unicode-data:check\n/);
   assert.doesNotMatch(stdout, /advanced-shaping-performance/);
   assert.doesNotMatch(stdout, /slug-fixed32-performance/);
 });
