@@ -116,9 +116,14 @@ describe('public external raster proof', () => {
     initialStage.commit();
     const initial = initialStage.batch;
     const geometry = meshGeometry(initial.object);
+    const mesh = initial.object.children[0];
+    expect(mesh).toBeDefined();
     const initialCapacity = initial.capacity;
     expect(initial.glyphCount).toBe(2);
     expect(geometry.instanceCount).toBe(2);
+    expect(initial.object).not.toBeInstanceOf(THREE.Group);
+    initial.setRenderOrderBase(600);
+    expect(mesh?.renderOrder).toBe(600);
 
     const aborted = glyphExampleModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
     expect(aborted.batch).toBe(initial);
@@ -131,6 +136,8 @@ describe('public external raster proof', () => {
     expect(shrink.batch).toBe(initial);
     expect(initial.glyphCount).toBe(1);
     expect(geometry.instanceCount).toBe(1);
+    expect(initial.object).not.toBeInstanceOf(THREE.Group);
+    expect(mesh?.renderOrder).toBe(600);
 
     expect(() =>
       glyphExampleModule.stageBatch(initial, layout([font.glyphCount]), loaded.resource, 0, paint(1), 1),
@@ -239,8 +246,8 @@ function paint(count: number): GlyphPaint {
   };
 }
 
-function meshGeometry(group: THREE.Group): THREE.InstancedBufferGeometry {
-  const mesh = group.children[0];
+function meshGeometry(object: THREE.Object3D): THREE.InstancedBufferGeometry {
+  const mesh = object.children[0];
   assert.ok(mesh instanceof THREE.Mesh);
   assert.ok(mesh.geometry instanceof THREE.InstancedBufferGeometry);
   return mesh.geometry;

@@ -39,7 +39,7 @@ type ReactTextCoreProps = DistributiveOmit<TextProperties, 'text' | 'spans'> & {
   readonly children?: TextChild | readonly TextChild[];
 };
 
-export type ReactTextProps = Omit<ThreeElements['group'], keyof TextProperties | 'children' | 'ref'> &
+export type ReactTextProps = Omit<ThreeElements['object3D'], keyof TextProperties | 'children' | 'ref'> &
   ReactTextCoreProps & { readonly ref?: Ref<CoreText> };
 
 export interface UseFont {

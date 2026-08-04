@@ -24,6 +24,9 @@ test('Slug retains both interleaved instance records and replaces changed page t
     assert.equal(batch.glyphCount, 3);
     assert.equal(batch.drawCount, 1);
     assert.equal(geometry.instanceCount, 3);
+    assert.equal(batch.object.isGroup, undefined);
+    batch.setRenderOrderBase(600);
+    assert.equal(mesh.renderOrder, 600);
 
     const replacementLayout = layout([1, 1, 1], 9, 11, 32);
     const replacement = slug.stageBatch(batch, replacementLayout, resource, 0, paint(3, [0.6, 0.5, 0.4, 0.3]), 1);
@@ -39,6 +42,8 @@ test('Slug retains both interleaved instance records and replaces changed page t
     assert.equal(geometry.getAttribute('slugCurveBase').data, uintData);
     assert.equal(floatData.array, floatArray);
     assert.equal(uintData.array, uintArray);
+    assert.equal(batch.object.isGroup, undefined, 'retained replacement keeps a neutral root');
+    assert.equal(mesh.renderOrder, 600, 'retained replacement preserves the Text-local order');
     assert.notDeepEqual(Array.from(floatArray), initialFloats);
     assert.notDeepEqual(Array.from(uintArray), initialUints);
     assert.deepEqual(floatData.updateRanges, [{ start: 0, count: 3 * floatData.stride }]);
@@ -97,6 +102,13 @@ test('Slug retains both interleaved instance records and replaces changed page t
     );
     assert.notEqual(changedTopology.batch, batch);
     assert.equal(changedTopology.batch.drawCount, 3);
+    changedTopology.batch.setRenderOrderBase(600);
+    assert.deepEqual(
+      changedTopology.batch.object.children.map(({ renderOrder }) => renderOrder),
+      [600, 601, 602],
+      'page runs compose the Text-local base with first-glyph-local order',
+    );
+    assert.equal(changedTopology.batch.object.isGroup, undefined);
     const topologyGeometries = changedTopology.batch.object.children.map(({ geometry: stagedGeometry }) => {
       let disposed = false;
       stagedGeometry.addEventListener('dispose', () => {

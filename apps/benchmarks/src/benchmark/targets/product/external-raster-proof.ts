@@ -28,6 +28,8 @@ interface ExternalRasterResources {
   readonly camera: THREE.OrthographicCamera;
   readonly text: Text;
   readonly font: import('@pmndrs/text').RegisteredFont;
+  readonly orderingGeometry: THREE.PlaneGeometry;
+  readonly orderingMaterial: THREE.MeshBasicNodeMaterial;
   readonly retainedObject: THREE.Object3D;
   readonly retainedGeometry: THREE.BufferGeometry;
   readonly glyphCount: number;
@@ -61,6 +63,8 @@ export function createExternalRasterProofTarget(backend: RendererBackend): Bench
       state = { kind: 'empty' };
       resources.text.dispose();
       resources.font.dispose();
+      resources.orderingGeometry.dispose();
+      resources.orderingMaterial.dispose();
       resources.target.dispose();
       if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
     },
@@ -88,6 +92,8 @@ async function createResources(
   let target: THREE.RenderTarget | undefined;
   let text: Text | undefined;
   let font: import('@pmndrs/text').RegisteredFont | undefined;
+  let orderingGeometry: THREE.PlaneGeometry | undefined;
+  let orderingMaterial: THREE.MeshBasicNodeMaterial | undefined;
   try {
     const physicalWidth = Math.round(WIDTH * dpr);
     const physicalHeight = Math.round(HEIGHT * dpr);
@@ -139,8 +145,31 @@ async function createResources(
     if (text.layout === undefined)
       throw new Error('warm external raster update did not publish during object traversal');
     text.position.set(32, -36, 0);
+    text.renderOrder = 600;
+    text.updateMatrixWorld();
+    if (Number(retainedMesh.renderOrder) !== 600)
+      throw new Error('warm external raster did not apply the Text render-order base');
+    text.renderOrder = 0;
+    text.updateMatrixWorld();
+    if (Number(retainedMesh.renderOrder) !== 0)
+      throw new Error('warm external raster did not resynchronize the Text render-order base');
     const scene = new THREE.Scene();
-    scene.add(text);
+    const coverGroup = new THREE.Group();
+    coverGroup.renderOrder = 100;
+    orderingGeometry = new THREE.PlaneGeometry(WIDTH, HEIGHT);
+    orderingMaterial = new THREE.MeshBasicNodeMaterial({
+      color: 0x7f1734,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    });
+    const cover = new THREE.Mesh(orderingGeometry, orderingMaterial);
+    cover.position.set(WIDTH / 2, -HEIGHT / 2, 0);
+    coverGroup.add(cover);
+    const textGroup = new THREE.Group();
+    textGroup.renderOrder = 200;
+    textGroup.add(text);
+    scene.add(coverGroup, textGroup);
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10);
     camera.position.z = 1;
     camera.updateProjectionMatrix();
@@ -154,6 +183,8 @@ async function createResources(
       camera,
       text,
       font,
+      orderingGeometry,
+      orderingMaterial,
       retainedObject,
       retainedGeometry,
       glyphCount: text.layout.glyphIds.length,
@@ -161,6 +192,8 @@ async function createResources(
   } catch (error) {
     text?.dispose();
     font?.dispose();
+    orderingGeometry?.dispose();
+    orderingMaterial?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
     throw error;
@@ -169,28 +202,56 @@ async function createResources(
 
 async function renderResources(resources: ExternalRasterResources, signal?: AbortSignal): Promise<TargetRunOutput> {
   signal?.throwIfAborted();
-  const bytes = await withRendererStateRestored(resources.renderer, async () => {
+  const { coverBytes, bytes } = await withRendererStateRestored(resources.renderer, async () => {
     const { renderer, target } = resources;
     const physicalWidth = Math.round(WIDTH * resources.dpr);
     const physicalHeight = Math.round(HEIGHT * resources.dpr);
     renderer.setRenderTarget(target);
     renderer.setClearColor(0x000000, 1);
+    resources.text.visible = false;
+    let coverFrame: Uint8Array;
+    try {
+      renderer.clear();
+      renderer.render(resources.scene, resources.camera);
+      const baselinePixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, physicalWidth, physicalHeight);
+      coverFrame = compactRgba8Readback(
+        new Uint8Array(baselinePixels.buffer, baselinePixels.byteOffset, baselinePixels.byteLength),
+        physicalWidth,
+        physicalHeight,
+        resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+      );
+    } finally {
+      resources.text.visible = true;
+    }
     renderer.clear();
     renderer.render(resources.scene, resources.camera);
     const pixels = await renderer.readRenderTargetPixelsAsync(target, 0, 0, physicalWidth, physicalHeight);
-    return compactRgba8Readback(
-      new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
-      physicalWidth,
-      physicalHeight,
-      resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
-    );
+    return {
+      coverBytes: coverFrame,
+      bytes: compactRgba8Readback(
+        new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
+        physicalWidth,
+        physicalHeight,
+        resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
+      ),
+    };
   });
   signal?.throwIfAborted();
   let litPixels = 0;
+  let layeringPixels = 0;
   for (let offset = 0; offset < bytes.byteLength; offset += 4) {
     if (bytes[offset] !== 0 || bytes[offset + 1] !== 0 || bytes[offset + 2] !== 0) litPixels += 1;
+    if (
+      bytes[offset] !== coverBytes[offset] ||
+      bytes[offset + 1] !== coverBytes[offset + 1] ||
+      bytes[offset + 2] !== coverBytes[offset + 2] ||
+      bytes[offset + 3] !== coverBytes[offset + 3]
+    ) {
+      layeringPixels += 1;
+    }
   }
   if (litPixels < 100) throw new Error('external raster proof produced no visible glyph frames');
+  if (layeringPixels < 100) throw new Error('external raster proof did not honor its caller-owned parent Group order');
   const liveObject = exactlyOne(resources.text.children, 'retained external raster draw object');
   const liveMesh = exactlyOne(liveObject.children, 'retained external raster mesh');
   if (
@@ -210,6 +271,7 @@ async function renderResources(resources: ExternalRasterResources, signal?: Abor
       glyphCount: resources.glyphCount,
       drawCount: 1,
       litPixels,
+      layeringPixels,
       retainedObject: 1,
       retainedGeometry: 1,
       renderTargetGpuBytes: bytes.byteLength,

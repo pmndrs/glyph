@@ -2,7 +2,6 @@ import { buildRuntimePackages, isMainModule, runNodeScript } from './support/com
 
 export async function runBenchmarkBuild(options: { readonly runtimePackagesReady?: boolean } = {}): Promise<void> {
   if (!options.runtimePackagesReady) await buildRuntimePackages();
-  await runNodeScript('scripts/measure-package-sizes.mts');
   await runNodeScript('node_modules/vite/bin/vite.js', ['build']);
   await runNodeScript('scripts/check-font-notices.mts');
 }

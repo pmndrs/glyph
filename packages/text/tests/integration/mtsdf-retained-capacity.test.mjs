@@ -46,6 +46,9 @@ test('MTSDF retains capacity for arbitrary glyph replacement and replaces only o
     assert.equal(batch.glyphCount, 3);
     assert.equal(batch.drawCount, 1);
     assert.equal(geometry.instanceCount, 3);
+    assert.equal(batch.object.isGroup, undefined);
+    batch.setRenderOrderBase(600);
+    assert.equal(mesh.renderOrder, 600);
 
     const replacementLayout = layout([1, 1, 1], 9, 11, 32);
     const replacementPaint = paint(3, [0.6, 0.5, 0.4, 0.3], [0.7, 0.6, 0.5, 0.4], [0.8, 0.7, 0.6, 0.5], 3, [3, -4]);
@@ -67,6 +70,8 @@ test('MTSDF retains capacity for arbitrary glyph replacement and replaces only o
     assert.equal(data.array, backingArray);
     assert.equal(batch.glyphCount, 3);
     assert.equal(geometry.instanceCount, 3);
+    assert.equal(batch.object.isGroup, undefined, 'retained replacement keeps a neutral root');
+    assert.equal(mesh.renderOrder, 600, 'retained replacement preserves the Text-local order');
     for (const [component, value] of Array.from(backingArray.subarray(0, STRIDE)).entries()) {
       assert.notEqual(value, initialValues[component], `all-field replacement updates component ${component}`);
     }

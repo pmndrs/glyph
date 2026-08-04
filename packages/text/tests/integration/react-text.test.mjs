@@ -15,13 +15,25 @@ after(restoreR3fEnvironment);
 const fixtureUrl = new URL('../../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const shaperUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
 
-test('React Text flattens spans, reconciles, forwards its ref, and disposes', async () => {
+test('React Text flattens spans, retains its Object3D identity, forwards its ref, and disposes', async () => {
   const restoreFetch = installFileFetch();
   const font = defineFont(fixtureUrl.href, bitmap({ strikes: [16] }));
   const loaded = await useFont.preload(font);
   const reference = createRef();
   const layouts = [];
-  const render = (suffix, color, position = [0, 0, 0]) =>
+  const render = (
+    suffix,
+    color,
+    {
+      position = [0, 0, 0],
+      rotation = [0, 0, 0],
+      scale = [1, 1, 1],
+      name = 'initial headline',
+      visible = true,
+      frustumCulled = true,
+      renderOrder = 600,
+    } = {},
+  ) =>
     React.createElement(
       StrictMode,
       null,
@@ -31,6 +43,12 @@ test('React Text flattens spans, reconciles, forwards its ref, and disposes', as
           font,
           fontSize: 16,
           position,
+          rotation,
+          scale,
+          name,
+          visible,
+          frustumCulled,
+          renderOrder,
           ref: reference,
           onLayout: (layout) => layouts.push(layout),
         },
@@ -48,20 +66,42 @@ test('React Text flattens spans, reconciles, forwards its ref, and disposes', as
       reference.current instanceof CoreText,
       `forwarded ref resolved to ${reference.current?.constructor?.name ?? String(reference.current)}`,
     );
+    assert.equal(reference.current.isObject3D, true, 'Text remains a Three.js Object3D');
+    assert.equal(reference.current.isGroup, undefined, 'Text does not introduce nested Group ordering');
     reference.current.updateMatrixWorld();
     assert.equal(reference.current.children.length, 1);
     assert.equal(reference.current.layout?.glyphIds.length, 11);
+    assert.equal(reference.current.children[0]?.children[0]?.renderOrder, 600);
     assert.equal(layouts.length, 1);
 
     const object = reference.current;
     const initialLayout = object.layout;
-    await renderer.update(render('office', '#00aaff', [2, 1, 0]));
+    const initialBatch = object.children[0];
+    await renderer.update(
+      render('office', '#00aaff', {
+        position: [2, 1, 0],
+        rotation: [0, 0.5, 0],
+        scale: [2, 3, 4],
+        name: 'updated headline',
+        visible: false,
+        frustumCulled: false,
+        renderOrder: 700,
+      }),
+    );
     object.updateMatrixWorld();
     assert.equal(reference.current, object, 'React updates retain the core object identity');
     assert.equal(object.layout, initialLayout, 'paint and transform changes do not reflow');
+    assert.equal(object.children[0], initialBatch, 'Object3D changes retain the raster batch');
     assert.deepEqual(object.position.toArray(), [2, 1, 0]);
+    assert.deepEqual(object.rotation.toArray(), [0, 0.5, 0, 'XYZ']);
+    assert.deepEqual(object.scale.toArray(), [2, 3, 4]);
+    assert.equal(object.name, 'updated headline');
+    assert.equal(object.visible, false);
+    assert.equal(object.frustumCulled, false);
+    assert.equal(object.renderOrder, 700);
+    assert.equal(initialBatch.children[0]?.renderOrder, 700, 'the retained draw mesh receives the new Text order');
 
-    await renderer.update(render('accurate', '#00aaff', [2, 1, 0]));
+    await renderer.update(render('accurate', '#00aaff', { position: [2, 1, 0] }));
     object.updateMatrixWorld();
     assert.notEqual(object.layout, initialLayout, 'text changes replace the layout generation');
     assert.equal(object.layout?.glyphIds.length, 13);
@@ -69,13 +109,9 @@ test('React Text flattens spans, reconciles, forwards its ref, and disposes', as
 
     await assert.rejects(
       ReactThreeTestRenderer.create(
-        React.createElement(
-          Text,
-          { font },
-          React.createElement(Text, { position: [1, 0, 0] }, 'invalid inline transform'),
-        ),
+        React.createElement(Text, { font }, React.createElement(Text, { renderOrder: 1 }, 'invalid inline order')),
       ),
-      /nested Text does not accept position/,
+      /nested Text does not accept renderOrder/,
     );
 
     await renderer.unmount();

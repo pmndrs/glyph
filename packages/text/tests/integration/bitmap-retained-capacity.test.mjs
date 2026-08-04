@@ -23,6 +23,9 @@ test('Bitmap retains every instance field within capacity and replaces changed r
     assert.equal(batch.glyphCount, 3);
     assert.equal(batch.drawCount, 1);
     assert.equal(geometry.instanceCount, 3);
+    assert.equal(batch.object.isGroup, undefined);
+    batch.setRenderOrderBase(600);
+    assert.equal(mesh.renderOrder, 600);
     for (const attribute of Object.values(attributes)) assert.equal(attribute.usage, THREE.DynamicDrawUsage);
 
     const replacementLayout = layout([1, 1, 1], 9, 11, 32);
@@ -46,6 +49,8 @@ test('Bitmap retains every instance field within capacity and replaces changed r
     assert.equal(mesh.material, material);
     assert.equal(batch.glyphCount, 3);
     assert.equal(geometry.instanceCount, 3);
+    assert.equal(batch.object.isGroup, undefined, 'retained replacement keeps a neutral root');
+    assert.equal(mesh.renderOrder, 600, 'retained replacement preserves the Text-local order');
     for (const [name, attribute] of Object.entries(bitmapAttributes(geometry))) {
       assert.equal(attribute, attributes[name], `retains ${name} attribute identity`);
       assert.equal(attribute.array, arrays[name], `retains ${name} backing allocation`);
@@ -118,6 +123,13 @@ test('Bitmap retains every instance field within capacity and replaces changed r
     );
     assert.notEqual(changedTopology.batch, batch);
     assert.equal(changedTopology.batch.drawCount, 3);
+    changedTopology.batch.setRenderOrderBase(600);
+    assert.deepEqual(
+      changedTopology.batch.object.children.map(({ renderOrder }) => renderOrder),
+      [600, 601, 602],
+      'page runs compose the Text-local base with first-glyph-local order',
+    );
+    assert.equal(changedTopology.batch.object.isGroup, undefined);
     const topologyGeometries = changedTopology.batch.object.children.map(({ geometry: stagedGeometry }) => {
       let disposed = false;
       stagedGeometry.addEventListener('dispose', () => {

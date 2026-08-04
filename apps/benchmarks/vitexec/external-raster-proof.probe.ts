@@ -68,7 +68,8 @@ for (const [targetId, backendMetric] of [
         measurement.metrics.drawCount !== 1 ||
         measurement.metrics.retainedObject !== 1 ||
         measurement.metrics.retainedGeometry !== 1 ||
-        (measurement.metrics.litPixels ?? 0) < 100,
+        (measurement.metrics.litPixels ?? 0) < 100 ||
+        (measurement.metrics.layeringPixels ?? 0) < 100,
     )
   ) {
     throw new Error(`${targetId} did not preserve the public external raster contract`);

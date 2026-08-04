@@ -20,7 +20,12 @@ import {
 import type { RegisteredFont } from '../font.js';
 import type { ParagraphLayout } from '../layout.js';
 import type { GlyphPaint } from '../paint.js';
-import { assertParallelRasterLayout, resolvedGlyphColor, unitRasterQuadGeometry } from '../internal/raster-batch.js';
+import {
+  assertParallelRasterLayout,
+  rasterRenderOrder,
+  resolvedGlyphColor,
+  unitRasterQuadGeometry,
+} from '../internal/raster-batch.js';
 import { rasterInstanceCapacity, rasterInstanceUpdateRanges } from '../internal/raster-instance-capacity.js';
 import {
   ABSENT_GLYPH_PAGE,
@@ -37,6 +42,7 @@ import {
   defineRasterBatchStage,
   type JsonValue,
   type RasterModule,
+  type RasterObjectDrawBatch,
   type RasterRequest,
   type RegisteredRaster,
 } from '../raster.js';
@@ -113,8 +119,7 @@ interface BitmapBatchRun {
   readonly page: BitmapPageResource;
 }
 
-export interface BitmapDrawBatch {
-  readonly object: THREE.Group;
+export interface BitmapDrawBatch extends RasterObjectDrawBatch<THREE.Object3D> {
   readonly glyphCount: number;
   readonly drawCount: number;
   /** Selected baked strike in pixels per em. */
@@ -147,6 +152,7 @@ interface PresentableBitmapBatch {
   readonly fontSlot: number;
   readonly strike: BitmapStrikeResource;
   revision: number;
+  renderOrderBase: number;
   disposed: boolean;
 }
 
@@ -529,7 +535,7 @@ function buildBitmapBatches(
   assertParallelRasterLayout(layout, paint);
   assertRasterCoverage(layout, fontSlot, resource.coverage, BITMAP_KIND);
   const strike = selectBitmapStrike(resource.strikes, layout, fontSlot, rasterPixelRatio);
-  const group = new THREE.Group();
+  const group = new THREE.Object3D();
   const runs = collectBitmapRunPlans(layout, strike, fontSlot).map(({ page, glyphIndices }) => {
     const run = createBitmapRun(layout, strike, page, glyphIndices, paint);
     group.add(run.mesh);
@@ -543,6 +549,7 @@ function buildBitmapBatches(
     fontSlot,
     strike,
     revision: 0,
+    renderOrderBase: 0,
     disposed: false,
   };
   presentableBatchByObject.set(group, presentation);
@@ -556,6 +563,10 @@ function buildBitmapBatches(
       return runs.reduce((count, run) => count + (run.logicalCount === 0 ? 0 : 1), 0);
     },
     strikePpem: strike.ppem,
+    setRenderOrderBase(base) {
+      presentation.renderOrderBase = base;
+      for (const run of runs) run.mesh.renderOrder = rasterRenderOrder(base, run.glyphIndices);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -599,7 +610,12 @@ function stageBitmapBatchUpdate(
   }
   const staged = plans.map(({ glyphIndices, page }, index) => {
     const run = presentation.runs[index]!;
-    return stageBitmapRunUpdate(run, glyphIndices, bitmapRunValues(layout, strike, page, glyphIndices, paint));
+    return stageBitmapRunUpdate(
+      run,
+      glyphIndices,
+      bitmapRunValues(layout, strike, page, glyphIndices, paint),
+      presentation.renderOrderBase,
+    );
   });
   let disposed = false;
   return {
@@ -712,6 +728,7 @@ function stageBitmapRunUpdate(
   run: BitmapBatchRun,
   glyphIndices: Uint32Array,
   values: BitmapRunValues,
+  renderOrderBase: number,
 ): BitmapBatchUpdate {
   const logicalCount = glyphIndices.length;
   const attributeUpdates = [
@@ -730,7 +747,7 @@ function stageBitmapRunUpdate(
       run.glyphIndices.set(glyphIndices);
       run.logicalCount = logicalCount;
       run.geometry.instanceCount = logicalCount;
-      run.mesh.renderOrder = glyphIndices[0] ?? 0;
+      run.mesh.renderOrder = rasterRenderOrder(renderOrderBase, glyphIndices);
       delete run.targetOrigins;
     },
     dispose() {
@@ -848,7 +865,7 @@ function createBitmapRun(
   const material = bitmapMaterial(page.texture);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
-  mesh.renderOrder = glyphIndices[0] ?? 0;
+  mesh.renderOrder = rasterRenderOrder(0, glyphIndices);
   const retainedGlyphIndices = new Uint32Array(capacity);
   retainedGlyphIndices.set(glyphIndices);
   return {

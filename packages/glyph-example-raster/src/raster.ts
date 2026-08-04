@@ -34,7 +34,7 @@ export interface GlyphExampleResource {
   readonly material: THREE.MeshBasicNodeMaterial;
 }
 
-export interface GlyphExampleDrawBatch extends RasterObjectDrawBatch<THREE.Group> {
+export interface GlyphExampleDrawBatch extends RasterObjectDrawBatch<THREE.Object3D> {
   readonly capacity: number;
   readonly glyphCount: number;
 }
@@ -46,6 +46,8 @@ interface BatchContext {
   readonly instances?: THREE.InstancedInterleavedBuffer;
   readonly mesh?: THREE.Mesh;
   logicalCount: number;
+  localRenderOrder: number;
+  renderOrderBase: number;
   disposed: boolean;
 }
 
@@ -193,7 +195,7 @@ function createBatch(
   values: Float32Array,
 ): GlyphExampleDrawBatch {
   const capacity = retainedCapacity(glyphIndices.length);
-  const object = new THREE.Group();
+  const object = new THREE.Object3D();
   object.name = 'pmndrs.text.glyph-example';
   const geometry = capacity === 0 ? undefined : unitQuad();
   const instances =
@@ -212,6 +214,7 @@ function createBatch(
     instances.needsUpdate = true;
     mesh = new THREE.Mesh(geometry, resource.material);
     mesh.frustumCulled = false;
+    mesh.renderOrder = glyphIndices[0] ?? 0;
     object.add(mesh);
   }
   let batch!: GlyphExampleDrawBatch;
@@ -220,6 +223,12 @@ function createBatch(
     capacity,
     get glyphCount() {
       return batchContexts.get(batch)?.logicalCount ?? 0;
+    },
+    setRenderOrderBase(base) {
+      const context = batchContexts.get(batch);
+      if (context === undefined) return;
+      context.renderOrderBase = base;
+      if (context.mesh !== undefined) context.mesh.renderOrder = base + context.localRenderOrder;
     },
     dispose() {
       const context = batchContexts.get(batch);
@@ -237,6 +246,8 @@ function createBatch(
     ...(instances === undefined ? {} : { instances }),
     ...(mesh === undefined ? {} : { mesh }),
     logicalCount: glyphIndices.length,
+    localRenderOrder: glyphIndices[0] ?? 0,
+    renderOrderBase: 0,
     disposed: false,
   });
   return batch;
@@ -271,8 +282,12 @@ function stageRetained(
       const liveValues = instances.array as Float32Array;
       liveValues.set(values);
       context.logicalCount = glyphIndices.length;
+      context.localRenderOrder = glyphIndices[0] ?? 0;
       geometry.instanceCount = glyphIndices.length;
-      if (mesh !== undefined) mesh.visible = glyphIndices.length > 0;
+      if (mesh !== undefined) {
+        mesh.visible = glyphIndices.length > 0;
+        mesh.renderOrder = context.renderOrderBase + context.localRenderOrder;
+      }
       if (ranges.length === 0) return;
       instances.clearUpdateRanges();
       for (const range of ranges) {

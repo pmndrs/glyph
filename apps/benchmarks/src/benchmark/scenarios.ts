@@ -50,6 +50,7 @@ function externalRasterProofValidation(values: readonly import('./contracts').Be
       metrics.retainedObject !== 1 ||
       metrics.retainedGeometry !== 1 ||
       (metrics.litPixels ?? 0) < 100 ||
+      (metrics.layeringPixels ?? 0) < 100 ||
       (metrics.backendWebGpu ?? 0) + (metrics.backendWebGl2 ?? 0) !== 1
     ) {
       throw new Error('External raster proof did not preserve its visible retained draw contract');

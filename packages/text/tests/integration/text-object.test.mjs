@@ -37,7 +37,12 @@ test('Text commits layout and draw generations atomically', async () => {
     fontSize: 16,
     onLayout: (layout) => layouts.push(layout),
   });
+  text.renderOrder = 600;
+  const parent = new THREE.Group();
+  parent.renderOrder = 500;
+  parent.add(text);
   try {
+    assert.equal(text.isGroup, undefined, 'Text does not replace its parent group order');
     assert.equal(text.children.length, 0);
     await publishText(text);
     assert.equal(text.children.length, 1);
@@ -46,10 +51,19 @@ test('Text commits layout and draw generations atomically', async () => {
 
     const initialLayout = text.layout;
     const initialBatch = text.children[0];
+    assert.equal(initialBatch.isGroup, undefined, 'a raster root does not replace the parent group order');
+    assert.equal(initialBatch.children[0]?.renderOrder, 600, 'the first raster run applies the Text-local order');
+    text.renderOrder = 700;
+    text.updateMatrixWorld();
+    assert.equal(text.renderOrder, 700, 'the caller controls the Text-local order directly');
+    assert.equal(initialBatch.children[0]?.renderOrder, 700, 'matrix traversal updates the drawable order');
+    assert.equal(parent.renderOrder, 500, 'Text-local ordering does not replace the parent group order');
+    assert.equal(text.layout, initialLayout);
     text.setProperties({ opacity: 0.5 });
     await publishText(text);
     assert.equal(text.layout, initialLayout, 'paint-only updates retain the committed layout');
     assert.equal(text.children[0], initialBatch, 'paint-only updates retain the draw batch');
+    assert.equal(initialBatch.children[0]?.renderOrder, 700, 'retained paint preserves the Text-local order');
 
     text.setProperties({
       text: 'office AVATAR',
@@ -72,6 +86,7 @@ test('Text commits layout and draw generations atomically', async () => {
     assert.equal(childTraversalLayout, text.layout, 'warm publication precedes retained child traversal');
     assert.equal(text.children.length, 1);
     assert.equal(text.children[0], initialBatch, 'compatible bitmap reflow retains the draw batch');
+    assert.equal(initialBatch.children[0]?.renderOrder, 700, 'retained layout preserves the Text-local order');
 
     const narrowLayout = text.layout;
     text.setProperties({ fontSize: 18 });
@@ -798,6 +813,46 @@ test('Text rejects a raster batch without the required Three.js lifecycle surfac
   }
 });
 
+test('Text rejects a nested raster Group that would replace its inherited paragraph order', async () => {
+  const restoreFetch = installFileFetch();
+  const registry = new FontRegistry();
+  const font = await registry.registerAsset(await readFile(fixtureUrl));
+  const groupBatchModule = {
+    kind: 'bitmap',
+    extension: 'PMNDRS_font_bitmap',
+    version: 0,
+    descriptor() {
+      return { generatorVersion: '0.0.0', strikes: [16] };
+    },
+    async decode() {
+      return {};
+    },
+    async prepare() {},
+    stageBatch() {
+      return {
+        batch: { object: new THREE.Group(), setRenderOrderBase() {}, dispose() {} },
+        commit() {},
+        abort() {},
+      };
+    },
+    dispose() {},
+  };
+  const text = new Text({
+    text: 'nested group',
+    font,
+    raster: { module: groupBatchModule },
+    fontSize: 16,
+  });
+  try {
+    await assert.rejects(text.ready, /neutral Object3D root/);
+    assert.equal(text.children.length, 0);
+  } finally {
+    text.dispose();
+    font.dispose();
+    restoreFetch();
+  }
+});
+
 test('Text resolves independent raster resources for two fonts in one paragraph', async () => {
   const restoreFetch = installFileFetch();
   const registry = new FontRegistry();
@@ -852,10 +907,16 @@ test('Text resolves independent raster resources for two fonts in one paragraph'
       },
     ],
   });
+  text.renderOrder = 600;
   try {
     await publishText(text);
     assert.equal(text.layout?.fontHandles.length, 2);
     assert.equal(text.children.length, 2);
+    assert.deepEqual(
+      text.children.map((batch) => batch.children[0]?.renderOrder),
+      [600, 606],
+      'font batches compose Text-local and absolute glyph-run order',
+    );
     const liveBatches = [...text.children];
     failPreparation = true;
     assert.throws(() => text.setProperties({ width: 200 }), /injected second-font preparation failure/);
@@ -883,6 +944,11 @@ test('Text resolves independent raster resources for two fonts in one paragraph'
     await publishText(text);
     assert.equal(text.children[0], liveBatches[0], 'a successful transaction retains the first batch');
     assert.equal(text.children[1], liveBatches[1], 'a successful transaction retains the second batch');
+    assert.deepEqual(
+      text.children.map((batch) => batch.children[0]?.renderOrder),
+      [600, 606],
+      'span paint commits preserve cross-font local ordering',
+    );
   } finally {
     text.dispose();
     inter.dispose();

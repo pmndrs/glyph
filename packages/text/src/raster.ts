@@ -193,6 +193,8 @@ export interface RasterDrawBatch {
 /** Renderer adapter batch that publishes one host-owned scene object. */
 export interface RasterObjectDrawBatch<SceneObject> extends RasterDrawBatch {
   readonly object: SceneObject;
+  /** Synchronously and infallibly apply the owning object's order while preserving draw-local ordering. */
+  setRenderOrderBase(base: number): void;
 }
 
 /**

@@ -49,6 +49,7 @@ import {
 import {
   assertParallelRasterLayout,
   assertParallelRasterPaint,
+  rasterRenderOrder,
   unitRasterQuadGeometry,
 } from '../internal/raster-batch.js';
 import { rasterInstanceCapacity, rasterInstanceUpdateRanges } from '../internal/raster-instance-capacity.js';
@@ -59,6 +60,7 @@ import {
   defineRasterBatchStage,
   type JsonValue,
   type RasterModule,
+  type RasterObjectDrawBatch,
   type RegisteredRaster,
 } from '../raster.js';
 import { assertRasterCoverage, decodeRasterCoverage } from '../internal/raster-coverage-artifact.js';
@@ -120,8 +122,7 @@ interface MsdfBatchRun {
   readonly mesh: THREE.Mesh;
 }
 
-export interface MsdfDrawBatch {
-  readonly object: THREE.Group;
+export interface MsdfDrawBatch extends RasterObjectDrawBatch<THREE.Object3D> {
   readonly glyphCount: number;
   readonly drawCount: number;
   dispose(): void;
@@ -137,6 +138,7 @@ interface MsdfBatchContext {
   readonly resource: MsdfResource;
   readonly fontSlot: number;
   readonly run: MsdfBatchRun | undefined;
+  renderOrderBase: number;
 }
 
 const batchContext = new WeakMap<MsdfDrawBatch, MsdfBatchContext>();
@@ -178,7 +180,7 @@ const msdfModule: RasterModule<typeof MSDF_KIND, MsdfResource, MsdfDrawBatch, Ms
     if (previous !== undefined && context?.resource === resource && context.fontSlot === fontSlot) {
       const update =
         context.layout === layout && sameMsdfPaintStructure(context.run, paint)
-          ? stageMsdfPaintUpdate(context.layout, context.run, paint)
+          ? stageMsdfPaintUpdate(context.layout, context.run, paint, context.renderOrderBase)
           : stageMsdfBatchUpdate(context, layout, resource, fontSlot, paint);
       if (update !== undefined) return defineRasterBatchStage(previous, update.commit, update.dispose);
     }
@@ -363,7 +365,7 @@ function buildMsdfBatches(
   assertParallelRasterLayout(layout, paint);
   assertRasterCoverage(layout, fontSlot, resource.coverage, MSDF_KIND);
   assertMsdfPaint(paint);
-  const group = new THREE.Group();
+  const group = new THREE.Object3D();
   const glyphIndices = collectMsdfGlyphIndices(layout, resource, fontSlot);
   const run = glyphIndices.length === 0 ? undefined : createMsdfRun(layout, resource, glyphIndices, paint);
   if (run !== undefined) group.add(run.mesh);
@@ -377,6 +379,12 @@ function buildMsdfBatches(
     get drawCount() {
       return run === undefined || run.logicalCount === 0 ? 0 : 1;
     },
+    setRenderOrderBase(base) {
+      const context = batchContext.get(batch);
+      if (context === undefined) return;
+      context.renderOrderBase = base;
+      if (run !== undefined) run.mesh.renderOrder = rasterRenderOrder(base, run.glyphIndices);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -385,7 +393,7 @@ function buildMsdfBatches(
       run?.geometry.dispose();
     },
   };
-  batchContext.set(batch, { layout, resource, fontSlot, run });
+  batchContext.set(batch, { layout, resource, fontSlot, run, renderOrderBase: 0 });
   return batch;
 }
 
@@ -417,7 +425,7 @@ function createMsdfRun(
   instanceAttribute(geometry, instanceData, 'msdfPageIndex', 1, INSTANCE_OFFSETS.pageIndex);
   const mesh = new THREE.Mesh(geometry, msdfMaterial(resource.atlas, resource.pixelRange));
   mesh.frustumCulled = false;
-  mesh.renderOrder = glyphIndices[0] ?? 0;
+  mesh.renderOrder = rasterRenderOrder(0, glyphIndices);
   const run: MsdfBatchRun = {
     capacity,
     glyphIndices: new Uint32Array(capacity),
@@ -523,7 +531,7 @@ function stageMsdfBatchUpdate(
   const paintStructure = new Float64Array(glyphIndices.length * PAINT_STRUCTURE_STRIDE);
   writeMsdfInstances(layout, resource, values, glyphIndices, paint, paintStructure);
   const liveValues = run.instanceData.array as Float32Array;
-  return stageMsdfRunCommit(run, liveValues, values, glyphIndices, () => {
+  return stageMsdfRunCommit(run, liveValues, values, glyphIndices, context.renderOrderBase, () => {
     run.paintStructure.set(paintStructure);
     context.layout = layout;
   });
@@ -533,6 +541,7 @@ function stageMsdfPaintUpdate(
   layout: ParagraphLayout,
   run: MsdfBatchRun | undefined,
   paint: GlyphPaint,
+  renderOrderBase: number,
 ): MsdfBatchUpdate {
   assertParallelRasterPaint(layout, paint);
   assertMsdfPaint(paint);
@@ -552,6 +561,7 @@ function stageMsdfPaintUpdate(
     run.instanceData.array as Float32Array,
     values,
     run.glyphIndices.subarray(0, run.logicalCount),
+    renderOrderBase,
     () => undefined,
   );
 }
@@ -561,6 +571,7 @@ function stageMsdfRunCommit(
   liveValues: Float32Array,
   values: Float32Array,
   glyphIndices: Uint32Array,
+  renderOrderBase: number,
   beforeCommit: () => void,
 ): MsdfBatchUpdate {
   const logicalCount = glyphIndices.length;
@@ -582,7 +593,7 @@ function stageMsdfRunCommit(
       run.glyphIndices.set(glyphIndices);
       run.logicalCount = logicalCount;
       run.geometry.instanceCount = logicalCount;
-      run.mesh.renderOrder = glyphIndices[0] ?? 0;
+      run.mesh.renderOrder = rasterRenderOrder(renderOrderBase, glyphIndices);
       if (ranges.length === 0) return;
       run.instanceData.clearUpdateRanges();
       for (const range of ranges) run.instanceData.addUpdateRange(range.start, range.count);

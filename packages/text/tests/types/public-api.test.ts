@@ -37,6 +37,7 @@ import {
   type ParagraphMeasurement,
   type TextProperties,
   type TextUpdateProperties,
+  type ThreeRasterDrawBatch,
 } from '../../src/index.js';
 import type { ReactElement } from 'react';
 import type { Object3D } from 'three/webgpu';
@@ -113,6 +114,12 @@ interface MsdfBatch {
 }
 
 declare const rasterObject: Object3D;
+const threeRasterBatch: ThreeRasterDrawBatch = {
+  object: rasterObject,
+  setRenderOrderBase() {},
+  dispose() {},
+};
+void threeRasterBatch;
 
 const msdf = defineRaster({
   kind: 'msdf',
@@ -296,6 +303,12 @@ const reactTokenProps: ReactTextProps = {
   font: titleFont,
   fontSize: 0.24,
   position: [0, 1, 0],
+  rotation: [0, 0.25, 0],
+  scale: [1.5, 1.5, 1],
+  name: 'headline',
+  visible: true,
+  frustumCulled: false,
+  renderOrder: 600,
   children: ['Fast ', nestedText],
 };
 const reactRawProps: ReactTextProps = {

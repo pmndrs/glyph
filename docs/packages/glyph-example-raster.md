@@ -5,7 +5,7 @@ description: Proves the published raster and baker extension boundary with a pri
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/text-glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:1b25dd5a8c679e241da5d73402e42c3441087587efffc9a25799d69dc5f229a0'
+source_digest: 'sha256:e7d18c2c53b9b5090c4f81fc3e20ed9be3d7b048b9a84db104830d6ffd33c6fb'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest
@@ -28,7 +28,7 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-04T17:42:34Z'
+  at: '2026-08-04T18:59:39Z'
 ---
 
 # Package reference: `@pmndrs/text-glyph-example-raster`
@@ -39,8 +39,8 @@ This private workspace package is a consumer proof, not a fourth recommended pro
 `@pmndrs/text` entry points and its own pinned Three.js dependency. It owns the literal `glyphExample` kind, companion
 extension and descriptor, deterministic baker, standalone-valid GLB framing, embedded or authenticated external RGBA glyph
 records, decoder validation, runtime baker, TSL material, retained instance storage, dirty upload policy, overflow replacement,
-abort behavior, and disposal. A source boundary test rejects imports from core internals or the three first-party raster and
-baker subpaths.
+paragraph/local-run render-order inheritance, abort behavior, and disposal. A source boundary test rejects imports from
+core internals or the three first-party raster and baker subpaths.
 
 The technique makes the proof observable by assigning each source-local glyph ID a deterministic color and drawing a framed
 em-relative diagnostic cell at the position produced by core shaping and paragraph layout. Its visual output is deliberately
@@ -64,11 +64,14 @@ clear, viewport, scissor, and scissor-test state, and never creates or disposes 
 
 ## Boundary findings
 
-The proof found and closed two public integration defects. First, portable `RasterDrawBatch` correctly promised only disposal
+The proof found and closed three public integration defects. First, portable `RasterDrawBatch` correctly promised only disposal
 while Three-backed `Text` silently required an `Object3D`. Core now publishes renderer-neutral
 `RasterObjectDrawBatch<Object>` and the Three adapter publishes `ThreeRasterDrawBatch`; the portable contract still imports no
 renderer. Second, `RasterRuntime.load` accepted `resolveResource` but dropped it when constructing cache-owned load options;
 it now preserves the resolver and the package's authenticated external-record test fails without that forwarding.
+Third, generated raster Groups replaced the ordering inherited from caller-owned parent Groups before draws reached Three.js
+sorting. `Text` and the example batch now use neutral `Object3D` containers. The example implements the public base-order
+method so its child mesh combines `Text.renderOrder` with glyph-run-local order across cold and in-place updates.
 
 The remaining friction is documented rather than hidden. Static discovery maps an imported factory export name to
 `package.json#pmndrs.text[exportName]` and requires the default baker's kind to equal that export name. A standalone companion

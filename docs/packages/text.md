@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:602ffb5cfb70317210c6cabe7be8b0eaa2e1fb0e09e4580b1ea506f4e471fccd'
+source_digest: 'sha256:59cfc72dfcff42889b5e951c630c8778b058eac24f5b240662cc43cab0be8958'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -142,18 +142,26 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-04T12:55:07Z'
+  at: '2026-08-04T19:04:36Z'
 ---
 
 # Package reference: `@pmndrs/text`
 
 Status: ✅ Milestone 9 Slug integration is complete
 
+`Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
+Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary
+base applied to drawable meshes, which preserve their first-glyph/page-run-local offsets. Cold publication, warm retained
+commits, base changes, and multi-font spans need no reshaping or per-frame descendant walk. Bitmap, MTSDF, Slug, and the
+external proof package implement the required batch method, and the Three adapter rejects a plugin batch that would reset
+inheritance with a nested Group.
+
 Milestone 10.4 proves that the open contract is implementable outside this package. The private
 `@pmndrs/text-glyph-example-raster` consumer owns a new literal kind, companion GLB, embedded/external records, static and runtime
 bakers, decoder, retained Three.js/TSL adapter, dirty uploads, overflow, abort, and disposal without importing this package's
 internals or first-party raster modules. The proof made the Three adapter requirement explicit through public
-`RasterObjectDrawBatch<Object>` and `ThreeRasterDrawBatch` types while keeping portable `RasterDrawBatch` renderer-neutral. It
+`RasterObjectDrawBatch<Object>` and `ThreeRasterDrawBatch` types while keeping portable `RasterDrawBatch` renderer-neutral. Its
+neutral Three.js root preserves renderer-local transparent-run order beneath the caller-owned parent Group and `Text` base. It
 also corrected `RasterRuntime.load` to retain the caller's `resolveResource` callback in cache-owned options; authenticated
 external records now traverse the same deduplicated load as their companion artifact. The public type additions erase at
 runtime. Compact forwarding of the complete public option bag makes browser core and every first-party runtime closure 55 raw

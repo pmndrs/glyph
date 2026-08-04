@@ -19,6 +19,11 @@ export function resolvedGlyphColor(paint: GlyphPaint, glyphIndex: number): Linea
   return resolved.color;
 }
 
+/** Compose one composite-object base with a raster run's first-glyph-local order. */
+export function rasterRenderOrder(base: number, glyphIndices: Uint32Array): number {
+  return base + (glyphIndices[0] ?? 0);
+}
+
 export function assertParallelRasterLayout(layout: ParagraphLayout, paint: GlyphPaint): void {
   const glyphCount = layout.glyphIds.length;
   for (const values of [layout.glyphFontSlots, layout.glyphFontSizes, layout.x, layout.y]) {

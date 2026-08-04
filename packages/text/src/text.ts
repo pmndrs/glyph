@@ -207,13 +207,14 @@ interface PreparedFontRaster {
 }
 
 /** Framework-neutral Three.js text object with transactional generations. */
-export class Text extends THREE.Group {
+export class Text extends THREE.Object3D {
   #state: TextState;
   #generation: TextGeneration | undefined;
   #pending: AbortController | undefined;
   #publication: PendingPublication | undefined;
   #invalidatedState: TextState | undefined;
   #revision = 0;
+  #renderOrderBase = Number.NaN;
   #ready: Promise<void> = Promise.resolve();
   #disposed = false;
 
@@ -280,11 +281,13 @@ export class Text extends THREE.Group {
 
   override updateMatrixWorld(force?: boolean): void {
     this.#publishPending();
+    this.#syncRenderOrderBase();
     super.updateMatrixWorld(force);
   }
 
   override updateWorldMatrix(updateParents: boolean, updateChildren: boolean): void {
     this.#publishPending();
+    this.#syncRenderOrderBase();
     super.updateWorldMatrix(updateParents, updateChildren);
   }
 
@@ -611,9 +614,17 @@ export class Text extends THREE.Group {
     }
     if (previous !== undefined && previous.paragraph !== generation.paragraph) previous.paragraph.dispose();
     for (const owned of generation.batches) {
+      owned.batch.setRenderOrderBase(this.renderOrder);
       if (owned.batch.object.parent !== this) this.add(owned.batch.object);
     }
+    this.#renderOrderBase = this.renderOrder;
     if (previous?.layout !== generation.layout) this.#state.onLayout?.(generation.layout);
+  }
+
+  #syncRenderOrderBase(): void {
+    if (this.#renderOrderBase === this.renderOrder) return;
+    for (const owned of this.#generation?.batches ?? []) owned.batch.setRenderOrderBase(this.renderOrder);
+    this.#renderOrderBase = this.renderOrder;
   }
 
   #publishPending(): void {

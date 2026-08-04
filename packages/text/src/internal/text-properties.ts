@@ -308,12 +308,19 @@ function isRasterModule(value: unknown): value is AnyRasterModule {
 export type ThreeRasterDrawBatch = RasterObjectDrawBatch<THREE.Object3D>;
 
 function assertRasterBatch(value: unknown): asserts value is ThreeRasterDrawBatch {
+  const object = isObject(value) ? readProperty(value, 'object') : undefined;
   if (
     !isObject(value) ||
-    !(readProperty(value, 'object') instanceof THREE.Object3D) ||
+    !(object instanceof THREE.Object3D) ||
+    typeof readProperty(value, 'setRenderOrderBase') !== 'function' ||
     typeof readProperty(value, 'dispose') !== 'function'
   ) {
     throw new TypeError('raster module returned an invalid draw batch');
+  }
+  if (object instanceof THREE.Group) {
+    throw new TypeError(
+      'a Three.js raster batch must use a neutral Object3D root so parent group order remains inherited',
+    );
   }
 }
 

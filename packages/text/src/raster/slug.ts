@@ -11,7 +11,7 @@ import { Fn, add, attribute, bool, mul, positionLocal, sub, uniform, varyingProp
 
 import type { RegisteredFont } from '../font.js';
 import type { Sha256Hex } from '../identity.js';
-import { assertParallelRasterLayout, unitRasterQuadGeometry } from '../internal/raster-batch.js';
+import { assertParallelRasterLayout, rasterRenderOrder, unitRasterQuadGeometry } from '../internal/raster-batch.js';
 import {
   coalesceRasterInstanceRanges,
   pendingRasterDirtyInstances,
@@ -36,6 +36,7 @@ import {
   defineRasterBatchStage,
   type JsonValue,
   type RasterModule,
+  type RasterObjectDrawBatch,
   type RasterResourceSource,
   type RegisteredRaster,
 } from '../raster.js';
@@ -115,8 +116,7 @@ interface SlugBatchRun {
   readonly pageIndex: number;
 }
 
-export interface SlugDrawBatch {
-  readonly object: THREE.Group;
+export interface SlugDrawBatch extends RasterObjectDrawBatch<THREE.Object3D> {
   readonly glyphCount: number;
   readonly drawCount: number;
   dispose(): void;
@@ -128,6 +128,7 @@ interface SlugBatchContext {
   readonly resource: SlugResource;
   readonly fontSlot: number;
   readonly runs: readonly SlugBatchRun[];
+  renderOrderBase: number;
 }
 
 const batchContext = new WeakMap<SlugDrawBatch, SlugBatchContext>();
@@ -477,7 +478,7 @@ function buildSlugBatches(
   assertParallelRasterLayout(layout, paint);
   assertSlugPaint(paint);
   assertSlugGlyphInputs(layout, resource, fontSlot, paint);
-  const group = new THREE.Group();
+  const group = new THREE.Object3D();
   group.name = 'pmndrs.text.slug';
   const runs: SlugBatchRun[] = [];
   try {
@@ -501,6 +502,12 @@ function buildSlugBatches(
     get drawCount() {
       return runs.reduce((count, run) => count + (run.logicalCount === 0 ? 0 : 1), 0);
     },
+    setRenderOrderBase(base) {
+      const context = batchContext.get(batch);
+      if (context === undefined) return;
+      context.renderOrderBase = base;
+      for (const run of runs) run.fillMesh.renderOrder = rasterRenderOrder(base, run.glyphIndices);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -509,7 +516,7 @@ function buildSlugBatches(
       for (const run of runs) run.geometry.dispose();
     },
   };
-  batchContext.set(batch, { layout, resource, fontSlot, runs });
+  batchContext.set(batch, { layout, resource, fontSlot, runs, renderOrderBase: 0 });
   return batch;
 }
 
@@ -549,7 +556,12 @@ function stageSlugBatchUpdate(
     return undefined;
   }
   const staged = plans.map(({ glyphIndices }, index) =>
-    stageSlugRunUpdate(context.runs[index]!, glyphIndices, slugRunValues(layout, resource, glyphIndices, paint)),
+    stageSlugRunUpdate(
+      context.runs[index]!,
+      glyphIndices,
+      slugRunValues(layout, resource, glyphIndices, paint),
+      context.renderOrderBase,
+    ),
   );
   let disposed = false;
   return {
@@ -678,7 +690,12 @@ function slugRunValues(
   return { floats, uints };
 }
 
-function stageSlugRunUpdate(run: SlugBatchRun, glyphIndices: Uint32Array, values: SlugRunValues): SlugBatchUpdate {
+function stageSlugRunUpdate(
+  run: SlugBatchRun,
+  glyphIndices: Uint32Array,
+  values: SlugRunValues,
+  renderOrderBase: number,
+): SlugBatchUpdate {
   const logicalCount = glyphIndices.length;
   const floatUpdate = stageSlugInterleavedData(run.floatData, values.floats, run.logicalCount, logicalCount);
   const uintUpdate = stageSlugInterleavedData(run.uintData, values.uints, run.logicalCount, logicalCount);
@@ -692,7 +709,7 @@ function stageSlugRunUpdate(run: SlugBatchRun, glyphIndices: Uint32Array, values
       run.glyphIndices.set(glyphIndices);
       run.logicalCount = logicalCount;
       run.geometry.instanceCount = logicalCount;
-      run.fillMesh.renderOrder = glyphIndices[0] ?? 0;
+      run.fillMesh.renderOrder = rasterRenderOrder(renderOrderBase, glyphIndices);
     },
     dispose() {
       if (disposed) return;
@@ -862,7 +879,7 @@ function populateSlugRun(
   const initialState = slugMaterialState(page);
   const fillMesh = new THREE.Mesh(geometry, initialState.material);
   fillMesh.frustumCulled = false;
-  fillMesh.renderOrder = glyphIndices[0] ?? 0;
+  fillMesh.renderOrder = rasterRenderOrder(0, glyphIndices);
   const retainedGlyphIndices = new Uint32Array(capacity);
   retainedGlyphIndices.set(glyphIndices);
   const run: SlugBatchRun = {

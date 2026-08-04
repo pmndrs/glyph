@@ -532,6 +532,12 @@ interface RasterDrawBatch {
   dispose(): void;
 }
 
+interface RasterObjectDrawBatch<SceneObject> extends RasterDrawBatch {
+  readonly object: SceneObject;
+  /** Synchronous and infallible, including after retained commits. */
+  setRenderOrderBase(base: number): void;
+}
+
 interface RasterBatchStage<DrawBatch extends RasterDrawBatch = RasterDrawBatch> {
   readonly batch: DrawBatch;
   /** Synchronous and infallible; transfers target-batch ownership to the caller. */
@@ -550,7 +556,7 @@ declare class RasterRuntime {
 }
 ```
 
-Every raster module's draw-batch type extends the renderer-neutral `RasterDrawBatch` ownership surface. It does not expose a scene object, shader system, or backend resource. The Three.js `Text` adapter separately requires and validates a Three-backed target batch before attaching it to its group. `RasterRuntime` derives the request identity, reuses one decoded resource per font/module/key, evicts failed promises, detaches an aborted consumer without cancelling other consumers, and releases decoded resources when the registered font generation or runtime is disposed. Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
+Every raster module's draw-batch type extends the renderer-neutral `RasterDrawBatch` ownership surface. It does not expose a scene object, shader system, or backend resource. The Three.js `Text` adapter separately requires and validates a Three-backed target batch before attaching it to its composite `Object3D`. That target uses a neutral `Object3D` root rather than a nested `Group`, so an enclosing caller-owned Group remains Three.js's primary `groupOrder`. `Text.renderOrder` is applied as the secondary base on each drawable while the raster preserves its run-local offset. `RasterRuntime` derives the request identity, reuses one decoded resource per font/module/key, evicts failed promises, detaches an aborted consumer without cancelling other consumers, and releases decoded resources when the registered font generation or runtime is disposed. Disposal increments the font generation and invalidates stale raster, shape, layout, and GPU-resource cache entries.
 
 ## Shared bake core
 
@@ -1146,9 +1152,12 @@ The resource and draw-batch types are owned by their optional raster packages. `
 
 `RasterDrawBatch` is the portable disposal contract. Renderer adapters refine it without changing that core boundary:
 `RasterObjectDrawBatch<Object>` adds one host scene object, and the public `ThreeRasterDrawBatch` alias binds that object to
-Three.js for modules rendered through `Text`. The `Text` adapter validates the object at the untrusted plugin boundary before
-publication. This makes the runtime requirement statically visible to external Three adapters without importing Three.js into
-the renderer-neutral raster contract.
+Three.js for modules rendered through `Text`. It also requires `setRenderOrderBase(base)`: the adapter calls it before cold
+publication and when the retained `Text.renderOrder` changes. `Text` itself is a composite `Object3D`, so a caller-owned parent
+Group remains the primary Three.js `groupOrder`; drawable children use `Text.renderOrder + raster-local order` as their
+secondary key. A Three raster batch must use a non-`Group` `Object3D` root so it does not replace the inherited primary key.
+The adapter rejects nested `Group` roots at the untrusted plugin boundary. This makes object attachment and layering
+statically visible to external adapters without importing Three.js into the renderer-neutral raster contract.
 
 The private `@pmndrs/text-glyph-example-raster` workspace package is the accepted external proof. Its `glyphExample` factory,
 literal kind, `PMNDRS_text_glyph_example` extension, descriptor, baker, standalone companion GLB, embedded/external record

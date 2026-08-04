@@ -248,8 +248,12 @@ infallible; make abort, batch disposal, and resource disposal idempotent. A reta
 and dirty-range coalescing privately. Those policies are not public API.
 
 For Three.js, publish `RasterObjectDrawBatch<Object3D>` so `Text` can attach the object while the portable
-`RasterDrawBatch` contract remains renderer-neutral. Another adapter may use a different batch type without adding that
-renderer to core.
+`RasterDrawBatch` contract remains renderer-neutral. Implement `setRenderOrderBase(base)` by assigning
+`base + rasterLocalOrder` to every drawable, including after retained commits. Use `new Object3D()` as a neutral batch
+container, not `new Group()`. `Text` is also a composite `Object3D`, so a caller-owned parent Group remains Three.js's primary
+`groupOrder`; `Text.renderOrder` and the raster-local offset form each drawable's secondary order. A nested batch Group would
+replace the inherited group order with its own default zero and is rejected by the `Text` adapter. Another renderer adapter
+may use a different batch type without adding that renderer to core.
 
 ## 6. Add optional runtime baking without growing the normal runtime
 
