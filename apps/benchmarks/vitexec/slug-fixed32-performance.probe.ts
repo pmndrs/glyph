@@ -1,11 +1,14 @@
-import type { ComparisonWorkloadPreview, ComparisonWorkloadStats } from '../src/renderer/comparison-workload';
+import type {
+  ComparisonWorkloadPreview,
+  ComparisonWorkloadStats,
+} from '../src/benchmark/targets/measurement/comparison-preview';
 
 export {};
 
 type SlugStats = Extract<ComparisonWorkloadStats, { readonly technique: 'slug' }>;
 type Variant = 'fixed16' | 'fixed32';
 
-const comparisonWorkloadPath = '/src/renderer/comparison-workload.ts';
+const comparisonWorkloadPath = '/src/benchmark/targets/measurement/comparison-preview.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const fontFixturesPath = '/src/benchmark/font-fixtures.ts';
 const productResultPath = '/src/benchmark/product-result.ts';

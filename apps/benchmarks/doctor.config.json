@@ -4,7 +4,12 @@
     "enabled": false
   },
   "ignore": {
-    "files": ["vitexec/**", "src/benchmark/bake-host-baseline.ts", "src/benchmark/worker-queue-evidence.ts"],
+    "files": [
+      "vitexec/**",
+      "src/benchmark/bake-host-baseline.ts",
+      "src/benchmark/worker-queue-evidence.ts",
+      "src/benchmark/targets/measurement/comparison-preview.ts"
+    ],
     "overrides": [
       {
         "files": ["src/benchmark/paragraph-layout-digest.ts"],
