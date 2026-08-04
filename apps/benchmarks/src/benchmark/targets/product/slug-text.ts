@@ -5,7 +5,8 @@ import * as THREE from 'three/webgpu';
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../../../workloads/benchmark-ipsum';
-import { loadSlugFont, registeredSlugConfiguration } from '../../../renderer/slug-text';
+import { registeredSlugConfiguration } from '../../low-level/raster/slug-configuration';
+import { loadSlugFontAsset } from '../../../workloads/font-assets/slug';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,
@@ -70,7 +71,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   const lines: Text[] = [];
   try {
     const fontStarted = performance.now();
-    const loaded = await loadSlugFont();
+    const loaded = await loadSlugFontAsset({ technique: 'slug', fixture: 'inter', delivery: 'baked' });
     font = loaded.font;
     const fontLoadMs = performance.now() - fontStarted;
     const scene = new THREE.Scene();

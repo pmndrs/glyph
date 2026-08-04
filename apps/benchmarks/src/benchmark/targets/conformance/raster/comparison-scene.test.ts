@@ -75,8 +75,8 @@ vi.mock('@pmndrs/text', async () => {
   return { Text: MockText };
 });
 
-vi.mock('../../../../renderer/mtsdf-text', () => ({
-  loadMtsdfFont: async (signal?: AbortSignal) => {
+vi.mock('../../../../workloads/font-assets/mtsdf', () => ({
+  loadMtsdfFontAsset: async ({ signal }: { readonly signal?: AbortSignal }) => {
     signal?.throwIfAborted();
     return {
       font: { dispose: () => mocks.fontDisposals.push('mtsdf') },
@@ -85,8 +85,8 @@ vi.mock('../../../../renderer/mtsdf-text', () => ({
   },
 }));
 
-vi.mock('../../../../renderer/slug-text', () => ({
-  loadSlugFont: async (signal?: AbortSignal) => {
+vi.mock('../../../../workloads/font-assets/slug', () => ({
+  loadSlugFontAsset: async ({ signal }: { readonly signal?: AbortSignal }) => {
     signal?.throwIfAborted();
     return {
       font: { dispose: () => mocks.fontDisposals.push('slug') },

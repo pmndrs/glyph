@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { BENCHMARK_IPSUM_CONFORMANCE_TEXT } from '../../../workloads/benchmark-ipsum';
-import { loadMtsdfFont } from '../../../renderer/mtsdf-text';
+import { loadMtsdfFontAsset } from '../../../workloads/font-assets/mtsdf';
 import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
 import {
   createConfiguredRenderer,
@@ -69,7 +69,7 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
   const lines: Text[] = [];
   try {
     const fontStarted = performance.now();
-    const loaded = await loadMtsdfFont();
+    const loaded = await loadMtsdfFontAsset({ technique: 'mtsdf', fixture: 'inter', delivery: 'baked' });
     font = loaded.font;
     const fontLoadMs = performance.now() - fontStarted;
     const scene = new THREE.Scene();

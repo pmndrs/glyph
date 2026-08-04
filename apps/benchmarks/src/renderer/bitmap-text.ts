@@ -1,12 +1,5 @@
+import { FontRegistry, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
 import {
-  FontRegistry,
-  type FontFeature,
-  type JsonValue,
-  type ParagraphLayout,
-  type RegisteredFont,
-} from '@pmndrs/text';
-import {
-  bitmapRasterKey,
   captureBitmapGlyphPositions,
   createBitmapGlyphPositionTransition,
   selectBitmapStrikePpem,
@@ -16,6 +9,7 @@ import {
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../benchmark/font-fixtures';
+import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../benchmark/low-level/raster/bitmap-atlas';
 import type { FontDelivery } from '../benchmark/url-state';
 import { createCanvasSurface } from './canvas-surface';
 import { finiteCanvasDelta } from './canvas-view';
@@ -36,13 +30,7 @@ import {
 } from './persistent-render-host';
 import { createPersistentSceneActivation } from './persistent-scene-activation';
 import { loadBitmapFontAsset } from '../workloads/font-assets/bitmap';
-import type { BitmapFixtureDensity } from '../workloads/font-assets';
 import { createBitmapLine, disposeBitmapLine, type BitmapLine } from './bitmap-line';
-
-const CONFORMANCE_BITMAP_STRIKES = [16] as const;
-const LIVE_BITMAP_STRIKES = [16, 32] as const;
-export { preloadBitmapFontAssets } from '../workloads/font-assets/bitmap';
-export type { BitmapFixtureDensity } from '../workloads/font-assets/bitmap';
 
 export interface BitmapTextLiveStats {
   readonly technique: 'bitmap';
@@ -107,14 +95,6 @@ export interface BitmapTextLiveStats {
   readonly gpuHistoryLength: number;
   readonly gpuHistoryNextIndex: number;
   readonly gpuHistoryCursor: LiveFrameHistoryCursor;
-}
-
-export interface BitmapAtlasPageStats {
-  readonly strikePpem: number;
-  readonly pageIndex: number;
-  readonly width: number;
-  readonly height: number;
-  readonly gpuBytes: number;
 }
 
 export interface BitmapTextSceneUpdate extends LiveFontFixtureUpdate {
@@ -190,88 +170,6 @@ export interface BitmapTextPersistentScene extends PersistentRenderScene {
   finishPresentation(revision: number): BitmapTextSceneSnapshot;
 }
 
-export async function loadBitmapFont(
-  signal?: AbortSignal,
-  fixture: BenchmarkFontFixture = 'inter',
-  delivery: FontDelivery = 'baked',
-  density: BitmapFixtureDensity = 'conformance',
-  onProgress?: import('@pmndrs/text').BakeProgressListener,
-  registry = new FontRegistry(),
-): Promise<Awaited<ReturnType<typeof loadBitmapFontAsset>>> {
-  return loadBitmapFontAsset({
-    technique: 'bitmap',
-    fixture,
-    delivery,
-    bitmapDensity: density,
-    ...(registry === undefined ? {} : { registry }),
-    ...(signal === undefined ? {} : { signal }),
-    ...(onProgress === undefined ? {} : { onProgress }),
-  });
-}
-
-export async function registeredBitmapAtlas(
-  font: RegisteredFont,
-  density: BitmapFixtureDensity = 'conformance',
-): Promise<{
-  readonly gpuBytes: number;
-  readonly pages: readonly BitmapAtlasPageStats[];
-  readonly strikes: readonly { readonly ppem: number }[];
-}> {
-  const rasterKey =
-    density === 'live'
-      ? await bitmapRasterKey({ strikes: LIVE_BITMAP_STRIKES })
-      : await bitmapRasterKey({ strikes: CONFORMANCE_BITMAP_STRIKES });
-  const raster =
-    font.getRaster(rasterKey) ??
-    (await font.loadRaster({
-      kind: 'bitmap',
-      rasterKey,
-    }));
-  const extension = jsonObject(raster.extensionData, 'bitmap extension');
-  const strikes = jsonArray(extension.strikes, 'bitmap strikes');
-  let bytes = 0;
-  const pages: BitmapAtlasPageStats[] = [];
-  const registeredStrikes: Array<{ readonly ppem: number }> = [];
-  for (const [strikeIndex, strikeValue] of strikes.entries()) {
-    const strike = jsonObject(strikeValue, `bitmap strike ${strikeIndex}`);
-    const strikePpem = jsonPositiveInteger(strike.ppemX, `bitmap strike ${strikeIndex} ppemX`);
-    if (strike.ppemY !== strikePpem) {
-      throw new TypeError(`bitmap strike ${strikeIndex} must be square`);
-    }
-    registeredStrikes.push({ ppem: strikePpem });
-    for (const [pageIndex, pageValue] of jsonArray(strike.pages, `bitmap strike ${strikeIndex} pages`).entries()) {
-      const page = jsonObject(pageValue, `bitmap strike ${strikeIndex} page ${pageIndex}`);
-      const width = jsonPositiveInteger(page.width, 'bitmap page width');
-      const height = jsonPositiveInteger(page.height, 'bitmap page height');
-      const gpuBytes = width * height;
-      bytes += gpuBytes;
-      pages.push({ strikePpem, pageIndex, width, height, gpuBytes });
-    }
-  }
-  return { gpuBytes: bytes, pages, strikes: registeredStrikes };
-}
-
-function jsonObject(value: JsonValue | undefined, name: string): Readonly<Record<string, JsonValue>> {
-  if (!isJsonObject(value)) throw new TypeError(`${name} must be an object`);
-  return value;
-}
-
-function isJsonObject(value: JsonValue | undefined): value is { readonly [key: string]: JsonValue } {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function jsonArray(value: JsonValue | undefined, name: string): readonly JsonValue[] {
-  if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`);
-  return value;
-}
-
-function jsonPositiveInteger(value: JsonValue | undefined, name: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
-    throw new TypeError(`${name} must be a positive integer`);
-  }
-  return value;
-}
-
 function countDraws(object: THREE.Object3D): number {
   let count = 0;
   object.traverse((child) => {
@@ -330,7 +228,7 @@ interface BitmapPersistentFontFixture {
   readonly atlas: Awaited<ReturnType<typeof registeredBitmapAtlas>>;
   readonly font: RegisteredFont;
   readonly fontLoadMs: number;
-  readonly loaded: Awaited<ReturnType<typeof loadBitmapFont>>;
+  readonly loaded: Awaited<ReturnType<typeof loadBitmapFontAsset>>;
 }
 
 export function createBitmapTextPersistentScene(options: BitmapTextPersistentSceneOptions): BitmapTextPersistentScene {
@@ -435,7 +333,15 @@ async function activateBitmapTextPersistentScene(
   let line: BitmapLine | undefined;
   try {
     const fontStarted = performance.now();
-    const loadedFont = await loadBitmapFont(context.signal, fontFixture, delivery, 'live', onBakeProgress, registry);
+    const loadedFont = await loadBitmapFontAsset({
+      technique: 'bitmap',
+      fixture: fontFixture,
+      delivery,
+      bitmapDensity: 'live',
+      registry,
+      signal: context.signal,
+      ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
+    });
     font = loadedFont.font;
     const fontLoadMs = performance.now() - fontStarted;
     context.signal.throwIfAborted();
@@ -580,14 +486,15 @@ async function activateBitmapTextPersistentScene(
           isCurrent: () => !closing && !disposed && revision === layoutRevision,
           load: async (fixture, fixtureRegistry) => {
             const fontStartedAt = performance.now();
-            const loaded = await loadBitmapFont(
-              context.signal,
+            const loaded = await loadBitmapFontAsset({
+              technique: 'bitmap',
               fixture,
               delivery,
-              'live',
-              onBakeProgress,
-              fixtureRegistry,
-            );
+              bitmapDensity: 'live',
+              registry: fixtureRegistry,
+              signal: context.signal,
+              ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
+            });
             try {
               const nextAtlas = await registeredBitmapAtlas(loaded.font, 'live');
               return { atlas: nextAtlas, font: loaded.font, fontLoadMs: performance.now() - fontStartedAt, loaded };
