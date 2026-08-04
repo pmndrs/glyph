@@ -9,7 +9,8 @@ okf_version: '0.2'
 - [Project README](../README.md) — product overview, API preview, implementation order, and local setup.
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
-- [Runtime and bake API V0](planning/api-shapes.md) — proposed public API and package boundaries.
+- [Runtime and bake API V0](planning/api-shapes.md) — accepted V1 public API, package boundaries, and explicitly deferred additions.
+- [Raster and baker plugin guide](planning/raster-baker-plugin.md) — build an external technique through the public runtime, baker, artifact, discovery, and lifecycle contracts.
 
 ## Architecture and data contracts
 

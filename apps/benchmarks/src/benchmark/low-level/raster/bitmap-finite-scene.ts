@@ -6,7 +6,7 @@ import { conformanceText, type BenchmarkFontFixture } from '../../font-fixtures'
 import type { TargetRunOutput } from '../../contracts';
 import type { FontDelivery } from '../../url-state';
 import { loadBitmapFontAsset } from '../../../workloads/font-assets/bitmap';
-import { createBitmapLine, disposeBitmapLine, type BitmapLine } from '../../../renderer/bitmap-line';
+import { createBitmapLine, disposeBitmapLine, type BitmapLine } from '../../../techniques/bitmap/line';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,

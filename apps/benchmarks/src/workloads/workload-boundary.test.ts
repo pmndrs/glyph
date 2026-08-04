@@ -14,6 +14,17 @@ const allowedRendererDependencies = new Set([
   'text-update-telemetry',
   'webgpu-renderer',
 ]);
+const authoredWorkloadIds = [
+  'advanced-shaping',
+  'benchmark-ipsum',
+  'text-ladder',
+  'zoom-text',
+  'icon-grid',
+  'off-axis-3d',
+  'dynamic-layout',
+  'paragraph-stress',
+  'paint-effects',
+] as const;
 
 async function sourceFiles(directory: string): Promise<readonly string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -33,11 +44,11 @@ function rendererDependencies(source: string): readonly string[] {
 
 describe('workload source boundaries', () => {
   it('recognizes direct, nested, and dynamic renderer imports', () => {
-    const renderer = 'renderer/bitmap-text';
-    expect(rendererDependencies(`import { text } from '../${renderer}';`)).toEqual(['bitmap-text']);
-    expect(rendererDependencies(`import { text } from '../../${renderer}';`)).toEqual(['bitmap-text']);
-    expect(rendererDependencies(`await import('../${renderer}');`)).toEqual(['bitmap-text']);
-    expect(rendererDependencies(`import(/* eager */ '../../${renderer}');`)).toEqual(['bitmap-text']);
+    const renderer = 'renderer/persistent-render-host';
+    expect(rendererDependencies(`import { text } from '../${renderer}';`)).toEqual(['persistent-render-host']);
+    expect(rendererDependencies(`import { text } from '../../${renderer}';`)).toEqual(['persistent-render-host']);
+    expect(rendererDependencies(`await import('../${renderer}');`)).toEqual(['persistent-render-host']);
+    expect(rendererDependencies(`import(/* eager */ '../../${renderer}');`)).toEqual(['persistent-render-host']);
   });
 
   it('depends only on generic renderer host and scene primitives', async () => {
@@ -57,12 +68,25 @@ describe('workload source boundaries', () => {
     expect(offenders.filter((file): file is string => file !== undefined)).toEqual([]);
   });
 
-  it('keeps the retained comparison scene local and the standalone adapter target-owned', async () => {
-    const source = await readFile(new URL('./comparison/scene.ts', import.meta.url), 'utf8');
+  it('colocates every authored route definition with its scene and keeps its Text imports public', async () => {
+    const directories = await Promise.all(
+      authoredWorkloadIds.map(async (id) => {
+        const directory = `${workloadDirectory}/${id}`;
+        const entries = await readdir(directory);
+        const [definition, scene] = await Promise.all([
+          readFile(`${directory}/definition.ts`, 'utf8'),
+          readFile(`${directory}/scene.ts`, 'utf8'),
+        ]);
+        return { definition, entries, id, scene };
+      }),
+    );
 
-    expect(source).not.toContain('createComparisonWorkloadPreview');
-    expect(source).not.toContain('createConfiguredRenderer');
-    expect(source).not.toContain('setAnimationLoop');
-    expect(source).not.toContain('createGpuFrameTimer');
+    for (const { definition, entries, id, scene } of directories) {
+      expect(entries).toEqual(expect.arrayContaining(['definition.ts', 'scene.ts']));
+      expect(definition).toContain(`id: '${id}'`);
+      expect(scene).not.toMatch(/@pmndrs\/text(?:-font-baker|\/internal)/);
+      expect(scene).not.toContain('.wasm?url');
+      expect(rendererDependencies(scene)).toEqual([]);
+    }
   });
 });

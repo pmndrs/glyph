@@ -2,9 +2,9 @@ import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'rea
 
 import type { FontDelivery, GraphicsBackend } from '../../benchmark/url-state';
 import { createLatestAsyncQueue, type LatestAsyncQueue } from './latest-async-queue';
-import type { MtsdfTextLiveStats, MtsdfTextPersistentScene } from '../../renderer/mtsdf-text';
+import type { MtsdfTextLiveStats, MtsdfTextPersistentScene } from '../../techniques/mtsdf/persistent-scene';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
-import type { SlugTextLiveStats, SlugTextPersistentScene } from '../../renderer/slug-text';
+import type { SlugTextLiveStats, SlugTextPersistentScene } from '../../techniques/slug/persistent-scene';
 import {
   benchmarkContentWidth,
   BENCHMARK_CONTENT_INSET,
@@ -16,11 +16,11 @@ import { BakeProgressOverlay, useBakeProgress } from './bake-progress-overlay';
 import type { LiveTextConfiguration, RetainedLiveTextUpdate } from './live-text-viewport-contracts';
 
 function loadMtsdfTextRenderer() {
-  return import('../../renderer/mtsdf-text');
+  return import('../../techniques/mtsdf/persistent-scene');
 }
 
 function loadSlugTextRenderer() {
-  return import('../../renderer/slug-text');
+  return import('../../techniques/slug/persistent-scene');
 }
 
 interface SdfTextViewportProps<TStats> {

@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     environment: 'node',
+    globalSetup: ['./vitest.global-setup.ts'],
     include: ['src/**/*.test.ts'],
   },
 });

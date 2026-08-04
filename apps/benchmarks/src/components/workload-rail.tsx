@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import type { AdvancedShapingFrame } from '../workloads/advanced-shaping';
+import type { AdvancedShapingFrame } from '../workloads/advanced-shaping/scene';
 import {
   ADVANCED_FONT_FIXTURES,
   BENCHMARK_FONT_LABELS,
@@ -24,7 +24,7 @@ import { TechniqueSwitcher } from './technique-switcher';
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 
 function importComparisonWorkload() {
-  return import('../workloads/comparison/scene');
+  return import('../surfaces/benchmark/scenes/comparison-workload');
 }
 
 function preloadComparisonWorkload(): ReturnType<typeof importComparisonWorkload> {

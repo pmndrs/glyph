@@ -1,8 +1,8 @@
 import { useEffect, useEffectEvent, useRef, type RefObject } from 'react';
 
-import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
-import type { MtsdfTextLiveStats } from '../renderer/mtsdf-text';
-import type { SlugTextLiveStats } from '../renderer/slug-text';
+import type { BitmapTextLiveStats } from '../techniques/bitmap/persistent-scene';
+import type { MtsdfTextLiveStats } from '../techniques/mtsdf/persistent-scene';
+import type { SlugTextLiveStats } from '../techniques/slug/persistent-scene';
 import {
   formatSparklineValue,
   sparklineCanvasMetrics,

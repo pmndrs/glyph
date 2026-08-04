@@ -144,12 +144,12 @@ Every package and subpath is native ESM. Optional engines and the runtime baker 
 
 Applications select a raster explicitly; the package never silently changes technique.
 
-| Need                                                            | Planned recommendation            |
-| --------------------------------------------------------------- | --------------------------------- |
-| General-purpose UI and scalable text                            | MSDF module using its MTSDF atlas |
-| Tiny text at known pixel sizes                                  | Generated bitmap strikes          |
-| Large text, extreme zoom, complex outlines, color vector layers | Slug                              |
-| Pixel-art or intentionally raster typography                    | Bitmap                            |
+| Need                                                    | V1 recommendation                 |
+| ------------------------------------------------------- | --------------------------------- |
+| General-purpose UI and scalable text                    | MSDF module using its MTSDF atlas |
+| Tiny text at known pixel sizes                          | Generated bitmap strikes          |
+| Large text, extreme zoom, intricate monochrome outlines | Slug                              |
+| Pixel-art or intentionally raster typography            | Bitmap                            |
 
 The [renderer capability matrix](docs/planning/renderer-capabilities.md) records supported content and effects, while the [implementation difficulty](docs/planning/implementation-difficulty.md) explains the correctness and performance effort behind their order. Windfoil remains research prior art rather than a planned backend.
 

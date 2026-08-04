@@ -6,7 +6,7 @@ status: stable
 tags: [benchmarks, corpus, shaping, typography]
 sources:
   - id: corpus
-    resource: ../../apps/benchmarks/src/workloads/benchmark-ipsum.ts
+    resource: ../../apps/benchmarks/src/workloads/benchmark-ipsum/scene.ts
     title: Executable benchmark ipsum corpus
   - id: benchmark-plan
     resource: benchmark-plan.md

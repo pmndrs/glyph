@@ -10,7 +10,7 @@ import {
   ADVANCED_SHAPING_CASES,
   advancedShapingFrames,
   type AdvancedShapingFontFixture,
-} from '../../../workloads/advanced-shaping';
+} from '../../../workloads/advanced-shaping/scene';
 import type { BenchmarkTarget } from '../../contracts';
 import { hashParagraphLayout, paragraphLayoutBytes } from '../../paragraph-layout-digest';
 

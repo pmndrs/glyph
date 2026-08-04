@@ -13,7 +13,7 @@ import {
   advancedShapingFrames,
   initialAdvancedShapingState,
   updateAdvancedShaping,
-} from './advanced-shaping';
+} from './advanced-shaping/scene';
 
 describe('Advanced Shaping workload timeline', () => {
   it('starts the live showcase on CJK without publishing an empty playing frame', () => {
@@ -42,6 +42,12 @@ describe('Advanced Shaping workload timeline', () => {
       textAlign: 'start',
       timelineTick: 1,
     });
+  });
+
+  it('preserves an explicitly selected compatible font fixture', () => {
+    const frame = advancedShapingFrame(initialAdvancedShapingState());
+
+    expect(advancedShapingLiveTextScene(frame, 'dot-gothic-16').fontFixture).toBe('dot-gothic-16');
   });
 
   it('completes one presentation cycle at the authored duration', () => {

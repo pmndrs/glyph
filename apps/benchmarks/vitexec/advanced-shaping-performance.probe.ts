@@ -1,4 +1,4 @@
-const advancedShapingPath = '/src/workloads/advanced-shaping.ts';
+const advancedShapingPath = '/src/workloads/advanced-shaping/scene.ts';
 const environmentPath = '/src/benchmark/environment.ts';
 const STEADY_STATE_REPORT_COUNT = 12;
 const [{ ADVANCED_SHAPING_CASES }, { environmentResource }] = await Promise.all([
@@ -35,11 +35,7 @@ for (const definition of ADVANCED_SHAPING_CASES) {
   }
   console.log('advanced-shaping-performance-settled', definition.id);
   const previousFrameCount = numericAttribute(viewport, 'data-frame-count');
-  await Promise.all([
-    waitForGreaterNumericAttribute(viewport, 'data-frame-count', previousFrameCount),
-    waitForAtLeastNumericAttribute(viewport, 'data-gpu-history-length', STEADY_STATE_REPORT_COUNT),
-    waitForAtLeastNumericAttribute(viewport, 'data-fps-history-length', STEADY_STATE_REPORT_COUNT),
-  ]);
+  await waitForTelemetryReports(viewport, previousFrameCount, STEADY_STATE_REPORT_COUNT);
   console.log('advanced-shaping-performance-sampled', definition.id);
   cases.push({
     id: definition.id,
@@ -154,14 +150,10 @@ function waitForGreaterNumericAttribute(element: HTMLElement, name: string, prev
   return observeUntil(element, find, { attributes: true, attributeFilter: [name] });
 }
 
-function waitForAtLeastNumericAttribute(element: HTMLElement, name: string, minimum: number): Promise<number> {
-  const find = (): number | undefined => {
-    const value = numericAttribute(element, name);
-    return value >= minimum ? value : undefined;
-  };
-  const current = find();
-  if (current !== undefined) return Promise.resolve(current);
-  return observeUntil(element, find, { attributes: true, attributeFilter: [name] });
+async function waitForTelemetryReports(element: HTMLElement, frameCount: number, count: number): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    frameCount = await waitForGreaterNumericAttribute(element, 'data-frame-count', frameCount);
+  }
 }
 
 function numericAttribute(element: HTMLElement, name: string): number {

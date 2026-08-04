@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { workloadsFor } from '../benchmark/workloads';
-import { COMPARISON_WORKLOAD_IDS } from './registry';
+import { COMPARISON_WORKLOAD_IDS } from './comparison/registry';
 import {
   BENCHMARK_WORKLOAD_IDS,
   BENCHMARK_WORKLOADS,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS } from '../workloads/advanced-shaping';
+import { ADVANCED_SHAPING_PRESENTATION_CYCLE_DURATION_MS } from '../workloads/advanced-shaping/scene';
 import {
   adjacentPresentationWorkload,
   PRESENTATION_SCENES,

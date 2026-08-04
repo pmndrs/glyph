@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BitmapTextLiveStats } from '../renderer/bitmap-text';
+import type { BitmapTextLiveStats } from '../techniques/bitmap/persistent-scene';
 import { captureLiveTextStats, snapshotCircularSeries } from './product-result';
 
 describe('live benchmark capture', () => {
