@@ -5,7 +5,7 @@ description: Proves the published raster and baker extension boundary with a pri
 resource: ../../packages/glyph-example-raster
 workspace_package: '@pmndrs/text-glyph-example-raster'
 documentation_type: reference
-source_digest: 'sha256:c84d1105482db3358c974f1c6bbefadc1510f9985021e004faaaa1525b9f2ef2'
+source_digest: 'sha256:1b25dd5a8c679e241da5d73402e42c3441087587efffc9a25799d69dc5f229a0'
 tags: [package, raster, extension-proof, threejs, tsl]
 sources:
   - id: manifest
@@ -28,7 +28,7 @@ sources:
     title: Dual-backend product rendering probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-04T12:55:07Z'
+  at: '2026-08-04T17:42:34Z'
 ---
 
 # Package reference: `@pmndrs/text-glyph-example-raster`
