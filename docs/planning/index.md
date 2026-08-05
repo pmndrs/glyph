@@ -6,6 +6,7 @@
 - [Runtime and bake API V0](api-shapes.md) — public and internal TypeScript contract fixture.
 - [Raster and baker plugin guide](raster-baker-plugin.md) — build an external technique through the public runtime, baker, artifact, discovery, and lifecycle contracts.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
+- [Renderer-agnostic core and engine integration boundary](engine-integration-boundary.md) — WIP plan separating portable text generation, raster techniques, GPU-authoring layers, and canvas/game-engine hosts.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 

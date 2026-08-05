@@ -1,23 +1,22 @@
-# pmndrs/text
+# @pmndrs/text
 
-Unicode-aware text for Three.js and React Three Fiber, with portable font baking and explicit Bitmap, MTSDF, and Slug
-renderers.
+Portable, Unicode-aware text for 3D and canvas rendering engines, with Three.js and React Three Fiber integrations today.
 
 > [!IMPORTANT]
-> `pmndrs/text` is in active development toward a public v1 API. The implementation is substantially complete and usable
+> `@pmndrs/text` is in active development toward a public v1 API. The implementation is substantially complete and usable
 > from this workspace, but the packages are still private and have not been published to npm.
 
-The engine shapes text once with HarfRust, lays it out as a paragraph, and renders the same positioned glyphs through the
-raster technique selected by the application. Font artifacts can be prepared ahead of time or generated in a Worker when a
-baked asset is unavailable.
+The public core loads fonts, shapes Unicode with HarfRust, lays out paragraphs, resolves paint, and exposes raster lifecycle
+contracts for renderer integrations. A Three.js implementation with React Three Fiber support is available today.
 
 - Native ESM for modern JavaScript runtimes.
-- Framework-neutral `THREE.Group` text objects and a thin React Three Fiber component.
+- Portable shaping, layout, paint, artifact, and raster-technique foundations.
 - Unicode 17 bidi, line breaking, grapheme segmentation, complex-script shaping, and horizontal CJK layout.
 - Bitmap strikes, MTSDF atlases, and analytic Slug outlines over one shaping and layout result.
 - Baked-first delivery with authenticated runtime fallback.
 - Retained glyph storage for warm text, layout, paint, font, and raster updates.
 - Public raster and baker contracts that third-party packages can implement without importing core internals.
+- A Three.js integration and thin React Three Fiber component.
 - WebGPU and WebGL2 product paths exercised by the benchmark and Presentation application.
 
 The [roadmap](docs/roadmap/roadmap.md) records exact milestone status. The v1 renderer and API milestone is closed in the
@@ -38,7 +37,9 @@ pnpm dev
 `pnpm dev` starts the benchmark and Presentation app. Mise is the easiest way to install the exact tool versions, but the
 same pnpm commands work when compatible versions are already installed.
 
-## Render text
+## Render text today
+
+The implemented rendering path targets Three.js directly or through React Three Fiber.
 
 ### React Three Fiber
 
@@ -74,7 +75,7 @@ await useFont.preload(uiFont);
 
 ### Three.js
 
-The core `Text` class owns a normal Three.js lifecycle. Its asynchronous generation becomes renderable through ordinary
+The Three.js `Text` class owns a normal engine lifecycle. Its asynchronous generation becomes renderable through ordinary
 matrix updates, and warm property changes retain the object while the replacement generation is prepared.
 
 ```ts
@@ -143,14 +144,17 @@ Use `pnpm bake --help` for CLI options. The Node API is available from `@pmndrs/
 
 ## How the pieces fit
 
-```text
-source font ──► font baker ──► authenticated core GLB ──► HarfRust shaping
-     │                                                            │
-     └────────► selected raster baker ──► raster GLB/pages         ▼
-                                                    paragraph layout
-                                                           │
-                                                           ▼
-                                             Three.js Text / React Text
+```mermaid
+flowchart LR
+  Font["Font source or baked GLB"] --> Load["defineFont<br/>FontLoader + FontRegistry"]
+  Load --> Shape["createRuntimeShaper"]
+  Shape --> Layout["createParagraphEngine<br/>ParagraphLayout"]
+  Load --> Raster["RasterRuntime<br/>RasterModule"]
+  Layout --> Stage["RasterBatchStage"]
+  Raster --> Stage
+  Stage --> Integration["Renderer integration"]
+  Integration --> Three["Three.js + R3F"]
+  Integration -.-> Other["Other engines"]
 ```
 
 The core artifact owns shaping data, font metrics, provenance, and the font-local glyph identity space. Raster artifacts own
@@ -160,6 +164,23 @@ independently without reshaping the paragraph for each renderer.
 Third-party raster implementations use the same public contracts as the built-in techniques. Start with the
 [raster and baker plugin guide](docs/planning/raster-baker-plugin.md); the private
 [`@pmndrs/text-glyph-example-raster`](packages/glyph-example-raster) package is the executable external-package proof.
+
+## Core and renderer integrations
+
+The public APIs below are available today; see the [API contract](docs/planning/api-shapes.md) for the complete surface.
+
+| API                                             | Role                                                                             |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| `defineFont`, `FontLoader`, `FontRegistry`      | Declare, authenticate, cache, and own font artifacts                             |
+| `createRuntimeShaper`, `createParagraphEngine`  | Produce synchronous measurements and positioned `ParagraphLayout` glyph data     |
+| `defineRaster`, `RasterRuntime`, `RasterModule` | Define, load, decode, prepare, and dispose a raster technique                    |
+| `RasterBatchStage`, `RasterDrawBatch`           | Stage complete renderer-owned batches, then commit or abort them transactionally |
+| `Text`, `@pmndrs/text/react`                    | Use the current Three.js and React Three Fiber integration                       |
+
+A new renderer consumes `ParagraphLayout`, implements the generic raster resource and batch types, and owns its transforms,
+GPU resources, ordering, publication, and device lifecycle. The [renderer-agnostic core plan](docs/planning/engine-integration-boundary.md)
+tracks the WIP generation boundary, and the [raster plugin guide](docs/planning/raster-baker-plugin.md) shows a working external
+technique.
 
 ## Repository commands
 
@@ -197,8 +218,9 @@ The README is the short path into the project. Deeper documentation is organized
 - **Look up:** use the [workspace package catalog](docs/packages/index.md),
   [renderer capability matrix](docs/planning/renderer-capabilities.md), and
   [`PMNDRS_font` extension schemas](docs/planning/extensions/index.md).
-- **Understand:** read the [architecture](docs/planning/architecture.md), [canonical roadmap](docs/roadmap/roadmap.md), and
-  [attributed research](RESEARCH.md).
+- **Understand:** read the [architecture](docs/planning/architecture.md),
+  [renderer-agnostic core plan](docs/planning/engine-integration-boundary.md), [canonical roadmap](docs/roadmap/roadmap.md),
+  and [attributed research](RESEARCH.md).
 
 The documentation under [`docs/`](docs/index.md) is also an Open Knowledge Format v0.2 bundle with package-source freshness
 checks, provenance, and progressive-disclosure indexes.
@@ -206,7 +228,6 @@ checks, provenance, and progressive-disclosure indexes.
 ## Current scope
 
 The workspace already implements the v1 shaping, horizontal paragraph, delivery, Three.js/React, and three-raster foundation.
-The roadmap keeps post-v1 work explicit: editorial flow regions, mixed-font fallback, large-coverage CJK raster paging, color
-emoji, expanded effects, and vertical writing.
+The renderer-agnostic core and additional engine integrations remain WIP alongside the roadmap's later layout and raster work.
 
-`pmndrs/text` is MIT licensed. Contributions are welcome while the public v1 surface is being stabilized.
+`@pmndrs/text` is MIT licensed. Contributions are welcome while the public v1 surface is being stabilized.
