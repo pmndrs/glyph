@@ -52,7 +52,7 @@ FontLoader
 
 ```ts
 import * as THREE from 'three/webgpu';
-import type { FontSelection, TextInput, TextLiteral } from '@pmndrs/text';
+import type { FontSelection, FormattedText, TextInput } from '@pmndrs/text';
 
 interface FontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
@@ -126,7 +126,7 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
 }
 
 export { txt, span } from '@pmndrs/text';
-export type { GlyphBufferCapacity } from '@pmndrs/text';
+export type { FormattedText, GlyphBufferCapacity, SpanFormat, SpanStyle, SpanTag, UnboundSpanTag } from '@pmndrs/text';
 ```
 
 `TextGroup.updateMode` controls the hidden core update for every `Text` bound to that group. `Text.updateMode` applies only
@@ -432,7 +432,7 @@ type TextContentProperties<Technique extends AnyRasterTechnique> =
       spans?: readonly TextSpan<Technique>[];
     }>
   | Readonly<{
-      text: TextLiteral<Technique>;
+      text: FormattedText<Technique>;
       spans?: never;
     }>;
 
@@ -447,7 +447,7 @@ type TextUpdate<Technique extends AnyRasterTechnique> =
       }>)
   | (Partial<TextBaseProperties<Technique>> &
       Readonly<{
-        text: TextLiteral<Technique>;
+        text: FormattedText<Technique>;
         spans?: never;
       }>);
 
@@ -472,17 +472,20 @@ The Three entry point re-exports core's renderer-neutral `txt` and `span` tags. 
 ```ts
 import { Text, span, txt } from '@pmndrs/text/three';
 
+const emphasis = span(noto, { color: '#ffddff' });
+
 const label = new Text({
   font: uiFont,
-  text: txt`Fast ${span({ font: noto })`accurate`} text`,
+  text: txt`Fast ${emphasis`accurate`} text`,
 });
 
 label.text = 'Plain text';
-label.text = txt`Player ${span({ font: noto })`Two`}`;
+label.text = txt`Player ${span(noto)`Two`}`;
 ```
 
-`txt` returns one immutable typed literal containing the flattened string and computed UTF-16 spans. `span(properties)`
-returns a typed fragment tag; TypeScript validates its font, style, paint, property names, and technique. Assignment of a
+`txt` returns one immutable typed literal containing the flattened string and computed UTF-16 spans. `span()` accepts a
+style by itself, or a `Font` / `FontStack` followed by styles and same-technique font overrides, merging left to right into
+a reusable typed tag. TypeScript validates fonts, style and paint fields, property names, and technique. Assignment of a
 plain string clears spans, while assignment of a literal replaces text and spans atomically. Explicit `spans`, `setSpan()`,
 and `removeSpan()` remain the lower-level imperative form.
 
@@ -628,5 +631,6 @@ The implementation is not complete until tests prove:
 - asynchronous mode renders the last complete revision and treats stale work as a resolved superseded outcome;
 - a same-technique `FontStack` produces the core-authored minimum physical batches and exact ordered submissions;
 - mixed-technique group additions and font stacks fail before shaping without replacing live text;
+- font-bound, font-stack-bound, style-only, reusable-tag, and readonly-tuple `span()` forms normalize identically, while mixed-technique format lists fail;
 - `txt`/`span`, explicit spans, and nested React `<Text>` produce the same UTF-16 source/span snapshot;
 - WebGPU and forced WebGL2 execute the same Bitmap, MTSDF, and Slug behavior on Three.js 0.185.1.

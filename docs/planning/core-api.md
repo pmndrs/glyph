@@ -294,7 +294,7 @@ type ParagraphContentProperties<Technique extends AnyRasterTechnique> =
       spans?: readonly ParagraphSpan<Technique>[];
     }>
   | Readonly<{
-      text: TextLiteral<Technique>;
+      text: FormattedText<Technique>;
       spans?: never;
     }>;
 
@@ -309,7 +309,9 @@ interface ParagraphSpan<Technique extends AnyRasterTechnique> {
   readonly paint?: GlyphPaintInput;
 }
 
-type TextInput<Technique extends AnyRasterTechnique> = string | TextLiteral<Technique>;
+type FormattedText<Technique extends AnyRasterTechnique> = TextLiteral<Technique> | TextLiteral<never>;
+
+type TextInput<Technique extends AnyRasterTechnique> = string | FormattedText<Technique>;
 
 declare const textLiteralTechnique: unique symbol;
 
@@ -332,16 +334,36 @@ type TextTemplateValue<Technique extends AnyRasterTechnique> =
   | string
   | number
   | TextLiteral<Technique>
-  | TextSpanFragment<Technique>;
+  | TextLiteral<never>
+  | TextSpanFragment<Technique>
+  | TextSpanFragment<never>;
+
+type SpanStyle = Readonly<ParagraphStyle & GlyphPaintInput>;
+
+type SpanFormat<Technique extends AnyRasterTechnique> = FontSelection<Technique> | SpanStyle;
+
+interface SpanTag<Technique extends AnyRasterTechnique> {
+  (strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Technique>[]): TextSpanFragment<Technique>;
+}
+
+interface UnboundSpanTag {
+  <Technique extends AnyRasterTechnique = never>(
+    strings: TemplateStringsArray,
+    ...values: readonly TextTemplateValue<Technique>[]
+  ): TextSpanFragment<Technique>;
+}
 
 declare function txt<Technique extends AnyRasterTechnique = never>(
   strings: TemplateStringsArray,
   ...values: readonly TextTemplateValue<Technique>[]
 ): TextLiteral<Technique>;
 
-declare function span<Technique extends AnyRasterTechnique = never>(
-  properties: Omit<ParagraphSpan<Technique>, 'start' | 'end'>,
-): (strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Technique>[]) => TextSpanFragment<Technique>;
+declare function span(...styles: readonly [SpanStyle, ...SpanStyle[]]): UnboundSpanTag;
+
+declare function span<Technique extends AnyRasterTechnique>(
+  font: FontSelection<Technique>,
+  ...formats: readonly SpanFormat<NoInfer<Technique>>[]
+): SpanTag<Technique>;
 ```
 
 The paragraph font and every explicit span font must match the paragraph batch technique. A span without `font` inherits
@@ -349,15 +371,41 @@ the paragraph selection. A `FontStack` resolves missing glyphs in its own stored
 paragraph's shaping semantics.
 
 The renderer-neutral `txt` and `span` tags compose the same string-plus-range representation without parsing an embedded
-markup language. Literal chunks remain exact text; typed span fragments carry font, style, and paint values. TypeScript
-rejects unknown properties, invalid value types, and mixed techniques. Core computes UTF-16 ranges and offsets nested
-fragments.
+markup language. `span()` accepts a `SpanStyle` by itself, or a concrete `Font` / `FontStack` followed by any number of
+same-technique font selections and styles. A style-only tag inherits the surrounding paragraph or span font. A `SpanStyle`
+flattens paragraph style and glyph paint for concise authoring; the helper normalizes it back into the canonical nested
+`ParagraphSpan.style` and `ParagraphSpan.paint` snapshot.
+
+A fragment or literal containing no font-bearing value carries `never` as its technique marker and is explicitly accepted
+by `TextTemplateValue<Technique>` and `FormattedText<Technique>`. The first font-bearing fragment fixes the literal
+technique; until then the composition remains neutral and inherits its eventual paragraph font.
+
+Formats merge from left to right. When a font is supplied it is the first argument, allowing that selection to fix the
+technique; a later same-technique font replaces it. Later style fields replace earlier fields. Nested values such as
+`features`, `outline`, and `shadow` replace as complete values; the helper does not deep-merge them. `NoInfer` makes
+TypeScript reject mixed-technique later fonts in addition to unknown properties and invalid value types. Core snapshots
+the formats when `span()` is called, then computes UTF-16 ranges and offsets for nested fragments.
 
 ```ts
-const title = txt`Fast ${span({ font: amiri })`accurate`} text`;
+const importantStyle = {
+  color: '#ffddff',
+  fontSize: 18,
+} satisfies SpanStyle;
+
+const important = span(amiri, importantStyle);
+
+const title = txt`Fast ${important`accurate`} text`;
 
 label.text = title;
 label.text = 'Plain text'; // replaces the source and clears spans
+```
+
+The returned `SpanTag` is reusable. When format inputs must remain independently composable, keep them in a readonly tuple
+and bind them later:
+
+```ts
+const importantFormat = [amiri, importantStyle] as const;
+const importantAmiri = span(...importantFormat);
 ```
 
 Assigning a `TextLiteral` replaces text and spans atomically. Passing a formatted literal together with separate `spans`
