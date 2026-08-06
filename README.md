@@ -71,10 +71,10 @@ const labels = new TextGroup({
 scene.add(labels);
 ```
 
-Allocate from the batch:
+Create retained `Text` objects, then add them through the ordinary Three scene graph:
 
 ```ts
-const body = labels.allocate({
+const body = new Text({
   font: bodyFont,
   text: 'This paragraph uses Noto when Inter is missing a glyph.',
   contentBox: {
@@ -82,18 +82,16 @@ const body = labels.allocate({
     wrap: 'word',
   },
 });
-```
-
-Or add a retained `Text` through the ordinary Three scene graph:
-
-```ts
 const score = new Text({ font: inter, text: 'Player 1' });
 
-labels.add(score);
+labels.add(body, score);
 
 score.position.set(0, 2, 0);
 score.rotation.y = Math.PI / 4;
 ```
+
+`TextGroup` adds no second allocation API. `add()` binds a `Text` to the batch; `remove()` unbinds it without disposing the
+retained object. Internal glyph slots are created later, when Three synchronizes the group for rendering.
 
 Compose typed spans without managing UTF-16 ranges by hand:
 

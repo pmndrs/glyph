@@ -92,9 +92,7 @@ declare class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Obje
   readonly disposed: boolean;
   updateMode: 'sync' | 'async';
 
-  allocate(properties: TextProperties<Technique>): Text<Technique>;
   add<const Children extends readonly THREE.Object3D[]>(...children: CompatibleTextChildren<Technique, Children>): this;
-  has(text: Text<AnyRasterTechnique>): boolean;
   dispose(): void;
 }
 
@@ -255,22 +253,7 @@ to the first renderer that draws it. Rendering it through a different renderer f
 `TextGroup` so attributes, materials, upload ranges, fences, and retirement remain renderer-owned. Standalone implicit
 batches follow the same rule.
 
-## Allocate or add text
-
-Allocate and attach in one call:
-
-```ts
-const body = worldText.allocate({
-  font: uiFont,
-  text: 'This paragraph carries its own missing-glyph behavior.',
-  contentBox: {
-    width: { mode: 'at-most', size: 480 },
-    wrap: 'word',
-  },
-});
-```
-
-Or create the transform-bearing object first and add it through the ordinary Three.js scene graph:
+## Add and remove text through the scene graph
 
 ```ts
 import { Text } from '@pmndrs/text/three';
@@ -287,8 +270,10 @@ label.rotation.y = Math.PI / 4;
 label.scale.setScalar(2);
 ```
 
-`allocate()` returns the same public `Text` type as `new Text()`. It is a convenience for immediate group binding, not a
-second text lifecycle.
+There is no `TextGroup.allocate()` shortcut. Construction creates one retained, late-bound `Text`; inherited
+`Object3D.add()` and `Object3D.remove()` are the only membership operations. Adding binds the object to the batch before
+the next synchronization. Removing releases its internal paragraph membership without disposing the public object, so it
+can be added elsewhere.
 
 A `Text` joins its nearest `TextGroup` ancestor. Ordinary `Object3D` containers may appear between them. A nested
 `TextGroup` stops membership discovery:
@@ -345,10 +330,9 @@ hudText.add(score);
 renderer.render(scene, camera); // shapes and renders only "3"
 ```
 
-Membership is resolved before the first shaping call. `TextGroup.allocate()` binds immediately. `Object3D` `added`,
-`removed`, `childadded`, and `childremoved` events mark scene membership dirty synchronously. Because those events do not
-bubble through every arbitrary ancestor change, `Text` and `TextGroup` perform a final ancestry reconciliation at the start
-of `updateMatrixWorld()`.
+Membership is resolved before the first shaping call. `Object3D` `added`, `removed`, `childadded`, and `childremoved`
+events mark scene membership dirty synchronously. Because those events do not bubble through every arbitrary ancestor
+change, `Text` and `TextGroup` perform a final ancestry reconciliation at the start of `updateMatrixWorld()`.
 
 The required order is:
 
@@ -633,7 +617,7 @@ The implementation is not complete until tests prove:
 
 - an unattached `Text` performs no shaping or GPU allocation;
 - direct `scene.add(text)` renders through an implicit batch of one on its first render;
-- `group.allocate()` and `group.add(new Text())` produce the same retained lifecycle;
+- `TextGroup` exposes no duplicate creation or allocation shortcut; `new Text()` plus ordinary `add()` is the only explicit-group path;
 - direct and nested descendants join the nearest `TextGroup`, while nested `TextGroup` boundaries do not merge;
 - add/remove/reparent events plus pre-render ancestry reconciliation cannot leave stale or duplicate membership;
 - moving a `Text` performs an atomic old allocation removal and new allocation creation without ghost glyphs;
