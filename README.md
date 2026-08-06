@@ -1,21 +1,32 @@
 # @pmndrs/text
 
-Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for Three.js or your own engine.
+Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
+
+## Render text with React Three Fiber
+
+```tsx
+import { Text, TextGroup, useFont } from '@pmndrs/text/react';
+import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+
+function Labels() {
+  const inter = useFont({
+    input: { baked: '/fonts/Inter.font.glb' },
+    raster: { technique: mtsdf },
+  });
+
+  return (
+    <TextGroup fonts={[inter]}>
+      <Text font={inter}>Hello, world!</Text>
+    </TextGroup>
+  );
+}
+```
 
 ## Render text with Three.js
 
 ```ts
-import * as THREE from 'three/webgpu';
-import { FontLoader, Text } from '@pmndrs/text/three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
-
-const renderer = new THREE.WebGPURenderer({ antialias: true });
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
-
-camera.position.z = 5;
-renderer.setSize(innerWidth, innerHeight);
-document.body.append(renderer.domElement);
 
 const loader = new FontLoader();
 const inter = await loader.loadAsync({
@@ -23,21 +34,14 @@ const inter = await loader.loadAsync({
   raster: { technique: mtsdf },
 });
 
-const hello = new Text({
-  font: inter,
-  text: 'Hello, world!',
-});
+const labels = new TextGroup({ fonts: [inter] });
+labels.add(new Text({ font: inter, text: 'Hello, world!' }));
 
-hello.position.set(-2, 1, 0);
-scene.add(hello);
-
-renderer.setAnimationLoop(() => {
-  renderer.render(scene, camera);
-});
+scene.add(labels);
 ```
 
-A `Text` added without a `TextGroup` is an implicit batch of one. Three.js owns its shaping and buffer updates inside the
-normal render lifecycle. The application loads fonts explicitly, then uses ordinary Three objects and transforms.
+Both integrations load fonts explicitly and add one same-technique text batch to the scene. Three.js owns shaping and
+buffer synchronization inside its normal render lifecycle.
 
 ## Batch text with `TextGroup`
 
