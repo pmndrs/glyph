@@ -244,7 +244,8 @@ expect(currentParagraph(current).text).toBe('B');
 - Sort paragraphs by finite application order and stable insertion order.
 - Resolve every glyph to one same-technique font resource.
 - Allocate stable instance slots by technique/resource/pipeline variant/chunk.
-- Support grow, chunk, and error overflow policies.
+- Treat capacity as glyph-instance slots per physical resource buffer; paragraph handles have no capacity limit.
+- Default explicit batches to lazy 4,096-glyph chunks and support explicit `size` plus `grow`, `chunk`, or `error` policy.
 - Pack technique-specific instance attributes once.
 - Compute coalesced dirty ranges per storage channel.
 - Emit a submission list that preserves paragraph and technique compositing order across resource changes.

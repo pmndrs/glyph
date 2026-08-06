@@ -87,7 +87,7 @@ declare class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Obje
   constructor(options: TextGroupOptions<Technique>);
 
   readonly technique: Technique;
-  readonly capacity: TextBatchCapacity;
+  readonly capacity: GlyphBufferCapacity;
   readonly textCount: number;
   readonly disposed: boolean;
   updateMode: 'sync' | 'async';
@@ -128,6 +128,7 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
 }
 
 export { txt, span } from '@pmndrs/text';
+export type { GlyphBufferCapacity } from '@pmndrs/text';
 ```
 
 `TextGroup.updateMode` controls the hidden core update for every `Text` bound to that group. `Text.updateMode` applies only
@@ -177,11 +178,6 @@ import { TextGroup } from '@pmndrs/text/three';
 
 const worldText = new TextGroup({
   technique: mtsdf,
-  capacity: {
-    texts: 1_000,
-    glyphs: 20_000,
-    overflow: 'chunk',
-  },
 });
 
 scene.add(worldText);
@@ -190,16 +186,33 @@ scene.add(worldText);
 ```ts
 interface TextGroupOptions<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
-  readonly capacity?: TextBatchCapacity;
+  readonly capacity?: GlyphBufferCapacity;
   readonly renderOrder?: number;
 }
 
-interface TextBatchCapacity {
-  readonly texts?: number;
-  readonly glyphs?: number;
-  readonly overflow?: 'grow' | 'chunk' | 'error';
+interface GlyphBufferCapacity {
+  readonly size: number;
+  readonly policy: 'grow' | 'chunk' | 'error';
 }
 ```
+
+### Use the default or preallocate explicitly
+
+An explicit `TextGroup` defaults to `{ size: 4_096, policy: 'chunk' }`. Storage is allocated lazily for each physical
+font-resource buffer, so an empty group allocates no glyph arrays or GPU buffer. Text objects and their metadata are not
+capacity-limited.
+
+```ts
+const denseText = new TextGroup({
+  technique: mtsdf,
+  capacity: { size: 20_000, policy: 'chunk' },
+});
+```
+
+`size` counts glyph-instance slots per physical buffer, not texts and not total glyphs across the `TextGroup`. `chunk`
+allocates another buffer without replacing published storage, `grow` transactionally replaces the full buffer with a
+buffer whose capacity doubles until the pending glyphs fit, and `error` makes `size` a hard per-buffer limit. The readonly
+`capacity` property exposes the normalized explicit or default value.
 
 A `TextGroup` is one author-declared text render phase and one hidden core paragraph batch. Its technique fixes the
 canonical instance layout, target implementation, and shader family before any text is attached. Every `Text` owns its
@@ -302,7 +315,7 @@ scene.add(title);
 ```ts
 type StandaloneTextProperties<Technique extends AnyRasterTechnique> = TextProperties<Technique> &
   Readonly<{
-    capacity?: Omit<TextBatchCapacity, 'texts'>;
+    capacity?: GlyphBufferCapacity;
   }>;
 ```
 
@@ -312,9 +325,9 @@ allocation, validates its font selection against the explicit group technique, a
 Removing it from the group recreates its implicit batch. The public `Text`, transform, desired properties, and glyph
 overrides remain the same object.
 
-The standalone `capacity` value configures only that implicit batch. While the object is inside a `TextGroup`, the parent
-group's technique, capacity, overflow, and update policy are authoritative; the `Text` always retains its own font
-selection.
+The standalone `capacity` value configures only that implicit batch and defaults to `{ size: 256, policy: 'grow' }` to
+avoid reserving a full explicit-group chunk for every isolated label. While the object is inside a `TextGroup`, the parent
+group's technique, capacity policy, and update policy are authoritative; the `Text` always retains its own font selection.
 
 ## Bind late; render on the first frame
 
@@ -523,7 +536,7 @@ These values define compatibility and have no setters:
 ```ts
 new TextGroup({
   technique, // canonical instance layout, target, and shader family
-  capacity, // initial allocation and overflow policy
+  capacity, // physical glyph-buffer size and overflow policy
 });
 ```
 

@@ -66,11 +66,6 @@ const bodyFont = createFontStack(inter, noto);
 
 const labels = new TextGroup({
   technique: mtsdf,
-  capacity: {
-    texts: 1_000,
-    glyphs: 20_000,
-    overflow: 'chunk',
-  },
 });
 
 scene.add(labels);
@@ -126,6 +121,25 @@ renderer.render(scene, camera); // shapes only "Player 2"
 One `TextGroup` is one intentional text render phase. Create separate groups for separate scenes, renderer lifetimes, or
 places where non-text draws must appear between text draws. Every `Text` owns its `Font` or `FontStack`; every effective
 font must use the group's rendering technique.
+
+## Preallocate glyph buffers when it matters
+
+Capacity is optional. An explicit `TextGroup` defaults to lazy 4,096-glyph chunks, so ordinary applications do not need to
+size batches up front. Paragraph handles and their metadata are not capacity-limited.
+
+Set capacity when a workload has a known upper bound or needs a different overflow policy:
+
+```ts
+const denseLabels = new TextGroup({
+  technique: mtsdf,
+  capacity: { size: 20_000, policy: 'chunk' },
+});
+```
+
+`size` is the number of glyph-instance slots in each physical font-resource buffer, not the total glyph count of the
+logical `TextGroup`. `chunk` preserves existing buffers and allocates another when one fills. `grow` replaces a full buffer
+and doubles its capacity until the pending glyphs fit, while `error` turns `size` into a hard limit. Core preserves
+paragraph order when text crosses physical buffers.
 
 ## Control batch render order
 
@@ -200,7 +214,6 @@ const uiFont = createFontStack(inter, noto);
 
 const paragraphs = runtime.createParagraphBatch({
   technique: mtsdf,
-  capacity: { paragraphs: 1_000, glyphs: 20_000, overflow: 'chunk' },
 });
 
 const label = paragraphs.add({

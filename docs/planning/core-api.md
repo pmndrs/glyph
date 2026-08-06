@@ -192,26 +192,18 @@ A paragraph batch contains paragraphs that the application permits core to order
 ```ts
 const worldText = runtime.createParagraphBatch({
   technique: mtsdf,
-  capacity: {
-    paragraphs: 1_000,
-    glyphs: 20_000,
-    overflow: 'chunk',
-  },
 });
 ```
 
 ```ts
 interface ParagraphBatchOptions<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
-  readonly capacity?: Readonly<{
-    readonly paragraphs?: number;
-    readonly glyphs?: number;
-    readonly resources?: readonly Readonly<{
-      readonly font: LoadedFont<Technique>;
-      readonly glyphs: number;
-    }>[];
-    readonly overflow?: 'grow' | 'chunk' | 'error';
-  }>;
+  readonly capacity?: GlyphBufferCapacity;
+}
+
+interface GlyphBufferCapacity {
+  readonly size: number;
+  readonly policy: 'grow' | 'chunk' | 'error';
 }
 
 interface ParagraphBatch<Technique extends AnyRasterTechnique> {
@@ -228,12 +220,30 @@ interface ParagraphBatch<Technique extends AnyRasterTechnique> {
 }
 ```
 
+### Use the default or preallocate explicitly
+
+Omitting `capacity` uses `{ size: 4_096, policy: 'chunk' }`. Core allocates storage lazily when the first glyph resolves to
+a physical font resource. Paragraph handles and paragraph metadata grow normally; only glyph-instance storage has a
+capacity policy.
+
+```ts
+const denseText = runtime.createParagraphBatch({
+  technique: mtsdf,
+  capacity: { size: 20_000, policy: 'chunk' },
+});
+```
+
+`size` applies independently to every physical technique/resource buffer produced beneath the logical paragraph batch. It
+is not a total glyph limit for the paragraph batch. Under `chunk`, core preserves existing storage and allocates another
+`size`-slot buffer when one fills. Under `grow`, core transactionally replaces a full buffer and doubles its capacity until
+the pending glyphs fit. Under `error`, exceeding `size` fails preparation and preserves the last published revision.
+Ordered submissions make cross-buffer paragraph and fallback-font order explicit.
+
 Create another paragraph batch when text must be rendered in another phase, even if it uses the same technique.
 
 ```ts
 const overlayText = runtime.createParagraphBatch({
   technique: mtsdf,
-  capacity: { paragraphs: 100, glyphs: 2_000, overflow: 'grow' },
 });
 ```
 
