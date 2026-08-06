@@ -205,9 +205,14 @@ interface GlyphRange {
 }
 ```
 
-One key represents compatible GPU storage, not necessarily one submit. Capacity overflow creates another `chunk` instead
-of reallocating an existing fixed chunk. Grow mode may replace storage with a larger capacity. Error mode preserves the
-prior revision and reports capacity failure.
+One key represents compatible GPU storage, not necessarily one submit. Public capacity has only two settings: glyph-slot
+`size` per physical resource buffer and `policy`. Explicit paragraph batches default to lazily allocated
+`{ size: 4_096, policy: 'chunk' }`; standalone Three.js text defaults to `{ size: 256, policy: 'grow' }`. Paragraph handles
+and metadata have no capacity limit.
+
+Chunk overflow creates another fixed-size `chunk` instead of reallocating existing published storage. Grow mode
+transactionally replaces a full buffer and doubles its capacity until the pending glyphs fit. Error mode treats `size` as
+a hard per-buffer limit, preserves the prior revision, and reports capacity failure.
 
 Different techniques can never appear in one `PreparedParagraphBatchRevision`. Different font resources normally produce
 different `GlyphBatchKey` values even when they use the same technique. A technique may opt two fonts into one key only if
