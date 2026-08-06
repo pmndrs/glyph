@@ -1,7 +1,7 @@
 ---
 type: Implementation Plan
 title: Renderer-neutral core and engine integration
-description: Implementation and proof plan for same-technique fallback groups, explicit paragraph render phases, synchronized updates, core-owned glyph batching, and thin engine targets.
+description: Implementation and proof plan for technique-declared paragraph batches, ordered font stacks, synchronized updates, core-owned glyph batching, and thin engine targets.
 documentation_type: explanation
 tags: [planning, api, shaping, batching, threejs, typegpu, wayfare]
 status: draft
@@ -43,7 +43,7 @@ Replace the current one-Three-object/one-paragraph ownership model with this pip
 
 ```ts
 LoadedFont[]
-  -> FontGroup                    // fallback fonts, one technique
+  -> Font | FontStack            // one logical font selection
   -> ParagraphBatch[]            // application-declared render phases
   -> Paragraph handles           // desired-state mutation
   -> TextRuntime.update*()       // one synchronization point
@@ -61,8 +61,8 @@ integration boundary. This document owns implementation order and proof.
 const Invariants = {
   explicitBakeAndLoad: true,
   everyTextUnitIsAParagraph: true,
-  fallbackMayUseMultipleFonts: true,
-  oneFontGroupUsesOneTechnique: true,
+  fontStackMayResolveThroughMultipleFonts: true,
+  paragraphBatchDeclaresOneTechnique: true,
   oneParagraphBatchIsOneIntentionalRenderPhase: true,
   oneParagraphBatchMayProduceManyGlyphBatchesAndSubmissions: true,
   paragraphHandlesOwnDesiredStateMutation: true,
@@ -82,7 +82,7 @@ const Rejected = {
   labelsOrIconsAsDifferentTextKinds: true,
   runtimeWideSyncOrWorkerMode: true,
   editCallbackPassedToUpdate: true,
-  fontGroupContainingSeveralTechniques: true,
+  fontStackContainingSeveralTechniques: true,
   logicalMixedTechniqueBatchRepartitionedByEveryRenderer: true,
   rendererOwnedGlyphSortingAndBatching: true,
   targetOwnedCanonicalGlyphStorage: true,
@@ -104,15 +104,13 @@ runtime.update();
 
 Both paragraphs shape at one synchronization point even when they belong to different paragraph render phases.
 
-### `FontGroup`
+### `FontStack`
 
-Defines the fonts that may participate in one paragraph and their fallback order. Every font must use the same technique.
+Defines one immutable logical font selection. Its first concrete font is primary and later fonts resolve missing glyphs in
+order. Every concrete font must use the same technique. A single `LoadedFont` already satisfies the same selection contract.
 
 ```ts
-const fonts = runtime.createFontGroup({
-  fonts: [interMtsdf, notoMtsdf, amiriMtsdf],
-  fallback: [interMtsdf, notoMtsdf, amiriMtsdf],
-});
+const uiFont = createFontStack(interMtsdf, notoMtsdf, amiriMtsdf);
 ```
 
 Different font resources may still require different glyph buffers and submits. Core produces those divisions.
@@ -122,7 +120,7 @@ Different font resources may still require different glyph buffers and submits. 
 Declares where the application permits core to order and submit text together. It is not a promise of one draw.
 
 ```ts
-const worldText = runtime.createParagraphBatch({ fonts });
+const worldText = runtime.createParagraphBatch({ technique: mtsdf });
 const overlayText = runtime.createParagraphBatch({ fonts });
 ```
 
@@ -158,9 +156,9 @@ for (const submission of revision.submissions) draw(submission);
 | Baking              | reduced font data, glyph records, technique artifacts, deterministic packaging                                      |
 | Loading             | validation, decoding, registered font and technique identity                                                        |
 | Text runtime        | dirty aggregation, sync/async scheduling, shaping calls, supersession, atomic publication                           |
-| Font group          | same-technique membership, primary/fallback eligibility and order                                                   |
-| Paragraph batch     | application-declared render phase, capacity policy, paragraph order domain                                          |
-| Paragraph           | desired source, spans, content box, style, paint, order, glyph-origin overrides                                     |
+| Font stack          | one immutable ordered missing-glyph policy over same-technique concrete fonts                                       |
+| Paragraph batch     | declared technique, application render phase, capacity policy, paragraph order domain                               |
+| Paragraph           | font selection, desired source, spans, content box, style, paint, order, glyph-origin overrides                     |
 | Core batch compiler | fallback runs, layout, resource partitioning, stable slots, overflow chunks, canonical CPU instances, dirty ranges  |
 | Technique           | instance schema, resource compatibility, instance writing, shader/data meaning                                      |
 | Engine target       | engine buffers, dirty-range synchronization, transforms, visibility, pass placement, upload, submission, retirement |
@@ -201,18 +199,20 @@ runtime.update();
 expect(shapeInputs).toEqual(['C']);
 ```
 
-### 2. Implement same-technique font groups
+### 2. Implement fonts and same-technique font stacks
 
-- Derive the group technique from its first loaded font.
-- Reject empty groups, duplicate logical membership where ambiguous, and any different technique identity.
-- Preserve explicit fallback order and validate primary/span fonts against membership.
+- Keep a single loaded font valid anywhere text accepts a font selection.
+- Create immutable non-empty stacks whose first font is primary and later fonts resolve missing glyphs in order.
+- Reject duplicate logical membership where ambiguous and any different technique identity.
+- Require every paragraph to own a font selection and validate it against its batch's declared technique.
+- Reuse the renderer-neutral `txt` and `span` composer for imperative literals and React nested-text flattening.
 - Pass all changed paragraphs through Unicode analysis and batched shaping with font-slot identity intact.
 - Prove missing glyph fallback across at least Latin, Arabic, and CJK cases.
 
 Proof:
 
 ```ts
-expect(() => runtime.createFontGroup({ fonts: [interMtsdf, iconBitmap] })).toThrow('mixed-technique-font-group');
+expect(() => createFontStack(interMtsdf, iconBitmap)).toThrow('mixed-technique-font-stack');
 ```
 
 ### 3. Implement runtime synchronization
@@ -274,8 +274,9 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
   paragraph batch, paragraph handle, prepared revision, or target adapter to ordinary Three users.
 - Make the Three `FontLoader` lazily initialize and cache the core shaper on its first load while preserving explicit
   callback/Promise loading and Three `LoadingManager` behavior.
-- Make each `TextGroup` one explicit scene render phase backed by one same-technique core font group, paragraph batch, and
-  renderer target. Make an ungrouped `Text` own an implicit batch of one.
+- Make each `TextGroup` declare one technique and own one explicit scene render phase backed by a core paragraph batch and
+  renderer target. Require every `Text` to carry a same-technique `Font` or `FontStack`. Make an ungrouped `Text` own an
+  implicit batch of one derived from that selection.
 - Keep `Text` unbound until allocation or scene attachment. Reconcile direct and nested scene membership before the first
   shaping call so resident text renders in the first observing frame.
 - Treat movement between batches as an atomic removal of the old paragraph allocation plus allocation of retained desired
@@ -303,7 +304,7 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 Build the smallest application in `AlexJWayne/typegpu-shader-canvas` that proves:
 
 - explicit baked artifact loading;
-- one same-technique font group with fallback;
+- one same-technique `FontStack` with ordered missing-glyph resolution;
 - more than one paragraph in one paragraph batch;
 - core-owned canonical instance storage and exact dirty ranges;
 - at least two physical font-resource batches and ordered submissions;
@@ -327,7 +328,7 @@ await proveRawTypeGpu();
 await proveWayfare();
 ```
 
-No test combines techniques inside one font group or paragraph batch. A technique-specific proof may use several fonts and
+No test combines techniques inside one font stack or paragraph batch. A technique-specific proof may use several fonts and
 must verify the minimum draw count and exact submission order implied by those resources.
 
 ## Performance evidence
@@ -359,8 +360,8 @@ callback-form asynchronous updates do not allocate a public Promise.
 
 - The README and exported declarations match the [core API](core-api.md).
 - One public paragraph-handle API covers multiline text, labels, and font-backed icons.
-- Same-technique fallback shapes one paragraph across multiple fonts exactly.
-- Mixed-technique font groups fail before paragraph creation.
+- A same-technique `FontStack` shapes one paragraph across multiple concrete fonts exactly.
+- Mixed-technique font stacks and paragraph additions fail before shaping.
 - Repeated handle writes coalesce before synchronization.
 - Sync and async calls alternate on one runtime without copying runtime state or font registrations.
 - No-op `update()` is allocation-free.

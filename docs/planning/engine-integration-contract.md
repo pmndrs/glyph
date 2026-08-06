@@ -399,7 +399,7 @@ interface EngineOwns {
 type CoreUpdateFailure =
   | 'invalid-paragraph-input'
   | 'font-outside-group'
-  | 'mixed-technique-font-group'
+  | 'mixed-technique-font-stack'
   | 'capacity-exceeded'
   | 'preparation-failed'
   | 'aborted'
