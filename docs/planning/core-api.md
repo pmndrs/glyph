@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: Core text API
-description: Canonical API and rationale for loading fonts, grouping same-technique fallbacks, editing paragraphs, synchronizing shaping, and producing renderer-ready glyph batches.
+description: Canonical API and rationale for loading fonts, composing ordered same-technique font stacks, editing paragraphs, synchronizing shaping, and producing renderer-ready glyph batches.
 documentation_type: reference
 tags: [api, fonts, shaping, paragraphs, batching, rendering, async]
 status: stable
@@ -43,7 +43,7 @@ This is the canonical public API and the authority for implementation.
 fontFile
   -> bakeFont()                    // optional build-time work
   -> runtime.loadFont()            // explicit asynchronous loading
-  -> runtime.createFontGroup()     // fallback fonts, exactly one technique
+  -> createFontStack()             // optional ordered missing-glyph resolution
   -> runtime.createParagraphBatch()// one intentional render phase
   -> paragraph.text = next         // cheap desired-state mutation
   -> runtime.update()              // synchronous synchronization point
@@ -65,8 +65,6 @@ interface TextRuntime {
     request: LoadedFontRequest<Technique>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<LoadedFont<Technique>>;
-
-  createFontGroup<Technique extends AnyRasterTechnique>(options: FontGroupOptions<Technique>): FontGroup<Technique>;
 
   createParagraphBatch<Technique extends AnyRasterTechnique>(
     options: ParagraphBatchOptions<Technique>,
@@ -121,7 +119,7 @@ Baking produces font metrics, glyph records, and technique resources before the 
 perform the same bake in a Worker, but loading remains explicit in either case.
 
 ```ts
-import { createTextRuntime } from '@pmndrs/text';
+import { createFontStack, createTextRuntime, span, txt } from '@pmndrs/text';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const runtime = await createTextRuntime({
@@ -148,47 +146,44 @@ interface LoadedFont<Technique extends AnyRasterTechnique> {
 `loadFont()` completes after shaping data and the selected technique data are decoded into renderer-neutral CPU state. It
 does not create textures, buffers, pipelines, materials, meshes, entities, or scene objects.
 
-## Group fallback fonts under one technique
+## Compose one logical font with fallback
 
-A font group is the complete set of fonts that may shape one paragraph. Its order defines fallback precedence.
+A `FontStack` is one immutable logical font choice. Its first concrete font is primary; later fonts resolve missing glyphs
+in order. A single loaded font already satisfies the same text-facing contract and needs no wrapper.
 
 ```ts
 const noto = await runtime.loadFont(notoMtsdfRequest);
 const amiri = await runtime.loadFont(amiriMtsdfRequest);
 const iconMtsdf = await runtime.loadFont(iconMtsdfRequest);
 
-const uiFonts = runtime.createFontGroup({
-  fonts: [inter, noto, amiri, iconMtsdf],
-  fallback: [inter, noto, amiri],
-});
+const uiFont = createFontStack(inter, noto, amiri);
+const iconFont = iconMtsdf;
 ```
 
 ```ts
-interface FontGroupOptions<Technique extends AnyRasterTechnique> {
-  readonly fonts: readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
-  readonly fallback?: readonly LoadedFont<Technique>[];
-}
+type FontSelection<Technique extends AnyRasterTechnique> = LoadedFont<Technique> | FontStack<Technique>;
 
-interface FontGroup<Technique extends AnyRasterTechnique> {
+interface FontStack<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
-  readonly fonts: readonly LoadedFont<Technique>[];
-  readonly fallback: readonly LoadedFont<Technique>[];
-  has(font: LoadedFont<Technique>): boolean;
+  readonly fonts: readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
 }
+
+declare function createFontStack<Technique extends AnyRasterTechnique>(
+  primary: LoadedFont<Technique>,
+  ...fallback: readonly LoadedFont<NoInfer<Technique>>[]
+): FontStack<Technique>;
 ```
 
-Every member must use the same technique. Different fonts may require different atlas, curve, or other GPU resources, so
-one font group does not promise one draw. It promises that one technique can render every resolved glyph.
+Every concrete font must use the same technique. TypeScript rejects a mixed stack through `NoInfer`; runtime validation
+provides the same guarantee to JavaScript and untrusted boundaries. The immutable stack owns no font lifecycle. A disposed
+member invalidates its use just as directly passing that disposed font would.
 
 ```ts
-runtime.createFontGroup({
-  fonts: [interMtsdf, iconBitmap],
-  // Throws: MTSDF and Bitmap are different techniques.
-});
+createFontStack(interMtsdf, iconBitmap); // compile-time error and runtime rejection
 ```
 
 A renderer that combines Bitmap and Slug data is a new technique with its own artifacts, instance schema, resource
-bindings, and shader. It is not a font group that mixes the existing Bitmap and Slug techniques.
+bindings, and shader. It is not a font stack that mixes the existing Bitmap and Slug techniques.
 
 ## Create an intentional paragraph batch
 
@@ -196,7 +191,7 @@ A paragraph batch contains paragraphs that the application permits core to order
 
 ```ts
 const worldText = runtime.createParagraphBatch({
-  fonts: uiFonts,
+  technique: mtsdf,
   capacity: {
     paragraphs: 1_000,
     glyphs: 20_000,
@@ -207,7 +202,7 @@ const worldText = runtime.createParagraphBatch({
 
 ```ts
 interface ParagraphBatchOptions<Technique extends AnyRasterTechnique> {
-  readonly fonts: FontGroup<Technique>;
+  readonly technique: Technique;
   readonly capacity?: Readonly<{
     readonly paragraphs?: number;
     readonly glyphs?: number;
@@ -221,7 +216,7 @@ interface ParagraphBatchOptions<Technique extends AnyRasterTechnique> {
 
 interface ParagraphBatch<Technique extends AnyRasterTechnique> {
   readonly runtime: TextRuntime;
-  readonly fonts: FontGroup<Technique>;
+  readonly technique: Technique;
   readonly current: PreparedParagraphBatchRevision<Technique>;
   readonly paragraphCount: number;
   readonly hasPendingChanges: boolean;
@@ -233,11 +228,11 @@ interface ParagraphBatch<Technique extends AnyRasterTechnique> {
 }
 ```
 
-Create another paragraph batch when text must be rendered in another phase, even if it uses the same font group.
+Create another paragraph batch when text must be rendered in another phase, even if it uses the same technique.
 
 ```ts
 const overlayText = runtime.createParagraphBatch({
-  fonts: uiFonts,
+  technique: mtsdf,
   capacity: { paragraphs: 100, glyphs: 2_000, overflow: 'grow' },
 });
 ```
@@ -252,8 +247,8 @@ icon use the same API.
 
 ```ts
 const body = worldText.add({
-  primaryFont: inter,
-  text: 'A paragraph can resolve glyphs through every font in its group.',
+  font: uiFont,
+  text: 'A paragraph resolves missing glyphs through its FontStack.',
   contentBox: {
     width: { mode: 'at-most', size: 480 },
     wrap: 'word',
@@ -261,41 +256,103 @@ const body = worldText.add({
 });
 
 const label = worldText.add({
-  primaryFont: inter,
+  font: inter,
   text: 'Player 1',
 });
 
 const icon = worldText.add({
-  primaryFont: iconMtsdf,
+  font: iconFont,
   text: '\uf013',
 });
 ```
 
-`iconMtsdf` must belong to `uiFonts`. A Bitmap icon cannot appear inline in an MTSDF paragraph batch. Supporting both
-resource types in one paragraph requires a technique expressly designed to render both.
+Every paragraph owns a concrete `Font` or `FontStack`. A Bitmap font cannot appear in an MTSDF paragraph batch. Supporting
+both resource types in one paragraph requires a technique expressly designed to render both.
 
 ```ts
-interface ParagraphProperties<Technique extends AnyRasterTechnique> {
-  readonly primaryFont: LoadedFont<Technique>;
-  readonly text: string;
-  readonly spans?: readonly ParagraphSpan<Technique>[];
+interface ParagraphBaseProperties<Technique extends AnyRasterTechnique> {
+  readonly font: FontSelection<Technique>;
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
   readonly order?: number;
 }
 
+type ParagraphContentProperties<Technique extends AnyRasterTechnique> =
+  | Readonly<{
+      text: string;
+      spans?: readonly ParagraphSpan<Technique>[];
+    }>
+  | Readonly<{
+      text: TextLiteral<Technique>;
+      spans?: never;
+    }>;
+
+type ParagraphProperties<Technique extends AnyRasterTechnique> = ParagraphBaseProperties<Technique> &
+  ParagraphContentProperties<Technique>;
+
 interface ParagraphSpan<Technique extends AnyRasterTechnique> {
   readonly start: number;
   readonly end: number;
-  readonly font?: LoadedFont<Technique>;
+  readonly font?: FontSelection<Technique>;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
 }
+
+type TextInput<Technique extends AnyRasterTechnique> = string | TextLiteral<Technique>;
+
+declare const textLiteralTechnique: unique symbol;
+
+interface TextLiteral<Technique extends AnyRasterTechnique> {
+  readonly [textLiteralTechnique]: (technique: Technique) => Technique;
+  readonly text: string;
+  readonly spans: readonly ParagraphSpan<Technique>[];
+}
+
+declare const textSpanFragmentTechnique: unique symbol;
+
+interface TextSpanFragment<Technique extends AnyRasterTechnique> {
+  readonly [textSpanFragmentTechnique]: (technique: Technique) => Technique;
+  readonly text: string;
+  readonly spans: readonly ParagraphSpan<Technique>[];
+  readonly properties: Omit<ParagraphSpan<Technique>, 'start' | 'end'>;
+}
+
+type TextTemplateValue<Technique extends AnyRasterTechnique> =
+  | string
+  | number
+  | TextLiteral<Technique>
+  | TextSpanFragment<Technique>;
+
+declare function txt<Technique extends AnyRasterTechnique = never>(
+  strings: TemplateStringsArray,
+  ...values: readonly TextTemplateValue<Technique>[]
+): TextLiteral<Technique>;
+
+declare function span<Technique extends AnyRasterTechnique = never>(
+  properties: Omit<ParagraphSpan<Technique>, 'start' | 'end'>,
+): (strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Technique>[]) => TextSpanFragment<Technique>;
 ```
 
-The primary font and every explicit span font must belong to the paragraph batch's font group. Missing glyphs resolve
-through that group's fallback order during shaping.
+The paragraph font and every explicit span font must match the paragraph batch technique. A span without `font` inherits
+the paragraph selection. A `FontStack` resolves missing glyphs in its own stored order; batch membership never changes a
+paragraph's shaping semantics.
+
+The renderer-neutral `txt` and `span` tags compose the same string-plus-range representation without parsing an embedded
+markup language. Literal chunks remain exact text; typed span fragments carry font, style, and paint values. TypeScript
+rejects unknown properties, invalid value types, and mixed techniques. Core computes UTF-16 ranges and offsets nested
+fragments.
+
+```ts
+const title = txt`Fast ${span({ font: amiri })`accurate`} text`;
+
+label.text = title;
+label.text = 'Plain text'; // replaces the source and clears spans
+```
+
+Assigning a `TextLiteral` replaces text and spans atomically. Passing a formatted literal together with separate `spans`
+is a type error. Manual `{ text: string, spans }`, `setSpan()`, and `removeSpan()` remain available when an integration
+already owns explicit UTF-16 ranges.
 
 ## Mutate handles; synchronize later
 
@@ -308,15 +365,16 @@ interface Paragraph<Technique extends AnyRasterTechnique> {
   readonly disposed: boolean;
   readonly committed: PreparedParagraph | undefined;
 
-  primaryFont: LoadedFont<Technique>;
-  text: string;
+  font: FontSelection<Technique>;
+  get text(): string;
+  set text(value: TextInput<Technique>);
   spans: readonly ParagraphSpan<Technique>[];
   contentBox: ParagraphContentBox;
   style: ParagraphStyle;
   paint: GlyphPaintInput;
   order: number;
 
-  set(properties: Partial<ParagraphProperties<Technique>>): void;
+  set(properties: ParagraphUpdate<Technique>): void;
   setSpan(index: number, span: ParagraphSpan<Technique>): void;
   removeSpan(index: number): void;
 
@@ -326,6 +384,18 @@ interface Paragraph<Technique extends AnyRasterTechnique> {
 
   dispose(): void;
 }
+
+type ParagraphUpdate<Technique extends AnyRasterTechnique> =
+  | (Partial<ParagraphBaseProperties<Technique>> &
+      Readonly<{
+        text?: string;
+        spans?: readonly ParagraphSpan<Technique>[];
+      }>)
+  | (Partial<ParagraphBaseProperties<Technique>> &
+      Readonly<{
+        text: TextLiteral<Technique>;
+        spans?: never;
+      }>);
 ```
 
 ```ts
@@ -343,7 +413,7 @@ Nested configuration values are immutable snapshots. Replace `paragraph.contentB
 Creation and disposal are staged in the same way:
 
 ```ts
-const pending = worldText.add({ primaryFont: inter, text: 'Not shaped yet' });
+const pending = worldText.add({ font: inter, text: 'Not shaped yet' });
 pending.dispose();
 
 runtime.update(); // coalesces the add and removal to no work
@@ -604,7 +674,7 @@ See the authoritative [Three.js text API](three-api.md). The mapping is intentio
 
 ```ts
 FontLoader -> cached TextRuntime/shaper initialization + loaded fonts
-TextGroup  -> FontGroup + ParagraphBatch + Three renderer target
+TextGroup  -> technique-specific ParagraphBatch + Three renderer target
 Text       -> desired paragraph state + late-bound Paragraph + Object3D transform
 ```
 
@@ -650,7 +720,8 @@ Targets release GPU resources only after their engine knows no in-flight frame s
 ```ts
 const Decisions = {
   oneParagraphAPI: 'A label or icon is still a paragraph.',
-  sameTechniqueFontGroups: 'Fallback needs multiple fonts; one shader technique must render the result.',
+  explicitBatchTechnique: 'The technique fixes canonical buffer layouts and rejects incompatible text before shaping.',
+  fontStacksAreFonts: 'A FontStack is one ordered font selection with missing-glyph behavior.',
   explicitParagraphBatches: 'Only the application knows where text render phases must remain separate.',
   coreOwnedPhysicalBatching: 'Every target would otherwise duplicate grouping, sorting, packing, and dirty tracking.',
   handleOwnedMutation: 'Repeated writes debounce naturally before a synchronization call.',

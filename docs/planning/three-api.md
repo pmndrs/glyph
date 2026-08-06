@@ -37,7 +37,7 @@ generated:
 
 # Three.js text API
 
-Three.js owns the core API internally. A Three.js application never creates a `TextRuntime`, `FontGroup`,
+Three.js owns the core API internally. A Three.js application never creates a `TextRuntime`,
 `ParagraphBatch`, `Paragraph`, prepared revision, or glyph submission.
 
 ```ts
@@ -52,6 +52,7 @@ FontLoader
 
 ```ts
 import * as THREE from 'three/webgpu';
+import type { FontSelection, TextInput, TextLiteral } from '@pmndrs/text';
 
 interface FontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
@@ -85,14 +86,14 @@ interface LoadedFont<Technique extends AnyRasterTechnique> {
 declare class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Object3D {
   constructor(options: TextGroupOptions<Technique>);
 
-  readonly fonts: readonly LoadedFont<Technique>[];
-  readonly fallback: readonly LoadedFont<Technique>[];
+  readonly technique: Technique;
   readonly capacity: TextBatchCapacity;
   readonly textCount: number;
   readonly disposed: boolean;
   updateMode: 'sync' | 'async';
 
   allocate(properties: TextProperties<Technique>): Text<Technique>;
+  add<const Children extends readonly THREE.Object3D[]>(...children: CompatibleTextChildren<Technique, Children>): this;
   has(text: Text<AnyRasterTechnique>): boolean;
   dispose(): void;
 }
@@ -105,8 +106,9 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   readonly disposed: boolean;
   readonly layout: ParagraphLayout | undefined;
 
-  font: LoadedFont<Technique>;
-  text: string;
+  font: FontSelection<Technique>;
+  get text(): string;
+  set text(value: TextInput<Technique>);
   spans: readonly TextSpan<Technique>[];
   contentBox: ParagraphContentBox;
   style: ParagraphStyle;
@@ -114,7 +116,7 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   rasterPixelRatio: number;
   updateMode: 'sync' | 'async';
 
-  set(properties: Partial<TextProperties<Technique>>): void;
+  set(properties: TextUpdate<Technique>): void;
   setSpan(index: number, span: TextSpan<Technique>): void;
   removeSpan(index: number): void;
 
@@ -124,6 +126,8 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
 
   dispose(): void;
 }
+
+export { txt, span } from '@pmndrs/text';
 ```
 
 `TextGroup.updateMode` controls the hidden core update for every `Text` bound to that group. `Text.updateMode` applies only
@@ -132,12 +136,13 @@ while the object owns an implicit standalone batch. Both are mutable policies, n
 ## Load fonts with the Three.js loader
 
 ```ts
+import { createFontStack } from '@pmndrs/text';
 import { FontLoader } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
 
-const [inter, noto, icons] = await Promise.all([
+const [inter, noto, iconFont] = await Promise.all([
   loader.loadAsync({
     input: { baked: '/fonts/Inter.font.glb' },
     raster: { technique: mtsdf },
@@ -151,6 +156,8 @@ const [inter, noto, icons] = await Promise.all([
     raster: { technique: mtsdf },
   }),
 ]);
+
+const uiFont = createFontStack(inter, noto);
 ```
 
 The first load in a Three font-cache domain lazily creates the core shaping engine. Concurrent loads share that
@@ -169,8 +176,7 @@ handle.
 import { TextGroup } from '@pmndrs/text/three';
 
 const worldText = new TextGroup({
-  fonts: [inter, noto, icons],
-  fallback: [inter, noto],
+  technique: mtsdf,
   capacity: {
     texts: 1_000,
     glyphs: 20_000,
@@ -183,8 +189,7 @@ scene.add(worldText);
 
 ```ts
 interface TextGroupOptions<Technique extends AnyRasterTechnique> {
-  readonly fonts: readonly [LoadedFont<Technique>, ...LoadedFont<Technique>[]];
-  readonly fallback?: readonly LoadedFont<Technique>[];
+  readonly technique: Technique;
   readonly capacity?: TextBatchCapacity;
   readonly renderOrder?: number;
 }
@@ -196,9 +201,14 @@ interface TextBatchCapacity {
 }
 ```
 
-A `TextGroup` is one author-declared text render phase and one hidden core paragraph batch. Every font must use the same
-technique. Fallback may cross fonts but never techniques. Core may produce several physical resource batches and ordered
-draw submissions beneath one `TextGroup`.
+A `TextGroup` is one author-declared text render phase and one hidden core paragraph batch. Its technique fixes the
+canonical instance layout, target implementation, and shader family before any text is attached. Every `Text` owns its
+font selection, which must use that technique. Core may produce several physical resource batches and ordered draw
+submissions beneath one `TextGroup`.
+
+The `add()` override preserves normal `Object3D` children while conditionally rejecting any directly supplied
+`Text<OtherTechnique>` tuple member. Runtime ancestry validation remains mandatory for JavaScript, React reconciliation,
+and text nested below arbitrary containers.
 
 `TextGroup` deliberately extends `THREE.Object3D`, not `THREE.Group`. Three carries the nearest real ancestor Group's
 `renderOrder` through non-Group descendants as `groupOrder`; another Group would replace it, including with its default
@@ -238,8 +248,8 @@ Allocate and attach in one call:
 
 ```ts
 const body = worldText.allocate({
-  font: inter,
-  text: 'Fallback can resolve this paragraph through every font in the group.',
+  font: uiFont,
+  text: 'This paragraph carries its own missing-glyph behavior.',
   contentBox: {
     width: { mode: 'at-most', size: 480 },
     wrap: 'word',
@@ -282,8 +292,7 @@ overlayText.add(icon); // icon belongs to overlayText, never worldText
 
 ```ts
 const title = new Text({
-  font: inter,
-  fallback: [noto],
+  font: uiFont,
   text: 'Standalone title',
 });
 
@@ -291,19 +300,21 @@ scene.add(title);
 ```
 
 ```ts
-interface StandaloneTextProperties<Technique extends AnyRasterTechnique> extends TextProperties<Technique> {
-  readonly fallback?: readonly LoadedFont<Technique>[];
-  readonly capacity?: Omit<TextBatchCapacity, 'texts'>;
-}
+type StandaloneTextProperties<Technique extends AnyRasterTechnique> = TextProperties<Technique> &
+  Readonly<{
+    capacity?: Omit<TextBatchCapacity, 'texts'>;
+  }>;
 ```
 
-When a `Text` has no `TextGroup` ancestor, it owns an implicit font group and paragraph batch containing only itself. Adding
-that same object to a `TextGroup` destroys the implicit allocation and allocates the retained desired state in the group.
+When a `Text` has no `TextGroup` ancestor, it owns an implicit paragraph batch containing only itself. Its required font
+selection supplies that implicit batch's technique. Adding that same object to a `TextGroup` destroys the implicit
+allocation, validates its font selection against the explicit group technique, and allocates the retained desired state in the group.
 Removing it from the group recreates its implicit batch. The public `Text`, transform, desired properties, and glyph
 overrides remain the same object.
 
-The standalone `fallback` and `capacity` values configure only that implicit batch. While the object is inside a
-`TextGroup`, the parent group's fonts, fallback order, capacity, overflow, and update policy are authoritative.
+The standalone `capacity` value configures only that implicit batch. While the object is inside a `TextGroup`, the parent
+group's technique, capacity, overflow, and update policy are authoritative; the `Text` always retains its own font
+selection.
 
 ## Bind late; render on the first frame
 
@@ -410,27 +421,84 @@ Those writes update desired state only. The parent batch shapes the final values
 synchronization. Nested records are immutable replacement values; direct deep mutation is unsupported.
 
 ```ts
-interface TextProperties<Technique extends AnyRasterTechnique> {
-  readonly font: LoadedFont<Technique>;
-  readonly text: string;
-  readonly spans?: readonly TextSpan<Technique>[];
+interface TextBaseProperties<Technique extends AnyRasterTechnique> {
+  readonly font: FontSelection<Technique>;
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
 }
 
+type TextContentProperties<Technique extends AnyRasterTechnique> =
+  | Readonly<{
+      text: string;
+      spans?: readonly TextSpan<Technique>[];
+    }>
+  | Readonly<{
+      text: TextLiteral<Technique>;
+      spans?: never;
+    }>;
+
+type TextProperties<Technique extends AnyRasterTechnique> = TextBaseProperties<Technique> &
+  TextContentProperties<Technique>;
+
+type TextUpdate<Technique extends AnyRasterTechnique> =
+  | (Partial<TextBaseProperties<Technique>> &
+      Readonly<{
+        text?: string;
+        spans?: readonly TextSpan<Technique>[];
+      }>)
+  | (Partial<TextBaseProperties<Technique>> &
+      Readonly<{
+        text: TextLiteral<Technique>;
+        spans?: never;
+      }>);
+
 interface TextSpan<Technique extends AnyRasterTechnique> {
   readonly start: number;
   readonly end: number;
-  readonly font?: LoadedFont<Technique>;
+  readonly font?: FontSelection<Technique>;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
 }
 ```
 
-`font` and every span font must belong to the effective batch. Changing `font` to another eligible same-technique font is a
-retained update. Assigning an ineligible font throws without changing current desired or rendered state.
+`font` and every span font must match the effective batch technique. Changing `font` to another same-technique `Font` or
+`FontStack` is a retained update. Assigning an incompatible selection throws without changing current desired or rendered
+state.
+
+## Compose typed spans
+
+The Three entry point re-exports core's renderer-neutral `txt` and `span` tags. It does not add formatting methods to the
+`Text` class or parse a markup language.
+
+```ts
+import { Text, span, txt } from '@pmndrs/text/three';
+
+const label = new Text({
+  font: uiFont,
+  text: txt`Fast ${span({ font: noto })`accurate`} text`,
+});
+
+label.text = 'Plain text';
+label.text = txt`Player ${span({ font: noto })`Two`}`;
+```
+
+`txt` returns one immutable typed literal containing the flattened string and computed UTF-16 spans. `span(properties)`
+returns a typed fragment tag; TypeScript validates its font, style, paint, property names, and technique. Assignment of a
+plain string clears spans, while assignment of a literal replaces text and spans atomically. Explicit `spans`, `setSpan()`,
+and `removeSpan()` remain the lower-level imperative form.
+
+React Three Fiber uses the same composer internally:
+
+```tsx
+<Text font={uiFont}>
+  Fast <Text font={noto}>accurate</Text> text
+</Text>
+```
+
+The nested React form and `txt` literal above must produce the same source string and span ranges. A nested React `<Text>`
+is inline paragraph data; `label.add(new Text(...))` remains an ordinary spatial Three child and a separate paragraph.
 
 Three-native state remains Three-native:
 
@@ -454,8 +522,7 @@ These values define compatibility and have no setters:
 
 ```ts
 new TextGroup({
-  fonts, // same-technique eligibility and fallback universe
-  fallback, // fallback precedence
+  technique, // canonical instance layout, target, and shader family
   capacity, // initial allocation and overflow policy
 });
 ```
@@ -463,8 +530,9 @@ new TextGroup({
 Changing them requires a new `TextGroup`. Existing `Text` objects can be added to that replacement because they bind late;
 the objects themselves, their transforms, and desired state do not need to be recreated.
 
-For standalone `Text`, `fallback` and `capacity` are likewise construction-only because they define the implicit batch.
-The primary `font` is mutable only within the effective eligible font set; changing technique requires a replacement batch.
+For standalone `Text`, `capacity` is likewise construction-only because it defines the implicit batch. Its font selection
+is mutable; changing technique rebuilds the implicit batch. Inside an explicit `TextGroup`, changing to a different
+technique is rejected and requires moving the retained `Text` to a compatible group.
 The renderer identity becomes fixed on first draw and is also structural. `renderOrder` and `updateMode` remain mutable
 runtime policies.
 
@@ -474,7 +542,7 @@ These operations retain public objects but may allocate new internal glyph slots
 
 ```ts
 destination.add(text); // remove old paragraph allocation, add new allocation
-text.font = anotherGroupFont; // reshape and possibly change physical resource batch
+text.font = anotherFont; // reshape and possibly change physical resource batch
 text.spans = nextSpans; // reshape and possibly change font-resource submissions
 text.rasterPixelRatio = next; // select resources and rebuild affected target storage
 ```
@@ -539,7 +607,8 @@ loader.dispose();
 `Text.dispose()` permanently releases its current paragraph allocation and any implicit standalone batch. Removing a
 `Text` from its parent does not dispose the public object because it may be added elsewhere. `TextGroup.dispose()` releases
 its hidden paragraph batch, renderer-specific targets, materials, attributes, and subscriptions; it does not dispose loaded
-fonts or child `Text` objects. `LoadedFont.dispose()` releases that loaded-font ownership after all groups using it are gone.
+fonts or child `Text` objects. `LoadedFont.dispose()` releases that loaded-font ownership after every `Text` or `FontStack`
+using it is gone; `FontStack` itself owns no lifecycle and cannot keep a disposed concrete font valid.
 `FontLoader.dispose()` releases its cache-domain ownership; shared shaping state retires only after its final loader/font
 owner is gone.
 
@@ -560,5 +629,7 @@ The implementation is not complete until tests prove:
 - runtime setters coalesce and select the narrowest dirty work;
 - default synchronous mode renders warm edits in the observing frame;
 - asynchronous mode renders the last complete revision and treats stale work as a resolved superseded outcome;
-- fallback fonts produce the core-authored minimum physical batches and exact ordered submissions;
+- a same-technique `FontStack` produces the core-authored minimum physical batches and exact ordered submissions;
+- mixed-technique group additions and font stacks fail before shaping without replacing live text;
+- `txt`/`span`, explicit spans, and nested React `<Text>` produce the same UTF-16 source/span snapshot;
 - WebGPU and forced WebGL2 execute the same Bitmap, MTSDF, and Slug behavior on Three.js 0.185.1.

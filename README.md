@@ -15,7 +15,7 @@ function Labels() {
   });
 
   return (
-    <TextGroup fonts={[inter]}>
+    <TextGroup technique={mtsdf}>
       <Text font={inter}>Hello, world!</Text>
     </TextGroup>
   );
@@ -34,19 +34,19 @@ const inter = await loader.loadAsync({
   raster: { technique: mtsdf },
 });
 
-const labels = new TextGroup({ fonts: [inter] });
+const labels = new TextGroup({ technique: mtsdf });
 labels.add(new Text({ font: inter, text: 'Hello, world!' }));
 
 scene.add(labels);
 ```
 
-Both integrations load fonts explicitly and add one same-technique text batch to the scene. Three.js owns shaping and
-buffer synchronization inside its normal render lifecycle.
+Both integrations load fonts explicitly and add one same-technique text batch to the scene. Three.js owns shaping and buffer synchronization inside its normal render lifecycle.
 
 ## Batch text with `TextGroup`
 
 ```ts
-import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
+import { createFontStack } from '@pmndrs/text';
+import { FontLoader, Text, TextGroup, span, txt } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
@@ -56,15 +56,16 @@ const loadMtsdf = (baked: string) =>
     raster: { technique: mtsdf },
   });
 
-const [inter, noto, icons] = await Promise.all([
+const [inter, noto, iconFont] = await Promise.all([
   loadMtsdf('/fonts/Inter.font.glb'),
   loadMtsdf('/fonts/NotoSans.font.glb'),
   loadMtsdf('/fonts/Icons.font.glb'),
 ]);
 
+const bodyFont = createFontStack(inter, noto);
+
 const labels = new TextGroup({
-  fonts: [inter, noto, icons],
-  fallback: [inter, noto],
+  technique: mtsdf,
   capacity: {
     texts: 1_000,
     glyphs: 20_000,
@@ -79,8 +80,8 @@ Allocate from the batch:
 
 ```ts
 const body = labels.allocate({
-  font: inter,
-  text: 'This paragraph can use every fallback font in the group.',
+  font: bodyFont,
+  text: 'This paragraph uses Noto when Inter is missing a glyph.',
   contentBox: {
     width: { mode: 'at-most', size: 480 },
     wrap: 'word',
@@ -99,6 +100,17 @@ score.position.set(0, 2, 0);
 score.rotation.y = Math.PI / 4;
 ```
 
+Compose typed spans without managing UTF-16 ranges by hand:
+
+```ts
+score.text = txt`
+  Player ${span({ font: noto })`Two`}
+`;
+```
+
+The Three entry point re-exports the renderer-neutral `txt` and `span` helpers from `@pmndrs/text`. A plain string remains
+valid anywhere a formatted text literal is accepted.
+
 An unattached `Text` stores desired state without shaping. When it is added, the nearest `TextGroup` allocates it before the
 first shape and render. Moving it to another group removes its old paragraph allocation and adds a new allocation while
 retaining the same `Text` object, properties, and transform.
@@ -112,8 +124,8 @@ renderer.render(scene, camera); // shapes only "Player 2"
 ```
 
 One `TextGroup` is one intentional text render phase. Create separate groups for separate scenes, renderer lifetimes, or
-places where non-text draws must appear between text draws. Fonts may vary within the group, including fallback fonts, but
-every font must use the same rendering technique.
+places where non-text draws must appear between text draws. Every `Text` owns its `Font` or `FontStack`; every effective
+font must use the group's rendering technique.
 
 ## Control batch render order
 
@@ -123,7 +135,7 @@ A `TextGroup` is an `Object3D`, so its draw submissions naturally retain the nea
 const hud = new THREE.Group();
 hud.renderOrder = 100;
 
-const labels = new TextGroup({ fonts: [inter, noto], fallback: [inter, noto] });
+const labels = new TextGroup({ technique: mtsdf });
 
 hud.add(labels); // submissions use groupOrder 100
 scene.add(hud);
@@ -166,7 +178,7 @@ Baking creates font metrics, glyph records, and technique resources before the a
 ### Load, shape, and render
 
 ```ts
-import { createTextRuntime } from '@pmndrs/text';
+import { createFontStack, createTextRuntime } from '@pmndrs/text';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const runtime = await createTextRuntime({
@@ -184,18 +196,15 @@ const noto = await runtime.loadFont({
   raster: { technique: mtsdf },
 });
 
-const fonts = runtime.createFontGroup({
-  fonts: [inter, noto],
-  fallback: [inter, noto],
-});
+const uiFont = createFontStack(inter, noto);
 
 const paragraphs = runtime.createParagraphBatch({
-  fonts,
+  technique: mtsdf,
   capacity: { paragraphs: 1_000, glyphs: 20_000, overflow: 'chunk' },
 });
 
 const label = paragraphs.add({
-  primaryFont: inter,
+  font: uiFont,
   text: 'Player 1',
 });
 ```
@@ -234,7 +243,6 @@ FontLoader
   -> loads core font + one technique
 
 TextGroup
-  -> owns one core FontGroup
   -> owns one core ParagraphBatch
   -> owns renderer-specific physical targets
 

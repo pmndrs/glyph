@@ -137,7 +137,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 10.6  |   ✅   | Complete raster switching, release conformance, public API review, recommendations, plugin authoring guidance, package-size evidence, and signed stacked delivery.                                                                                          |  L   | 10.5       |
 | 11.1  |   ⬜   | Freeze the accepted README/API fixtures and capture current Three.js behavior, package graphs, rendering, allocation, and shaping baselines.                                                                                                                |  M   | 10.6       |
 | 11.2  |   ⬜   | Split portable raster technique data from Three.js/TSL target preparation, staging, drawing, and disposal.                                                                                                                                                  |  L   | 11.1       |
-| 11.3  |   ⬜   | Implement `TextRuntime`, same-technique `FontGroup`, desired-state `Paragraph` handles, and explicit render-phase `ParagraphBatch` ownership with stable capacity and origin overrides.                                                                     |  XL  | 11.2       |
+| 11.3  |   ⬜   | Implement `TextRuntime`, immutable same-technique `FontStack` values, desired-state `Paragraph` handles, typed `txt`/`span` composition, and technique-declared render-phase `ParagraphBatch` ownership with stable capacity and origin overrides.          |  XL  | 11.2       |
 | 11.4  |   ⬜   | Implement dirty-channel coalescing plus per-call `update()` and Promise/callback `updateAsync()` synchronization with cross-batch atomic publication, cancellation, and supersession.                                                                       |  XL  | 11.3       |
 | 11.5  |   ⬜   | Move font-resource partitioning, stable slots, overflow chunks, canonical technique CPU storage, dirty ranges, and ordered submissions into core.                                                                                                           |  XL  | 11.3–11.4  |
 | 11.6  |   ⬜   | Rebuild Bitmap, MTSDF, and Slug behind the Three.js `FontLoader` → `TextGroup` → `Text` surface with lazy shaper initialization, late binding, implicit batches of one, native group/submission sort keys, renderer isolation, and no exposed core handles. |  XL  | 11.5       |
@@ -760,7 +760,7 @@ points while preserving the accepted shaping, paragraph, artifact, raster, and v
 
 Deliver:
 
-- explicit runtime and font loading, same-technique fallback groups, and per-update synchronous or asynchronous preparation;
+- explicit runtime and font loading, same-technique ordered font stacks, technique-declared paragraph batches, and per-update synchronous or asynchronous preparation;
 - desired-state paragraph handles covering multiline text, labels, and font-backed icons without separate public lifecycles;
 - explicit paragraph batches as application-owned render-phase boundaries with stable capacity and deterministic order;
 - core-owned font-resource partitioning, stable instance slots, overflow chunks, technique packing, dirty ranges, and ordered submissions;
