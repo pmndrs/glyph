@@ -93,6 +93,27 @@ score.rotation.y = Math.PI / 4;
 `TextGroup` adds no second allocation API. `add()` binds a `Text` to the batch; `remove()` unbinds it without disposing the
 retained object. Internal glyph slots are created later, when Three synchronizes the group for rendering.
 
+Grouped glyph buffers belong to `TextGroup`, not to each `Text`. Moving `score` lets the old group recycle its slot and
+gives the destination a new paragraph membership; the old group's retained buffer stays alive for its other text and future
+reuse.
+
+```ts
+overlayLabels.add(score); // Three removes it from labels and binds it to overlayLabels
+
+score.removeFromParent(); // reusable desired state; no batch membership while detached
+score.dispose(); // permanent: score cannot be added again
+```
+
+Call `dispose()` when the public `Text` will never be reused. It releases text-owned cached state and any standalone batch,
+but it does not dispose a group's shared buffers or the loaded font. Dispose the `TextGroup` when that render phase is done,
+then dispose fonts after no remaining text or font stack references them.
+
+Construction alone owns no renderer resource. A `Text` gets a text-owned implicit batch only after it is attached outside a
+`TextGroup` and synchronized for rendering. Moving that rendered standalone text into a group publishes new group
+membership before retiring its implicit target at a GPU-safe boundary. Calling `dispose()` after removal is therefore not a
+no-op or a defensive convention: it cancels pending work, clears retained caches and references, marks the object
+permanently disposed, and prevents it from being attached again.
+
 Compose typed spans without managing UTF-16 ranges by hand:
 
 ```ts
