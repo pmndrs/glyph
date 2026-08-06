@@ -12,6 +12,9 @@ sources:
   - id: engine-contract
     resource: engine-integration-contract.md
     title: Engine integration contract
+  - id: three-api
+    resource: three-api.md
+    title: Three.js text API
   - id: roadmap
     resource: ../roadmap/roadmap.md
     title: Canonical implementation order
@@ -219,7 +222,8 @@ expect(() => runtime.createFontGroup({ fonts: [interMtsdf, iconBitmap] })).toThr
 - Implement Promise and callback overloads without constructing a Promise in callback form.
 - Stream completed Worker results into unpublished staging storage with optional progress while retaining atomic publication.
 - Return the current revision without allocation for a no-op synchronous update.
-- Let a newer synchronization supersede an unpublished older asynchronous generation.
+- Let a newer synchronization supersede an unpublished older asynchronous generation. Resolve supersession and
+  cancellation as handled outcomes; reject only actual preparation failures.
 - Publish every affected paragraph batch atomically or none of them.
 - Keep writes after a snapshot dirty for the next synchronization.
 
@@ -231,7 +235,7 @@ const old = runtime.updateAsync();
 paragraph.text = 'B';
 const current = runtime.update();
 
-await expect(old).rejects.toMatchObject({ kind: 'superseded' });
+await expect(old).resolves.toMatchObject({ status: 'superseded' });
 expect(currentParagraph(current).text).toBe('B');
 ```
 
@@ -264,20 +268,32 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Allow several targets and late attachment to consume the same prepared storage without reshaping.
 - Prove targets never regroup, resort, or reinterpret submission boundaries while synchronizing their buffers.
 
-### 6. Rebuild Three.js as a thin target
+### 6. Rebuild the Three.js public surface over hidden core objects
 
-- Implement `ThreeParagraphBatch` for one paragraph render phase.
-- Give each paragraph one lightweight transform-bearing `Object3D`, not a private mesh/material.
-- Synchronize canonical dirty ranges to instanced attributes or upload writers.
-- Upload only dirty ranges and execute core's submission plan.
-- Keep existing TSL technique shaders and WebGPU/WebGL2 parity.
-- Remove Three-owned shaping, glyph regrouping, ordering, and canonical batch-plan computation; retain only dirty-range mapping into Three.js attributes.
-- Preserve explicit frame-boundary commit and GPU-safe retirement.
+- Keep Three.js applications on `FontLoader`, `TextGroup`, and transform-bearing `Text`; never expose a core runtime,
+  paragraph batch, paragraph handle, prepared revision, or target adapter to ordinary Three users.
+- Make the Three `FontLoader` lazily initialize and cache the core shaper on its first load while preserving explicit
+  callback/Promise loading and Three `LoadingManager` behavior.
+- Make each `TextGroup` one explicit scene render phase backed by one same-technique core font group, paragraph batch, and
+  renderer target. Make an ungrouped `Text` own an implicit batch of one.
+- Keep `Text` unbound until allocation or scene attachment. Reconcile direct and nested scene membership before the first
+  shaping call so resident text renders in the first observing frame.
+- Treat movement between batches as an atomic removal of the old paragraph allocation plus allocation of retained desired
+  state in the destination; do not add a movable core paragraph contract.
+- Make `TextGroup` an `Object3D`, not a Group, so Three naturally carries the nearest real ancestor Group's `groupOrder`
+  through it. Map `TextGroup.renderOrder` plus the core submission ordinal onto the physical draw objects' secondary
+  render orders; do not add a hidden Group or an inheritance API.
+- Let Three own sync/async core calls, dirty-range mapping, transform updates, and publication during the render lifecycle.
+  The application calls only `renderer.render(scene, camera)`.
+- Bind a group to one renderer target lifetime and require separate groups for separate scenes, render phases, or renderers.
+- Keep existing TSL technique shaders and WebGPU/WebGL2 parity while removing Three-owned glyph grouping, sorting,
+  partitioning, slot allocation, and submission-plan computation.
 
 ### 7. Rebuild React Three Fiber binding
 
-- Let declarative components create and mutate retained paragraph handles.
-- Flush once after reconciliation rather than preparing once per component setter.
+- Let declarative components create retained `Text` and `TextGroup` objects without exposing core handles.
+- Let R3F reconciliation update desired state; Three's matrix/render lifecycle performs the same group synchronization as
+  the imperative API.
 - Preserve nested spans as paragraph data, not independent render objects.
 - Preserve Suspense for loading only; warm shaping does not require a readiness Promise.
 - Make synchronous versus asynchronous synchronization an integration policy selectable per frame/update.

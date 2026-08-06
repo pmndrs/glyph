@@ -1,20 +1,139 @@
 # @pmndrs/text
 
-Portable font baking, Unicode shaping, paragraph layout, and renderer-ready glyph batching for Three.js or your own engine.
+Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for Three.js or your own engine.
+
+## Render text with Three.js
 
 ```ts
-fontFile
-  -> bakeFont()
-  -> runtime.loadFont()
-  -> runtime.createFontGroup()
-  -> runtime.createParagraphBatch()
-  -> paragraph.text = next
-  -> runtime.update() // or updateAsync()
-  -> core-populated glyph batches + ordered submissions
-  -> your engine draws
+import * as THREE from 'three/webgpu';
+import { FontLoader, Text } from '@pmndrs/text/three';
+import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
+
+camera.position.z = 5;
+renderer.setSize(innerWidth, innerHeight);
+document.body.append(renderer.domElement);
+
+const loader = new FontLoader();
+const inter = await loader.loadAsync({
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: mtsdf },
+});
+
+const hello = new Text({
+  font: inter,
+  text: 'Hello, world!',
+});
+
+hello.position.set(-2, 1, 0);
+scene.add(hello);
+
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
+});
 ```
 
-## Bake fonts
+A `Text` added without a `TextGroup` is an implicit batch of one. Three.js owns its shaping and buffer updates inside the
+normal render lifecycle. The application loads fonts explicitly, then uses ordinary Three objects and transforms.
+
+## Batch text with `TextGroup`
+
+```ts
+import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
+import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+
+const loader = new FontLoader();
+const loadMtsdf = (baked: string) =>
+  loader.loadAsync({
+    input: { baked },
+    raster: { technique: mtsdf },
+  });
+
+const [inter, noto, icons] = await Promise.all([
+  loadMtsdf('/fonts/Inter.font.glb'),
+  loadMtsdf('/fonts/NotoSans.font.glb'),
+  loadMtsdf('/fonts/Icons.font.glb'),
+]);
+
+const labels = new TextGroup({
+  fonts: [inter, noto, icons],
+  fallback: [inter, noto],
+  capacity: {
+    texts: 1_000,
+    glyphs: 20_000,
+    overflow: 'chunk',
+  },
+});
+
+scene.add(labels);
+```
+
+Allocate from the batch:
+
+```ts
+const body = labels.allocate({
+  font: inter,
+  text: 'This paragraph can use every fallback font in the group.',
+  contentBox: {
+    width: { mode: 'at-most', size: 480 },
+    wrap: 'word',
+  },
+});
+```
+
+Or add a retained `Text` through the ordinary Three scene graph:
+
+```ts
+const score = new Text({ font: inter, text: 'Player 1' });
+
+labels.add(score);
+
+score.position.set(0, 2, 0);
+score.rotation.y = Math.PI / 4;
+```
+
+An unattached `Text` stores desired state without shaping. When it is added, the nearest `TextGroup` allocates it before the
+first shape and render. Moving it to another group removes its old paragraph allocation and adds a new allocation while
+retaining the same `Text` object, properties, and transform.
+
+```ts
+score.text = 'First value';
+score.text = 'Second value';
+score.text = 'Player 2';
+
+renderer.render(scene, camera); // shapes only "Player 2"
+```
+
+One `TextGroup` is one intentional text render phase. Create separate groups for separate scenes, renderer lifetimes, or
+places where non-text draws must appear between text draws. Fonts may vary within the group, including fallback fonts, but
+every font must use the same rendering technique.
+
+## Control batch render order
+
+A `TextGroup` is an `Object3D`, so its draw submissions naturally retain the nearest parent Three `Group` order:
+
+```ts
+const hud = new THREE.Group();
+hud.renderOrder = 100;
+
+const labels = new TextGroup({ fonts: [inter, noto], fallback: [inter, noto] });
+
+hud.add(labels); // submissions use groupOrder 100
+scene.add(hud);
+```
+
+Set the batch's secondary render-order base through the ordinary Three property:
+
+```ts
+labels.renderOrder = 10;
+```
+
+Core sorts each `Text.renderOrder` inside the batch. The integration assigns the ordered physical submissions consecutive Three render orders beginning at `TextGroup.renderOrder`. Use separate `TextGroup`s when unrelated Three draws must appear between text submissions.
+
+## Bake fonts ahead of time
 
 ```ts
 import { rasterBake } from '@pmndrs/text';
@@ -34,324 +153,101 @@ await bakeFont({
 });
 ```
 
-Baking creates font metrics, glyph records, and technique resources before the application runs. Development fallback can
-perform the same work in a Worker.
+Baking creates font metrics, glyph records, and technique resources before the application runs. Development fallback can perform the same work in a Worker. Loading remains explicit either way.
 
-## Create the runtime
+## How Three.js maps to core
+
+Three.js owns the portable objects; applications using the Three surface never touch them:
+
+```ts
+FontLoader
+  -> lazily initializes and caches core shaping
+  -> loads core font + one technique
+
+TextGroup
+  -> owns one core FontGroup
+  -> owns one core ParagraphBatch
+  -> owns renderer-specific physical targets
+
+Text
+  -> owns desired paragraph state
+  -> binds one core Paragraph when attached
+  -> remains the transform-bearing Object3D
+
+renderer.render(scene, camera)
+  -> reconciles Text membership
+  -> synchronizes dirty paragraphs
+  -> uploads dirty glyph ranges
+  -> submits the core-authored draw order
+```
+
+This is the same boundary another engine implements: core shapes, sorts, partitions, allocates, and packs; the integration
+owns scene membership, transforms, GPU buffers, render phases, submission, and retirement.
+
+## Integrate core into another engine
 
 ```ts
 import { createTextRuntime } from '@pmndrs/text';
+import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const runtime = await createTextRuntime({
   async: {
     createWorker: () => new Worker(new URL('./text-worker.js', import.meta.url)),
   },
 });
-```
-
-The runtime can perform either synchronous or asynchronous updates. Runtime creation provisions the Worker capability; it
-does not force every update down one execution path.
-
-## Load fonts explicitly
-
-```ts
-import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const inter = await runtime.loadFont({
   input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: mtsdf },
 });
-
 const noto = await runtime.loadFont({
   input: { baked: '/fonts/NotoSans.font.glb' },
   raster: { technique: mtsdf },
 });
 
-const iconMtsdf = await runtime.loadFont({
-  input: { baked: '/fonts/Icons.font.glb' },
-  raster: { technique: mtsdf },
-});
-```
-
-`loadFont()` resolves after shaping data and the selected technique data are decoded into renderer-neutral CPU state. It does not create engine textures, buffers, pipelines, materials, meshes, or entities.
-
-## Group fallback fonts
-
-```ts
 const fonts = runtime.createFontGroup({
-  fonts: [inter, noto, iconMtsdf],
+  fonts: [inter, noto],
   fallback: [inter, noto],
 });
-```
 
-One font group can contain multiple fonts but exactly one rendering technique. Different fonts may require separate GPU
-resources and draws. Bitmap and Slug cannot share a font group; a renderer combining their data is a new technique with
-its own artifacts and shader.
-
-## Create a paragraph batch
-
-```ts
-const worldText = runtime.createParagraphBatch({
+const paragraphs = runtime.createParagraphBatch({
   fonts,
-  capacity: {
-    paragraphs: 1_000,
-    glyphs: 20_000,
-    overflow: 'chunk',
-  },
-});
-```
-
-A paragraph batch is an intentional render-phase boundary. Core may sort and batch every paragraph inside it, but never
-merges it with another paragraph batch.
-
-Create another one when your engine must draw text in another phase:
-
-```ts
-const overlayText = runtime.createParagraphBatch({
-  fonts,
-  capacity: {
-    paragraphs: 100,
-    glyphs: 2_000,
-    overflow: 'grow',
-  },
-});
-```
-
-## Add paragraphs
-
-A multiline block, one-line label, and font-backed icon are all paragraphs.
-
-```ts
-const body = worldText.add({
-  primaryFont: inter,
-  text: 'Fallback can shape this paragraph through every font in the group.',
-  contentBox: {
-    width: { mode: 'at-most', size: 480 },
-    wrap: 'word',
-  },
+  capacity: { paragraphs: 1_000, glyphs: 20_000, overflow: 'chunk' },
 });
 
-const label = worldText.add({
+const label = paragraphs.add({
   primaryFont: inter,
   text: 'Player 1',
 });
-
-const icon = overlayText.add({
-  primaryFont: iconMtsdf,
-  text: '\uf013',
-});
 ```
 
-`primaryFont` and every span font must belong to the paragraph batch's font group. Missing glyphs resolve through the
-group's fallback order.
-
-## Change paragraphs directly
+Change desired state, then choose the synchronization boundary explicitly:
 
 ```ts
-label.text = 'First value';
-label.text = 'Second value';
 label.text = 'Player 2';
 
-label.contentBox = {
-  width: { mode: 'at-most', size: 360 },
-  wrap: 'word',
-};
-```
-
-Setters update desired state and mark the paragraph dirty. They do not shape immediately. Repeated writes naturally coalesce, so the next update shapes only `Player 2` with the final content box.
-
-Replace nested configuration values as immutable snapshots:
-
-```ts
-paragraph.contentBox = nextContentBox;
-paragraph.style = nextStyle;
-paragraph.setSpan(0, nextSpan);
-```
-
-Deep mutation such as `paragraph.contentBox.width.size = 320` is not observable and is unsupported.
-
-## Update synchronously
-
-```ts
 const revision = runtime.update();
+// or: const outcome = await runtime.updateAsync();
 ```
 
-`update()` synchronously snapshots every dirty paragraph across the runtime, shapes them together, lays them out, updates
-physical glyph batches, rebuilds affected submission plans, publishes one atomic revision, and returns it.
-
-Calling `update()` with no dirty paragraphs returns `runtime.current` without allocating or notifying subscribers.
-
-## Update asynchronously
+Core returns technique-specific canonical CPU storage, exact dirty ranges, and ordered submissions. An integration maps
+those ranges into its own buffers but never reshapes, re-sorts, or rediscovers physical batch membership.
 
 ```ts
-label.text = 'Prepared in a Worker';
-const revision = await runtime.updateAsync();
-```
-
-Use the callback overload when a hot path should not allocate a public Promise:
-
-```ts
-runtime.updateAsync({ signal: controller.signal }, (result) => {
-  if (!result.ok) {
-    handleTextUpdateError(result.error);
-    return;
+for (const batch of revision.paragraphBatches) {
+  for (const glyphBatch of batch.glyphBatches) {
+    target.upload(glyphBatch.storage, glyphBatch.dirtyRanges);
   }
 
-  publish(result.value);
-});
-```
-
-Both forms snapshot pending changes when called. Mutations made afterward remain dirty for the next update.
-
-A newer synchronization supersedes an unfinished asynchronous candidate:
-
-```ts
-label.text = 'A';
-const preparingA = runtime.updateAsync();
-
-label.text = 'B';
-runtime.update(); // B is current before this returns
-
-await preparingA; // rejects as superseded; A cannot replace B
-```
-
-## Render with Three.js
-
-```ts
-import { ThreeParagraphBatch } from '@pmndrs/text/three';
-
-const worldObject = new ThreeParagraphBatch({ paragraphBatch: worldText });
-const overlayObject = new ThreeParagraphBatch({ paragraphBatch: overlayText });
-
-scene.add(worldObject, overlayObject);
-```
-
-Each paragraph gets a lightweight `Object3D` transform without its own mesh or material:
-
-```ts
-const labelObject = worldObject.object(label);
-
-labelObject.position.set(0, 2, 0);
-labelObject.rotation.y = Math.PI / 4;
-labelObject.scale.setScalar(2);
-```
-
-A synchronous frame loop is explicit:
-
-```ts
-function frame() {
-  scene.updateMatrixWorld();
-  runtime.update();
-  worldObject.updateInstances();
-  overlayObject.updateInstances();
-  renderer.render(scene, camera);
-}
-```
-
-An asynchronous loop renders the last completed revision:
-
-```ts
-function frame() {
-  scene.updateMatrixWorld();
-
-  if (runtime.hasPendingChanges && !runtime.isPreparing) {
-    runtime.updateAsync(handlePreparedRevision);
+  for (const submission of batch.submissions) {
+    target.draw(submission.batch, submission.start, submission.count);
   }
-
-  worldObject.updateInstances();
-  overlayObject.updateInstances();
-  renderer.render(scene, camera);
 }
 ```
 
-## Render with your engine
-
-Core has already shaped, sorted, partitioned, allocated, and packed every glyph. One paragraph batch exposes homogeneous
-glyph buffers and the order in which their ranges must be submitted:
-
-```ts
-interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
-  readonly technique: Technique;
-  readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
-  readonly submissions: readonly GlyphSubmission[];
-}
-```
-
-Upload only dirty ranges:
-
-```ts
-for (const batch of revision.glyphBatches) {
-  const gpu = target.ensureBatch({
-    key: batch.key,
-    technique: batch.technique,
-    font: batch.font,
-    capacity: batch.capacity,
-    storage: batch.storage,
-  });
-
-  gpu.upload(batch.dirtyRanges);
-  gpu.setCount(batch.instanceCount);
-}
-```
-
-Submit exactly the plan core produced:
-
-```ts
-for (const submission of revision.submissions) {
-  target.draw(submission.batch, submission.start, submission.count);
-}
-```
-
-Core retains canonical CPU instance arrays and reports their dirty ranges. An integration may copy those ranges directly
-into matching engine buffers or map the technique fields into a different interleaved or engine-specific layout. It never
-needs to reshape, sort, partition, or inspect glyphs to rediscover draw order.
-
-Your engine still owns transforms, visibility, scene composition, GPU objects, render-pass placement, command encoding,
-frame publication, fences, and retirement. It may map canonical fields into its buffer layout, but it does not reshape,
-regroup, sort, or recompute batch membership and submission order.
-
-## Move glyphs without reshaping
-
-```ts
-const snapshot = label.snapshotGlyphs();
-const x = snapshot.displayedX.slice();
-const y = snapshot.displayedY.slice();
-
-simulateGlyphs(x, y, delta);
-
-label.setGlyphOrigins({
-  topology: snapshot.topology,
-  start: 0,
-  x,
-  y,
-});
-
-runtime.update();
-```
-
-Return to shaped positions later:
-
-```ts
-label.clearGlyphOriginOverrides();
-runtime.update();
-```
-
-## Dispose
-
-```ts
-worldObject.dispose();
-overlayObject.dispose();
-worldText.dispose();
-overlayText.dispose();
-runtime.dispose();
-```
-
-Read the [full core API and rationale](docs/planning/core-api.md), the exact
-[engine integration contract](docs/planning/engine-integration-contract.md), and the
+Read the complete [Three.js API](docs/planning/three-api.md), [core API](docs/planning/core-api.md),
+[engine integration contract](docs/planning/engine-integration-contract.md), and
 [implementation plan](docs/planning/engine-integration-boundary.md).
-
-The next implementation change must prove the same core output through Three.js, raw TypeGPU, and Wayfare before this API
-is considered complete.
 
 ```sh
 mise install

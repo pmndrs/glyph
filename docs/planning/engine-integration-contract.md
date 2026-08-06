@@ -24,6 +24,9 @@ sources:
   - id: extraction-plan
     resource: engine-integration-boundary.md
     title: Renderer-neutral extraction plan
+  - id: three-api
+    resource: three-api.md
+    title: Three.js text API
 generated:
   by: openai-codex/gpt-5.6
   at: '2026-08-06T16:07:26Z'
@@ -32,6 +35,9 @@ generated:
 # Engine integration contract
 
 An engine integration receives already partitioned glyph storage and an ordered submission plan.
+
+This is the low-level contract implemented privately by the [Three.js API](three-api.md). Three users do not receive or
+stage these values directly; `FontLoader`, `TextGroup`, and `Text` own the corresponding core objects and target lifecycle.
 
 ```ts
 type EngineInput<Technique extends AnyRasterTechnique> = PreparedParagraphBatchRevision<Technique>;
