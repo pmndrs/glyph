@@ -9,6 +9,9 @@ sources:
   - id: core-api
     resource: core-api.md
     title: Canonical core text API
+  - id: raster-technique
+    resource: raster-technique-api.md
+    title: Raster technique and engine resource API
   - id: current-layout
     resource: ../../packages/text/src/layout.ts
     title: Current paragraph layout contract
@@ -29,7 +32,7 @@ sources:
     title: Three.js text API
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T16:07:26Z'
+  at: '2026-08-06T21:52:54Z'
 ---
 
 # Engine integration contract
@@ -52,9 +55,16 @@ or reinterpret submission order.
 interface ParagraphBatch<Technique extends AnyRasterTechnique> {
   readonly current: PreparedParagraphBatchRevision<Technique>;
 
+  subscribe(observer: ParagraphBatchObserver<Technique>): () => void;
+
   attach<TargetRevision extends ParagraphBatchTargetRevision>(
     target: ParagraphBatchTarget<Technique, TargetRevision>,
   ): ParagraphBatchAttachment<TargetRevision>;
+}
+
+interface ParagraphBatchObserver<Technique extends AnyRasterTechnique> {
+  next(revision: PreparedParagraphBatchRevision<Technique>): void;
+  complete(): void;
 }
 ```
 
@@ -66,14 +76,50 @@ and GPU lifetime.
 interface ParagraphBatchAttachment<TargetRevision extends ParagraphBatchTargetRevision> {
   readonly current: TargetRevision | undefined;
   readonly candidate: ParagraphBatchTargetStage<TargetRevision> | undefined;
+  readonly error: ParagraphBatchTargetError | undefined;
 
   commit(): TargetRevision | undefined;
+  retry(): void;
   dispose(): void;
+}
+
+interface ParagraphBatchTargetError {
+  readonly kind: 'target-failed';
+  readonly sourceRevision: number;
+  readonly cause: unknown;
 }
 ```
 
 Targets may attach before or after the first update. Attaching later stages the current prepared storage and submission
 plan without reshaping.
+
+`attach()` is the standard lifecycle coordinator, not a privileged preparation operation. Its behavior can be implemented
+entirely with `current`, `subscribe()`, and the target interfaces in this document: subscription synchronously replays the
+current revision, reports every later publication, and completes when the batch is disposed. The method belongs on the
+batch because that retained relationship terminates with the batch and technique compatibility can be rejected at the
+call. An integration needing different publication policy may subscribe directly and build its own coordinator; it does
+not receive access to private shaping or allocation state by doing so.
+
+A synchronous throw from `target.stage()` or rejection of its pending `ready` Promise becomes `attachment.error`. It does
+not roll back the published core revision, replace `attachment.current`, or escape through `attachment.commit()`. A later
+success clears the error. Engine adapters decide how to surface that retained target failure to their own users.
+`retry()` clears no live state and makes exactly one new staging attempt against the current source revision; it is a no-op
+while an attempt for that revision is already pending.
+
+Ownership is one-way. Disposing an attachment releases only that target's staged/live engine resources; it does not dispose
+the source paragraph batch, paragraphs, or fonts. Disposing the source `ParagraphBatch` invalidates every owned paragraph
+handle and notifies every attachment to cancel staging and begin target retirement. GPU objects remain alive only as long
+as required by the engine's in-flight-frame fences, but no disposed source can publish another target revision.
+
+An integration must not transfer a core `Paragraph` handle between batches. An engine-level retained object such as
+Three.js `Text` owns its desired-state snapshot independently, creates a new destination paragraph, and lets disposal remove
+the source handle. This adapter ownership is what permits scene-object reuse without weakening core batch ownership.
+
+For explicit capacity replacement, `ParagraphBatch.setCapacity(capacity)` changes the requested allocation without changing
+the paragraph batch, any paragraph handle, or any attachment. Core may reuse semantic shaping and layout caches, stages new
+canonical capacity-bound storage, and publishes it atomically while the source revision remains live. Existing attachments
+stage replacement target resources, swap at their safe frame boundary, and retire the old resources after their own fences.
+A failed resize preserves the live revision and every identity.
 
 ## Consume canonical CPU storage
 
@@ -89,7 +135,7 @@ interface MtsdfGlyphBatchStorage {
 Each technique defines one canonical structure-of-arrays storage contract. Core owns these arrays and updates them before
 publishing the prepared revision.
 
-An integration whose buffers have the same layout can synchronize exact ranges directly:
+An integration whose buffers have the same layout can synchronize an adjacent revision's exact ranges directly:
 
 ```ts
 for (const range of batch.dirtyRanges) {
@@ -100,7 +146,7 @@ for (const range of batch.dirtyRanges) {
 }
 ```
 
-An integration with interleaved or otherwise different engine storage maps only the dirty ranges:
+An integration with interleaved or otherwise different engine storage maps the same selected ranges:
 
 ```ts
 for (const range of batch.dirtyRanges) {
@@ -136,7 +182,7 @@ interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
   /** Stable author-declared render-phase identity. */
   readonly paragraphBatch: ParagraphBatch<Technique>;
 
-  /** Monotonic within this paragraph batch. */
+  /** Contiguous and monotonic within this paragraph batch. */
   readonly revision: number;
 
   /** Every font in this revision uses this technique. */
@@ -150,8 +196,6 @@ interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
 
   /** Ordered ranges the target must submit. */
   readonly submissions: readonly GlyphSubmission[];
-
-  readonly delta: PreparedParagraphBatchDelta;
 }
 ```
 
@@ -186,6 +230,7 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
   readonly chunk: number;
   readonly capacity: number;
   readonly instanceCount: number;
+  readonly binding: RasterBindingOf<Technique>;
   readonly storage: GlyphBatchStorageOf<Technique>;
   readonly dirtyRanges: readonly GlyphRange[];
 }
@@ -194,7 +239,7 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
 ```ts
 interface GlyphBatchKey {
   readonly technique: RasterTechniqueId;
-  readonly fontResource: FontResourceId;
+  readonly resource: RasterResourceId;
   readonly pipelineVariant: number;
   readonly chunk: number;
 }
@@ -205,16 +250,32 @@ interface GlyphRange {
 }
 ```
 
+`dirtyRanges` transforms the immediately preceding paragraph-batch revision into this revision. It is not a timeless
+description of every live slot. If `previous?.sourceRevision === next.revision - 1`, a target uploads those deltas. If
+`previous` is absent or names an older revision, the target initializes every live range referenced by `next.submissions`.
+It may coalesce overlapping or adjacent upload ranges for the same physical batch without changing submission order. This
+makes late attachment, a superseded pending stage, and recovery after a skipped revision correct without retaining a
+private core change journal.
+
+Published canonical arrays remain readable through the next paragraph-batch publication. `stage()` therefore consumes or
+copies every selected CPU range synchronously before returning. A pending target update may await allocation, compilation,
+queue completion, or another engine operation, but it must not retain a canonical typed-array view and read it later after
+`stage()` returns. This keeps core's one canonical CPU shadow reusable without forcing immutable full-buffer snapshots.
+
+`binding` is the technique-authored renderer-neutral selection of pages, tables, buffers, or other values from
+`font.data`. The target uses it to realize GPU resources; it never re-derives resource selection from glyph IDs.
+
 One key represents compatible GPU storage, not necessarily one submit. Public capacity has only two settings: glyph-slot
 `size` per physical resource buffer and `policy`. Explicit paragraph batches default to lazily allocated
 `{ size: 4_096, policy: 'chunk' }`; standalone Three.js text defaults to `{ size: 256, policy: 'grow' }`. Paragraph handles
 and metadata have no capacity limit.
 
 Chunk overflow creates another fixed-size `chunk` instead of reallocating existing published storage. Grow mode
-transactionally replaces a full buffer and doubles its capacity until the pending glyphs fit. Error mode treats `size` as
-a hard per-buffer limit, preserves the prior revision, and reports capacity failure.
+transactionally replaces a full buffer and doubles its capacity until the pending glyphs fit. Fixed mode treats `size` as
+a hard per-buffer limit, preserves the prior revision, and reports typed `capacity-exceeded` failure after shaping reveals
+the exact physical resource demand but before any target publication.
 
-Different techniques can never appear in one `PreparedParagraphBatchRevision`. Different font resources normally produce
+Different techniques can never appear in one `PreparedParagraphBatchRevision`. Different raster resources normally produce
 different `GlyphBatchKey` values even when they use the same technique. A technique may opt two fonts into one key only if
 it actually creates a shared GPU resource capable of addressing both.
 
@@ -259,11 +320,12 @@ Core never composes separate paragraph batches with non-text scene objects.
 ## Upload without regrouping
 
 ```ts
-function stageRevision(revision: PreparedParagraphBatchRevision<MyTechnique>) {
+function stageRevision(previous: MyTargetRevision | undefined, revision: PreparedParagraphBatchRevision<MyTechnique>) {
   for (const batch of revision.glyphBatches) {
-    const gpu = ensureGpuBatch(batch.key, batch.font, batch.capacity, batch.storage);
+    const gpu = ensureGpuBatch(batch.key, batch.font, batch.binding, batch.capacity, batch.storage);
 
-    for (const range of batch.dirtyRanges) {
+    const ranges = rangesForTarget(batch, revision.submissions, previous?.sourceRevision, revision.revision);
+    for (const range of ranges) {
       gpu.upload(range);
     }
 
@@ -273,6 +335,9 @@ function stageRevision(revision: PreparedParagraphBatchRevision<MyTechnique>) {
   return revision.submissions;
 }
 ```
+
+`rangesForTarget` above names renderer policy, not another core operation: it selects `batch.dirtyRanges` for an adjacent
+revision and otherwise selects that batch's ranges from `revision.submissions`.
 
 An integration that loops through every paragraph glyph to choose a resource or sort key is violating this contract.
 
@@ -340,6 +405,15 @@ interface ParagraphBatchTargetStage<TargetRevision extends ParagraphBatchTargetR
 `stage()` may allocate, upload, and fail. It must not mutate the live target revision or storage used by an in-flight frame.
 `commit()` only swaps staged ownership at the engine's safe frame boundary.
 
+`previous` is always the attachment's committed target revision, never an unpublished candidate. When a newer source
+revision arrives, the attachment cancels or aborts the older candidate before staging the newer one. The full-range rule
+above therefore covers every skipped candidate without replaying obsolete target work.
+
+On commit, the attachment asks the prior target revision to retire only after the replacement is live; its `dispose()`
+implementation may defer physical release until engine fences permit it. Disposing the attachment aborts its unpublished
+candidate, retires its current target revision, and calls `target.dispose()` exactly once. Batch completion performs that
+same idempotent attachment disposal path.
+
 ```ts
 function beforeRender() {
   const next = attachment.commit();
@@ -379,6 +453,7 @@ interface CoreOwns {
   readonly paragraphLayout: true;
   readonly paragraphOrdering: true;
   readonly resourcePartitioning: true;
+  readonly rasterResourceBindings: true;
   readonly instanceSlotAllocation: true;
   readonly capacityChunking: true;
   readonly techniqueInstancePacking: true;
@@ -398,38 +473,42 @@ interface EngineOwns {
 }
 ```
 
+The portable technique decodes font raster data, selects each glyph's physical binding, and populates canonical instance
+storage. The engine target realizes those bindings as textures, buffers, bind groups, pipelines, or materials. See the
+[raster technique and engine resource API](raster-technique-api.md).
+
 ## Failure contract
 
 ```ts
-type CoreUpdateFailure =
-  | 'invalid-paragraph-input'
-  | 'font-outside-group'
-  | 'mixed-technique-font-stack'
-  | 'capacity-exceeded'
-  | 'preparation-failed'
-  | 'aborted'
-  | 'superseded';
+type CoreMutationRejection = 'invalid-paragraph-input' | 'font-outside-group' | 'mixed-technique-font-stack';
+
+type CorePreparationFailure = 'capacity-exceeded' | 'preparation-failed';
+
+type CoreHandledOutcome = 'published' | 'aborted' | 'superseded';
 
 type TargetFailure =
   | 'unsupported-technique'
   | 'unsupported-instance-schema'
   | 'gpu-resource-failed'
   | 'engine-limit-exceeded'
-  | 'allocation-failed'
-  | 'aborted'
-  | 'superseded';
+  | 'allocation-failed';
 ```
 
-Core failure leaves the prior runtime and paragraph-batch revisions current. Target failure leaves the prior target revision
-live. Neither boundary exposes a partially prepared generation.
+Mutation rejection leaves desired state unchanged. Core preparation failure leaves the prior runtime and paragraph-batch
+revisions current. Target failure leaves the prior target revision live. Abortion and supersession are handled outcomes,
+not failures. A core preparation failure latches the exact failed desired generation on its paragraph batch and excludes it
+from later updates until relevant mutation or an explicit capacity resize, allowing other batches to publish without retry
+churn. A target failure is retained only by that attachment; other targets remain independent, and `retry()` stages the
+current source revision once without requiring another core publication. No boundary exposes a partially prepared
+generation.
 
 ## Integration checklist
 
 ```ts
 const IntegrationMust = {
   acceptOneTechniquePerParagraphBatch: true,
-  synchronizeCanonicalDirtyRanges: true,
-  uploadOnlyCoreReportedDirtyRanges: true,
+  consumeTechniqueAuthoredBindings: true,
+  synchronizeAdjacentDirtyOrCurrentLiveRanges: true,
   executeCoreSubmissionOrder: true,
   resolveTransformsFromParagraphHandles: true,
   stageBeforeMutatingLiveResources: true,

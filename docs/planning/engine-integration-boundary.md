@@ -12,6 +12,9 @@ sources:
   - id: engine-contract
     resource: engine-integration-contract.md
     title: Engine integration contract
+  - id: raster-technique
+    resource: raster-technique-api.md
+    title: Raster technique and engine resource API
   - id: three-api
     resource: three-api.md
     title: Three.js text API
@@ -32,7 +35,7 @@ sources:
     title: Raw TypeGPU proof target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T16:07:26Z'
+  at: '2026-08-06T21:52:54Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -70,6 +73,8 @@ const Invariants = {
   syncOrAsyncIsChosenPerUpdate: true,
   coreOwnsSortingPartitioningPackingAndDirtyRanges: true,
   coreRetainsCanonicalCpuInstanceStorage: true,
+  rasterArtifactsAndCpuDataAreEngineNeutral: true,
+  engineTargetsRealizeGpuResources: true,
   targetsOwnTransformsGpuLifetimeAndSceneComposition: true,
 } as const;
 ```
@@ -121,7 +126,7 @@ Declares where the application permits core to order and submit text together. I
 
 ```ts
 const worldText = runtime.createParagraphBatch({ technique: mtsdf });
-const overlayText = runtime.createParagraphBatch({ fonts });
+const overlayText = runtime.createParagraphBatch({ technique: mtsdf });
 ```
 
 Core does not merge these phases. The engine may place particles, meshes, post-processing, or UI work between them.
@@ -145,7 +150,9 @@ These are the concrete rendering outputs. Core groups compatible glyph instances
 the ordered ranges that must be drawn.
 
 ```ts
-for (const batch of revision.glyphBatches) upload(batch.dirtyRanges);
+for (const batch of revision.glyphBatches) {
+  upload(isAdjacentTargetRevision ? batch.dirtyRanges : liveSubmissionRanges(batch.key));
+}
 for (const submission of revision.submissions) draw(submission);
 ```
 
@@ -158,22 +165,24 @@ for (const submission of revision.submissions) draw(submission);
 | Text runtime        | dirty aggregation, sync/async scheduling, shaping calls, supersession, atomic publication                           |
 | Font stack          | one immutable ordered missing-glyph policy over same-technique concrete fonts                                       |
 | Paragraph batch     | declared technique, application render phase, capacity policy, paragraph order domain                               |
-| Paragraph           | font selection, desired source, spans, content box, style, paint, order, glyph-origin overrides                     |
+| Paragraph           | batch-owned handle, font leases, desired source, spans, content box, style, paint, order, glyph-origin overrides    |
 | Core batch compiler | fallback runs, layout, resource partitioning, stable slots, overflow chunks, canonical CPU instances, dirty ranges  |
-| Technique           | instance schema, resource compatibility, instance writing, shader/data meaning                                      |
+| Technique           | artifact decoding, resource selection/bindings, canonical instance schema and writing, data meaning                 |
+| Raster program      | optional shader-backend resource and pipeline realization shared by compatible engine targets                       |
 | Engine target       | engine buffers, dirty-range synchronization, transforms, visibility, pass placement, upload, submission, retirement |
 
 ## Current system versus target
 
-| Current V1 behavior                                     | Target behavior                                                                                 |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `Text` combines paragraph, raster, and Three ownership  | Paragraph state and batch compilation live in core; Three is one target                         |
-| Property changes can prepare one `Text` immediately     | Handle setters only mark desired state dirty                                                    |
-| Async behavior follows object/runtime lifecycle         | Every synchronization chooses `update()` or `updateAsync()`                                     |
-| One paragraph stages one raster-owned Three draw object | One paragraph batch produces resource-compatible glyph storage and an ordered multi-submit plan |
-| Renderer raster modules decide glyph grouping           | Core and technique modules decide grouping and populate canonical CPU instance storage          |
-| React/Three lifecycle defines publication boundaries    | Runtime revision and target stage/commit define publication independently of any engine         |
-| Existing `Paragraph` is a separately callable subsystem | Paragraph implementation remains internal to the one retained handle API                        |
+| Current V1 behavior                                                      | Target behavior                                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `Text` combines paragraph, raster, and Three ownership                   | Paragraph state and batch compilation live in core; Three is one target                         |
+| Property changes can prepare one `Text` immediately                      | Handle setters only mark desired state dirty                                                    |
+| Async behavior follows object/runtime lifecycle                          | Every synchronization chooses `update()` or `updateAsync()`                                     |
+| One paragraph stages one raster-owned Three draw object                  | One paragraph batch produces resource-compatible glyph storage and an ordered multi-submit plan |
+| Renderer raster modules decide glyph grouping                            | Core and technique modules decide grouping and populate canonical CPU instance storage          |
+| Raster modules combine CPU decode, Three textures, TSL, and draw objects | Portable techniques end at CPU data/bindings; engine targets realize GPU resources and draws    |
+| React/Three lifecycle defines publication boundaries                     | Runtime revision and target stage/commit define publication independently of any engine         |
+| Existing `Paragraph` is a separately callable subsystem                  | Paragraph implementation remains internal to the one retained handle API                        |
 
 The migration must preserve shaping, layout, paint, raster validation, transactional failure, and disposal behavior while
 moving Three-specific ownership behind the target boundary.
@@ -187,6 +196,10 @@ moving Three-specific ownership behind the target boundary.
 - Treat nested option records as immutable replacement values.
 - Track dirty handles once with channel bitsets; do not scan every paragraph.
 - Coalesce add followed by dispose before synchronization to no work.
+- Keep every core paragraph handle permanently owned by its creating batch. Recreate desired state elsewhere through an
+  immutable snapshot plus destination `add()`, never handle transfer.
+- Make batch disposal cascade through owned paragraphs and attachments without disposing the runtime or fonts; make
+  runtime disposal the explicit outer cascade root.
 
 Proof:
 
@@ -205,6 +218,8 @@ expect(shapeInputs).toEqual(['C']);
 - Create immutable non-empty stacks whose first font is primary and later fonts resolve missing glyphs in order.
 - Reject duplicate logical membership where ambiguous and any different technique identity.
 - Require every paragraph to own a font selection and validate it against its batch's declared technique.
+- Lease every selected concrete font for the retained paragraph lifetime and make early font disposal fail rather than
+  publishing missing-glyph substitutions.
 - Reuse the renderer-neutral `txt` and `span` composer for imperative literals and React nested-text flattening.
 - Pass all changed paragraphs through Unicode analysis and batched shaping with font-slot identity intact.
 - Prove missing glyph fallback across at least Latin, Arabic, and CJK cases.
@@ -245,7 +260,14 @@ expect(currentParagraph(current).text).toBe('B');
 - Resolve every glyph to one same-technique font resource.
 - Allocate stable instance slots by technique/resource/pipeline variant/chunk.
 - Treat capacity as glyph-instance slots per physical resource buffer; paragraph handles have no capacity limit.
-- Default explicit batches to lazy 4,096-glyph chunks and support explicit `size` plus `grow`, `chunk`, or `error` policy.
+- Name the non-resizing policy `fixed`. Detect its overflow during synchronization after exact shaping, preserve the prior
+  revision, and require render-loop adapters to retain and report the typed failure without throwing from rendering.
+- Latch an unchanged failed batch generation after reporting it once. Exclude that generation from later runtime updates
+  until relevant mutation so unrelated batches and explicit replacements can publish without retry churn.
+- Let a caller change paragraph-batch capacity explicitly while preserving the batch, every paragraph handle, and every
+  attachment. Reuse compatible semantic caches, stage canonical and target replacement storage transactionally, and retire
+  old buffers only after publication and engine fences.
+- Default explicit batches to lazy 4,096-glyph chunks and support explicit `size` plus `grow`, `chunk`, or `fixed` policy.
 - Pack technique-specific instance attributes once.
 - Compute coalesced dirty ranges per storage channel.
 - Emit a submission list that preserves paragraph and technique compositing order across resource changes.
@@ -264,10 +286,33 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 
 - Define one canonical structure-of-arrays instance contract per technique.
 - Let core and the technique populate and retain those arrays.
-- Report exact coalesced dirty ranges for every changed glyph batch.
-- Let matching targets copy or upload ranges 1:1 and different engine layouts map only those ranges.
+- Report exact coalesced adjacent-revision dirty ranges for every changed glyph batch.
+- Let matching targets copy or upload the selected ranges 1:1 and different engine layouts map only those ranges.
+- Initialize a late or gapped target from the live ranges already named by the current submission plan.
 - Allow several targets and late attachment to consume the same prepared storage without reshaping.
 - Prove targets never regroup, resort, or reinterpret submission boundaries while synchronizing their buffers.
+
+### 5a. Split portable techniques from engine raster programs
+
+- Keep every baker free of runtime engine imports.
+- Move artifact validation, external resource resolution, CPU page/table decoding, coverage checks, glyph-resource
+  selection, and canonical instance packing into a renderer-neutral `RasterTechnique`.
+- Expose the technique-authored `binding` on every prepared glyph batch so targets receive the exact page/buffer selection
+  instead of rediscovering it from glyph IDs.
+- Move Three textures, attributes, TSL materials, scene objects, and renderer disposal into Three raster targets.
+- Permit an optional `RasterProgram` seam when multiple engines share a shader/resource backend such as TypeGPU and raw
+  WebGPU interop; do not require an artificial universal shader interface in core.
+- Retain decoded CPU page/table bytes through loaded-font lifetime so several targets and late attachment need no refetch or
+  decode.
+
+Proof:
+
+```ts
+expect(mtsdfBaker).not.toImportAnyRenderer();
+expect(mtsdfTechnique).not.toImportAnyRenderer();
+expect(threeMtsdfTarget.technique).toBe(mtsdfTechnique);
+expect(typeGpuMtsdfProgram.technique).toBe(mtsdfTechnique);
+```
 
 ### 6. Rebuild the Three.js public surface over hidden core objects
 
@@ -278,16 +323,24 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Make each `TextGroup` declare one technique and own one explicit scene render phase backed by a core paragraph batch and
   renderer target. Require every `Text` to carry a same-technique `Font` or `FontStack`. Make an ungrouped `Text` own an
   implicit batch of one derived from that selection.
-- Keep `Text` unbound until allocation or scene attachment. Reconcile direct and nested scene membership before the first
+- Keep `Text` unbound until scene attachment. Reconcile direct and nested scene membership before the first
   shaping call so resident text renders in the first observing frame.
 - Treat movement between batches as an atomic removal of the old paragraph allocation plus allocation of retained desired
   state in the destination; do not add a movable core paragraph contract.
+- Let `Text` own desired state and font leases independently of membership. Disposing a populated `TextGroup` unbinds all
+  member text and retires group resources without disposing children or fonts; each live compatible `Text` can bind fresh
+  membership in another group. Treat a disposed group that remains in the scene graph as a terminal non-rendering boundary,
+  never as permission to fall through into an ancestor group or implicit standalone batch.
 - Make `TextGroup` an `Object3D`, not a Group, so Three naturally carries the nearest real ancestor Group's `groupOrder`
   through it. Map `TextGroup.renderOrder` plus the core submission ordinal onto the physical draw objects' secondary
   render orders; do not add a hidden Group or an inheritance API.
 - Let Three own sync/async core calls, dirty-range mapping, transform updates, and publication during the render lifecycle.
   The application calls only `renderer.render(scene, camera)`.
-- Bind a group to one renderer target lifetime and require separate groups for separate scenes, render phases, or renderers.
+- Expose explicit capacity changes on `TextGroup` and standalone `Text` while preserving their identities and hidden
+  paragraph handles. Reject `TextGroup.clone()` and `copy()` because recursive scene copying cannot safely duplicate batch
+  membership, external refs, subscriptions, and renderer resources.
+- Bind a group to one renderer target lifetime. Require separate groups for simultaneous scene placements, intentional
+  render phases, or different renderers; ordinary Three reparenting may move one group between scenes.
 - Keep existing TSL technique shaders and WebGPU/WebGL2 parity while removing Three-owned glyph grouping, sorting,
   partitioning, slot allocation, and submission-plan computation.
 
@@ -307,8 +360,8 @@ Build the smallest application in `AlexJWayne/typegpu-shader-canvas` that proves
 - explicit baked artifact loading;
 - one same-technique `FontStack` with ordered missing-glyph resolution;
 - more than one paragraph in one paragraph batch;
-- core-owned canonical instance storage and exact dirty ranges;
-- at least two physical font-resource batches and ordered submissions;
+- core-owned canonical instance storage, adjacent dirty ranges, and current live submission ranges;
+- at least two physical raster-resource batches and ordered submissions;
 - one synchronous update and one asynchronous update;
 - no Three.js import or Three-derived adapter logic.
 
@@ -368,7 +421,10 @@ callback-form asynchronous updates do not allocate a public Promise.
 - No-op `update()` is allocation-free.
 - Newer synchronization prevents stale async publication.
 - Core, not the engine, owns glyph sorting, resource partitioning, slot allocation, packing, dirty ranges, and submissions.
-- Core retains canonical packed CPU storage and targets synchronize only reported dirty ranges into their own buffers.
+- Core retains canonical packed CPU storage. Targets synchronize adjacent dirty ranges, or current live submission ranges
+  when first attached or recovering across a revision gap, into their own buffers.
 - Separate paragraph batches remain separate render phases.
+- Cloning a batch returns distinct mapped handles and storage; replacing a Three group retains its child object identities
+  while allocating a distinct hidden batch.
 - Three.js, raw TypeGPU, and Wayfare execute the same core output for Bitmap, MTSDF, and Slug.
 - Full repository checks, package-size gates, and documentation validation pass.

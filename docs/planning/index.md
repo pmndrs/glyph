@@ -4,10 +4,11 @@
 
 - [Project brief](project-brief.md) — product intent, current integration slice, V1, and later horizon.
 - [Runtime and bake API V0](api-shapes.md) — public and internal TypeScript contract fixture.
-- [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, implicit batches, native Three ordering, and render-loop synchronization.
-- [Core text API](core-api.md) — authoritative API and rationale for ordered font stacks, technique-declared paragraph render phases, typed text composition, desired-state handles, per-update scheduling, core-owned physical batching, and target-provided storage.
-- [Engine integration contract](engine-integration-contract.md) — exact prepared glyph-batch, target storage, submission order, transform, staging, and disposal contract.
-- [Raster and baker plugin guide](raster-baker-plugin.md) — build an external technique through the public runtime, baker, artifact, discovery, and lifecycle contracts.
+- [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, group disposal/rebinding, font leases, retained non-throwing errors, ordering, and render-loop synchronization.
+- [Core text API](core-api.md) — authoritative API and rationale for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, font leases, fixed-capacity failure, physical batching, and cascading disposal.
+- [Engine integration contract](engine-integration-contract.md) — exact prepared glyph-batch, target storage, submission order, transform, staging, attachment ownership, and disposal contract.
+- [Raster technique and engine resource API](raster-technique-api.md) — authoritative split between portable baker/artifact/CPU technique data, optional shader-backend programs, and engine GPU targets.
+- [Current V1 raster and baker plugin guide](raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the accepted extraction replaces it.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
 - [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — WIP extraction and proof plan for the batched core API, Three.js migration, and Wayfare/TypeGPU adapter.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.

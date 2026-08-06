@@ -32,7 +32,7 @@ sources:
     title: Three.js BufferAttribute
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T17:05:36Z'
+  at: '2026-08-06T21:52:54Z'
 ---
 
 # Three.js text API
@@ -52,7 +52,15 @@ FontLoader
 
 ```ts
 import * as THREE from 'three/webgpu';
-import type { FontSelection, FormattedText, TextInput } from '@pmndrs/text';
+import type {
+  FontSelection,
+  FormattedText,
+  ParagraphBatchTargetError,
+  TextInput,
+  TextPreparationError,
+} from '@pmndrs/text';
+
+type TextError = TextPreparationError | ParagraphBatchTargetError;
 
 interface FontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
@@ -90,9 +98,14 @@ declare class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Obje
   readonly capacity: GlyphBufferCapacity;
   readonly textCount: number;
   readonly disposed: boolean;
-  updateMode: 'sync' | 'async';
+  readonly error: TextError | undefined;
+  onError: ((error: TextError) => void) | undefined;
 
   add<const Children extends readonly THREE.Object3D[]>(...children: CompatibleTextChildren<Technique, Children>): this;
+  setCapacity(capacity: GlyphBufferCapacity): void;
+  retry(): void;
+  clone(recursive?: boolean): never;
+  copy(source: THREE.Object3D, recursive?: boolean): never;
   dispose(): void;
 }
 
@@ -103,6 +116,8 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   readonly bound: boolean;
   readonly disposed: boolean;
   readonly layout: ParagraphLayout | undefined;
+  readonly error: TextError | undefined;
+  onError: ((error: TextError) => void) | undefined;
 
   font: FontSelection<Technique>;
   get text(): string;
@@ -112,7 +127,6 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   style: ParagraphStyle;
   paint: GlyphPaintInput;
   rasterPixelRatio: number;
-  updateMode: 'sync' | 'async';
 
   set(properties: TextUpdate<Technique>): void;
   setSpan(index: number, span: TextSpan<Technique>): void;
@@ -122,15 +136,22 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   setGlyphOrigins(update: GlyphOriginUpdate): void;
   clearGlyphOriginOverrides(): void;
 
+  setCapacity(capacity: GlyphBufferCapacity): void;
+  retry(): void;
   dispose(): void;
 }
 
 export { txt, span } from '@pmndrs/text';
-export type { FormattedText, GlyphBufferCapacity, SpanFormat, SpanStyle, SpanTag, UnboundSpanTag } from '@pmndrs/text';
+export type {
+  FormattedText,
+  GlyphBufferCapacity,
+  SpanFormat,
+  SpanStyle,
+  SpanTag,
+  TextPreparationError,
+  UnboundSpanTag,
+} from '@pmndrs/text';
 ```
-
-`TextGroup.updateMode` controls the hidden core update for every `Text` bound to that group. `Text.updateMode` applies only
-while the object owns an implicit standalone batch. Both are mutable policies, not construction-time runtime choices.
 
 ## Load fonts with the Three.js loader
 
@@ -159,15 +180,21 @@ const [inter, noto, iconFont] = await Promise.all([
 const uiFont = createFontStack(inter, noto);
 ```
 
-The first load in a Three font-cache domain lazily creates the core shaping engine. Concurrent loads share that
-initialization Promise, and later loaders in the same domain reuse the resolved shaper. The cache domain is integration-
-owned; Three users do not construct a core registry or runtime. `loadAsync()` does not resolve until the font, selected
-technique data, and synchronous shaper are ready. Loading remains an explicit application wait; shaping ordinary warm edits
-does not become a readiness Promise.
+The first load in a Three font-cache domain lazily creates the single core text runtime and shaping engine. Concurrent loads
+share that initialization Promise, and later loaders in the same domain reuse the resolved runtime and shaper. The cache
+domain is integration-owned; Three users do not construct a core registry or runtime. `loadAsync()` does not resolve until
+the font, selected technique data, and synchronous shaper are ready. Loading remains an explicit application wait; shaping
+ordinary warm edits does not become a readiness Promise.
 
 The callback `load()` and Promise-returning `loadAsync()` follow the standard Three.js loader pattern and participate in the
 provided `LoadingManager`. The loaded font is a Three-surface handle; it does not expose the hidden core runtime or core font
 handle.
+
+Constructing a `Text` acquires a lease on every concrete font in its `Font` or `FontStack`, even while the object is
+detached. Changing `text.font` acquires the complete replacement selection before releasing the old leases.
+`LoadedFont.dispose()` fails while a live `Text` lease remains, so disposing a group or moving text can never silently drop
+fallback data or replace a glyph with missing-glyph output. A `FontStack` value alone owns no lease; using a stack with a
+successfully disposed member for a new `Text` is rejected.
 
 ## Create an explicit batch with `TextGroup`
 
@@ -190,7 +217,7 @@ interface TextGroupOptions<Technique extends AnyRasterTechnique> {
 
 interface GlyphBufferCapacity {
   readonly size: number;
-  readonly policy: 'grow' | 'chunk' | 'error';
+  readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 ```
 
@@ -209,8 +236,36 @@ const denseText = new TextGroup({
 
 `size` counts glyph-instance slots per physical buffer, not texts and not total glyphs across the `TextGroup`. `chunk`
 allocates another buffer without replacing published storage, `grow` transactionally replaces the full buffer with a
-buffer whose capacity doubles until the pending glyphs fit, and `error` makes `size` a hard per-buffer limit. The readonly
+buffer whose capacity doubles until the pending glyphs fit, and `fixed` makes `size` a hard per-buffer limit. The readonly
 `capacity` property exposes the normalized explicit or default value.
+
+`add()` validates text lifetime, font lifetime, and technique compatibility. It does not shape, so it cannot know whether a
+fixed physical buffer will overflow. That check occurs during the owning group's pre-render synchronization, after fallback,
+shaping, and layout reveal exact per-resource glyph counts.
+
+Resize explicitly when a fixed group needs a larger allocation:
+
+```ts
+const overflow = labels.error;
+if (overflow?.kind !== 'capacity-exceeded') throw new Error('No fixed-capacity overflow to resize');
+
+labels.setCapacity({ size: overflow.required, policy: 'fixed' });
+```
+
+`setCapacity()` preserves the public `TextGroup`, every nested `Text`, and every bound core `Paragraph`. It forwards the
+normalized capacity to the existing hidden `ParagraphBatch`, clears an unchanged capacity-overflow latch, and schedules a
+transactional canonical-storage and target-storage replacement for the next synchronization. The previous complete draw
+objects remain live until the replacement commits; renderer fences then retire them normally. No scene reparenting,
+listener transfer, ref replacement, or cleanup is required.
+
+`fixed` prevents automatic growth; it does not make the configured size permanently immutable. `setCapacity()` may also
+switch policies or shrink deliberately. Passing the current normalized capacity is a no-op. A shrink that cannot hold the
+desired generation reports the ordinary typed overflow while preserving the prior complete draw.
+
+`TextGroup.clone()` and `TextGroup.copy()` are unsupported and throw. A group owns identity-bearing text membership,
+subscriptions, attachment state, and renderer resources that cannot follow ordinary recursive `Object3D` copy semantics
+safely. Construct a separate group and add intentionally distinct `Text` objects when a second independently renderable
+tree is required.
 
 A `TextGroup` is one author-declared text render phase and one hidden core paragraph batch. Its technique fixes the
 canonical instance layout, target implementation, and shader family before any text is attached. Every `Text` owns its
@@ -316,7 +371,9 @@ transform, desired properties, and glyph overrides remain the same object throug
 
 The standalone `capacity` value configures only that implicit batch and defaults to `{ size: 256, policy: 'grow' }` to
 avoid reserving a full explicit-group chunk for every isolated label. While the object is inside a `TextGroup`, the parent
-group's technique, capacity policy, and update policy are authoritative; the `Text` always retains its own font selection.
+group's technique and capacity policy are authoritative; the `Text` always retains its own font selection.
+`text.setCapacity()` changes the retained implicit-batch capacity without replacing the `Text`; while grouped, that setting
+is retained but inactive until the text becomes standalone again.
 
 ## Bind late; render on the first frame
 
@@ -338,20 +395,109 @@ Membership is resolved before the first shaping call. `Object3D` `added`, `remov
 events mark scene membership dirty synchronously. Because those events do not bubble through every arbitrary ancestor
 change, `Text` and `TextGroup` perform a final ancestry reconciliation at the start of `updateMatrixWorld()`.
 
-The required order is:
+The integration uses `updateMatrixWorld()` as its automatic synchronization hook. `TextGroup` owns a private
+`ThreeTextBatchBinding`; this is the object that holds the core `ParagraphBatch`, its `ParagraphBatchAttachment`, the
+`ThreeParagraphBatchTarget`, the internal submission meshes, and the map from each child `Text` to its core `Paragraph`.
+It is implementation machinery, not another public API.
+
+The implementation sequence is:
 
 ```ts
-reconcileTextMembership();
-applyPendingRemovalsAndAllocations();
-synchronizeHiddenCore();
-publishThreeDrawObjects();
-super.updateMatrixWorld();
-// Three.js then builds the render list and draws.
+class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Object3D {
+  readonly #binding: ThreeTextBatchBinding<Technique>;
+
+  override updateMatrixWorld(force?: boolean): void {
+    this.#binding.reconcileMembership(this);
+    this.#binding.applyPendingMembership();
+
+    // Runtime-wide: shape, lay out, sort, partition, allocate, pack, and publish.
+    // Returns runtime.current without allocating when no desired state is dirty.
+    this.#binding.runtime.update();
+
+    // Commit any target revision staged by the runtime publication. This installs
+    // the exact internal meshes needed by the core-authored submission sequence.
+    this.#binding.commitPreparedRevision();
+
+    // Three computes this group, every child Text, and every newly installed mesh.
+    super.updateMatrixWorld(force);
+
+    // Core glyph origins are paragraph-local. Compose them with the now-current
+    // Text transforms, copy only changed transform slots, and mark those attribute
+    // ranges for WebGPURenderer.
+    this.#binding.writeGlyphTransforms();
+  }
+}
 ```
 
-Three.js 0.185.1 calls `scene.updateMatrixWorld()` before render-list construction in both `WebGPURenderer` and
-`WebGLRenderer`. Publishing before descendant traversal therefore makes newly attached resident text visible in that same
-render call. No preparatory frame is required.
+`applyPendingMembership()` is where scene membership becomes core membership. For each newly bound object it calls
+`paragraphBatch.add(text.desiredState)` and records the returned `Paragraph`; for each departure it calls
+`paragraph.dispose()`. It applies desired-state setters to already bound paragraphs before `runtime.update()`. No shaping
+happens in `Text.text`, `Text.set()`, `Text.setSpan()`, or the scene-graph event handlers.
+
+`runtime.update()` publishes one atomic `TextRuntimeRevision`. Each attached paragraph-batch target receives its changed
+`PreparedParagraphBatchRevision` by calling:
+
+```ts
+threeTarget.stage(attachment.current, preparedParagraphBatchRevision);
+```
+
+`ThreeParagraphBatchTarget.stage()` performs the engine-layout work: it creates or reuses the required Three
+`BufferAttribute` storage, selects `PreparedGlyphBatch.dirtyRanges` when its committed target revision is the immediate
+predecessor, otherwise selects every live range for that batch from the prepared submission plan, copies those ranges, sets
+the corresponding Three update ranges and `needsUpdate`, and creates one internal submission mesh or draw proxy for each entry in
+`preparedParagraphBatchRevision.submissions`. It does not shape, sort, regroup, or upload directly to a GPU queue. A ready
+stage is still unpublished until `commitPreparedRevision()` calls `attachment.commit()` at this render boundary and swaps
+the binding's live internal draw objects.
+
+With Three's default `scene.matrixWorldAutoUpdate = true`, the complete WebGPURenderer 0.185.1 call chain is:
+
+```ts
+renderer.render(scene, camera)
+  -> Renderer._renderScene(scene, camera)
+  -> scene.updateMatrixWorld()
+     -> TextGroup.updateMatrixWorld(force)
+        -> binding.reconcileMembership(textGroup)
+        -> binding.applyPendingMembership()
+           -> ParagraphBatch.add(...) / Paragraph.dispose() / Paragraph setters
+        -> TextRuntime.update()
+           -> publish TextRuntimeRevision
+           -> ThreeParagraphBatchTarget.stage(previous, preparedBatch)
+        -> binding.commitPreparedRevision()
+           -> ParagraphBatchAttachment.commit()
+           -> install the staged internal submission meshes
+        -> Object3D.updateMatrixWorld(force)
+           -> Text.updateMatrixWorld(force)        // transform only when grouped
+           -> submissionMesh.updateMatrixWorld(force)
+        -> binding.writeGlyphTransforms()
+           -> BufferAttribute.addUpdateRange(...)
+           -> BufferAttribute.needsUpdate = true
+  -> Renderer._projectObject(...)                  // build and sort the render list
+  -> submissionMesh.onBeforeRender(...)
+  -> Renderer._renderObjectDirect(...)
+  -> Geometries.updateForRender(...)
+  -> Attributes.update(...)
+  -> WebGPUBackend.updateAttribute(...)            // actual dirty-range GPU write
+  -> backend.draw(...)                             // one core-authored submission
+```
+
+Names beginning with `Renderer._` are shown to locate the integration in Three.js 0.185.1's implementation; they are not
+APIs the package calls or overrides. The supported hook is the public `Object3D.updateMatrixWorld()` override. The internal
+submission meshes use ordinary Three render-list and buffer-update behavior.
+
+If an application sets `scene.matrixWorldAutoUpdate = false`, Three deliberately skips `scene.updateMatrixWorld()` and
+therefore skips this automatic text synchronization. That application has opted into manual scene updates and must call
+`scene.updateMatrixWorld()` before `renderer.render(scene, camera)`; it does not call a text-specific update method.
+
+Publishing the target revision before `super.updateMatrixWorld()` ensures newly installed meshes receive a world matrix in
+the same traversal. Writing transform attributes after it ensures they read completed `Text.matrixWorld` values. Both
+happen before `_projectObject()` builds the render list, so resident text added immediately before `renderer.render()` is
+present, transformed, uploaded, and drawn in that call; no preparatory frame is required.
+
+`super.updateMatrixWorld()` visits every child `Text` exactly once. A grouped `Text` still performs that normal transform
+update but skips its standalone preparation branch because its nearest `TextGroup` owns the paragraph membership and draw
+objects. Joining or leaving a group never changes `matrixAutoUpdate` or `matrixWorldAutoUpdate`; caller-authored Three matrix
+policy survives unchanged. A detached text owns no preparation, while a directly rendered standalone text resumes its own
+implicit-batch branch. That branch uses the same method order through a private one-paragraph `ThreeTextBatchBinding`.
 
 ## Moving between batches is remove plus add
 
@@ -389,6 +535,38 @@ than waiting for another synchronization.
 Changing parents during an active Three.js traversal is unsupported, matching Three.js scene-graph expectations. Scene
 membership changes must complete before `renderer.render()` enters world-matrix traversal.
 
+## Dispose a group; retain its text
+
+`TextGroup.dispose()` is terminal for the group, not recursive destruction of its scene children:
+
+```ts
+groupA.add(label);
+renderer.render(scene, camera);
+
+groupA.dispose();
+
+groupA.disposed; // true
+label.disposed; // false
+label.bound; // false
+label.textGroup; // undefined, even while label.parent is still groupA
+
+groupB.add(label); // Three reparents the same object
+renderer.render(scene, camera); // new paragraph membership renders in groupB
+```
+
+Disposal synchronously invalidates `groupA` as a text-batch boundary, unbinds every direct or nested member `Text`, cancels
+the group's unpublished preparation, and begins retirement of its core paragraph batch and renderer targets. Existing
+children keep their transforms, desired state, glyph-origin override state, and font leases. The group contributes no
+further text submissions and rejects new text membership, but disposal does not mutate Three parent/child relationships.
+While a live `Text` remains below the disposed group in the scene graph, that disposed group stays a terminal non-rendering
+batch boundary: ancestry reconciliation must not fall through to an outer `TextGroup` or create an implicit standalone
+batch. The caller moves the text explicitly when it should render elsewhere.
+
+`groupB.add(label)` validates the live text, every leased font, and technique compatibility before calling Three's
+reparenting operation. Failure leaves `label` unchanged and unbound; success creates a new core paragraph handle and group-B
+slots before its first render. No group-A paragraph handle or GPU allocation transfers to group B, and group-A resources
+retire independently according to their renderer fences.
+
 ## Three.js owns synchronization
 
 ```ts
@@ -397,28 +575,19 @@ renderer.setAnimationLoop(() => {
 });
 ```
 
-Applications do not call a core update and then copy the result into Three. Each standalone `Text` or explicit `TextGroup`
-owns a hidden core runtime/batch coordinator. Its `updateMatrixWorld()` implementation coalesces every desired-state and
-membership change, invokes the selected core update, publishes the resulting Three draw objects, and then continues normal
-matrix traversal.
+Applications do not call a core update and then copy the result into Three. The integration coalesces desired-state and
+membership changes, invokes the shared runtime's `update()` from each encountered standalone `Text` or `TextGroup`, publishes
+that owner's resulting Three draw objects, and then continues normal matrix traversal. Core specifies that a no-op
+`update()` returns the current revision without allocation or notification. The first call after a mutation therefore
+prepares every dirty paragraph across every paragraph batch; later calls in the same frame, scene, or render pass are cheap
+revision checks unless their own membership reconciliation introduced new dirty work.
 
-The default `updateMode` is `'sync'`:
-
-```ts
-worldText.updateMode = 'sync';
-```
-
-Warm edits are current in the render call that observes them. Switch the same group to asynchronous preparation without
-recreating fonts, text objects, or runtime state:
-
-```ts
-worldText.updateMode = 'async';
-```
-
-Async mode starts at most one hidden update for the current desired-state snapshot and renders the last complete revision.
-Newer edits remain dirty. A completed candidate publishes on the next render traversal; stale work cannot replace a newer
-sync or async result. Loading and raster-page misses remain explicit readiness work owned by `FontLoader` and the loaded
-font handle rather than being silently started as ordinary shaping.
+`WebGPURenderer.render(scene, camera)` updates and projects only the supplied scene or object root. Three does not first
+update every scene known to the application. When an application renders several scenes, each scene traversal naturally
+encounters its own text owners and calls the same shared runtime. No application-level text update is required: the first
+encounter after a mutation performs the work, and every later encounter observes the published revision. Warm edits are
+current in the render call that observes them. Loading and raster-page misses remain explicit readiness work owned by
+`FontLoader` and the loaded font handle rather than being silently started as ordinary shaping.
 
 ## Change retained text at runtime
 
@@ -537,23 +706,22 @@ their primary `groupOrder`.
 
 ### Construction-only batch identity
 
-These values define compatibility and have no setters:
+Technique defines compatibility and has no setter:
 
 ```ts
 new TextGroup({
   technique, // canonical instance layout, target, and shader family
-  capacity, // physical glyph-buffer size and overflow policy
+  capacity, // initial physical glyph-buffer size and overflow policy
 });
 ```
 
-Changing them requires a new `TextGroup`. Existing `Text` objects can be added to that replacement because they bind late;
-the objects themselves, their transforms, and desired state do not need to be recreated.
+Changing technique requires a new `TextGroup`. Capacity is deliberately mutable through `setCapacity()` because storage
+replacement must preserve the group, its text identities, and its core paragraph handles.
 
-For standalone `Text`, `capacity` is likewise construction-only because it defines the implicit batch. Its font selection
-is mutable; changing technique rebuilds the implicit batch. Inside an explicit `TextGroup`, changing to a different
-technique is rejected and requires moving the retained `Text` to a compatible group.
-The renderer identity becomes fixed on first draw and is also structural. `renderOrder` and `updateMode` remain mutable
-runtime policies.
+For standalone `Text`, `setCapacity()` changes its implicit batch without changing the public object. Its font selection is
+mutable; changing technique rebuilds the implicit batch. Inside an explicit `TextGroup`, changing to a different technique
+is rejected and requires moving the retained `Text` to a compatible group.
+The renderer identity becomes fixed on first draw and is also structural. `renderOrder` remains mutable.
 
 ### Retained changes that rebuild internal storage
 
@@ -561,13 +729,45 @@ These operations retain public objects but may allocate new internal glyph slots
 
 ```ts
 destination.add(text); // remove old paragraph allocation, add new allocation
+textGroup.setCapacity(nextCapacity); // preserve handles; replace canonical and target storage transactionally
 text.font = anotherFont; // reshape and possibly change physical resource batch
-text.spans = nextSpans; // reshape and possibly change font-resource submissions
+text.spans = nextSpans; // reshape and possibly change raster-resource submissions
 text.rasterPixelRatio = next; // select resources and rebuild affected target storage
 ```
 
-Glyph overflow follows the owning group's `grow`, `chunk`, or `error` policy. All fallible replacement work stages before
+Glyph overflow follows the owning group's `grow`, `chunk`, or `fixed` policy. All fallible replacement work stages before
 publication; failure preserves the last complete revision.
+
+### Text errors do not escape rendering
+
+A synchronous core preparation failure is caught by the Three adapter before it can escape `renderer.render()`. An
+asynchronous failure enters the same adapter state. The owner is the effective `TextGroup`, or the standalone `Text` for an
+implicit batch:
+
+```ts
+labels.onError = (error) => {
+  if (error.kind === 'capacity-exceeded') {
+    console.error(`Text needs ${error.required} glyph slots; the fixed limit is ${error.capacity}.`);
+  }
+};
+
+renderer.render(scene, camera);
+labels.error; // typed preparation or target failure, or undefined after a successful revision
+```
+
+The integration sets `error` during synchronization and defers `onError` until after the active Three traversal. Core
+preparation failure or retained `attachment.error` preserves the last complete target revision; a first-render failure
+submits nothing for that owner. The failed desired generation stays retained, but Three does not retry an identical failure
+every frame. A relevant text, font, content-box, membership, or explicit `setCapacity()` change schedules new core work;
+`retry()` requests one explicit attempt against unchanged state. Successful publication clears `error`. Capacity recovery
+means resizing explicitly, reducing demand, or removing or moving text. No failure can partially publish or escape the
+render call.
+
+While a `Text` is grouped, the group is the synchronization owner: read `text.textGroup.error` and use the group's callback.
+The `Text` properties report and observe only its implicit standalone batch and are inactive while grouped. One failed
+generation schedules one deferred callback, not one callback per render frame. `text.retry()` delegates to that effective
+group while grouped and to the retained implicit attachment while standalone; `group.retry()` retries only that group's
+attachment.
 
 ### Hot retained changes
 
@@ -642,11 +842,13 @@ attachment. Mutating or adding a disposed `Text` throws.
 `TextGroup` owns its hidden paragraph batch, canonical batch storage, renderer-specific targets, materials, attributes,
 and subscriptions. Removing a child only frees/recycles logical slots inside those shared resources. `TextGroup.dispose()`
 permanently releases the group-owned resources, but does not dispose or remove child `Text` objects; callers may remove
-those retained children and add them to a live compatible group.
+those retained children and add them to a live compatible group. A disposed group rejects text attachment and cannot be
+reactivated.
 
-`LoadedFont.dispose()` releases that loaded-font ownership only after every `Text` or `FontStack` using it is gone;
-`FontStack` itself owns no lifecycle and cannot keep a disposed concrete font valid. `FontLoader.dispose()` releases its
-cache-domain ownership; shared shaping state retires only after its final loader/font owner is gone.
+`LoadedFont.dispose()` fails while any live `Text` lease remains. After the final text is disposed or changes font, font
+disposal releases that loaded-font ownership. `FontStack` itself owns no lifecycle and cannot keep a disposed concrete font
+valid. `FontLoader.dispose()` releases its cache-domain ownership; loaded fonts and their shared shaping state remain valid
+until their own final owners are gone.
 
 Renderer-specific GPU resources retire according to the renderer target's in-flight-frame rules. Disposal is idempotent.
 
@@ -662,12 +864,18 @@ The implementation is not complete until tests prove:
 - add/remove/reparent events plus pre-render ancestry reconciliation cannot leave stale or duplicate membership;
 - moving a `Text` performs an atomic old allocation removal and new allocation creation without ghost glyphs;
 - removing one text recycles its slots without shrinking or disposing shared group buffers;
+- disposing a populated group unbinds but does not dispose its direct or nested text, and each retained text can bind to a live compatible group;
+- text left parented below a disposed group remains unbound and cannot fall through to an outer group or implicit standalone batch;
 - disposed text rejects mutation and attachment, text disposal does not dispose group/font resources, and group disposal does not dispose child text/fonts;
-- separate scenes use separate groups, and attempting to draw one group through a second renderer fails before submission;
+- font disposal fails while paragraph or text leases remain, and group disposal or reparenting cannot create missing glyphs by releasing font data;
+- fixed capacity is checked after shaping rather than by `add()`, preserves the last complete revision, never throws from Three traversal, reports once, and retries only after a relevant change;
+- `setCapacity()` preserves the group, every public `Text`, every core paragraph handle, and existing target attachments while replacing canonical and GPU storage transactionally;
+- `TextGroup.clone()` and `copy()` are rejected rather than silently duplicating identity-bearing text, listener, and renderer state;
+- simultaneous scene placements use separate groups, ordinary reparenting can move one group between scenes, and attempting
+  to draw one group through a second renderer fails before submission;
 - construction-only incompatibilities fail without mutating the current group;
 - runtime setters coalesce and select the narrowest dirty work;
-- default synchronous mode renders warm edits in the observing frame;
-- asynchronous mode renders the last complete revision and treats stale work as a resolved superseded outcome;
+- automatic synchronous preparation renders warm edits in the observing frame;
 - a same-technique `FontStack` produces the core-authored minimum physical batches and exact ordered submissions;
 - mixed-technique group additions and font stacks fail before shaping without replacing live text;
 - font-bound, font-stack-bound, style-only, reusable-tag, and readonly-tuple `span()` forms normalize identically, while mixed-technique format lists fail;
