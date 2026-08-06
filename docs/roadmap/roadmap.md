@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-06T22:55:24Z'
 ---
 
 # Canonical implementation roadmap
@@ -143,7 +143,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 11.6  |   ⬜   | Rebuild Bitmap, MTSDF, and Slug behind `FontLoader` → `TextGroup` → `Text` with lazy shaper initialization plus late binding, implicit standalone batches, safe group disposal/rebinding, native ordering, renderer isolation, and no exposed core handles. |  XL  | 11.5       |
 | 11.7  |   ⬜   | Rebuild React Three Fiber over the same retained `TextGroup`/`Text` lifecycle, letting Three synchronize once per batch during render while preserving nested spans.                                                                                        |  L   | 11.6       |
 | 11.8  |   ⬜   | Prove the same prepared glyph batches and ordered submissions through raw TypeGPU and Wayfare with independent transforms, phases, capacity, overflow, sync/async updates, and disposal.                                                                    |  XL  | 11.5       |
-| 11.9  |   ⬜   | Prove the GPU-authoring seam with a Three.js + TypeGPU Bitmap/Slug path without changing portable or Three scene ownership.                                                                                                                                 |  L   | 11.6, 11.8 |
+| 11.9  |   ⬜   | Prove TypeGPU-authored Bitmap/Slug shader logic through `@typegpu/three` `toTSL()` without changing portable or Three scene ownership; inspect emitted shaders and measure the isolated dependency, transfer, graph-build, and compilation cost.            |  L   | 11.6, 11.8 |
 | 11.10 |   ⬜   | Reconcile implementation against the authoritative README and engine contract, remove the legacy V1 surface, update package concepts/digests, and close package, browser, GPU, size, and OKF gates.                                                         |  L   | 11.6–11.9  |
 
 ## Milestone 0 — accept contracts and versions

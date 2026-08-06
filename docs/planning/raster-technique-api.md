@@ -30,9 +30,12 @@ sources:
   - id: typegpu-pipelines
     resource: https://docs.swmansion.com/TypeGPU/apis/pipelines/
     title: TypeGPU pipelines and raw WebGPU pipeline interop
+  - id: typegpu-three
+    resource: https://docs.swmansion.com/TypeGPU/ecosystem/typegpu-three/
+    title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T22:12:47Z'
+  at: '2026-08-06T22:55:24Z'
 ---
 
 # Raster technique and engine resource API
@@ -364,14 +367,33 @@ This does not make the two engine targets identical. They still differ in lifecy
 culling, pass ordering, command ownership, and retirement. If an engine does not expose compatible WebGPU device/pass
 interop, the TypeGPU program cannot be inserted merely because the engine itself runs on WebGPU.
 
-TSL is a Three.js node-graph API and produces Three materials, so its program implementation is intentionally Three-only:
+TSL is a Three.js node-graph API and produces Three materials, so a completed TSL program remains Three-only. Its raster
+shader logic does not have to be authored independently, however. `@typegpu/three` can translate a TypeGPU function into a
+TSL node with `toTSL()`, while `fromTSL()` lets that function consume Three-owned nodes such as UVs, instance attributes, or
+resource accessors:
 
 ```ts
-createThreeMtsdfTarget({ renderer, program: createThreeMtsdfTslProgram() });
+const coverageNode = t3.toTSL(mtsdfCoverage);
+createThreeMtsdfTarget({ renderer, program: createThreeMtsdfTslProgram({ coverageNode }) });
 ```
 
-The portable MTSDF baker, decoded data, resource binding, and canonical instance storage remain shared with the TypeGPU
-path. Only GPU realization and shader/pipeline construction differ.
+This admits two Three program implementations behind the same target contract: a native TSL implementation, and an optional
+TypeGPU-authored implementation adapted through `toTSL()`. In the latter, TypeGPU can become the authoritative source for
+shared raster evaluation while the Three adapter still owns material construction, renderer accessors, blending, depth,
+pipeline state, and lifecycle. `toTSL()` is an authoring bridge; it does not move Three scene or render-pass ownership into
+the portable technique.
+
+The TypeGPU-authored path remains an experiment until the implementation proof:
+
+- compiles against the repository-pinned Three.js version and the selected `@typegpu/three` version;
+- inspects the emitted WebGPU shader and proves Bitmap and Slug output parity against the native TSL path;
+- measures tree-shaken raw, gzip, and Brotli transfer cost plus graph construction and shader compilation cost;
+- distinguishes `typegpu`, `@typegpu/three`, transform metadata, and optional build-plugin cost;
+- keeps the dependency behind an explicit Three export subpath so the default Three path and portable technique do not pay
+  for it.
+
+The npm package's unpacked size is not application bundle evidence. If the proof makes TypeGPU the authoritative source,
+the measured generated program—not package metadata—owns the cost decision.
 
 ## Package the boundaries independently
 
@@ -380,8 +402,10 @@ The dependency direction is one-way:
 ```ts
 RasterBaker
   -> RasterTechnique
-     -> TypeGpuRasterProgram?  -> EngineTarget
-     -> ThreeTslRasterProgram  -> ThreeTarget
+     -> TypeGpuShaderLogic?
+        -> TypeGpuRasterProgram       -> EngineTarget
+        -> @typegpu/three toTSL       -> ThreeTslRasterProgram -> ThreeTarget
+     -> NativeThreeTslRasterProgram?  -> ThreeTarget
 ```
 
 Do not publish one monolithic “raster plugin” that imports an engine at its portable entry point. A technique package may
@@ -396,9 +420,11 @@ expect(mtsdfTechnique).not.toImportAnyRenderer();
 
 expect(threeMtsdfTarget.technique).toBe(mtsdfTechnique);
 expect(typeGpuMtsdfProgram.technique).toBe(mtsdfTechnique);
+expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 
 expect(threeRevision.submissions).toEqual(typeGpuRevision.submissions);
 expect(threeRevision.storageBytes).toEqual(typeGpuRevision.storageBytes);
+expect(await render(typeGpuThreeMtsdfProgram)).toMatchRaster(await render(nativeThreeMtsdfProgram));
 ```
 
 Visual equivalence remains a renderer proof. Shared artifacts and CPU bytes prove that an engine adapter is consuming the
