@@ -133,7 +133,11 @@ labels.renderOrder = 10;
 
 Core sorts each `Text.renderOrder` inside the batch. The integration assigns the ordered physical submissions consecutive Three render orders beginning at `TextGroup.renderOrder`. Use separate `TextGroup`s when unrelated Three draws must appear between text submissions.
 
-## Bake fonts ahead of time
+## Integrate core into another engine
+
+Baking, loading, shaping, layout, and physical glyph batching are renderer-neutral core concepts.
+
+### Bake fonts
 
 ```ts
 import { rasterBake } from '@pmndrs/text';
@@ -155,36 +159,7 @@ await bakeFont({
 
 Baking creates font metrics, glyph records, and technique resources before the application runs. Development fallback can perform the same work in a Worker. Loading remains explicit either way.
 
-## How Three.js maps to core
-
-Three.js owns the portable objects; applications using the Three surface never touch them:
-
-```ts
-FontLoader
-  -> lazily initializes and caches core shaping
-  -> loads core font + one technique
-
-TextGroup
-  -> owns one core FontGroup
-  -> owns one core ParagraphBatch
-  -> owns renderer-specific physical targets
-
-Text
-  -> owns desired paragraph state
-  -> binds one core Paragraph when attached
-  -> remains the transform-bearing Object3D
-
-renderer.render(scene, camera)
-  -> reconciles Text membership
-  -> synchronizes dirty paragraphs
-  -> uploads dirty glyph ranges
-  -> submits the core-authored draw order
-```
-
-This is the same boundary another engine implements: core shapes, sorts, partitions, allocates, and packs; the integration
-owns scene membership, transforms, GPU buffers, render phases, submission, and retirement.
-
-## Integrate core into another engine
+### Load, shape, and render
 
 ```ts
 import { createTextRuntime } from '@pmndrs/text';
@@ -244,6 +219,35 @@ for (const batch of revision.paragraphBatches) {
   }
 }
 ```
+
+## How Three.js maps to core
+
+Three.js owns the portable objects; applications using the Three surface never touch them:
+
+```ts
+FontLoader
+  -> lazily initializes and caches core shaping
+  -> loads core font + one technique
+
+TextGroup
+  -> owns one core FontGroup
+  -> owns one core ParagraphBatch
+  -> owns renderer-specific physical targets
+
+Text
+  -> owns desired paragraph state
+  -> binds one core Paragraph when attached
+  -> remains the transform-bearing Object3D
+
+renderer.render(scene, camera)
+  -> reconciles Text membership
+  -> synchronizes dirty paragraphs
+  -> uploads dirty glyph ranges
+  -> submits the core-authored draw order
+```
+
+This is the same boundary another engine implements: core shapes, sorts, partitions, allocates, and packs; the integration
+owns scene membership, transforms, GPU buffers, render phases, submission, and retirement.
 
 Read the complete [Three.js API](docs/planning/three-api.md), [core API](docs/planning/core-api.md),
 [engine integration contract](docs/planning/engine-integration-contract.md), and
