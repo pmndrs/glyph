@@ -15,6 +15,9 @@ sources:
   - id: extraction-plan
     resource: engine-integration-boundary.md
     title: Renderer-neutral extraction plan
+  - id: three-api
+    resource: three-api.md
+    title: Three.js text API
   - id: current-api
     resource: api-shapes.md
     title: Existing API migration fixture
@@ -71,7 +74,7 @@ interface TextRuntime {
 
   update(): TextRuntimeRevision;
 
-  updateAsync(options?: AsyncTextUpdateOptions): Promise<TextRuntimeRevision>;
+  updateAsync(options?: AsyncTextUpdateOptions): Promise<TextUpdateOutcome>;
   updateAsync(callback: TextUpdateCallback): void;
   updateAsync(options: AsyncTextUpdateOptions, callback: TextUpdateCallback): void;
 
@@ -375,7 +378,11 @@ The same runtime can choose Worker preparation for any update.
 
 ```ts
 label.text = 'Prepare this away from the caller';
-const revision = await runtime.updateAsync();
+const outcome = await runtime.updateAsync();
+
+if (outcome.status === 'published') {
+  useRevision(outcome.value);
+}
 ```
 
 Promise-free callback form:
@@ -389,7 +396,9 @@ runtime.updateAsync({ signal: controller.signal }, (result) => {
     return;
   }
 
-  publish(result.value);
+  if (result.value.status === 'published') {
+    publish(result.value.value);
+  }
 });
 ```
 
@@ -410,17 +419,24 @@ interface TextUpdateProgress {
 type TextUpdateCallback = (result: TextUpdateResult) => void;
 
 type TextUpdateResult =
-  | { readonly ok: true; readonly value: TextRuntimeRevision }
-  | { readonly ok: false; readonly error: TextUpdateError };
+  | { readonly ok: true; readonly value: TextUpdateOutcome }
+  | { readonly ok: false; readonly error: TextPreparationError };
 
-type TextUpdateError =
-  | { readonly kind: 'aborted'; readonly reason?: unknown }
-  | { readonly kind: 'superseded'; readonly byRevision: number }
-  | { readonly kind: 'preparation'; readonly cause: unknown };
+type TextUpdateOutcome =
+  | { readonly status: 'published'; readonly value: TextRuntimeRevision }
+  | { readonly status: 'superseded'; readonly revision: number; readonly byRevision: number }
+  | { readonly status: 'aborted'; readonly revision: number; readonly reason?: unknown };
+
+interface TextPreparationError {
+  readonly kind: 'preparation';
+  readonly cause: unknown;
+}
 ```
 
-The callback form constructs no public Promise. Its callback runs asynchronously exactly once. The Promise form rejects
-with the equivalent error.
+The callback form constructs no public Promise and runs exactly once asynchronously. Supersession and cancellation are
+handled synchronization outcomes, not errors. The Promise resolves them and the callback returns them through its `ok`
+branch. The Promise rejects only for an actual preparation failure; the callback reports the same failure through its
+`error` branch.
 
 An asynchronous executor may stream completed paragraph work into unpublished staging storage and report bounded progress
 through `onProgress`. Streaming never publishes a partial runtime or paragraph-batch revision; every affected batch becomes
@@ -444,8 +460,12 @@ const preparingA = runtime.updateAsync();
 label.text = 'B';
 runtime.update(); // publishes B before returning
 
-await preparingA; // rejects as superseded; A can never replace B
+const outcomeA = await preparingA;
+// { status: 'superseded', revision: A, byRevision: B }
 ```
+
+`B` is the correct final state. The superseded result only explains why the older request did not publish; callers may
+ignore it when they do not need update diagnostics.
 
 ## Dirty state selects the work
 
@@ -574,45 +594,18 @@ runtime.update();
 Reshaping updates the authoritative target positions. The application may snapshot them again and interpolate from its
 current displayed positions.
 
-## Render with Three.js
+## Three.js is a separate public surface
+
+Three.js applications use `FontLoader`, `TextGroup`, and `Text` from `@pmndrs/text/three`. That integration owns these core
+objects privately and synchronizes them during Three's render lifecycle; it never asks an application to create core
+paragraphs and wrap them in adapter objects.
+
+See the authoritative [Three.js text API](three-api.md). The mapping is intentionally direct:
 
 ```ts
-import { ThreeParagraphBatch } from '@pmndrs/text/three';
-
-const worldObject = new ThreeParagraphBatch({ paragraphBatch: worldText });
-scene.add(worldObject);
-
-const labelObject = worldObject.object(label);
-labelObject.position.set(0, 2, 0);
-labelObject.rotation.y = Math.PI / 4;
-```
-
-The adapter binds canonical arrays to Three.js resources, applies paragraph transforms, and executes core's submission
-plan. It may map canonical fields into Three.js attributes, but it does not reshape, regroup, sort, or recompute batch
-membership and submission order.
-
-```ts
-function beforeRender() {
-  scene.updateMatrixWorld();
-  runtime.update();
-  worldObject.updateInstances();
-  renderer.render(scene, camera);
-}
-```
-
-An asynchronous loop renders the last completed revision while another is prepared:
-
-```ts
-function beforeRender() {
-  scene.updateMatrixWorld();
-
-  if (runtime.hasPendingChanges && !runtime.isPreparing) {
-    runtime.updateAsync(handlePreparedRevision);
-  }
-
-  worldObject.updateInstances();
-  renderer.render(scene, camera);
-}
+FontLoader -> cached TextRuntime/shaper initialization + loaded fonts
+TextGroup  -> FontGroup + ParagraphBatch + Three renderer target
+Text       -> desired paragraph state + late-bound Paragraph + Object3D transform
 ```
 
 ## Implement another engine
@@ -645,8 +638,6 @@ render-pass placement, command encoding, frame publication, fences, and resource
 ## Dispose
 
 ```ts
-worldObject.dispose();
-overlayObject.dispose();
 worldText.dispose();
 overlayText.dispose();
 runtime.dispose();
