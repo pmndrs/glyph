@@ -4,9 +4,11 @@
 
 - [Project brief](project-brief.md) — product intent, current integration slice, V1, and later horizon.
 - [Runtime and bake API V0](api-shapes.md) — public and internal TypeScript contract fixture.
+- [Core text API](core-api.md) — authoritative API and rationale for same-technique fallback groups, paragraph render phases, desired-state handles, per-update scheduling, core-owned physical batching, and target-provided storage.
+- [Engine integration contract](engine-integration-contract.md) — exact prepared glyph-batch, target storage, submission order, transform, staging, and disposal contract.
 - [Raster and baker plugin guide](raster-baker-plugin.md) — build an external technique through the public runtime, baker, artifact, discovery, and lifecycle contracts.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
-- [Renderer-agnostic core and engine integration boundary](engine-integration-boundary.md) — WIP plan separating portable text generation, raster techniques, GPU-authoring layers, and canvas/game-engine hosts.
+- [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — WIP extraction and proof plan for the batched core API, Three.js migration, and Wayfare/TypeGPU adapter.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 

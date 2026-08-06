@@ -1,7 +1,7 @@
 ---
 type: API Reference
-title: Runtime and bake API fixture V0
-description: Defines the canonical accepted V1 package, loader, baker, shaper, paragraph, raster, and cache interfaces plus explicitly deferred additions.
+title: Legacy V1 runtime and bake API fixture
+description: Records the pre-extraction V1 package, loader, baker, shaper, paragraph, raster, and cache interfaces for migration and regression comparison.
 tags: [api, loader, baker, shaping, paragraph, raster]
 sources:
   - id: 'citation-1'
@@ -22,16 +22,27 @@ sources:
   - id: 'raster-technique-comparison'
     resource: '../../apps/benchmarks/src/surfaces/conformance/scenes/raster-technique-comparison.ts'
     title: 'Retained MSDF and Slug comparison scene'
+  - id: 'core-api'
+    resource: 'core-api.md'
+    title: 'Core text API'
+  - id: 'engine-integration-contract'
+    resource: 'engine-integration-contract.md'
+    title: 'Proposed engine integration data contract'
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-03T15:29:54Z'
+  at: '2026-08-06T16:07:26Z'
 ---
 
-# Runtime and bake API fixture V0
+# Legacy V1 runtime and bake API fixture
 
 Status: accepted V1 surfaces are implemented; sections labeled deferred remain proposals
 Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScript paragraph layout, and explicit raster loading
+
+> [!NOTE]
+> This page is retained for migration and regression comparison. The root [README](../../README.md),
+> [core text API](core-api.md), and [engine integration contract](engine-integration-contract.md) define the
+> authoritative extraction API.
 
 ## Milestone 0.1 acceptance evidence
 
