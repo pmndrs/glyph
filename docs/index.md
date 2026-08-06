@@ -10,10 +10,11 @@ okf_version: '0.2'
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
 - [Runtime and bake API V0](planning/api-shapes.md) — accepted V1 public API, package boundaries, and explicitly deferred additions.
-- [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, standalone `Text`, late-binding, ordering, and lifecycle contract.
-- [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, technique-declared paragraph batches, typed text composition, synchronized updates, and renderer-ready glyph batches.
+- [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
+- [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
 - [Engine integration contract](planning/engine-integration-contract.md) — exact storage, batching, submission, ownership, staging, and frame-publication boundary for custom renderers.
-- [Raster and baker plugin guide](planning/raster-baker-plugin.md) — build an external technique through the public runtime, baker, artifact, discovery, and lifecycle contracts.
+- [Raster technique and engine resource API](planning/raster-technique-api.md) — portable artifact loading, CPU raster data, glyph-resource binding, reusable shader-backend programs, and engine target ownership.
+- [Current V1 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the accepted extraction replaces it.
 
 ## Architecture and data contracts
 

@@ -12,6 +12,9 @@ sources:
   - id: engine-contract
     resource: engine-integration-contract.md
     title: Engine integration contract
+  - id: raster-technique
+    resource: raster-technique-api.md
+    title: Raster technique and engine resource API
   - id: extraction-plan
     resource: engine-integration-boundary.md
     title: Renderer-neutral extraction plan
@@ -32,7 +35,7 @@ sources:
     title: Current raster transaction contract
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T16:07:26Z'
+  at: '2026-08-06T21:52:54Z'
 ---
 
 # Core text API
@@ -60,6 +63,7 @@ interface TextRuntime {
   readonly current: TextRuntimeRevision;
   readonly hasPendingChanges: boolean;
   readonly isPreparing: boolean;
+  readonly disposed: boolean;
 
   loadFont<Technique extends AnyRasterTechnique>(
     request: LoadedFontRequest<Technique>,
@@ -93,7 +97,13 @@ declare function createTextRuntime(options?: TextRuntimeOptions): Promise<TextRu
 ```
 
 Runtime options provision capabilities. They do not choose whether every update is synchronous or asynchronous. That
-choice belongs to each `update()` or `updateAsync()` call.
+choice belongs to each `update()` or `updateAsync()` call. `createTextRuntime()` takes exclusive lifecycle ownership of an
+injected registry, shaper, worker, or worker produced by `createWorker`; callers must not share those objects with another
+runtime or dispose them independently.
+
+`AnyRasterTechnique`, `RasterDataOf`, `RasterBindingOf`, and `GlyphBatchStorageOf` come from the portable
+[raster technique API](raster-technique-api.md). A technique owns artifact decoding, physical glyph-resource selection, and
+canonical CPU instance packing without importing a rendering engine.
 
 ## Bake and load explicitly
 
@@ -136,10 +146,13 @@ const inter = await runtime.loadFont({
 
 ```ts
 interface LoadedFont<Technique extends AnyRasterTechnique> {
+  readonly runtime: TextRuntime;
   readonly font: RegisteredFont;
   readonly technique: Technique;
   readonly raster: RegisteredRaster<RasterKindOf<Technique>>;
   readonly data: RasterDataOf<Technique>;
+  readonly disposed: boolean;
+  dispose(): void;
 }
 ```
 
@@ -175,8 +188,10 @@ declare function createFontStack<Technique extends AnyRasterTechnique>(
 ```
 
 Every concrete font must use the same technique. TypeScript rejects a mixed stack through `NoInfer`; runtime validation
-provides the same guarantee to JavaScript and untrusted boundaries. The immutable stack owns no font lifecycle. A disposed
-member invalidates its use just as directly passing that disposed font would.
+provides the same guarantee to JavaScript and untrusted boundaries. The immutable stack owns no font lifecycle. Adding a
+paragraph acquires a lease on every concrete font in its selection until that paragraph or its owning batch is disposed.
+`LoadedFont.dispose()` fails while any live paragraph lease remains, so disposal can never silently turn fallback into a
+missing glyph. A stack containing a successfully disposed member is rejected when used to create or update a paragraph.
 
 ```ts
 createFontStack(interMtsdf, iconBitmap); // compile-time error and runtime rejection
@@ -203,22 +218,44 @@ interface ParagraphBatchOptions<Technique extends AnyRasterTechnique> {
 
 interface GlyphBufferCapacity {
   readonly size: number;
-  readonly policy: 'grow' | 'chunk' | 'error';
+  readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 
 interface ParagraphBatch<Technique extends AnyRasterTechnique> {
   readonly runtime: TextRuntime;
   readonly technique: Technique;
+  readonly capacity: GlyphBufferCapacity;
   readonly current: PreparedParagraphBatchRevision<Technique>;
   readonly paragraphCount: number;
   readonly hasPendingChanges: boolean;
+  readonly preparationError: TextPreparationError | undefined;
+  readonly disposed: boolean;
 
   add(properties: ParagraphProperties<Technique>): Paragraph<Technique>;
+  setCapacity(capacity: GlyphBufferCapacity): void;
   has(paragraph: Paragraph<Technique>): boolean;
-  subscribe(listener: (revision: PreparedParagraphBatchRevision<Technique>) => void): () => void;
+  subscribe(observer: ParagraphBatchObserver<Technique>): () => void;
+  attach<TargetRevision extends ParagraphBatchTargetRevision>(
+    target: ParagraphBatchTarget<Technique, TargetRevision>,
+  ): ParagraphBatchAttachment<TargetRevision>;
   dispose(): void;
 }
+
+interface ParagraphBatchObserver<Technique extends AnyRasterTechnique> {
+  next(revision: PreparedParagraphBatchRevision<Technique>): void;
+  complete(): void;
+}
 ```
+
+`subscribe()` synchronously replays `current`, then reports each later published batch revision exactly once. Disposing the
+batch calls `complete()` exactly once; unsubscribing is idempotent and prevents later `next()` or `complete()` calls. This
+public observation contract is sufficient to build renderer coordination without access to shaping, allocation, or other
+batch internals.
+
+`attach()` is the retained convenience for that coordination. It validates technique compatibility, subscribes the target,
+stages revisions, exposes renderer-safe commit, and couples attachment disposal to batch disposal. It is policy built on the
+same public revisions and lifecycle events, not a second shaping or batching API. The exact target contract is specified in
+the [engine integration contract](engine-integration-contract.md).
 
 ### Use the default or preallocate explicitly
 
@@ -236,8 +273,43 @@ const denseText = runtime.createParagraphBatch({
 `size` applies independently to every physical technique/resource buffer produced beneath the logical paragraph batch. It
 is not a total glyph limit for the paragraph batch. Under `chunk`, core preserves existing storage and allocates another
 `size`-slot buffer when one fills. Under `grow`, core transactionally replaces a full buffer and doubles its capacity until
-the pending glyphs fit. Under `error`, exceeding `size` fails preparation and preserves the last published revision.
+the pending glyphs fit. Under `fixed`, exceeding `size` fails preparation and preserves the last published revision.
 Ordered submissions make cross-buffer paragraph and fallback-font order explicit.
+
+`ParagraphBatch.add()` cannot reject a capacity overflow because fallback, shaping, wrapping, and later mutations determine
+the physical per-resource glyph demand. `update()` or `updateAsync()` discovers overflow after shaping but before
+publication. Fixed overflow returns a typed `capacity-exceeded` preparation failure with the batch, configured limit, the
+maximum per-resource requirement, and every overflowing physical resource. One resize to `error.required`
+therefore satisfies the complete shaped generation rather than revealing overflows one at a time. The complete prior
+runtime revision remains current; on a first update no partial revision becomes visible. Desired state remains available
+for correction or an explicit capacity change.
+
+The first failing synchronization throws or rejects and records the error on `batch.preparationError`. That exact failed
+desired generation is then latched rather than remaining eligible work: `batch.hasPendingChanges` is false when its only
+unpublished state is the unchanged failure, and later runtime updates may publish other dirty batches. Any relevant
+paragraph or membership mutation clears the latch and schedules a new attempt. Successful publication clears
+`preparationError`. Calling `setCapacity()` with a different normalized capacity also clears the latch and schedules one
+new attempt while the last committed revision remains live.
+
+Resize a batch when an application wants to replace a fixed allocation explicitly:
+
+```ts
+worldText.setCapacity({ size: 40_000, policy: 'fixed' });
+runtime.update();
+
+worldText.has(label); // true: batch and paragraph identity did not change
+```
+
+`setCapacity()` validates and records the normalized requested capacity synchronously but does not mutate published
+canonical storage. The next `update()` or `updateAsync()` reuses compatible shaping and layout results, stages replacement
+storage, and atomically publishes it only when complete. Failure preserves the previous revision and every handle.
+Attached targets receive the new revision through their existing attachments, stage replacement engine buffers, commit at
+their safe frame boundary, and retire old buffers after their fences. The `ParagraphBatch`, its `Paragraph` handles,
+subscriptions, attachments, desired state, order, glyph overrides, and font leases never change identity.
+
+Changing from `fixed` to `grow` or `chunk`, growing a fixed size, and deliberately shrinking are all explicit capacity
+changes. A shrink that cannot hold the desired generation reports `capacity-exceeded` at synchronization and retains the
+previous complete revision. Passing the current normalized capacity is a no-op and does not retry a latched failure.
 
 Create another paragraph batch when text must be rendered in another phase, even if it uses the same technique.
 
@@ -439,8 +511,19 @@ interface Paragraph<Technique extends AnyRasterTechnique> {
   snapshotGlyphs(): GlyphSnapshot;
   setGlyphOrigins(update: GlyphOriginUpdate): void;
   clearGlyphOriginOverrides(): void;
+  snapshotProperties(): ParagraphSnapshot<Technique>;
 
   dispose(): void;
+}
+
+interface ParagraphSnapshot<Technique extends AnyRasterTechnique> {
+  readonly font: FontSelection<Technique>;
+  readonly text: string;
+  readonly spans: readonly ParagraphSpan<Technique>[];
+  readonly contentBox: ParagraphContentBox;
+  readonly style: ParagraphStyle;
+  readonly paint: GlyphPaintInput;
+  readonly order: number;
 }
 
 type ParagraphUpdate<Technique extends AnyRasterTechnique> =
@@ -451,7 +534,7 @@ type ParagraphUpdate<Technique extends AnyRasterTechnique> =
       }>)
   | (Partial<ParagraphBaseProperties<Technique>> &
       Readonly<{
-        text: TextLiteral<Technique>;
+        text: FormattedText<Technique>;
         spans?: never;
       }>);
 ```
@@ -477,6 +560,45 @@ pending.dispose();
 runtime.update(); // coalesces the add and removal to no work
 ```
 
+## Paragraph handles never move between batches
+
+A `Paragraph` belongs permanently to the `ParagraphBatch` that created it. Core has no detach, reparent, or handle-transfer
+operation. Snapshot desired properties, create a destination handle, then dispose the source handle:
+
+```ts
+const desired = label.snapshotProperties();
+const movedLabel = overlayText.add(desired);
+label.dispose();
+
+runtime.update(); // destination addition and source removal publish atomically
+```
+
+`snapshotProperties()` returns immutable normalized desired state, not membership, prepared glyph storage, target
+attachments, or ownership. The snapshot itself acquires no font lease. The destination must belong to the same runtime,
+must use the same technique, and must receive still-live fonts. Glyph-origin snapshots remain topology-bound and are
+reapplied separately after the destination has a compatible shaped topology.
+
+Disposing a paragraph releases only that handle, its dirty work, cached paragraph state, and font leases. It marks
+`paragraph.disposed`, removes it from `batch.has()`, and makes every method except idempotent `dispose()` fail.
+
+Disposing a paragraph batch is terminal and cascades only through objects it owns:
+
+```ts
+const desired = label.snapshotProperties();
+
+worldText.dispose();
+
+worldText.disposed; // true
+label.disposed; // true: the batch owned this core handle
+
+const replacement = overlayText.add(desired); // a new handle; never the old label
+```
+
+`ParagraphBatch.dispose()` cancels its pending work, disposes every owned paragraph handle, releases their font leases,
+removes the batch from future runtime revisions, and retires its canonical storage and target attachments. It does not
+dispose the runtime or loaded fonts. `add()` and subscriptions on a disposed batch fail; `dispose()` remains idempotent.
+Any snapshots required for recreation must be taken before disposal.
+
 ## Synchronize now
 
 ```ts
@@ -497,8 +619,9 @@ interface TextRuntimeRevision {
 shaping and layout synchronously, updates prepared glyph batches, publishes one atomic runtime revision, and returns it.
 When nothing is dirty it returns `runtime.current` without allocating or notifying subscribers.
 
-All data required by synchronous shaping must have been loaded already. Invalid input, missing data, capacity failure, or
-preparation failure throws before publication and leaves the prior revision current.
+Public `add()` and mutation methods reject invalid values, disposed handles, and technique incompatibility immediately.
+All data required by synchronous shaping must also have been loaded already. Missing preparation data, fixed-capacity
+overflow, or another preparation failure throws from `update()` before publication and leaves the prior revision current.
 
 ## Synchronize asynchronously
 
@@ -555,9 +678,22 @@ type TextUpdateOutcome =
   | { readonly status: 'superseded'; readonly revision: number; readonly byRevision: number }
   | { readonly status: 'aborted'; readonly revision: number; readonly reason?: unknown };
 
-interface TextPreparationError {
-  readonly kind: 'preparation';
-  readonly cause: unknown;
+type TextPreparationError =
+  | {
+      readonly kind: 'capacity-exceeded';
+      readonly batch: ParagraphBatch<AnyRasterTechnique>;
+      readonly capacity: number;
+      readonly required: number;
+      readonly overflows: readonly GlyphCapacityOverflow[];
+    }
+  | {
+      readonly kind: 'preparation-failed';
+      readonly cause: unknown;
+    };
+
+interface GlyphCapacityOverflow {
+  readonly resourceKey: GlyphBatchKey;
+  readonly required: number;
 }
 ```
 
@@ -624,6 +760,7 @@ resources. Core partitions and packs them before the renderer sees the revision.
 ```ts
 interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
   readonly paragraphBatch: ParagraphBatch<Technique>;
+  /** Contiguous and monotonic within this paragraph batch. */
   readonly revision: number;
   readonly technique: Technique;
   readonly paragraphs: readonly PreparedParagraph[];
@@ -638,13 +775,14 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
   readonly chunk: number;
   readonly capacity: number;
   readonly instanceCount: number;
+  readonly binding: RasterBindingOf<Technique>;
   readonly storage: GlyphBatchStorageOf<Technique>;
   readonly dirtyRanges: readonly GlyphRange[];
 }
 
 interface GlyphBatchKey {
   readonly technique: RasterTechniqueId;
-  readonly fontResource: FontResourceId;
+  readonly resource: RasterResourceId;
   readonly pipelineVariant: number;
   readonly chunk: number;
 }
@@ -668,7 +806,9 @@ revision.submissions = [
 ];
 ```
 
-The renderer does not inspect glyphs to rediscover technique, font-resource, capacity, or ordering boundaries.
+The renderer does not inspect glyphs to rediscover technique, raster-resource, capacity, or ordering boundaries. Each
+glyph batch also carries the technique-defined `binding` that selects the required pages, buffers, or other decoded font
+data from `glyphBatch.font.data`.
 
 ## Core retains canonical instance storage
 
@@ -682,13 +822,25 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
 }
 ```
 
+`dirtyRanges` is the coalesced delta from the immediately preceding revision of this paragraph batch. When a target has
+that exact predecessor, it uploads only those ranges. A newly attached target, or a target whose committed
+`sourceRevision` is older than that predecessor, initializes every range referenced by `submissions`; those are the live
+instance ranges for the current revision. It may coalesce overlapping or adjacent upload ranges, but it must not alter the
+submission sequence.
+
 The technique defines the canonical structure-of-arrays fields and writes changed slots into them. Those arrays are the
 portable synchronization boundary. They remain available for multiple targets, late attachment, inspection, Worker result
 integration, target recovery, and deterministic tests.
 
-An integration synchronizes only `dirtyRanges`. When its engine layout matches, this is a direct range copy or upload. When
-its layout differs, it maps only those canonical fields and ranges into its own interleaved or technique-specific buffer.
-The integration still performs no shaping, sorting, font-resource partitioning, slot allocation, or submission planning.
+Published array contents remain readable until the next revision of that paragraph batch publishes. A target must consume
+or copy its selected ranges during its synchronous `stage()` call; pending engine work cannot retain a canonical typed-array
+view and read it after that call returns. Core can therefore reuse its CPU shadow without allocating an immutable full-buffer
+snapshot for every publication.
+
+On an adjacent revision, an integration synchronizes only `dirtyRanges`. When its engine layout matches, this is a direct
+range copy or upload. When its layout differs, it maps only those canonical fields and ranges into its own interleaved or
+technique-specific buffer. First and gapped synchronization use the live submission ranges described above.
+The integration still performs no shaping, sorting, raster-resource partitioning, slot allocation, or submission planning.
 
 This CPU copy deliberately decouples core publication from inaccessible or in-flight GPU memory. The target owns its engine
 buffers, upload commands, double/triple buffering, frame publication, fences, and retirement.
@@ -746,11 +898,15 @@ for (const glyphBatch of revision.glyphBatches) {
     key: glyphBatch.key,
     technique: glyphBatch.technique,
     font: glyphBatch.font,
+    binding: glyphBatch.binding,
     capacity: glyphBatch.capacity,
     storage: glyphBatch.storage,
   });
 
-  gpuBatch.upload(glyphBatch.dirtyRanges);
+  const ranges = isAdjacentTargetRevision
+    ? glyphBatch.dirtyRanges
+    : liveSubmissionRanges(revision.submissions, glyphBatch.key);
+  gpuBatch.upload(ranges);
   gpuBatch.setCount(glyphBatch.instanceCount);
 }
 
@@ -768,10 +924,19 @@ render-pass placement, command encoding, frame publication, fences, and resource
 ```ts
 worldText.dispose();
 overlayText.dispose();
+inter.dispose();
 runtime.dispose();
 ```
 
-Targets release GPU resources only after their engine knows no in-flight frame still references them.
+Dispose from the narrowest retained owner outward: paragraphs when individually finished, paragraph batches when a render
+phase is finished, fonts after their paragraph leases are gone, and the runtime last. A successful dispose is idempotent;
+using a disposed handle otherwise fails.
+
+`TextRuntime.dispose()` is the one intentional cascade root. It cancels asynchronous preparation and unpublished staging,
+disposes every remaining paragraph batch and paragraph, releases loaded fonts after those leases are gone, notifies
+attachments, and disposes the runtime-owned registry, shaper, and Worker. It invalidates every handle created by that
+runtime and does not publish another revision. Targets release GPU resources only after their engine knows no in-flight
+frame still references them.
 
 ## Why these boundaries exist
 
@@ -784,7 +949,7 @@ const Decisions = {
   coreOwnedPhysicalBatching: 'Every target would otherwise duplicate grouping, sorting, packing, and dirty tracking.',
   handleOwnedMutation: 'Repeated writes debounce naturally before a synchronization call.',
   perUpdateScheduling: 'The same runtime must switch between immediate and Worker preparation.',
-  canonicalCpuStorage: 'Every target synchronizes exact dirty ranges from one stable portable representation.',
+  canonicalCpuStorage: 'Targets synchronize adjacent deltas or live ranges from one stable portable representation.',
   orderedSubmissions: 'Fallback font runs can require multiple GPU submits while preserving glyph order.',
 } as const;
 ```

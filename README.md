@@ -9,14 +9,14 @@ import { Text, TextGroup, useFont } from '@pmndrs/text/react';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 function Labels() {
-  const inter = useFont({
+  const Inter = useFont({
     input: { baked: '/fonts/Inter.font.glb' },
     raster: { technique: mtsdf },
   });
 
   return (
     <TextGroup technique={mtsdf}>
-      <Text font={inter}>Hello, world!</Text>
+      <Text font={Inter}>Hello, world!</Text>
     </TextGroup>
   );
 }
@@ -29,13 +29,13 @@ import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
-const inter = await loader.loadAsync({
+const Inter = await loader.loadAsync({
   input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: mtsdf },
 });
 
 const labels = new TextGroup({ technique: mtsdf });
-labels.add(new Text({ font: inter, text: 'Hello, world!' }));
+labels.add(new Text({ font: Inter, text: 'Hello, world!' }));
 
 scene.add(labels);
 ```
@@ -50,19 +50,19 @@ import { FontLoader, Text, TextGroup, span, txt, type SpanStyle } from '@pmndrs/
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
-const loadMtsdf = (baked: string) =>
+const loadMSDF = (baked: string) =>
   loader.loadAsync({
     input: { baked },
     raster: { technique: mtsdf },
   });
 
-const [inter, noto, iconFont] = await Promise.all([
-  loadMtsdf('/fonts/Inter.font.glb'),
-  loadMtsdf('/fonts/NotoSans.font.glb'),
-  loadMtsdf('/fonts/Icons.font.glb'),
+const [Inter, Noto, IconFont] = await Promise.all([
+  loadMSDF('/fonts/Inter.font.glb'),
+  loadMSDF('/fonts/NotoSans.font.glb'),
+  loadMSDF('/fonts/Icons.font.glb'),
 ]);
 
-const bodyFont = createFontStack(inter, noto);
+const BodyFont = createFontStack(Inter, Noto);
 
 const labels = new TextGroup({
   technique: mtsdf,
@@ -75,14 +75,14 @@ Create retained `Text` objects, then add them through the ordinary Three scene g
 
 ```ts
 const body = new Text({
-  font: bodyFont,
+  font: BodyFont,
   text: 'This paragraph uses Noto when Inter is missing a glyph.',
   contentBox: {
     width: { mode: 'at-most', size: 480 },
     wrap: 'word',
   },
 });
-const score = new Text({ font: inter, text: 'Player 1' });
+const score = new Text({ font: Inter, text: 'Player 1' });
 
 labels.add(body, score);
 
@@ -90,42 +90,50 @@ score.position.set(0, 2, 0);
 score.rotation.y = Math.PI / 4;
 ```
 
-`TextGroup` adds no second allocation API. `add()` binds a `Text` to the batch; `remove()` unbinds it without disposing the
-retained object. Internal glyph slots are created later, when Three synchronizes the group for rendering.
+`TextGroup.add()` binds a `Text` to the batch; `TextGroup.remove()` unbinds it without disposing the retained object. Internal glyph slots are created later, when Three synchronizes the group for rendering.
 
-Grouped glyph buffers belong to `TextGroup`, not to each `Text`. Moving `score` lets the old group recycle its slot and
-gives the destination a new paragraph membership; the old group's retained buffer stays alive for its other text and future
-reuse.
+Grouped glyph buffers belong to `TextGroup`, not to each `Text`. Moving `score` lets the old group recycle its slot and gives the destination a new paragraph membership; the old group's retained buffer stays alive for its other text and future reuse.
 
 ```ts
+const overlayLabels = new TextGroup({ technique: mtsdf });
+
 overlayLabels.add(score); // Three removes it from labels and binds it to overlayLabels
 
 score.removeFromParent(); // reusable desired state; no batch membership while detached
 score.dispose(); // permanent: score cannot be added again
 ```
 
-Call `dispose()` when the public `Text` will never be reused. It releases text-owned cached state and any standalone batch,
-but it does not dispose a group's shared buffers or the loaded font. Dispose the `TextGroup` when that render phase is done,
-then dispose fonts after no remaining text or font stack references them.
+Disposing a populated group destroys the batch, not its retained `Text` children:
 
-Construction alone owns no renderer resource. A `Text` gets a text-owned implicit batch only after it is attached outside a
-`TextGroup` and synchronized for rendering. Moving that rendered standalone text into a group publishes new group
-membership before retiring its implicit target at a GPU-safe boundary. Calling `dispose()` after removal is therefore not a
-no-op or a defensive convention: it cancels pending work, clears retained caches and references, marks the object
-permanently disposed, and prevents it from being attached again.
+```ts
+labels.dispose();
+
+body.disposed; // false
+body.bound; // false
+
+overlayLabels.add(body); // creates fresh membership; no old buffer or paragraph transfers
+```
+
+`body` keeps its desired state, transform, glyph overrides, and font leases. The disposed group cannot be reused. Destination validation happens before reparenting, so an incompatible technique or invalid font leaves `body` unbound instead of partially moving it.
+
+Call `dispose()` when the public `Text` will never be reused. It releases text-owned cached state and any standalone batch, but it does not dispose a group's shared buffers or the loaded font. Dispose the `TextGroup` when that render phase is done, then dispose fonts after no retained `Text` or core `Paragraph` holds them. A `FontStack` is an immutable selection value, not an owner; retaining the value does not prevent font disposal, and a stack containing a disposed font cannot be used again.
+
+Construction alone owns no renderer resource. A `Text` gets a text-owned implicit batch only after it is attached outside a `TextGroup` and synchronized for rendering. Moving that rendered standalone text into a group publishes new group membership before retiring its implicit target at a GPU-safe boundary. Calling `dispose()` after removal is therefore not a no-op or a defensive convention: it cancels pending work, clears retained caches and references, marks the object permanently disposed, and prevents it from being attached again.
+
+## Text spans
 
 Compose typed spans without managing UTF-16 ranges by hand:
 
 ```ts
-const importantStyle = {
+const AlertStyle = {
   color: '#ffddff',
   fontSize: 18,
 } satisfies SpanStyle;
 
-const important = span(noto, importantStyle);
+const alert = span(Noto, AlertStyle);
 
 score.text = txt`
-  Player ${important`Two`}
+  Player ${alert`Two`}
 `;
 ```
 
@@ -136,8 +144,8 @@ style types from `@pmndrs/text`. A plain string remains valid anywhere a formatt
 Keep the inputs as a tuple when they need to be extended before binding:
 
 ```ts
-const importantFormat = [inter, importantStyle] as const;
-const importantInter = span(...importantFormat);
+const AlertFormat = [Inter, AlertStyle] as const;
+const alertFormat = span(...AlertFormat);
 ```
 
 An unattached `Text` stores desired state without shaping. When it is added, the nearest `TextGroup` allocates it before the
@@ -152,14 +160,14 @@ score.text = 'Player 2';
 renderer.render(scene, camera); // shapes only "Player 2"
 ```
 
-One `TextGroup` is one intentional text render phase. Create separate groups for separate scenes, renderer lifetimes, or
-places where non-text draws must appear between text draws. Every `Text` owns its `Font` or `FontStack`; every effective
-font must use the group's rendering technique.
+One `TextGroup` is one intentional text render phase. Create separate groups for simultaneous scene placements, different
+renderer lifetimes, or places where non-text draws must appear between text draws. Ordinary Three reparenting may move one
+group between scenes. Every `Text` owns its `Font` or `FontStack`; every effective font must use the group's rendering
+technique.
 
 ## Preallocate glyph buffers when it matters
 
-Capacity is optional. An explicit `TextGroup` defaults to lazy 4,096-glyph chunks, so ordinary applications do not need to
-size batches up front. Paragraph handles and their metadata are not capacity-limited.
+Capacity is optional. A `TextGroup` defaults to 4,096-glyph chunks if unspecified. Ordinary applications do not need to size batches up front. Paragraph handles and their metadata are not capacity-limited.
 
 Set capacity when a workload has a known upper bound or needs a different overflow policy:
 
@@ -170,10 +178,27 @@ const denseLabels = new TextGroup({
 });
 ```
 
-`size` is the number of glyph-instance slots in each physical font-resource buffer, not the total glyph count of the
-logical `TextGroup`. `chunk` preserves existing buffers and allocates another when one fills. `grow` replaces a full buffer
-and doubles its capacity until the pending glyphs fit, while `error` turns `size` into a hard limit. Core preserves
-paragraph order when text crosses physical buffers.
+- `size` is the number of glyph-instance slots in each physical raster-resource buffer.
+- `policy: chunk` preserves existing buffers and allocates another when one fills.
+- `policy: grow` replaces a full buffer and doubles its capacity until the pending glyphs fit.
+- `policy: fixed` turns `size` into a hard limit.
+
+Core preserves paragraph order when text crosses physical buffers.
+
+`TextGroup.add()` validates ownership and technique compatibility, but it does not shape and therefore cannot know final glyph
+demand. A fixed-capacity overflow is discovered by synchronization: core reports a typed `capacity-exceeded` preparation
+error before publication and keeps the prior revision current. The Three.js integration catches that failure inside its
+render synchronization, keeps the last complete text visible, and exposes it through the owning
+`TextGroup.error` plus a deferred `onError` callback.
+
+Applications that manage fixed capacity resize explicitly:
+
+```ts
+const overflow = labels.error;
+if (overflow?.kind !== 'capacity-exceeded') throw new Error('No fixed-capacity overflow to resize');
+
+labels.setCapacity({ size: overflow.required, policy: 'fixed' });
+```
 
 ## Control batch render order
 
@@ -197,7 +222,7 @@ labels.renderOrder = 10;
 
 Core sorts each `Text.renderOrder` inside the batch. The integration assigns the ordered physical submissions consecutive Three render orders beginning at `TextGroup.renderOrder`. Use separate `TextGroup`s when unrelated Three draws must appear between text submissions.
 
-## Integrate core into another engine
+## Core API
 
 Baking, loading, shaping, layout, and physical glyph batching are renderer-neutral core concepts.
 
@@ -235,23 +260,23 @@ const runtime = await createTextRuntime({
   },
 });
 
-const inter = await runtime.loadFont({
+const Inter = await runtime.loadFont({
   input: { baked: '/fonts/Inter.font.glb' },
   raster: { technique: mtsdf },
 });
-const noto = await runtime.loadFont({
+const Noto = await runtime.loadFont({
   input: { baked: '/fonts/NotoSans.font.glb' },
   raster: { technique: mtsdf },
 });
 
-const uiFont = createFontStack(inter, noto);
+const UiFont = createFontStack(Inter, Noto);
 
 const paragraphs = runtime.createParagraphBatch({
   technique: mtsdf,
 });
 
 const label = paragraphs.add({
-  font: uiFont,
+  font: UiFont,
   text: 'Player 1',
 });
 ```
@@ -265,51 +290,72 @@ const revision = runtime.update();
 // or: const outcome = await runtime.updateAsync();
 ```
 
-Core returns technique-specific canonical CPU storage, exact dirty ranges, and ordered submissions. An integration maps
+Core returns technique-specific canonical CPU storage, exact adjacent-revision dirty ranges, and ordered submissions. An integration maps
 those ranges into its own buffers but never reshapes, re-sorts, or rediscovers physical batch membership.
 
-```ts
-for (const batch of revision.paragraphBatches) {
-  for (const glyphBatch of batch.glyphBatches) {
-    target.upload(glyphBatch.storage, glyphBatch.dirtyRanges);
-  }
+## How a rendering engine uses core
 
-  for (const submission of batch.submissions) {
-    target.draw(submission.batch, submission.start, submission.count);
-  }
-}
+Call core once after application text changes and before the engine submits text. Everything marked `RENDERER` is the thin
+technique adapter the engine implements for Bitmap, MTSDF, or Slug.
+
+```text
+CREATE target implementing ParagraphBatchTarget for the selected raster technique
+
+target.stage(previous, prepared):
+  FOR EACH glyphBatch IN prepared.glyphBatches:
+    RENDERER create or reuse safe unpublished buffers for:
+      glyphBatch.key
+      glyphBatch.capacity
+      glyphBatch.storage fields defined by GlyphBatchStorageOf<Technique>
+
+    IF previous.sourceRevision is the immediately preceding batch revision:
+      ranges = glyphBatch.dirtyRanges
+    ELSE:
+      ranges = the live ranges for glyphBatch named by prepared.submissions
+
+    FOR EACH range IN ranges:
+      RENDERER upload that range from every glyphBatch.storage field
+
+    RENDERER realize glyphBatch.binding from glyphBatch.font.data
+    RENDERER retain those font resources with the instance buffers
+    RASTER TECHNIQUE defines the portable data, binding, and instance semantics
+    RASTER PROGRAM defines shader and pipeline semantics for this renderer backend
+
+  RENDERER retain prepared.submissions without regrouping or sorting
+  RETURN a ready ParagraphBatchTargetStage
+    commit() publishes this complete target revision
+    abort() releases only this unpublished target revision
+
+target.dispose():
+  RENDERER retire target resources after in-flight work finishes
+
+CALL attachment = paragraphs.attach(target) once
+
+BEFORE EACH TEXT RENDER PHASE:
+  CALL runtime.update()
+    core shapes every dirty paragraph across the runtime
+    core publishes prepared paragraph batches atomically
+    changed attachments call target.stage(previous, prepared)
+
+  CALL attachment.commit()
+    publishes a ready renderer revision at this safe frame boundary
+
+  READ prepared = paragraphs.current
+  READ live = attachment.current
+
+  FOR EACH paragraph IN prepared.paragraphs:
+    RENDERER update the current engine transform for paragraph.paragraph
+    transform-only changes do not call runtime.update()
+
+  FOR EACH submission IN live.submissions, in the provided order:
+    RENDERER select the buffers identified by submission.batch
+    RENDERER bind the raster program and realized resources for that batch
+    RENDERER draw submission.start and submission.count instances
 ```
-
-## How Three.js maps to core
-
-Three.js owns the portable objects; applications using the Three surface never touch them:
-
-```ts
-FontLoader
-  -> lazily initializes and caches core shaping
-  -> loads core font + one technique
-
-TextGroup
-  -> owns one core ParagraphBatch
-  -> owns renderer-specific physical targets
-
-Text
-  -> owns desired paragraph state
-  -> binds one core Paragraph when attached
-  -> remains the transform-bearing Object3D
-
-renderer.render(scene, camera)
-  -> reconciles Text membership
-  -> synchronizes dirty paragraphs
-  -> uploads dirty glyph ranges
-  -> submits the core-authored draw order
-```
-
-This is the same boundary another engine implements: core shapes, sorts, partitions, allocates, and packs; the integration
-owns scene membership, transforms, GPU buffers, render phases, submission, and retirement.
 
 Read the complete [Three.js API](docs/planning/three-api.md), [core API](docs/planning/core-api.md),
 [engine integration contract](docs/planning/engine-integration-contract.md), and
+[raster technique boundary](docs/planning/raster-technique-api.md), then the
 [implementation plan](docs/planning/engine-integration-boundary.md).
 
 ```sh

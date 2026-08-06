@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T16:07:26Z'
+  at: '2026-08-06T21:52:54Z'
 ---
 
 # Canonical implementation roadmap
@@ -136,11 +136,11 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 10.5  |   ✅   | Remove benchmark recycling workarounds and prove Icon Grid plus every Presentation workload through sequential, timed, allocation, cadence, dual-backend, and React Doctor gates.                                                                           |  XL  | 10.2–10.4  |
 | 10.6  |   ✅   | Complete raster switching, release conformance, public API review, recommendations, plugin authoring guidance, package-size evidence, and signed stacked delivery.                                                                                          |  L   | 10.5       |
 | 11.1  |   ⬜   | Freeze the accepted README/API fixtures and capture current Three.js behavior, package graphs, rendering, allocation, and shaping baselines.                                                                                                                |  M   | 10.6       |
-| 11.2  |   ⬜   | Split portable raster technique data from Three.js/TSL target preparation, staging, drawing, and disposal.                                                                                                                                                  |  L   | 11.1       |
-| 11.3  |   ⬜   | Implement `TextRuntime`, immutable same-technique `FontStack` values, desired-state `Paragraph` handles, typed `txt`/`span` composition, technique-declared `ParagraphBatch` ownership, optional glyph capacity, and origin overrides.                      |  XL  | 11.2       |
+| 11.2  |   ⬜   | Split portable raster artifact decoding, CPU data, resource bindings, and instance packing from engine GPU realization; retain TSL as a Three program and admit reusable TypeGPU programs where hosts expose WebGPU interop.                                |  L   | 11.1       |
+| 11.3  |   ⬜   | Implement `TextRuntime`, same-technique `FontStack` values, batch-owned `Paragraph` handles, desired snapshots and font leases, typed `txt`/`span`, optional glyph capacity, and origin overrides.                                                          |  XL  | 11.2       |
 | 11.4  |   ⬜   | Implement dirty-channel coalescing plus per-call `update()` and Promise/callback `updateAsync()` synchronization with cross-batch atomic publication, cancellation, and supersession.                                                                       |  XL  | 11.3       |
-| 11.5  |   ⬜   | Move font-resource partitioning, stable slots, overflow chunks, canonical technique CPU storage, dirty ranges, and ordered submissions into core.                                                                                                           |  XL  | 11.3–11.4  |
-| 11.6  |   ⬜   | Rebuild Bitmap, MTSDF, and Slug behind the Three.js `FontLoader` → `TextGroup` → `Text` surface with lazy shaper initialization, late binding, implicit batches of one, native group/submission sort keys, renderer isolation, and no exposed core handles. |  XL  | 11.5       |
+| 11.5  |   ⬜   | Move raster-resource partitioning, typed technique bindings, stable slots, overflow chunks, canonical CPU storage, adjacent dirty ranges, live-range recovery, attachments, and ordered submissions into core.                                              |  XL  | 11.3–11.4  |
+| 11.6  |   ⬜   | Rebuild Bitmap, MTSDF, and Slug behind `FontLoader` → `TextGroup` → `Text` with lazy shaper initialization plus late binding, implicit standalone batches, safe group disposal/rebinding, native ordering, renderer isolation, and no exposed core handles. |  XL  | 11.5       |
 | 11.7  |   ⬜   | Rebuild React Three Fiber over the same retained `TextGroup`/`Text` lifecycle, letting Three synchronize once per batch during render while preserving nested spans.                                                                                        |  L   | 11.6       |
 | 11.8  |   ⬜   | Prove the same prepared glyph batches and ordered submissions through raw TypeGPU and Wayfare with independent transforms, phases, capacity, overflow, sync/async updates, and disposal.                                                                    |  XL  | 11.5       |
 | 11.9  |   ⬜   | Prove the GPU-authoring seam with a Three.js + TypeGPU Bitmap/Slug path without changing portable or Three scene ownership.                                                                                                                                 |  L   | 11.6, 11.8 |
@@ -762,15 +762,20 @@ Deliver:
 
 - explicit runtime and font loading, same-technique ordered font stacks, technique-declared paragraph batches, and per-update synchronous or asynchronous preparation;
 - desired-state paragraph handles covering multiline text, labels, and font-backed icons without separate public lifecycles;
+- batch-owned core handles, immutable desired-state recreation snapshots, retained font leases, and terminal non-recursive disposal rules;
 - explicit paragraph batches as application-owned render-phase boundaries with default or explicit per-buffer glyph capacity and deterministic order;
-- core-owned font-resource partitioning, stable instance slots, overflow chunks, technique packing, dirty ranges, and ordered submissions;
-- canonical technique-defined CPU instance storage with exact dirty ranges for engine-owned buffer synchronization;
+- `fixed` capacity overflow detected after shaping, rejected before publication, and reported by render-loop adapters without escaping rendering or retrying unchanged failures;
+- explicit capacity changes that preserve core batch, paragraph, Three group, and text identities while replacing canonical and target storage transactionally;
+- core-owned raster-resource partitioning, typed technique bindings, stable instance slots, overflow chunks, technique packing, dirty ranges, and ordered submissions;
+- canonical technique-defined CPU instance storage with adjacent dirty ranges and live submission ranges for engine-owned buffer synchronization;
 - atomic runtime revisions spanning every paragraph batch touched at one synchronization point;
 - owned glyph snapshots and topology-guarded displayed-origin writes without animation or physics policy in core;
 - one target staging contract whose fallible work preserves the live revision and whose commit is synchronous
   at an engine-owned safe frame boundary;
 - Three.js/TSL and React Three Fiber rebuilt as adapters with WebGPU/WebGL2 parity and actual many-item batching;
+- reusable Three `Text` objects that survive group disposal, bind fresh core handles elsewhere, and never inherit or transfer stale batch resources;
 - raw TypeGPU and Wayfare targets rendering Bitmap, MTSDF, and Slug without Three.js or TSL in portable graphs;
+- shared TypeGPU raster programs across compatible WebGPU hosts without moving scene or pass lifecycle into the technique;
 - a Three.js + TypeGPU proof that GPU-authoring choice does not own text or scene lifecycle;
 - exact package-graph, deterministic, Worker, lifecycle, browser, GPU, allocation, size, documentation, and OKF evidence.
 

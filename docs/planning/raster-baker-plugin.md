@@ -37,10 +37,15 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-04T12:55:07Z'
+  at: '2026-08-06T21:52:54Z'
 ---
 
 # Build a raster and baker plugin
+
+> [!NOTE]
+> This guide documents the currently implemented V1 `RasterModule` surface. The next extraction API is authoritative in
+> the [raster technique and engine resource specification](raster-technique-api.md); this guide will be rewritten against
+> that split when implementation replaces the V1 module.
 
 Use this guide to create an ESM package that adds a raster technique to `pmndrs/text` without changing or importing its
 internals. The finished package will own:
