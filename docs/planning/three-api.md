@@ -304,11 +304,15 @@ type StandaloneTextProperties<Technique extends AnyRasterTechnique> = TextProper
   }>;
 ```
 
-When a `Text` has no `TextGroup` ancestor, it owns an implicit paragraph batch containing only itself. Its required font
-selection supplies that implicit batch's technique. Adding that same object to a `TextGroup` destroys the implicit
-allocation, validates its font selection against the explicit group technique, and allocates the retained desired state in the group.
-Removing it from the group recreates its implicit batch. The public `Text`, transform, desired properties, and glyph
-overrides remain the same object.
+When a render-attached `Text` has no `TextGroup` ancestor, it owns an implicit paragraph batch containing only itself. Its
+required font selection supplies that implicit batch's technique. Adding that same object to a `TextGroup` retires the
+implicit batch, validates its font selection against the explicit group technique, and creates new paragraph membership in
+the group.
+
+An unattached or detached `Text` remains unbound and owns no implicit batch. `textGroup.remove(text)` therefore leaves only
+the reusable public object and desired state. Adding it directly to a scene later creates its implicit batch before that
+scene's first shaping and render; adding it to another `TextGroup` creates membership there instead. The public `Text`,
+transform, desired properties, and glyph overrides remain the same object throughout.
 
 The standalone `capacity` value configures only that implicit batch and defaults to `{ size: 256, policy: 'grow' }` to
 avoid reserving a full explicit-group chunk for every isolated label. While the object is inside a `TextGroup`, the parent
@@ -366,6 +370,21 @@ const nextParagraph = overlayParagraphBatch.add(label.desiredState);
 It does not move a core paragraph handle between batches. Pending removal and allocation publish in the same pre-render
 synchronization, so the old batch cannot leave ghost glyphs while the new batch renders the object. Cached shaping and
 layout may be reused when their inputs are unchanged, but the destination receives new batch slots.
+
+The old paragraph slot and glyph instances belong to the old batch, not to `label`. Removal makes those slots reusable and
+updates the old batch's logical counts and submissions. It does not dispose or shrink a shared buffer merely because one
+text left. The old `TextGroup` retains that capacity until a later transactional replacement or `TextGroup.dispose()`.
+The destination group owns any new physical storage it needs. Moving from a standalone implicit batch also retires that
+text-owned target storage according to the renderer's in-flight-frame rules.
+
+That standalone-to-group transition is transactional. The integration validates and stages destination membership first,
+publishes the new complete group revision, then retires the previous implicit target only after no in-flight frame can use
+it. It never destroys the old target first and risks a missing frame or unrecoverable destination failure.
+
+Removal marks old membership dirty synchronously. Slot recycling and the updated submission list publish at the old
+group's next render synchronization. If the old group remains visible, that synchronization occurs before Three builds the
+next render list. If the entire group is removed and will never render again, the application disposes the group rather
+than waiting for another synchronization.
 
 Changing parents during an active Three.js traversal is unsupported, matching Three.js scene-graph expectations. Scene
 membership changes must complete before `renderer.render()` enters world-matrix traversal.
@@ -604,13 +623,30 @@ noto.dispose();
 loader.dispose();
 ```
 
-`Text.dispose()` permanently releases its current paragraph allocation and any implicit standalone batch. Removing a
-`Text` from its parent does not dispose the public object because it may be added elsewhere. `TextGroup.dispose()` releases
-its hidden paragraph batch, renderer-specific targets, materials, attributes, and subscriptions; it does not dispose loaded
-fonts or child `Text` objects. `LoadedFont.dispose()` releases that loaded-font ownership after every `Text` or `FontStack`
-using it is gone; `FontStack` itself owns no lifecycle and cannot keep a disposed concrete font valid.
-`FontLoader.dispose()` releases its cache-domain ownership; shared shaping state retires only after its final loader/font
-owner is gone.
+`remove()` changes membership; `dispose()` ends ownership. Use the explicit destroy sequence when a text will never be
+reused:
+
+```ts
+label.removeFromParent();
+label.dispose();
+```
+
+`Text.dispose()` is idempotent and permanent. It releases the current core paragraph membership, renderer-neutral cached
+state, and any implicit standalone batch and target. It does not dispose explicit-group buffers or loaded fonts, and it
+does not mutate the caller-owned scene graph; a disposed object still parented in Three is skipped but remains referenced
+until the caller removes it. When grouped, disposal stages the same old-membership cleanup as `remove()` and the group
+publishes that cleanup before its next render. When already detached and unbound, disposal still cancels pending work,
+clears retained shaping/layout state and font references, marks the object permanently disposed, and prevents future
+attachment. Mutating or adding a disposed `Text` throws.
+
+`TextGroup` owns its hidden paragraph batch, canonical batch storage, renderer-specific targets, materials, attributes,
+and subscriptions. Removing a child only frees/recycles logical slots inside those shared resources. `TextGroup.dispose()`
+permanently releases the group-owned resources, but does not dispose or remove child `Text` objects; callers may remove
+those retained children and add them to a live compatible group.
+
+`LoadedFont.dispose()` releases that loaded-font ownership only after every `Text` or `FontStack` using it is gone;
+`FontStack` itself owns no lifecycle and cannot keep a disposed concrete font valid. `FontLoader.dispose()` releases its
+cache-domain ownership; shared shaping state retires only after its final loader/font owner is gone.
 
 Renderer-specific GPU resources retire according to the renderer target's in-flight-frame rules. Disposal is idempotent.
 
@@ -622,8 +658,11 @@ The implementation is not complete until tests prove:
 - direct `scene.add(text)` renders through an implicit batch of one on its first render;
 - `TextGroup` exposes no duplicate creation or allocation shortcut; `new Text()` plus ordinary `add()` is the only explicit-group path;
 - direct and nested descendants join the nearest `TextGroup`, while nested `TextGroup` boundaries do not merge;
+- a detached `Text` owns desired state but no paragraph batch or GPU resources, and direct scene attachment creates its implicit batch before first render;
 - add/remove/reparent events plus pre-render ancestry reconciliation cannot leave stale or duplicate membership;
 - moving a `Text` performs an atomic old allocation removal and new allocation creation without ghost glyphs;
+- removing one text recycles its slots without shrinking or disposing shared group buffers;
+- disposed text rejects mutation and attachment, text disposal does not dispose group/font resources, and group disposal does not dispose child text/fonts;
 - separate scenes use separate groups, and attempting to draw one group through a second renderer fails before submission;
 - construction-only incompatibilities fail without mutating the current group;
 - runtime setters coalesce and select the narrowest dirty work;
