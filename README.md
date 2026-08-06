@@ -46,7 +46,7 @@ Both integrations load fonts explicitly and add one same-technique text batch to
 
 ```ts
 import { createFontStack } from '@pmndrs/text';
-import { FontLoader, Text, TextGroup, span, txt } from '@pmndrs/text/three';
+import { FontLoader, Text, TextGroup, span, txt, type SpanStyle } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
@@ -96,13 +96,28 @@ retained object. Internal glyph slots are created later, when Three synchronizes
 Compose typed spans without managing UTF-16 ranges by hand:
 
 ```ts
+const importantStyle = {
+  color: '#ffddff',
+  fontSize: 18,
+} satisfies SpanStyle;
+
+const important = span(noto, importantStyle);
+
 score.text = txt`
-  Player ${span({ font: noto })`Two`}
+  Player ${important`Two`}
 `;
 ```
 
-The Three entry point re-exports the renderer-neutral `txt` and `span` helpers from `@pmndrs/text`. A plain string remains
-valid anywhere a formatted text literal is accepted.
+`span(inter)`, `span(uiFont)`, `span(importantStyle)`, and `span(inter, { color: '#ffddff' })` are the same composition path.
+A style-only span inherits its surrounding font. The Three entry point re-exports the renderer-neutral `txt`, `span`, and
+style types from `@pmndrs/text`. A plain string remains valid anywhere a formatted text literal is accepted.
+
+Keep the inputs as a tuple when they need to be extended before binding:
+
+```ts
+const importantFormat = [inter, importantStyle] as const;
+const importantInter = span(...importantFormat);
+```
 
 An unattached `Text` stores desired state without shaping. When it is added, the nearest `TextGroup` allocates it before the
 first shape and render. Moving it to another group removes its old paragraph allocation and adds a new allocation while
