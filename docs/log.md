@@ -1,7 +1,12 @@
 # pmndrs/text documentation update log
 
+## 2026-08-06
+
+- **Canonical paragraph batching API** — Froze the next core API from the maintainer review and rewrote the README, full API specification, engine contract, extraction plan, decisions, and roadmap around it. `TextRuntime` now coordinates explicit loading plus per-call sync/async synchronization; same-technique `FontGroup` values define fallback; desired-state `Paragraph` handles naturally coalesce writes; and application-declared `ParagraphBatch` values preserve intentional render phases. Core owns shaping, fallback, sorting, font-resource partitioning, stable slots, overflow chunks, canonical technique CPU instance arrays, dirty ranges, and ordered submissions. Engine targets synchronize those ranges into their own layouts and retain transforms, scene composition, GPU publication, and retirement. The specification rejects a separate public paragraph engine, runtime-wide preparation mode, update mutation callbacks, mixed-technique groups, and target-owned glyph regrouping. Implementation remains the next change.
+
 ## 2026-08-05
 
+- **Renderer-neutral batch API hardening** — Replaced the provisional one-text-generation extraction sketch with one explicit many-item batch contract for paragraphs, labels, and font-backed icons. The draft API separates asynchronous loading from synchronous or Worker paragraph preparation, adds stable item handles, caller-requested growable/fixed capacity, deterministic item ordering, touched-item atomic updates, renderer-owned physical chunking, and owned glyph snapshots with reversible displayed-origin writes. The execution plan now compares the current Three.js API directly, sequences the portable technique split and headless batch before Three migration, requires Bitmap/MTSDF/Slug through a Wayfare/TypeGPU proof, and rejects TypeGPU shader canvas as the primary engine proof because its current public surface is fullscreen-fragment-only.
 - **Renderer portability orientation** — Reframed Three.js/TSL and React Three Fiber as the first integrations over portable text foundations, added a compact public-core-to-adapter graph, and marked the serialized renderer-agnostic core plan as WIP.
 
 ## 2026-08-04

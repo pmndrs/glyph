@@ -1,233 +1,362 @@
 # @pmndrs/text
 
-Portable, Unicode-aware text for 3D and canvas rendering engines, with Three.js and React Three Fiber integrations today.
+Portable font baking, Unicode shaping, paragraph layout, and renderer-ready glyph batching for Three.js or your own engine.
 
-> [!IMPORTANT]
-> `@pmndrs/text` is in active development toward a public v1 API. The implementation is substantially complete and usable
-> from this workspace, but the packages are still private and have not been published to npm.
+```ts
+fontFile
+  -> bakeFont()
+  -> runtime.loadFont()
+  -> runtime.createFontGroup()
+  -> runtime.createParagraphBatch()
+  -> paragraph.text = next
+  -> runtime.update() // or updateAsync()
+  -> core-populated glyph batches + ordered submissions
+  -> your engine draws
+```
 
-The public core loads fonts, shapes Unicode with HarfRust, lays out paragraphs, resolves paint, and exposes raster lifecycle
-contracts for renderer integrations. A Three.js implementation with React Three Fiber support is available today.
+## Bake fonts
 
-- Native ESM for modern JavaScript runtimes.
-- Portable shaping, layout, paint, artifact, and raster-technique foundations.
-- Unicode 17 bidi, line breaking, grapheme segmentation, complex-script shaping, and horizontal CJK layout.
-- Bitmap strikes, MTSDF atlases, and analytic Slug outlines over one shaping and layout result.
-- Baked-first delivery with authenticated runtime fallback.
-- Retained glyph storage for warm text, layout, paint, font, and raster updates.
-- Public raster and baker contracts that third-party packages can implement without importing core internals.
-- A Three.js integration and thin React Three Fiber component.
-- WebGPU and WebGL2 product paths exercised by the benchmark and Presentation application.
+```ts
+import { rasterBake } from '@pmndrs/text';
+import { bakeFont } from '@pmndrs/text/bake';
+import mtsdfBaker from '@pmndrs/text/raster/mtsdf/baker';
 
-The [roadmap](docs/roadmap/roadmap.md) records exact milestone status. The v1 renderer and API milestone is closed in the
-workspace; release packaging, documentation, and API stabilization are still in progress.
+await bakeFont({
+  input: new URL('./Inter-Regular.ttf', import.meta.url),
+  output: new URL('./Inter.font.glb', import.meta.url),
+  font: { fontFaceIndex: 0 },
+  rasters: [
+    rasterBake(mtsdfBaker, {
+      packaging: { artifact: 'embedded', pages: 'embedded' },
+      options: undefined,
+    }),
+  ],
+});
+```
 
-## Quick start
+Baking creates font metrics, glyph records, and technique resources before the application runs. Development fallback can
+perform the same work in a Worker.
 
-Run the repository from source with the pinned Node.js, pnpm, and Rust toolchains:
+## Create the runtime
+
+```ts
+import { createTextRuntime } from '@pmndrs/text';
+
+const runtime = await createTextRuntime({
+  async: {
+    createWorker: () => new Worker(new URL('./text-worker.js', import.meta.url)),
+  },
+});
+```
+
+The runtime can perform either synchronous or asynchronous updates. Runtime creation provisions the Worker capability; it
+does not force every update down one execution path.
+
+## Load fonts explicitly
+
+```ts
+import { mtsdf } from '@pmndrs/text/raster/mtsdf';
+
+const inter = await runtime.loadFont({
+  input: { baked: '/fonts/Inter.font.glb' },
+  raster: { technique: mtsdf },
+});
+
+const noto = await runtime.loadFont({
+  input: { baked: '/fonts/NotoSans.font.glb' },
+  raster: { technique: mtsdf },
+});
+
+const iconMtsdf = await runtime.loadFont({
+  input: { baked: '/fonts/Icons.font.glb' },
+  raster: { technique: mtsdf },
+});
+```
+
+`loadFont()` resolves after shaping data and the selected technique data are decoded into renderer-neutral CPU state. It does not create engine textures, buffers, pipelines, materials, meshes, or entities.
+
+## Group fallback fonts
+
+```ts
+const fonts = runtime.createFontGroup({
+  fonts: [inter, noto, iconMtsdf],
+  fallback: [inter, noto],
+});
+```
+
+One font group can contain multiple fonts but exactly one rendering technique. Different fonts may require separate GPU
+resources and draws. Bitmap and Slug cannot share a font group; a renderer combining their data is a new technique with
+its own artifacts and shader.
+
+## Create a paragraph batch
+
+```ts
+const worldText = runtime.createParagraphBatch({
+  fonts,
+  capacity: {
+    paragraphs: 1_000,
+    glyphs: 20_000,
+    overflow: 'chunk',
+  },
+});
+```
+
+A paragraph batch is an intentional render-phase boundary. Core may sort and batch every paragraph inside it, but never
+merges it with another paragraph batch.
+
+Create another one when your engine must draw text in another phase:
+
+```ts
+const overlayText = runtime.createParagraphBatch({
+  fonts,
+  capacity: {
+    paragraphs: 100,
+    glyphs: 2_000,
+    overflow: 'grow',
+  },
+});
+```
+
+## Add paragraphs
+
+A multiline block, one-line label, and font-backed icon are all paragraphs.
+
+```ts
+const body = worldText.add({
+  primaryFont: inter,
+  text: 'Fallback can shape this paragraph through every font in the group.',
+  contentBox: {
+    width: { mode: 'at-most', size: 480 },
+    wrap: 'word',
+  },
+});
+
+const label = worldText.add({
+  primaryFont: inter,
+  text: 'Player 1',
+});
+
+const icon = overlayText.add({
+  primaryFont: iconMtsdf,
+  text: '\uf013',
+});
+```
+
+`primaryFont` and every span font must belong to the paragraph batch's font group. Missing glyphs resolve through the
+group's fallback order.
+
+## Change paragraphs directly
+
+```ts
+label.text = 'First value';
+label.text = 'Second value';
+label.text = 'Player 2';
+
+label.contentBox = {
+  width: { mode: 'at-most', size: 360 },
+  wrap: 'word',
+};
+```
+
+Setters update desired state and mark the paragraph dirty. They do not shape immediately. Repeated writes naturally coalesce, so the next update shapes only `Player 2` with the final content box.
+
+Replace nested configuration values as immutable snapshots:
+
+```ts
+paragraph.contentBox = nextContentBox;
+paragraph.style = nextStyle;
+paragraph.setSpan(0, nextSpan);
+```
+
+Deep mutation such as `paragraph.contentBox.width.size = 320` is not observable and is unsupported.
+
+## Update synchronously
+
+```ts
+const revision = runtime.update();
+```
+
+`update()` synchronously snapshots every dirty paragraph across the runtime, shapes them together, lays them out, updates
+physical glyph batches, rebuilds affected submission plans, publishes one atomic revision, and returns it.
+
+Calling `update()` with no dirty paragraphs returns `runtime.current` without allocating or notifying subscribers.
+
+## Update asynchronously
+
+```ts
+label.text = 'Prepared in a Worker';
+const revision = await runtime.updateAsync();
+```
+
+Use the callback overload when a hot path should not allocate a public Promise:
+
+```ts
+runtime.updateAsync({ signal: controller.signal }, (result) => {
+  if (!result.ok) {
+    handleTextUpdateError(result.error);
+    return;
+  }
+
+  publish(result.value);
+});
+```
+
+Both forms snapshot pending changes when called. Mutations made afterward remain dirty for the next update.
+
+A newer synchronization supersedes an unfinished asynchronous candidate:
+
+```ts
+label.text = 'A';
+const preparingA = runtime.updateAsync();
+
+label.text = 'B';
+runtime.update(); // B is current before this returns
+
+await preparingA; // rejects as superseded; A cannot replace B
+```
+
+## Render with Three.js
+
+```ts
+import { ThreeParagraphBatch } from '@pmndrs/text/three';
+
+const worldObject = new ThreeParagraphBatch({ paragraphBatch: worldText });
+const overlayObject = new ThreeParagraphBatch({ paragraphBatch: overlayText });
+
+scene.add(worldObject, overlayObject);
+```
+
+Each paragraph gets a lightweight `Object3D` transform without its own mesh or material:
+
+```ts
+const labelObject = worldObject.object(label);
+
+labelObject.position.set(0, 2, 0);
+labelObject.rotation.y = Math.PI / 4;
+labelObject.scale.setScalar(2);
+```
+
+A synchronous frame loop is explicit:
+
+```ts
+function frame() {
+  scene.updateMatrixWorld();
+  runtime.update();
+  worldObject.updateInstances();
+  overlayObject.updateInstances();
+  renderer.render(scene, camera);
+}
+```
+
+An asynchronous loop renders the last completed revision:
+
+```ts
+function frame() {
+  scene.updateMatrixWorld();
+
+  if (runtime.hasPendingChanges && !runtime.isPreparing) {
+    runtime.updateAsync(handlePreparedRevision);
+  }
+
+  worldObject.updateInstances();
+  overlayObject.updateInstances();
+  renderer.render(scene, camera);
+}
+```
+
+## Render with your engine
+
+Core has already shaped, sorted, partitioned, allocated, and packed every glyph. One paragraph batch exposes homogeneous
+glyph buffers and the order in which their ranges must be submitted:
+
+```ts
+interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
+  readonly technique: Technique;
+  readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
+  readonly submissions: readonly GlyphSubmission[];
+}
+```
+
+Upload only dirty ranges:
+
+```ts
+for (const batch of revision.glyphBatches) {
+  const gpu = target.ensureBatch({
+    key: batch.key,
+    technique: batch.technique,
+    font: batch.font,
+    capacity: batch.capacity,
+    storage: batch.storage,
+  });
+
+  gpu.upload(batch.dirtyRanges);
+  gpu.setCount(batch.instanceCount);
+}
+```
+
+Submit exactly the plan core produced:
+
+```ts
+for (const submission of revision.submissions) {
+  target.draw(submission.batch, submission.start, submission.count);
+}
+```
+
+Core retains canonical CPU instance arrays and reports their dirty ranges. An integration may copy those ranges directly
+into matching engine buffers or map the technique fields into a different interleaved or engine-specific layout. It never
+needs to reshape, sort, partition, or inspect glyphs to rediscover draw order.
+
+Your engine still owns transforms, visibility, scene composition, GPU objects, render-pass placement, command encoding,
+frame publication, fences, and retirement. It may map canonical fields into its buffer layout, but it does not reshape,
+regroup, sort, or recompute batch membership and submission order.
+
+## Move glyphs without reshaping
+
+```ts
+const snapshot = label.snapshotGlyphs();
+const x = snapshot.displayedX.slice();
+const y = snapshot.displayedY.slice();
+
+simulateGlyphs(x, y, delta);
+
+label.setGlyphOrigins({
+  topology: snapshot.topology,
+  start: 0,
+  x,
+  y,
+});
+
+runtime.update();
+```
+
+Return to shaped positions later:
+
+```ts
+label.clearGlyphOriginOverrides();
+runtime.update();
+```
+
+## Dispose
+
+```ts
+worldObject.dispose();
+overlayObject.dispose();
+worldText.dispose();
+overlayText.dispose();
+runtime.dispose();
+```
+
+Read the [full core API and rationale](docs/planning/core-api.md), the exact
+[engine integration contract](docs/planning/engine-integration-contract.md), and the
+[implementation plan](docs/planning/engine-integration-boundary.md).
+
+The next implementation change must prove the same core output through Three.js, raw TypeGPU, and Wayfare before this API
+is considered complete.
 
 ```sh
-git clone git@github.com:pmndrs/text.git
-cd text
 mise install
 pnpm install
 pnpm dev
 ```
 
-`pnpm dev` starts the benchmark and Presentation app. Mise is the easiest way to install the exact tool versions, but the
-same pnpm commands work when compatible versions are already installed.
-
-## Render text today
-
-The implemented rendering path targets Three.js directly or through React Three Fiber.
-
-### React Three Fiber
-
-`@pmndrs/text/react` uses React Suspense for cold font, shaper, and raster loading. Nested `Text` elements become styled
-spans in one paragraph and one Three.js object.
-
-```tsx
-import { Suspense } from 'react';
-import { defineFont } from '@pmndrs/text';
-import { Text } from '@pmndrs/text/react';
-import { msdf } from '@pmndrs/text/raster/msdf';
-
-const uiFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
-
-export function Label() {
-  return (
-    <Suspense fallback={null}>
-      <Text font={uiFont} width={4} fontSize={0.24} color="white" textAlign="center">
-        Fast, <Text color="#ff8a00">accurate</Text> text.
-      </Text>
-    </Suspense>
-  );
-}
-```
-
-Preload a font token before a route or scene transition when the application knows it will be needed:
-
-```ts
-import { useFont } from '@pmndrs/text/react';
-
-await useFont.preload(uiFont);
-```
-
-### Three.js
-
-The Three.js `Text` class owns a normal engine lifecycle. Its asynchronous generation becomes renderable through ordinary
-matrix updates, and warm property changes retain the object while the replacement generation is prepared.
-
-```ts
-import { Text, defineFont } from '@pmndrs/text';
-import { msdf } from '@pmndrs/text/raster/msdf';
-
-const uiFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
-const label = new Text({
-  font: uiFont,
-  text: 'Fast, accurate text.',
-  width: 4,
-  fontSize: 0.24,
-  color: 'white',
-});
-
-scene.add(label);
-await label.ready;
-
-label.setProperties({ text: 'Updated without replacing the Text object.' });
-
-// Later, when removing it from the scene:
-label.dispose();
-```
-
-Passing a source-font URL uses baked-first delivery: the loader probes the canonical sibling font artifact, validates it,
-and falls back to the package-owned Worker baker when necessary. Use `{ baked: '/fonts/Inter.font.glb' }` when an application
-must require a prebuilt artifact and never fall back to source.
-
-## Choose a renderer
-
-Raster selection is explicit. The package does not silently exchange visual techniques at runtime.
-
-| Renderer | Use it for                                                        | Import                       |
-| -------- | ----------------------------------------------------------------- | ---------------------------- |
-| MTSDF    | General-purpose scalable UI and scene text                        | `@pmndrs/text/raster/msdf`   |
-| Bitmap   | Tiny text at known pixel sizes or intentionally raster typography | `@pmndrs/text/raster/bitmap` |
-| Slug     | Large text, extreme zoom, and accurate monochrome outlines        | `@pmndrs/text/raster/slug`   |
-
-Bitmap strikes and their bake-time coverage are declared with the font:
-
-```ts
-import { defineFont } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
-
-const bodyFont = defineFont(
-  '/fonts/Inter-Regular.ttf',
-  bitmap({
-    strikes: [16, 32],
-    coverage: { text: 'The text and icons this application ships.' },
-  }),
-);
-```
-
-See the [renderer capability matrix](docs/planning/renderer-capabilities.md) for supported content, effects, and constraints.
-
-## Bake fonts ahead of time
-
-The workspace CLI discovers statically declared fonts and raster requirements and writes authenticated GLB artifacts:
-
-```sh
-pnpm bake --project-root . --entry src/text.ts --asset-root public --output-root public
-```
-
-Use `pnpm bake --help` for CLI options. The Node API is available from `@pmndrs/text/bake` for custom build systems; the
-[API contract](docs/planning/api-shapes.md) describes discovery, loading, caching, Workers, and artifact ownership.
-
-## How the pieces fit
-
-```mermaid
-flowchart LR
-  Font["Font source or baked GLB"] --> Load["defineFont<br/>FontLoader + FontRegistry"]
-  Load --> Shape["createRuntimeShaper"]
-  Shape --> Layout["createParagraphEngine<br/>ParagraphLayout"]
-  Load --> Raster["RasterRuntime<br/>RasterModule"]
-  Layout --> Stage["RasterBatchStage"]
-  Raster --> Stage
-  Stage --> Integration["Renderer integration"]
-  Integration --> Three["Three.js + R3F"]
-  Integration -.-> Other["Other engines"]
-```
-
-The core artifact owns shaping data, font metrics, provenance, and the font-local glyph identity space. Raster artifacts own
-only technique-specific GPU data and bind back to that core identity. Applications can package them together or fetch them
-independently without reshaping the paragraph for each renderer.
-
-Third-party raster implementations use the same public contracts as the built-in techniques. Start with the
-[raster and baker plugin guide](docs/planning/raster-baker-plugin.md); the private
-[`@pmndrs/text-glyph-example-raster`](packages/glyph-example-raster) package is the executable external-package proof.
-
-## Core and renderer integrations
-
-The public APIs below are available today; see the [API contract](docs/planning/api-shapes.md) for the complete surface.
-
-| API                                             | Role                                                                             |
-| ----------------------------------------------- | -------------------------------------------------------------------------------- |
-| `defineFont`, `FontLoader`, `FontRegistry`      | Declare, authenticate, cache, and own font artifacts                             |
-| `createRuntimeShaper`, `createParagraphEngine`  | Produce synchronous measurements and positioned `ParagraphLayout` glyph data     |
-| `defineRaster`, `RasterRuntime`, `RasterModule` | Define, load, decode, prepare, and dispose a raster technique                    |
-| `RasterBatchStage`, `RasterDrawBatch`           | Stage complete renderer-owned batches, then commit or abort them transactionally |
-| `Text`, `@pmndrs/text/react`                    | Use the current Three.js and React Three Fiber integration                       |
-
-A new renderer consumes `ParagraphLayout`, implements the generic raster resource and batch types, and owns its transforms,
-GPU resources, ordering, publication, and device lifecycle. The [renderer-agnostic core plan](docs/planning/engine-integration-boundary.md)
-tracks the WIP generation boundary, and the [raster plugin guide](docs/planning/raster-baker-plugin.md) shows a working external
-technique.
-
-## Repository commands
-
-The contributor-facing command surface is intentionally small:
-
-| Command        | Purpose                                                         |
-| -------------- | --------------------------------------------------------------- |
-| `pnpm bake`    | Build and run the workspace font-baking CLI.                    |
-| `pnpm dev`     | Start the benchmark and Presentation application.               |
-| `pnpm build`   | Build every package and application.                            |
-| `pnpm test`    | Run deterministic package and product tests.                    |
-| `pnpm check`   | Run the complete merge gate, including tests and documentation. |
-| `pnpm scripts` | Discover specialized maintenance and evidence workflows.        |
-
-Specialized commands explain their own requirements and outputs:
-
-```sh
-pnpm scripts list
-pnpm scripts list presentation
-pnpm scripts show benchmark:presentation
-pnpm scripts run benchmark:presentation
-```
-
-Hardware WebGPU/WebGL2 screenshots and performance measurements remain explicit local workflows because hosted CI cannot
-provide representative GPU timing or driver coverage. Deterministic package, browser, conformance, build, and documentation
-checks run through `pnpm check`.
-
-## Documentation
-
-The README is the short path into the project. Deeper documentation is organized by what the reader needs next:
-
-- **Learn:** run the [benchmark and Presentation app](docs/packages/benchmarks.md) and follow the examples above.
-- **Use:** consult the [API contract](docs/planning/api-shapes.md), [raster plugin guide](docs/planning/raster-baker-plugin.md),
-  and [uikit integration guidance](docs/planning/uikit-integration.md).
-- **Look up:** use the [workspace package catalog](docs/packages/index.md),
-  [renderer capability matrix](docs/planning/renderer-capabilities.md), and
-  [`PMNDRS_font` extension schemas](docs/planning/extensions/index.md).
-- **Understand:** read the [architecture](docs/planning/architecture.md),
-  [renderer-agnostic core plan](docs/planning/engine-integration-boundary.md), [canonical roadmap](docs/roadmap/roadmap.md),
-  and [attributed research](RESEARCH.md).
-
-The documentation under [`docs/`](docs/index.md) is also an Open Knowledge Format v0.2 bundle with package-source freshness
-checks, provenance, and progressive-disclosure indexes.
-
-## Current scope
-
-The workspace already implements the v1 shaping, horizontal paragraph, delivery, Three.js/React, and three-raster foundation.
-The renderer-agnostic core and additional engine integrations remain WIP alongside the roadmap's later layout and raster work.
-
-`@pmndrs/text` is MIT licensed. Contributions are welcome.
+`@pmndrs/text` is ESM-only and MIT licensed.
