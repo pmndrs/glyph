@@ -35,7 +35,7 @@ sources:
     title: Raw TypeGPU proof target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-06T22:55:24Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -302,6 +302,9 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Move Three textures, attributes, TSL materials, scene objects, and renderer disposal into Three raster targets.
 - Permit an optional `RasterProgram` seam when multiple engines share a shader/resource backend such as TypeGPU and raw
   WebGPU interop; do not require an artificial universal shader interface in core.
+- Permit an optional `@typegpu/three` program subpath that adapts shared TypeGPU raster functions into TSL nodes. Keep
+  Three-owned accessors, materials, pipeline state, and lifecycle in that adapter; neither core nor the portable technique
+  imports TypeGPU or TSL.
 - Retain decoded CPU page/table bytes through loaded-font lifetime so several targets and late attachment need no refetch or
   decode.
 
@@ -312,6 +315,7 @@ expect(mtsdfBaker).not.toImportAnyRenderer();
 expect(mtsdfTechnique).not.toImportAnyRenderer();
 expect(threeMtsdfTarget.technique).toBe(mtsdfTechnique);
 expect(typeGpuMtsdfProgram.technique).toBe(mtsdfTechnique);
+expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 ```
 
 ### 6. Rebuild the Three.js public surface over hidden core objects
@@ -364,6 +368,14 @@ Build the smallest application in `AlexJWayne/typegpu-shader-canvas` that proves
 - at least two physical raster-resource batches and ordered submissions;
 - one synchronous update and one asynchronous update;
 - no Three.js import or Three-derived adapter logic.
+
+### 8a. Prove TypeGPU-authored TSL
+
+Use `@typegpu/three` `toTSL()` to adapt the same TypeGPU-authored Bitmap and Slug raster functions into the Three program.
+Keep Three accessors, material assembly, blending, depth, renderer lifecycle, and target ownership in the Three adapter.
+Against the repository-pinned Three.js version, inspect the emitted WebGPU shaders, prove deterministic render parity with
+the native TSL programs, and measure tree-shaken raw/gzip/Brotli transfer plus graph-construction and shader-compilation
+cost. Keep this implementation behind an explicit export subpath unless those results justify making it the default.
 
 ### 9. Prove Wayfare
 
