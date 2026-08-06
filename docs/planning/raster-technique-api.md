@@ -32,7 +32,7 @@ sources:
     title: TypeGPU pipelines and raw WebGPU pipeline interop
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-06T22:12:47Z'
 ---
 
 # Raster technique and engine resource API
@@ -162,7 +162,9 @@ interface RasterTechnique<
   Data,
   Binding,
   Storage extends GlyphBatchStorage,
-> {
+> extends AnyRasterTechnique {
+  readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<Options, Descriptor, Data, Binding, Storage>;
+
   readonly id: Id;
   readonly kind: Kind;
   readonly extension: string;
@@ -194,14 +196,74 @@ interface RasterGlyphWriteInput<Data> {
 
 type GlyphBatchStorage = Readonly<Record<string, ArrayBufferView>>;
 
-type AnyRasterTechnique = RasterTechnique<any, any, any, any, any, any, any>;
-type RasterDataOf<Technique extends AnyRasterTechnique> =
-  Technique extends RasterTechnique<any, any, any, any, infer Data, any, any> ? Data : never;
-type RasterBindingOf<Technique extends AnyRasterTechnique> =
-  Technique extends RasterTechnique<any, any, any, any, any, infer Binding, any> ? Binding : never;
-type GlyphBatchStorageOf<Technique extends AnyRasterTechnique> =
-  Technique extends RasterTechnique<any, any, any, any, any, any, infer Storage> ? Storage : never;
+declare const rasterTechniqueTypes: unique symbol;
+
+interface RasterTechniqueTypeMap<
+  Options = unknown,
+  Descriptor extends JsonValue = JsonValue,
+  Data = unknown,
+  Binding = unknown,
+  Storage extends GlyphBatchStorage = GlyphBatchStorage,
+> {
+  readonly options: Options;
+  readonly descriptor: Descriptor;
+  readonly data: Data;
+  readonly binding: Binding;
+  readonly storage: Storage;
+}
+
+interface AnyRasterTechnique {
+  readonly id: RasterTechniqueId;
+  readonly kind: string;
+  readonly extension: string;
+  readonly version: number;
+  readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap;
+}
+
+type RasterTechniqueTypesOf<Technique extends AnyRasterTechnique> = NonNullable<Technique[typeof rasterTechniqueTypes]>;
+type RasterDataOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['data'];
+type RasterBindingOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['binding'];
+type GlyphBatchStorageOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['storage'];
+
+declare function defineRasterTechnique<
+  const Id extends RasterTechniqueId,
+  const Kind extends string,
+  Options,
+  Descriptor extends JsonValue,
+  Data,
+  Binding,
+  Storage extends GlyphBatchStorage,
+>(
+  technique: RasterTechnique<Id, Kind, Options, Descriptor, Data, Binding, Storage>,
+): RasterTechnique<Id, Kind, Options, Descriptor, Data, Binding, Storage>;
 ```
+
+`AnyRasterTechnique` contains only the common identity shape. It does not instantiate the generic technique with `any`, and
+it cannot be used to perform typed decode, selection, or storage writes. Its associated types intentionally widen to
+`unknown` / `GlyphBatchStorage` at a heterogeneous boundary. Concrete values retain their complete relationships:
+
+```ts
+const mtsdf = defineRasterTechnique({
+  id: MTSDF_TECHNIQUE_ID,
+  kind: 'mtsdf',
+  extension: 'PMNDRS_font_distance_field',
+  version: 0,
+  descriptor: mtsdfDescriptor,
+  decode: decodeMtsdf,
+  select: selectMtsdfGlyph,
+  createStorage: createMtsdfStorage,
+  writeStorage: writeMtsdfStorage,
+  dispose: disposeMtsdfData,
+});
+
+type Data = RasterDataOf<typeof mtsdf>; // MtsdfData
+type Binding = RasterBindingOf<typeof mtsdf>; // MtsdfBinding
+type Storage = GlyphBatchStorageOf<typeof mtsdf>; // MtsdfGlyphBatchStorage
+```
+
+The helper's generic parameters are inference variables in its declaration; raster authors do not supply them. An unresolved
+associated type remains `unknown`, which blocks technique-specific use until the author supplies enough type information. It
+never silently degrades to `any`.
 
 `select()` returns the physical resource and pipeline division for one resolved glyph. Core uses it while building stable
 glyph batches; a target never repeats this selection. `resource` must be a stable technique/runtime identity, while
