@@ -21,6 +21,7 @@ import type {
   ParagraphStyle,
   ParagraphUpdate,
 } from '../index.js';
+import type { ParagraphBatchTarget, ParagraphBatchTargetRevision } from '../paragraph-batch-attachment.js';
 import type { AnyRasterTechnique } from '../raster-technique.js';
 import { bitmap } from '../raster/bitmap-technique.js';
 import { mtsdf } from '../raster/mtsdf.js';
@@ -28,11 +29,27 @@ import { slug } from '../raster/slug-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import { ThreeBitmapTarget, type ThreeBitmapTargetOwner } from './bitmap-target.js';
 import { ThreeMtsdfTarget, type ThreeMtsdfTargetOwner } from './mtsdf-target.js';
+import { registerThreeRasterProgram, threeRasterProgram, type ThreeRasterProgram } from './program-registry.js';
 import { ThreeSlugTarget, type ThreeSlugTargetOwner } from './slug-target.js';
 
 export interface ThreeRenderVariant {
   readonly effects?: readonly unknown[];
 }
+
+const asProgram = (build: (owner: never) => unknown): ThreeRasterProgram => build as ThreeRasterProgram;
+
+registerThreeRasterProgram(
+  bitmap,
+  asProgram((owner: ThreeBitmapTargetOwner) => new ThreeBitmapTarget(owner)),
+);
+registerThreeRasterProgram(
+  mtsdf,
+  asProgram((owner: ThreeMtsdfTargetOwner) => new ThreeMtsdfTarget(owner)),
+);
+registerThreeRasterProgram(
+  slug,
+  asProgram((owner: ThreeSlugTargetOwner) => new ThreeSlugTarget(owner)),
+);
 
 export type TextSpan<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphSpan<
   Technique,
@@ -466,21 +483,19 @@ class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant>
       capacity,
       ...(group?.renderVariant === undefined ? {} : { renderVariant: group.renderVariant }),
     });
-    if ((technique as AnyRasterTechnique) === (bitmap as AnyRasterTechnique)) {
-      const target = new ThreeBitmapTarget<Variant>(this);
-      const bitmapBatch = this.#batch as unknown as ParagraphBatch<typeof bitmap, Variant>;
-      this.#attachment = bitmapBatch.attach(target) as unknown as ThreeTargetAttachment;
-    } else if ((technique as AnyRasterTechnique) === (mtsdf as AnyRasterTechnique)) {
-      const target = new ThreeMtsdfTarget<Variant>(this);
-      const mtsdfBatch = this.#batch as unknown as ParagraphBatch<typeof mtsdf, Variant>;
-      this.#attachment = mtsdfBatch.attach(target) as unknown as ThreeTargetAttachment;
-    } else if ((technique as AnyRasterTechnique) === (slug as AnyRasterTechnique)) {
-      const target = new ThreeSlugTarget<Variant>(this);
-      const slugBatch = this.#batch as unknown as ParagraphBatch<typeof slug, Variant>;
-      this.#attachment = slugBatch.attach(target) as unknown as ThreeTargetAttachment;
-    } else {
-      throw new TypeError('the target-v1 Three adapter currently has no program for this technique');
+    const program = threeRasterProgram(technique);
+    if (program === undefined) {
+      throw new TypeError(
+        `no Three raster program is registered for "${technique.id}"; register one with registerThreeRasterProgram`,
+      );
     }
+    const target = program(this) as unknown as ParagraphBatchTarget<
+      AnyRasterTechnique,
+      Variant,
+      ParagraphBatchTargetRevision
+    >;
+    const batch = this.#batch as unknown as ParagraphBatch<AnyRasterTechnique, Variant>;
+    this.#attachment = batch.attach(target) as unknown as ThreeTargetAttachment;
   }
   get textCount(): number {
     return this.#paragraphs.size;
