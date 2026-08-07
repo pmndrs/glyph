@@ -1,5 +1,7 @@
 import { liveWorkloadFontFixtures, type BenchmarkFontFixture } from './font-fixtures';
 import type { FontDelivery, RasterTechnique } from './url-state';
+import { benchmarkWorkloadDefinition, isBenchmarkWorkloadId } from '../workloads/catalog';
+import { workloadCompanionFontFixtures } from '../workloads/shared/definition';
 
 export interface PayloadPackageSizeEntry {
   readonly id: string;
@@ -96,8 +98,19 @@ export interface CreatePayloadSummaryOptions {
 export function createPayloadSummary(options: CreatePayloadSummaryOptions): PayloadSummary {
   const { delivery, fixtureManifests, fontFixture, packageSizes, technique, workload } = options;
   const selectedFonts = liveWorkloadFontFixtures(workload, fontFixture);
-  const fixtureIds =
-    selectedFonts.kind === 'icon-grid' ? [selectedFonts.primary, selectedFonts.labels] : [selectedFonts.primary];
+  // A route delivers every fixture it keeps resident, not only the one it renders body text from. Icon Grid names its
+  // label font beside its icon font; a composed route names the faces its spans select. Reporting only the primary
+  // would under-report exactly the workloads that cost the most to deliver.
+  const companionIds = isBenchmarkWorkloadId(workload)
+    ? workloadCompanionFontFixtures(benchmarkWorkloadDefinition(workload).fontPolicy)
+    : [];
+  const fixtureIds = [
+    ...new Set(
+      selectedFonts.kind === 'icon-grid'
+        ? [selectedFonts.primary, selectedFonts.labels]
+        : [selectedFonts.primary, ...companionIds],
+    ),
+  ];
   const compatibleLiveStats = options.liveStats?.technique === technique ? options.liveStats : undefined;
   const runtime = measuredPackageSizeIfAvailable(packageSizes, `${technique}-runtime-js`);
   const shaper = measuredPackageSize(packageSizes, 'text-shaper-wasm');

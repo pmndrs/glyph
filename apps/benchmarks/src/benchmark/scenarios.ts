@@ -444,6 +444,91 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
   return `${values.length}/${values.length} exact advanced-shaping timelines · ${frameCount} frames/sample`;
 }
 
+/**
+ * The composed paragraph's exact span evidence.
+ *
+ * Each pin answers one question that the others cannot. Glyph-id changes prove the shaper honoured a span; origin
+ * changes with unchanged ids prove a span altered metrics without altering selection; the line-count and first-break
+ * pins prove a size span reached line breaking rather than only advances; the slot pins prove a font span reached the
+ * shaper's font selection; and the `.notdef` pin proves the fallback span is what resolved the Devanagari at all.
+ */
+const RICH_TEXT_SPAN_EVIDENCE = {
+  hash: '7e765ac8',
+  glyphCount: 175,
+  renderedGlyphCount: 149,
+  drawCount: 7,
+  fontHandleCount: 3,
+  distinctFontSizeCount: 4,
+  spanCount: 8,
+  caseCount: 7,
+  smallCapsChangedGlyphs: 5,
+  trackingMovedOrigins: 12,
+  emphasisMovedOrigins: 101,
+  lineCount: 3,
+  bodySizeEmphasisLineCount: 2,
+  emphasisFirstLineTextEnd: 74,
+  bodySizeEmphasisFirstLineTextEnd: 87,
+  faceSpanSlotGlyphs: 6,
+  fallbackSpanSlotGlyphs: 8,
+  fallbackMissingGlyphsWithoutSpan: 8,
+  accentPaintGlyphs: 23,
+  tintPaintGlyphs: 3,
+  paragraphPaintGlyphs: 123,
+  nestedGlyphCount: 9,
+} as const;
+
+/**
+ * Glyphs the nested style-only span loses to the paragraph paint instead of inheriting from the span that encloses it.
+ *
+ * The README states that a span inherits its surroundings, and `packages/text` currently resolves paint by taking the
+ * innermost covering span's `paint` whole — so a span that states no paint falls through to the *paragraph* paint
+ * rather than to the enclosing span's. This pin characterises that defect exactly: it must become `0` when paint
+ * resolves as a per-property cascade, and this target is what will report that it has.
+ */
+const NESTED_SPAN_PAINT_CASCADE_DELTA = 9;
+
+function richTextSpanValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
+  deterministicValidation(values.map((value) => value.hash));
+  for (const value of values) {
+    const metrics = value.metrics;
+    if (metrics === undefined) throw new Error('Rich text span conformance reported no metrics');
+    for (const [key, expected] of Object.entries(RICH_TEXT_SPAN_EVIDENCE)) {
+      if (key === 'hash') continue;
+      if (metrics[key] !== expected) {
+        throw new Error(
+          `Rich text span conformance changed ${key}: ${String(metrics[key])} instead of ${String(expected)}`,
+        );
+      }
+    }
+    if (value.hash !== RICH_TEXT_SPAN_EVIDENCE.hash) {
+      throw new Error('Rich text span conformance changed its composed shaping and paint evidence');
+    }
+    if (
+      // A feature span must re-select glyphs only inside its own range.
+      metrics.smallCapsChangedGlyphsOutside !== 0 ||
+      // Tracking and size must move metrics without re-selecting a single glyph.
+      metrics.trackingChangedGlyphs !== 0 ||
+      metrics.emphasisChangedGlyphs !== 0 ||
+      // Dropping a font span must return its range to the body face's slot.
+      metrics.faceSpanSlotGlyphsWithoutSpan !== 0 ||
+      metrics.fallbackFontHandleCountWithoutSpan !== 2 ||
+      // The composed paragraph must resolve every glyph and account for every drawn instance.
+      metrics.missingGlyphCount !== 0 ||
+      (metrics.accentPaintGlyphs ?? 0) + (metrics.tintPaintGlyphs ?? 0) + (metrics.paragraphPaintGlyphs ?? 0) !==
+        metrics.renderedGlyphCount
+    ) {
+      throw new Error('Rich text span conformance did not preserve its composed-span contract');
+    }
+    if (metrics.nestedPaintDelta !== NESTED_SPAN_PAINT_CASCADE_DELTA) {
+      throw new Error(
+        `Nested style-only span paint inheritance changed: ${String(metrics.nestedPaintDelta)} glyphs lost to the paragraph paint instead of ${String(NESTED_SPAN_PAINT_CASCADE_DELTA)}`,
+      );
+    }
+  }
+  const nestedPaint = NESTED_SPAN_PAINT_CASCADE_DELTA > 0 ? 'resets' : 'inherits';
+  return `${values.length}/${values.length} exact composed-span paragraphs · ${String(RICH_TEXT_SPAN_EVIDENCE.caseCount)} controls · nested paint ${nestedPaint}`;
+}
+
 function finiteNonnegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
@@ -487,6 +572,14 @@ export const scenarios: readonly BenchmarkScenario[] = [
     description: 'Every authored Latin, Arabic, Devanagari, bidi, and CJK frame through public Text.',
     requiredCapabilities: new Set(['deterministic', 'shaping', 'paragraph', 'raster']),
     validate: advancedShapingValidation,
+  },
+  {
+    id: 'rich-text-spans-conformance',
+    label: 'Rich text span conformance',
+    description:
+      'Composed spans carrying features, tracking, size, face, fallback, nesting, and paint through public Text.',
+    requiredCapabilities: new Set(['deterministic', 'shaping', 'paragraph', 'raster']),
+    validate: richTextSpanValidation,
   },
   {
     id: 'react-text-reconciliation',

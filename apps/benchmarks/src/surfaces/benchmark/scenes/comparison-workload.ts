@@ -4,9 +4,10 @@ import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap/v0';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
-import { ICON_GRID_FONT_FIXTURE } from '../../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../../benchmark/runtime-world';
 import type { FontDelivery, RasterTechnique } from '../../../benchmark/url-state';
+import { benchmarkWorkloadDefinition } from '../../../workloads/catalog';
+import { workloadCompanionFontFixtures } from '../../../workloads/shared/definition';
 import {
   comparisonWorkloadDefinition,
   comparisonWorkloadRequiresIconWindowSuspension as registryRequiresIconWindowSuspension,
@@ -332,7 +333,12 @@ async function createComparisonWorkloadRuntime(
   const canvasSurface = createCanvasSurface(renderer, width, height, configuration.showGrid);
   const rendererInitMs = persistentContext.rendererInitMs;
   let font: LoadedTechniqueFont | undefined;
-  let iconFont: LoadedTechniqueFont | undefined;
+  /**
+   * Companion fixtures stay resident once loaded, keyed by fixture rather than held in one slot: the routes that need a
+   * companion do not all need the same one, and a Text that a previous workload published still holds a font lease, so
+   * releasing a companion at a workload switch would invalidate a font the outgoing scene has not finished with.
+   */
+  const companionFonts = new Map<BenchmarkFontFixture, LoadedTechniqueFont>();
   let selectedFontController: RetainedFontFixtureController<LoadedTechniqueFont> | undefined;
   let entries: readonly WorkloadEntry[] = [];
   // The workload's batch root. A shared `TextGroup` packs every Text of a multi-instance workload into one paragraph
@@ -402,57 +408,82 @@ async function createComparisonWorkloadRuntime(
       options.slugBakedArtifact,
       sharedRegistry,
     );
-    if (configuration.workload === 'icon-grid') {
-      iconFont = await loadTechniqueFont(
-        technique,
-        ICON_GRID_FONT_FIXTURE,
-        options.delivery,
-        signal,
-        options.onBakeProgress,
-        undefined,
-        sharedRegistry,
-      );
-    }
+    const companionFixtures = (workload: ComparisonWorkloadId): readonly BenchmarkFontFixture[] =>
+      workloadCompanionFontFixtures(benchmarkWorkloadDefinition(workload).fontPolicy);
+    const ensureCompanionFonts = async (workload: ComparisonWorkloadId): Promise<readonly LoadedTechniqueFont[]> => {
+      const loaded: LoadedTechniqueFont[] = [];
+      for (const fixture of companionFixtures(workload)) {
+        const resident = companionFonts.get(fixture);
+        if (resident !== undefined) {
+          loaded.push(resident);
+          continue;
+        }
+        const companion = await loadTechniqueFont(
+          technique,
+          fixture,
+          options.delivery,
+          signal,
+          options.onBakeProgress,
+          undefined,
+          sharedRegistry,
+        );
+        companionFonts.set(fixture, companion);
+        loaded.push(companion);
+      }
+      return loaded;
+    };
+    const residentCompanionFont = (workload: ComparisonWorkloadId): LoadedTechniqueFont | undefined => {
+      const [fixture] = companionFixtures(workload);
+      return fixture === undefined ? undefined : companionFonts.get(fixture);
+    };
+    await ensureCompanionFonts(configuration.workload);
     selectedFontController = createRetainedFontFixtureController(
       sharedRegistry,
       { fixture: configuration.fontFixture, asset: font },
       {
-        // The selected label fixture and fixed icon fixture can deduplicate to one loaded font. In that case the
-        // fixed icon owner releases the shared handle at teardown; a label switch must not invalidate its Texts.
+        // The selected fixture and a companion fixture can deduplicate to one loaded font. In that case the companion
+        // owner releases the shared handle at teardown; a selection switch must not invalidate its Texts.
         dispose: (asset) => {
-          if (asset.loaded !== iconFont?.loaded) asset.loaded.dispose();
+          if (![...companionFonts.values()].some((companion) => companion.loaded === asset.loaded)) {
+            asset.loaded.dispose();
+          }
         },
       },
     );
     const activeSelectedFont = selectedFontController;
     const activeFont = (): LoadedTechniqueFont => activeSelectedFont.current.asset;
     const loadedFontsScratch: LoadedTechniqueFont[] = [];
+    /**
+     * The selected fixture and a companion fixture can resolve to the same registered font, so residency is deduplicated
+     * by the loaded handle rather than by the asset wrapper — counting one font twice would double its reported bytes.
+     */
     const loadedFonts = (): readonly LoadedTechniqueFont[] => {
-      loadedFontsScratch[0] = activeFont();
-      if (iconFont === undefined) loadedFontsScratch.length = 1;
-      else {
-        loadedFontsScratch[1] = iconFont;
-        loadedFontsScratch.length = 2;
+      loadedFontsScratch.length = 0;
+      loadedFontsScratch.push(activeFont());
+      for (const companion of companionFonts.values()) {
+        if (!loadedFontsScratch.some(({ loaded }) => loaded === companion.loaded)) loadedFontsScratch.push(companion);
       }
       return loadedFontsScratch;
     };
-    let cachedBitmapAtlasPrimary: LoadedTechniqueFont | undefined;
-    let cachedBitmapAtlasSecondary: LoadedTechniqueFont | undefined;
+    let cachedBitmapAtlasFonts: readonly LoadedTechniqueFont[] = [];
     let cachedBitmapAtlasPages: readonly BitmapAtlasPageStats[] = [];
     const bitmapAtlasPages = (fonts: readonly LoadedTechniqueFont[]): readonly BitmapAtlasPageStats[] => {
-      const primary = fonts[0];
-      const secondary = fonts[1];
-      if (primary !== cachedBitmapAtlasPrimary || secondary !== cachedBitmapAtlasSecondary) {
-        cachedBitmapAtlasPrimary = primary;
-        cachedBitmapAtlasSecondary = secondary;
+      // A composed workload keeps more than two fonts resident, so the cache key is the whole residency rather than
+      // its first two members: a companion added behind the primary would otherwise return a stale page report.
+      const unchanged =
+        fonts.length === cachedBitmapAtlasFonts.length &&
+        fonts.every((resident, index) => resident === cachedBitmapAtlasFonts[index]);
+      if (!unchanged) {
+        cachedBitmapAtlasFonts = [...fonts];
         cachedBitmapAtlasPages = combineBitmapAtlasPages(fonts);
       }
       return cachedBitmapAtlasPages;
     };
-    // Keep the companion icon font resident for warm return visits, but never let that retained resource become
-    // the visible workload's density/configuration source after navigation away from Icon Grid.
+    // Icon Grid renders its cells from the companion fixture, so that fixture owns the reported density there. Every
+    // other workload — including a composed one that only reaches its companion through a span — keeps the selected
+    // font as its density source, so a retained companion never becomes the visible configuration after navigation.
     const statsFont = (): LoadedTechniqueFont =>
-      configuration.workload === 'icon-grid' ? (iconFont ?? activeFont()) : activeFont();
+      configuration.workload === 'icon-grid' ? (residentCompanionFont('icon-grid') ?? activeFont()) : activeFont();
     let fontFixtureSwitching = false;
     let fontFixtureCommitting = false;
     let committedContentWidth = comparisonWorkloadContentWidth(configuration, width);
@@ -465,12 +496,13 @@ async function createComparisonWorkloadRuntime(
       // Target-v1 has no per-Text readiness promise, so growing the pool is synchronous. The contract stays async
       // because the Icon Grid instance owns the await point that keeps a superseded resize from publishing.
       async resize(poolCapacity, iconSize, layout) {
-        if (iconFont === undefined) throw new Error('icon grid lost its icon font fixture');
+        const icons = residentCompanionFont('icon-grid');
+        if (icons === undefined) throw new Error('icon grid lost its icon font fixture');
         if (poolCapacity > entries.length) {
           const additions = createIconGridEntries({
             count: poolCapacity - entries.length,
             dpr: rendererViewport.pixelRatio,
-            iconFont: iconFont.loaded,
+            iconFont: icons.loaded,
             iconSize,
             labelFont: activeFont().loaded,
           });
@@ -545,17 +577,7 @@ async function createComparisonWorkloadRuntime(
     async function commit(next: ComparisonWorkloadConfiguration): Promise<void> {
       const workloadChanged = next.workload !== configuration.workload;
       const nextCamera = workloadChanged ? createWorkloadCamera(next.workload, width, height) : camera;
-      if (next.workload === 'icon-grid' && iconFont === undefined) {
-        iconFont = await loadTechniqueFont(
-          technique,
-          ICON_GRID_FONT_FIXTURE,
-          options.delivery,
-          signal,
-          options.onBakeProgress,
-          undefined,
-          sharedRegistry,
-        );
-      }
+      const nextCompanionFonts = await ensureCompanionFonts(next.workload);
       const commitRevision = ++revision;
       const readyStarted = performance.now();
       const nextIconGridInstance =
@@ -578,7 +600,7 @@ async function createComparisonWorkloadRuntime(
         height,
         workloadChanged ? 0 : performance.now() - animationEpoch,
         options.textLadderSpecimen,
-        iconFont?.loaded,
+        nextCompanionFonts.map(({ loaded }) => loaded),
         initialIconWindow?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
         initialIconWindow?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
       );
@@ -1041,7 +1063,8 @@ async function createComparisonWorkloadRuntime(
           batchRoot = new THREE.Group();
           // Every Text holds a font lease, so the loaded fonts can only be released after the entries are disposed.
           activeSelectedFont.dispose();
-          iconFont?.loaded.dispose();
+          for (const companion of companionFonts.values()) companion.loaded.dispose();
+          companionFonts.clear();
           canvasSurface.dispose();
         })();
         return disposal;
@@ -1050,7 +1073,8 @@ async function createComparisonWorkloadRuntime(
   } catch (error) {
     disposeEntries(entries);
     disposeBatchRoot(batchRoot);
-    iconFont?.loaded.dispose();
+    for (const companion of companionFonts.values()) companion.loaded.dispose();
+    companionFonts.clear();
     if (selectedFontController === undefined) font?.loaded.dispose();
     else selectedFontController.dispose();
     canvasSurface.dispose();
@@ -1088,16 +1112,16 @@ function createEntries(
   viewportHeight: number,
   animationElapsedMs: number,
   textLadderSpecimen?: RasterConformanceSpecimen,
-  iconFont?: WorkloadFont,
+  companionFonts: readonly WorkloadFont[] = [],
   iconScrollX = 0,
   iconScrollY = 0,
 ): readonly WorkloadEntry[] {
   return comparisonWorkloadDefinition(configuration.workload).create({
     animationElapsedMs,
+    companionFonts,
     configuration,
     dpr,
     font,
-    ...(iconFont === undefined ? {} : { iconFont }),
     iconScrollX,
     iconScrollY,
     technique,

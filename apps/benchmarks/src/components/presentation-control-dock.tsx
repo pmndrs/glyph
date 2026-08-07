@@ -153,7 +153,7 @@ function WorkloadControls(props: PresentationControlDockProps) {
       />,
     );
   }
-  if (props.workload === 'paint-effects') {
+  if (props.workload === 'paint-effects' || props.workload === 'rich-text') {
     controls.push(
       <RangeControl
         icon={<Droplets />}
@@ -527,7 +527,8 @@ function workloadHasLayoutWidth(workload: string): boolean {
     workload === 'dynamic-layout' ||
     workload === 'off-axis-3d' ||
     workload === 'paint-effects' ||
-    workload === 'paragraph-stress'
+    workload === 'paragraph-stress' ||
+    workload === 'rich-text'
   );
 }
 
@@ -543,7 +544,8 @@ function workloadHasAnimation(workload: string): boolean {
     workload === 'zoom-text' ||
     workload === 'text-ladder' ||
     workload === 'dynamic-layout' ||
-    workload === 'paragraph-stress'
+    workload === 'paragraph-stress' ||
+    workload === 'rich-text'
   );
 }
 
@@ -557,6 +559,8 @@ function workloadAmountLabel(workload: string): string | undefined {
       return 'Text volume';
     case 'paint-effects':
       return 'Hue spread';
+    case 'rich-text':
+      return 'Span density';
     default:
       return undefined;
   }

@@ -42,7 +42,8 @@ export const iconGridWorkload = {
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {
-    if (context.iconFont === undefined) throw new Error('icon grid requires its icon font fixture');
+    const icons = context.companionFonts[0];
+    if (icons === undefined) throw new Error('icon grid requires its icon font fixture');
     const window = iconGridVirtualWindow(
       ICON_GRID_ITEMS.length,
       context.configuration.fontSize,
@@ -54,7 +55,7 @@ export const iconGridWorkload = {
     return createIconGridEntries({
       count: window.poolCapacity,
       dpr: context.dpr,
-      iconFont: context.iconFont,
+      iconFont: icons,
       iconSize: context.configuration.fontSize,
       indices: window.indices,
       labelFont: context.font,

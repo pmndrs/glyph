@@ -40,7 +40,8 @@ function isComparisonWorkload(workload: string): boolean {
     workload === 'off-axis-3d' ||
     workload === 'dynamic-layout' ||
     workload === 'paragraph-stress' ||
-    workload === 'paint-effects'
+    workload === 'paint-effects' ||
+    workload === 'rich-text'
   );
 }
 

@@ -51,6 +51,11 @@ export interface WorkloadRuntimeDefaults {
 
 export type WorkloadFontPolicy =
   | { readonly defaultFixture: BenchmarkFontFixture; readonly kind: 'advanced-case' }
+  | {
+      readonly companionFixtures: readonly [BenchmarkFontFixture, ...BenchmarkFontFixture[]];
+      readonly defaultFixture: SelectableFontFixture;
+      readonly kind: 'composed';
+    }
   | { readonly defaultFixture: SelectableFontFixture; readonly kind: 'fixed' }
   | {
       readonly iconFixture: typeof ICON_GRID_FONT_FIXTURE;
@@ -58,6 +63,22 @@ export type WorkloadFontPolicy =
       readonly labelDefaultFixture: SelectableFontFixture;
     }
   | { readonly defaultFixture: SelectableFontFixture; readonly kind: 'selectable' };
+
+const NO_COMPANION_FIXTURES: readonly BenchmarkFontFixture[] = Object.freeze([]);
+
+/**
+ * The further concrete fixtures a route needs resident beside its selected font, in declaration order.
+ *
+ * Icon Grid renders its icons from its one companion while its labels come from the selection; a composed route names
+ * the faces its spans select for ranges the selection either cannot shape or should not shape. Both are the same host
+ * obligation — load further fixtures into the shared registry — so both answer through one accessor rather than
+ * through separate host branches. Order is the contract: a composed scene reads its companions positionally.
+ */
+export function workloadCompanionFontFixtures(policy: WorkloadFontPolicy): readonly BenchmarkFontFixture[] {
+  if (policy.kind === 'icon-grid') return [policy.iconFixture];
+  if (policy.kind === 'composed') return policy.companionFixtures;
+  return NO_COMPANION_FIXTURES;
+}
 
 /** Route policy colocated with the authored scene that it presents. */
 export interface BenchmarkWorkloadDefinition<Id extends string = string> {
@@ -146,6 +167,14 @@ export const textVolumeAmountControl = {
 
 export const hueSpreadAmountControl = {
   label: 'Hue spread',
+  maximum: 100,
+  minimum: 0,
+  scale: 'linear',
+  step: 1,
+} as const satisfies WorkloadRange;
+
+export const spanDensityAmountControl = {
+  label: 'Span density',
   maximum: 100,
   minimum: 0,
   scale: 'linear',

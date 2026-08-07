@@ -12,7 +12,8 @@ export type ComparisonWorkloadId =
   | 'off-axis-3d'
   | 'dynamic-layout'
   | 'paragraph-stress'
-  | 'paint-effects';
+  | 'paint-effects'
+  | 'rich-text';
 
 export type IconGridView = 'alternate' | 'origin';
 
@@ -56,9 +57,14 @@ export interface ComparisonWorkloadLayoutContext {
 /** App-private inputs made available to a workload's scene factory. */
 export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayoutContext {
   readonly animationElapsedMs: number;
+  /**
+   * The further fixtures the route's font policy named, already resident in the host's shared registry and supplied in
+   * the order the policy declares them. Icon Grid renders its icons from its one companion; a composed workload
+   * selects its companions from spans for ranges its primary face either cannot or should not shape.
+   */
+  readonly companionFonts: readonly WorkloadFont[];
   readonly dpr: number;
   readonly font: WorkloadFont;
-  readonly iconFont?: WorkloadFont;
   readonly iconScrollX: number;
   readonly iconScrollY: number;
   readonly technique: RasterTechnique;
