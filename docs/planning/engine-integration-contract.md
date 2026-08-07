@@ -30,40 +30,47 @@ sources:
   - id: three-api
     resource: three-api.md
     title: Three.js text API
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
 # Engine integration contract
 
-An engine integration receives already partitioned glyph storage and an ordered submission plan.
+An engine integration receives already partitioned glyph storage and ordered, variant-bearing glyph runs.
 
 This is the low-level contract implemented privately by the [Three.js API](three-api.md). Three users do not receive or
 stage these values directly; `FontLoader`, `TextGroup`, and `Text` own the corresponding core objects and target lifecycle.
 
 ```ts
-type EngineInput<Technique extends AnyRasterTechnique> = PreparedParagraphBatchRevision<Technique>;
+type EngineInput<Technique extends AnyRasterTechnique, Variant = undefined> = PreparedParagraphBatchRevision<
+  Technique,
+  Variant
+>;
 ```
 
-It must not shape text, resolve fallback, lay out lines, regroup glyphs by resource, sort paragraphs, allocate core slots,
-or reinterpret submission order.
+It must not shape text, resolve fallback, lay out lines, repartition glyphs by resource, sort paragraphs, or allocate core
+slots. It must compile the ordered runs into engine draws, preserving order unless its documented compositing policy proves
+another ordering equivalent.
 
 ## Attach to one paragraph batch
 
 ```ts
-interface ParagraphBatch<Technique extends AnyRasterTechnique> {
-  readonly current: PreparedParagraphBatchRevision<Technique>;
+interface ParagraphBatch<Technique extends AnyRasterTechnique, Variant = undefined> {
+  readonly current: PreparedParagraphBatchRevision<Technique, Variant>;
 
-  subscribe(observer: ParagraphBatchObserver<Technique>): () => void;
+  subscribe(observer: ParagraphBatchObserver<Technique, Variant>): () => void;
 
   attach<TargetRevision extends ParagraphBatchTargetRevision>(
-    target: ParagraphBatchTarget<Technique, TargetRevision>,
+    target: ParagraphBatchTarget<Technique, Variant, TargetRevision>,
   ): ParagraphBatchAttachment<TargetRevision>;
 }
 
-interface ParagraphBatchObserver<Technique extends AnyRasterTechnique> {
-  next(revision: PreparedParagraphBatchRevision<Technique>): void;
+interface ParagraphBatchObserver<Technique extends AnyRasterTechnique, Variant = undefined> {
+  next(revision: PreparedParagraphBatchRevision<Technique, Variant>): void;
   complete(): void;
 }
 ```
@@ -90,7 +97,7 @@ interface ParagraphBatchTargetError {
 }
 ```
 
-Targets may attach before or after the first update. Attaching later stages the current prepared storage and submission
+Targets may attach before or after the first update. Attaching later stages the current prepared storage and glyph-run
 plan without reshaping.
 
 `attach()` is the standard lifecycle coordinator, not a privileged preparation operation. Its behavior can be implemented
@@ -155,7 +162,7 @@ for (const range of batch.dirtyRanges) {
 ```
 
 This mapping is an engine-layout synchronization step, not text batching. The integration does not inspect paragraph glyphs
-to choose resources, slots, order, or draw boundaries.
+to choose resources, slots, source order, or variant boundaries; it derives final draws from the provided runs.
 
 ## Retain canonical CPU state
 
@@ -178,9 +185,9 @@ consume the same prepared revision.
 ## Read one prepared paragraph batch
 
 ```ts
-interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
+interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique, Variant = undefined> {
   /** Stable author-declared render-phase identity. */
-  readonly paragraphBatch: ParagraphBatch<Technique>;
+  readonly paragraphBatch: ParagraphBatch<Technique, Variant>;
 
   /** Contiguous and monotonic within this paragraph batch. */
   readonly revision: number;
@@ -194,8 +201,8 @@ interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
   /** Resource-compatible instance storage populated by core. */
   readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
 
-  /** Ordered ranges the target must submit. */
-  readonly submissions: readonly GlyphSubmission[];
+  /** Ordered core-authored ranges the target compiles into engine draws. */
+  readonly glyphRuns: readonly PreparedGlyphRun<Variant>[];
 }
 ```
 
@@ -252,8 +259,8 @@ interface GlyphRange {
 
 `dirtyRanges` transforms the immediately preceding paragraph-batch revision into this revision. It is not a timeless
 description of every live slot. If `previous?.sourceRevision === next.revision - 1`, a target uploads those deltas. If
-`previous` is absent or names an older revision, the target initializes every live range referenced by `next.submissions`.
-It may coalesce overlapping or adjacent upload ranges for the same physical batch without changing submission order. This
+`previous` is absent or names an older revision, the target initializes every live range referenced by `next.glyphRuns`.
+It may coalesce overlapping or adjacent upload ranges for the same physical batch without changing glyph-run order. This
 makes late attachment, a superseded pending stage, and recovery after a skipped revision correct without retaining a
 private core change journal.
 
@@ -279,11 +286,13 @@ Different techniques can never appear in one `PreparedParagraphBatchRevision`. D
 different `GlyphBatchKey` values even when they use the same technique. A technique may opt two fonts into one key only if
 it actually creates a shared GPU resource capable of addressing both.
 
-## Execute the ordered submission plan
+## Compile ordered glyph runs into draws
 
 ```ts
-interface GlyphSubmission {
+interface PreparedGlyphRun<Variant = undefined> {
   readonly batch: GlyphBatchKey;
+  readonly paragraph: ParagraphId;
+  readonly renderVariant: Variant | undefined;
   readonly start: number;
   readonly count: number;
   readonly order: number;
@@ -291,19 +300,22 @@ interface GlyphSubmission {
 ```
 
 Core sorts paragraphs by ascending finite `paragraph.order`, then stable insertion order, and preserves the technique's
-required glyph compositing order. It segments the resulting sequence whenever the resource key changes.
+required glyph compositing order. It resolves batch, paragraph, and span variant inheritance, then segments the sequence
+whenever its physical batch, paragraph, or effective variant changes.
 
 ```ts
 // Resolved font sequence: Inter -> Noto -> Inter
-revision.submissions = [
-  { batch: interBatch.key, start: 0, count: 8, order: 0 },
-  { batch: notoBatch.key, start: 0, count: 3, order: 1 },
-  { batch: interBatch.key, start: 8, count: 5, order: 2 },
+revision.glyphRuns = [
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 0, count: 8, order: 0 },
+  { batch: notoBatch.key, paragraph: label.id, renderVariant: warning, start: 0, count: 3, order: 1 },
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 8, count: 5, order: 2 },
 ];
 ```
 
-The target may reuse one bound buffer for multiple submissions, but it cannot merge or reorder ranges unless its documented
-depth/compositing policy proves the result equivalent.
+The run list is not a one-run/one-draw prescription. The target may split a run or coalesce adjacent runs when its program
+declares them compatible. A program that places variant parameters in indexed sidecar storage may render many variants in
+one draw; a program whose variant changes material or pipeline state must split them. The target must preserve the provided
+sequence unless its documented depth/compositing policy proves another order equivalent.
 
 The application creates separate paragraph batches when another engine draw must occur between text phases:
 
@@ -317,14 +329,17 @@ drawUi();
 
 Core never composes separate paragraph batches with non-text scene objects.
 
-## Upload without regrouping
+## Upload without repartitioning glyph storage
 
 ```ts
-function stageRevision(previous: MyTargetRevision | undefined, revision: PreparedParagraphBatchRevision<MyTechnique>) {
+function stageRevision(
+  previous: MyTargetRevision | undefined,
+  revision: PreparedParagraphBatchRevision<MyTechnique, MyVariant>,
+) {
   for (const batch of revision.glyphBatches) {
     const gpu = ensureGpuBatch(batch.key, batch.font, batch.binding, batch.capacity, batch.storage);
 
-    const ranges = rangesForTarget(batch, revision.submissions, previous?.sourceRevision, revision.revision);
+    const ranges = rangesForTarget(batch, revision.glyphRuns, previous?.sourceRevision, revision.revision);
     for (const range of ranges) {
       gpu.upload(range);
     }
@@ -332,12 +347,12 @@ function stageRevision(previous: MyTargetRevision | undefined, revision: Prepare
     gpu.setCount(batch.instanceCount);
   }
 
-  return revision.submissions;
+  return program.compileRuns(revision.glyphRuns, revision.glyphBatches);
 }
 ```
 
 `rangesForTarget` above names renderer policy, not another core operation: it selects `batch.dirtyRanges` for an adjacent
-revision and otherwise selects that batch's ranges from `revision.submissions`.
+revision and otherwise selects that batch's ranges from `revision.glyphRuns`.
 
 An integration that loops through every paragraph glyph to choose a resource or sort key is violating this contract.
 
@@ -361,13 +376,14 @@ feeds a transformed content constraint back into the paragraph API.
 ```ts
 interface ParagraphBatchTarget<
   Technique extends AnyRasterTechnique,
+  Variant,
   TargetRevision extends ParagraphBatchTargetRevision,
 > {
   readonly technique: Technique;
 
   stage(
     previous: TargetRevision | undefined,
-    next: PreparedParagraphBatchRevision<Technique>,
+    next: PreparedParagraphBatchRevision<Technique, Variant>,
     options?: { readonly signal?: AbortSignal },
   ): ParagraphBatchTargetUpdate<TargetRevision>;
 
@@ -376,8 +392,11 @@ interface ParagraphBatchTarget<
 
 interface ParagraphBatchTargetRevision {
   readonly sourceRevision: number;
-  readonly submissions: readonly GlyphSubmission[];
   dispose(): void;
+}
+
+interface MyTargetRevision extends ParagraphBatchTargetRevision {
+  readonly draws: readonly EngineDraw[];
 }
 
 type ParagraphBatchTargetUpdate<TargetRevision extends ParagraphBatchTargetRevision> =
@@ -419,8 +438,8 @@ function beforeRender() {
   const next = attachment.commit();
   if (next !== undefined) live = next;
 
-  for (const submission of live?.submissions ?? []) {
-    draw(submission.batch, submission.start, submission.count);
+  for (const drawCall of live?.draws ?? []) {
+    draw(drawCall);
   }
 }
 ```
@@ -458,13 +477,16 @@ interface CoreOwns {
   readonly capacityChunking: true;
   readonly techniqueInstancePacking: true;
   readonly dirtyRanges: true;
-  readonly glyphSubmissionOrder: true;
+  readonly orderedGlyphRuns: true;
+  readonly resolvedRenderVariants: true;
 }
 
 interface EngineOwns {
   readonly paragraphTransforms: true;
   readonly visibilityAndCulling: true;
   readonly sceneComposition: true;
+  readonly variantCompatibility: true;
+  readonly finalDrawPlanning: true;
   readonly gpuResources: true;
   readonly renderPassPlacement: true;
   readonly commandEncoding: true;

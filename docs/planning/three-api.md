@@ -12,6 +12,12 @@ sources:
   - id: engine-contract
     resource: engine-integration-contract.md
     title: Engine integration contract
+  - id: effect-composition
+    resource: text-effect-composition.md
+    title: Optional Three.js effect composition
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
   - id: current-loader
     resource: ../../packages/text/src/loader.ts
     title: Current font loader
@@ -32,13 +38,13 @@ sources:
     title: Three.js BufferAttribute
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
 # Three.js text API
 
 Three.js owns the core API internally. A Three.js application never creates a `TextRuntime`,
-`ParagraphBatch`, `Paragraph`, prepared revision, or glyph submission.
+`ParagraphBatch`, `Paragraph`, prepared revision, or glyph run.
 
 ```ts
 FontLoader
@@ -52,15 +58,99 @@ FontLoader
 
 ```ts
 import * as THREE from 'three/webgpu';
+import * as TSL from 'three/tsl';
 import type {
   FontSelection,
   FormattedText,
+  GlyphBatchKey,
+  GlyphRange,
   ParagraphBatchTargetError,
+  PreparedGlyphBatch,
+  PreparedGlyphRun,
+  RasterBindingOf,
   TextInput,
   TextPreparationError,
 } from '@pmndrs/text';
 
 type TextError = TextPreparationError | ParagraphBatchTargetError;
+
+interface ThreeRenderVariant {
+  readonly effects?: readonly ThreeTextEffectBinding[];
+}
+
+interface ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output> {
+  readonly parameters: ParameterSchema;
+  compose(base: Output, parameters: Parameters, context: Context): Output;
+  bind(parameters: Parameters): ThreeTextEffectBinding<Parameters>;
+}
+
+interface ThreeTextEffectBinding<Parameters = unknown> {
+  readonly effect: ThreeTextEffectDefinition<Parameters, unknown, unknown, unknown>;
+  readonly parameters: Parameters;
+}
+
+declare function defineTextEffect<Parameters, ParameterSchema, Context, Output>(
+  definition: Omit<ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output>, 'bind'>,
+): ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output>;
+
+type ThreeProgramVariantKey = PropertyKey | object;
+
+interface ThreeRasterShader<Technique extends AnyRasterTechnique> {
+  readonly technique: Technique;
+  evaluate(context: ThreeRasterContextOf<Technique>): ThreeRasterOutput;
+}
+
+interface ThreeRasterOutput {
+  readonly color: ReturnType<typeof TSL.vec4>;
+  readonly coverage: ReturnType<typeof TSL.float>;
+}
+
+interface ThreeRasterContextOf<Technique extends AnyRasterTechnique> {
+  readonly technique: Technique;
+  readonly localPosition: ReturnType<typeof TSL.vec2>;
+  readonly glyphIndex: ReturnType<typeof TSL.uint>;
+  readonly paintIndex: ReturnType<typeof TSL.uint>;
+}
+
+interface ThreeProgramMaterialContext<Technique extends AnyRasterTechnique> {
+  readonly renderer: THREE.WebGPURenderer;
+  readonly shader: ThreeRasterShader<Technique>;
+  readonly font: LoadedFont<Technique>;
+  readonly binding: RasterBindingOf<Technique>;
+  readonly pipelineVariant: number;
+}
+
+interface ThreeProgramVariantWriteContext<Variant> {
+  readonly runs: readonly PreparedGlyphRun<Variant>[];
+  readonly ranges: readonly GlyphRange[];
+}
+
+interface ThreeProgramRunContext<Technique extends AnyRasterTechnique, Variant> {
+  readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
+  readonly glyphRuns: readonly PreparedGlyphRun<Variant>[];
+}
+
+interface ThreeProgramDraw {
+  readonly object: THREE.Object3D;
+  readonly batch: GlyphBatchKey;
+  readonly start: number;
+  readonly count: number;
+}
+
+interface ThreeRasterProgram<Technique extends AnyRasterTechnique, Variant> {
+  readonly technique: Technique;
+  readonly shader: ThreeRasterShader<Technique>;
+  supportsVariant(value: unknown): value is Variant;
+  variantKey(value: Variant | undefined): ThreeProgramVariantKey;
+  createMaterial(context: ThreeProgramMaterialContext<Technique>): THREE.NodeMaterial;
+  writeVariants(context: ThreeProgramVariantWriteContext<Variant>): void;
+  compileRuns(context: ThreeProgramRunContext<Technique, Variant>): readonly ThreeProgramDraw[];
+  dispose(): void;
+}
+
+declare function defineThreeRasterProgram<Technique extends AnyRasterTechnique, Variant>(
+  program: ThreeRasterProgram<Technique, Variant>,
+): ThreeRasterProgram<Technique, Variant>;
 
 interface FontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
@@ -91,17 +181,21 @@ interface LoadedFont<Technique extends AnyRasterTechnique> {
   dispose(): void;
 }
 
-declare class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Object3D {
-  constructor(options: TextGroupOptions<Technique>);
+declare class TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> extends THREE.Object3D {
+  constructor(options: TextGroupOptions<Technique, Variant>);
 
   readonly technique: Technique;
   readonly capacity: GlyphBufferCapacity;
+  readonly program: ThreeRasterProgram<Technique, Variant>;
   readonly textCount: number;
   readonly disposed: boolean;
   readonly error: TextError | undefined;
   onError: ((error: TextError) => void) | undefined;
+  renderVariant: Variant | undefined;
 
-  add<const Children extends readonly THREE.Object3D[]>(...children: CompatibleTextChildren<Technique, Children>): this;
+  add<const Children extends readonly THREE.Object3D[]>(
+    ...children: CompatibleTextChildren<Technique, Variant, Children>
+  ): this;
   setCapacity(capacity: GlyphBufferCapacity): void;
   retry(): void;
   clone(recursive?: boolean): never;
@@ -109,10 +203,10 @@ declare class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Obje
   dispose(): void;
 }
 
-declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D {
-  constructor(properties: StandaloneTextProperties<Technique>);
+declare class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> extends THREE.Object3D {
+  constructor(properties: StandaloneTextProperties<Technique, Variant>);
 
-  readonly textGroup: TextGroup<Technique> | undefined;
+  readonly textGroup: TextGroup<Technique, Variant> | undefined;
   readonly bound: boolean;
   readonly disposed: boolean;
   readonly layout: ParagraphLayout | undefined;
@@ -122,14 +216,15 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   font: FontSelection<Technique>;
   get text(): string;
   set text(value: TextInput<Technique>);
-  spans: readonly TextSpan<Technique>[];
+  spans: readonly TextSpan<Technique, Variant>[];
   contentBox: ParagraphContentBox;
   style: ParagraphStyle;
   paint: GlyphPaintInput;
   rasterPixelRatio: number;
+  renderVariant: Variant | undefined;
 
-  set(properties: TextUpdate<Technique>): void;
-  setSpan(index: number, span: TextSpan<Technique>): void;
+  set(properties: TextUpdate<Technique, Variant>): void;
+  setSpan(index: number, span: TextSpan<Technique, Variant>): void;
   removeSpan(index: number): void;
 
   snapshotGlyphs(): GlyphSnapshot;
@@ -141,7 +236,24 @@ declare class Text<Technique extends AnyRasterTechnique> extends THREE.Object3D 
   dispose(): void;
 }
 
+type SameType<Left, Right> = [Left] extends [Right] ? ([Right] extends [Left] ? true : false) : false;
+
+type CompatibleTextChildren<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Children extends readonly THREE.Object3D[],
+> = {
+  readonly [Index in keyof Children]: Children[Index] extends Text<infer ChildTechnique, infer ChildVariant>
+    ? SameType<ChildTechnique, Technique> extends true
+      ? SameType<ChildVariant, Variant> extends true
+        ? Children[Index]
+        : never
+      : never
+    : Children[Index];
+};
+
 export { txt, span } from '@pmndrs/text';
+export { defineTextEffect, defineThreeRasterProgram };
 export type {
   FormattedText,
   GlyphBufferCapacity,
@@ -151,6 +263,7 @@ export type {
   TextPreparationError,
   UnboundSpanTag,
 } from '@pmndrs/text';
+export type { ThreeRasterProgram, ThreeRasterShader, ThreeRenderVariant, ThreeTextEffectBinding };
 ```
 
 ## Load fonts with the Three.js loader
@@ -209,10 +322,12 @@ scene.add(worldText);
 ```
 
 ```ts
-interface TextGroupOptions<Technique extends AnyRasterTechnique> {
+interface TextGroupOptions<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> {
   readonly technique: Technique;
+  readonly program?: ThreeRasterProgram<Technique, Variant>;
   readonly capacity?: GlyphBufferCapacity;
   readonly renderOrder?: number;
+  readonly renderVariant?: Variant;
 }
 
 interface GlyphBufferCapacity {
@@ -220,6 +335,82 @@ interface GlyphBufferCapacity {
   readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 ```
+
+## Select a program and render variant
+
+`technique` remains construction-only because it fixes decoded resources and canonical glyph-buffer layout. `program` is
+also construction-only because it fixes the accepted variant type, technique shader, Three attributes, node material,
+pipeline compatibility, and final draw compiler. Fonts remain per `Text` and are never declared on the group.
+
+```ts
+const gradientSlug = createThreeSlugProgram({
+  fragment({ shader, context }) {
+    const base = shader.evaluate(context);
+    return { ...base, color: gradient(base.color, context.localPosition) };
+  },
+});
+
+const labels = new TextGroup({
+  technique: slug,
+  program: gradientSlug,
+  renderVariant: { gradient: 'ui-default' },
+});
+
+const label = new Text({
+  font: uiFont,
+  text: 'Warning',
+  renderVariant: { gradient: 'warning' },
+});
+labels.add(label);
+```
+
+The first-party default program is selected when `program` is omitted. A group, text, and manual span may each set a
+variant; inheritance is group → text → span. The hidden core batch carries those exact values through ordered glyph runs.
+The Three program decides whether adjacent variants use one material/draw with indexed sidecar parameters or require
+separate draw proxies. A variant is not automatically a material and is not automatically a draw boundary.
+
+The standard programs accept `ThreeRenderVariant`, whose optional `effects` list is produced by the effect helpers:
+
+```ts
+const chromatic = defineTextEffect({
+  parameters: { phase: 'f32' },
+  compose(base, parameters, context) {
+    return { ...base, color: chromaticColor(base.color, context.paintIndex, parameters.phase) };
+  },
+});
+
+const animated = chromatic.bind({ phase: phaseUniform });
+const effectLabels = new TextGroup({ technique: slug }); // standard ThreeRenderVariant program
+const effectLabel = new Text({
+  font: uiFont,
+  text: 'Warning',
+  renderVariant: { effects: [animated] },
+});
+effectLabels.add(effectLabel);
+
+effectLabel.setSpan(0, {
+  start: 0,
+  end: 7,
+  renderVariant: { effects: [animated] },
+});
+```
+
+Effects compose after the canonical Bitmap, MTSDF, or Slug shader has resolved coverage and base output. Definitions with
+the same ordered graph identity share a material program; binding values are stored per text/span and do not create a new
+pipeline. This is an optional TSL authoring convenience, not a core API and not a requirement for custom programs. A custom
+program may define a completely different `Variant` type while still reusing the exported canonical technique shader.
+
+React Three Fiber expresses the same span variant through nested text:
+
+```tsx
+<Text font={uiFont}>
+  Normal <Text renderVariant={{ effects: [animated] }}>animated</Text>
+</Text>
+```
+
+A TypeGPU-authored first-party shader may enter the same program through `@typegpu/three` `toTSL()`. Three still owns its
+accessors, material, blend/depth state, render-list integration, draw compilation, and lifecycle. Native TSL and adapted
+TypeGPU shaders are alternative program implementations, not different core techniques.
 
 ### Use the default or preallocate explicitly
 
@@ -268,9 +459,9 @@ safely. Construct a separate group and add intentionally distinct `Text` objects
 tree is required.
 
 A `TextGroup` is one author-declared text render phase and one hidden core paragraph batch. Its technique fixes the
-canonical instance layout, target implementation, and shader family before any text is attached. Every `Text` owns its
-font selection, which must use that technique. Core may produce several physical resource batches and ordered draw
-submissions beneath one `TextGroup`.
+canonical instance layout and shader family before any text is attached. Every `Text` owns its font selection, which must
+use that technique. Core may produce several physical resource batches and ordered variant-bearing glyph runs beneath one
+`TextGroup`; the selected program compiles those runs into Three draw objects.
 
 The `add()` override preserves normal `Object3D` children while conditionally rejecting any directly supplied
 `Text<OtherTechnique>` tuple member. Runtime ancestry validation remains mandatory for JavaScript, React reconciliation,
@@ -280,15 +471,15 @@ and text nested below arbitrary containers.
 `renderOrder` through non-Group descendants as `groupOrder`; another Group would replace it, including with its default
 value of `0`. The integration does not insert a hidden Group.
 
-`TextGroup.renderOrder` is the secondary render-order base for the batch. The integration maps the core's ordered physical
-submissions to consecutive native Three render orders beginning at that base. `Text.renderOrder` remains the paragraph
+`TextGroup.renderOrder` is the secondary render-order base for the batch. The integration maps the program's ordered
+physical draws to consecutive native Three render orders beginning at that base. `Text.renderOrder` remains the paragraph
 sorting value inside core; it cannot create a Three render-list boundary inside one GPU batch.
 
 ```ts
 parent.renderOrder = 100;
-parent.add(textGroup); // physical submissions use groupOrder 100
+parent.add(textGroup); // physical draws use groupOrder 100
 
-textGroup.renderOrder = 10; // physical submissions begin at secondary order 10
+textGroup.renderOrder = 10; // physical draws begin at secondary order 10
 ```
 
 A nested `TextGroup` starts a new batch and render-order domain; it never joins its nearest outer `TextGroup`.
@@ -353,7 +544,10 @@ scene.add(title);
 ```
 
 ```ts
-type StandaloneTextProperties<Technique extends AnyRasterTechnique> = TextProperties<Technique> &
+type StandaloneTextProperties<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = TextProperties<
+  Technique,
+  Variant
+> &
   Readonly<{
     capacity?: GlyphBufferCapacity;
   }>;
@@ -397,14 +591,14 @@ change, `Text` and `TextGroup` perform a final ancestry reconciliation at the st
 
 The integration uses `updateMatrixWorld()` as its automatic synchronization hook. `TextGroup` owns a private
 `ThreeTextBatchBinding`; this is the object that holds the core `ParagraphBatch`, its `ParagraphBatchAttachment`, the
-`ThreeParagraphBatchTarget`, the internal submission meshes, and the map from each child `Text` to its core `Paragraph`.
+`ThreeParagraphBatchTarget`, the internal draw meshes, and the map from each child `Text` to its core `Paragraph`.
 It is implementation machinery, not another public API.
 
 The implementation sequence is:
 
 ```ts
-class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Object3D {
-  readonly #binding: ThreeTextBatchBinding<Technique>;
+class TextGroup<Technique extends AnyRasterTechnique, Variant> extends THREE.Object3D {
+  readonly #binding: ThreeTextBatchBinding<Technique, Variant>;
 
   override updateMatrixWorld(force?: boolean): void {
     this.#binding.reconcileMembership(this);
@@ -415,7 +609,7 @@ class TextGroup<Technique extends AnyRasterTechnique> extends THREE.Object3D {
     this.#binding.runtime.update();
 
     // Commit any target revision staged by the runtime publication. This installs
-    // the exact internal meshes needed by the core-authored submission sequence.
+    // the exact internal meshes needed by the program-compiled draw sequence.
     this.#binding.commitPreparedRevision();
 
     // Three computes this group, every child Text, and every newly installed mesh.
@@ -443,9 +637,10 @@ threeTarget.stage(attachment.current, preparedParagraphBatchRevision);
 
 `ThreeParagraphBatchTarget.stage()` performs the engine-layout work: it creates or reuses the required Three
 `BufferAttribute` storage, selects `PreparedGlyphBatch.dirtyRanges` when its committed target revision is the immediate
-predecessor, otherwise selects every live range for that batch from the prepared submission plan, copies those ranges, sets
-the corresponding Three update ranges and `needsUpdate`, and creates one internal submission mesh or draw proxy for each entry in
-`preparedParagraphBatchRevision.submissions`. It does not shape, sort, regroup, or upload directly to a GPU queue. A ready
+predecessor, otherwise selects every live range for that batch from the prepared glyph runs, copies those ranges, sets the
+corresponding Three update ranges and `needsUpdate`, and asks the selected `ThreeRasterProgram` to compile ordered
+compatible runs into internal meshes or draw proxies. It does not shape, sort paragraph source order, repartition physical
+storage, or upload directly to a GPU queue. A ready
 stage is still unpublished until `commitPreparedRevision()` calls `attachment.commit()` at this render boundary and swaps
 the binding's live internal draw objects.
 
@@ -464,25 +659,25 @@ renderer.render(scene, camera)
            -> ThreeParagraphBatchTarget.stage(previous, preparedBatch)
         -> binding.commitPreparedRevision()
            -> ParagraphBatchAttachment.commit()
-           -> install the staged internal submission meshes
+           -> install the staged internal draw meshes
         -> Object3D.updateMatrixWorld(force)
            -> Text.updateMatrixWorld(force)        // transform only when grouped
-           -> submissionMesh.updateMatrixWorld(force)
+           -> drawMesh.updateMatrixWorld(force)
         -> binding.writeGlyphTransforms()
            -> BufferAttribute.addUpdateRange(...)
            -> BufferAttribute.needsUpdate = true
   -> Renderer._projectObject(...)                  // build and sort the render list
-  -> submissionMesh.onBeforeRender(...)
+  -> drawMesh.onBeforeRender(...)
   -> Renderer._renderObjectDirect(...)
   -> Geometries.updateForRender(...)
   -> Attributes.update(...)
   -> WebGPUBackend.updateAttribute(...)            // actual dirty-range GPU write
-  -> backend.draw(...)                             // one core-authored submission
+  -> backend.draw(...)                             // one program-compiled draw
 ```
 
 Names beginning with `Renderer._` are shown to locate the integration in Three.js 0.185.1's implementation; they are not
 APIs the package calls or overrides. The supported hook is the public `Object3D.updateMatrixWorld()` override. The internal
-submission meshes use ordinary Three render-list and buffer-update behavior.
+draw meshes use ordinary Three render-list and buffer-update behavior.
 
 If an application sets `scene.matrixWorldAutoUpdate = false`, Three deliberately skips `scene.updateMatrixWorld()` and
 therefore skips this automatic text synchronization. That application has opted into manual scene updates and must call
@@ -518,7 +713,7 @@ synchronization, so the old batch cannot leave ghost glyphs while the new batch 
 layout may be reused when their inputs are unchanged, but the destination receives new batch slots.
 
 The old paragraph slot and glyph instances belong to the old batch, not to `label`. Removal makes those slots reusable and
-updates the old batch's logical counts and submissions. It does not dispose or shrink a shared buffer merely because one
+updates the old batch's logical counts and glyph runs. It does not dispose or shrink a shared buffer merely because one
 text left. The old `TextGroup` retains that capacity until a later transactional replacement or `TextGroup.dispose()`.
 The destination group owns any new physical storage it needs. Moving from a standalone implicit batch also retires that
 text-owned target storage according to the renderer's in-flight-frame rules.
@@ -527,7 +722,7 @@ That standalone-to-group transition is transactional. The integration validates 
 publishes the new complete group revision, then retires the previous implicit target only after no in-flight frame can use
 it. It never destroys the old target first and risks a missing frame or unrecoverable destination failure.
 
-Removal marks old membership dirty synchronously. Slot recycling and the updated submission list publish at the old
+Removal marks old membership dirty synchronously. Slot recycling and the updated glyph-run list publish at the old
 group's next render synchronization. If the old group remains visible, that synchronization occurs before Three builds the
 next render list. If the entire group is removed and will never render again, the application disposes the group rather
 than waiting for another synchronization.
@@ -557,7 +752,7 @@ renderer.render(scene, camera); // new paragraph membership renders in groupB
 Disposal synchronously invalidates `groupA` as a text-batch boundary, unbinds every direct or nested member `Text`, cancels
 the group's unpublished preparation, and begins retirement of its core paragraph batch and renderer targets. Existing
 children keep their transforms, desired state, glyph-origin override state, and font leases. The group contributes no
-further text submissions and rejects new text membership, but disposal does not mutate Three parent/child relationships.
+further text draws and rejects new text membership, but disposal does not mutate Three parent/child relationships.
 While a live `Text` remains below the disposed group in the scene graph, that disposed group stays a terminal non-rendering
 batch boundary: ancestry reconciliation must not fall through to an outer `TextGroup` or create an implicit standalone
 batch. The caller moves the text explicitly when it should render elsewhere.
@@ -606,45 +801,50 @@ Those writes update desired state only. The parent batch shapes the final values
 synchronization. Nested records are immutable replacement values; direct deep mutation is unsupported.
 
 ```ts
-interface TextBaseProperties<Technique extends AnyRasterTechnique> {
+interface TextBaseProperties<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> {
   readonly font: FontSelection<Technique>;
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
   readonly rasterPixelRatio?: number;
+  readonly renderVariant?: Variant;
 }
 
-type TextContentProperties<Technique extends AnyRasterTechnique> =
+type TextContentProperties<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> =
   | Readonly<{
       text: string;
-      spans?: readonly TextSpan<Technique>[];
+      spans?: readonly TextSpan<Technique, Variant>[];
     }>
   | Readonly<{
       text: FormattedText<Technique>;
       spans?: never;
     }>;
 
-type TextProperties<Technique extends AnyRasterTechnique> = TextBaseProperties<Technique> &
-  TextContentProperties<Technique>;
+type TextProperties<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = TextBaseProperties<
+  Technique,
+  Variant
+> &
+  TextContentProperties<Technique, Variant>;
 
-type TextUpdate<Technique extends AnyRasterTechnique> =
-  | (Partial<TextBaseProperties<Technique>> &
+type TextUpdate<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> =
+  | (Partial<TextBaseProperties<Technique, Variant>> &
       Readonly<{
         text?: string;
-        spans?: readonly TextSpan<Technique>[];
+        spans?: readonly TextSpan<Technique, Variant>[];
       }>)
-  | (Partial<TextBaseProperties<Technique>> &
+  | (Partial<TextBaseProperties<Technique, Variant>> &
       Readonly<{
         text: FormattedText<Technique>;
         spans?: never;
       }>);
 
-interface TextSpan<Technique extends AnyRasterTechnique> {
+interface TextSpan<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
+  readonly renderVariant?: Variant;
 }
 ```
 
@@ -699,7 +899,7 @@ label.renderOrder = 10;
 
 Transforms never reshape. `Text.renderOrder` maps to the paragraph ordering value inside the effective batch. Visibility,
 layers, and transform changes update instance visibility/transform storage without changing shaping. `TextGroup.renderOrder`
-sets the secondary Three render-order base for the batch's ordered physical submissions. The nearest real Three Group owns
+sets the secondary Three render-order base for the batch's ordered physical draws. The nearest real Three Group owns
 their primary `groupOrder`.
 
 ## Structural, rebuilding, and hot changes
@@ -710,12 +910,13 @@ Technique defines compatibility and has no setter:
 
 ```ts
 new TextGroup({
-  technique, // canonical instance layout, target, and shader family
+  technique, // canonical instance layout and shader family
+  program, // accepted variant type, attributes, material/pipeline, and draw compiler
   capacity, // initial physical glyph-buffer size and overflow policy
 });
 ```
 
-Changing technique requires a new `TextGroup`. Capacity is deliberately mutable through `setCapacity()` because storage
+Changing technique or program requires a new `TextGroup`. Capacity is deliberately mutable through `setCapacity()` because storage
 replacement must preserve the group, its text identities, and its core paragraph handles.
 
 For standalone `Text`, `setCapacity()` changes its implicit batch without changing the public object. Its font selection is
@@ -731,8 +932,9 @@ These operations retain public objects but may allocate new internal glyph slots
 destination.add(text); // remove old paragraph allocation, add new allocation
 textGroup.setCapacity(nextCapacity); // preserve handles; replace canonical and target storage transactionally
 text.font = anotherFont; // reshape and possibly change physical resource batch
-text.spans = nextSpans; // reshape and possibly change raster-resource submissions
+text.spans = nextSpans; // reshape and possibly change raster-resource glyph runs
 text.rasterPixelRatio = next; // select resources and rebuild affected target storage
+text.renderVariant = nextVariant; // rebuild run/draw compatibility without reshaping
 ```
 
 Glyph overflow follows the owning group's `grow`, `chunk`, or `fixed` policy. All fallible replacement work stages before
@@ -785,7 +987,7 @@ text.setGlyphOrigins(nextOrigins);
 ```
 
 Dirty channels determine whether the hidden update shapes, reflows, rewrites paint/origins/transforms, or only rebuilds the
-submission plan.
+glyph-run plan.
 
 ## Manual glyph motion
 
@@ -872,11 +1074,11 @@ The implementation is not complete until tests prove:
 - `setCapacity()` preserves the group, every public `Text`, every core paragraph handle, and existing target attachments while replacing canonical and GPU storage transactionally;
 - `TextGroup.clone()` and `copy()` are rejected rather than silently duplicating identity-bearing text, listener, and renderer state;
 - simultaneous scene placements use separate groups, ordinary reparenting can move one group between scenes, and attempting
-  to draw one group through a second renderer fails before submission;
+  to draw one group through a second renderer fails before encoding;
 - construction-only incompatibilities fail without mutating the current group;
 - runtime setters coalesce and select the narrowest dirty work;
 - automatic synchronous preparation renders warm edits in the observing frame;
-- a same-technique `FontStack` produces the core-authored minimum physical batches and exact ordered submissions;
+- a same-technique `FontStack` produces the core-authored minimum physical batches and exact ordered glyph runs;
 - mixed-technique group additions and font stacks fail before shaping without replacing live text;
 - font-bound, font-stack-bound, style-only, reusable-tag, and readonly-tuple `span()` forms normalize identically, while mixed-technique format lists fail;
 - `txt`/`span`, explicit spans, and nested React `<Text>` produce the same UTF-16 source/span snapshot;

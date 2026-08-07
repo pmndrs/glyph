@@ -21,6 +21,9 @@ sources:
   - id: three-api
     resource: three-api.md
     title: Three.js text API
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
   - id: current-api
     resource: api-shapes.md
     title: Existing API migration fixture
@@ -35,7 +38,7 @@ sources:
     title: Current raster transaction contract
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
 # Core text API
@@ -52,8 +55,8 @@ fontFile
   -> runtime.update()              // synchronous synchronization point
      // or runtime.updateAsync()   // asynchronous synchronization point
   -> PreparedGlyphBatch[]          // core-partitioned GPU instance data
-  -> GlyphSubmission[]             // core-authored draw order
-  -> engine upload and draw        // thin target wiring
+  -> PreparedGlyphRun[]            // ordered text runs with resolved render intent
+  -> engine draw compiler          // compatible pipelines, effects, and final draws
 ```
 
 ## The complete API
@@ -70,9 +73,9 @@ interface TextRuntime {
     options?: { readonly signal?: AbortSignal },
   ): Promise<LoadedFont<Technique>>;
 
-  createParagraphBatch<Technique extends AnyRasterTechnique>(
-    options: ParagraphBatchOptions<Technique>,
-  ): ParagraphBatch<Technique>;
+  createParagraphBatch<Technique extends AnyRasterTechnique, Variant = undefined>(
+    options: ParagraphBatchOptions<Technique, Variant>,
+  ): ParagraphBatch<Technique, Variant>;
 
   update(): TextRuntimeRevision;
 
@@ -211,9 +214,10 @@ const worldText = runtime.createParagraphBatch({
 ```
 
 ```ts
-interface ParagraphBatchOptions<Technique extends AnyRasterTechnique> {
+interface ParagraphBatchOptions<Technique extends AnyRasterTechnique, Variant = undefined> {
   readonly technique: Technique;
   readonly capacity?: GlyphBufferCapacity;
+  readonly renderVariant?: Variant;
 }
 
 interface GlyphBufferCapacity {
@@ -221,28 +225,30 @@ interface GlyphBufferCapacity {
   readonly policy: 'grow' | 'chunk' | 'fixed';
 }
 
-interface ParagraphBatch<Technique extends AnyRasterTechnique> {
+interface ParagraphBatch<Technique extends AnyRasterTechnique, Variant = undefined> {
   readonly runtime: TextRuntime;
   readonly technique: Technique;
   readonly capacity: GlyphBufferCapacity;
-  readonly current: PreparedParagraphBatchRevision<Technique>;
+  readonly current: PreparedParagraphBatchRevision<Technique, Variant>;
   readonly paragraphCount: number;
   readonly hasPendingChanges: boolean;
   readonly preparationError: TextPreparationError | undefined;
   readonly disposed: boolean;
 
-  add(properties: ParagraphProperties<Technique>): Paragraph<Technique>;
+  renderVariant: Variant | undefined;
+
+  add(properties: ParagraphProperties<Technique, Variant>): Paragraph<Technique, Variant>;
   setCapacity(capacity: GlyphBufferCapacity): void;
   has(paragraph: Paragraph<Technique>): boolean;
-  subscribe(observer: ParagraphBatchObserver<Technique>): () => void;
+  subscribe(observer: ParagraphBatchObserver<Technique, Variant>): () => void;
   attach<TargetRevision extends ParagraphBatchTargetRevision>(
-    target: ParagraphBatchTarget<Technique, TargetRevision>,
+    target: ParagraphBatchTarget<Technique, Variant, TargetRevision>,
   ): ParagraphBatchAttachment<TargetRevision>;
   dispose(): void;
 }
 
-interface ParagraphBatchObserver<Technique extends AnyRasterTechnique> {
-  next(revision: PreparedParagraphBatchRevision<Technique>): void;
+interface ParagraphBatchObserver<Technique extends AnyRasterTechnique, Variant = undefined> {
+  next(revision: PreparedParagraphBatchRevision<Technique, Variant>): void;
   complete(): void;
 }
 ```
@@ -274,7 +280,7 @@ const denseText = runtime.createParagraphBatch({
 is not a total glyph limit for the paragraph batch. Under `chunk`, core preserves existing storage and allocates another
 `size`-slot buffer when one fills. Under `grow`, core transactionally replaces a full buffer and doubles its capacity until
 the pending glyphs fit. Under `fixed`, exceeding `size` fails preparation and preserves the last published revision.
-Ordered submissions make cross-buffer paragraph and fallback-font order explicit.
+Ordered glyph runs make cross-buffer paragraph and fallback-font order explicit.
 
 `ParagraphBatch.add()` cannot reject a capacity overflow because fallback, shaping, wrapping, and later mutations determine
 the physical per-resource glyph demand. `update()` or `updateAsync()` discovers overflow after shaping but before
@@ -322,6 +328,18 @@ const overlayText = runtime.createParagraphBatch({
 Core never merges `worldText` and `overlayText`. The application may place non-text draws between them or give them
 different depth, stencil, clipping, compositing, lifetime, or render-pass policies.
 
+`renderVariant` is the batch's optional inherited render intent. Core treats it as an opaque, exactly typed value: it does
+not know whether the value represents an effect graph, material binding, palette entry, clipping mode, or application
+state. Paragraph and span values may override it. `undefined` means inherit; an integration that needs an explicit “no
+effect” choice defines that as an ordinary member of its own variant type. A variant never changes the declared raster
+technique and does not by itself require another physical glyph buffer, pipeline, or draw.
+
+Core retains an opaque variant value and compares replacements with `Object.is`; it cannot clone or inspect integration
+objects. Treat ordinary variant records as immutable snapshots and assign a replacement to change run identity. A stable
+binding object may expose integration-owned mutable parameters, but changing those parameters does not mark core dirty;
+the owning program must update its sidecar/uniform storage directly. Disposing a binding still referenced by a live batch,
+paragraph, or span is an integration lifecycle error.
+
 ## Everything added is a paragraph
 
 A paragraph is one independently shaped and laid-out sequence. A multiline block, a one-line label, and a font-backed
@@ -352,33 +370,38 @@ Every paragraph owns a concrete `Font` or `FontStack`. A Bitmap font cannot appe
 both resource types in one paragraph requires a technique expressly designed to render both.
 
 ```ts
-interface ParagraphBaseProperties<Technique extends AnyRasterTechnique> {
+interface ParagraphBaseProperties<Technique extends AnyRasterTechnique, Variant = undefined> {
   readonly font: FontSelection<Technique>;
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
   readonly order?: number;
+  readonly renderVariant?: Variant;
 }
 
-type ParagraphContentProperties<Technique extends AnyRasterTechnique> =
+type ParagraphContentProperties<Technique extends AnyRasterTechnique, Variant = undefined> =
   | Readonly<{
       text: string;
-      spans?: readonly ParagraphSpan<Technique>[];
+      spans?: readonly ParagraphSpan<Technique, Variant>[];
     }>
   | Readonly<{
       text: FormattedText<Technique>;
       spans?: never;
     }>;
 
-type ParagraphProperties<Technique extends AnyRasterTechnique> = ParagraphBaseProperties<Technique> &
-  ParagraphContentProperties<Technique>;
+type ParagraphProperties<Technique extends AnyRasterTechnique, Variant = undefined> = ParagraphBaseProperties<
+  Technique,
+  Variant
+> &
+  ParagraphContentProperties<Technique, Variant>;
 
-interface ParagraphSpan<Technique extends AnyRasterTechnique> {
+interface ParagraphSpan<Technique extends AnyRasterTechnique, Variant = undefined> {
   readonly start: number;
   readonly end: number;
   readonly font?: FontSelection<Technique>;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
+  readonly renderVariant?: Variant;
 }
 
 type FormattedText<Technique extends AnyRasterTechnique> = TextLiteral<Technique> | TextLiteral<never>;
@@ -484,55 +507,65 @@ Assigning a `TextLiteral` replaces text and spans atomically. Passing a formatte
 is a type error. Manual `{ text: string, spans }`, `setSpan()`, and `removeSpan()` remain available when an integration
 already owns explicit UTF-16 ranges.
 
+`SpanStyle` deliberately contains portable layout and paint only. Set an opaque `renderVariant` through explicit
+`ParagraphSpan` values or `setSpan()`; an integration such as React Three Fiber may normalize its own nested variant props
+into those spans. The renderer-neutral `txt` tag never captures an engine object accidentally.
+
 ## Mutate handles; synchronize later
 
 `add()` returns the retained interface for that paragraph. Setters change desired state and mark the paragraph dirty; they
 do not shape immediately.
 
 ```ts
-interface Paragraph<Technique extends AnyRasterTechnique> {
-  readonly batch: ParagraphBatch<Technique>;
+interface Paragraph<Technique extends AnyRasterTechnique, Variant = undefined> {
+  readonly id: ParagraphId;
+  readonly batch: ParagraphBatch<Technique, Variant>;
   readonly disposed: boolean;
   readonly committed: PreparedParagraph | undefined;
 
   font: FontSelection<Technique>;
   get text(): string;
   set text(value: TextInput<Technique>);
-  spans: readonly ParagraphSpan<Technique>[];
+  spans: readonly ParagraphSpan<Technique, Variant>[];
   contentBox: ParagraphContentBox;
   style: ParagraphStyle;
   paint: GlyphPaintInput;
   order: number;
+  renderVariant: Variant | undefined;
 
-  set(properties: ParagraphUpdate<Technique>): void;
-  setSpan(index: number, span: ParagraphSpan<Technique>): void;
+  set(properties: ParagraphUpdate<Technique, Variant>): void;
+  setSpan(index: number, span: ParagraphSpan<Technique, Variant>): void;
   removeSpan(index: number): void;
 
   snapshotGlyphs(): GlyphSnapshot;
   setGlyphOrigins(update: GlyphOriginUpdate): void;
   clearGlyphOriginOverrides(): void;
-  snapshotProperties(): ParagraphSnapshot<Technique>;
+  snapshotProperties(): ParagraphSnapshot<Technique, Variant>;
 
   dispose(): void;
 }
 
-interface ParagraphSnapshot<Technique extends AnyRasterTechnique> {
+declare const paragraphIdBrand: unique symbol;
+type ParagraphId = number & { readonly [paragraphIdBrand]: true };
+
+interface ParagraphSnapshot<Technique extends AnyRasterTechnique, Variant = undefined> {
   readonly font: FontSelection<Technique>;
   readonly text: string;
-  readonly spans: readonly ParagraphSpan<Technique>[];
+  readonly spans: readonly ParagraphSpan<Technique, Variant>[];
   readonly contentBox: ParagraphContentBox;
   readonly style: ParagraphStyle;
   readonly paint: GlyphPaintInput;
   readonly order: number;
+  readonly renderVariant: Variant | undefined;
 }
 
-type ParagraphUpdate<Technique extends AnyRasterTechnique> =
-  | (Partial<ParagraphBaseProperties<Technique>> &
+type ParagraphUpdate<Technique extends AnyRasterTechnique, Variant = undefined> =
+  | (Partial<ParagraphBaseProperties<Technique, Variant>> &
       Readonly<{
         text?: string;
-        spans?: readonly ParagraphSpan<Technique>[];
+        spans?: readonly ParagraphSpan<Technique, Variant>[];
       }>)
-  | (Partial<ParagraphBaseProperties<Technique>> &
+  | (Partial<ParagraphBaseProperties<Technique, Variant>> &
       Readonly<{
         text: FormattedText<Technique>;
         spans?: never;
@@ -611,7 +644,7 @@ const revision = runtime.update();
 ```ts
 interface TextRuntimeRevision {
   readonly revision: number;
-  readonly paragraphBatches: readonly PreparedParagraphBatchRevision<AnyRasterTechnique>[];
+  readonly paragraphBatches: readonly PreparedParagraphBatchRevision<AnyRasterTechnique, unknown>[];
 }
 ```
 
@@ -681,7 +714,7 @@ type TextUpdateOutcome =
 type TextPreparationError =
   | {
       readonly kind: 'capacity-exceeded';
-      readonly batch: ParagraphBatch<AnyRasterTechnique>;
+      readonly batch: ParagraphBatch<AnyRasterTechnique, unknown>;
       readonly capacity: number;
       readonly required: number;
       readonly overflows: readonly GlyphCapacityOverflow[];
@@ -734,7 +767,7 @@ ignore it when they do not need update diagnostics.
 ## Dirty state selects the work
 
 ```ts
-type ParagraphDirtyChannel = 'text' | 'font' | 'features' | 'content-box' | 'paint' | 'origins' | 'order';
+type ParagraphDirtyChannel = 'text' | 'font' | 'features' | 'content-box' | 'paint' | 'origins' | 'order' | 'variant';
 ```
 
 ```ts
@@ -745,12 +778,13 @@ const WorkByChannel = {
   'content-box': 'reflow-and-boundary-reshape',
   paint: 'rewrite-instance-paint',
   origins: 'rewrite-instance-origins',
-  order: 'rebuild-submission-plan',
+  order: 'rebuild-glyph-runs',
+  variant: 'rebuild-glyph-runs',
 } as const;
 ```
 
 Core keeps a dirty set rather than scanning every paragraph. Repeated writes to the same field coalesce. Paint, origin,
-and order changes do not reshape text.
+order, and render-variant changes do not reshape text.
 
 ## Core produces real glyph batches
 
@@ -758,14 +792,14 @@ One paragraph can resolve glyphs through several fonts. Those fonts use one tech
 resources. Core partitions and packs them before the renderer sees the revision.
 
 ```ts
-interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique> {
-  readonly paragraphBatch: ParagraphBatch<Technique>;
+interface PreparedParagraphBatchRevision<Technique extends AnyRasterTechnique, Variant = undefined> {
+  readonly paragraphBatch: ParagraphBatch<Technique, Variant>;
   /** Contiguous and monotonic within this paragraph batch. */
   readonly revision: number;
   readonly technique: Technique;
   readonly paragraphs: readonly PreparedParagraph[];
   readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
-  readonly submissions: readonly GlyphSubmission[];
+  readonly glyphRuns: readonly PreparedGlyphRun<Variant>[];
 }
 
 interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
@@ -787,8 +821,10 @@ interface GlyphBatchKey {
   readonly chunk: number;
 }
 
-interface GlyphSubmission {
+interface PreparedGlyphRun<Variant = undefined> {
   readonly batch: GlyphBatchKey;
+  readonly paragraph: ParagraphId;
+  readonly renderVariant: Variant | undefined;
   readonly start: number;
   readonly count: number;
   readonly order: number;
@@ -796,19 +832,30 @@ interface GlyphSubmission {
 ```
 
 Given the resolved font sequence `Inter -> Noto -> Inter`, core may retain one Inter buffer and one Noto buffer while
-emitting three ordered submissions:
+emitting three ordered glyph runs:
 
 ```ts
-revision.submissions = [
-  { batch: interBatch.key, start: 0, count: 8, order: 0 },
-  { batch: notoBatch.key, start: 0, count: 3, order: 1 },
-  { batch: interBatch.key, start: 8, count: 5, order: 2 },
+revision.glyphRuns = [
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 0, count: 8, order: 0 },
+  { batch: notoBatch.key, paragraph: label.id, renderVariant: warning, start: 0, count: 3, order: 1 },
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 8, count: 5, order: 2 },
 ];
 ```
 
-The renderer does not inspect glyphs to rediscover technique, raster-resource, capacity, or ordering boundaries. Each
-glyph batch also carries the technique-defined `binding` that selects the required pages, buffers, or other decoded font
-data from `glyphBatch.font.data`.
+Core resolves batch → paragraph → span variant inheritance, then segments the ordered glyph sequence whenever the physical
+batch, paragraph, or effective variant changes. The renderer does not inspect glyphs to rediscover technique,
+raster-resource, capacity, source order, or variant boundaries. Each glyph batch also carries the technique-defined
+`binding` that selects the required pages, buffers, or other decoded font data from `glyphBatch.font.data`.
+
+`PreparedGlyphRun` is not a promised draw call. It is the smallest ordered core-authored range an integration may need to
+classify. The target may split a run, or coalesce adjacent compatible runs, when compiling engine draws. It must preserve
+the supplied order and compositing semantics unless its documented depth/blend policy proves another ordering equivalent.
+It may not redo shaping, fallback, resource selection, or slot allocation.
+
+Render variants remain on the calling thread. Async shaping workers receive shaping and layout inputs, not renderer
+objects; after worker results return, core maps source clusters to the resolved variant before atomic publication. A
+variant boundary does not split a shaping cluster or ligature. The cluster receives the variant of the span containing its
+first UTF-16 code unit. Exact partial-ligature styling requires an authored shaping boundary or a shader masking technique.
 
 ## Core retains canonical instance storage
 
@@ -824,9 +871,9 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
 
 `dirtyRanges` is the coalesced delta from the immediately preceding revision of this paragraph batch. When a target has
 that exact predecessor, it uploads only those ranges. A newly attached target, or a target whose committed
-`sourceRevision` is older than that predecessor, initializes every range referenced by `submissions`; those are the live
-instance ranges for the current revision. It may coalesce overlapping or adjacent upload ranges, but it must not alter the
-submission sequence.
+`sourceRevision` is older than that predecessor, initializes every range referenced by `glyphRuns`; those are the live
+instance ranges for the current revision. It may coalesce overlapping or adjacent upload ranges without altering the
+ordered run sequence.
 
 The technique defines the canonical structure-of-arrays fields and writes changed slots into them. Those arrays are the
 portable synchronization boundary. They remain available for multiple targets, late attachment, inspection, Worker result
@@ -839,8 +886,10 @@ snapshot for every publication.
 
 On an adjacent revision, an integration synchronizes only `dirtyRanges`. When its engine layout matches, this is a direct
 range copy or upload. When its layout differs, it maps only those canonical fields and ranges into its own interleaved or
-technique-specific buffer. First and gapped synchronization use the live submission ranges described above.
-The integration still performs no shaping, sorting, raster-resource partitioning, slot allocation, or submission planning.
+technique-specific buffer. First and gapped synchronization use the live glyph-run ranges described above. The integration
+still performs no shaping, source sorting, raster-resource partitioning, or slot allocation. It does compile the ordered
+runs into its own minimum compatible draw sequence because only the integration knows its program, variant, pass, and
+material compatibility.
 
 This CPU copy deliberately decouples core publication from inaccessible or in-flight GPU memory. The target owns its engine
 buffers, upload commands, double/triple buffering, frame publication, fences, and retirement.
@@ -890,7 +939,7 @@ Text       -> desired paragraph state + late-bound Paragraph + Object3D transfor
 
 ## Implement another engine
 
-The engine consumes already partitioned storage and an ordered submission plan:
+The engine consumes already partitioned storage and ordered glyph runs:
 
 ```ts
 for (const glyphBatch of revision.glyphBatches) {
@@ -905,19 +954,19 @@ for (const glyphBatch of revision.glyphBatches) {
 
   const ranges = isAdjacentTargetRevision
     ? glyphBatch.dirtyRanges
-    : liveSubmissionRanges(revision.submissions, glyphBatch.key);
+    : liveGlyphRunRanges(revision.glyphRuns, glyphBatch.key);
   gpuBatch.upload(ranges);
   gpuBatch.setCount(glyphBatch.instanceCount);
 }
 
-for (const submission of revision.submissions) {
-  target.draw(submission.batch, submission.start, submission.count);
-}
+const draws = program.compileRuns(revision.glyphRuns, revision.glyphBatches);
+for (const draw of draws) target.draw(draw);
 ```
 
 Core owns shaping, fallback, layout, sorting, resource partitioning, slot allocation, overflow chunking, instance packing,
-dirty ranges, and the text-local submission plan. The engine owns transforms, visibility, scene composition, GPU objects,
-render-pass placement, command encoding, frame publication, fences, and resource retirement.
+dirty ranges, and the ordered variant-bearing text runs. The engine owns compatible-run coalescing/splitting, final draw
+planning, transforms, visibility, scene composition, GPU objects, render-pass placement, command encoding, frame
+publication, fences, and resource retirement.
 
 ## Dispose
 
@@ -950,9 +999,9 @@ const Decisions = {
   handleOwnedMutation: 'Repeated writes debounce naturally before a synchronization call.',
   perUpdateScheduling: 'The same runtime must switch between immediate and Worker preparation.',
   canonicalCpuStorage: 'Targets synchronize adjacent deltas or live ranges from one stable portable representation.',
-  orderedSubmissions: 'Fallback font runs can require multiple GPU submits while preserving glyph order.',
+  orderedGlyphRuns: 'Fallback and render variants preserve source order without pretending every run is a draw.',
 } as const;
 ```
 
 The old public `createParagraphEngine()` path, runtime-wide sync/Worker mode, mutation callback passed to `update()`, mixed-
-technique logical batch, and renderer-owned glyph repartitioning are explicitly not part of this API.
+technique logical batch, and renderer-owned reshaping or physical glyph repartitioning are explicitly not part of this API.

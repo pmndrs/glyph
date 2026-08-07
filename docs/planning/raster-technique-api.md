@@ -12,6 +12,9 @@ sources:
   - id: engine-contract
     resource: engine-integration-contract.md
     title: Engine integration contract
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
   - id: current-raster
     resource: ../../packages/text/src/raster.ts
     title: Current combined raster module
@@ -35,7 +38,7 @@ sources:
     title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T22:55:24Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
 # Raster technique and engine resource API
@@ -48,7 +51,8 @@ source font
   -> raster artifact + page artifacts    // portable bytes
   -> RasterTechnique.decode()            // portable validated CPU data
   -> TextRuntime.update*()                // portable partitioned instance storage
-  -> RasterProgram                        // optional shader-backend reuse seam
+  -> RasterShader                         // reusable backend technique algorithm
+  -> RasterProgram                        // engine resources, variants, and draw policy
   -> ParagraphBatchTarget                 // engine lifecycle, GPU resources, draws
 ```
 
@@ -300,6 +304,10 @@ interface GlyphBatchKey {
 view; Slug can identify one curve/header/reference page set. The target receives the answer instead of inspecting glyph IDs
 or font records to derive it again.
 
+`GlyphBatchKey.pipelineVariant` is a technique-authored physical-storage/resource constraint—for example a record format
+that requires another vertex layout. It is not the generic paragraph/span `renderVariant` and is not an application effect
+key. A raster program combines this technique value with its own variant compatibility key when compiling final draws.
+
 The technique also defines the canonical structure-of-arrays storage and writes it during core synchronization. This is
 where origin, size, glyph-record index, page index, paint index, or other technique values become renderer-ready CPU fields.
 
@@ -308,7 +316,7 @@ where origin, size, glyph-record index, page index, paint index, or other techni
 The target turns portable font data and bindings into resources usable by one renderer:
 
 ```ts
-class ThreeMtsdfTarget implements ParagraphBatchTarget<typeof mtsdf, ThreeMtsdfRevision> {
+class ThreeMtsdfTarget implements ParagraphBatchTarget<typeof mtsdf, ThreeMtsdfVariant, ThreeMtsdfRevision> {
   readonly technique = mtsdf;
 
   stage(previous, next) {
@@ -321,37 +329,65 @@ class ThreeMtsdfTarget implements ParagraphBatchTarget<typeof mtsdf, ThreeMtsdfR
       copySelectedRangesToThreeAttributes(batch.storage, resources, previous, next);
     }
 
-    return stageThreeSubmissions(next.submissions);
+    return stageThreeDraws(program.compileRuns(next.glyphRuns, next.glyphBatches));
   }
 }
 ```
 
 That target owns Three textures, attributes, TSL materials, internal draw objects, render-list placement, and GPU-safe
 retirement. A Wayfare target owns Wayfare entities/passes instead. Neither owns artifact decoding, font fallback, shaping,
-glyph-resource selection, batching, or submission order.
+glyph-resource selection, physical glyph storage partitioning, or source order. Each target does own the final compatible
+draw plan for its program.
 
 GPU resources should normally be cached by the engine integration using loaded-font identity plus the technique binding.
 Several paragraph batches can then share one atlas or curve buffer while retaining separate instance buffers and draw
 plans. Disposing a batch attachment releases its batch resources; disposing the last engine lease releases shared font GPU
 resources; disposing `LoadedFont` releases the portable CPU data only after its text and target leases are gone.
 
-## Share shader programs where the backend permits it
+## Reuse the technique shader without surrendering the program
 
 Shader authoring is not inherently engine-neutral. It is backend-neutral only when the consuming engines agree on the
 shader compiler, binding schema, resource handles, vertex/instance layout, and render-pass handoff.
 
 ```ts
-interface RasterProgram<Technique extends AnyRasterTechnique, Device, Resources, Pipeline> {
+interface RasterFragment<Context, Output> {
+  readonly context: Context;
+  readonly output: Output;
+}
+
+interface RasterShader<Technique extends AnyRasterTechnique, Context, Output, Evaluate> {
   readonly technique: Technique;
+  readonly evaluate: Evaluate;
+  readonly types?: RasterFragment<Context, Output>;
+}
+
+interface RasterProgram<Technique extends AnyRasterTechnique, Variant, Shader, Device, Resources, Pipeline, Draw> {
+  readonly technique: Technique;
+  readonly shader: Shader;
 
   createResources(device: Device, font: LoadedFont<Technique>, binding: RasterBindingOf<Technique>): Resources;
   createPipeline(device: Device, pipelineVariant: number): Pipeline;
+  compileRuns(
+    runs: readonly PreparedGlyphRun<Variant>[],
+    batches: readonly PreparedGlyphBatch<Technique>[],
+  ): readonly Draw[];
   disposeResources(resources: Resources): void;
   disposePipeline(pipeline: Pipeline): void;
 }
 ```
 
-This is an optional adapter-level seam, not a core requirement. A shared TypeGPU MTSDF program can create typed bind-group
+`RasterShader` is the reusable backend implementation of the hard technique algorithm: Bitmap sampling, MTSDF distance and
+coverage reconstruction, or Slug curve traversal and coverage. `evaluate` retains its concrete backend-authored function
+type; the contract never replaces its arguments or result with `any`. A shader consumes explicit technique context and
+returns resolved fragment output such as linear premultiplied color, opacity, and coverage. It does not own a material,
+pipeline, pass, variant, or draw.
+
+`RasterProgram` composes that canonical shader with resources, application variants, pipeline/material state, and a draw
+compiler. A custom gradient program normally calls `shader.evaluate(context)` and modifies the resolved output. Replacing
+the complete technique shader is a low-level escape hatch, not the expected customization path; users should never need to
+reimplement Slug merely to change final color.
+
+These are optional adapter-level seams, not core requirements. A shared TypeGPU MTSDF program can create typed bind-group
 layouts, GPU resources, and pipelines once for any host that exposes a compatible WebGPU device and lets the adapter encode
 those pipelines in its render pass. TypeGPU can also unwrap pipelines and bindings to raw WebGPU handles, so the host does
 not have to use TypeGPU for the rest of its renderer.
@@ -366,6 +402,9 @@ createAnotherWebGpuTextTarget({ renderer, program });
 This does not make the two engine targets identical. They still differ in lifecycle hooks, transforms, visibility,
 culling, pass ordering, command ownership, and retirement. If an engine does not expose compatible WebGPU device/pass
 interop, the TypeGPU program cannot be inserted merely because the engine itself runs on WebGPU.
+
+The exact TypeGPU shader, program, variant codec, direct engine, pass-encoding, and ownership declarations live in the
+[TypeGPU raster programs and text engine](typegpu-api.md) specification.
 
 TSL is a Three.js node-graph API and produces Three materials, so a completed TSL program remains Three-only. Its raster
 shader logic does not have to be authored independently, however. `@typegpu/three` can translate a TypeGPU function into a
@@ -422,7 +461,7 @@ expect(threeMtsdfTarget.technique).toBe(mtsdfTechnique);
 expect(typeGpuMtsdfProgram.technique).toBe(mtsdfTechnique);
 expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 
-expect(threeRevision.submissions).toEqual(typeGpuRevision.submissions);
+expect(threeRevision.glyphRuns).toEqual(typeGpuRevision.glyphRuns);
 expect(threeRevision.storageBytes).toEqual(typeGpuRevision.storageBytes);
 expect(await render(typeGpuThreeMtsdfProgram)).toMatchRaster(await render(nativeThreeMtsdfProgram));
 ```

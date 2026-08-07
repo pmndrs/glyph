@@ -16,15 +16,25 @@ sources:
   - id: 'citation-4'
     resource: 'https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html'
     title: 'KTX 2.0 specification'
+  - id: core-api
+    resource: core-api.md
+    title: Core text API
+  - id: raster-technique
+    resource: raster-technique-api.md
+    title: Raster technique and engine resource API
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-07-27T23:09:57Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
 # Proposed architecture
 
-Status: proposed; the [API contract](api-shapes.md) owns exact public interface shapes.
+Status: proposed; the [core API](core-api.md), [engine contract](engine-integration-contract.md), and engine-specific API
+specifications own exact public interface shapes.
 
 ## System boundaries
 
@@ -35,12 +45,16 @@ flowchart TD
   Bake --> Bytes["canonical PMNDRS_font bytes"]
   Bytes --> Registry["validator + font registry"]
   Registry --> Shaper["HarfRust Wasm"]
-  Registry --> Raster["selected raster"]
+  Registry --> Technique["portable raster technique"]
   Shaper --> Paragraph["JavaScript paragraph engine"]
-  Paragraph --> Object["Three.js Text object"]
-  Raster --> Object
-  React["@pmndrs/text/react"] -. "reconciles props and spans" .-> Object
-  Object --> GPU["GPU"]
+  Paragraph --> Batch["canonical glyph batches + ordered variant runs"]
+  Technique --> Batch
+  Batch --> Three["Three program + target"]
+  Batch --> TypeGPU["TypeGPU program + engine"]
+  Batch --> Other["other engine target"]
+  Three --> GPU["GPU"]
+  TypeGPU --> GPU
+  Other --> GPU
 ```
 
 The loader first probes the canonical baked core font. Only a core miss dynamically imports the runtime baker library and its font-bake Worker. Rasters may be embedded in that GLB or loaded as independently addressable GLBs. A selected raster with no artifact invokes that raster module's optional lazy runtime-baker capability; the raster package owns its Worker/import details. The Node host and runtime libraries use the same bake cores and emit the same records. Subsetting, remapping, compiled IR, and SIMD specialization remain later compiler units.
@@ -145,10 +159,17 @@ The shared core does not define, generate, serialize, validate, decode, or rende
 - bake options and serialized descriptor schema;
 - generator, artifact writer, and deterministic diagnostics;
 - companion extension schema, binary records, texture/resource formats, and validator;
-- runtime artifact decoding, GPU upload, batching, shader implementation, and disposal;
+- renderer-neutral runtime artifact decoding, resource selection, canonical glyph storage layout, and packing;
+- reusable backend-specific canonical technique shaders where appropriate;
+- engine-specific programs/targets for resources, variants, pipelines/materials, final draws, and disposal;
 - technique-specific fixtures, payload reports, and visual/performance gates.
 
-The generic Node and Worker hosts dynamically load raster packages, pass them the read-only font context, and compose returned artifacts into embedded or external delivery. They treat descriptor and artifact bodies as opaque package-owned values. Our raster packages use TSL internally, but the core interface does not name TSL, TypeGPU, WebGPU, WebGL, shader nodes, or pipeline types. An external package may use any implementation that can fulfill the small raster lifecycle.
+The generic Node and Worker hosts dynamically load raster packages, pass them the read-only font context, and compose
+returned artifacts into embedded or external delivery. They treat descriptor and artifact bodies as opaque package-owned
+values. Portable technique entry points name no TSL, TypeGPU, WebGPU, WebGL, shader-node, or pipeline type. First-party
+packages may expose native TSL or TypeGPU shader/program subpaths without pulling those dependencies into baking, loading,
+shaping, or core batching. An external package may use any implementation that satisfies the portable technique and target
+contracts.
 
 ### Node host owns
 

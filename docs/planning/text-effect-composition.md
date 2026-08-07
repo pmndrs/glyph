@@ -1,9 +1,10 @@
 ---
-type: Research Note
-title: Composable text effects over TSL
-description: Proposes a raster-independent node-composition seam for GPU text effects without baking product-specific shaders into core.
-tags: [rendering, effects, tsl, webgpu, webgl2, research]
-status: draft
+type: API Specification
+title: Three.js text effect composition
+description: Optional TSL convenience for composing parameterized effects after canonical raster technique shaders while core carries only opaque render variants.
+documentation_type: reference
+tags: [rendering, effects, tsl, threejs, webgpu, variants]
+status: stable
 sources:
   - id: raster-contract
     resource: ../../packages/text/src/raster.ts
@@ -17,65 +18,111 @@ sources:
   - id: tsl-skill
     resource: ../../.agents/skills/tsl/SKILL.md
     title: Repository TSL implementation guidance
+  - id: core-api
+    resource: core-api.md
+    title: Core render variants and glyph runs
+  - id: three-api
+    resource: three-api.md
+    title: Three.js text API
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-27T12:07:13Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
-# Composable text effects over TSL
+# Three.js text effect composition
 
-This note records a research direction, not an accepted public API. The immediate Paint & Effects benchmark updates retained `Text` instances through their synchronous paint-only path: React does not drive the animation, shaping and layout remain unchanged, and the raster batch rewrites only owned instance paint attributes. Moving an effect such as a per-word hue phase entirely onto the GPU first requires a general composition seam. A rainbow-specific branch in core or in the shared MTSDF material would be the wrong abstraction.
-
-## Proposed boundary
-
-An effect should compose over a raster's resolved fragment result rather than replace its sampling implementation. The following sketch communicates ownership and chaining; exact names and types remain evidence-gated:
+`TextEffect` is optional Three/TSL program authoring sugar. It is not a core concept. Core carries an integration-defined
+`renderVariant` from batch, paragraph, and span state into ordered glyph runs; the selected Three program interprets it.
 
 ```ts
-const chromaticPaint = defineTextEffect({
-  key: 'chromatic-paint-v1',
-  uniforms: { phase: 0 },
-  compose({ color, opacity, paintIndex, uniforms }) {
+const chromatic = defineTextEffect({
+  parameters: { phase: 'f32' },
+  compose(base, parameters, context) {
     return {
-      color: chromaticColor(color, paintIndex, uniforms.phase),
-      opacity,
+      ...base,
+      color: chromaticColor(base.color, context.paintIndex, parameters.phase),
     };
   },
 });
 
 const text = new Text({
-  effects: [chromaticPaint],
+  font,
+  text: 'Spectrum',
+  renderVariant: {
+    effects: [chromatic.bind({ phase: phaseUniform })],
+  },
 });
 ```
 
-The effect list composes in declaration order. Each stage receives the previous stage's color and opacity plus a deliberately small semantic context. Bitmap, MTSDF, and Slug retain ownership of atlas or curve sampling, coverage reconstruction, clipping, outline limits, shadows, and technique-specific validation. An effect cannot reach into those private graphs or mutate a shared material.
+## Complete helper surface
+
+```ts
+interface ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output> {
+  readonly parameters: ParameterSchema;
+  compose(base: Output, parameters: Parameters, context: Context): Output;
+  bind(parameters: Parameters): ThreeTextEffectBinding<Parameters>;
+}
+
+interface ThreeTextEffectBinding<Parameters = unknown> {
+  readonly effect: ThreeTextEffectDefinition<Parameters, unknown, unknown, unknown>;
+  readonly parameters: Parameters;
+}
+
+declare function defineTextEffect<Parameters, ParameterSchema, Context, Output>(
+  definition: Omit<ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output>, 'bind'>,
+): ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output>;
+
+interface ThreeRenderVariant {
+  readonly effects?: readonly ThreeTextEffectBinding[];
+}
+```
+
+The definition helper infers and preserves the concrete parameter, schema, context, and output types. The heterogeneous
+binding list exposes unavailable associated types as `unknown`, never `any`; the standard program narrows by retained
+effect-definition identity before composing or writing parameters.
+
+## Composition boundary
+
+Every effect composes after the program's canonical technique shader:
+
+```ts
+let output = slugShader.evaluate(context); // canonical curve traversal and coverage
+for (const binding of variant.effects ?? []) {
+  output = composeKnownEffect(output, binding, context);
+}
+return output;
+```
+
+Bitmap, MTSDF, and Slug retain atlas/curve sampling, coverage reconstruction, clipping, outline constraints, and
+technique-specific validation. An effect changes resolved output; it does not replace the hard raster algorithm. A custom
+`ThreeRasterProgram` may bypass this helper and define its own variant contract while still calling the same exported
+technique shader.
+
+## Batching contract
+
+Effect-definition identity and declaration order determine graph compatibility. Parameter values do not. The standard
+program may therefore place bindings for many texts and spans into indexed sidecar storage and draw them together through
+one material. A different ordered definition list requires another material/pipeline variant and may split the draw plan.
+
+Core only preserves variant boundaries and text order. It neither assigns TSL material keys nor forces one draw per effect.
+Changing a paragraph/span binding rebuilds core glyph runs without reshaping. Updating a stable uniform or sidecar binding
+may require no core call and no instance-buffer rewrite.
 
 ## Required invariants
 
-- **Graph identity:** every effect supplies a deterministic key for its graph shape. Material variants cache by raster identity plus the ordered effect-key list; uniform values are never part of that key.
-- **Object-local uniforms:** changing `phase.value` updates one retained `Text` without rebuilding a node graph, replacing geometry, touching React, or changing another text object that shares the same graph variant.
-- **Technique-independent inputs:** core exposes only reviewed semantic nodes such as resolved color, opacity, paint/span index, glyph index, and normalized local coordinates. A new input is added only when all intended raster adapters can define it precisely.
-- **Compositional output:** a stage returns color and opacity nodes for the next stage. Coverage stays raster-owned unless a separately reviewed effect class explicitly requires geometry or coverage expansion.
-- **Shared-material safety:** ordinary unmodified text continues to share the raster's canonical material. Effects use a cached variant and per-object bindings; no caller mutates the singleton atlas material.
-- **Backend parity:** the same public TSL graph must compile through the installed Three.js `WebGPURenderer` for asserted WebGPU and forced WebGL2. Backend-specific shader strings are not part of the public contract.
-- **Failure and disposal:** unsupported semantic inputs fail before publication. Effect-owned uniforms, buffers, and material variants have explicit owners and deterministic disposal.
-- **Performance accounting:** measurements separate graph construction/compilation, first pipeline creation, uniform updates, instance uploads avoided, CPU submission, and GPU frame time. A GPU path is adopted only if it materially improves the complete workload rather than moving unmeasured work.
+- effects compose in declaration order over the previous resolved output;
+- graph identity is definition identity plus ordered composition, never current parameter values;
+- parameters remain text/span-local even when materials and pipelines are shared;
+- semantic context is explicit and small: resolved output, paint/span index, glyph index, and normalized local coordinates;
+- unsupported semantic inputs fail while staging and do not replace the live target revision;
+- effect bindings and material variants have deterministic leases and disposal;
+- TypeGPU-authored functions may adapt through `toTSL()`, while native TSL effects remain Three-specific; and
+- proof measures graph construction, first pipeline creation, parameter updates, upload changes, CPU submit, GPU time, and
+  untouched-text bundle/pipeline cost.
 
-## Paint identity and word phases
-
-The current paragraph model already resolves span paint into per-glyph paint indices. A GPU hue effect should consume a stable semantic paint/span index rather than infer words from glyph IDs, clusters, positions, or display text. The host may assign authored word phases once when it constructs spans; the RAF then changes only an object-local phase uniform. That preserves complex-script shaping and keeps word segmentation outside the shader.
-
-This semantic attribute needs an explicit batching contract. Reusing a palette index is safe only if its identity remains stable across repainting and the renderer does not deduplicate distinct authored phases merely because their current colors match. Otherwise the raster batch needs a separate compact effect index. The choice requires layout, batching, byte-size, and cross-raster evidence before it becomes API.
-
-## Admission gate
-
-Do not add `effects` to public `Text` until a prototype proves all of the following on the repository's exact Three.js and TypeScript pins:
-
-1. two effects chain in a deterministic order without broad type erasure;
-2. two text objects share graph structure while retaining independent uniforms;
-3. Bitmap and MTSDF produce the intended effect without exposing private sampling nodes;
-4. toggling or disposing an effect leaves no stale material, uniform, listener, or GPU resource;
-5. WebGPU and forced WebGL2 execute the real graph with causal pixel evidence and negative controls;
-6. a live workload shows a material CPU or upload improvement over the retained paint-only batch update; and
-7. initial browser-core size and untouched-text pipeline counts remain within their existing budgets.
-
-Until that gate closes, product demonstrations should use the existing direct `Text.setProperties` paint-only update path and describe its measured CPU/upload cost honestly.
+The API is complete only after two chained effects, shared graph/independent parameters, Bitmap and Slug composition,
+disposal, pinned WebGPURenderer output, and single-draw multi-variant batching have causal tests. This is an integration
+feature layered on the accepted core variant contract; failure of the convenience helper cannot remove core customization.
