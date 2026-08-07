@@ -40,8 +40,8 @@ sources:
     resource: https://github.com/AlexJWayne/typegpu-shader-canvas
     title: Raw TypeGPU proof target
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:31:24Z'
+  by: anthropic-claude/opus-5
+  at: '2026-08-07T13:26:50Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -366,7 +366,10 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
   the imperative API.
 - Preserve nested spans as paragraph data, not independent render objects.
 - Preserve Suspense for loading only; warm shaping does not require a readiness Promise.
-- Make synchronous versus asynchronous synchronization an integration policy selectable per frame/update.
+- Do not add a per-frame synchronous/asynchronous switch to the binding. The [Three API](three-api.md) settled that the
+  standard Three target is synchronous by construction, so a target returning `pending` cannot offer the
+  same-observing-frame guarantee and is not accepted by the standard `TextGroup` binding. Choosing `update()` versus
+  `updateAsync()` remains a core runtime decision available to applications that drive core directly.
 
 ### 8. Implement and prove the package-owned TypeGPU subpath
 
