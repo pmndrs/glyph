@@ -5,22 +5,20 @@ import { join } from 'node:path';
 
 import {
   FontRegistry,
-  RasterRuntime,
   rasterBake,
   type GlyphPaint,
-  type ParagraphLayout,
+  type RasterGlyphInput,
   type RasterKey,
   type RasterResolverContext,
   type RasterResourceResolverContext,
+  type RegisteredFont,
   type Sha256Hex,
 } from '@pmndrs/text';
 import { bakeFont } from '@pmndrs/text/bake';
-import * as THREE from 'three/webgpu';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import glyphExampleBaker from '../src/baker.js';
-import { dirtyRanges, retainedCapacity } from '../src/capacity.js';
-import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor, glyphExampleModule } from '../src/index.js';
+import { GLYPH_EXAMPLE_KIND, glyphExample, glyphExampleDescriptor, type GlyphExampleData } from '../src/index.js';
 
 const source = new URL('../../../apps/benchmarks/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const temporaryDirectories: string[] = [];
@@ -30,18 +28,6 @@ afterEach(async () => {
 });
 
 describe('public external raster proof', () => {
-  test('adds bounded slack and coalesces fragmented writes into one full upload', () => {
-    expect(retainedCapacity(1)).toBe(2);
-    expect(retainedCapacity(1_024)).toBe(1_280);
-    expect(retainedCapacity(2_048)).toBe(2_304);
-
-    const count = 18 * 32;
-    const current = new Float32Array(count);
-    const replacement = new Float32Array(count);
-    for (let bucket = 0; bucket < 18; bucket += 2) replacement[bucket * 32] = 1;
-    expect(dirtyRanges(current, replacement, count, count, 1)).toEqual([{ start: 0, count }]);
-  });
-
   test('bakes deterministic standalone companion bytes', async () => {
     const request = {
       font: {
@@ -70,133 +56,118 @@ describe('public external raster proof', () => {
     assert.ok(core && companion && records);
     const registry = new FontRegistry();
     const font = await registry.registerAsset(await readFile(core.file));
-    const runtime = new RasterRuntime();
     const resolve = vi.fn(async (_context: RasterResolverContext) => readFile(companion.file));
     const resolveResource = vi.fn(async (_context: RasterResourceResolverContext) => readFile(records.file));
 
     try {
-      const loaded = await runtime.load(font, glyphExample({ paletteSeed: 7 }), { resolve, resolveResource });
-      expect(loaded.artifact.kind).toBe(GLYPH_EXAMPLE_KIND);
-      expect(loaded.resource.colors.byteLength).toBe(font.glyphCount * 4);
+      const raster = await font.loadRaster(rasterSelection(font), { resolve, resolveResource });
+      const data = await glyphExample.decode(font, raster);
+      expect(raster.kind).toBe(GLYPH_EXAMPLE_KIND);
+      expect(data.colors.byteLength).toBe(font.glyphCount * 4);
+      expect(data.binding.inset).toBe(glyphExampleDescriptor({ paletteSeed: 7 }).inset);
       expect(resolve).toHaveBeenCalledOnce();
       expect(resolveResource).toHaveBeenCalledOnce();
       expect(resolve.mock.calls[0]?.[0].reference.kind).toBe(GLYPH_EXAMPLE_KIND);
       expect(resolveResource.mock.calls[0]?.[0].source.artifactHash).toMatch(/^[0-9a-f]{64}$/);
+      glyphExample.dispose(data);
     } finally {
-      runtime.dispose();
       font.dispose();
     }
   });
 
-  test('retains success and shrink, preserves live state on abort, and replaces overflow', async () => {
-    const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
-    const core = baked.execution.outputs.find(({ role }) => role === 'font');
-    assert.ok(core);
-    const registry = new FontRegistry();
-    const font = await registry.registerAsset(await readFile(core.file));
-    const runtime = new RasterRuntime();
-    const loaded = await runtime.load(font, glyphExample({ paletteSeed: 7 }));
-    let resourceDisposals = 0;
-    loaded.resource.material.addEventListener('dispose', () => {
-      resourceDisposals += 1;
-    });
+  test('selects one shared resource and packs canonical instances without a renderer', async () => {
+    const { font, data } = await loadEmbedded();
+    try {
+      const selection = glyphExample.select(glyph(data, 1));
+      expect(selection).toEqual({ resource: data.resource, pipelineVariant: 0, binding: data.binding });
+      expect(glyphExample.select(glyph(data, 2))?.binding).toBe(data.binding);
 
-    const emptyStage = glyphExampleModule.stageBatch(undefined, layout([]), loaded.resource, 0, paint(0), 1);
-    emptyStage.commit();
-    expect(emptyStage.batch.glyphCount).toBe(0);
-    expect(emptyStage.batch.capacity).toBe(0);
-    expect(emptyStage.batch.object.children).toHaveLength(0);
-    const growFromEmpty = glyphExampleModule.stageBatch(emptyStage.batch, layout([1]), loaded.resource, 0, paint(1), 1);
-    expect(growFromEmpty.batch).not.toBe(emptyStage.batch);
-    growFromEmpty.abort();
-    expect(emptyStage.batch.object.children).toHaveLength(0);
-    emptyStage.batch.dispose();
+      const storage = glyphExample.createStorage(4);
+      glyphExample.writeStorage(
+        storage,
+        { start: 1, count: 2 },
+        { data, binding: data.binding, glyphs: [glyph(data, 1), glyph(data, 2)] },
+      );
+      // Canonical storage is Float32Array, so every expectation compares at single precision.
+      const inset = data.binding.inset * 16;
+      expect(Array.from(storage.origins.subarray(0, 2))).toEqual([0, 0]);
+      expectClose(Array.from(storage.origins.subarray(2, 4)), [inset, 12 - 16 * 0.8 + inset]);
+      expectClose(Array.from(storage.sizes.subarray(2, 4)), [16 * 0.65 - inset * 2, 16 - inset * 2]);
+      expectClose(Array.from(storage.colors.subarray(4, 8)), glyphColor(data, 1));
+      expectClose(Array.from(storage.colors.subarray(8, 12)), glyphColor(data, 2));
 
-    const initialStage = glyphExampleModule.stageBatch(undefined, layout([1, 2]), loaded.resource, 0, paint(2), 1);
-    initialStage.commit();
-    const initial = initialStage.batch;
-    const geometry = meshGeometry(initial.object);
-    const mesh = initial.object.children[0];
-    expect(mesh).toBeDefined();
-    const initialCapacity = initial.capacity;
-    expect(initial.glyphCount).toBe(2);
-    expect(geometry.instanceCount).toBe(2);
-    expect(initial.object).not.toBeInstanceOf(THREE.Group);
-    initial.setRenderOrderBase(600);
-    expect(mesh?.renderOrder).toBe(600);
+      expect(() =>
+        glyphExample.writeStorage(
+          storage,
+          { start: 0, count: 1 },
+          { data, binding: { ...data.binding }, glyphs: [glyph(data, 1)] },
+        ),
+      ).toThrow(/binding does not belong/);
+      expect(() =>
+        glyphExample.writeStorage(
+          storage,
+          { start: 4, count: 1 },
+          { data, binding: data.binding, glyphs: [glyph(data, 1)] },
+        ),
+      ).toThrow(/outside its capacity/);
+      expect(() => glyphExample.select(glyph(data, font.glyphCount))).toThrow(/unavailable glyph/);
 
-    const aborted = glyphExampleModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
-    expect(aborted.batch).toBe(initial);
-    aborted.abort();
-    expect(initial.glyphCount).toBe(2);
-    expect(geometry.instanceCount).toBe(2);
-
-    const shrink = glyphExampleModule.stageBatch(initial, layout([3]), loaded.resource, 0, paint(1), 1);
-    shrink.commit();
-    expect(shrink.batch).toBe(initial);
-    expect(initial.glyphCount).toBe(1);
-    expect(geometry.instanceCount).toBe(1);
-    expect(initial.object).not.toBeInstanceOf(THREE.Group);
-    expect(mesh?.renderOrder).toBe(600);
-
-    expect(() =>
-      glyphExampleModule.stageBatch(initial, layout([font.glyphCount]), loaded.resource, 0, paint(1), 1),
-    ).toThrow(/unavailable glyph/);
-    expect(initial.glyphCount).toBe(1);
-    expect(geometry.instanceCount).toBe(1);
-
-    const exact = glyphExampleModule.stageBatch(
-      initial,
-      layout(Array.from({ length: initialCapacity }, (_, index) => index + 1)),
-      loaded.resource,
-      0,
-      paint(initialCapacity),
-      1,
-    );
-    exact.commit();
-    expect(exact.batch).toBe(initial);
-    expect(initial.glyphCount).toBe(initialCapacity);
-
-    const overflowCount = initialCapacity + 1;
-    const overflow = glyphExampleModule.stageBatch(
-      initial,
-      layout(Array.from({ length: overflowCount }, (_, index) => index + 1)),
-      loaded.resource,
-      0,
-      paint(overflowCount),
-      1,
-    );
-    expect(overflow.batch).not.toBe(initial);
-    overflow.abort();
-    expect(initial.glyphCount).toBe(initialCapacity);
-    expect(overflow.batch.object.children).toHaveLength(0);
-
-    initial.dispose();
-    initial.dispose();
-    runtime.dispose();
-    runtime.dispose();
-    await Promise.resolve();
-    expect(resourceDisposals).toBe(1);
-    font.dispose();
+      glyphExample.dispose(data);
+    } finally {
+      font.dispose();
+    }
   });
 
-  test('honors cancellation before loading and leaves no decoded resource', async () => {
+  test('rejects paint the package cannot render', async () => {
+    const { font, data } = await loadEmbedded();
+    try {
+      expect(() =>
+        glyphExample.validatePaint?.({
+          paintIndices: Uint16Array.of(0),
+          palette: [{ color: [1, 1, 1, 1], outline: { color: [0, 0, 0, 1], width: 1 } }],
+        }),
+      ).toThrow(/fill color and opacity only/);
+      expect(() =>
+        glyphExample.validatePaint?.({ paintIndices: Uint16Array.of(0), palette: [{ color: [1, 1, 2, 1] }] }),
+      ).toThrow(/four finite linear values/);
+      glyphExample.dispose(data);
+    } finally {
+      font.dispose();
+    }
+  });
+
+  test('honors cancellation before decoding and leaves no decoded data', async () => {
     const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
     const core = baked.execution.outputs.find(({ role }) => role === 'font');
     assert.ok(core);
     const registry = new FontRegistry();
     const font = await registry.registerAsset(await readFile(core.file));
-    const runtime = new RasterRuntime();
+    const raster = await font.loadRaster(rasterSelection(font));
     const controller = new AbortController();
-    controller.abort(new DOMException('cancel glyph-example load', 'AbortError'));
+    controller.abort(new DOMException('cancel glyph-example decode', 'AbortError'));
 
-    expect(() => runtime.load(font, glyphExample(), { signal: controller.signal })).toThrowError(
+    await expect(glyphExample.decode(font, raster, controller.signal)).rejects.toThrowError(
       expect.objectContaining({ name: 'AbortError' }),
     );
-    runtime.dispose();
     font.dispose();
   });
 });
+
+async function loadEmbedded(): Promise<{ readonly font: RegisteredFont; readonly data: GlyphExampleData }> {
+  const baked = await bakeFixture({ artifact: 'embedded', pages: 'embedded' });
+  const core = baked.execution.outputs.find(({ role }) => role === 'font');
+  assert.ok(core);
+  const font = await new FontRegistry().registerAsset(await readFile(core.file));
+  const raster = await font.loadRaster(rasterSelection(font));
+  return { font, data: await glyphExample.decode(font, raster) };
+}
+
+/** The baked artifact advertises its own raster key, so the test never reimplements key derivation. */
+function rasterSelection(font: RegisteredFont): { readonly rasterKey: RasterKey; readonly kind: 'glyphExample' } {
+  const reference = font.rasterReferences.find(({ kind }) => kind === GLYPH_EXAMPLE_KIND);
+  assert.ok(reference, 'baked font must advertise its glyph-example raster');
+  return { rasterKey: reference.rasterKey, kind: GLYPH_EXAMPLE_KIND };
+}
 
 async function bakeFixture(packaging: {
   readonly artifact: 'embedded' | 'external';
@@ -212,43 +183,19 @@ async function bakeFixture(packaging: {
   });
 }
 
-function layout(glyphIds: readonly number[]): ParagraphLayout {
-  const count = glyphIds.length;
-  return {
-    width: count * 12,
-    height: 16,
-    contentWidth: count * 12,
-    contentHeight: 16,
-    firstBaseline: 12,
-    lastBaseline: 12,
-    overflowed: false,
-    fontHandles: Uint32Array.of(1),
-    glyphFontSlots: new Uint16Array(count),
-    glyphIds: Uint16Array.from(glyphIds),
-    clusters: Uint32Array.from(glyphIds, (_glyph, index) => index),
-    glyphFontSizes: Float32Array.from({ length: count }, () => 16),
-    x: Float32Array.from({ length: count }, (_value, index) => index * 12),
-    y: Float32Array.from({ length: count }, () => 12),
-    glyphFlags: new Uint16Array(count),
-    lineTextStarts: Uint32Array.of(0),
-    lineTextEnds: Uint32Array.of(count),
-    lineGlyphStarts: Uint32Array.of(0),
-    lineGlyphCounts: Uint32Array.of(count),
-    lineBaselines: Float32Array.of(12),
-    lineAdvances: Float32Array.of(count * 12),
-  };
+function glyph(data: GlyphExampleData, glyphId: number): RasterGlyphInput<GlyphExampleData> {
+  return { data, glyphId, fontSize: 16, originX: 0, originY: 12, rasterPixelRatio: 1, paint: paint().palette[0]! };
 }
 
-function paint(count: number): GlyphPaint {
-  return {
-    palette: [{ color: [1, 1, 1, 1] }],
-    paintIndices: new Uint16Array(count),
-  };
+function expectClose(actual: readonly number[], expected: readonly number[]): void {
+  expect(actual).toHaveLength(expected.length);
+  for (const [index, value] of expected.entries()) expect(actual[index]).toBeCloseTo(value, 6);
 }
 
-function meshGeometry(object: THREE.Object3D): THREE.InstancedBufferGeometry {
-  const mesh = object.children[0];
-  assert.ok(mesh instanceof THREE.Mesh);
-  assert.ok(mesh.geometry instanceof THREE.InstancedBufferGeometry);
-  return mesh.geometry;
+function glyphColor(data: GlyphExampleData, glyphId: number): readonly number[] {
+  return Array.from(data.colors.subarray(glyphId * 4, glyphId * 4 + 4), (value) => value / 255);
+}
+
+function paint(): GlyphPaint {
+  return { palette: [{ color: [1, 1, 1, 1] }], paintIndices: Uint16Array.of(0) };
 }

@@ -27,7 +27,7 @@ sources:
     resource: https://github.com/DefinitelyTyped/DefinitelyTyped/pull/75246
     title: Upstream NodeExtras lookup-map fix
   - id: bitmap-identity
-    resource: ../../packages/text/src/raster/bitmap.ts
+    resource: ../../packages/text/src/raster/bitmap-technique.ts
     title: Bitmap descriptor and raster identity implementation
   - id: bitmap-baker
     resource: ../../packages/text/rust/bitmap-baker
@@ -51,8 +51,8 @@ sources:
     resource: ../../packages/text/src/internal/mtsdf-generator.ts
     title: MTSDF direct-memory TypeScript host
   - id: mtsdf-contract
-    resource: ../../packages/text/src/raster/msdf.ts
-    title: Fixed MTSDF runtime module
+    resource: ../../packages/text/src/raster/mtsdf.ts
+    title: Portable MTSDF runtime technique
   - id: mtsdf-baker
     resource: ../../packages/text/src/bakers/msdf.ts
     title: Fixed MTSDF baker host
@@ -75,8 +75,8 @@ sources:
     resource: ../../packages/text/src/bakers/slug.ts
     title: Direct-memory Slug baker host
   - id: slug-runtime
-    resource: ../../packages/text/src/raster/slug.ts
-    title: Fixed analytic Slug runtime module
+    resource: ../../packages/text/src/raster/slug-technique.ts
+    title: Portable analytic Slug runtime technique
   - id: slug-shaders
     resource: ../../packages/text/src/internal/slug-shaders
     title: Three.js TSL Slug shader implementation
@@ -89,9 +89,6 @@ sources:
   - id: raster-atlas-runtime
     resource: ../../packages/text/src/internal/raster-atlas.ts
     title: Renderer-neutral lossless-atlas decoder
-  - id: three-raster-atlas-runtime
-    resource: ../../packages/text/src/internal/three-raster-atlas.ts
-    title: Three.js lossless-atlas adapter
   - id: raster-technique-api
     resource: ../../packages/text/src/raster-technique.ts
     title: Portable raster technique contract
@@ -125,9 +122,6 @@ sources:
   - id: raster-validation
     resource: ../../packages/text/src/internal/raster-artifact-validation.ts
     title: Shared standalone raster artifact validation
-  - id: raster-batch-runtime
-    resource: ../../packages/text/src/internal/raster-batch.ts
-    title: Shared instanced-raster batch primitives
   - id: composition
     resource: ../../packages/text/src/internal/compose-bake.ts
     title: Generic core/raster artifact composer
@@ -156,7 +150,7 @@ sources:
     resource: ../../packages/text/src/paragraph.ts
     title: Paragraph engine implementation
   - id: text-object
-    resource: ../../packages/text/src/text.ts
+    resource: ../../packages/text/src/three/text.ts
     title: Framework-neutral Three.js Text object
   - id: raster-runtime
     resource: ../../packages/text/src/raster-runtime.ts
@@ -171,8 +165,8 @@ sources:
     resource: ../../packages/text/src/raster/slug-technique.ts
     title: Renderer-neutral Slug technique
   - id: react-runtime
-    resource: ../../packages/text/src/react.ts
-    title: React 19 reconciliation layer
+    resource: ../../packages/text/src/r3f.ts
+    title: React Three Fiber reconciliation layer
   - id: unicode-analysis
     resource: ../../packages/text/src/internal/unicode.ts
     title: Unicode analysis implementation
@@ -197,18 +191,15 @@ bindings, and pack positive-down paragraph origins plus technique fields into ty
 strike/page per glyph and retains R8 pages; MTSDF retains one RGBA8 atlas-array binding per font; Slug retains its original
 RGBA16F curve, R32 header, and R16 reference bytes so Three's R16-to-R32 workaround remains target-owned. Focused package
 tests prove selection, range writes, binding identity, coordinates, paint, and analytic addresses. The merged-v0 Bitmap and
-Slug renderer modules remain temporarily reachable through explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness
-subpaths, while `/raster/msdf` remains the historical spelling, until the target-v1 Three adapter replaces them. The
-Bitmap conformance lane no longer needs that fallback: driven by the target-v1 `Text`, `ThreeBitmapTarget`, and
+Slug renderer modules, the `/raster/msdf` spelling, the merged-v0 `Text`, and the `/react` binding are deleted; `/raster/bitmap`, `/raster/mtsdf`, `/raster/slug`, `/three`, `/r3f`, and `/typegpu` are the whole renderer surface. The
+Bitmap conformance lane no longer needs a fallback: driven by the target-v1 `Text`, `ThreeBitmapTarget`, and
 `LoadedFont` raster data, it reproduces the benchmark's independent CPU atlas compositor in zero mismatched bytes and
 returns the same pinned full-frame hash `a47930d3…e893`, the same 5,930 lit and 3,473 half-coverage pixels, and the same
 `[68, 18, 313, 112]` ink bounds the merged-v0 renderer produced. Reaching that required two corrections to the exported
 Bitmap graph, both invisible to a coverage-threshold smoke check and both caught only by the exact oracle: the graph had
 inherited merged-v0's vertical atlas flip, which belongs to that renderer's `flipY`-enabled upload rather than to the
-target-v1 pages, and it had dropped the physical-pixel snap the strike's integer placement depends on. The prior
-renderer remains separate from portable packing, but the relocated harness paths passed a fresh 42-cell Presentation
-matrix: all seven workloads remained visible for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
-case. Runtime batching and target-v1 engine targets remain open.
+target-v1 pages, and it had dropped the physical-pixel snap the strike's integer placement depends on. Every Presentation
+surface now renders through the target-v1 techniques and the `/three` adapter.
 
 The `/three` adapter resolves each technique's target through a program registry keyed by the technique's stable
 identifier rather than its object identity, and pre-registers the three first-party programs. Identifier keying preserves

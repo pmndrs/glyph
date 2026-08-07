@@ -20,10 +20,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./v0": {
-      "types": "./dist/v0.d.ts",
-      "import": "./dist/v0.js"
-    },
     "./three": {
       "types": "./dist/three.d.ts",
       "import": "./dist/three.js"
@@ -40,14 +36,6 @@
       "types": "./dist/raster/bitmap-technique.d.ts",
       "import": "./dist/raster/bitmap-technique.js"
     },
-    "./raster/bitmap/v0": {
-      "types": "./dist/raster/bitmap.d.ts",
-      "import": "./dist/raster/bitmap.js"
-    },
-    "./raster/msdf": {
-      "types": "./dist/raster/msdf.d.ts",
-      "import": "./dist/raster/msdf.js"
-    },
     "./raster/mtsdf": {
       "types": "./dist/raster/mtsdf.d.ts",
       "import": "./dist/raster/mtsdf.js"
@@ -55,14 +43,6 @@
     "./raster/slug": {
       "types": "./dist/raster/slug-technique.d.ts",
       "import": "./dist/raster/slug-technique.js"
-    },
-    "./raster/slug/v0": {
-      "types": "./dist/raster/slug.d.ts",
-      "import": "./dist/raster/slug.js"
-    },
-    "./react": {
-      "types": "./dist/react.d.ts",
-      "import": "./dist/react.js"
     },
     "./bakers/bitmap": {
       "types": "./dist/bakers/bitmap.d.ts",

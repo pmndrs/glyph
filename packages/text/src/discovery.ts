@@ -100,10 +100,7 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
         const visit = (node: ts.Node): void => {
           if (ts.isCallExpression(node)) {
             const binding = importedBinding(node.expression, checker, project);
-            if (
-              (binding?.module === '@pmndrs/text' || binding?.module === '@pmndrs/text/v0') &&
-              binding.exported === 'defineFont'
-            ) {
+            if (binding?.module === '@pmndrs/text' && binding.exported === 'defineFont') {
               const sourceOffset = node.getStart(sourceFile);
               analyses.push(
                 analyzeDefinition(
@@ -120,63 +117,6 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
                   else diagnostics.push({ value: result.diagnostic, sourceOffset });
                 }),
               );
-            }
-          }
-          if (ts.isNewExpression(node)) {
-            const binding = importedBinding(node.expression, checker, project);
-            const properties = node.arguments?.[0];
-            if (
-              (binding?.module === '@pmndrs/text' || binding?.module === '@pmndrs/text/v0') &&
-              binding.exported === 'Text' &&
-              properties !== undefined &&
-              ts.isObjectLiteralExpression(unwrap(properties))
-            ) {
-              const object = unwrap(properties) as ts.ObjectLiteralExpression;
-              const input = objectPropertyExpression(object, 'font');
-              const raster = objectPropertyExpression(object, 'raster');
-              if (input !== undefined && raster !== undefined) {
-                const sourceOffset = node.getStart(sourceFile);
-                analyses.push(
-                  analyzeDefinition(
-                    input,
-                    raster,
-                    node.getText(sourceFile),
-                    sourceFile,
-                    checker,
-                    project,
-                    assetRoots,
-                  ).then((result) => {
-                    if (result === undefined) return;
-                    if ('font' in result) fonts.push({ value: result.font, sourceOffset });
-                    else diagnostics.push({ value: result.diagnostic, sourceOffset });
-                  }),
-                );
-              }
-            }
-          }
-          if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-            const binding = importedBinding(node.tagName as ts.Expression, checker, project);
-            if (binding?.module === '@pmndrs/text/react' && binding.exported === 'Text') {
-              const input = jsxAttributeExpression(node, 'font');
-              const raster = jsxAttributeExpression(node, 'raster');
-              if (input !== undefined && raster !== undefined) {
-                const sourceOffset = node.getStart(sourceFile);
-                analyses.push(
-                  analyzeDefinition(
-                    input,
-                    raster,
-                    node.getText(sourceFile),
-                    sourceFile,
-                    checker,
-                    project,
-                    assetRoots,
-                  ).then((result) => {
-                    if (result === undefined) return;
-                    if ('font' in result) fonts.push({ value: result.font, sourceOffset });
-                    else diagnostics.push({ value: result.diagnostic, sourceOffset });
-                  }),
-                );
-              }
             }
           }
           node.forEachChild(visit);
@@ -567,24 +507,6 @@ function objectPropertyExpression(object: ts.ObjectLiteralExpression, name: stri
     if (ts.isPropertyAssignment(property) && propertyName(property.name) === name) return property.initializer;
     if (ts.isShorthandPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === name)
       return property.name;
-  }
-  return undefined;
-}
-
-function jsxAttributeExpression(
-  element: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
-  name: string,
-): ts.Expression | undefined {
-  for (const property of element.attributes.properties) {
-    if (
-      !ts.isJsxAttribute(property) ||
-      !ts.isIdentifier(property.name) ||
-      property.name.text !== name ||
-      property.initializer === undefined
-    )
-      continue;
-    if (ts.isStringLiteral(property.initializer)) return property.initializer;
-    if (ts.isJsxExpression(property.initializer)) return property.initializer.expression;
   }
   return undefined;
 }

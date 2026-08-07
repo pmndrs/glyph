@@ -1,10 +1,19 @@
-import { FontRegistry, Text } from '@pmndrs/text/v0';
+import { FontRegistry, type LoadedFont } from '@pmndrs/text';
+import { Text, TextGroup } from '@pmndrs/text/three';
 import { glyphExample } from '@pmndrs/text-glyph-example-raster';
+// The Three program registers itself on import: nothing in @pmndrs/text knows this package exists, so the proof must
+// pull in the third-party program exactly as an application would.
+import '@pmndrs/text-glyph-example-raster/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { compactRgba8Readback } from '../../low-level/raster/rgba-readback';
-import { loadBenchmarkFontAsset } from '../../../workloads/font-assets';
+import {
+  createFontDeliveryMetrics,
+  loadSourceFont,
+  measuredRuntimeFontBake,
+  sourceUrlForFixture,
+} from '../../../workloads/font-assets/runtime';
 import type { PersistentRenderSceneRenderer } from '../../../renderer/persistent-render-host';
 import { withRendererStateRestored } from '../../../renderer/renderer-state-transaction';
 import {
@@ -26,11 +35,12 @@ interface ExternalRasterResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly text: Text;
-  readonly font: import('@pmndrs/text').RegisteredFont;
+  readonly text: Text<typeof glyphExample>;
+  readonly textGroup: TextGroup<typeof glyphExample>;
+  readonly font: LoadedFont<typeof glyphExample>;
   readonly orderingGeometry: THREE.PlaneGeometry;
   readonly orderingMaterial: THREE.MeshBasicNodeMaterial;
-  readonly retainedObject: THREE.Object3D;
+  readonly retainedMesh: THREE.Mesh;
   readonly retainedGeometry: THREE.BufferGeometry;
   readonly glyphCount: number;
 }
@@ -62,6 +72,7 @@ export function createExternalRasterProofTarget(backend: RendererBackend): Bench
       const resources = state.resources;
       state = { kind: 'empty' };
       resources.text.dispose();
+      resources.textGroup.dispose();
       resources.font.dispose();
       resources.orderingGeometry.dispose();
       resources.orderingMaterial.dispose();
@@ -90,8 +101,9 @@ async function createResources(
       : undefined;
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
-  let text: Text | undefined;
-  let font: import('@pmndrs/text').RegisteredFont | undefined;
+  let text: Text<typeof glyphExample> | undefined;
+  let textGroup: TextGroup<typeof glyphExample> | undefined;
+  let font: LoadedFont<typeof glyphExample> | undefined;
   let orderingGeometry: THREE.PlaneGeometry | undefined;
   let orderingMaterial: THREE.MeshBasicNodeMaterial | undefined;
   try {
@@ -107,52 +119,22 @@ async function createResources(
     });
     target.texture.colorSpace = THREE.NoColorSpace;
     target.texture.generateMipmaps = false;
-    ({ font } = await loadBenchmarkFontAsset({
-      technique: 'bitmap',
-      fixture: 'inter',
-      delivery: 'runtime',
-      bitmapDensity: 'conformance',
+    // The whole point of this target: a package outside @pmndrs/text supplies both halves of the boundary — a portable
+    // technique loaded through the public loader, and a Three program resolved from the public program registry.
+    font = await loadSourceFont({
+      source: sourceUrlForFixture('inter'),
+      raster: { technique: glyphExample, options: { paletteSeed: 17, inset: 0.1 } },
+      runtimeBake: measuredRuntimeFontBake(createFontDeliveryMetrics('runtime')),
       registry: new FontRegistry(),
-      signal,
-    }));
+      ...(signal === undefined ? {} : { signal }),
+    });
     signal?.throwIfAborted();
     text = new Text({
       text: INITIAL_TEXT,
       font,
-      raster: glyphExample({ paletteSeed: 17, inset: 0.1 }),
-      fontSize: 48,
-      color: 0xffffff,
+      style: { fontSize: 48 },
+      paint: { color: '#ffffff' },
     });
-    const abortText = () => text?.dispose();
-    signal?.addEventListener('abort', abortText, { once: true });
-    try {
-      await text.ready;
-      signal?.throwIfAborted();
-    } finally {
-      signal?.removeEventListener('abort', abortText);
-    }
-    const retainedObject = exactlyOne(text.children, 'external raster draw object');
-    const retainedMesh = exactlyOne(retainedObject.children, 'external raster mesh');
-    if (!(retainedMesh instanceof THREE.Mesh) || !(retainedMesh.geometry instanceof THREE.BufferGeometry)) {
-      throw new TypeError('external raster did not publish a Three.js mesh');
-    }
-    const retainedGeometry = retainedMesh.geometry;
-    text.setProperties({ text: UPDATED_TEXT });
-    text.updateMatrixWorld();
-    if (text.children[0] !== retainedObject || retainedObject.children[0] !== retainedMesh) {
-      throw new Error('warm external raster update replaced its retained Three.js objects');
-    }
-    if (text.layout === undefined)
-      throw new Error('warm external raster update did not publish during object traversal');
-    text.position.set(32, -36, 0);
-    text.renderOrder = 600;
-    text.updateMatrixWorld();
-    if (Number(retainedMesh.renderOrder) !== 600)
-      throw new Error('warm external raster did not apply the Text render-order base');
-    text.renderOrder = 0;
-    text.updateMatrixWorld();
-    if (Number(retainedMesh.renderOrder) !== 0)
-      throw new Error('warm external raster did not resynchronize the Text render-order base');
     const scene = new THREE.Scene();
     const coverGroup = new THREE.Group();
     coverGroup.renderOrder = 100;
@@ -166,10 +148,44 @@ async function createResources(
     const cover = new THREE.Mesh(orderingGeometry, orderingMaterial);
     cover.position.set(WIDTH / 2, -HEIGHT / 2, 0);
     coverGroup.add(cover);
-    const textGroup = new THREE.Group();
-    textGroup.renderOrder = 200;
+    // The caller-owned parent stays a plain `THREE.Group`: Three derives a render list's `groupOrder` from `isGroup`,
+    // so this is the boundary that must order the whole text above the cover. The `TextGroup` inside it owns only the
+    // text-local render-order base, which is a separate contract this target also checks.
+    textGroup = new TextGroup({ technique: glyphExample, renderOrder: 200 });
     textGroup.add(text);
-    scene.add(coverGroup, textGroup);
+    const callerGroup = new THREE.Group();
+    callerGroup.renderOrder = 200;
+    callerGroup.add(textGroup);
+    text.position.set(32, -36, 0);
+    scene.add(coverGroup, callerGroup);
+    // `Text` reconciles while parented, so attaching and forcing one world update is what commits the first revision.
+    textGroup.updateMatrixWorld(true);
+    if (textGroup.error !== undefined) throw textGroup.error;
+    const retainedMesh = exactlyOne(text.children, 'external raster draw mesh');
+    if (!(retainedMesh instanceof THREE.Mesh) || !(retainedMesh.geometry instanceof THREE.BufferGeometry)) {
+      throw new TypeError('external raster did not publish a Three.js mesh');
+    }
+    const retainedGeometry = retainedMesh.geometry;
+    if (Number(retainedMesh.renderOrder) !== 200)
+      throw new Error('external raster did not apply the TextGroup render-order base');
+
+    text.set({ text: UPDATED_TEXT });
+    textGroup.updateMatrixWorld(true);
+    if (textGroup.error !== undefined) throw textGroup.error;
+    if (text.children[0] !== retainedMesh || retainedMesh.geometry !== retainedGeometry) {
+      throw new Error('warm external raster update replaced its retained Three.js objects');
+    }
+    if (text.layout === undefined)
+      throw new Error('warm external raster update did not publish during object traversal');
+    textGroup.renderOrder = 600;
+    textGroup.updateMatrixWorld(true);
+    if (Number(retainedMesh.renderOrder) !== 600)
+      throw new Error('warm external raster did not reapply the TextGroup render-order base');
+    textGroup.renderOrder = 200;
+    textGroup.updateMatrixWorld(true);
+    if (Number(retainedMesh.renderOrder) !== 200)
+      throw new Error('warm external raster did not resynchronize the TextGroup render-order base');
+
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10);
     camera.position.z = 1;
     camera.updateProjectionMatrix();
@@ -182,15 +198,17 @@ async function createResources(
       scene,
       camera,
       text,
+      textGroup,
       font,
       orderingGeometry,
       orderingMaterial,
-      retainedObject,
+      retainedMesh,
       retainedGeometry,
       glyphCount: text.layout.glyphIds.length,
     };
   } catch (error) {
     text?.dispose();
+    textGroup?.dispose();
     font?.dispose();
     orderingGeometry?.dispose();
     orderingMaterial?.dispose();
@@ -252,13 +270,8 @@ async function renderResources(resources: ExternalRasterResources, signal?: Abor
   }
   if (litPixels < 100) throw new Error('external raster proof produced no visible glyph frames');
   if (layeringPixels < 100) throw new Error('external raster proof did not honor its caller-owned parent Group order');
-  const liveObject = exactlyOne(resources.text.children, 'retained external raster draw object');
-  const liveMesh = exactlyOne(liveObject.children, 'retained external raster mesh');
-  if (
-    liveObject !== resources.retainedObject ||
-    !(liveMesh instanceof THREE.Mesh) ||
-    liveMesh.geometry !== resources.retainedGeometry
-  ) {
+  const liveMesh = exactlyOne(resources.text.children, 'retained external raster draw mesh');
+  if (liveMesh !== resources.retainedMesh || resources.retainedMesh.geometry !== resources.retainedGeometry) {
     throw new Error('external raster proof lost retained object or geometry identity');
   }
   return {

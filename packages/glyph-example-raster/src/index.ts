@@ -7,4 +7,9 @@ export {
   type GlyphExampleDescriptor,
   type GlyphExampleOptions,
 } from './contract.js';
-export { glyphExample, glyphExampleModule, type GlyphExampleDrawBatch, type GlyphExampleResource } from './raster.js';
+export {
+  glyphExample,
+  type GlyphExampleBinding,
+  type GlyphExampleData,
+  type GlyphExampleGlyphBatchStorage,
+} from './raster.js';

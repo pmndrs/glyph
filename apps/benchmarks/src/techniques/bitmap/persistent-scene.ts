@@ -429,12 +429,12 @@ async function activateBitmapTextPersistentScene(
     }
     const textReadyMs = performance.now() - textStarted;
     updateBitmapDrawVisibility(activeText);
-    const atlas = await registeredBitmapAtlas(loadedAsset.font, 'live');
+    const atlas = await registeredBitmapAtlas(loadedAsset.loaded.font, 'live');
     fontFixtureController = createRetainedFontFixtureController(
       registry,
       {
         fixture: fontFixture,
-        asset: { atlas, font: loadedAsset.font, fontLoadMs, loaded: loadedAsset, loadedFont },
+        asset: { atlas, font: loadedAsset.loaded.font, fontLoadMs, loaded: loadedAsset, loadedFont },
       },
       // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
       // registered font would strand the raster this technique still holds.
@@ -579,10 +579,10 @@ async function activateBitmapTextPersistentScene(
               ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
             });
             try {
-              const nextAtlas = await registeredBitmapAtlas(loaded.font, 'live');
+              const nextAtlas = await registeredBitmapAtlas(loaded.loaded.font, 'live');
               return {
                 atlas: nextAtlas,
-                font: loaded.font,
+                font: loaded.loaded.font,
                 fontLoadMs: performance.now() - fontStartedAt,
                 loaded,
                 loadedFont: loaded.loaded,

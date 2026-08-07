@@ -1,4 +1,7 @@
-import { Text, type RegisteredFont } from '@pmndrs/text/v0';
+import type { LoadedFont, ParagraphContentBox, ParagraphStyle } from '@pmndrs/text';
+import type { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import type { slug } from '@pmndrs/text/raster/slug';
+import { Text } from '@pmndrs/text/three';
 import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';
 import { mul, saturate, sub, texture, vec4 } from 'three/tsl';
@@ -55,10 +58,11 @@ interface ComparisonResources {
   readonly mtsdfScene: THREE.Scene;
   readonly slugScene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly mtsdfFont: RegisteredFont;
-  readonly slugFont: RegisteredFont;
-  readonly mtsdfLine: Text;
-  readonly slugLine: Text;
+  readonly shaping: ComparisonShaping;
+  readonly mtsdfFont: LoadedFont<typeof mtsdf>;
+  readonly slugFont: LoadedFont<typeof slug>;
+  readonly mtsdfLine: Text<typeof mtsdf>;
+  readonly slugLine: Text<typeof slug>;
   readonly quad: THREE.QuadMesh;
   readonly mtsdfMaterial: THREE.NodeMaterial;
   readonly slugMaterial: THREE.NodeMaterial;
@@ -70,6 +74,11 @@ interface ComparisonLineView {
   readonly fontSize: number;
   readonly rasterPixelRatio: number;
   readonly width: number;
+}
+
+interface ComparisonShaping {
+  readonly language: string;
+  readonly direction: 'ltr' | 'rtl';
 }
 
 /**
@@ -182,19 +191,11 @@ export function createRasterTechniqueComparisonPersistentScene(
       let pairIsRenderable = false;
       candidateUpdatesPending = true;
       try {
-        resources.mtsdfLine.setProperties(nextView);
-        resources.slugLine.setProperties(nextView);
-        publishComparisonLines(resources);
-        const results = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
+        const failure = publishComparisonView(resources, nextView);
         if (disposed || activation !== resources || revision !== updateRevision) return;
-        const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
         if (failure !== undefined) {
-          resources.mtsdfLine.setProperties(previousView);
-          resources.slugLine.setProperties(previousView);
-          publishComparisonLines(resources);
-          const rollback = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
-          pairIsRenderable = rollback.every((result) => result.status === 'fulfilled');
-          throw failure.reason;
+          pairIsRenderable = publishComparisonView(resources, previousView) === undefined;
+          throw failure;
         }
         committedLineView = nextView;
         const nextTargetSize = physicalPanelSize(resources.viewport);
@@ -271,19 +272,11 @@ export function createRasterTechniqueComparisonPersistentScene(
         let pairIsRenderable = false;
         candidateUpdatesPending = true;
         try {
-          resources.mtsdfLine.setProperties({ text: nextText });
-          resources.slugLine.setProperties({ text: nextText });
-          publishComparisonLines(resources);
-          const results = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
+          const failure = publishComparisonText(resources, nextText);
           if (disposed || activation !== resources || revision !== textRevision) return;
-          const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
           if (failure !== undefined) {
-            resources.mtsdfLine.setProperties({ text: previousText });
-            resources.slugLine.setProperties({ text: previousText });
-            publishComparisonLines(resources);
-            const rollback = await Promise.allSettled([resources.mtsdfLine.ready, resources.slugLine.ready]);
-            pairIsRenderable = rollback.every((result) => result.status === 'fulfilled');
-            throw failure.reason;
+            pairIsRenderable = publishComparisonText(resources, previousText) === undefined;
+            throw failure;
           }
           committedText = nextText;
           pairIsRenderable = true;
@@ -329,10 +322,10 @@ async function createComparisonResources(
   fontFixture: SelectableFontFixture,
   text: string,
 ): Promise<ComparisonResources> {
-  let mtsdfFont: RegisteredFont | undefined;
-  let slugFont: RegisteredFont | undefined;
-  let mtsdfLine: Text | undefined;
-  let slugLine: Text | undefined;
+  let mtsdfFont: LoadedFont<typeof mtsdf> | undefined;
+  let slugFont: LoadedFont<typeof slug> | undefined;
+  let mtsdfLine: Text<typeof mtsdf> | undefined;
+  let slugLine: Text<typeof slug> | undefined;
   let mtsdfTarget: THREE.RenderTarget | undefined;
   let slugTarget: THREE.RenderTarget | undefined;
   let mtsdfMaterial: THREE.NodeMaterial | undefined;
@@ -344,56 +337,37 @@ async function createComparisonResources(
       loadSlugFontAsset({ technique: 'slug', fixture: fontFixture, delivery: 'baked', signal: context.signal }),
     ]);
     if (mtsdfResult.status === 'rejected') {
-      if (slugResult.status === 'fulfilled') slugResult.value.font.dispose();
+      if (slugResult.status === 'fulfilled') slugResult.value.loaded.dispose();
       throw mtsdfResult.reason;
     }
     if (slugResult.status === 'rejected') {
-      mtsdfResult.value.font.dispose();
+      mtsdfResult.value.loaded.dispose();
       throw slugResult.reason;
     }
     const mtsdfLoaded = mtsdfResult.value;
     const slugLoaded = slugResult.value;
-    mtsdfFont = mtsdfLoaded.font;
-    slugFont = slugLoaded.font;
+    mtsdfFont = mtsdfLoaded.loaded;
+    slugFont = slugLoaded.loaded;
     context.signal.throwIfAborted();
-    const panelWidth = context.viewport.width / PANEL_COUNT;
-    const fontSize = BASE_PHYSICAL_PPEM / context.viewport.dpr;
     const specimen = rasterConformanceSpecimen(fontFixture);
-    mtsdfLine = new Text({
-      text,
-      font: mtsdfLoaded.font,
-      raster: mtsdfLoaded.raster,
-      fontSize,
-      rasterPixelRatio: context.viewport.dpr,
-      lineHeight: 1.2,
-      width: Math.max(120, panelWidth - 36),
-      wrap: 'word',
-      color: 0xffffff,
-      language: specimen.language,
-      direction: specimen.direction,
-    });
-    slugLine = new Text({
-      text,
-      font: slugLoaded.font,
-      raster: slugLoaded.raster,
-      fontSize,
-      rasterPixelRatio: context.viewport.dpr,
-      lineHeight: 1.2,
-      width: Math.max(120, panelWidth - 36),
-      wrap: 'word',
-      color: 0xffffff,
-      language: specimen.language,
-      direction: specimen.direction,
-    });
-    await Promise.all([mtsdfLine.ready, slugLine.ready]);
-    context.signal.throwIfAborted();
+    const shaping: ComparisonShaping = { language: specimen.language, direction: specimen.direction };
+    const view = comparisonLineView(context.viewport, 1);
+    const paint = { color: '#ffffff' };
+    mtsdfLine = new Text({ text, font: mtsdfFont, paint, ...lineViewUpdate(shaping, view) });
+    slugLine = new Text({ text, font: slugFont, paint, ...lineViewUpdate(shaping, view) });
     mtsdfLine.position.set(18, -42, 0);
     slugLine.position.copy(mtsdfLine.position);
     const mtsdfScene = new THREE.Scene();
     const slugScene = new THREE.Scene();
     mtsdfScene.add(mtsdfLine);
     slugScene.add(slugLine);
-    const camera = comparisonCamera(panelWidth, context.viewport.height);
+    // `Text` reconciles while parented, so attaching and forcing one world update is what commits both layouts.
+    mtsdfLine.updateMatrixWorld(true);
+    slugLine.updateMatrixWorld(true);
+    if (mtsdfLine.error !== undefined) throw mtsdfLine.error;
+    if (slugLine.error !== undefined) throw slugLine.error;
+    context.signal.throwIfAborted();
+    const camera = comparisonCamera(context.viewport.width / PANEL_COUNT, context.viewport.height);
     const targetSize = physicalPanelSize(context.viewport);
     mtsdfTarget = comparisonTarget(targetSize.width, targetSize.height, 'MTSDF candidate');
     slugTarget = comparisonTarget(targetSize.width, targetSize.height, 'Slug candidate');
@@ -411,8 +385,9 @@ async function createComparisonResources(
       mtsdfScene,
       slugScene,
       camera,
-      mtsdfFont: mtsdfLoaded.font,
-      slugFont: slugLoaded.font,
+      shaping,
+      mtsdfFont,
+      slugFont,
       mtsdfLine,
       slugLine,
       quad,
@@ -463,11 +438,27 @@ async function compileComparison(resources: ComparisonResources): Promise<void> 
   });
 }
 
-function publishComparisonLines(resources: ComparisonResources): void {
-  // Both publications occur in one JavaScript task. Candidate target rendering remains paused until every async
-  // preparation settles, so a later frame can never sample one new generation beside one old generation.
+/**
+ * Both publications occur in one JavaScript task. Candidate target rendering stays paused until both lines commit, so
+ * a later frame can never sample one new generation beside one old generation. Returns the first line error, if any,
+ * so a caller can roll the pair back together rather than leaving one panel ahead of the other.
+ */
+function publishComparisonLines(resources: ComparisonResources): unknown {
   resources.mtsdfLine.updateMatrixWorld(true);
   resources.slugLine.updateMatrixWorld(true);
+  return resources.mtsdfLine.error ?? resources.slugLine.error;
+}
+
+function publishComparisonView(resources: ComparisonResources, view: ComparisonLineView): unknown {
+  resources.mtsdfLine.set(lineViewUpdate(resources.shaping, view));
+  resources.slugLine.set(lineViewUpdate(resources.shaping, view));
+  return publishComparisonLines(resources);
+}
+
+function publishComparisonText(resources: ComparisonResources, text: string): unknown {
+  resources.mtsdfLine.set({ text });
+  resources.slugLine.set({ text });
+  return publishComparisonLines(resources);
 }
 
 function renderComparison(resources: ComparisonResources, renderCandidates: boolean): void {
@@ -547,6 +538,25 @@ function comparisonLineView(viewport: PersistentRenderViewport, zoom: number): C
     fontSize: (BASE_PHYSICAL_PPEM * zoom) / viewport.dpr,
     rasterPixelRatio: viewport.dpr,
     width: Math.max(120, viewport.width / PANEL_COUNT - 36),
+  };
+}
+
+/**
+ * `set` replaces whole property groups, so every update restates the fixture's shaping context. Dropping it would
+ * silently reshape the specimen the moment the viewer zoomed.
+ */
+function lineViewUpdate(
+  shaping: ComparisonShaping,
+  view: ComparisonLineView,
+): {
+  readonly style: ParagraphStyle;
+  readonly contentBox: ParagraphContentBox;
+  readonly rasterPixelRatio: number;
+} {
+  return {
+    style: { fontSize: view.fontSize, lineHeight: 1.2, language: shaping.language, direction: shaping.direction },
+    contentBox: { width: { mode: 'at-most', size: view.width }, wrap: 'word' },
+    rasterPixelRatio: view.rasterPixelRatio,
   };
 }
 

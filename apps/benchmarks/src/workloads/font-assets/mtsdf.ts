@@ -1,5 +1,3 @@
-import { defineRaster } from '@pmndrs/text';
-import { msdf, type MsdfModule } from '@pmndrs/text/raster/msdf';
 import { mtsdf as mtsdfTechnique } from '@pmndrs/text/raster/mtsdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
@@ -88,10 +86,8 @@ export async function loadMtsdfFontAsset(
       artifactBytes: metrics.coreArtifactBytes,
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
-      font: loaded.font,
       loaded,
       metrics,
-      raster: measuredMsdfRaster(metrics, onProgress),
     };
   }
   const artifact = await fetchAuthenticatedGzipAsset(
@@ -111,10 +107,8 @@ export async function loadMtsdfFontAsset(
     artifactBytes: artifact.byteLength,
     atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
     compressedBytes: manifest.compressed.bytes,
-    font: loaded.font,
     loaded,
     metrics,
-    raster: msdf,
   };
 }
 
@@ -128,12 +122,4 @@ function measuredMtsdfTechnique(
 ): typeof mtsdfTechnique {
   const runtimeBaker = measuredRuntimeRaster(mtsdfTechnique.runtimeBaker, metrics, onProgress);
   return { ...mtsdfTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
-}
-
-function measuredMsdfRaster(
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>['onProgress'],
-): MsdfModule {
-  const runtimeBaker = measuredRuntimeRaster(msdf.runtimeBaker, metrics, onProgress);
-  return defineRaster({ ...msdf, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) });
 }

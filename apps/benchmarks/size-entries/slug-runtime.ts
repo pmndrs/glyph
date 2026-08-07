@@ -1,2 +1,3 @@
-export { FontRegistry, Text } from '@pmndrs/text/v0';
-export { slug } from '@pmndrs/text/raster/slug/v0';
+export { FontRegistry } from '@pmndrs/text';
+export { slug } from '@pmndrs/text/raster/slug';
+export { Text } from '@pmndrs/text/three';

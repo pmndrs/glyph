@@ -22,7 +22,7 @@ sources:
     resource: ../../packages/text/src/loader.ts
     title: Current font loader
   - id: current-text
-    resource: ../../packages/text/src/text.ts
+    resource: ../../packages/text/src/three/text.ts
     title: Current Three.js Text lifecycle
   - id: three-object3d
     resource: https://threejs.org/docs/pages/Object3D.html

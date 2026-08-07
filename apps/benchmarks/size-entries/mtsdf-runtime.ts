@@ -1,2 +1,3 @@
-export { FontRegistry, Text } from '@pmndrs/text/v0';
-export { msdf } from '@pmndrs/text/raster/msdf';
+export { FontRegistry } from '@pmndrs/text';
+export { mtsdf } from '@pmndrs/text/raster/mtsdf';
+export { Text } from '@pmndrs/text/three';

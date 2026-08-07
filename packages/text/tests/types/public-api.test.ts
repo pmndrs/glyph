@@ -5,7 +5,6 @@ import {
   defineFont,
   createParagraphEngine,
   createRuntimeShaper,
-  Text,
   FontLoader,
   FontRegistry,
   rasterBake,
@@ -13,7 +12,6 @@ import {
   type BidiAnalysisViews,
   type FontInputOf,
   type FontRasterModuleOf,
-  type LoadedFontV0,
   type GlyphPaint,
   type RasterKey,
   type RasterBatchOf,
@@ -21,6 +19,7 @@ import {
   type RasterBakeDescriptorOf,
   type RasterBakeRequest,
   type RasterKindOf,
+  type RasterObjectDrawBatch,
   type RasterOptionsOf,
   type RasterResourceOf,
   type RasterResourceSource,
@@ -35,14 +34,8 @@ import {
   type LayoutParagraph,
   type ParagraphConstraints,
   type ParagraphMeasurement,
-  type TextProperties,
-  type TextUpdateProperties,
-  type ThreeRasterDrawBatch,
-} from '../../src/v0.js';
-import type { ReactElement } from 'react';
+} from '../../src/index.js';
 import type { Object3D } from 'three/webgpu';
-import type { LazyRaster, ReactTextProps, UseFont } from '../../src/react.js';
-import { bitmap } from '../../src/raster/bitmap.js';
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2 ? true : false;
@@ -114,12 +107,12 @@ interface MsdfBatch {
 }
 
 declare const rasterObject: Object3D;
-const threeRasterBatch: ThreeRasterDrawBatch = {
+const objectDrawBatch: RasterObjectDrawBatch<Object3D> = {
   object: rasterObject,
   setRenderOrderBase() {},
   dispose() {},
 };
-void threeRasterBatch;
+void objectDrawBatch;
 
 const msdf = defineRaster({
   kind: 'msdf',
@@ -228,19 +221,6 @@ runtime.load(font, { module: configurable });
 // @ts-expect-error An MSDF decoder cannot consume a Slug artifact.
 msdf.decode(font, slugArtifact);
 
-const validText: TextProperties = {
-  text: 'Hello',
-  font,
-  raster: msdf,
-};
-void validText;
-const coreText = new Text(validText);
-const coreReady: Promise<void> = coreText.ready;
-void coreReady;
-void coreText.layout;
-coreText.setProperties({ opacity: 0.75 });
-coreText.dispose();
-
 declare const paragraph: LayoutParagraph;
 
 const naturalMeasurement: ParagraphMeasurement = paragraph.measure();
@@ -281,75 +261,12 @@ paragraph.layout({ width: { mode: 'unconstrained', size: 320 } });
 const titleFont = defineFont('/fonts/Inter-Regular.ttf', msdf);
 type _TitleInput = Expect<Equal<FontInputOf<typeof titleFont>, '/fonts/Inter-Regular.ttf'>>;
 type _TitleRaster = Expect<Equal<FontRasterModuleOf<typeof titleFont>, typeof msdf>>;
-const tokenText: TextProperties = { text: 'Hello', font: titleFont };
-void tokenText;
-
-declare const useFont: UseFont;
-const preloadedTitleFont = useFont.preload(titleFont);
-type _PreloadedTitleFont = Expect<
-  Equal<Awaited<typeof preloadedTitleFont>, LoadedFontV0<typeof msdf, '/fonts/Inter-Regular.ttf'>>
->;
-
-function TitleFontTypeProbe(): null {
-  const loadedTitleFont = useFont(titleFont);
-  type _LoadedTitleFont = Expect<Equal<typeof loadedTitleFont, LoadedFontV0<typeof msdf, '/fonts/Inter-Regular.ttf'>>>;
-  void (0 as unknown as _LoadedTitleFont);
-  return null;
-}
-void TitleFontTypeProbe;
-
-declare const nestedText: ReactElement<ReactTextProps>;
-const reactTokenProps: ReactTextProps = {
-  font: titleFont,
-  fontSize: 0.24,
-  position: [0, 1, 0],
-  rotation: [0, 0.25, 0],
-  scale: [1.5, 1.5, 1],
-  name: 'headline',
-  visible: true,
-  frustumCulled: false,
-  renderOrder: 600,
-  children: ['Fast ', nestedText],
-};
-const reactRawProps: ReactTextProps = {
-  font: '/fonts/Inter-Regular.ttf',
-  raster: msdf,
-  children: 'One-off label',
-};
-void reactTokenProps;
-void reactRawProps;
-
-// @ts-expect-error React children own source text; the core text prop is not duplicated.
-const duplicateReactText: ReactTextProps = { text: 'Hidden duplicate' };
-void duplicateReactText;
-
-// @ts-expect-error React raw-font props retain the core font/raster composition rule.
-const reactRawWithoutRaster: ReactTextProps = { font: '/fonts/Inter-Regular.ttf' };
-void reactRawWithoutRaster;
-
-declare const lazyRaster: LazyRaster;
-const deferredMsdf = lazyRaster(async () => ({ default: msdf }));
-type _DeferredMsdf = Expect<Equal<typeof deferredMsdf, typeof msdf>>;
-
-const textOnlyUpdate: TextUpdateProperties = { text: 'Updated' };
-const paintOnlyUpdate: TextUpdateProperties = { opacity: 0.5 };
-void textOnlyUpdate;
-void paintOnlyUpdate;
-
-// @ts-expect-error Span offsets cannot be replaced without their source text.
-const spansOnlyUpdate: TextUpdateProperties = { spans: [] };
-void spansOnlyUpdate;
-
-// @ts-expect-error A raw font and raster must be replaced atomically.
-const rasterOnlyUpdate: TextUpdateProperties = { raster: msdf };
-void rasterOnlyUpdate;
 
 const configuredFont = defineFont('/fonts/Inter-Regular.ttf', {
   module: configurable,
   options: { quality: 'high' },
 });
-const configuredText: TextProperties = { text: 'Configured', font: configuredFont };
-void configuredText;
+void configuredFont;
 
 // @ts-expect-error A configurable raster module requires its options.
 defineFont('/fonts/Inter-Regular.ttf', configurable);
@@ -383,18 +300,6 @@ void bakedOnlyFont;
 declare const sourceUrl: URL;
 const urlFont = defineFont(sourceUrl, msdf);
 void urlFont;
-
-// @ts-expect-error A composed font already owns its raster definition.
-const duplicateRaster: TextProperties = { text: 'Hello', font: titleFont, raster: msdf };
-void duplicateRaster;
-
-// @ts-expect-error A raw font input requires an explicit raster definition.
-const missingModule: TextProperties = { text: 'Hello', font: '/fonts/Inter-Regular.ttf' };
-void missingModule;
-
-// @ts-expect-error Structured spans require their source text.
-const missingText: TextProperties = { spans: [] };
-void missingText;
 
 // @ts-expect-error A font input requires either source or baked bytes.
 defineFont({}, msdf);
@@ -535,12 +440,7 @@ const proseCoverage: RasterCoverage = {
   text: 'Authored text',
   glyphIds: [0, 43],
 };
-const proseFont = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: [16, 32], coverage: proseCoverage }));
-void proseFont;
-
-const proseStrikes = [16, 32] as const;
-const proseFontFromConst = defineFont('/fonts/Inter-Regular.ttf', bitmap({ strikes: proseStrikes }));
-void proseFontFromConst;
+void proseCoverage;
 
 declare const dynamicStrike: number;
 declare const dynamicStrikes: number[];

@@ -313,12 +313,12 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         loadedFont = loaded.loaded;
         const fontLoadMs = performance.now() - fontStartedAt;
         context.signal.throwIfAborted();
-        const rasterConfiguration = await registeredMtsdfConfiguration(loaded.font, context.signal);
+        const rasterConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, context.signal);
         fontFixtureController = createRetainedFontFixtureController(
           registry,
           {
             fixture: options.fontFixture ?? 'inter',
-            asset: { font: loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
+            asset: { font: loaded.loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
           },
           // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
           // registered font would strand the raster this technique still holds.
@@ -482,9 +482,9 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
             ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
           });
           try {
-            const rasterConfiguration = await registeredMtsdfConfiguration(loaded.font, resources.signal);
+            const rasterConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, resources.signal);
             return {
-              font: loaded.font,
+              font: loaded.loaded.font,
               fontLoadMs: performance.now() - fontStartedAt,
               loaded,
               loadedFont: loaded.loaded,

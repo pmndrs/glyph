@@ -4,16 +4,16 @@ import test from 'node:test';
 import {
   MTSDF_MAX_EM_SIZE,
   MTSDF_MAX_PIXEL_RANGE,
-  msdfDescriptor,
-  msdfDescriptorRasterKey,
-  msdfRasterKey,
-} from '@pmndrs/text/raster/msdf';
+  mtsdfDescriptor,
+  mtsdfDescriptorRasterKey,
+  mtsdfRasterKey,
+} from '@pmndrs/text/raster/mtsdf';
 
 test('preserves the legacy MTSDF identity while authenticating custom quality', async () => {
-  const legacy = msdfDescriptor();
-  const explicitDefault = msdfDescriptor({ emSize: 64, pixelRange: 8 });
-  const rangeFour = msdfDescriptor({ emSize: 32, pixelRange: 4 });
-  const rangeSix = msdfDescriptor({ emSize: 32, pixelRange: 6 });
+  const legacy = mtsdfDescriptor();
+  const explicitDefault = mtsdfDescriptor({ emSize: 64, pixelRange: 8 });
+  const rangeFour = mtsdfDescriptor({ emSize: 32, pixelRange: 4 });
+  const rangeSix = mtsdfDescriptor({ emSize: 32, pixelRange: 6 });
 
   assert.strictEqual(explicitDefault, legacy);
   assert.deepEqual(legacy, { generatorVersion: '0.0.0' });
@@ -23,37 +23,37 @@ test('preserves the legacy MTSDF identity while authenticating custom quality', 
     pixelRange: 4,
   });
   assert.equal(
-    await msdfDescriptorRasterKey(legacy),
+    await mtsdfDescriptorRasterKey(legacy),
     'e944ba8d2856314856289466e82e471e0adc0775a7c9c3affec7c59bfdd8fe93',
   );
   assert.equal(
-    await msdfDescriptorRasterKey(rangeFour),
+    await mtsdfDescriptorRasterKey(rangeFour),
     '9c8825cc24b9549e9cc923a17a32665770a4ec05be48e7439a0d5ac89f05afa1',
   );
   assert.equal(
-    await msdfDescriptorRasterKey(rangeSix),
+    await mtsdfDescriptorRasterKey(rangeSix),
     'fa8f5c03367db3652abb41659835618f989ad00c0dc0c39fac8dcf3e21ee16a8',
   );
-  assert.equal(await msdfRasterKey({ emSize: 32, pixelRange: 4 }), await msdfDescriptorRasterKey(rangeFour));
+  assert.equal(await mtsdfRasterKey({ emSize: 32, pixelRange: 4 }), await mtsdfDescriptorRasterKey(rangeFour));
 });
 
 test('validates MTSDF quality options at the package boundary', () => {
-  assert.deepEqual(msdfDescriptor({ emSize: 32 }), {
+  assert.deepEqual(mtsdfDescriptor({ emSize: 32 }), {
     emSize: 32,
     generatorVersion: '0.0.0',
     pixelRange: 8,
   });
-  assert.deepEqual(msdfDescriptor({ pixelRange: 5 }), {
+  assert.deepEqual(mtsdfDescriptor({ pixelRange: 5 }), {
     emSize: 64,
     generatorVersion: '0.0.0',
     pixelRange: 5,
   });
 
   for (const emSize of [0, 1.5, Number.NaN, MTSDF_MAX_EM_SIZE + 1]) {
-    assert.throws(() => msdfDescriptor({ emSize }), /emSize/);
+    assert.throws(() => mtsdfDescriptor({ emSize }), /emSize/);
   }
   for (const pixelRange of [0, 1.5, Number.NaN, MTSDF_MAX_PIXEL_RANGE + 1]) {
-    assert.throws(() => msdfDescriptor({ pixelRange }), /pixelRange/);
+    assert.throws(() => mtsdfDescriptor({ pixelRange }), /pixelRange/);
   }
-  assert.throws(() => msdfDescriptor({ unknown: 1 }), /unknown property/);
+  assert.throws(() => mtsdfDescriptor({ unknown: 1 }), /unknown property/);
 });

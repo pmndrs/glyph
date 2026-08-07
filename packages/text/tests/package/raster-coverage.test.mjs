@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { normalizeRasterCoverage, RasterCoverageError } from '@pmndrs/text';
-import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
-import { msdfDescriptor, msdfRasterKey } from '@pmndrs/text/raster/msdf';
+import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { mtsdfDescriptor, mtsdfRasterKey } from '@pmndrs/text/raster/mtsdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';
 import { assertRasterCoverage } from '../../dist/internal/raster-coverage-artifact.js';
 
@@ -54,8 +54,8 @@ test('authenticates identical bounded coverage in Bitmap and MTSDF descriptors',
     await bitmapRasterKey({ strikes: [16, 32], coverage }),
     'c2ca57973a0666f858d350def46deb26b41b9219e3073df6636a3eaa0810e853',
   );
-  assert.deepEqual(msdfDescriptor({ coverage }), { coverage, generatorVersion: '0.0.0' });
-  assert.equal(await msdfRasterKey({ coverage }), '4118e8f8787ea4de99492c4869059cca10b0ae69494b780699a421d5fe22fe4d');
+  assert.deepEqual(mtsdfDescriptor({ coverage }), { coverage, generatorVersion: '0.0.0' });
+  assert.equal(await mtsdfRasterKey({ coverage }), '4118e8f8787ea4de99492c4869059cca10b0ae69494b780699a421d5fe22fe4d');
 });
 
 test('rejects ambiguous, unbounded, and non-scalar coverage input', () => {

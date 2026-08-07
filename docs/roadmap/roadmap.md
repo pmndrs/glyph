@@ -817,6 +817,10 @@ sampled mirrored atlas rows and had lost its physical-pixel snap, Slug integrate
 composed spans resolved shaping and paint through two mechanisms that disagreed. One span cascade now resolves every
 property by containment and serves both layers.
 
+The merged-v0 surface — `/v0`, `/raster/bitmap/v0`, `/raster/slug/v0`, `/raster/msdf`, and `/react` — is deleted, together
+with the internals it alone reached. The third-party extension proof moved with it rather than being retired: its example
+raster is now a portable technique registering a Three program through the public registry.
+
 ### Milestone 12 — editorial flow regions and mixed-raster composition
 
 This post-v1 milestone adds an ordered flow-region planner without weakening the rectangular paragraph fast path. Each line band resolves one or more usable horizontal slots after explicit drop-cap, image, callout, or known-geometry exclusions are subtracted. Shaped clusters fill those slots using existing safe-break and batched boundary-reshape machinery.

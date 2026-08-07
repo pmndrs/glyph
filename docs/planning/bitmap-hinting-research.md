@@ -12,7 +12,7 @@ sources:
     resource: ../../packages/text/rust/bitmap-baker/src/rasterize.rs
     title: Bitmap baker rasterization implementation
   - id: bitmap-runtime
-    resource: ../../packages/text/src/raster/bitmap.ts
+    resource: ../../packages/text/src/raster/bitmap-technique.ts
     title: Bitmap runtime renderer
   - id: benchmark-evidence
     resource: ../../apps/benchmarks/src/benchmark/targets/product/bitmap-text.ts

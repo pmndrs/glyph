@@ -15,6 +15,10 @@
       "types": "./dist/baker.d.ts",
       "import": "./dist/baker.js"
     },
+    "./three": {
+      "types": "./dist/three.d.ts",
+      "import": "./dist/three.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

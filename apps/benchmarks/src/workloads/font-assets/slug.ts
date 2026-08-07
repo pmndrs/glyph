@@ -1,6 +1,4 @@
-import { defineRaster } from '@pmndrs/text';
 import { slug as slugTechnique } from '@pmndrs/text/raster/slug';
-import { slug, type SlugModule } from '@pmndrs/text/raster/slug/v0';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-slug.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-slug.font.glb.gz?url';
@@ -86,10 +84,8 @@ export async function loadSlugFontAsset(
       artifactBytes: metrics.coreArtifactBytes,
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
-      font: loaded.font,
       loaded,
       metrics,
-      raster: measuredSlugRaster(metrics, onProgress),
     };
   }
   const source = request.bakedArtifact ?? fixtureManifestSource(fixture);
@@ -105,10 +101,8 @@ export async function loadSlugFontAsset(
     artifactBytes: artifact.byteLength,
     atlasGpuBytes: 0,
     compressedBytes: source.compressed.bytes,
-    font: loaded.font,
     loaded,
     metrics,
-    raster: slug,
   };
 }
 
@@ -128,12 +122,4 @@ function fixtureManifestSource(fixture: BenchmarkFontFixture): BakedSlugArtifact
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown Slug font fixture: ${fixture}`);
   return { url: compressedFontUrls[fixture], compressed: manifest.compressed, uncompressed: manifest.uncompressed };
-}
-
-function measuredSlugRaster(
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'slug' }>['onProgress'],
-): SlugModule {
-  const runtimeBaker = measuredRuntimeRaster(slug.runtimeBaker, metrics, onProgress);
-  return defineRaster({ ...slug, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) });
 }
