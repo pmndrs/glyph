@@ -41,7 +41,7 @@ sources:
     title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # Raster technique and engine resource API
@@ -116,7 +116,8 @@ const font = await runtime.loadFont({
 ```
 
 Before it resolves, core has loaded and validated the shaping artifact, found the selected raster companion, resolved every
-required embedded or authenticated external resource, and called the technique decoder. No GPU resource exists yet.
+required embedded resource or hash-validated external resource, and called the technique decoder. No GPU resource exists
+yet.
 
 ```ts
 interface RegisteredRaster<Kind extends string> {
@@ -127,9 +128,18 @@ interface RegisteredRaster<Kind extends string> {
   view(bufferView: number): Uint8Array;
   resource(source: RasterResourceSource, signal?: AbortSignal): Promise<Uint8Array>;
 }
+
+type RasterResourceSource =
+  | { readonly type: 'bufferView'; readonly bufferView: number }
+  | {
+      readonly type: 'external';
+      readonly uri: string;
+      readonly byteLength: number;
+      readonly artifactHash: Sha256Hex;
+    };
 ```
 
-Raster authors use `view()` for embedded bytes and `resource()` for either embedded or SHA-256-authenticated external page
+Raster authors use `view()` for embedded bytes and `resource()` for either embedded or SHA-256-validated external page
 bytes. Applications normally do not call either method; the selected technique's `decode()` does.
 
 ```ts
@@ -236,6 +246,7 @@ interface AnyRasterTechnique {
 }
 
 type RasterTechniqueTypesOf<Technique extends AnyRasterTechnique> = NonNullable<Technique[typeof rasterTechniqueTypes]>;
+type RasterOptionsOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['options'];
 type RasterDataOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['data'];
 type RasterBindingOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['binding'];
 type GlyphBatchStorageOf<Technique extends AnyRasterTechnique> = RasterTechniqueTypesOf<Technique>['storage'];
@@ -304,6 +315,7 @@ interface GlyphBatchKey {
   readonly technique: RasterTechniqueId;
   readonly resource: RasterResourceId;
   readonly pipelineVariant: number;
+  readonly generation: number;
   readonly chunk: number;
 }
 ```
@@ -419,11 +431,11 @@ interop, the TypeGPU program cannot be inserted merely because the engine itself
 The exact TypeGPU shader, program, variant codec, direct engine, pass-encoding, and ownership declarations live in the
 [TypeGPU raster programs and text engine](typegpu-api.md) specification.
 
-TSL is a Three.js node-graph API and produces Three materials, so a completed TSL program remains Three-only. Its raster
-shader logic may not have to be authored independently, however. `@typegpu/three` can translate a zero-argument TypeGPU
-closure into a TSL node with `toTSL()`, while `fromTSL()` exposes supported Three-owned nodes inside that closure. The exact
-bridge coverage for sampleable Three textures, dependent texture loads, returned structs, and vertex-stage logic is not
-established by the public API description:
+TSL is a Three.js node-graph API and produces Three materials, so a completed TSL program remains Three-only.
+`@typegpu/three@0.11.0` can inject a resolved zero-argument TypeGPU WGSL closure through Three's WebGPU node builder, while
+`fromTSL()` exposes supported Three-owned data nodes inside that closure. Inspection of that release found no forced-WebGL2
+path and no demonstrated sampleable-resource bridge for dependent Slug loads; it is not a general TypeGPU-to-native-TSL
+translation:
 
 ```ts
 const coverageNode = t3.toTSL(() => {
@@ -433,11 +445,10 @@ const coverageNode = t3.toTSL(() => {
 createThreeMtsdfTarget({ renderer, program: createThreeMtsdfTslProgram({ coverageNode }) });
 ```
 
-This could admit two Three program implementations behind the same target contract: a native TSL implementation, and an
-optional TypeGPU-authored implementation adapted through `toTSL()`. In the latter, TypeGPU could become the authoritative source for
-shared raster evaluation while the Three adapter still owns material construction, renderer accessors, blending, depth,
-pipeline state, and lifecycle. `toTSL()` is an authoring bridge; it does not move Three scene or render-pass ownership into
-the portable technique.
+The sample can admit limited pure-WebGPU math inside an optional Three program. It does not establish a complete second
+Bitmap/MTSDF/Slug implementation. If a future exact-version gate proves the full resource and stage contract, TypeGPU could
+become authoritative for that supported path while the Three adapter still owns material construction, accessors,
+blending, depth, pipeline state, and lifecycle.
 
 The bridge is currently WebGPU-only according to the official `@typegpu/three` documentation. It cannot replace the native
 TSL path while the Three integration promises WebGL2. The TypeGPU-authored path remains an experiment until the
