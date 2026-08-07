@@ -12,8 +12,10 @@ import type {
 import type { ParagraphBatchTarget, ParagraphBatchTargetUpdate } from '../paragraph-batch-attachment.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
 import {
+  instanceStorageBytes,
   invalidatePboTexture,
   retainedRunIdentities,
+  RetainedThreeGpuBytes,
   RetainedThreeTargetRevision,
   type RetainedThreeTargetResource,
 } from './retained-target.js';
@@ -33,6 +35,7 @@ interface ThreeSlugPage extends SlugShaderPage {
 interface SlugTargetResource extends RetainedThreeTargetResource<typeof slug> {
   readonly key: GlyphBatchKey;
   readonly capacity: number;
+  readonly gpuBytes: number;
   readonly material: THREE.MeshBasicNodeMaterial;
   readonly viewport: UniformNode<'vec2', THREE.Vector2>;
   readonly mvpRow0: UniformNode<'vec4', THREE.Vector4>;
@@ -52,10 +55,15 @@ export class ThreeSlugTarget<Variant> implements ParagraphBatchTarget<typeof slu
   readonly technique: typeof slug = slug;
   readonly #owner: ThreeSlugTargetOwner;
   readonly #pages = new Map<string, ThreeSlugPage>();
+  readonly #gpuBytes = new RetainedThreeGpuBytes<typeof slug, SlugTargetResource>();
   #disposed = false;
 
   constructor(owner: ThreeSlugTargetOwner) {
     this.#owner = owner;
+  }
+
+  get gpuBytes(): number {
+    return this.#gpuBytes.total;
   }
 
   stage(
@@ -73,7 +81,9 @@ export class ThreeSlugTarget<Variant> implements ParagraphBatchTarget<typeof slu
             if (finished) throw new Error('Three Slug stage is no longer active');
             finished = true;
             const state = previous.transfer(next, this.#owner.renderOrderBase);
-            return new ThreeSlugTargetRevision(next.revision, state.draws, state.resources, state.runIdentities);
+            return this.#gpuBytes.retain(
+              new ThreeSlugTargetRevision(next.revision, state.draws, state.resources, state.runIdentities),
+            );
           },
           abort: () => {
             finished = true;
@@ -110,7 +120,9 @@ export class ThreeSlugTarget<Variant> implements ParagraphBatchTarget<typeof slu
             finished = true;
             for (let index = 0; index < draws.length; index += 1)
               this.#owner.objectForParagraph(next.glyphRuns[index]!.paragraph).add(draws[index]!);
-            return new ThreeSlugTargetRevision(next.revision, draws, resources, retainedRunIdentities(next));
+            return this.#gpuBytes.retain(
+              new ThreeSlugTargetRevision(next.revision, draws, resources, retainedRunIdentities(next)),
+            );
           },
           abort: () => {
             if (finished) return;
@@ -130,6 +142,7 @@ export class ThreeSlugTarget<Variant> implements ParagraphBatchTarget<typeof slu
     this.#disposed = true;
     for (const page of this.#pages.values()) page.dispose();
     this.#pages.clear();
+    this.#gpuBytes.release();
   }
 
   #createResource(batch: PreparedGlyphBatch<typeof slug>): SlugTargetResource {
@@ -141,21 +154,17 @@ export class ThreeSlugTarget<Variant> implements ParagraphBatchTarget<typeof slu
   #page(data: SlugPageData): ThreeSlugPage {
     let page = this.#pages.get(data.resource);
     if (page !== undefined) return page;
-    const curveTexture = dataTexture(
-      ownedUint16(data.curveBytes),
-      data.curveWidth,
-      data.curveHeight,
-      THREE.RGBAFormat,
-      THREE.HalfFloatType,
-    );
+    const curves = ownedUint16(data.curveBytes);
+    const headers = ownedUint32(data.headerBytes);
+    const packedReferences = packReferencePairs(ownedUint16(data.referenceBytes), data.referenceWidth);
+    const curveTexture = dataTexture(curves, data.curveWidth, data.curveHeight, THREE.RGBAFormat, THREE.HalfFloatType);
     const headerTexture = dataTexture(
-      ownedUint32(data.headerBytes),
+      headers,
       data.headerWidth,
       data.headerHeight,
       THREE.RedIntegerFormat,
       THREE.UnsignedIntType,
     );
-    const packedReferences = packReferencePairs(ownedUint16(data.referenceBytes), data.referenceWidth);
     const referenceTexture = dataTexture(
       packedReferences.data,
       packedReferences.width,
@@ -180,6 +189,7 @@ export class ThreeSlugTarget<Variant> implements ParagraphBatchTarget<typeof slu
       },
     };
     this.#pages.set(data.resource, page);
+    this.#gpuBytes.addShared(curves.byteLength + headers.byteLength + packedReferences.data.byteLength);
     return page;
   }
 }
@@ -286,6 +296,7 @@ function createSlugTargetResource(batch: PreparedGlyphBatch<typeof slug>, page: 
   return {
     key: batch.key,
     capacity: batch.capacity,
+    gpuBytes: instanceStorageBytes(Object.values(attributes)),
     material,
     viewport,
     mvpRow0,

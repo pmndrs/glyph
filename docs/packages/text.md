@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:e19d7768323ae790766ba772f84df015fd4bde7b8cd51ca07a98716f330d4e4f'
+source_digest: 'sha256:883132818cd308b85ae02cbdd509cff871ad2065ab068da7fbdbf21468a15d52'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -174,8 +174,8 @@ sources:
     resource: ../../packages/text/src/internal/unicode.ts
     title: Unicode analysis implementation
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-07T05:13:16Z'
+  by: anthropic-claude/opus-5
+  at: '2026-08-07T13:26:50Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -206,6 +206,18 @@ the public raster extension boundary proven in milestone 10: a third party regis
 through `registerThreeRasterProgram`, and an application may wrap a first-party technique to instrument its runtime baker
 without the wrapper losing its program. An unregistered technique fails at batch construction with a typed error naming
 the identifier instead of rendering nothing.
+
+Readonly `Text.gpuBytes` and `TextGroup.gpuBytes` report the bytes of the GPU resources their attached target currently
+retains: the textures it shares across batches plus the instance buffers its committed revision owns. Reporting belongs to
+the target because only the target knows the realized allocation — Bitmap's R8 pages, MTSDF's layer-padded RGBA8 atlas
+array, and Slug's RGBA16F curves, R32UI headers, and pair-packed R32UI references — while the portable techniques end at
+CPU data and never describe engine residency. A revision that transferred its resources to a successor reports nothing, so
+a warm commit cannot count the same buffers twice; an unbound `Text` and a third-party target that omits the optional
+`ThreeRasterTargetAccounting` accessor both report zero. A `Text` inside a `TextGroup` shares that group's target, so both
+objects report the same batch-wide total rather than a per-paragraph share. On the retained proof pages at the default 256-glyph capacity,
+16-pixel Inter Bitmap measures 707,584 bytes as one 1024×679 R8 page plus 12,288 attribute bytes, MTSDF measures
+41,971,712 bytes as its 41,943,040-byte padded atlas array plus 28,672 attribute bytes, and Slug measures 3,190,784 bytes;
+the same totals are reported on WebGPU and forced WebGL2.
 
 `Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
 Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary

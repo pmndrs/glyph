@@ -29,7 +29,12 @@ import { slug } from '../raster/slug-technique.js';
 import type { TextRuntime } from '../text-runtime.js';
 import { ThreeBitmapTarget, type ThreeBitmapTargetOwner } from './bitmap-target.js';
 import { ThreeMtsdfTarget, type ThreeMtsdfTargetOwner } from './mtsdf-target.js';
-import { registerThreeRasterProgram, threeRasterProgram, type ThreeRasterProgram } from './program-registry.js';
+import {
+  registerThreeRasterProgram,
+  threeRasterProgram,
+  type ThreeRasterProgram,
+  type ThreeRasterTargetAccounting,
+} from './program-registry.js';
 import { ThreeSlugTarget, type ThreeSlugTargetOwner } from './slug-target.js';
 
 export interface ThreeRenderVariant {
@@ -145,6 +150,9 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
   }
   get error(): unknown {
     return this.#error ?? this.#binding?.error;
+  }
+  get gpuBytes(): number {
+    return this.#binding?.gpuBytes ?? 0;
   }
   get font(): FontSelection<Technique> {
     return this.#desired.font;
@@ -366,6 +374,9 @@ export class TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeRend
   get error(): unknown {
     return this.#error ?? this.#binding?.error;
   }
+  get gpuBytes(): number {
+    return this.#binding?.gpuBytes ?? 0;
+  }
   get renderVariant(): Variant | undefined {
     return this.#renderVariant;
   }
@@ -467,6 +478,7 @@ class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant>
   readonly #paragraphs = new Map<Text<Technique, Variant>, Paragraph<Technique, Variant>>();
   readonly #textsByParagraph = new Map<number, Text<Technique, Variant>>();
   readonly #renderOrders = new Map<Text<Technique, Variant>, number>();
+  readonly #target: ThreeRasterTargetAccounting;
   readonly #attachment: ThreeTargetAttachment;
   #disposed = false;
 
@@ -489,19 +501,25 @@ class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant>
         `no Three raster program is registered for "${technique.id}"; register one with registerThreeRasterProgram`,
       );
     }
-    const target = program(this) as unknown as ParagraphBatchTarget<
+    const target = program(this);
+    const attached = target as unknown as ParagraphBatchTarget<
       AnyRasterTechnique,
       Variant,
       ParagraphBatchTargetRevision
     >;
     const batch = this.#batch as unknown as ParagraphBatch<AnyRasterTechnique, Variant>;
-    this.#attachment = batch.attach(target) as unknown as ThreeTargetAttachment;
+    this.#target = target;
+    this.#attachment = batch.attach(attached) as unknown as ThreeTargetAttachment;
   }
   get textCount(): number {
     return this.#paragraphs.size;
   }
   get error(): unknown {
     return this.#batch.preparationError ?? this.#attachment.error;
+  }
+  get gpuBytes(): number {
+    const bytes = this.#target.gpuBytes;
+    return typeof bytes === 'number' ? bytes : 0;
   }
   get renderOrderBase(): number {
     return this.#group?.renderOrder ?? 0;

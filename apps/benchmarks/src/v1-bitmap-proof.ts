@@ -16,6 +16,7 @@ interface TargetV1BitmapResult {
   readonly litPixels: number;
   readonly retainedDraw: boolean;
   readonly retainedStorage: boolean;
+  readonly gpuBytes: number;
 }
 
 window.targetV1BitmapReady = render();
@@ -67,6 +68,7 @@ async function render(): Promise<TargetV1BitmapResult> {
       litPixels,
       retainedDraw: retainedDraw === firstDraw,
       retainedStorage: retainedDraw?.geometry.getAttribute('_pmndrsTextOrigins') === firstStorage,
+      gpuBytes: text.gpuBytes,
     };
   } finally {
     text?.removeFromParent();

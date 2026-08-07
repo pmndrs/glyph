@@ -10,8 +10,10 @@ import type {
 import type { ParagraphBatchTarget, ParagraphBatchTargetUpdate } from '../paragraph-batch-attachment.js';
 import { bitmap, type BitmapPageData } from '../raster/bitmap-technique.js';
 import {
+  instanceStorageBytes,
   invalidatePboTexture,
   retainedRunIdentities,
+  RetainedThreeGpuBytes,
   RetainedThreeTargetRevision,
   type RetainedThreeTargetResource,
 } from './retained-target.js';
@@ -24,6 +26,7 @@ export interface ThreeBitmapTargetOwner {
 interface BitmapTargetResource extends RetainedThreeTargetResource<typeof bitmap> {
   readonly key: GlyphBatchKey;
   readonly capacity: number;
+  readonly gpuBytes: number;
   readonly material: THREE.MeshBasicNodeMaterial;
   readonly attributes: readonly THREE.StorageInstancedBufferAttribute[];
   update(batch: PreparedGlyphBatch<typeof bitmap>): void;
@@ -41,10 +44,15 @@ export class ThreeBitmapTarget<Variant> implements ParagraphBatchTarget<
   readonly technique: typeof bitmap = bitmap;
   readonly #owner: ThreeBitmapTargetOwner;
   readonly #textures = new Map<string, THREE.DataTexture>();
+  readonly #gpuBytes = new RetainedThreeGpuBytes<typeof bitmap, BitmapTargetResource>();
   #disposed = false;
 
   constructor(owner: ThreeBitmapTargetOwner) {
     this.#owner = owner;
+  }
+
+  get gpuBytes(): number {
+    return this.#gpuBytes.total;
   }
 
   stage(
@@ -62,7 +70,9 @@ export class ThreeBitmapTarget<Variant> implements ParagraphBatchTarget<
             if (finished) throw new Error('Three bitmap stage is no longer active');
             finished = true;
             const state = previous.transfer(next, this.#owner.renderOrderBase);
-            return new ThreeBitmapTargetRevision(next.revision, state.draws, state.resources, state.runIdentities);
+            return this.#gpuBytes.retain(
+              new ThreeBitmapTargetRevision(next.revision, state.draws, state.resources, state.runIdentities),
+            );
           },
           abort: () => {
             finished = true;
@@ -95,7 +105,9 @@ export class ThreeBitmapTarget<Variant> implements ParagraphBatchTarget<
             for (let index = 0; index < draws.length; index += 1) {
               this.#owner.objectForParagraph(next.glyphRuns[index]!.paragraph).add(draws[index]!);
             }
-            return new ThreeBitmapTargetRevision(next.revision, draws, resources, retainedRunIdentities(next));
+            return this.#gpuBytes.retain(
+              new ThreeBitmapTargetRevision(next.revision, draws, resources, retainedRunIdentities(next)),
+            );
           },
           abort: () => {
             if (finished) return;
@@ -115,6 +127,7 @@ export class ThreeBitmapTarget<Variant> implements ParagraphBatchTarget<
     this.#disposed = true;
     for (const texture of this.#textures.values()) texture.dispose();
     this.#textures.clear();
+    this.#gpuBytes.release();
   }
 
   #createResource(batch: PreparedGlyphBatch<typeof bitmap>): BitmapTargetResource {
@@ -135,6 +148,7 @@ export class ThreeBitmapTarget<Variant> implements ParagraphBatchTarget<
     texture.flipY = false;
     texture.needsUpdate = true;
     this.#textures.set(page.resource, texture);
+    this.#gpuBytes.addShared(page.bytes.byteLength);
     return texture;
   }
 }
@@ -181,6 +195,7 @@ function createBitmapTargetResource(
   return {
     key: batch.key,
     capacity: batch.capacity,
+    gpuBytes: instanceStorageBytes(attributes),
     material,
     attributes,
     update(next) {

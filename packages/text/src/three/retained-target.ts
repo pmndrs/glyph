@@ -12,6 +12,7 @@ import type { AnyRasterTechnique } from '../raster-technique.js';
 export interface RetainedThreeTargetResource<Technique extends AnyRasterTechnique> {
   readonly key: GlyphBatchKey;
   readonly capacity: number;
+  readonly gpuBytes: number;
   update(batch: PreparedGlyphBatch<Technique>): void;
   dispose(): void;
 }
@@ -51,6 +52,13 @@ export class RetainedThreeTargetRevision<
     this.draws = draws;
     this.#resources = resources;
     this.#runIdentities = runIdentities;
+  }
+
+  get gpuBytes(): number {
+    if (this.#disposed || this.#transferred) return 0;
+    let bytes = 0;
+    for (const resource of this.#resources.values()) bytes += resource.gpuBytes;
+    return bytes;
   }
 
   setRenderOrderBase(base: number): void {
@@ -97,6 +105,43 @@ export class RetainedThreeTargetRevision<
     }
     for (const resource of this.#resources.values()) resource.dispose();
   }
+}
+
+/**
+ * GPU residency of one retained Three target: the resources it shares across batches plus the instance buffers its
+ * committed revision owns. A revision that has transferred its resources to a successor reports nothing, so a warm
+ * commit never counts the same buffers twice.
+ */
+export class RetainedThreeGpuBytes<
+  Technique extends AnyRasterTechnique,
+  Resource extends RetainedThreeTargetResource<Technique>,
+> {
+  #shared = 0;
+  #revision: RetainedThreeTargetRevision<Technique, Resource> | undefined;
+
+  get total(): number {
+    return this.#shared + (this.#revision?.gpuBytes ?? 0);
+  }
+
+  addShared(bytes: number): void {
+    this.#shared += bytes;
+  }
+
+  retain<Revision extends RetainedThreeTargetRevision<Technique, Resource>>(revision: Revision): Revision {
+    this.#revision = revision;
+    return revision;
+  }
+
+  release(): void {
+    this.#shared = 0;
+    this.#revision = undefined;
+  }
+}
+
+export function instanceStorageBytes(attributes: Iterable<THREE.StorageInstancedBufferAttribute>): number {
+  let bytes = 0;
+  for (const attribute of attributes) bytes += attribute.array.byteLength;
+  return bytes;
 }
 
 export function retainedRunIdentities<Technique extends AnyRasterTechnique, Variant>(

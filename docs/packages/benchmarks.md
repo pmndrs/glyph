@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:5a1a1cf60e7faaa1625b6d8bcc7aa4aa495493328237d1495e99c15fbcd118b4'
+source_digest: 'sha256:f10d7d83f0a87a92236ea45e5bd87145d7b28bb5df354658d490aef7e840cec4'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -189,8 +189,8 @@ sources:
     resource: ../../apps/benchmarks/vitexec/raster-technique-compare.probe.ts
     title: Realtime comparison product probe
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-07T05:13:16Z'
+  by: anthropic-claude/opus-5
+  at: '2026-08-07T13:26:50Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -200,8 +200,10 @@ Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentatio
 The application now also contains focused target-v1 browser proofs for Bitmap, MTSDF, Slug, and Worker preparation while
 the full Presentation remains on the explicit merged-v0 harness subpath. Each raster proof renders through the maintained
 Three adapter on native WebGPU and forced WebGL2, mutates the retained text, and asserts draw plus storage identity rather
-than treating first pixels as sufficient evidence. The Worker proof distinguishes call-time snapshots, later desired
-state, supersession, abort, progress, and one reusable module Worker.
+than treating first pixels as sufficient evidence. Each raster proof also reports the retained `Text.gpuBytes` and fails
+when a visibly populated draw claims no GPU residency, so the accessor is proven against live engine resources rather than
+a unit fixture. The Worker proof distinguishes call-time snapshots, later desired state, supersession, abort, progress,
+and one reusable module Worker.
 
 During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
 their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths. Canonical `/raster/bitmap` and `/raster/slug`

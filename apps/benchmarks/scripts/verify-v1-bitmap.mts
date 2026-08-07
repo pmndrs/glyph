@@ -18,6 +18,7 @@ interface RasterProofResult {
   readonly litPixels: number;
   readonly retainedDraw: boolean;
   readonly retainedStorage: boolean;
+  readonly gpuBytes: number;
 }
 
 interface AsyncProofResult {
@@ -72,7 +73,8 @@ try {
       result.glyphCount !== 16 ||
       result.litPixels < 32 ||
       !result.retainedDraw ||
-      !result.retainedStorage
+      !result.retainedStorage ||
+      result.gpuBytes <= 0
     ) {
       throw new Error(`${expected} target-v1 Bitmap output is not visibly populated: ${JSON.stringify(result)}`);
     }
@@ -99,7 +101,8 @@ try {
       result.glyphCount !== 15 ||
       result.litPixels < 32 ||
       !result.retainedDraw ||
-      !result.retainedStorage
+      !result.retainedStorage ||
+      result.gpuBytes <= 0
     )
       throw new Error(`${expected} target-v1 MTSDF output is not visibly populated: ${JSON.stringify(result)}`);
     process.stdout.write(`${expected} mtsdf: ${JSON.stringify(result)}\n`);
@@ -125,7 +128,8 @@ try {
       result.glyphCount !== 14 ||
       result.litPixels < 32 ||
       !result.retainedDraw ||
-      !result.retainedStorage
+      !result.retainedStorage ||
+      result.gpuBytes <= 0
     )
       throw new Error(`${expected} target-v1 Slug output is not visibly populated: ${JSON.stringify(result)}`);
     process.stdout.write(`${expected} slug: ${JSON.stringify(result)}\n`);

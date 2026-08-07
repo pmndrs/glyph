@@ -11,8 +11,10 @@ import type {
 import type { ParagraphBatchTarget, ParagraphBatchTargetUpdate } from '../paragraph-batch-attachment.js';
 import { mtsdf, type MtsdfBinding, type MtsdfData } from '../raster/mtsdf.js';
 import {
+  instanceStorageBytes,
   invalidatePboTexture,
   retainedRunIdentities,
+  RetainedThreeGpuBytes,
   RetainedThreeTargetRevision,
   type RetainedThreeTargetResource,
 } from './retained-target.js';
@@ -25,6 +27,7 @@ export interface ThreeMtsdfTargetOwner {
 interface MtsdfTargetResource extends RetainedThreeTargetResource<typeof mtsdf> {
   readonly key: GlyphBatchKey;
   readonly capacity: number;
+  readonly gpuBytes: number;
   readonly material: THREE.MeshBasicNodeMaterial;
   update(batch: PreparedGlyphBatch<typeof mtsdf>): void;
   geometry(count: number): THREE.InstancedBufferGeometry;
@@ -41,10 +44,15 @@ export class ThreeMtsdfTarget<Variant> implements ParagraphBatchTarget<
   readonly technique: typeof mtsdf = mtsdf;
   readonly #owner: ThreeMtsdfTargetOwner;
   readonly #atlases = new Map<string, THREE.DataArrayTexture>();
+  readonly #gpuBytes = new RetainedThreeGpuBytes<typeof mtsdf, MtsdfTargetResource>();
   #disposed = false;
 
   constructor(owner: ThreeMtsdfTargetOwner) {
     this.#owner = owner;
+  }
+
+  get gpuBytes(): number {
+    return this.#gpuBytes.total;
   }
 
   stage(
@@ -62,7 +70,9 @@ export class ThreeMtsdfTarget<Variant> implements ParagraphBatchTarget<
             if (finished) throw new Error('Three MTSDF stage is no longer active');
             finished = true;
             const state = previous.transfer(next, this.#owner.renderOrderBase);
-            return new ThreeMtsdfTargetRevision(next.revision, state.draws, state.resources, state.runIdentities);
+            return this.#gpuBytes.retain(
+              new ThreeMtsdfTargetRevision(next.revision, state.draws, state.resources, state.runIdentities),
+            );
           },
           abort: () => {
             finished = true;
@@ -95,7 +105,9 @@ export class ThreeMtsdfTarget<Variant> implements ParagraphBatchTarget<
             finished = true;
             for (let index = 0; index < draws.length; index += 1)
               this.#owner.objectForParagraph(next.glyphRuns[index]!.paragraph).add(draws[index]!);
-            return new ThreeMtsdfTargetRevision(next.revision, draws, resources, retainedRunIdentities(next));
+            return this.#gpuBytes.retain(
+              new ThreeMtsdfTargetRevision(next.revision, draws, resources, retainedRunIdentities(next)),
+            );
           },
           abort: () => {
             if (finished) return;
@@ -115,6 +127,7 @@ export class ThreeMtsdfTarget<Variant> implements ParagraphBatchTarget<
     this.#disposed = true;
     for (const atlas of this.#atlases.values()) atlas.dispose();
     this.#atlases.clear();
+    this.#gpuBytes.release();
   }
 
   #atlas(data: MtsdfData): THREE.DataArrayTexture {
@@ -138,6 +151,7 @@ export class ThreeMtsdfTarget<Variant> implements ParagraphBatchTarget<
     atlas.generateMipmaps = false;
     atlas.needsUpdate = true;
     this.#atlases.set(data.resource, atlas);
+    this.#gpuBytes.addShared(bytes.byteLength);
     return atlas;
   }
 }
@@ -243,6 +257,7 @@ function createMtsdfTargetResource(
   return {
     key: batch.key,
     capacity: batch.capacity,
+    gpuBytes: instanceStorageBytes(Object.values(attributes)),
     material,
     update(next) {
       for (const range of next.dirtyRanges) writeMtsdfStorage(next, arrays, range.start, range.count);
