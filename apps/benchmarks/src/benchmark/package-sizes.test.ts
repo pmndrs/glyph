@@ -72,10 +72,11 @@ describe('independent package-size report', () => {
       // replaced a style sweep plus seven per-property heaps and now serves both the shaping and paint layers, and the
       // Three Bitmap program regained the device-pixel snapping milestone 1 records as a hard contract.
       //
-      // Raised to cover that work and to leave roughly one or two more features of room, deliberately not more, so the
-      // ceiling starts pushing back again soon rather than quietly absorbing whatever lands next. Re-derive every
-      // baseline here once the merged-v0 surface is deleted: these numbers predate both this growth and that removal,
-      // so they measure against a tree that no longer exists.
+      // The three runtime baselines are re-derived against the tree with merged-v0 deleted, which shed roughly 215 KB
+      // from each graph, so growth is once again measured from something that exists. browser-core keeps its original
+      // pre-coverage baseline because deleting v0 did not move it: the root index never referenced v0, v0 re-exported
+      // the root. Each ceiling leaves roughly one or two features of room and no more, so it starts pushing back soon
+      // rather than quietly absorbing whatever lands next.
       'browser-core': {
         rawBytes: { baseline: 324_269, maximumGrowth: 54_000 },
         minifiedBytes: { baseline: 247_205, maximumGrowth: 34_000 },
@@ -95,10 +96,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
       },
       'bitmap-runtime-js': {
-        rawBytes: { baseline: 361_809, maximumGrowth: 32_500 },
-        minifiedBytes: { baseline: 271_005, maximumGrowth: 19_500 },
-        gzipBytes: { baseline: 78_673, maximumGrowth: 4_400 },
-        brotliBytes: { baseline: 60_857, maximumGrowth: 3_650 },
+        rawBytes: { baseline: 178_792, maximumGrowth: 12_000 },
+        minifiedBytes: { baseline: 115_766, maximumGrowth: 7_000 },
+        gzipBytes: { baseline: 28_450, maximumGrowth: 1_800 },
+        brotliBytes: { baseline: 24_500, maximumGrowth: 1_500 },
       },
       'mtsdf-baker-wasm': {
         rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
@@ -113,10 +114,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
       },
       'mtsdf-runtime-js': {
-        rawBytes: { baseline: 370_255, maximumGrowth: 31_500 },
-        minifiedBytes: { baseline: 275_271, maximumGrowth: 18_500 },
-        gzipBytes: { baseline: 79_993, maximumGrowth: 4_300 },
-        brotliBytes: { baseline: 62_081, maximumGrowth: 3_650 },
+        rawBytes: { baseline: 178_789, maximumGrowth: 12_000 },
+        minifiedBytes: { baseline: 115_832, maximumGrowth: 7_000 },
+        gzipBytes: { baseline: 28_449, maximumGrowth: 1_800 },
+        brotliBytes: { baseline: 24_558, maximumGrowth: 1_500 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
@@ -134,26 +135,26 @@ describe('independent package-size report', () => {
   it('bounds retained-capacity growth from the warm-publication baseline', () => {
     const retainedCapacityGrowth = {
       'bitmap-runtime-js': {
-        baseline: { rawBytes: 382_060, minifiedBytes: 283_898, gzipBytes: 81_435, brotliBytes: 63_146 },
+        baseline: { rawBytes: 178_792, minifiedBytes: 115_766, gzipBytes: 28_450, brotliBytes: 24_500 },
         // These ceilings were reviewed against a target-v1 that was missing two things it now carries. The Three
         // Bitmap program had no device-pixel snapping, which milestone 1 records as a hard density contract and
         // which is what makes this graph reproduce the pinned merged-v0 frame exactly. Spans resolved shaping and
         // paint through two unrelated mechanisms that disagreed, replaced by one containment cascade — a net cost,
         // since it deleted the previous style sweep and its per-property heaps.
         //
-        // Every field is raised to cover that work plus roughly one or two more features, and no further, so this
-        // keeps pushing back on duplication instead of quietly absorbing whatever lands next. Brotli stays the
-        // tightest of the four because it is what ships to browsers. Re-derive these baselines once the merged-v0
-        // surface is deleted; they measure against a tree that will no longer exist.
-        maximumGrowth: { rawBytes: 12_500, minifiedBytes: 6_000, gzipBytes: 1_550, brotliBytes: 1_250 },
+        // Baselines re-derived after merged-v0 deletion. Brotli stays the tightest of the four because it is what
+        // ships to browsers. NOTE these three graphs are currently within three bytes of each other because /three
+        // registers every built-in program at module scope; once technique-paired subpaths restore separation per
+        // D-158 they will diverge again and these baselines need re-deriving once more.
+        maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
       },
       'mtsdf-runtime-js': {
-        baseline: { rawBytes: 389_761, minifiedBytes: 287_629, gzipBytes: 82_721, brotliBytes: 64_286 },
-        maximumGrowth: { rawBytes: 12_250, minifiedBytes: 5_500, gzipBytes: 1_500, brotliBytes: 1_250 },
+        baseline: { rawBytes: 178_789, minifiedBytes: 115_832, gzipBytes: 28_449, brotliBytes: 24_558 },
+        maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
       },
       'slug-runtime-js': {
-        baseline: { rawBytes: 390_276, minifiedBytes: 286_600, gzipBytes: 82_730, brotliBytes: 64_271 },
-        maximumGrowth: { rawBytes: 16_250, minifiedBytes: 8_000, gzipBytes: 2_200, brotliBytes: 1_900 },
+        baseline: { rawBytes: 178_790, minifiedBytes: 115_762, gzipBytes: 28_385, brotliBytes: 24_521 },
+        maximumGrowth: { rawBytes: 12_000, minifiedBytes: 7_000, gzipBytes: 1_800, brotliBytes: 1_500 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
