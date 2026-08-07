@@ -201,7 +201,10 @@ async function observeTypewriter(page: Page): Promise<readonly FrameObservation[
     observations.push(
       await page
         .getByRole('button', { name: 'Pause' })
-        .evaluate((element, windowMs) => window.liveUpdateCanvasProbe.observe(windowMs, element), observationWindowMs),
+        .evaluate(
+          (element, windowMs) => window.liveUpdateCanvasProbe.observe(windowMs, element as HTMLElement),
+          observationWindowMs,
+        ),
     );
     await page.waitForTimeout(300);
   }
@@ -235,12 +238,15 @@ function installCanvasProbe(): void {
       scratch.height = height;
       const context = scratch.getContext('2d', { willReadFrequently: true });
       if (context === null) throw new Error('the probe scratch context is unavailable');
-      const sample = (): Uint8ClampedArray => {
+      const sample = (): Uint8ClampedArray<ArrayBufferLike> => {
         context.clearRect(0, 0, width, height);
         context.drawImage(canvas, 0, 0, width, height);
         return context.getImageData(0, 0, width, height).data;
       };
-      const differs = (left: Uint8ClampedArray, right: Uint8ClampedArray): boolean => {
+      const differs = (
+        left: Uint8ClampedArray<ArrayBufferLike>,
+        right: Uint8ClampedArray<ArrayBufferLike>,
+      ): boolean => {
         let changed = 0;
         for (let index = 0; index < left.length; index += 4) {
           const delta =
@@ -258,7 +264,7 @@ function installCanvasProbe(): void {
         distinctFrames: number;
         sampledFrames: number;
       }>((resolve) => {
-        let previous = new Uint8ClampedArray();
+        let previous: Uint8ClampedArray<ArrayBufferLike> = new Uint8ClampedArray();
         let startedAt = 0;
         let sampledFrames = 0;
         let framesToChange = 0;
