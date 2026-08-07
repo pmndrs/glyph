@@ -4,7 +4,7 @@ import {
   bitmapRasterKey,
   type BitmapOptions,
   type BitmapResource,
-} from '@pmndrs/text/raster/bitmap';
+} from '@pmndrs/text/raster/bitmap/v0';
 import type { RasterKey, RegisteredFont, RegisteredRaster } from '@pmndrs/text';
 
 const inline = bitmapDescriptor({ strikes: [16, 32] });

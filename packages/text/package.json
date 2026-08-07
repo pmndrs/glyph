@@ -21,6 +21,10 @@
       "import": "./dist/index.js"
     },
     "./raster/bitmap": {
+      "types": "./dist/raster/bitmap-technique.d.ts",
+      "import": "./dist/raster/bitmap-technique.js"
+    },
+    "./raster/bitmap/v0": {
       "types": "./dist/raster/bitmap.d.ts",
       "import": "./dist/raster/bitmap.js"
     },
@@ -33,6 +37,10 @@
       "import": "./dist/raster/mtsdf.js"
     },
     "./raster/slug": {
+      "types": "./dist/raster/slug-technique.d.ts",
+      "import": "./dist/raster/slug-technique.js"
+    },
+    "./raster/slug/v0": {
       "types": "./dist/raster/slug.d.ts",
       "import": "./dist/raster/slug.js"
     },

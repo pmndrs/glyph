@@ -5,7 +5,7 @@ import {
   selectBitmapStrikePpem,
   type BitmapGlyphPositionSnapshot,
   type BitmapGlyphPositionTransition,
-} from '@pmndrs/text/raster/bitmap';
+} from '@pmndrs/text/raster/bitmap/v0';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';

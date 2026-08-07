@@ -1,5 +1,5 @@
 import { FontRegistry, type RegisteredFont } from '@pmndrs/text';
-import { bitmap, bitmapRasterKey, type BitmapResource } from '@pmndrs/text/raster/bitmap';
+import { bitmap, bitmapRasterKey, type BitmapResource } from '@pmndrs/text/raster/bitmap/v0';
 import * as THREE from 'three/webgpu';
 
 import { conformanceText, type BenchmarkFontFixture } from '../../font-fixtures';

@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 
 import { Text as CoreText, defineFont, type ParagraphLayout } from '@pmndrs/text';
 import { Text, useFont } from '@pmndrs/text/react';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/raster/bitmap/v0';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json';
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';

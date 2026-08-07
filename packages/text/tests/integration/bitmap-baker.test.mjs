@@ -9,7 +9,7 @@ import {
   createBitmapBakerFromInstance,
   readBitmapBakerAbi,
 } from '@pmndrs/text/bakers/bitmap';
-import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
 
 const wasmUrl = new URL('../../dist/bitmap_baker.wasm', import.meta.url);

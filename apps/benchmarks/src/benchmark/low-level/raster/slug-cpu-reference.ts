@@ -1,5 +1,5 @@
 import type { ParagraphLayout } from '@pmndrs/text';
-import type { SlugPageResource, SlugResource } from '@pmndrs/text/raster/slug';
+import type { SlugPageResource, SlugResource } from '@pmndrs/text/raster/slug/v0';
 
 const RECORD_STRIDE = 40;
 const ABSENT_PAGE = 0xffff;

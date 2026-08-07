@@ -1,5 +1,5 @@
 import type { ParagraphLayout } from '@pmndrs/text';
-import type { SlugResource } from '@pmndrs/text/raster/slug';
+import type { SlugResource } from '@pmndrs/text/raster/slug/v0';
 import * as THREE from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 

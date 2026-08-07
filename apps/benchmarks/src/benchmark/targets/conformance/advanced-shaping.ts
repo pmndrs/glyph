@@ -1,5 +1,5 @@
 import { FontRegistry, Text, type RegisteredFont } from '@pmndrs/text';
-import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { bitmap } from '@pmndrs/text/raster/bitmap/v0';
 import * as THREE from 'three/webgpu';
 
 import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';

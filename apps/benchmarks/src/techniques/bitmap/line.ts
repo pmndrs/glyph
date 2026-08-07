@@ -1,5 +1,5 @@
 import { Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
-import { bitmap, selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
+import { bitmap, selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap/v0';
 import * as THREE from 'three/webgpu';
 
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../../workloads/shared/text-style';
