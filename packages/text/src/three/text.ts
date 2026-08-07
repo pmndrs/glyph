@@ -193,7 +193,10 @@ export class Text<Technique extends AnyRasterTechnique, Variant = ThreeRenderVar
 
   set(update: TextUpdate<Technique, Variant>): void {
     this.#assertActive();
-    const next = normalizeDesired({ ...this.#desired, ...update } as TextProperties<Technique, Variant>);
+    const next = normalizeDesired({ ...this.#desired, ...replacedContent(update) } as TextProperties<
+      Technique,
+      Variant
+    >);
     const fonts = selectedFonts(next);
     acquireFonts(fonts, this.#runtime, this.#technique);
     releaseFonts(this.#leasedFonts);
@@ -579,6 +582,19 @@ class ThreeTextBatchBinding<Technique extends AnyRasterTechnique, Variant>
       text.bind(this, paragraph, group);
     }
   }
+}
+
+/**
+ * Replacement text carries its own formatting: a literal brings its spans and a
+ * plain string brings none. Retaining the previous spans would reinterpret them
+ * against unrelated text, so an update that replaces text without stating spans
+ * clears the ones it replaced.
+ */
+function replacedContent<Technique extends AnyRasterTechnique, Variant>(
+  update: TextUpdate<Technique, Variant>,
+): TextUpdate<Technique, Variant> {
+  if (!('text' in update) || 'spans' in update) return update;
+  return { ...update, spans: [] } as TextUpdate<Technique, Variant>;
 }
 
 function normalizeDesired<Technique extends AnyRasterTechnique, Variant>(
