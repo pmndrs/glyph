@@ -29,7 +29,7 @@ sources:
     title: TypeGPU raster programs and text engine
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # Three.js text effect composition
@@ -89,7 +89,7 @@ effect-definition identity before composing or writing parameters.
 Every effect composes after the program's canonical technique shader:
 
 ```ts
-let output = slugShader.evaluate(context); // canonical curve traversal and coverage
+let output = slugShader.fragment(context); // canonical curve traversal and coverage
 for (const binding of variant.effects ?? []) {
   output = composeKnownEffect(output, binding, context);
 }

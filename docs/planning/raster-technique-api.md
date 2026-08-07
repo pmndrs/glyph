@@ -41,7 +41,7 @@ sources:
     title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # Raster technique and engine resource API
@@ -172,7 +172,7 @@ interface RasterTechnique<
   Descriptor extends JsonValue,
   Data,
   Binding,
-  Storage extends GlyphBatchStorage,
+  Storage extends GlyphBatchStorageShape<Storage>,
 > extends AnyRasterTechnique {
   readonly [rasterTechniqueTypes]?: RasterTechniqueTypeMap<Options, Descriptor, Data, Binding, Storage>;
 
@@ -205,7 +205,11 @@ interface RasterGlyphWriteInput<Data> {
   readonly glyphs: readonly RasterGlyphInput<Data>[];
 }
 
-type GlyphBatchStorage = Readonly<Record<string, ArrayBufferView>>;
+type GlyphBatchStorageShape<Storage> = {
+  readonly [Field in keyof Storage]: ArrayBufferView;
+};
+
+type GlyphBatchStorage = Readonly<Record<PropertyKey, ArrayBufferView>>;
 
 declare const rasterTechniqueTypes: unique symbol;
 
@@ -214,7 +218,7 @@ interface RasterTechniqueTypeMap<
   Descriptor extends JsonValue = JsonValue,
   Data = unknown,
   Binding = unknown,
-  Storage extends GlyphBatchStorage = GlyphBatchStorage,
+  Storage extends GlyphBatchStorageShape<Storage> = GlyphBatchStorage,
 > {
   readonly options: Options;
   readonly descriptor: Descriptor;
@@ -243,7 +247,7 @@ declare function defineRasterTechnique<
   Descriptor extends JsonValue,
   Data,
   Binding,
-  Storage extends GlyphBatchStorage,
+  Storage extends GlyphBatchStorageShape<Storage>,
 >(
   technique: RasterTechnique<Id, Kind, Options, Descriptor, Data, Binding, Storage>,
 ): RasterTechnique<Id, Kind, Options, Descriptor, Data, Binding, Storage>;
@@ -345,8 +349,10 @@ draw plan for its program.
 
 GPU resources should normally be cached by the engine integration using loaded-font identity plus the technique binding.
 Several paragraph batches can then share one atlas or curve buffer while retaining separate instance buffers and draw
-plans. Disposing a batch attachment releases its batch resources; disposing the last engine lease releases shared font GPU
-resources; disposing `LoadedFont` releases the portable CPU data only after its text and target leases are gone.
+plans. During synchronous `stage()`, a target copies every CPU page/table value it needs into independently owned engine
+resources. Disposing a batch attachment releases its batch resources; disposing the last engine cache entry releases shared
+font GPU resources. Core font leases belong to live paragraphs only. A target does not retain `font.data` after `stage()`
+returns, so it neither needs nor receives a hidden target lease.
 
 ## Reuse the technique shader without surrendering the program
 
@@ -354,15 +360,17 @@ Shader authoring is not inherently engine-neutral. It is backend-neutral only wh
 shader compiler, binding schema, resource handles, vertex/instance layout, and render-pass handoff.
 
 ```ts
-interface RasterFragment<Context, Output> {
-  readonly context: Context;
+interface RasterStage<Input, Output, Evaluate> {
+  readonly input: Input;
   readonly output: Output;
+  readonly evaluate: Evaluate;
 }
 
-interface RasterShader<Technique extends AnyRasterTechnique, Context, Output, Evaluate> {
+interface RasterShader<Technique extends AnyRasterTechnique, Vertex, Fragment, Resources> {
   readonly technique: Technique;
-  readonly evaluate: Evaluate;
-  readonly types?: RasterFragment<Context, Output>;
+  readonly vertex: Vertex;
+  readonly fragment: Fragment;
+  readonly resources: Resources;
 }
 
 interface RasterProgram<Technique extends AnyRasterTechnique, Variant, Shader, Device, Resources, Pipeline, Draw> {
@@ -380,14 +388,15 @@ interface RasterProgram<Technique extends AnyRasterTechnique, Variant, Shader, D
 }
 ```
 
-`RasterShader` is the reusable backend implementation of the hard technique algorithm: Bitmap sampling, MTSDF distance and
-coverage reconstruction, or Slug curve traversal and coverage. `evaluate` retains its concrete backend-authored function
-type; the contract never replaces its arguments or result with `any`. A shader consumes explicit technique context and
-returns resolved fragment output such as linear premultiplied color, opacity, and coverage. It does not own a material,
-pipeline, pass, variant, or draw.
+`RasterShader` is a backend implementation of the complete hard technique algorithm: vertex expansion and pixel snapping,
+resource access, Bitmap sampling, MTSDF distance and coverage reconstruction, or Slug dilation, curve traversal, and
+coverage. Each concrete stage retains its backend-authored input/output/function types; the contract never replaces its
+arguments or result with `any`. The resource schema names the semantic pages, tables, buffers, sampling rules, and
+coordinate spaces those stages consume. A shader returns resolved vertex outputs and fragment values such as linear
+premultiplied color, opacity, and coverage. It does not own a material, pipeline, pass, variant, or draw.
 
 `RasterProgram` composes that canonical shader with resources, application variants, pipeline/material state, and a draw
-compiler. A custom gradient program normally calls `shader.evaluate(context)` and modifies the resolved output. Replacing
+compiler. A custom gradient program normally calls `shader.fragment.evaluate(context)` and modifies the resolved output. Replacing
 the complete technique shader is a low-level escape hatch, not the expected customization path; users should never need to
 reimplement Slug merely to change final color.
 
@@ -411,24 +420,33 @@ The exact TypeGPU shader, program, variant codec, direct engine, pass-encoding, 
 [TypeGPU raster programs and text engine](typegpu-api.md) specification.
 
 TSL is a Three.js node-graph API and produces Three materials, so a completed TSL program remains Three-only. Its raster
-shader logic does not have to be authored independently, however. `@typegpu/three` can translate a TypeGPU function into a
-TSL node with `toTSL()`, while `fromTSL()` lets that function consume Three-owned nodes such as UVs, instance attributes, or
-resource accessors:
+shader logic may not have to be authored independently, however. `@typegpu/three` can translate a zero-argument TypeGPU
+closure into a TSL node with `toTSL()`, while `fromTSL()` exposes supported Three-owned nodes inside that closure. The exact
+bridge coverage for sampleable Three textures, dependent texture loads, returned structs, and vertex-stage logic is not
+established by the public API description:
 
 ```ts
-const coverageNode = t3.toTSL(mtsdfCoverage);
+const coverageNode = t3.toTSL(() => {
+  'use gpu';
+  return mtsdfCoverage(readMtsdfContextFromTsl());
+});
 createThreeMtsdfTarget({ renderer, program: createThreeMtsdfTslProgram({ coverageNode }) });
 ```
 
-This admits two Three program implementations behind the same target contract: a native TSL implementation, and an optional
-TypeGPU-authored implementation adapted through `toTSL()`. In the latter, TypeGPU can become the authoritative source for
+This could admit two Three program implementations behind the same target contract: a native TSL implementation, and an
+optional TypeGPU-authored implementation adapted through `toTSL()`. In the latter, TypeGPU could become the authoritative source for
 shared raster evaluation while the Three adapter still owns material construction, renderer accessors, blending, depth,
 pipeline state, and lifecycle. `toTSL()` is an authoring bridge; it does not move Three scene or render-pass ownership into
 the portable technique.
 
-The TypeGPU-authored path remains an experiment until the implementation proof:
+The bridge is currently WebGPU-only according to the official `@typegpu/three` documentation. It cannot replace the native
+TSL path while the Three integration promises WebGL2. The TypeGPU-authored path remains an experiment until the
+implementation proof:
 
 - compiles against the repository-pinned Three.js version and the selected `@typegpu/three` version;
+- proves the real texture/resource ABI, dependent Slug loads, vertex-stage Bitmap snapping and Slug dilation, and returned
+  value shapes rather than only a constant-color fragment;
+- either supplies the required forced-WebGL2 path or remains an explicitly WebGPU-only optional package;
 - inspects the emitted WebGPU shader and proves Bitmap and Slug output parity against the native TSL path;
 - measures tree-shaken raw, gzip, and Brotli transfer cost plus graph construction and shader compilation cost;
 - distinguishes `typegpu`, `@typegpu/three`, transform metadata, and optional build-plugin cost;

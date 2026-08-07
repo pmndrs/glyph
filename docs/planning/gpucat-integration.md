@@ -32,7 +32,7 @@ sources:
     title: Target v1 raster technique boundary
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # External gpucat integration fitness plan
@@ -46,18 +46,18 @@ The remaining uncertainty is narrower: gpucat can author its own Bitmap, MTSDF, 
 not prove that the canonical Slug GPU algorithm can be shared with TypeGPU and Three without a gpucat-specific translation.
 That belongs to the raster shader package and adapter proof, not core shaping, layout, batching, or variants.
 
-| Boundary | Result | Evidence or remaining gate |
-| --- | --- | --- |
-| Public core revisions and attachments | Fits | `ParagraphBatchTarget.stage()` receives complete batches, runs, storage, bindings, and dirty ranges. |
-| Instance buffers and partial uploads | Fits | `GpuBuffer` owns a typed CPU array and `addUpdateRange(start, count)` queues component ranges for renderer upload.[^gpucat-buffer] |
-| Bitmap/MTSDF texture realization | Fits | gpucat publicly exports array/data texture resources and partial texture updates. |
-| Slug curve/header/reference storage | Fits | gpucat storage buffers and typed node access can represent the technique bindings. |
-| Many physical draws per paragraph batch | Fits | A `Mesh` can carry ordered instanced `draws`; incompatible material/pipeline runs can use consecutive meshes.[^gpucat-mesh] |
-| Paragraph transforms and visibility | Fits | Adapter-owned sidecar buffers can index paragraph transforms without reshaping. |
-| Scene synchronization | Fits with adapter policy | gpucat applications explicitly update world matrices before `render()`; the text group can synchronize before render-list collection.[^gpucat-object3d] |
-| Stable cross-mesh ordering | Fits with a constraint | gpucat currently hard-codes `groupOrder` to zero, so the adapter assigns consecutive `Mesh.renderOrder` values.[^gpucat-render-list] |
-| Canonical Slug shader reuse | Not proven | Prove a shared typed WGSL ABI or generated WGSL artifact through gpucat before accepting the shader-package design. |
-| Visible Bitmap/MTSDF/Slug parity | Not proven | Implement the external proof application and compare output, ordering, updates, and disposal. |
+| Boundary                                | Result                   | Evidence or remaining gate                                                                                                                                                                          |
+| --------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public core revisions and attachments   | Fits                     | `ParagraphBatchTarget.stage()` receives complete batches, runs, storage, bindings, and dirty ranges.                                                                                                |
+| Instance buffers and partial uploads    | Fits                     | `GpuBuffer` owns a typed CPU array and `addUpdateRange(start, count)` queues component ranges for renderer upload.[^gpucat-buffer]                                                                  |
+| Bitmap/MTSDF texture realization        | Fits                     | gpucat publicly exports array/data texture resources and partial texture updates.                                                                                                                   |
+| Slug curve/header/reference storage     | Fits                     | gpucat storage buffers and typed node access can represent the technique bindings.                                                                                                                  |
+| Many physical draws per paragraph batch | Fits                     | A `Mesh` can carry ordered instanced `draws`; incompatible material/pipeline runs can use consecutive meshes.[^gpucat-mesh]                                                                         |
+| Paragraph transforms and visibility     | Fits                     | Adapter-owned sidecar buffers can index paragraph transforms without reshaping.                                                                                                                     |
+| Scene synchronization                   | Fits with adapter policy | gpucat applications explicitly update world matrices before `render()`; the text group can synchronize before render-list collection.[^gpucat-object3d]                                             |
+| Stable cross-mesh ordering              | Conditional              | gpucat currently hard-codes `groupOrder` to zero. Consecutive `Mesh.renderOrder` values preserve internal text order but cannot reserve an interval against unrelated objects.[^gpucat-render-list] |
+| Canonical Slug shader reuse             | Not proven               | Prove a shared typed WGSL ABI or generated WGSL artifact through gpucat before accepting the shader-package design; gpucat WebGL also requires a GLSL companion for raw `wgslFn()` code.            |
+| Visible Bitmap/MTSDF/Slug parity        | Not proven               | Implement the external proof application and compare output, ordering, updates, and disposal.                                                                                                       |
 
 ## Keep the integration outside core
 
@@ -98,9 +98,11 @@ tarballs into an isolated fixture so workspace path aliases cannot hide a privat
 One gpucat text group owns one core paragraph batch, one attachment, and one or more hidden meshes:
 
 ```ts
-class GpucatParagraphBatchTarget
-  implements ParagraphBatchTarget<typeof technique, GpucatVariant, GpucatTargetRevision>
-{
+class GpucatParagraphBatchTarget implements ParagraphBatchTarget<
+  typeof technique,
+  GpucatVariant,
+  GpucatTargetRevision
+> {
   readonly technique = technique;
 
   stage(previous, next) {
@@ -182,7 +184,7 @@ A matrix, visibility, or effect-parameter change updates only its sidecar range.
 content-box change dirties the core paragraph and is synchronized through `TextRuntime.update*()`.
 
 Gpucat sorts render items by `groupOrder`, `renderOrder`, depth, and stable identity, but its current traversal supplies
-`groupOrder = 0` for every mesh. Therefore one integration paragraph batch reserves a consecutive `renderOrder` interval:
+`groupOrder = 0` for every mesh. One integration paragraph batch can assign consecutive `renderOrder` values:
 
 ```ts
 for (const [index, mesh] of orderedMeshes.entries()) {
@@ -190,7 +192,10 @@ for (const [index, mesh] of orderedMeshes.entries()) {
 }
 ```
 
-Compatible adjacent runs may become several entries in one `Mesh.draws`. A different material, pipeline, transparency
+This preserves order among the hidden meshes, but it does not reserve the numeric interval: an unrelated object may choose
+the same or an intermediate value and interleave. The integration must document that limitation, expose distinct render
+phases, or prove an engine-level ordering allocator before claiming atomic group ordering. Compatible adjacent runs may
+become several entries in one `Mesh.draws`. A different material, pipeline, transparency
 class, or pass becomes another hidden `Mesh`. The program must preserve `PreparedGlyphRun` order across both forms. If an
 application needs unrelated engine draws between text draws, it creates separate text groups/render phases; core does not
 guess that scene-composition boundary.
@@ -203,7 +208,9 @@ shader package exposes the canonical evaluation algorithm plus a typed resource/
 Gpucat publicly exposes a typed node language and `wgslFn()`, so two implementation candidates are plausible:
 
 1. Publish one technique-owned WGSL kernel and typed ABI that TypeGPU, gpucat, and raw WebGPU programs wrap.
-2. Author the kernel in TypeGPU and publish a deterministic generated WGSL artifact plus ABI that gpucat wraps.
+2. Author the kernel in TypeGPU and publish a deterministic generated WGSL artifact plus ABI that gpucat wraps. For
+   gpucat's WebGL backend, the wrapper must also supply and verify the required GLSL companion; otherwise the integration is
+   explicitly WebGPU-only.
 
 Neither candidate is accepted by source inspection alone. The proof must compile the real Slug loops and bindings, inspect
 the emitted WGSL, render the same glyph corpus, compare output against the Three/TSL and TypeGPU paths, and measure added

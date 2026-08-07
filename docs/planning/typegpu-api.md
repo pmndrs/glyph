@@ -4,7 +4,7 @@ title: TypeGPU raster programs and text engine
 description: Target v1 API for an external TypeGPU integration package containing reusable technique shaders, variant-aware raster programs, and a direct WebGPU text engine that consumes public core paragraph batches without Three.js.
 documentation_type: reference
 tags: [api, typegpu, webgpu, shaders, raster, engine, batching, variants]
-status: stable
+status: draft
 sources:
   - id: core-api
     resource: core-api.md
@@ -38,7 +38,7 @@ sources:
     title: TypeGPU and TSL interoperability
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # TypeGPU raster programs and text engine
@@ -155,6 +155,7 @@ interface TypeGpuParagraphBatchOptions<
   readonly technique: Technique;
   readonly program: Program;
   readonly capacity?: GlyphBufferCapacity;
+  readonly rasterPixelRatio?: number;
   readonly renderVariant?: TypeGpuVariantOf<Program>;
 }
 
@@ -169,6 +170,7 @@ interface TypeGpuParagraphBatch<
   readonly error: TextPreparationError | ParagraphBatchTargetError | undefined;
   readonly disposed: boolean;
 
+  rasterPixelRatio: number;
   renderVariant: Variant | undefined;
   add(properties: TypeGpuParagraphProperties<Technique, Variant>): TypeGpuParagraph<Technique, Variant>;
   has(paragraph: TypeGpuParagraph<Technique, Variant>): boolean;
@@ -212,6 +214,7 @@ interface TypeGpuParagraph<Technique extends AnyRasterTechnique, Variant> {
   contentBox: ParagraphContentBox;
   style: ParagraphStyle;
   paint: GlyphPaintInput;
+  rasterPixelRatio: number;
   order: number;
   renderVariant: Variant | undefined;
   visible: boolean;
@@ -247,30 +250,42 @@ dirty only the target's transform/visibility storage; they do not call core shap
 glyph, index a transform table, use indirect draws, or cull complete paragraphs. This choice never changes paragraph-local
 core layout. `encode()` flushes those target-owned dirty ranges before encoding the first draw that observes them.
 
+`rasterPixelRatio` participates in core resource selection and must be assigned before `update*()`. `TypeGpuFrame.pixelRatio`
+is later frame state used by vertex snapping and screen-space evaluation during `encode()`; it cannot retroactively select a
+Bitmap strike. An integration normally keeps the two equal and updates the batch density before synchronization when the
+render target density changes.
+
 ## Define a canonical TypeGPU technique shader
 
 ```ts
-interface TypeGpuRasterShader<Technique extends AnyRasterTechnique, InputSchema, OutputSchema, Evaluate> {
-  readonly technique: Technique;
+interface TypeGpuRasterStage<InputSchema, OutputSchema, Evaluate> {
   readonly input: InputSchema;
   readonly output: OutputSchema;
   readonly evaluate: Evaluate;
 }
 
-declare function defineTypeGpuRasterShader<Technique extends AnyRasterTechnique, InputSchema, OutputSchema, Evaluate>(
-  shader: TypeGpuRasterShader<Technique, InputSchema, OutputSchema, Evaluate>,
-): TypeGpuRasterShader<Technique, InputSchema, OutputSchema, Evaluate>;
+interface TypeGpuRasterShader<Technique extends AnyRasterTechnique, Vertex, Fragment, ResourceSchema> {
+  readonly technique: Technique;
+  readonly vertex: Vertex;
+  readonly fragment: Fragment;
+  readonly resources: ResourceSchema;
+}
+
+declare function defineTypeGpuRasterShader<Technique extends AnyRasterTechnique, Vertex, Fragment, ResourceSchema>(
+  shader: TypeGpuRasterShader<Technique, Vertex, Fragment, ResourceSchema>,
+): TypeGpuRasterShader<Technique, Vertex, Fragment, ResourceSchema>;
 ```
 
-The concrete TypeGPU function supplies the actual validation. For example, `evaluate` is the exact value returned by
-`tgpu.fn([SlugFragmentInput], SlugFragmentOutput)(implementation)`. The helper infers and retains that function, its input
-schema, and its output schema; no associated type widens to `any`. JavaScript-authored functions require TypeGPU's build
-transform, while WGSL-shell functions remain a supported package implementation choice.
+Each concrete TypeGPU stage supplies the actual validation. For example, `fragment.evaluate` is the exact value returned by
+`tgpu.fn([SlugFragmentInput], SlugFragmentOutput)(implementation)`, while `vertex.evaluate` owns Slug dilation and its
+varying output. The helper infers and retains both functions, their input/output schemas, and the complete resource schema;
+no associated type widens to `any`. JavaScript-authored functions require TypeGPU's build transform, while WGSL-shell
+functions remain a supported package implementation choice.
 
 First-party shaders export their typed function as a public customization seam:
 
 ```ts
-const base = slugShader.evaluate(context);
+const base = slugShader.fragment.evaluate(context);
 const output = { ...base, color: gradient(base.color, context.localPosition) };
 ```
 
@@ -320,10 +335,10 @@ type TypeGpuDrawOf<Program extends AnyTypeGpuRasterProgram<AnyRasterTechnique>> 
 interface TypeGpuRasterProgram<
   Technique extends AnyRasterTechnique,
   Variant,
-  Shader extends TypeGpuRasterShader<Technique, InputSchema, OutputSchema, Evaluate>,
-  InputSchema,
-  OutputSchema,
-  Evaluate,
+  Shader extends TypeGpuRasterShader<Technique, Vertex, Fragment, ResourceSchema>,
+  Vertex,
+  Fragment,
+  ResourceSchema,
   VariantKey,
   VariantSchema,
   VariantValue,
@@ -352,6 +367,11 @@ interface TypeGpuRasterProgram<
   disposePipeline(pipeline: Pipeline): void;
   dispose(): void;
 }
+
+declare function defineTypeGpuRasterProgram<
+  Technique extends AnyRasterTechnique,
+  const Program extends AnyTypeGpuRasterProgram<Technique>,
+>(program: Program): Program;
 
 interface TypeGpuProgramRunContext<Technique extends AnyRasterTechnique, Variant, VariantKey, FontResources, Pipeline> {
   readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
@@ -416,6 +436,10 @@ Changing a core variant rebuilds the run plan but does not reshape. Mutating val
 may update only its TypeGPU sidecar buffer and need no core update at all. Programs should use immutable variant snapshots
 or stable binding objects so equality and lifetime remain explicit.
 
+First-party program caches are bounded. Their factory options declare maximum pipeline and materialized-variant entries;
+least-recently-used entries retire through the same GPU-safe path as explicit program disposal. A new object-valued variant
+each frame cannot create an unbounded cache. Custom programs own and document equivalent bounds.
+
 ## Compose effects without replacing the technique
 
 ```ts
@@ -465,19 +489,26 @@ create a pipeline per text instance.
 
 ## Adapt the same shader to Three
 
-`@typegpu/three` may translate the canonical TypeGPU function to TSL:
+`@typegpu/three` may translate a zero-argument TypeGPU closure to a TSL node:
 
 ```ts
-const slugNode = t3.toTSL(slugShader.evaluate);
+const slugNode = t3.toTSL(() => {
+  'use gpu';
+  return slugShader.fragment.evaluate(readSlugContextFromTsl());
+});
 const threeProgram = createThreeSlugProgram({ shader: slugNode });
 ```
 
-`fromTSL()` supplies Three-owned attributes, textures, and accessors where the TypeGPU function needs them. Three still
+`fromTSL()` can expose supported Three-owned nodes where the closure needs them. Whether it can carry the real Slug texture
+loads, Bitmap texture sampling, returned structures, and both techniques' vertex work is an executable gate, not an
+accepted capability. Three still
 owns its node material, render-list integration, pipeline state, lifecycle, and final variant/draw compiler. The direct
 TypeGPU program and Three program share the hard technique algorithm; they are not the same engine target.
 
-This bridge remains an experiment until generated shader inspection, Bitmap and Slug pixel parity, repository-pinned Three
-compatibility, and measured tree-shaken transfer/graph-build/compile cost pass. Native TSL remains a valid Three-only path.
+This bridge remains WebGPU-only in the currently documented `@typegpu/three` release and experimental until generated
+shader inspection, Bitmap and Slug pixel parity, repository-pinned Three compatibility, and measured tree-shaken
+transfer/graph-build/compile cost pass. Native TSL remains the authoritative Three path for WebGPU plus WebGL2 unless the
+bridge proves both backends.
 
 ## Ownership and failure
 

@@ -35,7 +35,7 @@ sources:
     title: TypeGPU raster programs and text engine
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # Engine integration contract
@@ -212,6 +212,7 @@ interface PreparedParagraph {
   readonly insertionOrder: number;
   readonly order: number;
   readonly topology: number;
+  readonly rasterPixelRatio: number;
   readonly layout: ParagraphLayout;
   readonly paint: GlyphPaint;
   readonly fontSlots: readonly PreparedFontSlot[];
@@ -271,6 +272,11 @@ queue completion, or another engine operation, but it must not retain a canonica
 
 `binding` is the technique-authored renderer-neutral selection of pages, tables, buffers, or other values from
 `font.data`. The target uses it to realize GPU resources; it never re-derives resource selection from glyph IDs.
+
+Core interns and freezes each `GlyphBatchKey` for the lifetime of its physical batch. The identical key object appears in
+the prepared batch, every referencing run, and adjacent revisions until that physical batch retires, so targets may use it
+as a `Map` key. Its branded technique/resource IDs and numeric pipeline/chunk fields also form the deterministic diagnostic
+tuple; integrations never construct keys themselves.
 
 One key represents compatible GPU storage, not necessarily one submit. Public capacity has only two settings: glyph-slot
 `size` per physical resource buffer and `policy`. Explicit paragraph batches default to lazily allocated

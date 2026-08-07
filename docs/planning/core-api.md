@@ -41,7 +41,7 @@ sources:
     title: Current raster transaction contract
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # Core text API
@@ -220,6 +220,7 @@ const worldText = runtime.createParagraphBatch({
 interface ParagraphBatchOptions<Technique extends AnyRasterTechnique, Variant = undefined> {
   readonly technique: Technique;
   readonly capacity?: GlyphBufferCapacity;
+  readonly rasterPixelRatio?: number;
   readonly renderVariant?: Variant;
 }
 
@@ -238,6 +239,7 @@ interface ParagraphBatch<Technique extends AnyRasterTechnique, Variant = undefin
   readonly preparationError: TextPreparationError | undefined;
   readonly disposed: boolean;
 
+  rasterPixelRatio: number;
   renderVariant: Variant | undefined;
 
   add(properties: ParagraphProperties<Technique, Variant>): Paragraph<Technique, Variant>;
@@ -378,6 +380,7 @@ interface ParagraphBaseProperties<Technique extends AnyRasterTechnique, Variant 
   readonly contentBox?: ParagraphContentBox;
   readonly style?: ParagraphStyle;
   readonly paint?: GlyphPaintInput;
+  readonly rasterPixelRatio?: number;
   readonly order?: number;
   readonly renderVariant?: Variant;
 }
@@ -533,6 +536,7 @@ interface Paragraph<Technique extends AnyRasterTechnique, Variant = undefined> {
   contentBox: ParagraphContentBox;
   style: ParagraphStyle;
   paint: GlyphPaintInput;
+  rasterPixelRatio: number;
   order: number;
   renderVariant: Variant | undefined;
 
@@ -558,6 +562,7 @@ interface ParagraphSnapshot<Technique extends AnyRasterTechnique, Variant = unde
   readonly contentBox: ParagraphContentBox;
   readonly style: ParagraphStyle;
   readonly paint: GlyphPaintInput;
+  readonly rasterPixelRatio: number;
   readonly order: number;
   readonly renderVariant: Variant | undefined;
 }
@@ -654,6 +659,9 @@ interface TextRuntimeRevision {
 `update()` snapshots every currently dirty paragraph across every paragraph batch in the runtime, performs the required
 shaping and layout synchronously, updates prepared glyph batches, publishes one atomic runtime revision, and returns it.
 When nothing is dirty it returns `runtime.current` without allocating or notifying subscribers.
+
+Runtime and paragraph-batch revision numbers advance only when a new complete revision publishes. A clean call, a failed
+preparation, an aborted request, and a superseded asynchronous candidate do not consume a published revision number.
 
 Public `add()` and mutation methods reject invalid values, disposed handles, and technique incompatibility immediately.
 All data required by synchronous shaping must also have been loaded already. Missing preparation data, fixed-capacity
@@ -770,7 +778,16 @@ ignore it when they do not need update diagnostics.
 ## Dirty state selects the work
 
 ```ts
-type ParagraphDirtyChannel = 'text' | 'font' | 'features' | 'content-box' | 'paint' | 'origins' | 'order' | 'variant';
+type ParagraphDirtyChannel =
+  | 'text'
+  | 'font'
+  | 'features'
+  | 'content-box'
+  | 'paint'
+  | 'raster-pixel-ratio'
+  | 'origins'
+  | 'order'
+  | 'variant';
 ```
 
 ```ts
@@ -780,6 +797,7 @@ const WorkByChannel = {
   features: 'shape-layout-partition',
   'content-box': 'reflow-and-boundary-reshape',
   paint: 'rewrite-instance-paint',
+  'raster-pixel-ratio': 'reselect-resources-and-repack',
   origins: 'rewrite-instance-origins',
   order: 'rebuild-glyph-runs',
   variant: 'rebuild-glyph-runs',
@@ -817,6 +835,12 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
   readonly dirtyRanges: readonly GlyphRange[];
 }
 
+declare const rasterTechniqueIdBrand: unique symbol;
+type RasterTechniqueId = string & { readonly [rasterTechniqueIdBrand]: true };
+
+declare const rasterResourceIdBrand: unique symbol;
+type RasterResourceId = string & { readonly [rasterResourceIdBrand]: true };
+
 interface GlyphBatchKey {
   readonly technique: RasterTechniqueId;
   readonly resource: RasterResourceId;
@@ -833,6 +857,19 @@ interface PreparedGlyphRun<Variant = undefined> {
   readonly order: number;
 }
 ```
+
+`rasterPixelRatio` is renderer-supplied physical density, not layout scale. It defaults to the batch value, which defaults
+to `1`; a paragraph may override it. Changing it never reshapes, but techniques such as Bitmap may reselect a strike and
+repack affected storage. Because selection is part of the prepared core revision, one paragraph batch cannot represent two
+different density choices for the same paragraph and revision across two attached targets. Paragraph overrides may still
+partition one batch across several strikes. Render the same logical paragraph simultaneously at different target densities
+with separate batches, or update the value before the synchronization that prepares that render phase.
+
+`RasterTechniqueId` and `RasterResourceId` are opaque branded strings whose values are stable and unique within a runtime.
+Core interns and freezes one `GlyphBatchKey` object for each live physical glyph batch and reuses that object in
+`PreparedGlyphBatch.key`, `PreparedGlyphRun.batch`, and adjacent revisions until the physical batch retires. Integrations
+may therefore use the object as a `Map` key. The tuple `(technique, resource, pipelineVariant, chunk)` is also its stable
+diagnostic and deterministic ordering value; consumers must not manufacture keys.
 
 Given the resolved font sequence `Inter -> Noto -> Inter`, core may retain one Inter buffer and one Noto buffer while
 emitting three ordered glyph runs:
@@ -915,6 +952,12 @@ label.setGlyphOrigins({
 
 runtime.update(); // writes origins only
 ```
+
+`topology` identifies the committed glyph sequence to which indices apply. It changes whenever shaping, fallback, glyph
+count/order, or font-slot assignment changes; paint, order, variant, transform, and origin-only updates preserve it.
+`setGlyphOrigins()` rejects a stale topology synchronously and leaves desired state unchanged. A later reshape preserves an
+override only when the resulting topology is identical; otherwise core clears the override and publishes the newly shaped
+origins.
 
 Clear the override to return to the current shaped positions:
 
