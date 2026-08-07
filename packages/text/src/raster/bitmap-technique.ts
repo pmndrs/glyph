@@ -85,6 +85,19 @@ export interface BitmapData {
   readonly coverage?: Uint8Array;
 }
 
+/**
+ * Reports the physical strike this technique selects for a logical CSS size and raster pixel ratio. Applications that
+ * display or assert density behaviour must read the selection from here rather than reimplementing it, so a reported
+ * strike can never diverge from the strike actually rendered.
+ */
+export function selectBitmapStrikePpem(
+  strikes: readonly { readonly ppem: number }[],
+  cssFontSize: number,
+  rasterPixelRatio: number,
+): number {
+  return strikes[nearestBitmapStrikeIndex(strikes, cssFontSize, rasterPixelRatio)]!.ppem;
+}
+
 export interface BitmapGlyphBatchStorage {
   readonly origins: Float32Array;
   readonly sizes: Float32Array;
