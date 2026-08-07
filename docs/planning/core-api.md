@@ -41,7 +41,7 @@ sources:
     title: Current raster transaction contract
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T03:25:58Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # Core text API
@@ -1070,7 +1070,7 @@ current displayed positions.
 
 ## Three.js is a separate public surface
 
-Three.js applications use `FontLoader`, `TextGroup`, and `Text` from `@pmndrs/text-three`. That integration owns these core
+Three.js applications use `FontLoader`, `TextGroup`, and `Text` from `@pmndrs/text/three`. That integration owns these core
 objects privately and synchronizes them during Three's render lifecycle; it never asks an application to create core
 paragraphs and wrap them in adapter objects.
 

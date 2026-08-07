@@ -5,7 +5,7 @@ import type {
   RasterLoadOptions,
   RasterReference,
   RasterRequest,
-  RasterOptionsOf,
+  RasterModuleOptionsOf,
   RasterSelection,
   RegisteredRaster,
 } from './raster.js';
@@ -78,7 +78,11 @@ export type FontRasterModuleOf<Token extends AnyFontToken> = Token['raster']['mo
 export function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(
   input: Input,
   raster: Module &
-    ([RasterOptionsOf<Module>] extends [never] ? unknown : undefined extends RasterOptionsOf<Module> ? unknown : never),
+    ([RasterModuleOptionsOf<Module>] extends [never]
+      ? unknown
+      : undefined extends RasterModuleOptionsOf<Module>
+        ? unknown
+        : never),
 ): FontToken<Module, Input>;
 
 export function defineFont<const Input extends FontInput, const Module extends AnyRasterModule>(

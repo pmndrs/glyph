@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # Proposed architecture
@@ -248,8 +248,8 @@ The React integration owns no shaping, line-breaking, baking, raster decoding, s
 
 ```mermaid
 flowchart LR
-  React["@pmndrs/text-r3f"] --> Three["@pmndrs/text-three"] --> Core["@pmndrs/text"]
-  TypeGPU["@pmndrs/text-typegpu"] --> Core
+  React["@pmndrs/text/r3f"] --> Three["@pmndrs/text/three"] --> Core["@pmndrs/text"]
+  TypeGPU["@pmndrs/text/typegpu"] --> Core
   Gpucat["@pmndrs/text-gpucat"] --> Core
   Core --> Registry["asset validator / registry"]
   Core --> Shaper["shaper bridge"]

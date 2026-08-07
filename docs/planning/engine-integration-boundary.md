@@ -41,7 +41,7 @@ sources:
     title: Raw TypeGPU proof target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T03:25:58Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -310,7 +310,7 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Move Three textures, attributes, TSL materials, scene objects, and renderer disposal into Three raster targets.
 - Permit an optional `RasterProgram` seam when multiple engines share a shader/resource backend such as TypeGPU and raw
   WebGPU interop; do not require an artificial universal shader interface in core.
-- Permit an optional external Three/TypeGPU experiment only for capabilities the exact-version bridge proves. At the
+- Permit an optional package-owned `/three/typegpu` experiment only for capabilities the exact-version bridge proves. At the
   reviewed versions it is nullary WGSL injection, WebGPU-only, and not a complete Slug/Bitmap resource bridge. Keep
   Three-owned accessors, materials, pipeline state, and lifecycle in that adapter; neither core nor the portable technique
   imports TypeGPU or TSL.
@@ -368,7 +368,7 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 - Preserve Suspense for loading only; warm shaping does not require a readiness Promise.
 - Make synchronous versus asynchronous synchronization an integration policy selectable per frame/update.
 
-### 8. Implement and prove the external TypeGPU engine
+### 8. Implement and prove the package-owned TypeGPU subpath
 
 Implement the complete [TypeGPU API](typegpu-api.md), then build the smallest application in
 `AlexJWayne/typegpu-shader-canvas` that proves:
@@ -391,7 +391,7 @@ Start from the reviewed baseline `three@0.185.1`, `typegpu@0.11.9`, and `@typegp
 closure, injects resolved WGSL through Three's WebGPU builder, has no forced-WebGL2 route, and has not carried Slug's
 sampleable resources. Build a minimal exact-version fixture before adapting text. Only if that fixture proves real Bitmap
 and Slug resources, dependent loads, vertex work, structured results, and every promised backend should the experiment
-inspect parity and measure transfer/graph/compilation cost. Otherwise narrow the optional external package to the pure
+inspect parity and measure transfer/graph/compilation cost. Otherwise narrow the optional package subpath to the pure
 WebGPU math it actually supports; native TSL remains authoritative for Three.
 
 ### 9. Prove Wayfare
@@ -468,6 +468,7 @@ callback-form asynchronous updates do not allocate a public Promise.
 - Explicit capacity changes preserve batch, paragraph, attachment, and Three object identities; core and Three batch
   cloning remain unsupported.
 - Three.js, raw TypeGPU, Wayfare, and the external gpucat package execute the same core output for Bitmap, MTSDF, and Slug.
-- Core, portable techniques, and bakers import no Three.js, TypeGPU, Wayfare, or gpucat code; integration packages pass a
+- Core, portable techniques, and bakers import no Three.js, TypeGPU, Wayfare, or gpucat code; maintained subpaths and
+  external integrations pass a
   packed-public-package test without deep imports.
 - Full repository checks, package-size gates, and documentation validation pass.

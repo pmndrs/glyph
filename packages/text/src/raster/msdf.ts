@@ -248,42 +248,35 @@ async function decodeMsdfResource(font: RegisteredFont, raster: RegisteredRaster
   if (pageValues.length === 0) throw new TypeError('MTSDF raster must contain at least one page');
   if (pageValues.length > 65_535) throw new RangeError('MTSDF raster contains too many pages');
   const decodedPages: RasterAtlasPage[] = [];
-  try {
-    for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
-      validateMtsdfPageDirectory(pageValues[pageIndex]!, pageIndex);
-      const page = decodeEmbeddedLosslessAtlasPage(raster, pageValues[pageIndex]!, `MTSDF page ${pageIndex}`, {
-        gpuFormat: 'rgba8unorm',
-        vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
-        blockWidth: 1,
-        blockHeight: 1,
-        bytesPerBlock: 4,
-        uncompressedChannelTypes: [
-          KHR_DF_CHANNEL_RGBSDA_RED,
-          KHR_DF_CHANNEL_RGBSDA_GREEN,
-          KHR_DF_CHANNEL_RGBSDA_BLUE,
-          KHR_DF_CHANNEL_RGBSDA_ALPHA,
-        ],
-        textureFormat: THREE.RGBAFormat,
-        generateMipmaps: false,
-        minFilter: THREE.LinearFilter,
-      });
-      decodedPages.push(page);
-    }
-    validateDenseGlyphRecords(records, decodedPages, 'MTSDF', true);
-    const { atlas, gpuBytes, pages } = createTextureArray(decodedPages);
-    return {
-      emSize,
-      pixelRange,
-      planeUnitsPerEm,
-      records,
-      ...(coverage === undefined ? {} : { coverage: coverage.bits }),
-      pages,
-      atlas,
-      gpuBytes,
-    };
-  } finally {
-    for (const page of decodedPages) page.texture.dispose();
+  for (let pageIndex = 0; pageIndex < pageValues.length; pageIndex += 1) {
+    validateMtsdfPageDirectory(pageValues[pageIndex]!, pageIndex);
+    const page = decodeEmbeddedLosslessAtlasPage(raster, pageValues[pageIndex]!, `MTSDF page ${pageIndex}`, {
+      gpuFormat: 'rgba8unorm',
+      vkFormat: VK_FORMAT_R8G8B8A8_UNORM,
+      blockWidth: 1,
+      blockHeight: 1,
+      bytesPerBlock: 4,
+      uncompressedChannelTypes: [
+        KHR_DF_CHANNEL_RGBSDA_RED,
+        KHR_DF_CHANNEL_RGBSDA_GREEN,
+        KHR_DF_CHANNEL_RGBSDA_BLUE,
+        KHR_DF_CHANNEL_RGBSDA_ALPHA,
+      ],
+    });
+    decodedPages.push(page);
   }
+  validateDenseGlyphRecords(records, decodedPages, 'MTSDF', true);
+  const { atlas, gpuBytes, pages } = createTextureArray(decodedPages);
+  return {
+    emSize,
+    pixelRange,
+    planeUnitsPerEm,
+    records,
+    ...(coverage === undefined ? {} : { coverage: coverage.bits }),
+    pages,
+    atlas,
+    gpuBytes,
+  };
 }
 
 function configuredInteger(value: JsonValue | undefined, label: string, maximum: number): number {
@@ -319,10 +312,7 @@ function createTextureArray(pages: readonly RasterAtlasPage[]): {
   const texels = new Uint8Array(baseBytes);
   for (let layer = 0; layer < pages.length; layer += 1) {
     const page = pages[layer]!;
-    const source = page.texture.image.data;
-    if (!(source instanceof Uint8Array)) {
-      throw new TypeError(`MTSDF page ${layer} is not backed by unsigned-byte RGBA texels`);
-    }
+    const source = page.bytes;
     const sourceRowBytes = page.width * 4;
     const targetRowBytes = width * 4;
     for (let row = 0; row < page.height; row += 1) {

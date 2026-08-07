@@ -1,5 +1,3 @@
-import * as THREE from 'three/webgpu';
-
 import { RasterKtxValidationError, validateNativeKtx2, type NativeKtx2Format } from './raster-ktx.js';
 import { DENSE_GLYPH_RECORD_STRIDE, DenseGlyphRecordError, validateDenseGlyphRecordTable } from './raster-records.js';
 import type { JsonValue, RegisteredRaster } from '../raster.js';
@@ -9,14 +7,11 @@ export { ABSENT_GLYPH_PAGE, DENSE_GLYPH_RECORD_STRIDE } from './raster-records.j
 export interface RasterAtlasPage {
   readonly width: number;
   readonly height: number;
-  readonly texture: THREE.DataTexture;
+  readonly bytes: Uint8Array;
 }
 
 export interface LosslessAtlasFormat extends NativeKtx2Format {
   readonly gpuFormat: string;
-  readonly textureFormat: THREE.PixelFormat;
-  readonly generateMipmaps: boolean;
-  readonly minFilter: THREE.MinificationTextureFilter;
 }
 
 export function decodeEmbeddedLosslessAtlasPage(
@@ -64,20 +59,7 @@ export function decodeEmbeddedLosslessAtlasPage(
   }
   const level = container.levels[0];
   if (level === undefined) throw new TypeError(`${path} KTX2 contains no base level`);
-  const texture = new THREE.DataTexture(
-    level.levelData.slice(),
-    width,
-    height,
-    format.textureFormat,
-    THREE.UnsignedByteType,
-  );
-  texture.colorSpace = THREE.NoColorSpace;
-  texture.flipY = true;
-  texture.generateMipmaps = format.generateMipmaps;
-  texture.minFilter = format.minFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.needsUpdate = true;
-  return { width, height, texture };
+  return { width, height, bytes: level.levelData.slice() };
 }
 
 export function validateDenseGlyphRecords(

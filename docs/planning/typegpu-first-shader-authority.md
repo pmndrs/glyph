@@ -47,7 +47,7 @@ sources:
     title: gpucat at the reviewed revision
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T03:25:58Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # TypeGPU-first shader authority
@@ -119,25 +119,25 @@ The reusable TypeGPU package does not need to be a complete scene engine. Its pr
 @pmndrs/text
   core loading, shaping, layout, batches, storage, runs, target protocol
 
-@pmndrs/text-raster-{bitmap,mtsdf,slug}
+@pmndrs/text/raster/{bitmap,mtsdf,slug}
   baker + portable decoder + resource selection + canonical storage schema
 
-@pmndrs/text-typegpu
+@pmndrs/text/typegpu
   TypeGPU vertex/fragment functions + resource ABI + program factories
   optional direct pass encoder; no scene graph, canvas, RAF, or adapter request
 
-@pmndrs/text-three
+@pmndrs/text/three
   Three objects, loader, target, ordering, materials, native TSL programs
 
-@pmndrs/text-three-typegpu                 // experiment
+@pmndrs/text/three/typegpu                 // experiment
   @typegpu/three bridge into Three-owned NodeMaterials; WebGPU-only today
 
 @pmndrs/text-gpucat                        // external fitness package
   gpucat objects, target, resource wrappers, draws, and shader adaptation
 ```
 
-All engine packages may live outside this repository. They depend only on packed public packages; no internal subpath is a
-privileged integration API.
+Three, React Three Fiber, and TypeGPU are package-owned subpaths. The gpucat fitness package remains external and proves
+that the renderer-neutral contracts are sufficient without deep imports.
 
 ## Author a complete raster kernel, not only fragment coverage
 
@@ -220,7 +220,7 @@ or that a structured vertex/fragment ABI returns usable TSL nodes.
 
 The reviewed implementation confirms WGSL injection, no WebGL2 route, and no demonstrated way to carry the required
 sampleable Three resources. Therefore the native TSL program remains the flagship implementation. Retiring it is permitted only after the bridge
-passes the complete Bitmap, MTSDF, and Slug proof on every backend promised by `@pmndrs/text-three`. If TypeGPU remains
+passes the complete Bitmap, MTSDF, and Slug proof on every backend promised by `@pmndrs/text/three`. If TypeGPU remains
 WebGPU-only, it is an optional package rather than a silent implementation detail of the default Three integration.
 
 ## Bridge to gpucat
@@ -404,8 +404,8 @@ WebGPU building blocks and confirms a WebGPU-only Three bridge; it does not yet 
 Implement Gate 0 before building a TypeGPU engine. Until then:
 
 - native TSL remains the flagship Three implementation;
-- `@pmndrs/text-typegpu` is specified as an independent WebGPU shader/program package with an optional direct encoder;
-- `@pmndrs/text-three-typegpu` is an isolated experiment;
+- `@pmndrs/text/typegpu` is the package-owned WebGPU shader/program subpath with an optional direct encoder;
+- `@pmndrs/text/three/typegpu` is an isolated package-owned experiment;
 - gpucat remains an external public-API fitness test;
 - no TypeGPU, Three, or gpucat type enters core.
 
@@ -414,41 +414,41 @@ Implement Gate 0 before building a TypeGPU engine. Until then:
 This ledger covers the complete retained Claude Opus report, not only its top findings. “Gate” means the prose claim was
 narrowed and cannot become accepted architecture until that executable evidence exists.
 
-| Finding | Disposition in the canonical docs |
-| --- | --- |
-| B1 raster density had no core path | Corrected: batch and paragraph density are pre-update core inputs; spans do not override target density. |
-| B2 target font leases did not exist | Corrected by removing the lease claim: targets synchronously copy required CPU font data during staging and own the result. |
-| B3 interface storage failed `Record` | Corrected with the self-mapped storage constraint; the focused TypeScript probe passed. |
-| B4 key identity/IDs were undefined | Corrected with branded IDs and interned frozen key identity through a physical allocation generation. |
-| B5 `toTSL` capability claims | Falsified at `three@0.185.1` / `typegpu@0.11.9` / `@typegpu/three@0.11.0`; exact-version Gate 0 replaces the claim. |
-| B6 WebGL2 omitted from the gate | Corrected: forced WebGPU and forced WebGL2 are explicit acceptance cases. |
-| H1 reusable shader omitted vertex work | Corrected: the reusable algorithm includes typed vertex and fragment stages; Bitmap snap and Slug dilation are named requirements. |
-| H2 Three context could not express techniques | Corrected: each technique exports exact resource, instance, vertex, fragment, derivative, and screen-scale context types. |
-| H3 effect generics inferred `unknown` | Three helper corrected by binding schema inference to an exact shader. TypeGPU helper remains gated on an installed compile fixture. |
-| H4 program inference helper undeclared | Corrected: `defineTypeGpuRasterProgram()` is declared, but remains unverified until the TypeGPU fixture exists. |
-| H5 per-group hook staged unrelated targets | Corrected: core publication only records attachment source; the observed engine calls `attachment.prepare()`. |
-| H6 Three silently assumed ready staging | Corrected: the standard Three target must synchronously return `ready`; pending custom targets cannot claim same-frame publication. |
-| H7 unbounded variant/pipeline caches | Corrected: first-party programs require configurable bounds and GPU-safe eviction; custom programs must document equivalents. |
-| H8 gpucat order interval could interleave | Corrected as a limitation: no interval is claimed reserved; strict adjacency requires one aggregate object or host reservation support. |
-| H9 gpucat WebGL needed GLSL | Corrected: WebGL support requires an explicit GLSL companion and parity gate; WGSL alone is WebGPU-only. |
-| H10 gpucat instance ABI differs | Corrected: semantic canonical SoA is shared; Three attributes and gpucat data textures are target-owned accessors. |
-| M1 duplicate `LoadedFont` | Removed; integration docs import the core declaration. |
-| M2 resize/chunk identity was undefined | Corrected: every real capacity change creates a complete new physical allocation generation and retires old keys. |
-| M3 adjacent revision rule was ambiguous | Corrected: only successful publication increments runtime/batch revisions. |
-| M4 no instance-to-paragraph mapping | Corrected: the contract defines the complete derivation by scanning disjoint ordered runs. |
-| M5 duplicate run `order` | Removed; array position is authoritative. |
-| M6 duplicate batch `chunk` | Removed from `PreparedGlyphBatch`; `GlyphBatchKey.chunk` is authoritative. |
-| M7 “complete API” used undefined types | Corrected for core-owned public values; external `TgpuRoot` remains an imported TypeGPU type and TypeGPU declarations remain a draft gate. |
-| M8 topology semantics were undefined | Corrected: the exact invalidation/preservation rules and stale-write behavior are specified. |
-| M9 duplicate decision IDs | Corrected by assigning D-146 through D-151 to the duplicate rows. |
-| M10 broad peers hid deep-import drift | Corrected: the experiment pins exact versions and reruns the compatibility fixture per upgrade. |
-| L1 `msdf`/`mtsdf` naming mismatch | Documented as an intentional target-v1 rename from the merged v0 export. |
-| L2 preparing/pending/failure flags | Corrected: active async work, eligible dirty work, and latched failure are distinct states. |
-| L3 gpucat failing test attribution | Rechecked: 256/260 passed; one failure proves process-global symbol instability and three are stale flip-Y golden snapshots, none text evidence. |
-| U1 newer bridge versions may differ | Kept open through an exact-version rerun gate, never a floating peer-range assumption. |
-| U2 “technique compositing order” undefined | Corrected to visual run-array order plus adjacent program-expanded per-run passes. |
-| U3 vertex ownership unclear | Corrected: canonical semantics/specification are shared; each engine program owns its executable vertex stage. |
-| U4 Slug buffer-vs-texture split | Corrected with a semantic resource ABI and backend-specific storage accessors. |
-| U5 variant-to-sidecar mapping absent | Corrected with an explicit program-owned codec/intern/write step and bounded revision lifetime. |
-| U6 Wayfare was not inspected | Claim withdrawn; Wayfare reuse is an explicit source-inspection and execution gate. |
-| U7 async variant mapping under supersession | Corrected: candidate input/span tables are immutable and generation-tagged; stale Worker results never map against current state. |
+| Finding                                       | Disposition in the canonical docs                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B1 raster density had no core path            | Corrected: batch and paragraph density are pre-update core inputs; spans do not override target density.                                         |
+| B2 target font leases did not exist           | Corrected by removing the lease claim: targets synchronously copy required CPU font data during staging and own the result.                      |
+| B3 interface storage failed `Record`          | Corrected with the self-mapped storage constraint; the focused TypeScript probe passed.                                                          |
+| B4 key identity/IDs were undefined            | Corrected with branded IDs and interned frozen key identity through a physical allocation generation.                                            |
+| B5 `toTSL` capability claims                  | Falsified at `three@0.185.1` / `typegpu@0.11.9` / `@typegpu/three@0.11.0`; exact-version Gate 0 replaces the claim.                              |
+| B6 WebGL2 omitted from the gate               | Corrected: forced WebGPU and forced WebGL2 are explicit acceptance cases.                                                                        |
+| H1 reusable shader omitted vertex work        | Corrected: the reusable algorithm includes typed vertex and fragment stages; Bitmap snap and Slug dilation are named requirements.               |
+| H2 Three context could not express techniques | Corrected: each technique exports exact resource, instance, vertex, fragment, derivative, and screen-scale context types.                        |
+| H3 effect generics inferred `unknown`         | Three helper corrected by binding schema inference to an exact shader. TypeGPU helper remains gated on an installed compile fixture.             |
+| H4 program inference helper undeclared        | Corrected: `defineTypeGpuRasterProgram()` is declared, but remains unverified until the TypeGPU fixture exists.                                  |
+| H5 per-group hook staged unrelated targets    | Corrected: core publication only records attachment source; the observed engine calls `attachment.prepare()`.                                    |
+| H6 Three silently assumed ready staging       | Corrected: the standard Three target must synchronously return `ready`; pending custom targets cannot claim same-frame publication.              |
+| H7 unbounded variant/pipeline caches          | Corrected: first-party programs require configurable bounds and GPU-safe eviction; custom programs must document equivalents.                    |
+| H8 gpucat order interval could interleave     | Corrected as a limitation: no interval is claimed reserved; strict adjacency requires one aggregate object or host reservation support.          |
+| H9 gpucat WebGL needed GLSL                   | Corrected: WebGL support requires an explicit GLSL companion and parity gate; WGSL alone is WebGPU-only.                                         |
+| H10 gpucat instance ABI differs               | Corrected: semantic canonical SoA is shared; Three attributes and gpucat data textures are target-owned accessors.                               |
+| M1 duplicate `LoadedFont`                     | Removed; integration docs import the core declaration.                                                                                           |
+| M2 resize/chunk identity was undefined        | Corrected: every real capacity change creates a complete new physical allocation generation and retires old keys.                                |
+| M3 adjacent revision rule was ambiguous       | Corrected: only successful publication increments runtime/batch revisions.                                                                       |
+| M4 no instance-to-paragraph mapping           | Corrected: the contract defines the complete derivation by scanning disjoint ordered runs.                                                       |
+| M5 duplicate run `order`                      | Removed; array position is authoritative.                                                                                                        |
+| M6 duplicate batch `chunk`                    | Removed from `PreparedGlyphBatch`; `GlyphBatchKey.chunk` is authoritative.                                                                       |
+| M7 “complete API” used undefined types        | Corrected for core-owned public values; external `TgpuRoot` remains an imported TypeGPU type and TypeGPU declarations remain a draft gate.       |
+| M8 topology semantics were undefined          | Corrected: the exact invalidation/preservation rules and stale-write behavior are specified.                                                     |
+| M9 duplicate decision IDs                     | Corrected by assigning D-146 through D-151 to the duplicate rows.                                                                                |
+| M10 broad peers hid deep-import drift         | Corrected: the experiment pins exact versions and reruns the compatibility fixture per upgrade.                                                  |
+| L1 `msdf`/`mtsdf` naming mismatch             | Documented as an intentional target-v1 rename from the merged v0 export.                                                                         |
+| L2 preparing/pending/failure flags            | Corrected: active async work, eligible dirty work, and latched failure are distinct states.                                                      |
+| L3 gpucat failing test attribution            | Rechecked: 256/260 passed; one failure proves process-global symbol instability and three are stale flip-Y golden snapshots, none text evidence. |
+| U1 newer bridge versions may differ           | Kept open through an exact-version rerun gate, never a floating peer-range assumption.                                                           |
+| U2 “technique compositing order” undefined    | Corrected to visual run-array order plus adjacent program-expanded per-run passes.                                                               |
+| U3 vertex ownership unclear                   | Corrected: canonical semantics/specification are shared; each engine program owns its executable vertex stage.                                   |
+| U4 Slug buffer-vs-texture split               | Corrected with a semantic resource ABI and backend-specific storage accessors.                                                                   |
+| U5 variant-to-sidecar mapping absent          | Corrected with an explicit program-owned codec/intern/write step and bounded revision lifetime.                                                  |
+| U6 Wayfare was not inspected                  | Claim withdrawn; Wayfare reuse is an explicit source-inspection and execution gate.                                                              |
+| U7 async variant mapping under supersession   | Corrected: candidate input/span tables are immutable and generation-tagged; stale Worker results never map against current state.                |
