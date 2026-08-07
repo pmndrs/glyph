@@ -1,19 +1,18 @@
-import { Text, type TextSpan } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { benchmarkContentWidth, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
+  exactWidth,
+  paintColor,
   type ComparisonWorkloadEntry,
+  type MutablePaintSpan,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
 
-export interface MutablePaintSpan extends TextSpan {
-  color: number;
-  outline?: { color: number; width: number };
-  shadow?: { color: number; offset: readonly [number, number] };
-}
+export type { MutablePaintSpan } from '../shared/scene-entry';
 
 export const PAINT_EFFECTS_TEXT =
   'Color begins as light, then the human eye turns wavelength into sensation. Our cones negotiate red, green, and blue while the brain invents every violet, amber, and electric cyan between them. Here each word carries its own chromatic phase, flowing through a continuous spectrum while opacity and contour remain live.';
@@ -29,6 +28,7 @@ export const paintEffectsWorkload = {
   applyRetainedConfiguration(entries, configuration, technique) {
     applyPaintEffectsRetainedConfiguration(entries, technique, configuration);
   },
+  batching: 'group',
   cameraKind: 'orthographic',
   contentWidth: {},
   create(context) {
@@ -36,7 +36,6 @@ export const paintEffectsWorkload = {
       ...context.configuration,
       dpr: context.dpr,
       font: context.font,
-      raster: context.raster,
       technique: context.technique,
       viewportWidth: context.viewportWidth,
     });
@@ -70,15 +69,15 @@ export function createPaintEffectsEntries(
   const spans = createPaintSpans(0, context.amount, paintOutlineWidth, paintShadowOffset);
   const text = new Text({
     font: context.font,
-    raster: context.raster,
     rasterPixelRatio: context.dpr,
-    lineHeight: LIVE_TEXT_LINE_HEIGHT,
     text: PAINT_EFFECTS_TEXT,
     spans,
-    fontSize: context.fontSize,
-    opacity: context.paintOpacity,
-    width: benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio),
-    wrap: 'word',
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
+    paint: { opacity: context.paintOpacity },
+    contentBox: {
+      width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)),
+      wrap: 'word',
+    },
   });
   return [
     {
@@ -100,7 +99,7 @@ export function createPaintSpans(
   outlineWidth?: number,
   shadowOffset?: readonly [number, number],
 ): MutablePaintSpan[] {
-  const spans = PAINT_WORD_RANGES.map((range) => ({ ...range, color: 0 }));
+  const spans = PAINT_WORD_RANGES.map((range) => ({ ...range, paint: { color: paintColor(0) } }));
   updatePaintSpans(spans, phase, amount, outlineWidth, shadowOffset);
   return spans;
 }
@@ -113,17 +112,18 @@ export function updatePaintSpans(
   shadowOffset?: readonly [number, number],
 ): void {
   for (let index = 0; index < spans.length; index += 1) {
-    const span = spans[index]!;
+    const { paint } = spans[index]!;
     const hue = paintWordHue(index, PAINT_WORD_RANGES.length, phase, amount);
-    span.color = hslColor(hue, 0.88, 0.53);
-    if (outlineWidth === undefined || outlineWidth === 0) delete span.outline;
-    else if (span.outline === undefined) span.outline = { color: 0xffffff, width: outlineWidth };
-    else span.outline.width = outlineWidth;
-    if (shadowOffset === undefined) delete span.shadow;
-    else if (span.shadow === undefined) span.shadow = { color: hslColor(hue, 0.68, 0.28), offset: shadowOffset };
-    else {
-      span.shadow.color = hslColor(hue, 0.68, 0.28);
-      span.shadow.offset = shadowOffset;
+    paint.color = paintColor(hslColor(hue, 0.88, 0.53));
+    if (outlineWidth === undefined || outlineWidth === 0) delete paint.outline;
+    else if (paint.outline === undefined) paint.outline = { color: paintColor(0xffffff), width: outlineWidth };
+    else paint.outline.width = outlineWidth;
+    if (shadowOffset === undefined) delete paint.shadow;
+    else if (paint.shadow === undefined) {
+      paint.shadow = { color: paintColor(hslColor(hue, 0.68, 0.28)), offset: shadowOffset };
+    } else {
+      paint.shadow.color = paintColor(hslColor(hue, 0.68, 0.28));
+      paint.shadow.offset = shadowOffset;
     }
   }
 }
@@ -161,7 +161,7 @@ export function animatePaintEffectsEntries(
     throw new Error('paint effects entry is missing its retained span buffer');
   }
   updatePaintSpans(entry.paintSpans, phase, configuration.amount, entry.paintOutlineWidth, entry.paintShadowOffset);
-  entry.text.setProperties(entry.paintUpdate);
+  entry.text.set(entry.paintUpdate);
   entry.paintRevision = (entry.paintRevision ?? 0) + 1;
   entry.lastPaintUpdateMs = performance.now() - started;
 }
@@ -193,8 +193,8 @@ export function applyPaintEffectsRetainedConfiguration(
       paintOutlineWidth,
       paintShadowOffset,
     );
-    entry.text.setProperties({
-      opacity: configuration.paintOpacity,
+    entry.text.set({
+      paint: { ...entry.text.paint, opacity: configuration.paintOpacity },
       text: PAINT_EFFECTS_TEXT,
       spans: entry.paintSpans,
     });

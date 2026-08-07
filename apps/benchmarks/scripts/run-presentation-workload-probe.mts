@@ -158,34 +158,18 @@ try {
   for (const workload of workloads) {
     await workloadControl.click();
     await page.getByRole('option', { name: workload.label, exact: true }).click();
-    await assertPresentationRemainsVisible(page, workload.id, backend);
-    await page.waitForFunction(
-      ({ expected }) => {
-        const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
-        if (viewport === null) return false;
-        const close = (attribute: string, value: number): boolean =>
-          Math.abs(Number(viewport.getAttribute(attribute)) - value) < 0.000_001;
-        const zoomReady = expected.id !== 'zoom-text' || Number(viewport.dataset.zoomScale) >= 3;
-        const animatedParagraph = expected.id === 'paragraph-stress';
-        return (
-          viewport.dataset.workload === expected.id &&
-          viewport.dataset.presentationPending === 'false' &&
-          viewport.dataset.backend === expected.backend &&
-          viewport.dataset.cameraKind === expected.camera &&
-          viewport.dataset.canvasGrid === 'true' &&
-          viewport.dataset.animationEnabled === 'true' &&
-          close('data-animation-speed', 50) &&
-          (animatedParagraph || close('data-applied-font-size', expected.fontSize)) &&
-          (animatedParagraph || close('data-layout-width-ratio', expected.layoutWidthRatio)) &&
-          close('data-applied-workload-amount', expected.amount) &&
-          Number(viewport.dataset.glyphCount) > 0 &&
-          Number(viewport.dataset.drawCount) > 0 &&
-          Number(viewport.dataset.framesPerSecond) > 0 &&
-          zoomReady
-        );
-      },
-      { expected: { ...workload, backend } },
+    // Sample the batch topology at the settled mount, before the presentation timeline advances. Paragraph stress
+    // animates its own size and measure, so a sample taken later in the soak would report a different scene.
+    await waitForSettledWorkload(page, workload, backend, false);
+    const settled = await readBatching(page);
+    console.log(
+      'presentation-workload-settled',
+      workload.id,
+      `draws=${String(settled.drawCount)}`,
+      `glyphs=${String(settled.glyphCount)}`,
     );
+    await assertPresentationRemainsVisible(page, workload.id, backend);
+    await waitForSettledWorkload(page, workload, backend, true);
     const retainedCanvas = await page.evaluate(() => {
       const scope = globalThis as typeof globalThis & { presentationProbeCanvas: Element | undefined };
       return scope.presentationProbeCanvas === document.querySelector('canvas[data-configured-renderer-active="true"]');
@@ -241,6 +225,58 @@ try {
 } finally {
   await browser?.close();
   await server.close();
+}
+
+/**
+ * Waits until the named workload owns the viewport at its authored configuration and is publishing frames.
+ *
+ * `requireZoomBuildUp` is the one condition that is not a mount invariant: Zoom text only reaches its reported scale
+ * part-way through its own cycle, so the settled-mount sample must not wait for it.
+ */
+async function waitForSettledWorkload(
+  page: Page,
+  workload: (typeof workloads)[number],
+  expectedBackend: PresentationBackend,
+  requireZoomBuildUp: boolean,
+): Promise<void> {
+  await page.waitForFunction(
+    ({ expected, requireZoom }) => {
+      const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+      if (viewport === null) return false;
+      const close = (attribute: string, value: number): boolean =>
+        Math.abs(Number(viewport.getAttribute(attribute)) - value) < 0.000_001;
+      const zoomReady = !requireZoom || expected.id !== 'zoom-text' || Number(viewport.dataset.zoomScale) >= 3;
+      const animatedParagraph = expected.id === 'paragraph-stress';
+      return (
+        viewport.dataset.workload === expected.id &&
+        viewport.dataset.presentationPending === 'false' &&
+        viewport.dataset.backend === expected.backend &&
+        viewport.dataset.cameraKind === expected.camera &&
+        viewport.dataset.canvasGrid === 'true' &&
+        viewport.dataset.animationEnabled === 'true' &&
+        close('data-animation-speed', 50) &&
+        (animatedParagraph || close('data-applied-font-size', expected.fontSize)) &&
+        (animatedParagraph || close('data-layout-width-ratio', expected.layoutWidthRatio)) &&
+        close('data-applied-workload-amount', expected.amount) &&
+        Number(viewport.dataset.glyphCount) > 0 &&
+        Number(viewport.dataset.drawCount) > 0 &&
+        Number(viewport.dataset.framesPerSecond) > 0 &&
+        zoomReady
+      );
+    },
+    { expected: { ...workload, backend: expectedBackend }, requireZoom: requireZoomBuildUp },
+  );
+}
+
+/**
+ * Draw and glyph counts are the batching evidence for one cell: the renderer issues one draw per packed glyph run, so
+ * a change in batch topology shows up here and nowhere else in the probe output.
+ */
+async function readBatching(page: Page): Promise<{ readonly drawCount: number; readonly glyphCount: number }> {
+  return page.evaluate(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-testid="comparison-live-viewport"]');
+    return { drawCount: Number(viewport?.dataset.drawCount), glyphCount: Number(viewport?.dataset.glyphCount) };
+  });
 }
 
 async function assertCanvasHandoff(page: Page, label: string, expectedBackend: PresentationBackend): Promise<void> {
@@ -347,7 +383,14 @@ async function assertPresentationRemainsVisible(
   if (visibleInkPixels < minimumRequiredInkPixels) {
     throw new Error(`${workload} rendered only ${String(visibleInkPixels)} visible foreground pixels`);
   }
-  console.log('presentation-workload-visible', workload, visibleInkPixels);
+  const batching = await readBatching(page);
+  console.log(
+    'presentation-workload-visible',
+    workload,
+    visibleInkPixels,
+    `draws=${String(batching.drawCount)}`,
+    `glyphs=${String(batching.glyphCount)}`,
+  );
 }
 
 interface CanvasEvidence {

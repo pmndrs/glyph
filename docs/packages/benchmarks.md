@@ -257,6 +257,42 @@ resolve to the new renderer-neutral techniques. The harness paths preserve the e
 move rendered all seven workloads visibly for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
 case.
 
+The technique-generic comparison workload layer has now moved off that harness path. `ComparisonWorkloadEntry` holds
+`Text<AnyRasterTechnique>`, and every workload factory receives the `LoadedFont` the shared target-v1 `FontLoader`
+already produced, so no comparison scene names or loads a raster module. Type erasure happens once, at the font:
+`LoadedFont` is covariant in its technique, so a concrete `LoadedFont<typeof bitmap>` widens to
+`LoadedFont<AnyRasterTechnique>` and every `Text`, `TextGroup`, and `TextUpdate` downstream is uniformly erased without a
+cast. Erasing at the `Text` instead does not compile: the `set` method and the `font` accessor make `Text` invariant in
+its technique.
+
+Batching is a per-workload policy on the definition rather than a host-wide rule. Text ladder, Zoom text, Icon grid,
+Off-axis / 3D, Dynamic layout, and Paint & effects mount under one shared `TextGroup`, so every paragraph in the workload
+prepares and packs into a single batch owning one set of GPU resources; Icon grid's recycled icon and label Texts share
+that batch across two font fixtures because both load through the one registry-scoped runtime. Paragraph stress stays
+standalone: it is a single `Text` holding a large repeated-ipsum body, already a batch of one, and keeping it standalone
+holds both adapter paths under test. The group takes a `grow` capacity because a chunked batch would split a paragraph's
+glyph run at each chunk boundary and turn one draw into several.
+
+Batching shares preparation and GPU resources, not draws. Target-v1 emits one mesh per packed glyph run and a run never
+spans paragraphs, so the shared group leaves the draw topology of each paragraph exactly as it was. Measured at the
+settled workload mount, every deterministic cell of the technique-by-backend matrix reports the same `drawCount` before
+and after the move — Text ladder 35 for Bitmap and 19 for MTSDF and Slug, Off-axis / 3D 12 and 1, Dynamic layout 20 and
+3, Paint & effects 18 and 1, Paragraph stress 1,120 and 1, Zoom text 1 throughout. Icon grid is the one workload whose
+count is not comparable between runs because it auto-pans from mount, so its visible window differs by sample instant.
+
+Publication replaced readiness. Target-v1 has no per-`Text` promise: parenting a workload under its batch root and
+calling `updateMatrixWorld` shapes, lays out, and packs it synchronously, after which `layout` is readable and `error` is
+meaningful. A rebuild therefore stages its root off-scene, publishes once, positions from the committed layouts, and only
+then swaps the live scene. The retained font-fixture swap collapsed from an asynchronous two-phase rollback to
+`set({ font })` plus one publication, because the replacement `LoadedFont` is already resolved when the swap begins.
+
+The visible-pixel counts printed by `benchmark:presentation` are not a regression gate. The matrix samples live animated
+scenes at whatever phase the soak happens to end on, and two runs of identical code disagree in roughly half of the 42
+cells — Paragraph stress alone ranged from 25,339 to 40,708 across two untouched merged-v0 runs, because the harness
+animates that workload's own font size and measure. What the matrix proves is its per-case line: all seven workloads
+visible, one renderer per case, across every technique and backend. Deterministic regression evidence lives in the
+headless conformance suite and its stored frame hashes.
+
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane. Conformance mode combines live GPU inspection with finite visual correctness checks; finite CPU-reference work begins only through the explicit run action rather than during workload navigation. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 
 The MSDF / Slug comparison workload owns one renderer, two equal RGBA8 render targets, and one fullscreen TSL composition graph. Both candidates share authored text, layout dimensions, camera, physical target size, zoom, and pan. The heatmap samples both candidate textures directly with no readback or CPU composition: black agrees, red marks extra MSDF coverage, cyan marks extra Slug coverage, and intensity is amplified eight times. A deterministic delayed-peer probe proved that independently prepared retained `Text` objects could otherwise expose one new candidate beside one old candidate. The scene now keeps sampling the last complete target pair while both updates prepare, publishes both retained objects in one JavaScript task, and refreshes or resizes both targets together only after the pair succeeds. Failure rolls both objects back; abort disposes only after the queued update settles. This remains private comparison coordination rather than a renderer-wide grouped-publication API. Explicit conformance runs and their follow-up visual captures execute as serialized jobs borrowing the route renderer; the retained scene pauses during each job and resumes after success, failure, or abort without replacing its canvas or leaking finite renderer state into the next frame. The permanent hardware-browser probe proves custom text, 4× zoom, responsive tab switching, zero automatic finite capture, abort and successful-capture recovery, a peak renderer concurrency of one, exact WebGPU backend initialization, and a live canvas; forced WebGL2 proves the same lifecycle without shader or validation errors. Run both backend lanes with `pnpm scripts run benchmark:raster-comparison`.[^raster-technique-compare-probe]

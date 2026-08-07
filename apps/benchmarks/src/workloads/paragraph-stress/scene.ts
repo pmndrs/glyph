@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 import type * as THREE from 'three/webgpu';
 
 import { benchmarkIpsumText } from '../../benchmark/font-fixtures';
@@ -7,6 +7,8 @@ import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } fr
 import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
+  exactWidth,
+  paintColor,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
@@ -17,6 +19,9 @@ export const paragraphStressWorkload = {
     animateParagraphStressScene(scene, entries, configuration, elapsedMs, viewportHeight);
   },
   applyRetainedConfiguration() {},
+  // One Text holding a large repeated-ipsum body is already a batch of one, so a shared group would prove nothing
+  // here. Staying standalone also keeps this lane's draw and glyph telemetry directly comparable to merged v0.
+  batching: 'standalone',
   cameraKind: 'orthographic',
   contentWidth: {},
   create(context) {
@@ -24,7 +29,6 @@ export const paragraphStressWorkload = {
       ...context.configuration,
       dpr: context.dpr,
       font: context.font,
-      raster: context.raster,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -50,14 +54,14 @@ export function createParagraphStressEntries(
   ).join('\n');
   const text = new Text({
     font: context.font,
-    raster: context.raster,
     rasterPixelRatio: context.dpr,
-    lineHeight: LIVE_TEXT_LINE_HEIGHT,
     text: sourceText,
-    fontSize: context.fontSize,
-    color: LIVE_TEXT_COLOR,
-    width: benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio),
-    wrap: 'word',
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
+    paint: { color: paintColor(LIVE_TEXT_COLOR) },
+    contentBox: {
+      width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio)),
+      wrap: 'word',
+    },
   });
   return [{ node: text, role: 'primary', sourceText, text }];
 }

@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -6,6 +6,9 @@ import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '.
 
 import {
   committedTextLayout,
+  exactWidth,
+  paintColor,
+  publishWorkloadTexts,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
@@ -17,13 +20,14 @@ export const DYNAMIC_LAYOUT_TEXT = [
 ] as const;
 
 export const dynamicLayoutWorkload = {
-  animate(entries, configuration, elapsedMs, viewportWidth, viewportHeight, _scene, scratch, onError, onReflow) {
+  animate(entries, configuration, elapsedMs, viewportWidth, viewportHeight, scene, scratch, onError, onReflow) {
     animateDynamicLayoutEntries(
       entries,
       configuration,
       elapsedMs,
       viewportWidth,
       viewportHeight,
+      scene,
       scratch.dynamicWidths,
       onError,
       onReflow,
@@ -34,6 +38,7 @@ export const dynamicLayoutWorkload = {
       if (entry.bounds !== undefined) entry.bounds.visible = configuration.showLayoutBounds;
     }
   },
+  batching: 'group',
   cameraKind: 'orthographic',
   contentWidth: { maximumWidth: 1_000 },
   create(context) {
@@ -42,7 +47,6 @@ export const dynamicLayoutWorkload = {
       animationElapsedMs: context.animationElapsedMs,
       dpr: context.dpr,
       font: context.font,
-      raster: context.raster,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -87,15 +91,11 @@ export function createDynamicLayoutEntries(
     const width = widths[index]!;
     const text = new Text({
       font: context.font,
-      raster: context.raster,
       rasterPixelRatio: context.dpr,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
       text: sourceText,
-      fontSize: context.fontSize,
-      color: LIVE_TEXT_COLOR,
-      width,
-      wrap: 'word',
-      textAlign: alignment,
+      style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
+      paint: { color: paintColor(LIVE_TEXT_COLOR) },
+      contentBox: { width: exactWidth(width), wrap: 'word', align: alignment },
     });
     const bounds = createLayoutBounds();
     setDynamicLayoutBoundsVisibility(bounds, context.showLayoutBounds);
@@ -110,7 +110,6 @@ export function createDynamicLayoutEntries(
       alignment,
       animationPhase,
       lastWidth: width,
-      widthUpdate: { width },
     };
   });
 }
@@ -128,6 +127,7 @@ export function animateDynamicLayoutEntries(
   timestamp: number,
   viewportWidth: number,
   viewportHeight: number,
+  scene: THREE.Scene,
   widthsScratch: Float64Array,
   onError: (error: unknown) => void,
   onReflow: (duration: number) => void,
@@ -144,16 +144,19 @@ export function animateDynamicLayoutEntries(
   try {
     for (const [index, entry] of entries.entries()) {
       entry.lastWidth = nextWidths[index]!;
-      if (entry.widthUpdate === undefined) throw new Error('dynamic layout entry is missing its retained width update');
-      entry.widthUpdate.width = nextWidths[index]!;
-      entry.text.setProperties(entry.widthUpdate);
+      setDynamicLayoutWidth(entry, nextWidths[index]!);
     }
-    for (const { node } of entries) node.updateMatrixWorld(true);
+    publishWorkloadTexts(scene, entries);
     layoutDynamicLayoutEntries(entries, viewportWidth, viewportHeight);
     onReflow(performance.now() - reflowStarted);
   } catch (error) {
     onError(error);
   }
+}
+
+/** Each lane keeps its own alignment, so the reflowed measure has to carry the rest of the content box with it. */
+function setDynamicLayoutWidth(entry: ComparisonWorkloadEntry, width: number): void {
+  entry.text.set({ contentBox: { ...entry.text.contentBox, width: exactWidth(width) } });
 }
 
 export function layoutDynamicLayoutEntries(

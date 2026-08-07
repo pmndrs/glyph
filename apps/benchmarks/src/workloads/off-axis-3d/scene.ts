@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
@@ -7,6 +7,8 @@ import { benchmarkContentWidth, LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '.
 
 import {
   committedTextLayout,
+  exactWidth,
+  paintColor,
   type ComparisonWorkloadEntry,
   type MutablePaintSpan,
   type WorkloadTextFactoryContext,
@@ -26,7 +28,7 @@ const OFF_AXIS_WORD_COLORS = [
 export const OFF_AXIS_SPANS: readonly MutablePaintSpan[] = OFF_AXIS_WORD_COLORS.map(({ color, word }) => {
   const start = OFF_AXIS_TEXT.indexOf(word);
   if (start === -1) throw new Error(`off-axis callout is missing its ${word} color span`);
-  return { color, end: start + word.length, start };
+  return { end: start + word.length, paint: { color: paintColor(color) }, start };
 });
 const colorAt = createOklabColorCycle(OFF_AXIS_WORD_COLORS.map(({ color }) => color));
 
@@ -35,6 +37,7 @@ export const offAxis3dWorkload = {
     animateOffAxis3dEntries(entries, configuration, elapsedMs);
   },
   applyRetainedConfiguration() {},
+  batching: 'group',
   cameraKind: 'perspective',
   contentWidth: { multiplier: 2 },
   create(context) {
@@ -42,7 +45,6 @@ export const offAxis3dWorkload = {
       ...context.configuration,
       dpr: context.dpr,
       font: context.font,
-      raster: context.raster,
       viewportWidth: context.viewportWidth,
     });
   },
@@ -65,19 +67,19 @@ export function createOffAxis3dEntries(
     readonly viewportWidth: number;
   },
 ): readonly ComparisonWorkloadEntry[] {
-  const spans = OFF_AXIS_SPANS.map((span) => ({ ...span }));
+  const spans = OFF_AXIS_SPANS.map((span) => ({ ...span, paint: { ...span.paint } }));
   const text = new Text({
     font: context.font,
-    raster: context.raster,
     rasterPixelRatio: context.dpr,
-    lineHeight: LIVE_TEXT_LINE_HEIGHT,
     text: OFF_AXIS_TEXT,
     spans,
-    fontSize: context.fontSize,
-    color: LIVE_TEXT_COLOR,
-    width: benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio, undefined, 2),
-    wrap: 'word',
-    textAlign: 'center',
+    style: { fontSize: context.fontSize, lineHeight: LIVE_TEXT_LINE_HEIGHT },
+    paint: { color: paintColor(LIVE_TEXT_COLOR) },
+    contentBox: {
+      width: exactWidth(benchmarkContentWidth(context.viewportWidth, context.layoutWidthRatio, undefined, 2)),
+      wrap: 'word',
+      align: 'center',
+    },
   });
   const node = new THREE.Group();
   node.add(text);
@@ -127,9 +129,9 @@ export function animateOffAxis3dEntries(
   }
   const colorPhase = (timestamp / 32_000) * animationRate(configuration.animationSpeed);
   for (let index = 0; index < entry.offAxisSpans.length; index += 1) {
-    entry.offAxisSpans[index]!.color = offAxisColorAt(index, colorPhase);
+    entry.offAxisSpans[index]!.paint.color = paintColor(offAxisColorAt(index, colorPhase));
   }
-  entry.text.setProperties(entry.offAxisPaintUpdate);
+  entry.text.set(entry.offAxisPaintUpdate);
 }
 
 function animationRate(animationSpeed: number): number {
