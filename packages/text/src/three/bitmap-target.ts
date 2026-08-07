@@ -9,6 +9,7 @@ import type {
 } from '../paragraph-batch.js';
 import type { ParagraphBatchTarget, ParagraphBatchTargetUpdate } from '../paragraph-batch-attachment.js';
 import { bitmap, type BitmapPageData } from '../raster/bitmap-technique.js';
+import { bitmapShader } from './bitmap-shader.js';
 import {
   instanceStorageBytes,
   invalidatePboTexture,
@@ -168,29 +169,25 @@ function createBitmapTargetResource(
     ({ object }) => (object?.userData.pmndrsTextRunStart as number | undefined) ?? 0,
   );
   const instance = TSL.instanceIndex.add(runStart);
-  const origin = TSL.storage(origins, 'vec2', origins.count).setPBO(true).element(instance);
-  const size = TSL.storage(sizes, 'vec2', sizes.count).setPBO(true).element(instance);
-  const uvOrigin = TSL.storage(uvOrigins, 'vec2', uvOrigins.count).setPBO(true).element(instance);
-  const uvSize = TSL.storage(uvSizes, 'vec2', uvSizes.count).setPBO(true).element(instance);
-  const color = TSL.storage(colors, 'vec4', colors.count).setPBO(true).element(instance);
-  const atlasUv = TSL.vec2(
-    uvOrigin.x.add(TSL.uv().x.mul(uvSize.x)),
-    TSL.float(1).sub(uvOrigin.y.add(TSL.uv().y.mul(uvSize.y))),
+  const shader = bitmapShader(
+    {
+      origin: TSL.storage(origins, 'vec2', origins.count).setPBO(true).element(instance),
+      size: TSL.storage(sizes, 'vec2', sizes.count).setPBO(true).element(instance),
+      uvOrigin: TSL.storage(uvOrigins, 'vec2', uvOrigins.count).setPBO(true).element(instance),
+      uvSize: TSL.storage(uvSizes, 'vec2', uvSizes.count).setPBO(true).element(instance),
+      color: TSL.storage(colors, 'vec4', colors.count).setPBO(true).element(instance),
+    },
+    { page: texture },
   );
-  const sampled = TSL.texture(texture, atlasUv);
   const material = new THREE.MeshBasicNodeMaterial({
     depthTest: false,
     depthWrite: false,
     side: THREE.DoubleSide,
     transparent: true,
   });
-  material.positionNode = TSL.vec3(
-    origin.x.add(TSL.positionLocal.x.mul(size.x)),
-    origin.y.add(TSL.positionLocal.y.mul(size.y)).negate(),
-    0,
-  );
-  material.colorNode = color.rgb;
-  material.opacityNode = color.a.mul(sampled.r);
+  material.positionNode = shader.position;
+  material.colorNode = shader.color;
+  material.opacityNode = shader.opacity;
 
   return {
     key: batch.key,

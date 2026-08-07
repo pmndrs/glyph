@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:06acf9e9e614e47720176e0ba2f16e4d3edf88af6abe6757b16760c9d0bb41cd'
+source_digest: 'sha256:e04381c010396a8f0b005a71129adc853c2427ba8ece4e08e488c002a8eb9417'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -175,7 +175,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T13:26:50Z'
+  at: '2026-08-07T14:52:58Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -205,7 +205,25 @@ identifier rather than its object identity, and pre-registers the three first-pa
 the public raster extension boundary proven in milestone 10: a third party registers a Three program for its own technique
 through `registerThreeRasterProgram`, and an application may wrap a first-party technique to instrument its runtime baker
 without the wrapper losing its program. An unregistered technique fails at batch construction with a typed error naming
-the identifier instead of rendering nothing.
+the identifier instead of rendering nothing. `registerThreeRasterProgram` infers that technique, so a program may type its
+prepared batches, storage, and binding concretely; the registry itself stays heterogeneous and holds the erased form after
+the pairing is proven at the registration call.
+
+`/three` also exports each canonical technique shader as `bitmapShader`, `mtsdfShader`, and `slugShader`.[^three-v1] Each
+takes one glyph instance's resolved nodes plus that batch's bound GPU resources and returns a named readonly output:
+position, coverage, resolved colour, opacity, and the intermediate stages the technique produces, such as MTSDF's separate
+fill, outline-ring, and shadow coverage or Slug's dilated render coordinate. These are not a parallel copy maintained for
+external use. `ThreeBitmapTarget`, `ThreeMtsdfTarget`, and `ThreeSlugTarget` build their materials from exactly these
+functions, so a composed program cannot drift from what the first-party path renders and deleting an export breaks the
+built-in target rather than an unused mirror. Each function reads `positionLocal` and `uv()` from the technique's unit
+quad, so a program supplying its own geometry owns that correspondence.
+
+The composed-program proof renders one paragraph twice on native WebGPU and forced WebGL2: once through the pre-registered
+Bitmap program, then through a third-party program that owns its own attributes, geometry, and material and composes only
+its final colour over `bitmapShader`. Both passes light an identical 1,243-pixel set while the composed pass emits no green
+channel, so the custom program inherited the canonical placement and coverage instead of reimplementing them. Extracting
+the three shaders left the retained proof pages unchanged at 1,226 lit pixels for Bitmap, 1,935 for MTSDF, and 1,510 for
+Slug on both backends.
 
 The Three `FontLoader` forwards the two per-load capabilities the core runtime already accepted but the adapter withheld.
 A request may carry an `AbortSignal`, so a cancelled load stops instead of running to completion; the merged-v0 registry

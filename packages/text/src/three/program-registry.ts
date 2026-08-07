@@ -25,9 +25,9 @@ export interface ThreeRasterTargetAccounting {
  * Builds the Three target that realizes one technique's prepared glyph batches as engine resources and draws. Core
  * owns partitioning, packing, and ordering; a program owns shaders, pipelines, and final draw compilation.
  */
-export type ThreeRasterProgram = (
+export type ThreeRasterProgram<Technique extends AnyRasterTechnique = AnyRasterTechnique> = (
   owner: ThreeRasterTargetOwner,
-) => ParagraphBatchTarget<AnyRasterTechnique, never, ParagraphBatchTargetRevision> & ThreeRasterTargetAccounting;
+) => ParagraphBatchTarget<Technique, never, ParagraphBatchTargetRevision> & ThreeRasterTargetAccounting;
 
 const programs = new Map<RasterTechniqueId, ThreeRasterProgram>();
 
@@ -35,13 +35,20 @@ const programs = new Map<RasterTechniqueId, ThreeRasterProgram>();
  * Registers the Three program for a raster technique, keyed by the technique's stable identifier rather than its object
  * identity. Identifier keying lets an application wrap a technique — to instrument its runtime baker, for example —
  * without losing the ability to render it.
+ *
+ * The technique is inferred, so a program may type its prepared batches, storage, and binding concretely; the registry
+ * itself is heterogeneous and holds the erased form, having already proven the pairing at this call.
  */
-export function registerThreeRasterProgram(technique: AnyRasterTechnique, program: ThreeRasterProgram): void {
+export function registerThreeRasterProgram<Technique extends AnyRasterTechnique>(
+  technique: Technique,
+  program: ThreeRasterProgram<Technique>,
+): void {
+  const erased = program as ThreeRasterProgram;
   const existing = programs.get(technique.id);
-  if (existing !== undefined && existing !== program) {
+  if (existing !== undefined && existing !== erased) {
     throw new TypeError(`a different Three raster program is already registered for "${technique.id}"`);
   }
-  programs.set(technique.id, program);
+  programs.set(technique.id, erased);
 }
 
 /** Resolves the registered Three program for a technique, or `undefined` when no program has been registered. */

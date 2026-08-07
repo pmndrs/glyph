@@ -12,7 +12,19 @@ export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
 export type { GlyphBufferCapacity, GlyphOriginUpdate, GlyphSnapshot, ParagraphContentBox } from './paragraph-batch.js';
 export type { ParagraphLayout } from './layout.js';
 export type { ParagraphStyle } from './paragraph.js';
+export { bitmapShader } from './three/bitmap-shader.js';
+export type {
+  ThreeBitmapInstanceNodes,
+  ThreeBitmapShaderOutput,
+  ThreeBitmapShaderResources,
+} from './three/bitmap-shader.js';
 export { FontLoader } from './three/font-loader.js';
+export { mtsdfShader } from './three/mtsdf-shader.js';
+export type {
+  ThreeMtsdfInstanceNodes,
+  ThreeMtsdfShaderOutput,
+  ThreeMtsdfShaderResources,
+} from './three/mtsdf-shader.js';
 export { registerThreeRasterProgram } from './three/program-registry.js';
 export type {
   ThreeRasterProgram,
@@ -23,6 +35,14 @@ export type {
   ThreeFontLoaderOptions as FontLoaderOptions,
   ThreeLoadedFontRequest as LoadedFontRequest,
 } from './three/font-loader.js';
+export { slugShader } from './three/slug-shader.js';
+export type {
+  ThreeSlugFillRule,
+  ThreeSlugInstanceNodes,
+  ThreeSlugPageResources,
+  ThreeSlugShaderOutput,
+  ThreeSlugShaderResources,
+} from './three/slug-shader.js';
 export { Text, TextGroup } from './three/text.js';
 export type {
   StandaloneTextProperties,

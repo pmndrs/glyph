@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 /* @workflow
 {
   "name": "benchmark:v1-bitmap",
-  "summary": "Render the target-v1 core and Three Bitmap path on WebGPU and WebGL2.",
+  "summary": "Render the target-v1 core, Three Bitmap/MTSDF/Slug, and a composed third-party program on WebGPU and WebGL2.",
   "requirements": "Playwright Chromium, WebGPU, WebGL2, and baked Inter fixtures.",
   "writes": "No repository files."
 }
@@ -19,6 +19,17 @@ interface RasterProofResult {
   readonly retainedDraw: boolean;
   readonly retainedStorage: boolean;
   readonly gpuBytes: number;
+}
+
+interface ComposeProofResult {
+  readonly backend: 'webgpu' | 'webgl2';
+  readonly drawCount: number;
+  readonly glyphCount: number;
+  readonly litPixels: number;
+  readonly redPixels: number;
+  readonly greenPixels: number;
+  readonly canonicalLitPixels: number;
+  readonly canonicalGreenPixels: number;
 }
 
 interface AsyncProofResult {
@@ -133,6 +144,30 @@ try {
     )
       throw new Error(`${expected} target-v1 Slug output is not visibly populated: ${JSON.stringify(result)}`);
     process.stdout.write(`${expected} slug: ${JSON.stringify(result)}\n`);
+    await page.close();
+  }
+  for (const expected of ['webgpu', 'webgl2'] as const) {
+    const page = await browser.newPage({ viewport: { width: 256, height: 128 }, deviceScaleFactor: 1 });
+    const errors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(`http://127.0.0.1:5177/v1-compose.html?backend=${expected}`, { waitUntil: 'domcontentloaded' });
+    const result = await page.evaluate(
+      () => (window as typeof window & { targetV1ComposeReady: Promise<ComposeProofResult> }).targetV1ComposeReady,
+    );
+    if (errors.length !== 0) throw new Error(`${expected} compose browser errors: ${errors.join(' | ')}`);
+    if (result.backend !== expected) throw new Error(`expected ${expected}, received ${result.backend}`);
+    if (result.drawCount < 1 || result.glyphCount !== 16 || result.canonicalGreenPixels !== result.canonicalLitPixels)
+      throw new Error(`compose proof did not establish a canonical baseline: ${JSON.stringify(result)}`);
+    // Composing over the exported shader may repaint the glyphs but must not move or reshape them: an identical lit set
+    // proves the custom program inherited the canonical position and coverage rather than reimplementing them.
+    if (result.litPixels !== result.canonicalLitPixels || result.redPixels !== result.canonicalLitPixels)
+      throw new Error(`composed program did not reproduce the canonical coverage: ${JSON.stringify(result)}`);
+    if (result.greenPixels !== 0)
+      throw new Error(`composed program did not apply its own final output: ${JSON.stringify(result)}`);
+    process.stdout.write(`${expected} compose: ${JSON.stringify(result)}\n`);
     await page.close();
   }
   const asyncPage = await browser.newPage();

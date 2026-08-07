@@ -2,7 +2,6 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { UniformNode } from 'three/webgpu';
 
-import { slugDilate, slugRender, type SlugShaderPage } from '../internal/slug-shaders/index.js';
 import type {
   GlyphBatchKey,
   ParagraphId,
@@ -11,6 +10,7 @@ import type {
 } from '../paragraph-batch.js';
 import type { ParagraphBatchTarget, ParagraphBatchTargetUpdate } from '../paragraph-batch-attachment.js';
 import { slug, type SlugPageData } from '../raster/slug-technique.js';
+import { slugShader, type ThreeSlugPageResources } from './slug-shader.js';
 import {
   instanceStorageBytes,
   invalidatePboTexture,
@@ -25,7 +25,7 @@ export interface ThreeSlugTargetOwner {
   readonly renderOrderBase: number;
 }
 
-interface ThreeSlugPage extends SlugShaderPage {
+interface ThreeSlugPage extends ThreeSlugPageResources {
   readonly curveHeight: number;
   readonly headerHeight: number;
   readonly referenceHeight: number;
@@ -236,11 +236,30 @@ function createSlugTargetResource(batch: PreparedGlyphBatch<typeof slug>, page: 
   const mvpRow0: UniformNode<'vec4', THREE.Vector4> = TSL.uniform(new THREE.Vector4(1, 0, 0, 0));
   const mvpRow1: UniformNode<'vec4', THREE.Vector4> = TSL.uniform(new THREE.Vector4(0, 1, 0, 0));
   const mvpRow3: UniformNode<'vec4', THREE.Vector4> = TSL.uniform(new THREE.Vector4(0, 0, 0, 1));
-  const renderCoordinate = TSL.varyingProperty('vec2', 'pmndrsSlugRenderCoordinate');
-  const origin = geometry.xy;
-  const size = geometry.zw;
-  const emOrigin = em.xy;
-  const emSize = em.zw;
+  const shader = slugShader(
+    {
+      origin: geometry.xy,
+      size: geometry.zw,
+      emOrigin: em.xy,
+      emSize: em.zw,
+      inverseScale,
+      color,
+      bandTransform,
+      curveBaseTexel: addresses.x,
+      horizontalHeaderBase: addresses.y,
+      verticalHeaderBase: addresses.z,
+      referenceBase: addresses.w,
+      horizontalBandCount: counts.x,
+      verticalBandCount: counts.y,
+    },
+    {
+      page,
+      viewport,
+      modelViewProjectionRow0: mvpRow0,
+      modelViewProjectionRow1: mvpRow1,
+      modelViewProjectionRow3: mvpRow3,
+    },
+  );
   const material = new THREE.MeshBasicNodeMaterial({
     blending: THREE.NormalBlending,
     depthTest: false,
@@ -248,50 +267,9 @@ function createSlugTargetResource(batch: PreparedGlyphBatch<typeof slug>, page: 
     side: THREE.DoubleSide,
     transparent: true,
   });
-  material.positionNode = TSL.Fn(() => {
-    const localPosition = TSL.vec2(
-      origin.x.add(TSL.positionLocal.x.mul(size.x)),
-      origin.y.add(TSL.positionLocal.y.mul(size.y)).negate(),
-    );
-    const outwardNormal = TSL.vec2(
-      TSL.positionLocal.x.sub(0.5).mul(size.x),
-      TSL.positionLocal.y.sub(0.5).mul(size.y).negate(),
-    );
-    const emCoordinate = TSL.vec2(
-      emOrigin.x.add(TSL.positionLocal.x.mul(emSize.x)),
-      emOrigin.y.add(TSL.positionLocal.y.mul(emSize.y)),
-    );
-    const dilated = slugDilate(
-      localPosition,
-      outwardNormal,
-      emCoordinate,
-      inverseScale,
-      mvpRow0,
-      mvpRow1,
-      mvpRow3,
-      viewport,
-    );
-    renderCoordinate.assign(dilated.textureCoordinate);
-    return TSL.vec3(dilated.position.x, dilated.position.y, 0);
-  })();
-  material.colorNode = color.rgb;
-  material.opacityNode = TSL.Fn(() => {
-    const coverage = slugRender(
-      page,
-      {
-        curveBaseTexel: addresses.x,
-        horizontalHeaderBase: addresses.y,
-        verticalHeaderBase: addresses.z,
-        referenceBase: addresses.w,
-        horizontalBandCount: counts.x,
-        verticalBandCount: counts.y,
-        bandTransform,
-      },
-      renderCoordinate,
-      { evenOdd: TSL.bool(false), weightBoost: TSL.bool(false) },
-    );
-    return color.a.mul(coverage);
-  })();
+  material.positionNode = shader.position;
+  material.colorNode = shader.color;
+  material.opacityNode = shader.opacity;
   const allAttributes = Object.entries(attributes);
   return {
     key: batch.key,
