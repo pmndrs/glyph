@@ -27,15 +27,17 @@ const techniques = ['bitmap', 'mtsdf', 'slug'] as const;
 type Technique = (typeof techniques)[number];
 
 interface Scenario {
-  readonly change: 'text' | 'font-size' | 'layout-width';
+  readonly change: 'text' | 'typewriter' | 'font-size' | 'layout-width';
   readonly workload: 'advanced-shaping' | 'benchmark-ipsum';
-  readonly control: RegExp;
-  /** Absolute control values to apply in turn, or `undefined` to step the control's current value by one. */
+  /** The range control the measurement drives, or `undefined` when the workload's own timeline drives the change. */
+  readonly control: RegExp | undefined;
+  /** Absolute control values to apply in turn, or `undefined` to step the control by `TEXT_REVEAL_STEP`. */
   readonly values: readonly string[] | undefined;
 }
 
 const scenarios: readonly Scenario[] = [
   { change: 'text', workload: 'advanced-shaping', control: /^Timeline · /, values: undefined },
+  { change: 'typewriter', workload: 'advanced-shaping', control: undefined, values: undefined },
   { change: 'font-size', workload: 'benchmark-ipsum', control: /^Rendered size · /, values: ['26', '18', '30', '20'] },
   {
     change: 'layout-width',
@@ -67,6 +69,12 @@ interface ScenarioResult extends Scenario {
 const backend = process.env.PROBE_BACKEND === 'webgl2' ? 'webgl2' : 'webgpu';
 const observationWindowMs = 500;
 const stepCount = 4;
+/** Reveal tick of the mixed-direction case that sits inside its Arabic run, where an insertion reorders the line. */
+const ARABIC_RUN_TICK = 22;
+/** Graphemes revealed per measured text change. Several at once make the bidi reorder unmistakable in the canvas. */
+const TEXT_REVEAL_STEP = 3;
+/** Full authored reveal speed: faster than one grapheme per frame, which is where a lagging presentation shows. */
+const TYPEWRITER_REVEAL_PER_SECOND = 240;
 
 const server = await createServer({ root, server: { host: '127.0.0.1', port: 0 } });
 await server.listen();
@@ -126,29 +134,20 @@ async function openWorkload(page: Page, technique: Technique, workload: Scenario
     await page.getByRole('button', { name: 'Pause' }).click();
     const timeline = page.getByLabel(/^Timeline · /);
     const tickCount = Number(await timeline.getAttribute('max'));
-    await setRangeValue(timeline, String(Math.round(tickCount / 2)));
+    // Park the reveal inside the Arabic run. The case opens "PMNDRS 2026 — " in Latin, and appending to a left-to-right
+    // run reorders nothing; only a right-to-left run shows the reordering a cluster-keyed match would animate through.
+    await setRangeValue(timeline, String(Math.min(ARABIC_RUN_TICK, tickCount)));
   }
   await page.evaluate(installCanvasProbe);
   await page.waitForTimeout(600);
 }
 
 async function runScenario(page: Page, technique: Technique, scenario: Scenario): Promise<ScenarioResult> {
-  await page.getByLabel(scenario.control).waitFor({ timeout: 30_000 });
   const idle = await page.evaluate((windowMs) => window.liveUpdateCanvasProbe.observe(windowMs), observationWindowMs);
-  const observations: FrameObservation[] = [];
-  for (let step = 0; step < stepCount; step += 1) {
-    const value = scenario.values?.[step % scenario.values.length];
-    observations.push(
-      await page
-        .getByLabel(scenario.control)
-        .evaluate(
-          (element, request) =>
-            window.liveUpdateCanvasProbe.observe(request.windowMs, element as HTMLInputElement, request.value),
-          { windowMs: observationWindowMs, value },
-        ),
-    );
-    await page.waitForTimeout(400);
-  }
+  const observations =
+    scenario.control === undefined
+      ? await observeTypewriter(page)
+      : await observeControl(page, scenario.control, scenario.values);
   const evidence = await page.evaluate((testId) => {
     const viewport = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
     return {
@@ -159,6 +158,54 @@ async function runScenario(page: Page, technique: Technique, scenario: Scenario)
     };
   }, `${technique}-live-viewport`);
   return { ...scenario, technique, observations, idle, ...evidence };
+}
+
+async function observeControl(
+  page: Page,
+  control: RegExp,
+  values: readonly string[] | undefined,
+): Promise<readonly FrameObservation[]> {
+  await page.getByLabel(control).waitFor({ timeout: 30_000 });
+  const observations: FrameObservation[] = [];
+  for (let step = 0; step < stepCount; step += 1) {
+    const locator = page.getByLabel(control);
+    // Resolved before the measurement window opens, so the sampler only ever applies an absolute value.
+    const value = values?.[step % values.length] ?? String(Number(await locator.inputValue()) + TEXT_REVEAL_STEP);
+    observations.push(
+      await locator.evaluate(
+        (element, request) =>
+          window.liveUpdateCanvasProbe.observe(request.windowMs, element as HTMLInputElement, request.value),
+        { windowMs: observationWindowMs, value },
+      ),
+    );
+    await page.waitForTimeout(400);
+  }
+  return observations;
+}
+
+/**
+ * Measures how far the presented paragraph lags the paragraph the surface has already committed.
+ *
+ * The typewriter runs at full reveal speed, faster than one grapheme per frame, and then the window opens on the very
+ * task that pauses it. From that instant the source text is fixed, so every further distinct frame is the harness
+ * still catching up: queued updates it had not applied, or a glyph transition still travelling toward a layout that
+ * settled frames ago. A presentation that keeps pace goes quiet immediately.
+ */
+async function observeTypewriter(page: Page): Promise<readonly FrameObservation[]> {
+  const observations: FrameObservation[] = [];
+  for (let step = 0; step < stepCount; step += 1) {
+    await setRangeValue(page.getByLabel(/^Reveal speed · /), String(TYPEWRITER_REVEAL_PER_SECOND));
+    await setRangeValue(page.getByLabel(/^Timeline · /), String(ARABIC_RUN_TICK));
+    await page.getByRole('button', { name: 'Play' }).click();
+    await page.waitForTimeout(700);
+    observations.push(
+      await page
+        .getByRole('button', { name: 'Pause' })
+        .evaluate((element, windowMs) => window.liveUpdateCanvasProbe.observe(windowMs, element), observationWindowMs),
+    );
+    await page.waitForTimeout(300);
+  }
+  return observations;
 }
 
 async function setRangeValue(control: ReturnType<Page['getByLabel']>, value: string): Promise<void> {
@@ -178,11 +225,11 @@ async function setRangeValue(control: ReturnType<Page['getByLabel']>, value: str
  */
 function installCanvasProbe(): void {
   window.liveUpdateCanvasProbe = {
-    observe(windowMs: number, input?: HTMLInputElement, value?: string) {
+    observe(windowMs: number, input?: HTMLElement, value = '') {
       const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-configured-renderer-active="true"]');
       if (canvas === null) throw new Error('the probe canvas is missing');
-      const width = 320;
-      const height = 180;
+      const width = 640;
+      const height = 360;
       const scratch = document.createElement('canvas');
       scratch.width = width;
       scratch.height = height;
@@ -200,8 +247,8 @@ function installCanvasProbe(): void {
             Math.abs(left[index]! - right[index]!) +
             Math.abs(left[index + 1]! - right[index + 1]!) +
             Math.abs(left[index + 2]! - right[index + 2]!);
-          if (delta > 12) changed += 1;
-          if (changed > 3) return true;
+          if (delta > 10) changed += 1;
+          if (changed > 2) return true;
         }
         return false;
       };
@@ -211,8 +258,8 @@ function installCanvasProbe(): void {
         distinctFrames: number;
         sampledFrames: number;
       }>((resolve) => {
-        let previous = sample();
-        const startedAt = performance.now();
+        let previous = new Uint8ClampedArray();
+        let startedAt = 0;
         let sampledFrames = 0;
         let framesToChange = 0;
         let latencyMs = Number.NaN;
@@ -234,13 +281,19 @@ function installCanvasProbe(): void {
           }
           requestAnimationFrame(step);
         };
-        requestAnimationFrame(step);
-        if (input !== undefined) {
-          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-          setter?.call(input, value ?? String(Number(input.value) + 1));
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+        // The baseline has to come from a rendered frame. Sampling outside the animation callback reads whichever
+        // buffer the compositor happens to expose, and that alone counts as a change on the first sampled frame.
+        requestAnimationFrame(() => {
+          previous = sample();
+          startedAt = performance.now();
+          if (input instanceof HTMLInputElement) {
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+            setter?.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          } else input?.click();
+          requestAnimationFrame(step);
+        });
       });
     },
   };
@@ -249,18 +302,18 @@ function installCanvasProbe(): void {
 function report(all: readonly ScenarioResult[]): void {
   process.stdout.write(`backend=${backend} window=${String(observationWindowMs)}ms steps=${String(stepCount)}\n`);
   process.stdout.write(
-    'technique change       frames-to-visible  latency-ms        distinct-frames  idle-distinct  fps    transitioned  matched/target\n',
+    'technique change        frames-to-visible  latency-ms        distinct-frames  idle  fps    transitioned  matched/target\n',
   );
   for (const result of all) {
     const frames = result.observations.map((observation) => observation.framesToChange);
     const latencies = result.observations.map((observation) => observation.latencyMs);
     const distinct = result.observations.map((observation) => observation.distinctFrames);
     process.stdout.write(
-      `${result.technique.padEnd(10)}${result.change.padEnd(14)}` +
+      `${result.technique.padEnd(10)}${result.change.padEnd(15)}` +
         `${`${String(median(frames))} med / ${String(Math.max(...frames))} max`.padEnd(19)}` +
         `${`${median(latencies).toFixed(1)} / ${Math.max(...latencies).toFixed(1)}`.padEnd(18)}` +
         `${`${String(median(distinct))} med / ${String(Math.max(...distinct))} max`.padEnd(17)}` +
-        `${String(result.idle.distinctFrames).padEnd(15)}` +
+        `${String(result.idle.distinctFrames).padEnd(6)}` +
         `${result.framesPerSecond.toFixed(1).padEnd(7)}` +
         `${(result.transitioned ?? 'n/a').padEnd(14)}` +
         `${result.matchedGlyphs ?? 'n/a'}/${result.targetGlyphs ?? 'n/a'}\n`,
@@ -280,7 +333,7 @@ declare global {
     liveUpdateCanvasProbe: {
       observe(
         windowMs: number,
-        input?: HTMLInputElement,
+        input?: HTMLElement,
         value?: string,
       ): Promise<{
         framesToChange: number;
