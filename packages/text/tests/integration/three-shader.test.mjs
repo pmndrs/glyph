@@ -43,7 +43,7 @@ test('a custom Three program composes over the exported Bitmap shader in the rea
 
   assert.deepEqual(
     Object.keys(shader).sort(),
-    ['atlasUv', 'color', 'coverage', 'opacity', 'position'],
+    ['atlasUv', 'clipPosition', 'color', 'coverage', 'opacity', 'position'],
     'the canonical Bitmap shader must return its documented named outputs',
   );
   for (const [name, node] of Object.entries(shader)) {
@@ -52,6 +52,7 @@ test('a custom Three program composes over the exported Bitmap shader in the rea
 
   assert.equal(draws[0].material, material);
   assert.equal(material.positionNode, shader.position, 'the program must reuse the canonical vertex placement');
+  assert.equal(material.vertexNode, shader.clipPosition, 'the program must inherit the canonical pixel snapping');
   assert.equal(material.opacityNode, shader.opacity, 'the program must reuse the canonical coverage and paint alpha');
   assert.notEqual(material.colorNode, shader.color, 'the program must be free to emit its own final colour');
 
@@ -132,6 +133,7 @@ class ComposedTarget {
     );
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true });
     material.positionNode = shader.position;
+    material.vertexNode = shader.clipPosition;
     material.colorNode = shader.color.mul(TSL.vec3(1, 0, 0));
     material.opacityNode = shader.opacity;
     this.#built.push({ shader, material });

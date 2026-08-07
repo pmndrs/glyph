@@ -1,12 +1,16 @@
-import { FontRegistry, type RegisteredFont } from '@pmndrs/text';
-import { bitmap, bitmapRasterKey, type BitmapResource } from '@pmndrs/text/raster/bitmap/v0';
+import { FontRegistry, type LoadedFont } from '@pmndrs/text';
+import { type bitmap, type BitmapData } from '@pmndrs/text/raster/bitmap';
 import * as THREE from 'three/webgpu';
 
 import { conformanceText, type BenchmarkFontFixture } from '../../font-fixtures';
 import type { TargetRunOutput } from '../../contracts';
 import type { FontDelivery } from '../../url-state';
 import { loadBitmapFontAsset } from '../../../workloads/font-assets/bitmap';
-import { createBitmapLine, disposeBitmapLine, type BitmapLine } from '../../../techniques/bitmap/line';
+import {
+  createBitmapConformanceLine,
+  disposeBitmapConformanceLine,
+  type BitmapConformanceLine,
+} from '../../../techniques/bitmap/conformance-line';
 import {
   createConfiguredRenderer,
   disposeConfiguredRenderer,
@@ -22,24 +26,9 @@ export const BITMAP_FINITE_HEIGHT = 128;
 const CLIPPED_WIDTH = 192;
 const CLIPPED_HEIGHT = 64;
 const BITMAP_FONT_SIZE = 16;
-const bitmapRequest = bitmap({ strikes: [16] as const });
-
-interface BitmapReferencePage {
-  readonly width: number;
-  readonly height: number;
-  readonly texels: Uint8Array;
-}
-
-interface BitmapReferenceStrike {
-  readonly ppem: number;
-  readonly planeUnitsPerEm: number;
-  readonly records: Uint8Array;
-  readonly pages: readonly BitmapReferencePage[];
-}
-
-interface BitmapReferenceResource {
-  readonly strikes: readonly BitmapReferenceStrike[];
-}
+/** Glyph record stride the Bitmap technique publishes for its dense per-strike record table. */
+const RECORD_STRIDE = 20;
+const ABSENT_PAGE = 0xffff;
 
 export interface BitmapFiniteScene {
   readonly backend: RendererBackend;
@@ -49,9 +38,9 @@ export interface BitmapFiniteScene {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly line: BitmapLine;
-  readonly reference: BitmapReferenceResource;
+  readonly font: LoadedFont<typeof bitmap>;
+  readonly line: BitmapConformanceLine;
+  readonly reference: BitmapData;
   readonly referencePixels: Uint8Array;
   readonly atlasGpuBytes: number;
   readonly firstDrawMs: number;
@@ -102,8 +91,8 @@ export async function createBitmapFiniteScene({
   const renderer = borrowedRenderer ?? ownedRenderer!;
   const rendererViewport = readRendererViewportState(renderer as THREE.WebGPURenderer);
   let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  let line: BitmapLine | undefined;
+  let font: LoadedFont<typeof bitmap> | undefined;
+  let line: BitmapConformanceLine | undefined;
   try {
     const loadedFont = await loadBitmapFontAsset({
       technique: 'bitmap',
@@ -113,10 +102,11 @@ export async function createBitmapFiniteScene({
       registry: new FontRegistry(),
       ...(signal === undefined ? {} : { signal }),
     });
-    font = loadedFont.font;
-    line = await createBitmapLine(
+    font = loadedFont.loaded;
+    const scene = new THREE.Scene();
+    line = createBitmapConformanceLine(
+      scene,
       font,
-      loadedFont.raster,
       conformanceText(),
       BITMAP_FONT_SIZE / dpr,
       rendererViewport.pixelRatio,
@@ -127,8 +117,6 @@ export async function createBitmapFiniteScene({
       quarterDevicePosition(-Math.max(4, (BITMAP_FINITE_HEIGHT - line.height) / 2), dpr),
       0,
     );
-    const scene = new THREE.Scene();
-    scene.add(line.object);
     const camera = new THREE.OrthographicCamera(0, BITMAP_FINITE_WIDTH, 0, -BITMAP_FINITE_HEIGHT, 0.1, 10);
     camera.position.z = 1;
     camera.updateProjectionMatrix();
@@ -151,7 +139,7 @@ export async function createBitmapFiniteScene({
       renderer.render(scene, camera);
       return performance.now() - firstDrawStarted;
     });
-    const { atlasGpuBytes, reference } = await loadBitmapReferenceSnapshot(font, signal);
+    const reference = font.data;
     const referencePixels = composeBitmapReference(line, reference, dpr, BITMAP_FINITE_WIDTH, BITMAP_FINITE_HEIGHT);
     return {
       backend,
@@ -165,12 +153,12 @@ export async function createBitmapFiniteScene({
       line,
       reference,
       referencePixels,
-      atlasGpuBytes,
+      atlasGpuBytes: bitmapAtlasBytes(reference),
       firstDrawMs,
       fontFixture,
     };
   } catch (error) {
-    if (line !== undefined) disposeBitmapLine(line);
+    if (line !== undefined) disposeBitmapConformanceLine(line);
     font?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
@@ -308,7 +296,7 @@ export async function renderBitmapFiniteFrame(
 }
 
 export async function disposeBitmapFiniteScene(resources: BitmapFiniteScene): Promise<void> {
-  disposeBitmapLine(resources.line);
+  disposeBitmapConformanceLine(resources.line);
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
@@ -388,44 +376,12 @@ export function assertBitmapTextPixels(
   };
 }
 
-async function loadBitmapReferenceSnapshot(
-  font: RegisteredFont,
-  signal?: AbortSignal,
-): Promise<{ readonly atlasGpuBytes: number; readonly reference: BitmapReferenceResource }> {
-  const raster = await font.loadRaster(
-    { rasterKey: await bitmapRasterKey({ strikes: [16] as const }), kind: 'bitmap' },
-    signal === undefined ? undefined : { signal },
-  );
-  const resource = await bitmapRequest.module.decode(font, raster, signal);
-  try {
-    return { atlasGpuBytes: bitmapAtlasBytes(resource), reference: snapshotBitmapReference(resource) };
-  } finally {
-    bitmapRequest.module.dispose(resource);
-  }
-}
-
-function bitmapAtlasBytes(resource: BitmapResource): number {
-  return resource.strikes.reduce(
+function bitmapAtlasBytes(data: BitmapData): number {
+  return data.strikes.reduce(
     (strikeBytes, strike) =>
       strikeBytes + strike.pages.reduce((pageBytes, page) => pageBytes + page.width * page.height, 0),
     0,
   );
-}
-
-function snapshotBitmapReference(resource: BitmapResource): BitmapReferenceResource {
-  return {
-    strikes: resource.strikes.map((strike) => ({
-      ppem: strike.ppem,
-      planeUnitsPerEm: strike.planeUnitsPerEm,
-      records: strike.records.slice(),
-      pages: strike.pages.map((page) => {
-        const texels = page.texture.image.data;
-        if (!(texels instanceof Uint8Array))
-          throw new TypeError('bitmap reference page is not backed by unsigned-byte coverage');
-        return { width: page.width, height: page.height, texels: texels.slice() };
-      }),
-    })),
-  };
 }
 
 function differenceImage(
@@ -452,8 +408,8 @@ function differenceImage(
 }
 
 function composeBitmapReference(
-  line: BitmapLine,
-  resource: BitmapReferenceResource,
+  line: BitmapConformanceLine,
+  data: BitmapData,
   dpr: number,
   cssWidth: number,
   cssHeight: number,
@@ -463,7 +419,7 @@ function composeBitmapReference(
   const physicalHeight = Math.round(cssHeight * dpr);
   const output = new Uint8Array(physicalWidth * physicalHeight * 4);
   for (let alpha = 3; alpha < output.byteLength; alpha += 4) output[alpha] = 255;
-  const strike = resource.strikes.find(({ ppem }) => ppem === line.strikePpem);
+  const strike = data.strikes.find(({ ppem }) => ppem === line.strikePpem);
   if (strike === undefined) throw new Error('bitmap reference is missing the selected strike');
   const records = new DataView(strike.records.buffer, strike.records.byteOffset, strike.records.byteLength);
   const { layout } = line;
@@ -472,9 +428,9 @@ function composeBitmapReference(
     const glyphId = layout.glyphIds[glyphIndex];
     const fontSize = layout.glyphFontSizes[glyphIndex];
     if (glyphId === undefined || fontSize === undefined) continue;
-    const record = glyphId * 20;
+    const record = glyphId * RECORD_STRIDE;
     const pageIndex = records.getUint16(record + 16, true);
-    if (pageIndex === 0xffff) continue;
+    if (pageIndex === ABSENT_PAGE) continue;
     const page = strike.pages[pageIndex];
     if (page === undefined) throw new Error('bitmap reference record points to a missing page');
     const scale = fontSize / strike.planeUnitsPerEm;
@@ -495,7 +451,7 @@ function composeBitmapReference(
           if (allowClipping) continue;
           throw new Error('bitmap reference glyph exceeds the framebuffer');
         }
-        const coverage = page.texels[atlasY * page.width + atlasX]!;
+        const coverage = page.bytes[atlasY * page.width + atlasX]!;
         const destination = (y * physicalWidth + x) * 4;
         const previous = output[destination]!;
         const composed = coverage + Math.round((previous * (255 - coverage)) / 255);
