@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:0f329b43241131981b1a399232246033efdf4f2fc451846f135ec8bae0bdb02c'
+source_digest: 'sha256:06acf9e9e614e47720176e0ba2f16e4d3edf88af6abe6757b16760c9d0bb41cd'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -206,6 +206,12 @@ the public raster extension boundary proven in milestone 10: a third party regis
 through `registerThreeRasterProgram`, and an application may wrap a first-party technique to instrument its runtime baker
 without the wrapper losing its program. An unregistered technique fails at batch construction with a typed error naming
 the identifier instead of rendering nothing.
+
+The Three `FontLoader` forwards the two per-load capabilities the core runtime already accepted but the adapter withheld.
+A request may carry an `AbortSignal`, so a cancelled load stops instead of running to completion; the merged-v0 registry
+and loader both accepted one, and several consumers abort mid-load. Loader options may name a `FontRegistry`, so an
+application holding registry-scoped state reaches the fonts this loader produces rather than receiving fonts owned by a
+registry it cannot address.
 
 Readonly `Text.gpuBytes` and `TextGroup.gpuBytes` report the bytes of the GPU resources their attached target currently
 retains: the textures it shares across batches plus the instance buffers its committed revision owns. Reporting belongs to

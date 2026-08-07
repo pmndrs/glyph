@@ -19,7 +19,10 @@ export type {
   ThreeRasterTargetAccounting,
   ThreeRasterTargetOwner,
 } from './three/program-registry.js';
-export type { ThreeFontLoaderOptions as FontLoaderOptions } from './three/font-loader.js';
+export type {
+  ThreeFontLoaderOptions as FontLoaderOptions,
+  ThreeLoadedFontRequest as LoadedFontRequest,
+} from './three/font-loader.js';
 export { Text, TextGroup } from './three/text.js';
 export type {
   StandaloneTextProperties,
