@@ -1,5 +1,5 @@
 import { type RegisteredFont } from '@pmndrs/text';
-import { msdfDescriptorRasterKey } from '@pmndrs/text/raster/msdf';
+import { MTSDF_KIND, mtsdfDescriptorRasterKey } from '@pmndrs/text/raster/mtsdf';
 
 export interface MtsdfRasterConfiguration {
   readonly emSize: number;
@@ -11,10 +11,10 @@ export async function registeredMtsdfConfiguration(
   font: RegisteredFont,
   signal?: AbortSignal,
 ): Promise<MtsdfRasterConfiguration> {
-  const rasterKey = await msdfDescriptorRasterKey();
+  const rasterKey = await mtsdfDescriptorRasterKey();
   const raster =
     font.getRaster(rasterKey) ??
-    (await font.loadRaster({ kind: 'msdf', rasterKey }, signal === undefined ? undefined : { signal }));
+    (await font.loadRaster({ kind: MTSDF_KIND, rasterKey }, signal === undefined ? undefined : { signal }));
   const extension = raster.extensionData;
   if (typeof extension !== 'object' || extension === null || Array.isArray(extension)) {
     throw new TypeError('MTSDF extension must be an object');

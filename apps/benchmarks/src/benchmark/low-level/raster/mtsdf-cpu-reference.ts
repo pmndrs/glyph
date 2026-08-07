@@ -1,7 +1,6 @@
 import type { ParagraphLayout } from '@pmndrs/text';
-import type { MsdfResource } from '@pmndrs/text/raster/msdf';
+import { MTSDF_GLYPH_RECORD_STRIDE, type MtsdfData, type MtsdfPageData } from '@pmndrs/text/raster/mtsdf';
 
-const RECORD_STRIDE = 20;
 const ABSENT_PAGE = 0xffff;
 
 export interface MtsdfCpuReferenceBounds {
@@ -98,13 +97,14 @@ export interface FlatMtsdfCpuReferenceOptions {
  * Reconstructs the fixed, flat MTSDF specimen without invoking Canvas text,
  * Three.js materials, texture sampling, or browser font rendering.
  *
- * The sampler deliberately reads the same immutable RGBA8 base-level texels
- * carried by the decoded resource. It is suitable for an axis-aligned,
- * untransformed fill specimen; outlines, shadows, mip selection, and arbitrary
- * object transforms belong in separate conformance cases.
+ * The sampler deliberately reads the same immutable RGBA8 base-level page
+ * texels carried by the decoded technique data, in the top-down page space the
+ * glyph records address. It is suitable for an axis-aligned, untransformed fill
+ * specimen; outlines, shadows, mip selection, and arbitrary object transforms
+ * belong in separate conformance cases.
  */
 export function renderFlatMtsdfCpuReference(
-  resource: MsdfResource,
+  data: MtsdfData,
   layout: ParagraphLayout,
   options: FlatMtsdfCpuReferenceOptions,
 ): MtsdfCpuReference {
@@ -117,8 +117,8 @@ export function renderFlatMtsdfCpuReference(
   const fill = linearColor(options.fill ?? [1, 1, 1, 1]);
   assertLayoutArrays(layout);
 
-  const atlas = atlasTexels(resource);
-  const records = recordView(resource);
+  assertPageTexels(data);
+  const records = recordView(data);
   const pixels = opaqueBlack(width, height);
   let glyphCount = 0;
   let bounds: MtsdfCpuReferenceBounds | undefined;
@@ -126,13 +126,14 @@ export function renderFlatMtsdfCpuReference(
   for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
     if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
     const glyphId = layout.glyphIds[glyphIndex]!;
-    if (glyphId >= resource.records.byteLength / RECORD_STRIDE) {
+    if (glyphId >= data.records.byteLength / MTSDF_GLYPH_RECORD_STRIDE) {
       throw new TypeError('paragraph layout references an MTSDF glyph outside the resource');
     }
-    const recordOffset = glyphId * RECORD_STRIDE;
+    const recordOffset = glyphId * MTSDF_GLYPH_RECORD_STRIDE;
     const pageIndex = records.getUint16(recordOffset + 16, true);
     if (pageIndex === ABSENT_PAGE) continue;
-    if (pageIndex >= resource.atlas.layers || resource.pages[pageIndex] === undefined) {
+    const page = data.pages[pageIndex];
+    if (pageIndex >= data.binding.layers || page === undefined) {
       throw new TypeError('MTSDF record references a missing atlas page');
     }
 
@@ -144,12 +145,11 @@ export function renderFlatMtsdfCpuReference(
     const atlasTop = records.getUint16(recordOffset + 10, true);
     const atlasRight = records.getUint16(recordOffset + 12, true);
     const atlasBottom = records.getUint16(recordOffset + 14, true);
-    const page = resource.pages[pageIndex]!;
     if (atlasRight > page.width || atlasBottom > page.height || atlasLeft >= atlasRight || atlasTop >= atlasBottom) {
       throw new TypeError('MTSDF record atlas rectangle exceeds its page');
     }
     const fontSize = positiveFinite(layout.glyphFontSizes[glyphIndex]!, 'MTSDF CPU reference glyph font size');
-    const scale = fontSize / positiveFinite(resource.planeUnitsPerEm, 'MTSDF plane units per em');
+    const scale = fontSize / positiveFinite(data.planeUnitsPerEm, 'MTSDF plane units per em');
     const left = (originX + layout.x[glyphIndex]! + planeLeft * scale) * dpr;
     const right = (originX + layout.x[glyphIndex]! + planeRight * scale) * dpr;
     const top = -(originY - layout.y[glyphIndex]! + planeTop * scale) * dpr;
@@ -167,26 +167,25 @@ export function renderFlatMtsdfCpuReference(
     // pxRange * 0.5 * (device pixels / atlas texel in X + the same in Y).
     const screenRange = Math.max(
       1,
-      positiveFinite(resource.pixelRange, 'MTSDF pixel range') *
+      positiveFinite(data.pixelRange, 'MTSDF pixel range') *
         0.5 *
         ((right - left) / (atlasRight - atlasLeft) + (bottom - top) / (atlasBottom - atlasTop)),
     );
-    const atlasHeight = resource.atlas.height;
     const sampleBounds = {
       minX: atlasLeft,
-      minY: atlasHeight - atlasBottom,
+      minY: atlasTop,
       maxX: atlasRight - 1,
-      maxY: atlasHeight - atlasTop - 1,
+      maxY: atlasBottom - 1,
     };
     for (let y = pixelBounds.minY; y <= pixelBounds.maxY; y += 1) {
       const unitY = (y + 0.5 - top) / (bottom - top);
-      const atlasY = atlasHeight - atlasTop - unitY * (atlasBottom - atlasTop) - 0.5;
+      const atlasY = atlasTop + unitY * (atlasBottom - atlasTop) - 0.5;
       for (let x = pixelBounds.minX; x <= pixelBounds.maxX; x += 1) {
         const unitX = (x + 0.5 - left) / (right - left);
         const atlasX = atlasLeft + unitX * (atlasRight - atlasLeft) - 0.5;
-        const red = bilinearChannel(atlas, resource, pageIndex, atlasX, atlasY, 0, sampleBounds);
-        const green = bilinearChannel(atlas, resource, pageIndex, atlasX, atlasY, 1, sampleBounds);
-        const blue = bilinearChannel(atlas, resource, pageIndex, atlasX, atlasY, 2, sampleBounds);
+        const red = bilinearChannel(page, atlasX, atlasY, 0, sampleBounds);
+        const green = bilinearChannel(page, atlasX, atlasY, 1, sampleBounds);
+        const blue = bilinearChannel(page, atlasX, atlasY, 2, sampleBounds);
         const distance = median(red, green, blue) / 255 - 0.5;
         const coverage = clamp01(distance * screenRange + 0.5);
         compositeFill(pixels, (y * width + x) * 4, fill, coverage);
@@ -197,23 +196,19 @@ export function renderFlatMtsdfCpuReference(
   return { width, height, pixels, bounds, glyphCount };
 }
 
-function atlasTexels(resource: MsdfResource): Uint8Array {
-  const data: unknown = resource.atlas.texture.image.data;
-  if (!(data instanceof Uint8Array)) {
-    throw new TypeError('MTSDF CPU reference requires unsigned-byte RGBA atlas texels');
+function assertPageTexels(data: MtsdfData): void {
+  for (const page of data.pages) {
+    if (page.bytes.byteLength !== page.width * page.height * 4) {
+      throw new TypeError('MTSDF CPU reference atlas page byte length does not match its dimensions');
+    }
   }
-  const expected = resource.atlas.width * resource.atlas.height * resource.atlas.layers * 4;
-  if (data.byteLength !== expected) {
-    throw new TypeError('MTSDF CPU reference atlas byte length does not match its dimensions');
-  }
-  return data;
 }
 
-function recordView(resource: MsdfResource): DataView {
-  if (resource.records.byteLength % RECORD_STRIDE !== 0) {
+function recordView(data: MtsdfData): DataView {
+  if (data.records.byteLength % MTSDF_GLYPH_RECORD_STRIDE !== 0) {
     throw new TypeError('MTSDF CPU reference record table is not densely packed');
   }
-  return new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
+  return new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
 }
 
 function assertLayoutArrays(layout: ParagraphLayout): void {
@@ -262,9 +257,7 @@ function unionBounds(
 }
 
 function bilinearChannel(
-  texels: Uint8Array,
-  resource: MsdfResource,
-  layer: number,
+  page: MtsdfPageData,
   x: number,
   y: number,
   channel: number,
@@ -278,10 +271,8 @@ function bilinearChannel(
   const y1 = Math.min(bounds.maxY, y0 + 1);
   const fractionX = clampedX - x0;
   const fractionY = clampedY - y0;
-  const rowStride = resource.atlas.width * 4;
-  const layerOffset = layer * resource.atlas.height * rowStride;
-  const sample = (sampleX: number, sampleY: number): number =>
-    texels[layerOffset + sampleY * rowStride + sampleX * 4 + channel]!;
+  const rowStride = page.width * 4;
+  const sample = (sampleX: number, sampleY: number): number => page.bytes[sampleY * rowStride + sampleX * 4 + channel]!;
   const top = sample(x0, y0) * (1 - fractionX) + sample(x1, y0) * fractionX;
   const bottom = sample(x0, y1) * (1 - fractionX) + sample(x1, y1) * fractionX;
   return top * (1 - fractionY) + bottom * fractionY;

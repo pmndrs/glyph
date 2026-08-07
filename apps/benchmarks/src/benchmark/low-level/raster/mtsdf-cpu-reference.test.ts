@@ -1,6 +1,5 @@
-import type { ParagraphLayout } from '@pmndrs/text';
-import type { MsdfResource } from '@pmndrs/text/raster/msdf';
-import * as THREE from 'three/webgpu';
+import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/text';
+import type { MtsdfData } from '@pmndrs/text/raster/mtsdf';
 import { describe, expect, it } from 'vitest';
 
 import { compareRgba8Coverage, renderFlatMtsdfCpuReference } from './mtsdf-cpu-reference';
@@ -25,8 +24,8 @@ describe('CPU RGBA8 coverage comparison', () => {
 
 describe('flat MTSDF CPU reference', () => {
   it('uses the RGB median rather than the true-distance alpha channel', () => {
-    const resource = specimenResource([255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0]);
-    const result = renderFlatMtsdfCpuReference(resource, specimenLayout(), {
+    const data = specimenData([255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0]);
+    const result = renderFlatMtsdfCpuReference(data, specimenLayout(), {
       width: 4,
       height: 4,
       fill: [1, 0.5, 0, 1],
@@ -39,8 +38,8 @@ describe('flat MTSDF CPU reference', () => {
   });
 
   it('performs scalar bilinear sampling at physical pixel centers', () => {
-    const resource = specimenResource([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0, 255, 255, 255, 255, 0]);
-    const result = renderFlatMtsdfCpuReference(resource, specimenLayout(), {
+    const data = specimenData([0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0, 255, 255, 255, 255, 0]);
+    const result = renderFlatMtsdfCpuReference(data, specimenLayout(), {
       width: 4,
       height: 4,
     });
@@ -55,9 +54,9 @@ describe('flat MTSDF CPU reference', () => {
     ]);
   });
 
-  it('maps top-down paragraph pixels onto the vertically packed texture array', () => {
-    const resource = specimenResource([0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 0, 255, 255, 255, 0]);
-    const result = renderFlatMtsdfCpuReference(resource, specimenLayout(), {
+  it('maps top-down paragraph pixels onto top-down atlas page rows', () => {
+    const data = specimenData([255, 255, 255, 0, 255, 255, 255, 0, 0, 0, 0, 255, 0, 0, 0, 255]);
+    const result = renderFlatMtsdfCpuReference(data, specimenLayout(), {
       width: 4,
       height: 4,
     });
@@ -70,18 +69,13 @@ describe('flat MTSDF CPU reference', () => {
     ]);
   });
 
-  it('accounts for bottom padding when an atlas layer is taller than its page', () => {
-    const texels = new Uint8Array(2 * 4 * 4);
-    texels.fill(255, 2 * 2 * 4);
-    const texture = new THREE.DataArrayTexture(texels, 2, 4, 1);
-    const resource: MsdfResource = {
-      ...specimenResource(new Array(16).fill(0)),
-      pages: [{ width: 2, height: 2 }],
-      atlas: { width: 2, height: 4, layers: 1, texture },
-      gpuBytes: texels.byteLength,
+  it('addresses page texels by page size when the shared binding is padded taller', () => {
+    const data: MtsdfData = {
+      ...specimenData(new Array(16).fill(255)),
+      binding: { width: 2, height: 4, layers: 1 },
     };
 
-    const result = renderFlatMtsdfCpuReference(resource, specimenLayout(), {
+    const result = renderFlatMtsdfCpuReference(data, specimenLayout(), {
       width: 4,
       height: 4,
     });
@@ -93,7 +87,7 @@ describe('flat MTSDF CPU reference', () => {
     const records = new Uint8Array(40);
     writeRecord(records, 0, { planeLeft: -1, planeRight: 1 });
     writeRecord(records, 1, { planeLeft: -1, planeRight: 1 });
-    const resource = specimenResource(
+    const data = specimenData(
       [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
       records,
     );
@@ -104,7 +98,7 @@ describe('flat MTSDF CPU reference', () => {
       x: new Float32Array([0, 2]),
       y: new Float32Array([4, 4]),
     });
-    const result = renderFlatMtsdfCpuReference(resource, layout, {
+    const result = renderFlatMtsdfCpuReference(data, layout, {
       width: 3,
       height: 4,
       originX: -0.5,
@@ -121,34 +115,35 @@ describe('flat MTSDF CPU reference', () => {
     ]);
   });
 
-  it('skips absent records and rejects malformed resource boundaries', () => {
+  it('skips absent records and rejects malformed page boundaries', () => {
     const records = new Uint8Array(20);
     writeRecord(records, 0, { pageIndex: 0xffff });
     expect(
-      renderFlatMtsdfCpuReference(specimenResource(new Array(16).fill(0), records), specimenLayout(), {
+      renderFlatMtsdfCpuReference(specimenData(new Array(16).fill(0), records), specimenLayout(), {
         width: 4,
         height: 4,
       }),
     ).toMatchObject({ glyphCount: 0, bounds: undefined });
 
-    const malformed = specimenResource(new Array(16).fill(0));
-    Object.defineProperty(malformed.atlas.texture.image, 'data', { value: new Uint8Array(3) });
+    const malformed: MtsdfData = {
+      ...specimenData(new Array(16).fill(0)),
+      pages: [{ width: 2, height: 2, format: 'rgba8unorm', bytes: new Uint8Array(3) }],
+    };
     expect(() => renderFlatMtsdfCpuReference(malformed, specimenLayout(), { width: 4, height: 4 })).toThrow(
-      'atlas byte length',
+      'atlas page byte length',
     );
   });
 });
 
-function specimenResource(texels: readonly number[], records = defaultRecords()): MsdfResource {
-  const texture = new THREE.DataArrayTexture(Uint8Array.from(texels), 2, 2, 1);
+function specimenData(texels: readonly number[], records = defaultRecords()): MtsdfData {
   return {
+    resource: defineRasterResourceId('pmndrs.mtsdf/specimen'),
+    binding: { width: 2, height: 2, layers: 1 },
     emSize: 2,
     pixelRange: 0.25,
     planeUnitsPerEm: 1,
     records,
-    pages: [{ width: 2, height: 2 }],
-    atlas: { width: 2, height: 2, layers: 1, texture },
-    gpuBytes: 16,
+    pages: [{ width: 2, height: 2, format: 'rgba8unorm', bytes: Uint8Array.from(texels) }],
   };
 }
 

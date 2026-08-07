@@ -1,5 +1,6 @@
-import { Text, type RegisteredFont } from '@pmndrs/text/v0';
-import { msdf } from '@pmndrs/text/raster/msdf';
+import type { LoadedFont } from '@pmndrs/text';
+import type { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
@@ -22,8 +23,8 @@ interface MtsdfProductTargetResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly lines: readonly Text[];
+  readonly font: LoadedFont<typeof mtsdf>;
+  readonly lines: readonly Text<typeof mtsdf>[];
   readonly artifactBytes: number;
   readonly compressedBytes: number;
   readonly fontLoadMs: number;
@@ -65,53 +66,46 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
   const canvas = document.createElement('canvas');
   const renderer = await createConfiguredRenderer({ canvas, width: WIDTH, height: HEIGHT, backend, dpr });
   let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  const lines: Text[] = [];
+  let font: LoadedFont<typeof mtsdf> | undefined;
+  const lines: Text<typeof mtsdf>[] = [];
   try {
     const fontStarted = performance.now();
     const loaded = await loadMtsdfFontAsset({ technique: 'mtsdf', fixture: 'inter', delivery: 'baked' });
-    font = loaded.font;
+    font = loaded.loaded;
     const fontLoadMs = performance.now() - fontStarted;
     const scene = new THREE.Scene();
 
     const resizeLine = new Text({
       text: BENCHMARK_IPSUM_CONFORMANCE_TEXT,
       font,
-      raster: msdf,
-      fontSize: 18,
-      lineHeight: 1.2,
-      width: 280,
-      wrap: 'word',
-      color: 0xf2f5ff,
+      contentBox: { width: { mode: 'exact', size: 280 }, wrap: 'word' },
+      style: { fontSize: 18, lineHeight: 1.2 },
+      paint: { color: '#f2f5ff' },
     });
     lines.push(resizeLine);
-    await resizeLine.ready;
-    resizeLine.setProperties({ width: 476 });
-    resizeLine.updateMatrixWorld();
-    resizeLine.position.set(18, -24, 0);
     scene.add(resizeLine);
+    // Commit the narrow box before widening it so the frame proves a re-layout rather than a first layout.
+    resizeLine.updateMatrixWorld(true);
+    resizeLine.set({ contentBox: { width: { mode: 'exact', size: 476 }, wrap: 'word' } });
+    resizeLine.position.set(18, -24, 0);
 
     const mipLine = new Text({
       text: 'mip 12 px  ffi  AV  0123456789',
       font,
-      raster: msdf,
-      fontSize: 12,
-      color: 0x7dd3fc,
+      style: { fontSize: 12 },
+      paint: { color: '#7dd3fc' },
     });
     lines.push(mipLine);
-    await mipLine.ready;
     mipLine.position.set(18, -142, 0);
     scene.add(mipLine);
 
     const transformLine = new Text({
       text: 'TRANSFORM / MTSDF',
       font,
-      raster: msdf,
-      fontSize: 30,
-      color: 0xc4b5fd,
+      style: { fontSize: 30 },
+      paint: { color: '#c4b5fd' },
     });
     lines.push(transformLine);
-    await transformLine.ready;
     transformLine.position.set(252, -194, 0);
     transformLine.rotation.set(-0.2, 0.18, -0.1);
     transformLine.scale.setScalar(0.7);
@@ -120,17 +114,20 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<M
     const effectsLine = new Text({
       text: 'Fill  Outline  Shadow',
       font,
-      raster: msdf,
-      fontSize: 26,
-      color: 0xf8fafc,
-      opacity: 0.92,
-      outline: { color: 0x22d3ee, width: 1.5 },
-      shadow: { color: 0x6d28d9, offset: [3, 3] },
+      style: { fontSize: 26 },
+      paint: {
+        color: '#f8fafc',
+        opacity: 0.92,
+        outline: { color: '#22d3ee', width: 1.5 },
+        shadow: { color: '#6d28d9', offset: [3, 3] },
+      },
     });
     lines.push(effectsLine);
-    await effectsLine.ready;
     effectsLine.position.set(18, -236, 0);
     scene.add(effectsLine);
+
+    scene.updateMatrixWorld(true);
+    for (const line of lines) if (line.error !== undefined) throw line.error;
 
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
     camera.position.z = 500;
@@ -230,7 +227,10 @@ async function renderMtsdfFrame(resources: MtsdfProductTargetResources): Promise
 }
 
 async function disposeResources(resources: MtsdfProductTargetResources): Promise<void> {
-  for (const line of resources.lines) line.dispose();
+  for (const line of resources.lines) {
+    line.removeFromParent();
+    line.dispose();
+  }
   resources.font.dispose();
   resources.target.dispose();
   await disposeConfiguredRenderer(resources.renderer);
