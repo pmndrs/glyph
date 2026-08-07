@@ -1,3 +1,4 @@
+import { statedProperties } from './internal/span-cascade.js';
 import type { FontSelection } from './loaded-font.js';
 import type { ParagraphStyle } from './paragraph.js';
 import type { AnyRasterTechnique } from './raster-technique.js';
@@ -137,19 +138,16 @@ function normalizeFormats<Technique extends AnyRasterTechnique>(
   let font: FontSelection<Technique> | undefined;
   let style: ParagraphStyle | undefined;
   let paint: GlyphPaintInput | undefined;
+  // A span states only what it changes. A group the format does not touch stays
+  // absent so the cascade inherits it, instead of arriving as an empty object
+  // that would reset the range to the default shaping style or glyph colour.
   for (const format of formats) {
     if (isFontSelection(format)) font = format;
     else {
       const { color, opacity, outline, shadow, ...layout } = format;
-      style = Object.freeze({ ...(style ?? {}), ...layout });
-      const painted = {
-        ...(color === undefined ? {} : { color }),
-        ...(opacity === undefined ? {} : { opacity }),
-        ...(outline === undefined ? {} : { outline }),
-        ...(shadow === undefined ? {} : { shadow }),
-      };
-      // An absent paint must stay absent so the span inherits the surrounding
-      // paint instead of resetting it to the default glyph colour.
+      const styled = statedProperties<ParagraphStyle>(layout);
+      if (Object.keys(styled).length !== 0) style = Object.freeze({ ...(style ?? {}), ...styled });
+      const painted = statedProperties<GlyphPaintInput>({ color, opacity, outline, shadow });
       if (Object.keys(painted).length !== 0) paint = Object.freeze({ ...(paint ?? {}), ...painted });
     }
   }
