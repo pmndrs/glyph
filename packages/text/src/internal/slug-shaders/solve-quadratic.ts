@@ -3,66 +3,43 @@
  * experimental eac7d015 naive-solver trade-off (MIT). See RESEARCH.md.
  */
 import type { Node } from 'three/webgpu';
-import {
-  If,
-  abs,
-  add,
-  div,
-  float,
-  greaterThanEqual,
-  lessThan,
-  lessThanEqual,
-  mul,
-  select,
-  sqrt,
-  sub,
-  vec2,
-} from 'three/tsl';
+import { add, mul, sub, vec2 } from 'three/tsl';
+import { d, std } from 'typegpu';
+import * as t3 from '@typegpu/three';
 
 /**
  * Two real roots of `a*t^2 - 2*b*t + c = 0`, ordered to match
  * `calcRootCode`'s winding convention.
  */
-function stableRoots(
-  a: Node<'float'>,
-  b: Node<'float'>,
-  c: Node<'float'>,
-  namePrefix: 'slugHorizontal' | 'slugVertical',
-): Node<'vec2'> {
-  const bSquared: Node<'float'> = mul(b, b);
-  const aTimesC: Node<'float'> = mul(a, c);
-  const discriminant: Node<'float'> = sub(bSquared, aTimesC).toVar(`${namePrefix}Discriminant`);
-  const t1: Node<'float'> = float(0).toVar(`${namePrefix}PolynomialRoot1`);
-  const t2: Node<'float'> = float(0).toVar(`${namePrefix}PolynomialRoot2`);
-  const absoluteA: Node<'float'> = abs(a);
-  const linearAxis: Node<'bool'> = lessThan(absoluteA, 1 / 65_536);
+function stableRoots(a: number, b: number, c: number): d.v2f {
+  'use gpu';
 
-  If(linearAxis, () => {
-    const twiceB: Node<'float'> = mul(b, 2);
-    const linearRoot: Node<'float'> = div(c, twiceB);
-    t1.assign(linearRoot);
-    t2.assign(linearRoot);
-  })
-    .ElseIf(lessThanEqual(discriminant, 0), () => {
-      const extremum = div(b, a);
-      t1.assign(extremum);
-      t2.assign(extremum);
-    })
-    .Else(() => {
-      // These variables are intentional code-generation hoists. `select` evaluates
-      // both operands, so leaving the expressions inline duplicates sqrt/div work.
-      const distance: Node<'float'> = sqrt(discriminant).toVar(`${namePrefix}RootDistance`);
-      const bPositive: Node<'bool'> = greaterThanEqual(b, 0).toVar(`${namePrefix}BPositive`);
-      const sign: Node<'float'> = select(bPositive, float(1), float(-1));
-      const signedDistance: Node<'float'> = mul(sign, distance);
-      const q: Node<'float'> = add(b, signedDistance).toVar(`${namePrefix}Q`);
-      const rootA: Node<'float'> = div(q, a).toVar(`${namePrefix}RootA`);
-      const rootB: Node<'float'> = div(c, q).toVar(`${namePrefix}RootB`);
-      t1.assign(select(bPositive, rootB, rootA));
-      t2.assign(select(bPositive, rootA, rootB));
-    });
+  const discriminant = b * b - a * c;
+  let t1 = d.f32(0); // polynomial root #1
+  let t2 = d.f32(0); // polynomial root #2
+  const linearAxis = std.abs(a) < 1 / 65_536;
 
-  return vec2(t1, t2);
+  if (linearAxis) {
+    const twiceB = b * 2;
+    const linearRoot = c / twiceB;
+    t1 = linearRoot;
+    t2 = linearRoot;
+  } else if (discriminant <= 0) {
+    const extremum = b / a;
+    t1 = extremum;
+    t2 = extremum;
+  } else {
+    const distance = std.sqrt(discriminant);
+    const sign = std.select(d.f32(-1), d.f32(1), b >= 0);
+    const signedDistance = sign * distance;
+    const q = b + signedDistance;
+    const rootA = q / a;
+    const rootB = c / q;
+    t1 = std.select(rootA, rootB, b >= 0);
+    t2 = std.select(rootB, rootA, b >= 0);
+  }
+
+  return d.vec2f(t1, t2);
 }
 
 /** Solve a quadratic curve's intersections with a horizontal ray at y=0. */
@@ -71,7 +48,16 @@ export function solveHorizontalPolynomial(p0: Node<'vec2'>, p1: Node<'vec2'>, p2
   const p0MinusTwiceP1Y: Node<'float'> = sub(p0.y, twiceP1Y);
   const a: Node<'float'> = add(p0MinusTwiceP1Y, p2.y);
   const b: Node<'float'> = sub(p0.y, p1.y);
-  const roots = stableRoots(a, b, p0.y, 'slugHorizontal');
+
+  const roots = t3.toTSL(() => {
+    'use gpu';
+    return stableRoots(
+      t3.fromTSL(a, d.f32).$, // a
+      t3.fromTSL(b, d.f32).$, // b
+      t3.fromTSL(p0.y, d.f32).$, // c
+    );
+  }) as Node<'vec2'>;
+
   const twiceP1X: Node<'float'> = mul(p1.x, 2);
   const p0MinusTwiceP1X: Node<'float'> = sub(p0.x, twiceP1X);
   const ax: Node<'float'> = add(p0MinusTwiceP1X, p2.x);
@@ -93,7 +79,16 @@ export function solveVerticalPolynomial(p0: Node<'vec2'>, p1: Node<'vec2'>, p2: 
   const p0MinusTwiceP1X: Node<'float'> = sub(p0.x, twiceP1X);
   const a: Node<'float'> = add(p0MinusTwiceP1X, p2.x);
   const b: Node<'float'> = sub(p0.x, p1.x);
-  const roots = stableRoots(a, b, p0.x, 'slugVertical');
+
+  const roots = t3.toTSL(() => {
+    'use gpu';
+    return stableRoots(
+      t3.fromTSL(a, d.f32).$, // a
+      t3.fromTSL(b, d.f32).$, // b
+      t3.fromTSL(p0.x, d.f32).$, // c
+    );
+  }) as Node<'vec2'>;
+
   const twiceP1Y: Node<'float'> = mul(p1.y, 2);
   const p0MinusTwiceP1Y: Node<'float'> = sub(p0.y, twiceP1Y);
   const ay: Node<'float'> = add(p0MinusTwiceP1Y, p2.y);

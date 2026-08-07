@@ -1,5 +1,9 @@
 # pmndrs/text documentation update log
 
+## 2026-08-07
+
+- **Plugin-capable `@pmndrs/text` emit** — Replaced the package's direct `tsc` emit with tsdown and Rolldown in unbundle mode so shader source can pass a build plugin, presently `unplugin-typegpu/rolldown`, ahead of rewriting the Slug TSL shaders to TypeGPU. `dist` keeps one module per source file, declaration output, and the executable `pmndrs-text-bake` shebang; the seven JSON schema imports become sibling `dist` modules rather than copied files, so validators no longer rely on host import attributes. The bundler never becomes the type gate: `build` and `build:typescript` run the pinned compiler over the build project with `--noEmit` first, preserving the previous `noEmitOnError` behavior, and the new `dev:typescript` script re-emits on change without it. Package and integration suites, the compile-only type fixtures, and the benchmark application's typecheck all pass against the new output, and exact package-size entries were regenerated for the bundler's output.
+
 ## 2026-08-05
 
 - **Renderer portability orientation** — Reframed Three.js/TSL and React Three Fiber as the first integrations over portable text foundations, added a compact public-core-to-adapter graph, and marked the serialized renderer-agnostic core plan as WIP.
