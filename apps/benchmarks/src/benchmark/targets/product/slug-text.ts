@@ -1,5 +1,5 @@
 import { Text, type RegisteredFont } from '@pmndrs/text';
-import { slug } from '@pmndrs/text/raster/slug';
+import { slug } from '@pmndrs/text/raster/slug/v0';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';

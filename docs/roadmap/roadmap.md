@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:49:05Z'
+  at: '2026-08-07T05:13:16Z'
 ---
 
 # Canonical implementation roadmap
@@ -796,12 +796,14 @@ The [renderer-neutral extraction plan](../planning/engine-integration-boundary.m
 Engine transforms, scene composition, pass placement, command encoding, GPU synchronization, and device lifecycle remain
 adapter-owned. Core owns physical glyph grouping and ordered variant-bearing text runs; programs own compatible final draws.
 
-Implementation evidence begins with the public exact-typed `RasterTechnique` contract and a renderer-neutral lossless
-atlas decoder. The target-v1 `/raster/mtsdf` subpath now authenticates and retains CPU pages without Three, selects one
-stable physical atlas binding per font while omitting absent records, and writes typed canonical origins, dimensions, UVs,
-page indices, fill, outline, and shadow fields. The merged-v0 `/raster/msdf` path remains the rendering baseline until its
-Three target is rebuilt. Item 11.2 remains open until Bitmap and Slug own the same portable selection/packing split and all
-three reusable shader/program surfaces pass their engine proofs.
+Implementation evidence begins with the public exact-typed `RasterTechnique` contract and renderer-neutral resource
+decoders. Target-v1 `/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug` now authenticate and retain CPU resources without
+Three, omit absent records, select stable physical bindings, and write typed canonical positive-down instance storage.
+Bitmap partitions by strike/page, MTSDF by a font atlas array, and Slug by its raw curve/header/reference page. Explicit
+`/v0` Bitmap/Slug harness subpaths and historical `/raster/msdf` preserve the merged renderer baseline until the new Three
+adapter consumes canonical storage. The relocated harness passed all 42 Presentation cells across three techniques, seven
+workloads, and both backends with one renderer per case. Item 11.2 remains open until reusable shader/program surfaces and
+live engine proofs replace those harness paths.
 
 ### Milestone 12 — editorial flow regions and mixed-raster composition
 

@@ -1,5 +1,5 @@
 import { type RegisteredFont } from '@pmndrs/text';
-import { slug, slugDescriptorRasterKey, type SlugResource } from '@pmndrs/text/raster/slug';
+import { slug, slugDescriptorRasterKey, type SlugResource } from '@pmndrs/text/raster/slug/v0';
 
 export interface SlugRasterConfiguration {
   readonly planeUnitsPerEm: number;

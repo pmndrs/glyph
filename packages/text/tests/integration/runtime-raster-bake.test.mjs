@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import bitmapBaker from '@pmndrs/text/bakers/bitmap';
 import msdfBaker from '@pmndrs/text/bakers/msdf';
-import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
 import { msdf, msdfDescriptor, msdfRasterKey } from '@pmndrs/text/raster/msdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';
 import { normalizeMsdfOptions } from '../../dist/internal/msdf-contract.js';

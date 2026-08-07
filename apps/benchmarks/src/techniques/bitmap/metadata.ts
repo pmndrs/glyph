@@ -1,5 +1,5 @@
 import { type JsonValue, type RegisteredFont } from '@pmndrs/text';
-import { bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
 
 import type { BitmapFixtureDensity } from '../../workloads/font-assets';
 

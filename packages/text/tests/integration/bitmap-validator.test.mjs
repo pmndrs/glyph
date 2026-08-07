@@ -5,7 +5,7 @@ import test, { before } from 'node:test';
 
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/text/bakers/bitmap';
 import { BitmapArtifactValidationError, validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
-import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
 
 const GLB_MAGIC = 0x4654_6c67;
 const JSON_CHUNK = 0x4e4f_534a;

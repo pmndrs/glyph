@@ -1,6 +1,6 @@
 import { FontRegistry, type AnyRasterInput, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
 import * as THREE from 'three/webgpu';
-import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
+import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap/v0';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
 import { ICON_GRID_FONT_FIXTURE } from '../../../benchmark/font-fixtures';

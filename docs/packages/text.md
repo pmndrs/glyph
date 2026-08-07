@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:16a2da33ab05a22dbc8120b88088c4779963e9dcc36fdfbf9d3ee28e81a82a6d'
+source_digest: 'sha256:cf6f890cc55cc14cabe2e6f9ceecd13c05668e285392c413edc458ce8899f328'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -143,6 +143,12 @@ sources:
   - id: mtsdf-technique
     resource: ../../packages/text/src/raster/mtsdf.ts
     title: Renderer-neutral MTSDF technique
+  - id: bitmap-technique
+    resource: ../../packages/text/src/raster/bitmap-technique.ts
+    title: Renderer-neutral Bitmap technique
+  - id: slug-technique
+    resource: ../../packages/text/src/raster/slug-technique.ts
+    title: Renderer-neutral Slug technique
   - id: react-runtime
     resource: ../../packages/text/src/react.ts
     title: React 19 reconciliation layer
@@ -151,24 +157,26 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:49:05Z'
+  at: '2026-08-07T05:13:16Z'
 ---
 
 # Package reference: `@pmndrs/text`
 
 Status: ✅ Milestone 9 Slug integration is complete
 
-Target-v1 extraction now has an executable renderer-neutral technique boundary. `RasterTechnique` preserves exact options,
-descriptor, decoded data, binding, and canonical storage types without `any`; its public helpers validate and brand
-technique and resource identities without requiring third-party casts. Lossless KTX2 atlas validation and byte decoding
-produce renderer-neutral `{ width, height, bytes }` pages. The new `/raster/mtsdf` subpath decodes and authenticates those
-pages without importing Three, explicitly omits absent raster records during selection, retains one stable font-atlas
-binding, and packs positive-down paragraph origins, dimensions, UVs, page indices, fill, outline, and shadow values into
-typed canonical CPU arrays. Focused package tests prove selection, range writes, binding identity, and storage bounds. The
-merged-v0 `/raster/msdf` renderer remains intact while the target-v1 Three adapter is rebuilt. The prior complete 42-cell
-Presentation matrix still proves the atlas-decoder split across Bitmap, MTSDF, Slug, WebGPU, and WebGL2; the new portable
-packing has not yet been connected to a renderer. Bitmap/Slug technique conversion, runtime batching, and engine targets
-remain open.
+Target-v1 extraction now has executable renderer-neutral Bitmap, MTSDF, and Slug techniques. `RasterTechnique` preserves
+exact options, descriptor, decoded data, binding, and canonical storage types without `any`; its public helpers validate
+and brand technique and resource identities without requiring casts. `/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug`
+decode and authenticate CPU resources without importing Three, explicitly omit absent records, select stable physical
+bindings, and pack positive-down paragraph origins plus technique fields into typed canonical arrays. Bitmap selects a
+strike/page per glyph and retains R8 pages; MTSDF retains one RGBA8 atlas-array binding per font; Slug retains its original
+RGBA16F curve, R32 header, and R16 reference bytes so Three's R16-to-R32 workaround remains target-owned. Focused package
+tests prove selection, range writes, binding identity, coordinates, paint, and analytic addresses. The merged-v0 Bitmap and
+Slug renderer modules remain temporarily reachable through explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness
+subpaths, while `/raster/msdf` remains the historical spelling, until the target-v1 Three adapter replaces them. The prior
+renderer remains separate from portable packing, but the relocated harness paths passed a fresh 42-cell Presentation
+matrix: all seven workloads remained visible for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
+case. Runtime batching and target-v1 engine targets remain open.
 
 `Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
 Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary

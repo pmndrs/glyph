@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { normalizeRasterCoverage, RasterCoverageError } from '@pmndrs/text';
-import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
 import { msdfDescriptor, msdfRasterKey } from '@pmndrs/text/raster/msdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';
 import { assertRasterCoverage } from '../../dist/internal/raster-coverage-artifact.js';

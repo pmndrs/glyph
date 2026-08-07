@@ -1,5 +1,5 @@
 import { FontRegistry, defineRaster } from '@pmndrs/text';
-import { slug, type SlugModule } from '@pmndrs/text/raster/slug';
+import { slug, type SlugModule } from '@pmndrs/text/raster/slug/v0';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-slug.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-slug.font.glb.gz?url';

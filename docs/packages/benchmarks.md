@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:7caa13cad8bd29da884513b3802781efc0d99a2d0361c48598c8b8acabb1054e'
+source_digest: 'sha256:6a745d74b2e69fc11e0631f765b15c435d0a00e9054263709ac61219e564eb25'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -178,12 +178,19 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:12:04Z'
+  at: '2026-08-07T05:13:16Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
+
+During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
+their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths. Canonical `/raster/bitmap` and `/raster/slug`
+resolve to the new renderer-neutral techniques. The harness paths preserve the existing Presentation oracle until the new
+`/three` adapter consumes canonical technique storage; they are not target-v1 application APIs. A fresh matrix after the
+move rendered all seven workloads visibly for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
+case.
 
 The primary product surface is organized for humans by mode, technique, backend, and workload. Benchmark mode is the default live control plane. Conformance mode combines live GPU inspection with finite visual correctness checks; finite CPU-reference work begins only through the explicit run action rather than during workload navigation. Internal target/scenario terms remain runner architecture and do not appear as the primary controls. Figma-backed tokens and components remain design inputs, while the product information architecture may diverge from the wireframe.
 

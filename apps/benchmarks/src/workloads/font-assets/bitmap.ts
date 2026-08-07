@@ -1,5 +1,5 @@
 import { defineRaster, FontRegistry } from '@pmndrs/text';
-import { bitmap, type BitmapModule } from '@pmndrs/text/raster/bitmap';
+import { bitmap, type BitmapModule } from '@pmndrs/text/raster/bitmap/v0';
 
 import amiriBitmapFontUrl from '../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
 import amiriBitmapDensityFontUrl from '../../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url';

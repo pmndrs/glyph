@@ -31,7 +31,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T05:01:15Z'
 ---
 
 # Merged v0 runtime and bake API fixture
@@ -102,9 +102,9 @@ flowchart TD
   React["@pmndrs/text/react<br/>thin React Three Fiber wrapper"] --> Core
   Bake["@pmndrs/text/bake<br/>Node host and CLI"] --> BakeCore["shared portable bake core"]
   Runtime["@pmndrs/text/runtime-bake<br/>dynamically loaded Worker host"] --> BakeCore
-  Bitmap["@pmndrs/text/raster/bitmap"] --> Core
+  Bitmap["@pmndrs/text/raster/bitmap/v0"] --> Core
   Msdf["@pmndrs/text/raster/msdf"] --> Core
-  Slug["@pmndrs/text/raster/slug"] --> Core
+  Slug["@pmndrs/text/raster/slug/v0"] --> Core
 ```
 
 A baked core-font hit does not load the runtime baker or any unselected raster engine. The core package has no React dependency. The React subpath has `react`, `three`, and `@react-three/fiber` as peer dependencies and adds no shaping, layout, baking, or rendering behavior.

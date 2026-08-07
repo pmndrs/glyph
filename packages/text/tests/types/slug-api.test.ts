@@ -6,7 +6,7 @@ import {
   slugDescriptorRasterKey,
   type SlugDrawBatch,
   type SlugResource,
-} from '@pmndrs/text/raster/slug';
+} from '@pmndrs/text/raster/slug/v0';
 
 const descriptor = slugDescriptor();
 const kind: 'slug' = SLUG_KIND;
