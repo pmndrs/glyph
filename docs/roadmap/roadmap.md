@@ -24,8 +24,8 @@ sources:
     title: 'Renderer-neutral extraction plan'
 
 generated:
-  by: openai-codex/gpt-5.6
-  at: '2026-08-07T05:13:16Z'
+  by: anthropic-claude/opus-5
+  at: '2026-08-07T18:20:00Z'
 ---
 
 # Canonical implementation roadmap
@@ -149,6 +149,9 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 11.9  |   ⬜   | Prove TypeGPU-authored Bitmap/MTSDF/Slug through pinned `@typegpu/three`, including real textures, dependent loads, loops, vertex work, generated shaders, forced WebGPU/WebGL2 capability, pixels, and isolated cost; retain native TSL unless every promised backend passes. |  L   | 11.6, 11.8 |
 | 11.10 |   ⬜   | Prove an external gpucat package against public core and technique exports, including ordering limits, partial uploads, lifetime, TypeGPU/WGSL reuse, and an explicit GLSL companion or WebGPU-only scope, without a core change or private import.                            |  L   | 11.5, 11.8 |
 | 11.11 |   ⬜   | Reconcile implementation against the authoritative README and engine contract, remove the merged v0 surface, update package concepts/digests, and close package, browser, GPU, size, and OKF gates before declaring v1.                                                        |  L   | 11.6–11.10 |
+| 11.12 |   ⬜   | Bake underline position/thickness and strikeout position/size into font metrics without implementing decoration rendering, so text decoration becomes an additive renderer feature instead of an artifact version bump and a re-bake of every shipped font.                     |  S   | 11.6       |
+| 11.13 |   ⬜   | Prove the shaping and layout contract can represent a break-inserted hyphen glyph that has no source cluster, and fix the contract if it cannot. Language patterns, break selection, and justification quality controls remain later work.                                      |  M   | 11.6       |
+| 11.14 |   ⬜   | Add the professional typography the editorial showcase requires: `wordSpacing`, first-line indent, paragraph space before/after, and justification controls covering minimum/maximum word-space ratio, letter-space expansion, and last-line policy.                            |  L   | 11.12–11.13 |
 
 ## Milestone 0 — accept contracts and versions
 
@@ -817,6 +820,8 @@ Deliver:
 - one **Editorial composition** live benchmark using native-strike bitmap body copy, an MTSDF pull quote, and a Slug headline or drop cap over one authoritative positioned layout;
 - viewport, column, obstacle, text-editing, typewriter, strike, and display-transform controls with consumer-facing phase, frame, GPU, allocation, and residency evidence;
 - a reproducible comparison with Pretext that distinguishes approximate browser-compatible line breaking from exact GPU-ready shaping and makes no unmeasured speed claim.
+
+Maintainers intend an editorial piece as a v1 showcase, so the typography that composition depends on is scoped into milestone 11 rather than left here: items 11.12–11.14 cover baked decoration metrics, the break-inserted hyphen contract, and `wordSpacing`, first-line indent, paragraph spacing, and justification controls. This milestone keeps only the flow-region planner itself.
 
 Contour-tight glyph-ink wrapping, arbitrary rendered-pixel occlusion, balanced columns, automatic hyphenation, vertical flow, and a frozen public flow API remain deferred until the initial integration produces evidence. The [editorial flow research concept](../planning/editorial-flow-layout.md) defines the proposed internal model, benchmark composition, comparison rules, and acceptance gates.
 
