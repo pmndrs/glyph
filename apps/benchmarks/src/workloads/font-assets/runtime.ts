@@ -1,11 +1,16 @@
 import {
-  FontLoader,
-  FontRegistry,
+  type AnyRasterTechnique,
   type BakeProgressListener,
+  type FontRegistry,
+  type LoadedFont,
+  type LoadedFontRequest,
   type RasterBakeArtifact,
+  type RuntimeFontBake,
   type RuntimeFontBakeRequest,
   type RuntimeRasterBakerModule,
 } from '@pmndrs/text';
+import { FontLoader } from '@pmndrs/text/three';
+import * as THREE from 'three/webgpu';
 
 import type { FontDelivery } from '../../benchmark/url-state';
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
@@ -47,36 +52,104 @@ export function createFontDeliveryMetrics(delivery: FontDelivery): FontDeliveryM
   };
 }
 
-/** Uses the published FontLoader and runtime-bake entrypoint; no Wasm URL is imported by benchmark scenes. */
-export async function loadRuntimeCoreFont({
-  source,
-  metrics,
+/**
+ * Records the source size, duration, and artifact size of one core bake. The baker is per load because its measurements
+ * belong to one asset; a loader-wide baker could not attribute concurrent label and icon loads to separate metrics.
+ */
+export function measuredRuntimeFontBake(
+  metrics: FontDeliveryMetrics,
+  onProgress?: BakeProgressListener,
+): RuntimeFontBake {
+  return async (request: RuntimeFontBakeRequest) => {
+    metrics.sourceFontBytes = request.source.byteLength;
+    const started = performance.now();
+    const { bakeFontInWorker } = await import('@pmndrs/text/runtime-bake');
+    const artifact = await bakeFontInWorker({
+      ...request,
+      ...(onProgress === undefined ? {} : { onProgress }),
+    });
+    metrics.coreBakeMs = performance.now() - started;
+    metrics.coreArtifactBytes = artifact.byteLength;
+    return artifact;
+  };
+}
+
+/**
+ * The Three font loader keys one text runtime per loading manager, and every `Text` in a paragraph batch must share a
+ * runtime, so loads that do not name a registry share one manager. A caller-supplied registry is how a benchmark
+ * surface isolates font ownership today; each such registry therefore keeps its own manager, runtime, and loader.
+ */
+const sharedLoadingManager = new THREE.LoadingManager();
+const isolatedLoadingManagers = new WeakMap<FontRegistry, THREE.LoadingManager>();
+const fontLoaders = new WeakMap<THREE.LoadingManager, FontLoader>();
+
+/**
+ * Loads one font from artifact bytes the caller already fetched and authenticated. `LoadedFontInput` accepts URLs
+ * rather than bytes, so the authenticated artifact is published as a blob URL that is revoked once the load settles.
+ */
+export async function loadBakedFont<Technique extends AnyRasterTechnique>({
+  artifact,
+  raster,
   registry,
   signal,
-  onProgress,
+}: {
+  readonly artifact: Uint8Array<ArrayBuffer>;
+  readonly raster: LoadedFontRequest<Technique>['raster'];
+  readonly registry?: FontRegistry | undefined;
+  readonly signal?: AbortSignal | undefined;
+}): Promise<LoadedFont<Technique>> {
+  const url = URL.createObjectURL(new Blob([artifact], { type: 'model/gltf-binary' }));
+  try {
+    return await fontLoader(registry).loadAsync({
+      input: { baked: url },
+      raster,
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Loads one font from its source URL, baking the core artifact and the selected raster through the measured bakers. */
+export function loadSourceFont<Technique extends AnyRasterTechnique>({
+  source,
+  raster,
+  runtimeBake,
+  registry,
+  signal,
 }: {
   readonly source: string;
-  readonly metrics: FontDeliveryMetrics;
-  readonly registry: FontRegistry;
+  readonly raster: LoadedFontRequest<Technique>['raster'];
+  readonly runtimeBake: RuntimeFontBake;
+  readonly registry?: FontRegistry | undefined;
   readonly signal?: AbortSignal | undefined;
-  readonly onProgress?: BakeProgressListener | undefined;
-}) {
-  const loader = new FontLoader({
-    registry,
-    runtimeBake: async (request: RuntimeFontBakeRequest) => {
-      metrics.sourceFontBytes = request.source.byteLength;
-      const started = performance.now();
-      const { bakeFontInWorker } = await import('@pmndrs/text/runtime-bake');
-      const artifact = await bakeFontInWorker({
-        ...request,
-        ...(onProgress === undefined ? {} : { onProgress }),
-      });
-      metrics.coreBakeMs = performance.now() - started;
-      metrics.coreArtifactBytes = artifact.byteLength;
-      return artifact;
-    },
+}): Promise<LoadedFont<Technique>> {
+  return fontLoader(registry).loadAsync({
+    input: { source, runtimeBake },
+    raster,
+    ...(signal === undefined ? {} : { signal }),
   });
-  return loader.load({ source, baked: null }, signal === undefined ? undefined : { signal });
+}
+
+function fontLoader(registry: FontRegistry | undefined): FontLoader {
+  const manager = loadingManager(registry);
+  let loader = fontLoaders.get(manager);
+  if (loader === undefined) {
+    // Naming the caller's registry keeps `LoadedFont.font` reachable through the registry the surface already owns.
+    loader = new FontLoader(manager, registry === undefined ? {} : { registry });
+    fontLoaders.set(manager, loader);
+  }
+  return loader;
+}
+
+function loadingManager(registry: FontRegistry | undefined): THREE.LoadingManager {
+  if (registry === undefined) return sharedLoadingManager;
+  let manager = isolatedLoadingManagers.get(registry);
+  if (manager === undefined) {
+    manager = new THREE.LoadingManager();
+    isolatedLoadingManagers.set(registry, manager);
+  }
+  return manager;
 }
 
 export function measuredRuntimeRaster<Kind extends string, Options>(
