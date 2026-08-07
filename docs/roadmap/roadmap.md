@@ -66,7 +66,7 @@ Status key: ✅ complete · 🟡 in progress · ⬜ not started · ⛔ blocked
 |     8 |   ✅   | Implement and validate MSDF                                           | XL     | 7                   | The MTSDF-backed general-purpose raster passes visual, payload, and GPU performance gates.                   |
 |     9 |   ✅   | Port/rewrite and validate Slug                                        | XL     | 7                   | Outline-accurate text passes correctness, packing, visual, and GPU performance gates.                        |
 |    10 |   ✅   | Harden the merged v0 renderer baseline                                | L      | 8–9                 | Bitmap, MSDF, and Slug merge as independent modules over one shaping/layout result; no release is published. |
-|    11 |   ⬜   | Extract the renderer-neutral batched core and engine target contract  | XL     | 10                  | One explicit batch renders through Three.js and Wayfare without renderer dependencies in portable core.      |
+|    11 |   🟡   | Extract the renderer-neutral batched core and engine target contract  | XL     | 10                  | One explicit batch renders through Three.js and Wayfare without renderer dependencies in portable core.      |
 
 Milestones 0–10 are closed. Milestone 11 is the next additive workstream.
 
@@ -138,17 +138,17 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 10.4  |   ✅   | Prove the public extension boundary with a private workspace raster/baker package that owns a new kind, artifact, adapter, retained updates, overflow, abort, and disposal.                                                                                                    |  L   | 10.1, 10.3 |
 | 10.5  |   ✅   | Remove benchmark recycling workarounds and prove Icon Grid plus every Presentation workload through sequential, timed, allocation, cadence, dual-backend, and React Doctor gates.                                                                                              |  XL  | 10.2–10.4  |
 | 10.6  |   ✅   | Complete raster switching, v0 conformance, public API review, recommendations, plugin authoring guidance, package-size evidence, and signed stacked merge.                                                                                                                     |  L   | 10.5       |
-| 11.1  |   ⬜   | Freeze the accepted README/API fixtures and capture current Three.js behavior, package graphs, rendering, allocation, and shaping baselines.                                                                                                                                   |  M   | 10.6       |
-| 11.2  |   ⬜   | Split portable raster decoding/bindings/packing from GPU realization; export reusable backend `RasterShader` algorithms and exact-typed programs, retaining native TSL and reusable TypeGPU paths.                                                                             |  L   | 11.1       |
-| 11.3  |   ⬜   | Implement `TextRuntime`, same-technique `FontStack`, batch-owned `Paragraph` handles, desired snapshots/font leases, typed `txt`/`span`, opaque batch/paragraph/span render variants, capacity, and origin overrides.                                                          |  XL  | 11.2       |
-| 11.4  |   ⬜   | Implement dirty-channel coalescing plus per-call `update()` and Promise/callback `updateAsync()` synchronization with cross-batch atomic publication, cancellation, and supersession.                                                                                          |  XL  | 11.3       |
-| 11.5  |   ⬜   | Move raster-resource partitioning, typed bindings, stable slots, overflow chunks, canonical CPU storage, dirty/live ranges, attachments, resolved variants, and ordered `PreparedGlyphRun` values into core.                                                                   |  XL  | 11.3–11.4  |
-| 11.6  |   ⬜   | Rebuild Bitmap, MTSDF, and Slug behind `FontLoader` → `TextGroup` → `Text`, including program-selected variants, reusable canonical shaders, optional TSL effects, late binding, native ordering, and renderer isolation.                                                      |  XL  | 11.5       |
-| 11.7  |   ⬜   | Rebuild React Three Fiber over the same retained `TextGroup`/`Text` lifecycle, letting Three synchronize once per batch during render while preserving nested spans.                                                                                                           |  L   | 11.6       |
-| 11.8  |   ⬜   | Run the TypeGPU-first capability gate, then implement reusable complete-stage TypeGPU raster programs and only the minimal direct pass encoder needed to prove the same public core batches/runs through TypeGPU and Wayfare.                                                  |  XL  | 11.5       |
+| 11.1  |   ✅   | Freeze the accepted README/API fixtures and capture current Three.js behavior, package graphs, rendering, allocation, and shaping baselines.                                                                                                                                   |  M   | 10.6       |
+| 11.2  |   ✅   | Split portable raster decoding/bindings/packing from GPU realization; export reusable backend `RasterShader` algorithms and exact-typed programs, retaining native TSL and reusable TypeGPU paths.                                                                             |  L   | 11.1       |
+| 11.3  |   ✅   | Implement `TextRuntime`, same-technique `FontStack`, batch-owned `Paragraph` handles, desired snapshots/font leases, typed `txt`/`span`, opaque batch/paragraph/span render variants, capacity, and origin overrides.                                                          |  XL  | 11.2       |
+| 11.4  |   ✅   | Implement dirty-channel coalescing plus per-call `update()` and Promise/callback `updateAsync()` synchronization with cross-batch atomic publication, cancellation, and supersession.                                                                                          |  XL  | 11.3       |
+| 11.5  |   ✅   | Move raster-resource partitioning, typed bindings, stable slots, overflow chunks, canonical CPU storage, dirty/live ranges, attachments, resolved variants, and ordered `PreparedGlyphRun` values into core.                                                                   |  XL  | 11.3–11.4  |
+| 11.6  |   ✅   | Rebuild Bitmap, MTSDF, and Slug behind `FontLoader` → `TextGroup` → `Text`, including program-selected variants, reusable canonical shaders, optional TSL effects, late binding, native ordering, and renderer isolation.                                                      |  XL  | 11.5       |
+| 11.7  |   ✅   | Rebuild React Three Fiber over the same retained `TextGroup`/`Text` lifecycle, letting Three synchronize once per batch during render while preserving nested spans.                                                                                                           |  L   | 11.6       |
+| 11.8  |   🟡   | Run the TypeGPU-first capability gate, then implement reusable complete-stage TypeGPU raster programs and only the minimal direct pass encoder needed to prove the same public core batches/runs through TypeGPU and Wayfare.                                                  |  XL  | 11.5       |
 | 11.9  |   ⬜   | Prove TypeGPU-authored Bitmap/MTSDF/Slug through pinned `@typegpu/three`, including real textures, dependent loads, loops, vertex work, generated shaders, forced WebGPU/WebGL2 capability, pixels, and isolated cost; retain native TSL unless every promised backend passes. |  L   | 11.6, 11.8 |
 | 11.10 |   ⬜   | Prove an external gpucat package against public core and technique exports, including ordering limits, partial uploads, lifetime, TypeGPU/WGSL reuse, and an explicit GLSL companion or WebGPU-only scope, without a core change or private import.                            |  L   | 11.5, 11.8 |
-| 11.11 |   ⬜   | Reconcile implementation against the authoritative README and engine contract, remove the merged v0 surface, update package concepts/digests, and close package, browser, GPU, size, and OKF gates before declaring v1.                                                        |  L   | 11.6–11.10 |
+| 11.11 |   🟡   | Reconcile implementation against the authoritative README and engine contract, remove the merged v0 surface, update package concepts/digests, and close package, browser, GPU, size, and OKF gates before declaring v1.                                                        |  L   | 11.6–11.10 |
 | 11.12 |   ⬜   | Bake underline position/thickness and strikeout position/size into font metrics without implementing decoration rendering, so text decoration becomes an additive renderer feature instead of an artifact version bump and a re-bake of every shipped font.                     |  S   | 11.6       |
 | 11.13 |   ⬜   | Prove the shaping and layout contract can represent a break-inserted hyphen glyph that has no source cluster, and fix the contract if it cannot. Language patterns, break selection, and justification quality controls remain later work.                                      |  M   | 11.6       |
 | 11.14 |   ⬜   | Add the professional typography the editorial showcase requires: `wordSpacing`, first-line indent, paragraph space before/after, and justification controls covering minimum/maximum word-space ratio, letter-space expansion, and last-line policy.                            |  L   | 11.12–11.13 |
@@ -803,11 +803,19 @@ adapter-owned. Core owns physical glyph grouping and ordered variant-bearing tex
 Implementation evidence begins with the public exact-typed `RasterTechnique` contract and renderer-neutral resource
 decoders. Target-v1 `/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug` now authenticate and retain CPU resources without
 Three, omit absent records, select stable physical bindings, and write typed canonical positive-down instance storage.
-Bitmap partitions by strike/page, MTSDF by a font atlas array, and Slug by its raw curve/header/reference page. Explicit
-`/v0` Bitmap/Slug harness subpaths and historical `/raster/msdf` preserve the merged renderer baseline until the new Three
-adapter consumes canonical storage. The relocated harness passed all 42 Presentation cells across three techniques, seven
-workloads, and both backends with one renderer per case. Item 11.2 remains open until reusable shader/program surfaces and
-live engine proofs replace those harness paths.
+Bitmap partitions by strike/page, MTSDF by a font atlas array, and Slug by its raw curve/header/reference page.
+
+Items 11.1 through 11.7 are closed. `/three` exports each canonical technique shader, and the first-party targets consume
+those exports rather than a copy, so removing one fails the typecheck. Programs resolve through a registry keyed by the
+technique's stable identifier, which restores the third-party extension boundary that identity comparison had closed. The
+benchmark drives the whole surface: every technique lane, the live scenes, and the comparison workloads run through
+`FontLoader` → `TextGroup` → `Text`, and the finite Bitmap lane reproduces merged v0's pinned frame `a47930d3…e893` in
+zero mismatched bytes against an independent CPU atlas compositor.
+
+Driving those oracles found defects no threshold check could see, because each moved ink without removing it: Bitmap
+sampled mirrored atlas rows and had lost its physical-pixel snap, Slug integrated coverage in mirrored em space, and
+composed spans resolved shaping and paint through two mechanisms that disagreed. One span cascade now resolves every
+property by containment and serves both layers.
 
 ### Milestone 12 — editorial flow regions and mixed-raster composition
 
