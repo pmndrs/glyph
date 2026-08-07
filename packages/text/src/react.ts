@@ -10,7 +10,7 @@ import {
   type Ref,
 } from 'react';
 
-import type { AnyFontToken, FontInput, FontToken, LoadedFont, RegisteredFont } from './font.js';
+import type { AnyFontToken, FontInput, FontToken, LoadedFontV0, RegisteredFont } from './font.js';
 import { canonicalJson } from './internal/raster-identity.js';
 import {
   isRegisteredFont,
@@ -44,11 +44,13 @@ export type ReactTextProps = Omit<ThreeElements['object3D'], keyof TextPropertie
 
 export interface UseFont {
   (input: FontInput, options?: FontLoadOptions): RegisteredFont;
-  <Input extends FontInput, Module extends AnyRasterModule>(token: FontToken<Module, Input>): LoadedFont<Module, Input>;
+  <Input extends FontInput, Module extends AnyRasterModule>(
+    token: FontToken<Module, Input>,
+  ): LoadedFontV0<Module, Input>;
   preload(input: FontInput, options?: FontLoadOptions): Promise<RegisteredFont>;
   preload<Input extends FontInput, Module extends AnyRasterModule>(
     token: FontToken<Module, Input>,
-  ): Promise<LoadedFont<Module, Input>>;
+  ): Promise<LoadedFontV0<Module, Input>>;
   clear(input: FontInput | AnyFontToken): void;
 }
 
@@ -70,7 +72,7 @@ interface CoreAndObjectProperties {
 }
 
 const fontPreloads = new WeakMap<FontRegistry, Map<string, Promise<RegisteredFont>>>();
-const tokenPreloads = new WeakMap<FontRegistry, WeakMap<object, Promise<LoadedFont<AnyRasterModule, FontInput>>>>();
+const tokenPreloads = new WeakMap<FontRegistry, WeakMap<object, Promise<LoadedFontV0<AnyRasterModule, FontInput>>>>();
 const rasterPreloads = new WeakMap<
   RegisteredFont,
   WeakMap<AnyRasterModule, Map<string, Promise<LoadedRaster<AnyRasterModule>>>>
@@ -120,7 +122,7 @@ export function Text(properties: ReactTextProps): ReactElement {
 const useFontImplementation = ((
   input: FontInput | AnyFontToken,
   options?: FontLoadOptions,
-): RegisteredFont | LoadedFont<AnyRasterModule, FontInput> => use(preloadFontValue(input, options))) as UseFont;
+): RegisteredFont | LoadedFontV0<AnyRasterModule, FontInput> => use(preloadFontValue(input, options))) as UseFont;
 
 useFontImplementation.preload = preloadFont as UseFont['preload'];
 useFontImplementation.clear = (input): void => {
@@ -130,7 +132,7 @@ useFontImplementation.clear = (input): void => {
   const fontPromise = fontCache?.get(inputKey);
   fontCache?.delete(inputKey);
   rawTextPreloads.get(registry)?.delete(inputKey);
-  let loadedPromise: Promise<RegisteredFont | LoadedFont<AnyRasterModule, FontInput>> | undefined = fontPromise;
+  let loadedPromise: Promise<RegisteredFont | LoadedFontV0<AnyRasterModule, FontInput>> | undefined = fontPromise;
   if (isFontToken(input)) {
     const tokenCache = tokenPreloads.get(registry);
     loadedPromise = tokenCache?.get(input) ?? loadedPromise;
@@ -184,18 +186,18 @@ function preloadFont(input: FontInput, options?: FontLoadOptions): Promise<Regis
 function preloadFont<Input extends FontInput, Module extends AnyRasterModule>(
   input: FontToken<Module, Input>,
   options?: FontLoadOptions,
-): Promise<LoadedFont<Module, Input>>;
+): Promise<LoadedFontV0<Module, Input>>;
 function preloadFont(
   input: FontInput | AnyFontToken,
   options: FontLoadOptions = {},
-): Promise<RegisteredFont | LoadedFont<AnyRasterModule, FontInput>> {
+): Promise<RegisteredFont | LoadedFontV0<AnyRasterModule, FontInput>> {
   return preloadFontValue(input, options);
 }
 
 function preloadFontValue(
   input: FontInput | AnyFontToken,
   options: FontLoadOptions = {},
-): Promise<RegisteredFont | LoadedFont<AnyRasterModule, FontInput>> {
+): Promise<RegisteredFont | LoadedFontV0<AnyRasterModule, FontInput>> {
   const registry = textRegistry();
   return isFontToken(input)
     ? withSignal(preloadToken(input, registry), options.signal)
@@ -224,7 +226,7 @@ function preloadInput(input: FontInput, registry: FontRegistry): Promise<Registe
   return promise;
 }
 
-function preloadToken(token: AnyFontToken, registry: FontRegistry): Promise<LoadedFont<AnyRasterModule, FontInput>> {
+function preloadToken(token: AnyFontToken, registry: FontRegistry): Promise<LoadedFontV0<AnyRasterModule, FontInput>> {
   let cache = tokenPreloads.get(registry);
   if (cache === undefined) {
     cache = new WeakMap();

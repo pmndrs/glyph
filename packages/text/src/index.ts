@@ -25,7 +25,7 @@ export type {
   BakedFontSource,
   FontInput,
   FontInputOf,
-  LoadedFont,
+  LoadedFontV0,
   FontMetrics,
   FontRasterModuleOf,
   FontSourceOverride,
@@ -49,18 +49,69 @@ export type {
 } from './loader.js';
 export { FontLoader, FontLoadError, FontRegistry } from './loader.js';
 
+export type { FontSelection, FontStack, LoadedFont } from './loaded-font.js';
+export { createFontStack, FontLeaseError } from './loaded-font.js';
+
+export type {
+  GlyphBatchKey,
+  GlyphBufferCapacity,
+  GlyphCapacityOverflow,
+  GlyphOriginUpdate,
+  GlyphSnapshot,
+  GlyphTopology,
+  Paragraph,
+  ParagraphAxisConstraint,
+  ParagraphBaseProperties,
+  ParagraphBatch,
+  ParagraphBatchObserver,
+  ParagraphBatchOptions,
+  ParagraphContentBox,
+  ParagraphContentProperties,
+  ParagraphId,
+  ParagraphProperties,
+  ParagraphSnapshot,
+  ParagraphUpdate,
+  PreparedGlyphBatch,
+  PreparedGlyphRun,
+  PreparedParagraph,
+  PreparedParagraphBatchRevision,
+  TextPreparationError,
+} from './paragraph-batch.js';
+export type {
+  ParagraphBatchAttachment,
+  ParagraphBatchTarget,
+  ParagraphBatchTargetError,
+  ParagraphBatchTargetRevision,
+  ParagraphBatchTargetStage,
+  ParagraphBatchTargetUpdate,
+} from './paragraph-batch-attachment.js';
+
+export type {
+  ColorInput,
+  FormattedText,
+  GlyphPaintInput,
+  ParagraphSpan,
+  SpanFormat,
+  SpanStyle,
+  SpanTag,
+  TextInput,
+  TextLiteral,
+  TextSpanFragment,
+  UnboundSpanTag,
+} from './formatted-text.js';
+export { span, txt } from './formatted-text.js';
+
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 
 export type {
-  Paragraph,
-  ParagraphAxisConstraint,
   ParagraphConstraints,
   ParagraphEngine,
   ParagraphEngineOptions,
   ParagraphInput,
-  ParagraphSpan,
   ParagraphStyle,
 } from './paragraph.js';
+export type { Paragraph as LayoutParagraph } from './paragraph.js';
+export type { ParagraphAxisConstraint as LayoutParagraphAxisConstraint } from './paragraph.js';
 export { createParagraphEngine } from './paragraph.js';
 
 export type {
@@ -142,18 +193,19 @@ export type {
   TextShaperWasmSource,
 } from './shaper.js';
 export { createRuntimeShaper } from './shaper.js';
+export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 
 export type {
-  FontFeature,
-  ResolvedFontFeature,
-  TextContentProperties,
-  TextFontProperties,
-  TextLayoutProperties,
-  TextPaintProperties,
-  TextProperties,
-  TextShapingProperties,
-  TextSpan,
-  TextUpdateProperties,
-  ThreeRasterDrawBatch,
-} from './text.js';
-export { Text } from './text.js';
+  AsyncTextUpdateOptions,
+  LoadedFontInput,
+  LoadedFontRequest,
+  TextPreparationWorker,
+  TextRuntime,
+  TextRuntimeOptions,
+  TextRuntimeRevision,
+  TextUpdateCallback,
+  TextUpdateOutcome,
+  TextUpdateProgress,
+  TextUpdateResult,
+} from './text-runtime.js';
+export { createTextPreparationWorker, createTextRuntime } from './text-runtime.js';

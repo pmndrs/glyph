@@ -104,7 +104,7 @@ pass.end();
 TypeGPU itself preserves that ownership when a root is initialized from an existing device. The application owns device
 loss, canvas configuration, command encoders, pass descriptors, queue submission, and frame fences.
 
-## Proposed public surface (compile gate required)
+## Public engine surface
 
 ```ts
 import type { TgpuRoot } from 'typegpu';
@@ -298,148 +298,63 @@ The custom program keeps curve traversal, coverage, clipping, and technique vali
 
 ## Define variants and compile runs
 
-```ts
-interface TypeGpuVariantCodec<Variant, Key, Schema, Value> {
-  readonly schema: Schema;
-  key(variant: Variant | undefined): Key;
-  value(variant: Variant | undefined): Value;
-}
-
-declare const typeGpuRasterProgramTypes: unique symbol;
-
-interface TypeGpuRasterProgramTypeMap<Variant, Shader, Codec, FontResources, Pipeline, Draw> {
-  readonly variant: Variant;
-  readonly shader: Shader;
-  readonly codec: Codec;
-  readonly fontResources: FontResources;
-  readonly pipeline: Pipeline;
-  readonly draw: Draw;
-}
-
-interface AnyTypeGpuRasterProgram<Technique extends AnyRasterTechnique> {
-  readonly technique: Technique;
-  readonly [typeGpuRasterProgramTypes]?: TypeGpuRasterProgramTypeMap<
-    unknown,
-    unknown,
-    unknown,
-    unknown,
-    unknown,
-    unknown
-  >;
-}
-
-type TypeGpuProgramTypesOf<Program extends AnyTypeGpuRasterProgram<AnyRasterTechnique>> = NonNullable<
-  Program[typeof typeGpuRasterProgramTypes]
->;
-type TypeGpuVariantOf<Program extends AnyTypeGpuRasterProgram<AnyRasterTechnique>> =
-  TypeGpuProgramTypesOf<Program>['variant'];
-type TypeGpuDrawOf<Program extends AnyTypeGpuRasterProgram<AnyRasterTechnique>> =
-  TypeGpuProgramTypesOf<Program>['draw'];
-
-interface TypeGpuRasterProgram<
-  Technique extends AnyRasterTechnique,
-  Variant,
-  Shader extends TypeGpuRasterShader<Technique, Vertex, Fragment, ResourceSchema>,
-  Vertex,
-  Fragment,
-  ResourceSchema,
-  VariantKey,
-  VariantSchema,
-  VariantValue,
-  FontResources,
-  Pipeline,
-  Draw,
-> extends AnyTypeGpuRasterProgram<Technique> {
-  readonly [typeGpuRasterProgramTypes]?: TypeGpuRasterProgramTypeMap<
-    Variant,
-    Shader,
-    TypeGpuVariantCodec<Variant, VariantKey, VariantSchema, VariantValue>,
-    FontResources,
-    Pipeline,
-    Draw
-  >;
-  readonly shader: Shader;
-  readonly variant: TypeGpuVariantCodec<Variant, VariantKey, VariantSchema, VariantValue>;
-  readonly cacheLimits: {
-    readonly pipelines: number;
-    readonly materializedVariants: number;
-  };
-
-  createFontResources(root: TgpuRoot, font: LoadedFont<Technique>, binding: RasterBindingOf<Technique>): FontResources;
-  createPipeline(root: TgpuRoot, key: VariantKey, pipelineVariant: number): Pipeline;
-  compileRuns(
-    context: TypeGpuProgramRunContext<Technique, Variant, VariantKey, FontResources, Pipeline>,
-  ): readonly Draw[];
-  encode(pass: GPURenderPassEncoder, draw: Draw, frame: TypeGpuFrame): void;
-  disposeFontResources(resources: FontResources): void;
-  disposePipeline(pipeline: Pipeline): void;
-  dispose(): void;
-}
-
-declare function defineTypeGpuRasterProgram<
-  Technique extends AnyRasterTechnique,
-  const Program extends AnyTypeGpuRasterProgram<Technique>,
->(program: Program): Program;
-
-interface TypeGpuProgramRunContext<Technique extends AnyRasterTechnique, Variant, VariantKey, FontResources, Pipeline> {
-  readonly glyphBatches: readonly PreparedGlyphBatch<Technique>[];
-  readonly glyphRuns: readonly PreparedGlyphRun<Variant>[];
-  readonly fontResources: ReadonlyMap<GlyphBatchKey, FontResources>;
-  pipeline(key: VariantKey, pipelineVariant: number): Pipeline;
-}
-```
-
-`AnyTypeGpuRasterProgram` contains only common identity plus an associated-type witness. A concrete program returned by
-`defineTypeGpuRasterProgram()` preserves the exact shader input/output/function, variant key/schema/value, font-resource,
-pipeline, and draw types. A heterogeneous registry exposes associated values as `unknown` and must narrow before
-program-specific work. No public default uses `any` as an inference placeholder.
-
-The reusable program does not own paragraph-batch instance buffers or a live target revision. A target created from that
-program owns those per-batch values:
+The implementation proof found a missing ownership method in the earlier resource/pipeline sketch: it described font
+resources and draw compilation, but no operation could create or update the per-batch instance buffers from canonical
+storage and `dirtyRanges`. Those buffers are program-specific and cannot move into core. The public program therefore owns
+one exact target factory instead of exposing an incomplete list of internal steps:
 
 ```ts
 interface TypeGpuParagraphBatchTargetRevision<Draw> extends ParagraphBatchTargetRevision {
   readonly draws: readonly Draw[];
 }
 
-interface TypeGpuParagraphBatchTarget<
-  Technique extends AnyRasterTechnique,
-  Variant,
-  Program extends AnyTypeGpuRasterProgram<Technique>,
-> extends ParagraphBatchTarget<Technique, Variant, TypeGpuParagraphBatchTargetRevision<TypeGpuDrawOf<Program>>> {
-  readonly root: TgpuRoot;
-  readonly program: Program;
-  encode(
-    pass: GPURenderPassEncoder,
-    revision: TypeGpuParagraphBatchTargetRevision<TypeGpuDrawOf<Program>>,
-    frame: TypeGpuFrame,
-  ): void;
+interface TypeGpuParagraphState {
+  readonly transform: Float32Array;
+  readonly visible: boolean;
 }
 
-declare function createTypeGpuParagraphBatchTarget<
-  Technique extends AnyRasterTechnique,
-  Program extends AnyTypeGpuRasterProgram<Technique>,
->(options: {
+interface TypeGpuParagraphBatchTarget<Technique extends AnyRasterTechnique, Variant, Draw, Revision>
+  extends ParagraphBatchTarget<Technique, Variant, Revision> {
   readonly root: TgpuRoot;
-  readonly technique: Technique;
-  readonly program: Program;
-  readonly colorFormat: GPUTextureFormat;
-  readonly depthStencil?: GPUDepthStencilState;
-  readonly sampleCount?: number;
-}): TypeGpuParagraphBatchTarget<Technique, TypeGpuVariantOf<Program>, Program>;
+  setParagraphState(paragraph: ParagraphId, state: TypeGpuParagraphState | undefined): void;
+  encode(pass: GPURenderPassEncoder, revision: Revision, frame: TypeGpuFrame): void;
+}
+
+interface TypeGpuRasterProgram<Technique extends AnyRasterTechnique, Variant, Draw, Revision>
+  extends AnyTypeGpuRasterProgram<Technique> {
+  createTarget(options: {
+    readonly root: TgpuRoot;
+    readonly technique: Technique;
+    readonly colorFormat: GPUTextureFormat;
+    readonly depthStencil?: GPUDepthStencilState;
+    readonly sampleCount: number;
+  }): TypeGpuParagraphBatchTarget<Technique, Variant, Draw, Revision>;
+  dispose(): void;
+}
+
+declare function defineTypeGpuRasterProgram<Technique, Variant, Draw, Revision>(
+  program: TypeGpuRasterProgram<Technique, Variant, Draw, Revision>,
+): TypeGpuRasterProgram<Technique, Variant, Draw, Revision>;
 ```
 
-`TypeGpuTextEngine.createParagraphBatch()` constructs this target, attaches it to the hidden core batch, and exposes the
-retained convenience shown earlier. Another engine may call the factory directly only after proving compatible WebGPU
-device/pass interop, attach it to its own public core batch, and decide when to prepare, commit, and encode. Wayfare remains
-an unverified candidate rather than a claimed consumer. Several targets and batches can lease one program without sharing their
-instance, transform, draw-revision, or fence state.
+The target factory is the advanced customization boundary. It owns exact TypeGPU buffer schemas, dirty-range writes, font
+textures/tables, variant sidecars, bind groups, pipeline caches, run compilation, staged revisions, draw encoding, and
+retirement. The program remains reusable; each call creates independent batch state for one root and render-target
+compatibility tuple. Built-in program factories provide this target, so ordinary users do not implement it.
 
-`variant.key()` describes pipeline/material compatibility, not authored identity. Two different parameter bindings may
-return the same key and occupy one draw when the program writes their values to indexed sidecar storage. Conversely, a
-variant that changes shader graph, bind-group layout, blend mode, depth policy, or another pipeline constraint returns a
-different key. The program compiles adjacent core runs by physical glyph batch plus variant key and may split further for
-engine limits. It does not reorder non-equivalent runs.
+The associated-type witness retains exact variant, draw, and revision types. A heterogeneous registry exposes those values
+as `unknown` and must narrow before program-specific work; no public default uses `any`. A program may expose additional
+typed `shader`, variant-codec, resource, or pipeline properties for authoring and inspection without forcing one internal
+resource layout on every technique.
+
+`TypeGpuTextEngine.createParagraphBatch()` calls `program.createTarget()`, attaches that target to the hidden core batch,
+and exposes the retained convenience shown earlier. Another WebGPU host may use the same program factory after proving
+compatible device/pass interop and may coordinate the returned public target with `ParagraphBatch.attach()`. Wayfare remains
+an unverified candidate rather than a claimed consumer.
+
+The target resolves variant compatibility while compiling the ordered core runs. Two parameter bindings may occupy one
+draw when sidecar storage and shader logic permit it; a shader graph, bind-group layout, blend, depth, or other pipeline
+change may split them. The target may split further for engine limits, but it does not reorder non-equivalent core runs.
 
 Changing a core variant rebuilds the run plan but does not reshape. Mutating values inside a stable program-owned binding
 may update only its TypeGPU sidecar buffer and need no core update at all. Programs should use immutable variant snapshots
@@ -451,9 +366,9 @@ each frame cannot create an unbounded cache. Custom programs own and document eq
 
 ## Compose effects without replacing the technique
 
-The convenience helper's exact declaration is intentionally not claimed yet. TypeGPU is not installed in this repository,
-and the earlier five-parameter sketch could infer `Parameters`, `Context`, and `Output` as `unknown`. The accepted shape is
-constrained instead:
+The convenience helper's exact declaration is intentionally not claimed yet. The installed TypeGPU 0.11.9 compile proof
+showed that the earlier five-parameter sketch could infer `Parameters`, `Context`, and `Output` as `unknown`. The accepted
+shape is constrained instead:
 
 - the helper takes the exact technique shader as an inference anchor;
 - parameter values are derived from the declared TypeGPU schema through the installed TypeGPU type utilities;
@@ -527,9 +442,11 @@ Dispose paragraphs before their batch when individually finished, batches before
 releasing its program leases. `engine.dispose()` cascades through its batches and hidden runtime but not the caller-owned
 root/device. A program shared with another engine remains live until its final lease is released.
 
-## Conformance
+## Remaining conformance
 
-The surface is not implemented until the proof demonstrates:
+The engine wrapper, exact program/target types, explicit synchronization, retained paragraph identity, transform/visibility
+sidecar state, attachment staging, and caller-owned pass encoding are implemented. The built-in program stack is not
+complete until the proof demonstrates:
 
 - Bitmap, MTSDF, and Slug consume the same portable artifacts, glyph batches, glyph runs, and canonical storage as Three;
 - adjacent updates write only dirty byte ranges through TypeGPU buffers, while first/gapped attachment initializes live

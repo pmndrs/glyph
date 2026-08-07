@@ -1,6 +1,6 @@
 import type { FontHandle } from './identity.js';
 import type { ParagraphLayout, ParagraphMeasurement } from './layout.js';
-import type { FontFeature, ResolvedFontFeature } from './text.js';
+import type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 import type { RegisteredFont } from './font.js';
 import type { BidiAnalysisViews, ReshapeRange, RuntimeShaper, ShapeBatchRequest, ShapedBatchViews } from './shaper.js';
 import { analyzeUnicodeText, type UnicodeTextAnalysis } from './internal/unicode.js';

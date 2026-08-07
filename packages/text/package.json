@@ -20,6 +20,22 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./v0": {
+      "types": "./dist/v0.d.ts",
+      "import": "./dist/v0.js"
+    },
+    "./three": {
+      "types": "./dist/three.d.ts",
+      "import": "./dist/three.js"
+    },
+    "./r3f": {
+      "types": "./dist/r3f.d.ts",
+      "import": "./dist/r3f.js"
+    },
+    "./typegpu": {
+      "types": "./dist/typegpu.d.ts",
+      "import": "./dist/typegpu.js"
+    },
     "./raster/bitmap": {
       "types": "./dist/raster/bitmap-technique.d.ts",
       "import": "./dist/raster/bitmap-technique.js"
@@ -109,24 +125,30 @@
     "@types/react": "19.2.14",
     "@types/three": "0.185.1",
     "@unicode/unicode-17.0.0": "1.6.17",
+    "@webgpu/types": "0.1.71",
     "binaryen": "129.0.0",
     "eslint-plugin-react-you-might-not-need-an-effect": "1.0.1",
     "oxfmt": "0.35.0",
     "oxlint": "1.75.0",
     "react": "19.2.8",
     "three": "0.185.1",
+    "typegpu": "0.11.9",
     "unicode-property-value-aliases": "3.9.0"
   },
   "peerDependencies": {
     "@react-three/fiber": ">=10.0.0-alpha.2 <11",
     "react": ">=19 <19.3",
-    "three": ">=0.185.1"
+    "three": ">=0.185.1",
+    "typegpu": ">=0.11.9 <0.12"
   },
   "peerDependenciesMeta": {
     "@react-three/fiber": {
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "typegpu": {
       "optional": true
     }
   },

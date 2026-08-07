@@ -34,24 +34,12 @@ import {
   textShaper,
 } from './internal/text-runtime.js';
 import type { FontRegistry } from './loader.js';
+import type { FontFeature } from './font-feature.js';
+
+export type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 
 /** Three.js adapter batch required by raster modules rendered through {@link Text}. */
 export type ThreeRasterDrawBatch = RasterObjectDrawBatch<THREE.Object3D>;
-
-export interface FontFeature {
-  readonly tag: string;
-  readonly value?: number;
-  readonly start?: number;
-  readonly end?: number;
-}
-
-/** Resolved, absolute UTF-16 feature range passed to the shaping ABI. */
-export interface ResolvedFontFeature {
-  readonly tag: string;
-  readonly value: number;
-  readonly start: number;
-  readonly end: number;
-}
 
 export interface TextLayoutProperties {
   readonly width?: number;

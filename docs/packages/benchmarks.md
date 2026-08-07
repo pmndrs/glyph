@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:6a745d74b2e69fc11e0631f765b15c435d0a00e9054263709ac61219e564eb25'
+source_digest: 'sha256:5a1a1cf60e7faaa1625b6d8bcc7aa4aa495493328237d1495e99c15fbcd118b4'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -68,6 +68,18 @@ sources:
   - id: react-text-product-target
     resource: ../../apps/benchmarks/src/benchmark/targets/product/react-text.ts
     title: React Text reconciliation product target
+  - id: v1-bitmap-proof
+    resource: ../../apps/benchmarks/src/v1-bitmap-proof.ts
+    title: Target-v1 retained Bitmap browser proof
+  - id: v1-mtsdf-proof
+    resource: ../../apps/benchmarks/src/v1-mtsdf-proof.ts
+    title: Target-v1 retained MTSDF browser proof
+  - id: v1-slug-proof
+    resource: ../../apps/benchmarks/src/v1-slug-proof.ts
+    title: Target-v1 retained Slug browser proof
+  - id: v1-async-proof
+    resource: ../../apps/benchmarks/src/v1-async-proof.ts
+    title: Target-v1 Worker synchronization browser proof
   - id: bitmap-text-product-target
     resource: ../../apps/benchmarks/src/benchmark/targets/product/bitmap-text.ts
     title: Finite Bitmap public Text product target
@@ -184,6 +196,12 @@ generated:
 # Package reference: `@pmndrs/text-benchmarks`
 
 Status: ✅ Milestone 10 renderer-neutral extensibility and retained Presentation are complete
+
+The application now also contains focused target-v1 browser proofs for Bitmap, MTSDF, Slug, and Worker preparation while
+the full Presentation remains on the explicit merged-v0 harness subpath. Each raster proof renders through the maintained
+Three adapter on native WebGPU and forced WebGL2, mutates the retained text, and asserts draw plus storage identity rather
+than treating first pixels as sufficient evidence. The Worker proof distinguishes call-time snapshots, later desired
+state, supersession, abort, progress, and one reusable module Worker.
 
 During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
 their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths. Canonical `/raster/bitmap` and `/raster/slug`

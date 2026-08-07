@@ -1,6 +1,6 @@
 import type {
-  Paragraph,
-  ParagraphAxisConstraint,
+  LayoutParagraph as Paragraph,
+  LayoutParagraphAxisConstraint as ParagraphAxisConstraint,
   ParagraphConstraints,
   ParagraphInput,
   ParagraphLayout,

@@ -1,4 +1,4 @@
-import { Text, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
+import { Text, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text/v0';
 import { msdf, msdfDescriptorRasterKey, type MsdfResource } from '@pmndrs/text/raster/msdf';
 import * as THREE from 'three/webgpu';
 

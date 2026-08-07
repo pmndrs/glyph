@@ -100,7 +100,10 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
         const visit = (node: ts.Node): void => {
           if (ts.isCallExpression(node)) {
             const binding = importedBinding(node.expression, checker, project);
-            if (binding?.module === '@pmndrs/text' && binding.exported === 'defineFont') {
+            if (
+              (binding?.module === '@pmndrs/text' || binding?.module === '@pmndrs/text/v0') &&
+              binding.exported === 'defineFont'
+            ) {
               const sourceOffset = node.getStart(sourceFile);
               analyses.push(
                 analyzeDefinition(
@@ -123,7 +126,7 @@ export async function discoverProjectFonts(options: DiscoveryOptions = {}): Prom
             const binding = importedBinding(node.expression, checker, project);
             const properties = node.arguments?.[0];
             if (
-              binding?.module === '@pmndrs/text' &&
+              (binding?.module === '@pmndrs/text' || binding?.module === '@pmndrs/text/v0') &&
               binding.exported === 'Text' &&
               properties !== undefined &&
               ts.isObjectLiteralExpression(unwrap(properties))

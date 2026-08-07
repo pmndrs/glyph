@@ -1,4 +1,11 @@
-import { FontLoader, FontRegistry, Text, type ParagraphLayout, type RegisteredFont, type TextSpan } from '@pmndrs/text';
+import {
+  FontLoader,
+  FontRegistry,
+  Text,
+  type ParagraphLayout,
+  type RegisteredFont,
+  type TextSpan,
+} from '@pmndrs/text/v0';
 import { slug, slugDescriptorRasterKey, type SlugModule, type SlugResource } from '@pmndrs/text/raster/slug/v0';
 import * as THREE from 'three/webgpu';
 

@@ -4,9 +4,12 @@ import test, { after } from 'node:test';
 
 import React, { createRef, StrictMode } from 'react';
 
-import { Text as CoreText, defineFont } from '../../dist/index.js';
+import { Text as CoreText, defineFont } from '../../dist/v0.js';
+import { Text as R3fText, TextGroup as R3fTextGroup, useFont as useV1Font } from '../../dist/r3f.js';
 import { Text, lazyRaster, useFont } from '../../dist/react.js';
+import { bitmap as bitmapTechnique } from '../../dist/raster/bitmap-technique.js';
 import { bitmap } from '../../dist/raster/bitmap.js';
+import { Text as ThreeV1Text } from '../../dist/three.js';
 
 const restoreR3fEnvironment = installR3fEnvironment();
 const { default: ReactThreeTestRenderer } = await import('@react-three/test-renderer');
@@ -123,6 +126,63 @@ test('React Text flattens spans, retains its Object3D identity, forwards its ref
     await Promise.resolve();
     loaded.font.dispose();
     useFont.clear(font);
+    restoreFetch();
+  }
+});
+
+test('target-v1 R3F TextGroup and nested Text retain Three objects without Strict Mode font leaks', async () => {
+  const restoreFetch = installFileFetch();
+  const request = {
+    input: { baked: fixtureUrl.href },
+    raster: { technique: bitmapTechnique, options: { strikes: [16] } },
+  };
+  const font = await useV1Font.preload(request);
+  const groupReference = createRef();
+  const textReference = createRef();
+  const render = (suffix) =>
+    React.createElement(
+      StrictMode,
+      null,
+      React.createElement(
+        R3fTextGroup,
+        { technique: bitmapTechnique, ref: groupReference },
+        React.createElement(
+          R3fText,
+          { font, ref: textReference },
+          'Fast ',
+          React.createElement(R3fText, { paint: { color: '#ff00ff' } }, suffix),
+        ),
+      ),
+    );
+
+  let renderer;
+  try {
+    await ReactThreeTestRenderer.act(async () => {
+      renderer = await ReactThreeTestRenderer.create(render('text'));
+    });
+    assert.ok(textReference.current instanceof ThreeV1Text);
+    groupReference.current.updateMatrixWorld();
+    assert.equal(textReference.current.layout?.glyphIds.length, 9);
+    assert.deepEqual(
+      textReference.current.spans.map(({ start, end }) => [start, end]),
+      [[5, 9]],
+    );
+    const retained = textReference.current;
+
+    await renderer.update(render('type'));
+    groupReference.current.updateMatrixWorld();
+    assert.equal(textReference.current, retained);
+    assert.equal(retained.text, 'Fast type');
+
+    await renderer.unmount();
+    renderer = undefined;
+    assert.equal(retained.disposed, true);
+    font.dispose();
+    useV1Font.clear(request);
+  } finally {
+    if (renderer !== undefined) await renderer.unmount();
+    if (!font.disposed) font.dispose();
+    useV1Font.clear(request);
     restoreFetch();
   }
 });

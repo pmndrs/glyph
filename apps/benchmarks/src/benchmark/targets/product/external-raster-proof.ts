@@ -1,4 +1,4 @@
-import { FontRegistry, Text } from '@pmndrs/text';
+import { FontRegistry, Text } from '@pmndrs/text/v0';
 import { glyphExample } from '@pmndrs/text-glyph-example-raster';
 import * as THREE from 'three/webgpu';
 

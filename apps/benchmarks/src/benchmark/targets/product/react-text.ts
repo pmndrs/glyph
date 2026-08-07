@@ -2,7 +2,7 @@ import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu
 import React, { createRef, StrictMode, useLayoutEffect } from 'react';
 import * as THREE from 'three/webgpu';
 
-import { Text as CoreText, defineFont, type ParagraphLayout } from '@pmndrs/text';
+import { Text as CoreText, defineFont, type ParagraphLayout } from '@pmndrs/text/v0';
 import { Text, useFont } from '@pmndrs/text/react';
 import { bitmap } from '@pmndrs/text/raster/bitmap/v0';
 

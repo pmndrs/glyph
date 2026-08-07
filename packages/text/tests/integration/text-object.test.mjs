@@ -6,7 +6,7 @@ import { createFontBaker } from '@pmndrs/text-font-baker';
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/text/bakers/bitmap';
 import * as THREE from 'three/webgpu';
-import { FontLoader, FontRegistry, RasterRuntime, Text, defineRaster } from '../../dist/index.js';
+import { FontLoader, FontRegistry, RasterRuntime, Text, defineRaster } from '../../dist/v0.js';
 import {
   bitmap,
   bitmapDescriptor,

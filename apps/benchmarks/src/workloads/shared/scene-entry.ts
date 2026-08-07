@@ -1,4 +1,4 @@
-import type { AnyRasterInput, ParagraphLayout, RegisteredFont, Text, TextSpan } from '@pmndrs/text';
+import type { AnyRasterInput, ParagraphLayout, RegisteredFont, Text, TextSpan } from '@pmndrs/text/v0';
 import type * as THREE from 'three/webgpu';
 
 export interface MutablePaintSpan {

@@ -196,7 +196,7 @@ test('discovers core and React raw forms, resolves source overrides, and skips b
   await writeFile(
     join(root, 'src', 'main.tsx'),
     `
-      import { Text as CoreText, defineFont } from '@pmndrs/text'
+      import { Text as CoreText, defineFont } from '@pmndrs/text/v0'
       import { Text as ReactText } from '@pmndrs/text/react'
       import { bitmap } from '@fixture/raster'
       new CoreText({ font: '/fonts/Core.ttf', raster: bitmap({ strikes: [16] }) })

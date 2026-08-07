@@ -1,4 +1,4 @@
-import { FontRegistry, Text, type RegisteredFont } from '@pmndrs/text';
+import { FontRegistry, Text, type RegisteredFont } from '@pmndrs/text/v0';
 import { bitmap } from '@pmndrs/text/raster/bitmap/v0';
 import * as THREE from 'three/webgpu';
 
