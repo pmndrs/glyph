@@ -6,6 +6,7 @@ import {
   type GlyphBatchStorageOf,
   type RasterBindingOf,
   type RasterDataOf,
+  type RasterGlyphWriteInput,
   type RasterOptionsOf,
   type RasterTechniqueDescriptorOf,
   type RasterTechniqueId,
@@ -64,6 +65,12 @@ type _Descriptor = Expect<
 type _Data = Expect<Equal<RasterDataOf<typeof technique>, TestData>>;
 type _Binding = Expect<Equal<RasterBindingOf<typeof technique>, TestBinding>>;
 type _Storage = Expect<Equal<GlyphBatchStorageOf<typeof technique>, TestStorage>>;
+
+declare const writeInput: RasterGlyphWriteInput<TestData, TestBinding>;
+const writeOrigin: number = writeInput.glyphs[0]!.originX + writeInput.glyphs[0]!.originY;
+const writePage: number = writeInput.binding.page;
+void writeOrigin;
+void writePage;
 
 const erased: AnyRasterTechnique = technique;
 void erased;

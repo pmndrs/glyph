@@ -54,12 +54,18 @@ export interface RasterGlyphInput<Data> {
   readonly data: Data;
   readonly glyphId: number;
   readonly fontSize: number;
+  /** Paragraph-local displayed origin after any caller-authored glyph override. */
+  readonly originX: number;
+  /** Paragraph-local displayed origin after any caller-authored glyph override. */
+  readonly originY: number;
   readonly rasterPixelRatio: number;
   readonly paint: ResolvedPaint;
 }
 
-export interface RasterGlyphWriteInput<Data> {
+export interface RasterGlyphWriteInput<Data, Binding> {
   readonly data: Data;
+  /** The selection already used by core to form this physical glyph batch. */
+  readonly binding: Binding;
   readonly glyphs: readonly RasterGlyphInput<Data>[];
 }
 
@@ -88,9 +94,10 @@ export interface RasterTechnique<
 
   descriptor(options: RasterOptionsArgument<Options>): Descriptor;
   decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Data>;
-  select(input: RasterGlyphInput<Data>): RasterGlyphSelection<Binding>;
+  /** Return undefined when a shaped glyph intentionally has no renderable raster instance. */
+  select(input: RasterGlyphInput<Data>): RasterGlyphSelection<Binding> | undefined;
   createStorage(capacity: number): Storage;
-  writeStorage(storage: Storage, range: GlyphRange, input: RasterGlyphWriteInput<Data>): void;
+  writeStorage(storage: Storage, range: GlyphRange, input: RasterGlyphWriteInput<Data, Binding>): void;
   validatePaint?(paint: GlyphPaint): void;
   dispose(data: Data): void;
 }

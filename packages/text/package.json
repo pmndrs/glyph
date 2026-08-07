@@ -28,6 +28,10 @@
       "types": "./dist/raster/msdf.d.ts",
       "import": "./dist/raster/msdf.js"
     },
+    "./raster/mtsdf": {
+      "types": "./dist/raster/mtsdf.d.ts",
+      "import": "./dist/raster/mtsdf.js"
+    },
     "./raster/slug": {
       "types": "./dist/raster/slug.d.ts",
       "import": "./dist/raster/slug.js"
