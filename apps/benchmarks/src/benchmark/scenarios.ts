@@ -453,7 +453,7 @@ function advancedShapingValidation(values: readonly import('./contracts').Benchm
  * shaper's font selection; and the `.notdef` pin proves the fallback span is what resolved the Devanagari at all.
  */
 const RICH_TEXT_SPAN_EVIDENCE = {
-  hash: '7e765ac8',
+  hash: '87c41664',
   glyphCount: 175,
   renderedGlyphCount: 149,
   drawCount: 7,
@@ -471,21 +471,21 @@ const RICH_TEXT_SPAN_EVIDENCE = {
   faceSpanSlotGlyphs: 6,
   fallbackSpanSlotGlyphs: 8,
   fallbackMissingGlyphsWithoutSpan: 8,
-  accentPaintGlyphs: 23,
+  accentPaintGlyphs: 32,
   tintPaintGlyphs: 3,
-  paragraphPaintGlyphs: 123,
+  paragraphPaintGlyphs: 114,
   nestedGlyphCount: 9,
 } as const;
 
 /**
  * Glyphs the nested style-only span loses to the paragraph paint instead of inheriting from the span that encloses it.
  *
- * The README states that a span inherits its surroundings, and `packages/text` currently resolves paint by taking the
- * innermost covering span's `paint` whole — so a span that states no paint falls through to the *paragraph* paint
- * rather than to the enclosing span's. This pin characterises that defect exactly: it must become `0` when paint
- * resolves as a per-property cascade, and this target is what will report that it has.
+ * This was 9 while paint resolved by taking the innermost covering span's `paint` whole, so a span stating no paint
+ * fell through to the paragraph paint rather than to the span enclosing it — contradicting the README. It reached `0`
+ * when one span cascade began resolving every property by containment for both shaping and paint, and those nine
+ * glyphs moved from `paragraphPaintGlyphs` into `accentPaintGlyphs`. Keep the pin: a regression would raise it again.
  */
-const NESTED_SPAN_PAINT_CASCADE_DELTA = 9;
+const NESTED_SPAN_PAINT_CASCADE_DELTA = 0;
 
 function richTextSpanValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
   deterministicValidation(values.map((value) => value.hash));
@@ -501,7 +501,9 @@ function richTextSpanValidation(values: readonly import('./contracts').Benchmark
       }
     }
     if (value.hash !== RICH_TEXT_SPAN_EVIDENCE.hash) {
-      throw new Error('Rich text span conformance changed its composed shaping and paint evidence');
+      throw new Error(
+        `Rich text span conformance changed its composed shaping and paint evidence: ${value.hash} instead of ${RICH_TEXT_SPAN_EVIDENCE.hash}`,
+      );
     }
     if (
       // A feature span must re-select glyphs only inside its own range.
