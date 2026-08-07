@@ -37,8 +37,25 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const diagnosticModuleFragments = ['/packages/text/dist/internal/raster-baker-profile.js'];
 const diagnosticCodeFragments = ['createProfiledDirectRasterBakerFromInstance', 'profiled MTSDF baker'];
 
+// The renderer and shader-authoring runtimes `@pmndrs/text` builds on are peer
+// dependencies, not vendored code: each keys its identity to a single instance, so a
+// duplicate copy breaks interop rather than merely wasting bytes. `typegpu` warns on a
+// duplicate version and derives every internal symbol from its version string, exactly
+// as Three.js and React require one instance. The consumer installs and dedupes them,
+// so they are outside what this package ships and outside its reviewed ceilings.
 function isTextPeerDependency(id: string): boolean {
-  return id === 'three' || id.startsWith('three/') || id === 'react' || id.startsWith('@react-three/fiber');
+  return (
+    id === 'three' ||
+    id.startsWith('three/') ||
+    id === 'react' ||
+    id.startsWith('@react-three/fiber') ||
+    id === 'typegpu' ||
+    id.startsWith('typegpu/') ||
+    id.startsWith('@typegpu/') ||
+    // Resolution internals reached only through `typegpu` itself.
+    id === 'typed-binary' ||
+    id === 'tinyest'
+  );
 }
 
 async function bundle(

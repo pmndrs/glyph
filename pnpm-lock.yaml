@@ -43,6 +43,12 @@ importers:
       '@react-three/fiber':
         specifier: 10.0.0-alpha.2
         version: 10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
+      '@typegpu/gl':
+        specifier: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c
+        version: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c)
+      '@typegpu/three':
+        specifier: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c
+        version: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c(@typegpu/gl@https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c))(three@0.185.1)(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -73,6 +79,9 @@ importers:
       tw-animate-css:
         specifier: 1.4.0
         version: 1.4.0
+      typegpu:
+        specifier: https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c
+        version: https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c
       unicode-segmenter:
         specifier: 0.15.0
         version: 0.15.0
@@ -184,18 +193,9 @@ importers:
       '@pmndrs/text-font-baker':
         specifier: workspace:*
         version: link:../font-baker
-      '@typegpu/gl':
-        specifier: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c
-        version: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c)
-      '@typegpu/three':
-        specifier: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c
-        version: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c(@typegpu/gl@https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c))(three@0.185.1)(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c)
       ktx-parse:
         specifier: 1.1.0
         version: 1.1.0
-      typegpu:
-        specifier: https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c
-        version: https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -209,6 +209,12 @@ importers:
       '@react-three/test-renderer':
         specifier: 9.1.0
         version: 9.1.0(patch_hash=d950389bba30f10cc54781d343dcedf3aace346d11f507a16a445072f2ed899d)(@react-three/fiber@10.0.0-alpha.2(patch_hash=0f6d2085306bbd109ac98a3051bebfeff94f5c97b04d32917f436bb4a9498ef8)(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
+      '@typegpu/gl':
+        specifier: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c
+        version: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c)
+      '@typegpu/three':
+        specifier: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c
+        version: https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/three@e2d7e6d81c389a2584e91670c270f6e28178353c(@typegpu/gl@https://pkg.pr.new/software-mansion/TypeGPU/@typegpu/gl@e2d7e6d81c389a2584e91670c270f6e28178353c(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c))(three@0.185.1)(typegpu@https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c)
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -242,6 +248,9 @@ importers:
       tsdown:
         specifier: 0.22.14
         version: 0.22.14(typescript@7.0.2)
+      typegpu:
+        specifier: https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c
+        version: https://pkg.pr.new/software-mansion/TypeGPU/typegpu@e2d7e6d81c389a2584e91670c270f6e28178353c
       unicode-property-value-aliases:
         specifier: 3.9.0
         version: 3.9.0
