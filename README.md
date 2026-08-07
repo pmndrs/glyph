@@ -202,7 +202,7 @@ labels.setCapacity({ size: overflow.required, policy: 'fixed' });
 
 ## Control batch render order
 
-A `TextGroup` is an `Object3D`, so its draw submissions naturally retain the nearest parent Three `Group` order:
+A `TextGroup` is an `Object3D`, so its program-compiled draws naturally retain the nearest parent Three `Group` order:
 
 ```ts
 const hud = new THREE.Group();
@@ -210,7 +210,7 @@ hud.renderOrder = 100;
 
 const labels = new TextGroup({ technique: mtsdf });
 
-hud.add(labels); // submissions use groupOrder 100
+hud.add(labels); // text draws use groupOrder 100
 scene.add(hud);
 ```
 
@@ -220,7 +220,9 @@ Set the batch's secondary render-order base through the ordinary Three property:
 labels.renderOrder = 10;
 ```
 
-Core sorts each `Text.renderOrder` inside the batch. The integration assigns the ordered physical submissions consecutive Three render orders beginning at `TextGroup.renderOrder`. Use separate `TextGroup`s when unrelated Three draws must appear between text submissions.
+Core sorts each `Text.renderOrder` inside the batch. The integration assigns the program's ordered physical draws
+consecutive Three render orders beginning at `TextGroup.renderOrder`. Use separate `TextGroup`s when unrelated Three draws
+must appear between text phases.
 
 ## Core API
 
@@ -290,8 +292,9 @@ const revision = runtime.update();
 // or: const outcome = await runtime.updateAsync();
 ```
 
-Core returns technique-specific canonical CPU storage, exact adjacent-revision dirty ranges, and ordered submissions. An integration maps
-those ranges into its own buffers but never reshapes, re-sorts, or rediscovers physical batch membership.
+Core returns technique-specific canonical CPU storage, exact adjacent-revision dirty ranges, and ordered glyph runs carrying
+the paragraph/span render variant. An integration maps those ranges into its own buffers and compiles compatible runs into
+engine draws; it never reshapes, re-sorts source text, or rediscovers physical resource membership.
 
 ## How a rendering engine uses core
 
@@ -311,7 +314,7 @@ target.stage(previous, prepared):
     IF previous.sourceRevision is the immediately preceding batch revision:
       ranges = glyphBatch.dirtyRanges
     ELSE:
-      ranges = the live ranges for glyphBatch named by prepared.submissions
+      ranges = the live ranges for glyphBatch named by prepared.glyphRuns
 
     FOR EACH range IN ranges:
       RENDERER upload that range from every glyphBatch.storage field
@@ -321,7 +324,9 @@ target.stage(previous, prepared):
     RASTER TECHNIQUE defines the portable data, binding, and instance semantics
     RASTER PROGRAM defines shader and pipeline semantics for this renderer backend
 
-  RENDERER retain prepared.submissions without regrouping or sorting
+  RASTER PROGRAM compile prepared.glyphRuns into ordered compatible draws
+    it may coalesce adjacent compatible variants or split for engine limits
+    it must preserve order unless its compositing policy proves another order equivalent
   RETURN a ready ParagraphBatchTargetStage
     commit() publishes this complete target revision
     abort() releases only this unpublished target revision
@@ -347,15 +352,16 @@ BEFORE EACH TEXT RENDER PHASE:
     RENDERER update the current engine transform for paragraph.paragraph
     transform-only changes do not call runtime.update()
 
-  FOR EACH submission IN live.submissions, in the provided order:
-    RENDERER select the buffers identified by submission.batch
-    RENDERER bind the raster program and realized resources for that batch
-    RENDERER draw submission.start and submission.count instances
+  FOR EACH draw IN live.draws, in the compiled order:
+    RENDERER select the physical buffers and resources identified by draw
+    RENDERER bind the raster program, variant data, and pipeline
+    RENDERER encode the draw
 ```
 
 Read the complete [Three.js API](docs/planning/three-api.md), [core API](docs/planning/core-api.md),
 [engine integration contract](docs/planning/engine-integration-contract.md), and
-[raster technique boundary](docs/planning/raster-technique-api.md), then the
+[raster technique boundary](docs/planning/raster-technique-api.md),
+[TypeGPU program and engine API](docs/planning/typegpu-api.md), then the
 [implementation plan](docs/planning/engine-integration-boundary.md).
 
 ```sh

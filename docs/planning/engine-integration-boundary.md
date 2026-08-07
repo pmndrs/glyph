@@ -18,6 +18,9 @@ sources:
   - id: three-api
     resource: three-api.md
     title: Three.js text API
+  - id: typegpu-api
+    resource: typegpu-api.md
+    title: TypeGPU raster programs and text engine
   - id: roadmap
     resource: ../roadmap/roadmap.md
     title: Canonical implementation order
@@ -35,7 +38,7 @@ sources:
     title: Raw TypeGPU proof target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T22:55:24Z'
+  at: '2026-08-07T00:37:30Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -51,8 +54,8 @@ LoadedFont[]
   -> Paragraph handles           // desired-state mutation
   -> TextRuntime.update*()       // one synchronization point
   -> PreparedGlyphBatch[]        // core partitions and packs
-  -> GlyphSubmission[]           // core preserves draw order
-  -> engine target               // storage, GPU upload, transform, submit
+  -> PreparedGlyphRun[]          // core preserves order and resolved variants
+  -> engine target               // storage, compatible draws, transform, submit
 ```
 
 The [core API](core-api.md) is the public authority. The [engine contract](engine-integration-contract.md) is the exact
@@ -67,12 +70,13 @@ const Invariants = {
   fontStackMayResolveThroughMultipleFonts: true,
   paragraphBatchDeclaresOneTechnique: true,
   oneParagraphBatchIsOneIntentionalRenderPhase: true,
-  oneParagraphBatchMayProduceManyGlyphBatchesAndSubmissions: true,
+  oneParagraphBatchMayProduceManyGlyphBatchesAndRuns: true,
   paragraphHandlesOwnDesiredStateMutation: true,
   runtimeUpdateIsTheSynchronizationPoint: true,
   syncOrAsyncIsChosenPerUpdate: true,
   coreOwnsSortingPartitioningPackingAndDirtyRanges: true,
   coreRetainsCanonicalCpuInstanceStorage: true,
+  coreVariantsAreOpaqueRenderIntent: true,
   rasterArtifactsAndCpuDataAreEngineNeutral: true,
   engineTargetsRealizeGpuResources: true,
   targetsOwnTransformsGpuLifetimeAndSceneComposition: true,
@@ -89,7 +93,7 @@ const Rejected = {
   editCallbackPassedToUpdate: true,
   fontStackContainingSeveralTechniques: true,
   logicalMixedTechniqueBatchRepartitionedByEveryRenderer: true,
-  rendererOwnedGlyphSortingAndBatching: true,
+  rendererOwnedShapingOrResourcePartitioning: true,
   targetOwnedCanonicalGlyphStorage: true,
 } as const;
 ```
@@ -144,16 +148,16 @@ paragraph.paint = nextPaint;
 
 Repeated setters before the next runtime update coalesce naturally.
 
-### `PreparedGlyphBatch` and `GlyphSubmission`
+### `PreparedGlyphBatch` and `PreparedGlyphRun`
 
 These are the concrete rendering outputs. Core groups compatible glyph instances into stable storage and separately emits
-the ordered ranges that must be drawn.
+the ordered variant-bearing ranges the integration compiles into draws.
 
 ```ts
 for (const batch of revision.glyphBatches) {
   upload(isAdjacentTargetRevision ? batch.dirtyRanges : liveSubmissionRanges(batch.key));
 }
-for (const submission of revision.submissions) draw(submission);
+for (const draw of program.compileRuns(revision.glyphRuns)) draw(draw);
 ```
 
 ## Ownership boundary
@@ -166,10 +170,11 @@ for (const submission of revision.submissions) draw(submission);
 | Font stack          | one immutable ordered missing-glyph policy over same-technique concrete fonts                                       |
 | Paragraph batch     | declared technique, application render phase, capacity policy, paragraph order domain                               |
 | Paragraph           | batch-owned handle, font leases, desired source, spans, content box, style, paint, order, glyph-origin overrides    |
-| Core batch compiler | fallback runs, layout, resource partitioning, stable slots, overflow chunks, canonical CPU instances, dirty ranges  |
+| Core batch compiler | fallback runs, layout, resource partitioning, stable slots, canonical CPU instances, dirty ranges, ordered variants |
 | Technique           | artifact decoding, resource selection/bindings, canonical instance schema and writing, data meaning                 |
-| Raster program      | optional shader-backend resource and pipeline realization shared by compatible engine targets                       |
-| Engine target       | engine buffers, dirty-range synchronization, transforms, visibility, pass placement, upload, submission, retirement |
+| Raster shader       | reusable backend implementation of canonical Bitmap, MTSDF, or Slug evaluation                                      |
+| Raster program      | shader composition, variant compatibility, resources, pipelines, and final draw compilation                         |
+| Engine target       | engine buffers, dirty-range synchronization, transforms, visibility, pass placement, encoding, retirement           |
 
 ## Current system versus target
 
@@ -178,7 +183,7 @@ for (const submission of revision.submissions) draw(submission);
 | `Text` combines paragraph, raster, and Three ownership                   | Paragraph state and batch compilation live in core; Three is one target                         |
 | Property changes can prepare one `Text` immediately                      | Handle setters only mark desired state dirty                                                    |
 | Async behavior follows object/runtime lifecycle                          | Every synchronization chooses `update()` or `updateAsync()`                                     |
-| One paragraph stages one raster-owned Three draw object                  | One paragraph batch produces resource-compatible glyph storage and an ordered multi-submit plan |
+| One paragraph stages one raster-owned Three draw object                  | One paragraph batch produces resource-compatible storage and ordered variant-bearing glyph runs |
 | Renderer raster modules decide glyph grouping                            | Core and technique modules decide grouping and populate canonical CPU instance storage          |
 | Raster modules combine CPU decode, Three textures, TSL, and draw objects | Portable techniques end at CPU data/bindings; engine targets realize GPU resources and draws    |
 | React/Three lifecycle defines publication boundaries                     | Runtime revision and target stage/commit define publication independently of any engine         |
@@ -270,7 +275,7 @@ expect(currentParagraph(current).text).toBe('B');
 - Default explicit batches to lazy 4,096-glyph chunks and support explicit `size` plus `grow`, `chunk`, or `fixed` policy.
 - Pack technique-specific instance attributes once.
 - Compute coalesced dirty ranges per storage channel.
-- Emit a submission list that preserves paragraph and technique compositing order across resource changes.
+- Emit glyph runs that preserve paragraph, variant, and technique compositing order across resource changes.
 - Never make targets inspect glyphs to choose a batch.
 
 Proof:
@@ -278,7 +283,7 @@ Proof:
 ```ts
 expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
   glyphBatches: ['Inter', 'Noto'],
-  submissions: ['Inter[0..8]', 'Noto[0..3]', 'Inter[8..13]'],
+  glyphRuns: ['Inter[0..8]', 'Noto[0..3]', 'Inter[8..13]'],
 });
 ```
 
@@ -288,9 +293,9 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Let core and the technique populate and retain those arrays.
 - Report exact coalesced adjacent-revision dirty ranges for every changed glyph batch.
 - Let matching targets copy or upload the selected ranges 1:1 and different engine layouts map only those ranges.
-- Initialize a late or gapped target from the live ranges already named by the current submission plan.
+- Initialize a late or gapped target from the live ranges already named by the current glyph-run plan.
 - Allow several targets and late attachment to consume the same prepared storage without reshaping.
-- Prove targets never regroup, resort, or reinterpret submission boundaries while synchronizing their buffers.
+- Prove targets never reshape, repartition physical storage, or change non-equivalent glyph-run order while synchronizing.
 
 ### 5a. Split portable techniques from engine raster programs
 
@@ -336,7 +341,7 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
   membership in another group. Treat a disposed group that remains in the scene graph as a terminal non-rendering boundary,
   never as permission to fall through into an ancestor group or implicit standalone batch.
 - Make `TextGroup` an `Object3D`, not a Group, so Three naturally carries the nearest real ancestor Group's `groupOrder`
-  through it. Map `TextGroup.renderOrder` plus the core submission ordinal onto the physical draw objects' secondary
+  through it. Map `TextGroup.renderOrder` plus the program draw ordinal onto the physical draw objects' secondary
   render orders; do not add a hidden Group or an inheritance API.
 - Let Three own sync/async core calls, dirty-range mapping, transform updates, and publication during the render lifecycle.
   The application calls only `renderer.render(scene, camera)`.
@@ -345,8 +350,10 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
   membership, external refs, subscriptions, and renderer resources.
 - Bind a group to one renderer target lifetime. Require separate groups for simultaneous scene placements, intentional
   render phases, or different renderers; ordinary Three reparenting may move one group between scenes.
-- Keep existing TSL technique shaders and WebGPU/WebGL2 parity while removing Three-owned glyph grouping, sorting,
-  partitioning, slot allocation, and submission-plan computation.
+- Export each canonical technique shader and let custom programs compose final TSL output without rewriting Bitmap,
+  MTSDF, or Slug. Keep the optional `TextEffect` helper at the Three layer; core carries only generic variants.
+- Remove Three-owned shaping, source sorting, resource partitioning, and slot allocation. Retain Three-owned variant
+  compatibility, final draw compilation, materials, and render-list integration.
 
 ### 7. Rebuild React Three Fiber binding
 
@@ -357,15 +364,20 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 - Preserve Suspense for loading only; warm shaping does not require a readiness Promise.
 - Make synchronous versus asynchronous synchronization an integration policy selectable per frame/update.
 
-### 8. Prove raw TypeGPU
+### 8. Implement and prove the direct TypeGPU engine
 
-Build the smallest application in `AlexJWayne/typegpu-shader-canvas` that proves:
+Implement the complete [TypeGPU API](typegpu-api.md), then build the smallest application in
+`AlexJWayne/typegpu-shader-canvas` that proves:
 
 - explicit baked artifact loading;
 - one same-technique `FontStack` with ordered missing-glyph resolution;
 - more than one paragraph in one paragraph batch;
-- core-owned canonical instance storage, adjacent dirty ranges, and current live submission ranges;
-- at least two physical raster-resource batches and ordered submissions;
+- caller-owned `TgpuRoot`, device, render pass, queue submission, and frame loop;
+- reusable typed Bitmap, MTSDF, and Slug shaders plus program-owned resources, variants, pipelines, and draw compilation;
+- core-owned canonical instance storage, adjacent dirty ranges, and current live glyph-run ranges;
+- at least two physical raster-resource batches and ordered variant-bearing glyph runs;
+- one program that batches several parameterized variants into one draw and one program that deliberately splits them;
+- paragraph transforms, visibility, and effect parameters without reshaping;
 - one synchronous update and one asynchronous update;
 - no Three.js import or Three-derived adapter logic.
 
@@ -380,8 +392,9 @@ cost. Keep this implementation behind an explicit export subpath unless those re
 ### 9. Prove Wayfare
 
 Build the smallest application in `iwoplaza/wayfare` that proves the same contract through Wayfare's entity, transform,
-render-pass, and frame lifecycle. The Wayfare adapter may own scene integration but must not reshape, repartition, resort, or
-recompute canonical packing, batch membership, or submission order.
+render-pass, and frame lifecycle. The Wayfare adapter may own scene integration but must not reshape, repartition physical
+storage, resort source text, or recompute canonical packing. It may reuse a TypeGPU program while retaining its own final
+pass and draw lifecycle.
 
 ### 10. Verify all techniques
 
@@ -395,7 +408,7 @@ await proveWayfare();
 ```
 
 No test combines techniques inside one font stack or paragraph batch. A technique-specific proof may use several fonts and
-must verify the minimum draw count and exact submission order implied by those resources.
+must verify exact core glyph-run order and the minimum draw count permitted by its program compatibility.
 
 ## Performance evidence
 
@@ -412,14 +425,15 @@ interface CoreBatchMetrics {
   packedBytes: number;
   dirtyRangeCount: number;
   glyphBatchCount: number;
-  submissionCount: number;
+  glyphRunCount: number;
+  compiledDrawCount: number;
   capacityGrowths: number;
   overflowChunks: number;
 }
 ```
 
 The proof must distinguish semantic CPU state, canonical packed CPU storage, target-owned CPU/staging storage, decoded technique resources, GPU
-resources, draw count, and submission count. It must show that warm handle mutations do not allocate per setter and that
+resources, glyph-run count, and compiled draw count. It must show that warm handle mutations do not allocate per setter and that
 callback-form asynchronous updates do not allocate a public Promise.
 
 ## Exit gates
@@ -432,11 +446,12 @@ callback-form asynchronous updates do not allocate a public Promise.
 - Sync and async calls alternate on one runtime without copying runtime state or font registrations.
 - No-op `update()` is allocation-free.
 - Newer synchronization prevents stale async publication.
-- Core, not the engine, owns glyph sorting, resource partitioning, slot allocation, packing, dirty ranges, and submissions.
-- Core retains canonical packed CPU storage. Targets synchronize adjacent dirty ranges, or current live submission ranges
+- Core owns source sorting, resource partitioning, slot allocation, packing, dirty ranges, resolved variants, and ordered
+  glyph runs. Programs own variant compatibility and final draw compilation.
+- Core retains canonical packed CPU storage. Targets synchronize adjacent dirty ranges, or current live glyph-run ranges
   when first attached or recovering across a revision gap, into their own buffers.
 - Separate paragraph batches remain separate render phases.
-- Cloning a batch returns distinct mapped handles and storage; replacing a Three group retains its child object identities
-  while allocating a distinct hidden batch.
+- Explicit capacity changes preserve batch, paragraph, attachment, and Three object identities; core and Three batch
+  cloning remain unsupported.
 - Three.js, raw TypeGPU, and Wayfare execute the same core output for Bitmap, MTSDF, and Slug.
 - Full repository checks, package-size gates, and documentation validation pass.
