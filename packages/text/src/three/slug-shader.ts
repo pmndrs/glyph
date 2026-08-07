@@ -100,7 +100,7 @@ export function slugShader(
     );
     const emCoordinate = TSL.vec2(
       instance.emOrigin.x.add(TSL.positionLocal.x.mul(instance.emSize.x)),
-      instance.emOrigin.y.add(TSL.positionLocal.y.mul(instance.emSize.y)),
+      instance.emOrigin.y.sub(TSL.positionLocal.y.mul(instance.emSize.y)),
     );
     const dilated = slugDilate(
       localPosition,

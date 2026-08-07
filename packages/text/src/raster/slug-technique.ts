@@ -324,13 +324,14 @@ function writeSlugStorage(
     const verticalBands = records.getUint16(record + 12, true);
     const normalizedLeft = left / input.data.planeUnitsPerEm;
     const normalizedBottom = bottom / input.data.planeUnitsPerEm;
+    const normalizedTop = top / input.data.planeUnitsPerEm;
     const normalizedWidth = (right - left) / input.data.planeUnitsPerEm;
     const normalizedHeight = (top - bottom) / input.data.planeUnitsPerEm;
     const scale = glyph.fontSize / input.data.planeUnitsPerEm;
     const instance = range.start + index;
     setVector2(storage.origins, instance, glyph.originX + left * scale, glyph.originY - top * scale);
     setVector2(storage.sizes, instance, (right - left) * scale, (top - bottom) * scale);
-    setVector2(storage.emOrigins, instance, normalizedLeft, normalizedBottom);
+    setVector2(storage.emOrigins, instance, normalizedLeft, normalizedTop);
     setVector2(storage.emSizes, instance, normalizedWidth, normalizedHeight);
     storage.inverseScales[instance] = 1 / glyph.fontSize;
     const transformOffset = instance * 4;
