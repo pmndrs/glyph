@@ -1,5 +1,6 @@
-import { FontRegistry, Text, type RegisteredFont } from '@pmndrs/text/v0';
-import { bitmap } from '@pmndrs/text/raster/bitmap/v0';
+import type { LoadedFont, LoadedFontRequest } from '@pmndrs/text';
+import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { FontLoader, Text, type ParagraphStyle } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import amiriBitmapFontUrl from '../../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
@@ -14,10 +15,15 @@ import {
 import type { BenchmarkTarget } from '../../contracts';
 import { hashParagraphLayout, paragraphLayoutBytes } from '../../paragraph-layout-digest';
 
+type BitmapTechnique = typeof bitmap;
+
 const VIEWPORT_WIDTH = 800;
 const FONT_SIZE = 16;
 const UTF8_ENCODER = new TextEncoder();
-const bitmapRequest = bitmap({ strikes: [16] as const });
+const bitmapRaster: LoadedFontRequest<BitmapTechnique>['raster'] = {
+  technique: bitmap,
+  options: { strikes: [16] },
+};
 const fontUrlByFixture: Readonly<Record<AdvancedShapingFontFixture, string>> = {
   inter: interBitmapFontUrl,
   amiri: amiriBitmapFontUrl,
@@ -29,7 +35,8 @@ type AdvancedShapingConformanceState =
   | { readonly kind: 'empty' }
   | {
       readonly kind: 'ready';
-      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, RegisteredFont>;
+      readonly loader: FontLoader;
+      readonly fonts: ReadonlyMap<AdvancedShapingFontFixture, LoadedFont<BitmapTechnique>>;
     };
 
 export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
@@ -41,19 +48,21 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     color: 'violet',
     capabilities: new Set(['deterministic', 'font-bytes', 'wasm', 'shaping', 'paragraph', 'raster']),
     status: () => 'ready',
-    load: async () => {
+    load: async (_controls, context) => {
       if (state.kind === 'ready') return;
-      const registry = new FontRegistry();
-      const fonts = new Map<AdvancedShapingFontFixture, RegisteredFont>();
+      // A loading manager this target owns keeps its text runtime, and the fonts registered in it, isolated from the
+      // shared manager every other benchmark surface loads through.
+      const loader = new FontLoader(new THREE.LoadingManager());
+      const fonts = new Map<AdvancedShapingFontFixture, LoadedFont<BitmapTechnique>>();
       try {
         const fixtures = [...new Set(ADVANCED_SHAPING_CASES.map((definition) => definition.fontFixture))];
         const results = await Promise.allSettled(
           fixtures.map(async (fixture) => {
-            const response = await fetch(fontUrlByFixture[fixture]);
-            if (!response.ok) {
-              throw new Error(`Unable to load ${fixture} bitmap fixture (${response.status})`);
-            }
-            const font = await registry.registerAsset(new Uint8Array(await response.arrayBuffer()));
+            const font = await loader.loadAsync({
+              input: { baked: fontUrlByFixture[fixture] },
+              raster: bitmapRaster,
+              ...(context?.signal === undefined ? {} : { signal: context.signal }),
+            });
             return [fixture, font] as const;
           }),
         );
@@ -62,13 +71,15 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
         }
         const failure = results.find((result) => result.status === 'rejected');
         if (failure !== undefined) throw failure.reason;
-        state = { kind: 'ready', fonts };
+        state = { kind: 'ready', loader, fonts };
       } catch (error) {
         for (const font of fonts.values()) font.dispose();
+        loader.dispose();
         throw error;
       }
     },
-    run: async () => {
+    run: async (_input, _sampleIndex, _controls, context) => {
+      context?.signal?.throwIfAborted();
       if (state.kind !== 'ready') {
         throw new Error('advanced-shaping conformance target was not loaded');
       }
@@ -82,33 +93,50 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
       let coldReadyObservationCount = 0;
       let warmLifecyclePublicationCount = 0;
 
+      // A standalone Text only binds a paragraph batch while it has a parent, so every case shapes inside a scene.
+      const scene = new THREE.Scene();
       for (const definition of ADVANCED_SHAPING_CASES) {
         const font = state.fonts.get(definition.fontFixture);
         if (font === undefined) throw new Error(`Missing ${definition.fontFixture} fixture`);
         const caseFrames = frames.filter((frame) => frame.caseDefinition.id === definition.id);
-        let text: Text | undefined;
+        let text: Text<BitmapTechnique> | undefined;
         try {
           for (const frame of caseFrames) {
-            const properties = {
-              text: frame.text,
-              width: Math.max(120, (VIEWPORT_WIDTH * frame.widthPermille) / 1000),
+            const style: ParagraphStyle = {
               fontSize: FONT_SIZE,
               language: definition.language,
               direction: definition.direction,
-              features: definition.features,
+              // Target v1 validates an unbounded feature as a non-empty UTF-16 range over the paragraph, so the empty
+              // opening frame of each timeline states no features instead of an unsatisfiable whole-paragraph range.
+              ...(frame.text.length === 0 ? {} : { features: definition.features }),
+            };
+            const properties = {
+              text: frame.text,
+              contentBox: {
+                width: {
+                  mode: 'exact',
+                  size: Math.max(120, (VIEWPORT_WIDTH * frame.widthPermille) / 1000),
+                },
+              },
+              style,
             } as const;
             if (text === undefined) {
-              text = new Text({
-                ...properties,
-                font,
-                raster: bitmapRequest,
-              });
-              await text.ready;
+              text = new Text({ font, ...properties });
+              scene.add(text);
               coldReadyObservationCount += 1;
             } else {
-              text.setProperties(properties);
-              text.updateMatrixWorld(true);
+              text.set(properties);
               warmLifecyclePublicationCount += 1;
+            }
+            // Target v1 publishes shaping, layout, and draws during the world-matrix update instead of through an
+            // awaited readiness promise, so failures surface on the object rather than as a rejected wait.
+            text.updateMatrixWorld(true);
+            // Headless runs read this across a page boundary that cannot transfer a cause, so the frame that failed
+            // and the underlying reason both belong in the message.
+            if (text.error !== undefined) {
+              throw new Error(`${definition.id}:${frame.tick} failed to publish: ${String(text.error)}`, {
+                cause: text.error,
+              });
             }
             const layout = text.layout;
             if (layout === undefined) throw new Error(`${definition.id}:${frame.tick} has no layout`);
@@ -139,6 +167,7 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
             );
           }
         } finally {
+          text?.removeFromParent();
           text?.dispose();
         }
       }
@@ -163,8 +192,10 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
     },
     dispose: async () => {
       if (state.kind !== 'ready') return;
-      for (const font of state.fonts.values()) font.dispose();
+      const { fonts, loader } = state;
       state = { kind: 'empty' };
+      for (const font of fonts.values()) font.dispose();
+      loader.dispose();
     },
   };
 }

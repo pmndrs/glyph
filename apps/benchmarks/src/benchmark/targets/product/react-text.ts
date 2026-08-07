@@ -1,10 +1,11 @@
 import { createRoot, flushSync, type RootStore } from '@react-three/fiber/webgpu';
-import React, { createRef, StrictMode, useLayoutEffect } from 'react';
+import React, { createRef, StrictMode } from 'react';
 import * as THREE from 'three/webgpu';
 
-import { Text as CoreText, defineFont, type ParagraphLayout } from '@pmndrs/text/v0';
-import { Text, useFont } from '@pmndrs/text/react';
-import { bitmap } from '@pmndrs/text/raster/bitmap/v0';
+import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
+import { bitmap } from '@pmndrs/text/raster/bitmap';
+import { Text, useFont } from '@pmndrs/text/r3f';
+import type { LoadedFontRequest, ParagraphContentBox, Text as CoreText } from '@pmndrs/text/three';
 
 import canonicalParagraphLayout from '../../../../fixtures/contracts/paragraph-layout-v0.json';
 import bitmapFontUrl from '../../../../fixtures/rendering/inter-bitmap-16.font.glb?url';
@@ -12,17 +13,41 @@ import type { BenchmarkTarget, TargetRunOutput } from '../../contracts';
 import { hashParagraphLayout } from '../../paragraph-layout-digest';
 import { createConfiguredRenderer, disposeConfiguredRenderer } from '../../../renderer/webgpu-renderer';
 
+type BitmapTechnique = typeof bitmap;
+type BitmapTextObject = CoreText<BitmapTechnique>;
+
+/** Both the outer paragraph and its nested span bind one technique, so both elements share one instantiation. */
+const BitmapText = Text<BitmapTechnique>;
+
 const FRAME_WIDTH = 384;
 const FRAME_HEIGHT = 128;
 const TEXT_PREFIX = 'office ';
 const TEXT_ACCENT = 'AVATAR';
 const TEXT_SUFFIX = ' café — ffi, kerning, marks, and wrapping.';
+const NARROW_WIDTH = 360;
+/**
+ * Target v1 merges a Text update into the state it already holds, so dropping the content box would keep the previous
+ * constraint instead of restoring the natural measurement. The unconstrained axis has to be stated.
+ */
+const NATURAL_CONTENT_BOX: ParagraphContentBox = { width: { mode: 'unconstrained' } };
+const fontRequest: LoadedFontRequest<BitmapTechnique> = {
+  input: { baked: bitmapFontUrl },
+  raster: { technique: bitmap, options: { strikes: [16] } },
+};
+
+/**
+ * Target v1 reports batch failures through `onError` rather than a rejected readiness promise, so the run records the
+ * first failure and fails on it instead of hashing whatever partial frame survived.
+ */
+interface ReactTextFailures {
+  error: unknown;
+}
 
 interface ReactTextResources {
   readonly canvas: HTMLCanvasElement;
-  readonly font: Awaited<ReturnType<typeof useFont.preload>>;
-  readonly fontToken: ReturnType<typeof defineFont>;
-  readonly reference: React.RefObject<CoreText | null>;
+  readonly failures: ReactTextFailures;
+  readonly font: LoadedFont<BitmapTechnique>;
+  readonly reference: React.RefObject<BitmapTextObject | null>;
   readonly renderer: THREE.WebGPURenderer;
   readonly root: ReturnType<typeof createRoot>;
   readonly store: RootStore;
@@ -52,8 +77,8 @@ export function createReactTextTarget(): BenchmarkTarget {
       const resources = state.resources;
       state = { kind: 'empty' };
       flushSync(() => resources.root.unmount());
-      resources.font.font.dispose();
-      useFont.clear(resources.fontToken);
+      resources.font.dispose();
+      useFont.clear(fontRequest);
       await disposeConfiguredRenderer(resources.renderer);
     },
   };
@@ -69,8 +94,8 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
     height: FRAME_HEIGHT,
   });
   const root = createRoot(canvas);
-  const fontToken = defineFont(bitmapFontUrl, bitmap({ strikes: [16] as const }));
-  let font: Awaited<ReturnType<typeof useFont.preload>> | undefined;
+  const failures: ReactTextFailures = { error: undefined };
+  let font: LoadedFont<BitmapTechnique> | undefined;
   try {
     await root.configure({
       camera: {
@@ -89,14 +114,14 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
       renderer,
       size: { height: FRAME_HEIGHT, left: 0, top: 0, width: FRAME_WIDTH },
     });
-    font = await useFont.preload(fontToken);
-    const reference = createRef<CoreText>();
-    const initial = await renderCommittedText(root, fontToken, reference);
-    return { canvas, font, fontToken, reference, renderer, root, store: initial.store };
+    font = await useFont.preload(fontRequest);
+    const reference = createRef<BitmapTextObject>();
+    const initial = await renderCommittedText(root, reference, failures);
+    return { canvas, failures, font, reference, renderer, root, store: initial.store };
   } catch (error) {
     flushSync(() => root.unmount());
-    font?.font.dispose();
-    useFont.clear(fontToken);
+    font?.dispose();
+    useFont.clear(fontRequest);
     await disposeConfiguredRenderer(renderer);
     throw error;
   }
@@ -107,14 +132,20 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
   const initialLayout = requiredLayout(core);
   assertOracleLayout(initialLayout, 'natural');
 
-  const narrow = await renderCommittedText(resources.root, resources.fontToken, resources.reference, 360, '#31d7c5');
+  const narrow = await renderCommittedText(
+    resources.root,
+    resources.reference,
+    resources.failures,
+    NARROW_WIDTH,
+    '#31d7c5',
+  );
   const narrowLayout = requiredLayout(core);
   assertOracleLayout(narrowLayout, 'narrow');
   if (narrow.core !== core || narrowLayout === initialLayout) {
     throw new Error('React Text did not retain its core object across width reflow');
   }
 
-  const restored = await renderCommittedText(resources.root, resources.fontToken, resources.reference);
+  const restored = await renderCommittedText(resources.root, resources.reference, resources.failures);
   const restoredLayout = requiredLayout(core);
   assertOracleLayout(restoredLayout, 'natural');
   if (restored.core !== core) throw new Error('React Text replaced its core object during restore');
@@ -142,7 +173,7 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     hash,
     metrics: {
       coreObjectRetained: 1,
-      nestedSpanCount: 1,
+      nestedSpanCount: core.spans.length,
       glyphCount: restoredLayout.glyphIds.length,
       drawCount,
       paintCount,
@@ -157,76 +188,88 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
 
 async function renderCommittedText(
   root: ReturnType<typeof createRoot>,
-  font: ReturnType<typeof defineFont>,
-  reference: React.RefObject<CoreText | null>,
+  reference: React.RefObject<BitmapTextObject | null>,
+  failures: ReactTextFailures,
   width?: number,
   accent = '#ff8a00',
-): Promise<{ readonly core: CoreText; readonly store: RootStore }> {
-  const committed = deferred<CoreText>();
+): Promise<{ readonly core: BitmapTextObject; readonly store: RootStore }> {
+  const committed = deferred<void>();
+  // Target v1 constructs its Three object in a layout effect and publishes it on the following render, so a parent
+  // effect would still observe an empty ref. The ref callback is the first point where the object exists, and it is
+  // composed here rather than inside the component so the component never writes through a prop.
+  const publish = (object: BitmapTextObject | null): void => {
+    reference.current = object;
+    if (object !== null) committed.resolve();
+  };
   let store: RootStore | undefined;
   flushSync(() => {
-    store = root.render(renderText(font, reference, committed.resolve, width, accent));
+    store = root.render(renderText(publish, failures, width, accent));
   });
-  const core = await committed.promise;
+  // The commit only signals that an object reached the ref; StrictMode may remount before the flush settles, so the
+  // retained object is always read back from the ref rather than captured at the first commit.
+  await committed.promise;
+  const core = requiredCoreText(reference);
   if (store === undefined) throw new Error('R3F did not publish its root store');
   const state = store.getState();
   state.gl.render(state.scene, state.camera);
+  if (failures.error !== undefined) throw failures.error;
   return { core, store };
 }
 
 function renderText(
-  font: ReturnType<typeof defineFont>,
-  reference: React.RefObject<CoreText | null>,
-  onCommit: (core: CoreText) => void,
+  textRef: React.RefCallback<BitmapTextObject>,
+  failures: ReactTextFailures,
   width?: number,
   accent = '#ff8a00',
 ): React.ReactElement {
   return React.createElement(
     StrictMode,
     null,
-    React.createElement(
-      CommittedText,
-      { accent, font, onCommit, reference, ...(width === undefined ? {} : { width }) },
-      null,
-    ),
+    React.createElement(CommittedText, { accent, failures, textRef, ...(width === undefined ? {} : { width }) }, null),
   );
 }
 
 function CommittedText({
   accent,
-  font,
-  onCommit,
-  reference,
+  failures,
+  textRef,
   width,
 }: {
   readonly accent: string;
-  readonly font: ReturnType<typeof defineFont>;
-  readonly onCommit: (core: CoreText) => void;
-  readonly reference: React.RefObject<CoreText | null>;
+  readonly failures: ReactTextFailures;
+  readonly textRef: React.RefCallback<BitmapTextObject>;
   readonly width?: number;
 }): React.ReactElement {
-  useLayoutEffect(() => {
-    onCommit(requiredCoreText(reference));
-  }, [onCommit, reference]);
+  const font = useFont(fontRequest);
   return React.createElement(
-    Text,
+    BitmapText,
     {
       font,
-      fontSize: canonicalParagraphLayout.style.fontSize,
-      lineHeight: canonicalParagraphLayout.style.lineHeight,
-      ref: reference,
-      ...(width === undefined ? {} : { width }),
+      onError: (error: unknown) => {
+        failures.error ??= error;
+      },
+      ref: textRef,
+      style: {
+        fontSize: canonicalParagraphLayout.style.fontSize,
+        lineHeight: canonicalParagraphLayout.style.lineHeight,
+      },
+      contentBox: width === undefined ? NATURAL_CONTENT_BOX : exactContentBox(width),
     },
     TEXT_PREFIX,
-    React.createElement(Text, { color: accent }, TEXT_ACCENT),
+    React.createElement(BitmapText, { paint: { color: accent } }, TEXT_ACCENT),
     TEXT_SUFFIX,
   );
+}
+
+/** The oracle pins the narrow measurement to an exact box rather than an upper bound. */
+function exactContentBox(size: number): ParagraphContentBox {
+  return { width: { mode: 'exact', size } };
 }
 
 function assertOracleLayout(layout: ParagraphLayout, state: 'natural' | 'narrow'): void {
   const oracle = canonicalParagraphLayout.goldens[state];
   const hash = hashParagraphLayout(layout);
-  const expectedWidth = state === 'narrow' ? 360 : oracle.measurement.width;
+  const expectedWidth = state === 'narrow' ? NARROW_WIDTH : oracle.measurement.width;
   if (
     hash !== oracle.layout.hash ||
     layout.glyphIds.length !== oracle.layout.glyphCount ||
@@ -243,17 +286,17 @@ function assertOracleLayout(layout: ParagraphLayout, state: 'natural' | 'narrow'
   }
 }
 
-function requiredCoreText(reference: React.RefObject<CoreText | null>): CoreText {
+function requiredCoreText(reference: React.RefObject<BitmapTextObject | null>): BitmapTextObject {
   if (reference.current === null) throw new Error('React Text core object is unavailable');
   return reference.current;
 }
 
-function requiredLayout(core: CoreText): NonNullable<CoreText['layout']> {
+function requiredLayout(core: BitmapTextObject): NonNullable<BitmapTextObject['layout']> {
   if (core.layout === undefined) throw new Error('React Text layout is unavailable');
   return core.layout;
 }
 
-function countDraws(object: CoreText): number {
+function countDraws(object: BitmapTextObject): number {
   let count = 0;
   object.traverse((child) => {
     if (child.type === 'Mesh') count += 1;
@@ -261,18 +304,22 @@ function countDraws(object: CoreText): number {
   return count;
 }
 
-function countUniquePaints(object: CoreText): number {
+function countUniquePaints(object: BitmapTextObject): number {
   const paints = new Set<string>();
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
-    const colors = child.geometry.getAttribute('bitmapColor');
+    const colors = child.geometry.getAttribute('_pmndrsTextColors');
     if (colors === undefined) return;
+    // One physical batch backs every run of a paragraph, so a draw reads its own window of the shared paint buffer.
+    const start = (child.userData.pmndrsTextRunStart as number | undefined) ?? 0;
     const instanceCount =
       child.geometry instanceof THREE.InstancedBufferGeometry ? child.geometry.instanceCount : colors.count;
-    if (instanceCount > colors.count) {
-      throw new Error(`React Text submits ${instanceCount} instances from a ${colors.count}-entry paint buffer`);
+    if (start + instanceCount > colors.count) {
+      throw new Error(
+        `React Text submits instances ${start}..${start + instanceCount} from a ${colors.count}-entry paint buffer`,
+      );
     }
-    for (let instance = 0; instance < instanceCount; instance += 1) {
+    for (let instance = start; instance < start + instanceCount; instance += 1) {
       paints.add(
         [colors.getX(instance), colors.getY(instance), colors.getZ(instance), colors.getW(instance)].join(','),
       );
