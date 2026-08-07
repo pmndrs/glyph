@@ -659,16 +659,20 @@ function resolveFeatures(
   containingStart: number,
   containingEnd: number,
 ): readonly ResolvedFontFeature[] {
-  return features.map((feature) => {
+  return features.flatMap((feature) => {
     const start = feature.start ?? containingStart;
     const end = feature.end ?? containingEnd;
+    // A feature that states no range covers whatever it is applied to, so an empty containing range makes it
+    // vacuous rather than invalid. Rejecting it would fail an ordinary feature-styled field before its first
+    // character is typed. An explicitly empty range is still a caller error.
+    if (feature.start === undefined && feature.end === undefined && start === end) return [];
     assertTextRange(start, end, containingEnd, `feature ${feature.tag}`);
     if (start < containingStart) throw new RangeError(`feature ${feature.tag} starts before its style range`);
     const value = feature.value ?? 1;
     if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
       throw new RangeError(`feature ${feature.tag} value must be a uint32`);
     }
-    return { tag: feature.tag, value, start, end };
+    return [{ tag: feature.tag, value, start, end }];
   });
 }
 
