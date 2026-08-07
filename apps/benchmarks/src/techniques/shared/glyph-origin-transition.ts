@@ -1,0 +1,204 @@
+import type { GlyphOriginUpdate, GlyphSnapshot, ParagraphLayout } from '@pmndrs/text';
+
+/**
+ * The part of a committed target-v1 `Text` this helper needs. Core owns glyph snapshots and topology-guarded
+ * displayed-origin writes but deliberately keeps animation and matching policy out of the library, so identity matching
+ * and interpolation live here — in the application — and every live technique scene shares this one implementation.
+ */
+export interface TransitionableText {
+  readonly layout: ParagraphLayout | undefined;
+  snapshotGlyphs(): GlyphSnapshot;
+  setGlyphOrigins(update: GlyphOriginUpdate): void;
+  clearGlyphOriginOverrides(): void;
+}
+
+/** Displayed glyph origins copied out of one committed paragraph. It retains no renderer or core resources. */
+export interface GlyphOriginSnapshot {
+  readonly glyphCount: number;
+  /** Displayed origin per glyph, keyed by the shaping identity that survives a reflow. */
+  readonly origins: ReadonlyMap<string, readonly [number, number]>;
+}
+
+/** Presentation-only motion toward one authoritative layout. Progress never changes what the layout committed. */
+export interface GlyphOriginTransition {
+  /** Glyphs whose previous displayed origin was recovered by identity; the rest start already placed. */
+  readonly matchedGlyphs: number;
+  readonly targetGlyphs: number;
+  readonly progress: number;
+  setProgress(progress: number): void;
+  finish(): void;
+  dispose(): void;
+}
+
+const EMPTY_SNAPSHOT: GlyphOriginSnapshot = { glyphCount: 0, origins: new Map() };
+
+/**
+ * Copies the displayed origins of the currently committed paragraph. An uncommitted `Text` has nothing to move from,
+ * which is a normal first-frame state rather than a failure, so it yields an empty snapshot that matches nothing.
+ */
+export function captureGlyphOrigins(text: TransitionableText): GlyphOriginSnapshot {
+  const layout = text.layout;
+  if (layout === undefined) return EMPTY_SNAPSHOT;
+  const glyphs = text.snapshotGlyphs();
+  const identities = glyphIdentityKeys(layout, glyphs);
+  const origins = new Map<string, readonly [number, number]>();
+  for (let index = 0; index < identities.length; index += 1) {
+    origins.set(identities[index]!, [glyphs.displayedX[index]!, glyphs.displayedY[index]!]);
+  }
+  return { glyphCount: identities.length, origins };
+}
+
+/**
+ * Moves the committed paragraph's displayed origins from where the matching glyphs used to be toward where the new
+ * layout puts them. The target is the shaped origin rather than the current displayed one, so restarting a transition
+ * mid-flight still converges on the authoritative layout instead of on a partially interpolated position.
+ */
+export function createGlyphOriginTransition(
+  text: TransitionableText,
+  from: GlyphOriginSnapshot,
+): GlyphOriginTransition {
+  const layout = text.layout;
+  if (layout === undefined) throw new TypeError('glyph-origin transition requires a committed paragraph');
+  const glyphs = text.snapshotGlyphs();
+  const identities = glyphIdentityKeys(layout, glyphs);
+  const targetGlyphs = identities.length;
+  const fromX = glyphs.shapedX.slice();
+  const fromY = glyphs.shapedY.slice();
+  let matchedGlyphs = 0;
+  for (let index = 0; index < targetGlyphs; index += 1) {
+    const origin = from.origins.get(identities[index]!);
+    if (origin === undefined) continue;
+    fromX[index] = origin[0];
+    fromY[index] = origin[1];
+    matchedGlyphs += 1;
+  }
+  const topology = glyphs.topology;
+  const targetX = glyphs.shapedX;
+  const targetY = glyphs.shapedY;
+  const displayedX = new Float32Array(targetGlyphs);
+  const displayedY = new Float32Array(targetGlyphs);
+  let progress = 1;
+  let disposed = false;
+  const setProgress = (nextProgress: number): void => {
+    if (!Number.isFinite(nextProgress) || nextProgress < 0 || nextProgress > 1) {
+      throw new RangeError('glyph-origin transition progress must be in [0, 1]');
+    }
+    // A reflow publishes a new layout object and a new topology together, which is exactly when interpolating between
+    // the old and new glyph arrays would be meaningless. Report it as staleness, the way a superseded update reads.
+    if (disposed || text.layout !== layout) {
+      throw new DOMException('The glyph-origin transition is stale', 'AbortError');
+    }
+    for (let index = 0; index < targetGlyphs; index += 1) {
+      const startX = fromX[index]!;
+      const startY = fromY[index]!;
+      displayedX[index] = startX + (targetX[index]! - startX) * nextProgress;
+      displayedY[index] = startY + (targetY[index]! - startY) * nextProgress;
+    }
+    text.setGlyphOrigins({ topology, x: displayedX, y: displayedY });
+    progress = nextProgress;
+  };
+  return {
+    matchedGlyphs,
+    targetGlyphs,
+    get progress() {
+      return progress;
+    },
+    setProgress,
+    finish() {
+      if (disposed) return;
+      setProgress(1);
+      // Settled motion must hand authority back to the layout: an override pinned at the target would otherwise
+      // outlive this transition and silently shadow the next committed origins.
+      text.clearGlyphOriginOverrides();
+      disposed = true;
+    },
+    dispose() {
+      disposed = true;
+    },
+  };
+}
+
+/** Duration the live technique scenes present a reflow over, matching the bitmap viewport's host-driven timeline. */
+export const GLYPH_ORIGIN_TRANSITION_MS = 110;
+
+/** A transition advanced by the host frame clock, for scenes whose surface does not drive progress itself. */
+export interface FrameDrivenGlyphTransition {
+  readonly matchedGlyphs: number;
+  readonly targetGlyphs: number;
+  /** Applies the eased progress for `timestamp` and returns it; `1` means the transition has settled. */
+  advance(timestamp: number): number;
+  dispose(): void;
+}
+
+/**
+ * Wraps one transition in the smoothstep timeline the bitmap viewport applies from React. The first advanced frame
+ * starts the clock rather than the constructor, so a reflow that commits between two frames still presents in full.
+ */
+export function createFrameDrivenGlyphTransition(
+  text: TransitionableText,
+  from: GlyphOriginSnapshot,
+  durationMs: number = GLYPH_ORIGIN_TRANSITION_MS,
+): FrameDrivenGlyphTransition {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    throw new RangeError('glyph-origin transition duration must be positive');
+  }
+  const transition = createGlyphOriginTransition(text, from);
+  transition.setProgress(0);
+  let startedAt: number | undefined;
+  return {
+    matchedGlyphs: transition.matchedGlyphs,
+    targetGlyphs: transition.targetGlyphs,
+    advance(timestamp) {
+      startedAt ??= timestamp;
+      const linear = Math.min(1, Math.max(0, (timestamp - startedAt) / durationMs));
+      if (linear === 1) {
+        transition.finish();
+        return 1;
+      }
+      const eased = linear * linear * (3 - 2 * linear);
+      transition.setProgress(eased);
+      return eased;
+    },
+    dispose() {
+      transition.dispose();
+    },
+  };
+}
+
+/**
+ * Reproduces the identity merged-v0 matched on: font handle, glyph id, cluster, exact font size, and the occurrence
+ * index that separates otherwise identical glyphs within one paragraph.
+ */
+function glyphIdentityKeys(layout: ParagraphLayout, glyphs: GlyphSnapshot): readonly string[] {
+  assertParallelGlyphIdentity(layout, glyphs);
+  const floatBits = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT);
+  const floatValue = new Float32Array(floatBits);
+  const unsignedValue = new Uint32Array(floatBits);
+  const counts = new Map<string, number>();
+  const keys: string[] = [];
+  for (let index = 0; index < glyphs.glyphIds.length; index += 1) {
+    const fontHandle = layout.fontHandles[glyphs.fontSlots[index]!];
+    if (fontHandle === undefined) throw new TypeError('paragraph layout references a missing font slot');
+    floatValue[0] = layout.glyphFontSizes[index]!;
+    const baseKey = `${fontHandle}:${glyphs.glyphIds[index]!}:${glyphs.clusters[index]!}:${unsignedValue[0]!}`;
+    const occurrence = counts.get(baseKey) ?? 0;
+    counts.set(baseKey, occurrence + 1);
+    keys.push(`${baseKey}:${occurrence}`);
+  }
+  return keys;
+}
+
+function assertParallelGlyphIdentity(layout: ParagraphLayout, glyphs: GlyphSnapshot): void {
+  const glyphCount = glyphs.glyphIds.length;
+  for (const values of [
+    glyphs.clusters,
+    glyphs.fontSlots,
+    glyphs.shapedX,
+    glyphs.shapedY,
+    glyphs.displayedX,
+    glyphs.displayedY,
+    layout.glyphFontSizes,
+  ]) {
+    if (values.length !== glyphCount) throw new TypeError('paragraph glyph identity arrays are not parallel');
+  }
+}

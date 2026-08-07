@@ -1,5 +1,10 @@
 /** Technique-invariant visual inputs shared by benchmark workload examples and renderer adapters. */
 export const LIVE_TEXT_COLOR = 0xffffff;
+/**
+ * The same colour target-v1 `paint` accepts. Numeric and CSS hex resolve through one transfer function, so a scene
+ * that migrates from merged-v0 `color` to `paint.color` keeps its pixels rather than only its intent.
+ */
+export const LIVE_TEXT_COLOR_CSS = '#ffffff';
 export const LIVE_TEXT_LINE_HEIGHT = 1.25;
 export const BENCHMARK_CONTENT_INSET = 24;
 export const BENCHMARK_CONTENT_MINIMUM_VIEWPORT_WIDTH = 720;
