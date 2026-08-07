@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-27T01:29:13Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Font payload budget
@@ -42,7 +42,7 @@ flowchart TD
   Total --> Runtime["runtime memory<br/>Wasm font state and GPU resources"]
 ```
 
-The payloads for bitmap, MSDF, and Slug are alternatives unless an asset deliberately contains more than one raster. The shaping data is paid once and is shared by every raster. V1 MSDF resources are always MTSDF-encoded RGBA8.
+The payloads for Bitmap, MSDF, and Slug are alternatives unless an asset deliberately contains more than one raster. The shaping data is paid once and is shared by every raster. Merged v0 and target v1 MSDF resources are always MTSDF-encoded RGBA8.
 
 The HarfRust Wasm shaper is shared application code, not repeated per font. Its current pre-build envelope is 250–600 KiB raw / 90–250 KiB compressed and must be replaced by the first compiled artifact report. Raster modules, KTX2 transcoders, and renderer adapters are likewise reported as independently loaded code chunks rather than charged to every font.
 
@@ -273,4 +273,4 @@ The benchmark corpus must eventually produce this report for:
 
 No modeled number becomes a product claim until a checked-in generator, descriptor, source hash, visual reference, and raw report reproduce it.
 
-Plain RGB MSDF is not part of the V1 totals. A later compression experiment may compare an RGB-capable native block format against the MTSDF baseline, including transport bytes, GPU residency, visual error, effect loss, and extra batch/module complexity. It becomes a supported encoding only if that complete comparison proves a material win.
+Plain RGB MSDF is not part of the merged v0 or target v1 totals. A later compression experiment may compare an RGB-capable native block format against the MTSDF baseline, including transport bytes, GPU residency, visual error, effect loss, and extra batch/module complexity. It becomes a supported encoding only if that complete comparison proves a material win.

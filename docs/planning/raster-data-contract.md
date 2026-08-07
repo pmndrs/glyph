@@ -22,13 +22,13 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-29T11:22:07Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Raster data contract V0
 
 Status: settled V0; changes require an explicit companion-extension version revision
-Scope: independently loadable bitmap, MSDF, and Slug rasters sharing one font-local glyph space; V1 MSDF resources use MTSDF encoding
+Scope: independently loadable Bitmap, MSDF, and Slug rasters sharing one font-local glyph space; merged v0 and target v1 MSDF resources use MTSDF encoding
 
 ## Logical resources, not a mandatory file split
 
@@ -221,7 +221,7 @@ For the non-subsetted V0 fixtures, records are 58,740 bytes for the pinned 2,937
 
 ## `PMNDRS_font_distance_field` V0
 
-This extension is the serialized resource for the public MSDF raster module. V1 supports one encoding: MTSDF in linear RGBA8. RGB stores the multi-channel signed-distance field and alpha stores true signed distance. The lossless GPU baseline is already four-channel because WebGPU has no ordinary `rgb8unorm` sampled texture format; discarding alpha would not reduce that baseline's GPU residency.
+This extension is the serialized resource for the public MSDF raster module. Merged v0 and target v1 support one encoding: MTSDF in linear RGBA8. RGB stores the multi-channel signed-distance field and alpha stores true signed distance. The lossless GPU baseline is already four-channel because WebGPU has no ordinary `rgb8unorm` sampled texture format; discarding alpha would not reduce that baseline's GPU residency.
 
 ```ts
 interface MsdfRasterV0 {
@@ -239,7 +239,7 @@ MSDF glyph records are the same 20-byte plane/atlas/page/flags layout as bitmap 
 
 The package default remains 64/8 and preserves its established raster key. These controls permit smaller or larger authored fields without implying that a lower-cost setting is universally preferable. Passing validation at 32/4 and 32/6 establishes format and implementation support; source-outline quality, transport, residency, and rendering evidence must select any future recommended default.
 
-One resource and one batch family serve both ordinary text and distance effects. Fill coverage uses the median of RGB; outline, shadow, glow, or another effect may use alpha where true geometric distance is required. A fill-only shader may ignore alpha, but it consumes the same MTSDF atlas. Paint/material differences may still split draws; field encoding never creates separate MSDF and MTSDF batches. V1 does not generate or attach a second plain-MSDF atlas.
+One resource and one batch family serve both ordinary text and distance effects. Fill coverage uses the median of RGB; outline, shadow, glow, or another effect may use alpha where true geometric distance is required. A fill-only shader may ignore alpha, but it consumes the same MTSDF atlas. Paint/material differences may still split draws; field encoding never creates separate MSDF and MTSDF batches. Merged v0 and target v1 do not generate or attach a second plain-MSDF atlas.
 
 The required baseline is lossless linear `rgba8unorm` KTX2. UASTC/native BC7, ETC2 RGBA, and ASTC variants are allowed only as `quality-gated` variants because channel error moves reconstructed edges. Their post-GPU-decode images must pass the visual/error corpus; they do not replace the lossless baseline by declaration alone.
 
@@ -365,7 +365,7 @@ The caller explicitly selects a configured raster definition, normally through a
 6. creates GPU resources in bulk without per-glyph object reconstruction;
 7. attaches the resource to `(FontHandle, rasterKey)`.
 
-Switching or attaching a raster does not reshape text and cannot change paragraph measurement. Multiple raster artifacts may be attached concurrently, but V1 never attaches both plain-MSDF and MTSDF versions of the same MSDF raster.
+Switching or attaching a raster does not reshape text and cannot change paragraph measurement. Multiple raster artifacts may be attached concurrently, but merged v0 and target v1 never attach both plain-MSDF and MTSDF versions of the same MSDF raster.
 
 Bitmap and distance-field glyph records are CPU-consumed typed-array data used to gather quad/UV/page values during bulk instance generation. They require no per-glyph objects, but their 20-byte layout is not claimed as a direct GPU metadata format. Slug headers/references and all selected texture variants are upload-formatted resources.
 

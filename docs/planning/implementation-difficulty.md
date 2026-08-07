@@ -18,8 +18,8 @@ sources:
     title: 'Research bibliography'
 
 generated:
-  by: 'openai-codex/gpt-5'
-  at: '2026-07-25T01:24:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Rendering implementation difficulty
@@ -49,7 +49,7 @@ Scores are relative planning estimates from 1 (lowest effort/risk) to 5 (highest
 
 The minimum useful implementation rasterizes a canonical outline at selected ppem values, crops it, packs it into an atlas, and emits plane/atlas bounds keyed by the shared glyph ID. An unhinted grayscale implementation is comparatively direct.
 
-The difficulty rises if V1 requires TrueType hinting, LCD/subpixel output, native/Wasm byte-identical output, or authored bitmap-font ingestion. Those are separate capability decisions rather than reasons to complicate the first strike generator.
+The difficulty rises if target v1 requires TrueType hinting, LCD/subpixel output, native/Wasm byte-identical output, or authored bitmap-font ingestion. Those are separate capability decisions rather than reasons to complicate the first strike generator.
 
 ### Make it performant
 

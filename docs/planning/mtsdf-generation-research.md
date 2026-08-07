@@ -42,7 +42,7 @@ sources:
     title: TypeGPU functions and WGSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-01T06:26:44Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # MTSDF generation research
@@ -110,11 +110,11 @@ The scalar kernel is both the correctness oracle and the selected production imp
 
 Item 8.6 now measures the complete artifact pipeline rather than extrapolating from the generator microcorpus. The native phase observer uses the same optimized Rust pipeline; direct and Worker columns use the shipped optimized Wasm. Times are Apple arm64 observations, not portable thresholds. `Wasm copy` is the exact owned response copy from linear memory, `Worker transfer` is delivery after the Worker's complete marker, linear memory is the retained Wasm high-water mark, and RSS is the isolated Node process lifetime peak.
 
-| Coverage | Selected/generated glyphs | Texels | Edge visits | Native texel/total ms | Wasm bake/copy ms | Worker total/transfer ms | Linear/RSS peak bytes | Output bytes |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Small authored text | 39 / 38 | 71,341 | 1,694,576 | 245.40 / 248.32 | 511.96 / 0.69 | 520.88 / 0.46 | 6,488,064 / 109,002,752 | 595,752 |
-| U+0020–U+024F | 524 / 522 | 1,289,496 | 36,939,819 | 4,429.17 / 4,445.46 | 9,075.97 / 0.74 | 9,109.36 / 0.61 | 36,634,624 / 147,177,472 | 7,074,796 |
-| Complete Inter | 2,937 / 2,915 | 7,233,197 | 227,327,416 | 25,871.57 / 25,957.06 | 52,420.37 / 4.51 | 52,860.21 / 0.47 | 227,737,600 / 343,343,104 | 39,175,608 |
+| Coverage            | Selected/generated glyphs |    Texels | Edge visits | Native texel/total ms | Wasm bake/copy ms | Worker total/transfer ms |     Linear/RSS peak bytes | Output bytes |
+| ------------------- | ------------------------: | --------: | ----------: | --------------------: | ----------------: | -----------------------: | ------------------------: | -----------: |
+| Small authored text |                   39 / 38 |    71,341 |   1,694,576 |       245.40 / 248.32 |     511.96 / 0.69 |            520.88 / 0.46 |   6,488,064 / 109,002,752 |      595,752 |
+| U+0020–U+024F       |                 524 / 522 | 1,289,496 |  36,939,819 |   4,429.17 / 4,445.46 |   9,075.97 / 0.74 |          9,109.36 / 0.61 |  36,634,624 / 147,177,472 |    7,074,796 |
+| Complete Inter      |             2,937 / 2,915 | 7,233,197 | 227,327,416 | 25,871.57 / 25,957.06 |  52,420.37 / 4.51 |         52,860.21 / 0.47 | 227,737,600 / 343,343,104 |   39,175,608 |
 
 Texel generation accounts for 98.8%, 99.6%, and 99.7% of measured native pipeline time. Packing, texture encoding, serialization, Wasm response copying, and Worker delivery are not plausible dominant-phase optimizations. Direct Wasm and Worker artifacts are byte-identical in every case. Small and medium native artifacts also match; complete native arm64 and Wasm artifact hashes are retained separately because target floating-point output diverges at full-face scale. The shipped Wasm identity remains authoritative. This evidence admits the adjacent-texel experiment described below and rejects packaging or transfer tuning as the next optimization.
 
@@ -147,7 +147,7 @@ Admission requires byte-identical or independently bounded output against the sa
 
 The runtime text renderer has a different boundary. Its hot work is already one instanced draw sampling a resident atlas; a pre-render compute pass would add dispatch and synchronization without removing the fragment samples. No compute branch is proposed for Bitmap or MTSDF rendering.
 
-V1 sequencing deliberately postpones the renderer-neutral extraction until Slug lands. Slug first ports through the current Three.js/TSL integration so its real curve-resource, shader-composition, batching, and lifetime requirements are executable rather than guessed. Milestone 10 then extracts the common direct integration contract beneath all three rasters: core shaping and layout remain renderer-neutral, raster plugins expose backend-neutral prepared batches and resources, a direct WebGPU integration owns raw devices and pipelines, and Three.js becomes one supported adapter over that boundary. A future TypeGPU renderer adapter may reuse the same contract, but the compute-baker experiment can proceed independently and must not force this refactor before Slug provides the missing requirements.
+The merged v0 sequence deliberately retained Three.js/TSL through Slug so its real curve-resource, shader-composition, batching, and lifetime requirements were executable rather than guessed. Target v1 Milestone 11 now extracts the common integration contract beneath all three rasters: core shaping and layout remain renderer-neutral, portable techniques expose prepared batches and resources, and Three.js, TypeGPU, Wayfare, and gpucat remain independently selectable integrations. The compute-baker experiment can proceed independently and must not enter unrelated runtime graphs.
 
 [^valve-sdf]: Green, _Improved Alpha-Tested Magnification for Vector Textures and Special Effects_, 2007.
 

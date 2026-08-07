@@ -15,6 +15,9 @@ sources:
   - id: typegpu-api
     resource: typegpu-api.md
     title: TypeGPU raster programs and text engine
+  - id: gpucat-integration
+    resource: gpucat-integration.md
+    title: External gpucat integration fitness plan
   - id: current-raster
     resource: ../../packages/text/src/raster.ts
     title: Current combined raster module
@@ -38,7 +41,7 @@ sources:
     title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Raster technique and engine resource API
@@ -60,7 +63,8 @@ Bitmap, MTSDF, and Slug each need one baker and one portable technique implement
 baking, artifact validation, external-page fetching, fallback resolution, glyph partitioning, or canonical CPU instance
 packing for every engine.
 
-Every engine still needs a target. Technique-specific GPU realization and shader code can be shared when several engines
+Every engine still needs a target, but that target is an ordinary external consumer package rather than a core subpath.
+Technique-specific GPU realization and shader code can be shared when several engines
 expose the same shader/resource backend, but scene traversal, render-pass placement, transforms, submission, fences, and
 retirement remain engine-specific.
 
@@ -387,7 +391,7 @@ compiler. A custom gradient program normally calls `shader.evaluate(context)` an
 the complete technique shader is a low-level escape hatch, not the expected customization path; users should never need to
 reimplement Slug merely to change final color.
 
-These are optional adapter-level seams, not core requirements. A shared TypeGPU MTSDF program can create typed bind-group
+These are optional adapter-level seams declared by integration or shader packages, not core exports or requirements. A shared TypeGPU MTSDF program can create typed bind-group
 layouts, GPU resources, and pipelines once for any host that exposes a compatible WebGPU device and lets the adapter encode
 those pipelines in its render pass. TypeGPU can also unwrap pipelines and bindings to raw WebGPU handles, so the host does
 not have to use TypeGPU for the rest of its renderer.
@@ -428,8 +432,8 @@ The TypeGPU-authored path remains an experiment until the implementation proof:
 - inspects the emitted WebGPU shader and proves Bitmap and Slug output parity against the native TSL path;
 - measures tree-shaken raw, gzip, and Brotli transfer cost plus graph construction and shader compilation cost;
 - distinguishes `typegpu`, `@typegpu/three`, transform metadata, and optional build-plugin cost;
-- keeps the dependency behind an explicit Three export subpath so the default Three path and portable technique do not pay
-  for it.
+- keeps the dependency in an optional external shader/integration package so the default Three path and portable technique
+  do not pay for it.
 
 The npm package's unpacked size is not application bundle evidence. If the proof makes TypeGPU the authoritative source,
 the measured generated program—not package metadata—owns the cost decision.

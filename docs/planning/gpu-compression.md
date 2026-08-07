@@ -52,7 +52,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-07-27T19:47:03Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # GPU compression and compact Slug storage
@@ -281,4 +281,4 @@ Acceptance rules:
 5. Headline size claims include dynamic transcoder bytes and report transport and GPU savings separately.
 6. No compression path is loaded when the selected raster/assets do not require it.
 
-Plain RGB MSDF is not a V1 storage option. A smaller RGB-native compressed variant is an experiment only: it must include the loss of true-distance effects, additional format/shader/batch complexity, platform coverage, transport bytes, and GPU bytes in the comparison. It cannot replace the MTSDF baseline from an isolated texture-size result.
+Plain RGB MSDF is not a merged v0 or target v1 storage option. A smaller RGB-native compressed variant is an experiment only: it must include the loss of true-distance effects, additional format/shader/batch complexity, platform coverage, transport bytes, and GPU bytes in the comparison. It cannot replace the MTSDF baseline from an isolated texture-size result.

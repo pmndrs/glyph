@@ -15,8 +15,8 @@ sources:
     title: 'Research bibliography'
 
 generated:
-  by: 'openai-codex/gpt-5'
-  at: '2026-07-25T01:24:00Z'
+  by: openai-codex/gpt-5.6
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Three Flatland Slug audit
@@ -166,7 +166,7 @@ Disposition:
 
 - preserve the algorithm and tests as the initial Slug generator candidate;
 - store chosen band counts/limits in raster metadata where necessary;
-- benchmark font corpus distributions before fixing V1 limits;
+- benchmark font corpus distributions before fixing target v1 limits;
 - reject or adapt glyphs that exceed shader/runtime capacity instead of truncating.
 
 ### Slug texture packing: port format intent, revisit constraints

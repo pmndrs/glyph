@@ -2,16 +2,17 @@
 
 ## Product, API, and execution
 
-- [Project brief](project-brief.md) — product intent, current integration slice, V1, and later horizon.
-- [Runtime and bake API V0](api-shapes.md) — public and internal TypeScript contract fixture.
+- [Project brief](project-brief.md) — product intent, merged v0, target v1, and later horizon.
+- [Merged v0 runtime and bake API](api-shapes.md) — public and internal TypeScript migration fixture.
 - [Three.js text API](three-api.md) — authoritative `FontLoader`, `TextGroup`, and `Text` surface, including late binding, group disposal/rebinding, font leases, retained non-throwing errors, ordering, and render-loop synchronization.
 - [Core text API](core-api.md) — authoritative API and rationale for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, font leases, fixed-capacity failure, physical batching, and cascading disposal.
 - [Engine integration contract](engine-integration-contract.md) — exact prepared glyph-batch/run, variant, target storage, transform, draw compilation, staging, attachment ownership, and disposal contract.
 - [Raster technique and engine resource API](raster-technique-api.md) — authoritative split between portable baker/artifact/CPU technique data, reusable backend technique shaders, variant-aware programs, and engine GPU targets.
 - [TypeGPU raster programs and text engine](typegpu-api.md) — complete direct TypeGPU API for typed technique shaders, programs, variants, caller-owned render passes, transforms, synchronization, and disposal.
-- [Current V1 raster and baker plugin guide](raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the accepted extraction replaces it.
+- [Merged v0 raster and baker plugin guide](raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
 - [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — WIP extraction and proof plan for the batched core API, Three.js migration, direct TypeGPU engine, and Wayfare adapter.
+- [External gpucat integration fitness plan](gpucat-integration.md) — public-surface mapping, external-package boundary, ordering/lifecycle plan, and remaining shader-reuse proof for gpucat.
 - [Canonical roadmap](../roadmap/roadmap.md) — authoritative implementation order and exit gates.
 - [uikit integration](uikit-integration.md) — third-party retained-layout integration boundary.
 
@@ -37,7 +38,7 @@
 
 - [Shaping compilation and execution research](shaping-compilation-research.md) — closed-corpus baking, semantic bytecode, per-font CPU/Wasm specialization, and WebGPU execution research.
 - [Language-aware font units and physical bitmap strikes](language-and-strike-bundles.md) — coverage-first language delivery, CJK units, DPR selection, and independent strike residency.
-- [Responsive editorial flow and mixed-raster composition](editorial-flow-layout.md) — post-V1 exclusion regions, responsive columns, and a bitmap/MTSDF/Slug benchmark.
+- [Responsive editorial flow and mixed-raster composition](editorial-flow-layout.md) — post-v1 exclusion regions, responsive columns, and a bitmap/MTSDF/Slug benchmark.
 
 ## Rendering analysis
 

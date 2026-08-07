@@ -37,7 +37,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-07-29T15:36:00Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Shaping and layout conformance plan
@@ -174,7 +174,7 @@ call; an unrelated subsequent shaper call proves the layout owns its arrays.
 | Controls       | LF, CRLF, paragraph separator, tabs policy, default ignorables, ZWJ/ZWNJ, soft hyphen                                                                                                                                                                                  |
 | Invalid input  | unpaired UTF-16 surrogates and replacement policy at JS boundary                                                                                                                                                                                                       |
 
-The CJK row is split across two gates. Roadmap item 5.4 now proves exact horizontal CJK source/reduced HarfRust and HarfBuzz agreement, UTF-16 clustering, language-sensitive substitutions, variation handling, and paragraph layout. It conditionally retains source `BASE`, `VORG`, `vhea`, and `vmtx` without fabrication while leaving vertical layout deferred. It does not require CJK raster coverage. Milestone 13 later combines large-coverage CJK raster paging with icon paging, residency, and payload stress; that later work does not block the Latin-first bitmap/MSDF/Slug V1 renderer gate. Before those raster contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK rendering support.
+The CJK row is split across two gates. Roadmap item 5.4 now proves exact horizontal CJK source/reduced HarfRust and HarfBuzz agreement, UTF-16 clustering, language-sensitive substitutions, variation handling, and paragraph layout. It conditionally retains source `BASE`, `VORG`, `vhea`, and `vmtx` without fabrication while leaving vertical layout deferred. It does not require CJK raster coverage. Milestone 14 later combines large-coverage CJK raster paging with icon paging, residency, and payload stress; that later work does not block the Latin-first Bitmap/MTSDF/Slug target v1 renderer gate. Before those raster contracts freeze, a synthetic 65,535-glyph fixture still validates glyph-ID width, dense-record lengths, logical page indexes, external page sources, and multi-page batching without claiming full CJK rendering support.
 
 ### Large-coverage page invariants
 

@@ -9,12 +9,13 @@ okf_version: '0.2'
 - [Project README](../README.md) — product overview, API preview, implementation order, and local setup.
 - [Project brief](planning/project-brief.md) — product outcome, scope, non-goals, and success criteria.
 - [Canonical roadmap](roadmap/roadmap.md) — implementation sequence, issue-sized milestones, dependencies, and exit gates.
-- [Runtime and bake API V0](planning/api-shapes.md) — accepted V1 public API, package boundaries, and explicitly deferred additions.
+- [Merged v0 runtime and bake API](planning/api-shapes.md) — migration fixture for the implemented, unreleased package boundaries and explicitly deferred additions.
 - [Three.js text API](planning/three-api.md) — authoritative Three-native loader, explicit `TextGroup` batching, reusable text across group disposal, retained non-throwing errors, ordering, and lifecycle contract.
 - [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
 - [Engine integration contract](planning/engine-integration-contract.md) — exact storage, batching, submission, ownership, staging, and frame-publication boundary for custom renderers.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — portable artifact loading, CPU raster data, glyph-resource binding, reusable shader-backend programs, and engine target ownership.
-- [Current V1 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the accepted extraction replaces it.
+- [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
+- [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.
 
 ## Architecture and data contracts
 

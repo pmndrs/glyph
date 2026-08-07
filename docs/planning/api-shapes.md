@@ -1,7 +1,7 @@
 ---
 type: API Reference
-title: Legacy V1 runtime and bake API fixture
-description: Records the pre-extraction V1 package, loader, baker, shaper, paragraph, raster, and cache interfaces for migration and regression comparison.
+title: Merged v0 runtime and bake API fixture
+description: Records the merged v0 package, loader, baker, shaper, paragraph, raster, and cache interfaces for migration and regression comparison while the target v1 API is built.
 tags: [api, loader, baker, shaping, paragraph, raster]
 sources:
   - id: 'citation-1'
@@ -31,12 +31,12 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-06T16:07:26Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
-# Legacy V1 runtime and bake API fixture
+# Merged v0 runtime and bake API fixture
 
-Status: accepted V1 surfaces are implemented; sections labeled deferred remain proposals
+Status: merged v0 surfaces are implemented but unreleased; sections labeled deferred remain proposals
 Scope: baked-first loading, lazy Worker baking, HarfRust Wasm shaping, JavaScript paragraph layout, and explicit raster loading
 
 > [!NOTE]
@@ -59,7 +59,7 @@ This table reports contract evidence; it does not turn implementation or prose i
 ## Benchmark consumer API discovery
 
 The Milestone-10 benchmark cleanup treats every live workload as executable consumer evidence. A public API candidate is
-admitted here only when the desired consumer snippet cannot be expressed through the shipped package, the missing
+admitted here only when the desired consumer snippet cannot be expressed through the merged v0 package, the missing
 constraint has a distinguishing test, and runtime-size, Worker, renderer, and type consequences are stated. Benchmark
 telemetry, fixture authentication, renderer ownership, and direct-ABI measurement do not become product APIs merely
 because the harness needs them.
@@ -79,7 +79,7 @@ because the harness needs them.
 | Direct baker/shaper ABI targets | Published Wasm/package entry points behind one lazily selected target adapter                                             | Exact ABI timing and byte-level conformance                            | Keep isolated under benchmark conformance/measurement targets                     |
 | Retained MSDF / Slug comparison | Two independently transactional public `Text` objects coordinated by the scene                                            | Paired offscreen-target publication and rollback after a delayed peer  | Keep coordination local; no ordinary consumer proves a grouped public transaction |
 
-The workload pass also tested three plausible additions and found no consumer failure that would justify shipping them:
+The workload pass also tested three plausible additions and found no consumer failure that would justify merging them:
 
 | Candidate                                | Evidence                                                                                                                                                                                                                                                                     | Decision                                                                                                                       |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -88,7 +88,7 @@ The workload pass also tested three plausible additions and found no consumer fa
 | Public retained-update diagnostics       | Reuse, ranged upload, overflow, and replacement are covered by raster tests and benchmark-only telemetry; applications do not need those classifications to render correctly                                                                                                 | Keep investigation/profiling signals outside the thin runtime so production builds retain zero diagnostic cost                 |
 
 This audit rejects new loader telemetry, generic raster-statistics, Three-specific, and React-specific APIs: each would add
-coupling or shipped code without a demonstrated consumer failure. It also rejects exporting the first-party capacity and dirty-
+coupling or merged code without a demonstrated consumer failure. It also rejects exporting the first-party capacity and dirty-
 range helpers: the portable `stageBatch` contract already lets an external raster own an equivalent policy without inheriting
 Three-specific storage. The delayed-peer failure is real, but its required atomicity belongs to one comparison product over
 two independent render targets. The private retained-target solution closes that consumer failure without adding renderer-
@@ -1159,7 +1159,7 @@ Coverage seeds are normalized, bounded, and authenticated in the raster descript
 
 The optional bitmap presentation helpers snapshot copied font handles, glyph IDs, UTF-16 clusters, exact font-size bits, occurrence ordinals, and currently displayed instance origins without retaining a `Text`, batch, texture, or geometry. A transition matches only the same complete glyph identity and updates the target batch's existing origin arrays. New or reshaped glyphs remain at their authoritative target positions; sizes, UVs, paint, shaping, line breaks, and `ParagraphLayout` never interpolate. Progress is finite and bounded to `[0, 1]`, stale or disposed batches reject mutation, and `finish`/`dispose` are idempotent. Target-origin storage is allocated only when a consumer creates a transition. The existing TSL graph still performs the final physical-pixel snap.
 
-The resource and draw-batch types are owned by their optional raster packages. `defineRaster` captures the literal `kind` and associated types from the module value; consumers do not supply generic arguments. Core has no closed raster-kind union and does not assume which raster packages are installed or shipped. Each optional package owns its literal kind and companion data contract. Adding a first-party or external raster requires no change to the core type declarations. The shared package depends only on `RasterModule` and never imports concrete engines.
+The resource and draw-batch types are owned by their optional raster packages. `defineRaster` captures the literal `kind` and associated types from the module value; consumers do not supply generic arguments. Core has no closed raster-kind union and does not assume which raster packages are installed or present. Each optional package owns its literal kind and companion data contract. Adding a first-party or external raster requires no change to the core type declarations. The shared package depends only on `RasterModule` and never imports concrete engines.
 
 `RasterDrawBatch` is the portable disposal contract. Renderer adapters refine it without changing that core boundary:
 `RasterObjectDrawBatch<Object>` adds one host scene object, and the public `ThreeRasterDrawBatch` alias binds that object to

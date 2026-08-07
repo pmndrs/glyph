@@ -5,7 +5,7 @@ description: Governs evidence-based optimization experiments that cannot trade a
 tags: [optimization, benchmarks, quality]
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-26T20:20:41Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Autoresearch optimization protocol
@@ -21,7 +21,7 @@ Its job is not to produce the largest benchmark number. Its job is to discover c
 
 The first raster target should be Slug because:
 
-- it has the highest V1 optimization difficulty;
+- it has the highest optimization difficulty among the merged v0 techniques;
 - Three Flatland already supplies measured hypotheses and rejected experiments;
 - its fill-bound shader has meaningful room for representation, code-generation, and workload-specific improvements;
 - bitmap and MTSDF-backed MSDF runtime paths are comparatively conventional.
