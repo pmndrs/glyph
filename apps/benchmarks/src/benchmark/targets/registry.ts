@@ -23,6 +23,7 @@ const targetGroups: Readonly<Record<string, TargetGroup>> = {
   'tsl-webgl2-baseline': 'conformance',
   'tsl-webgpu-baseline': 'conformance',
   'advanced-shaping-conformance': 'conformance',
+  'rich-text-spans-conformance': 'conformance',
   'mtsdf-conformance-webgl2': 'conformance',
   'mtsdf-conformance-webgpu': 'conformance',
   'slug-conformance-webgl2': 'conformance',

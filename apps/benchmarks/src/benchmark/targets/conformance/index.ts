@@ -57,6 +57,19 @@ const advancedShapingTarget = () =>
     async () => (await import('./advanced-shaping')).createAdvancedShapingConformanceTarget(),
   );
 
+const richTextSpansTarget = () =>
+  createDeferredTarget(
+    {
+      id: 'rich-text-spans-conformance',
+      label: 'Rich text span conformance',
+      detail: 'features · tracking · size · face · fallback · nested paint · public Text bitmap batches',
+      color: 'violet',
+      capabilities: rasterCapabilities,
+      status: () => 'ready',
+    },
+    async () => (await import('./rich-text-spans')).createRichTextSpansConformanceTarget(),
+  );
+
 function sourceOutlineFidelityTarget(technique: Technique, backend: Backend): BenchmarkTarget {
   if (technique === 'mtsdf' || technique === 'slug') {
     return createRasterSourceOutlineConformanceTarget(
@@ -157,6 +170,7 @@ export function createConformanceTargets(): readonly BenchmarkTarget[] {
     tslBaselineTarget('webgl2'),
     tslBaselineTarget('webgpu'),
     advancedShapingTarget(),
+    richTextSpansTarget(),
     samplingTarget('mtsdf', 'webgl2'),
     samplingTarget('mtsdf', 'webgpu'),
     samplingTarget('slug', 'webgl2'),

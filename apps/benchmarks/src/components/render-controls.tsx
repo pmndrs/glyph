@@ -49,6 +49,8 @@ function workloadAmountLabel(workload: string, amount: number): string | undefin
       return `Text volume · ${amount}%`;
     case 'paint-effects':
       return `Hue spread · ${amount}%`;
+    case 'rich-text':
+      return `Span density · ${amount}%`;
     default:
       return undefined;
   }
@@ -61,6 +63,7 @@ function workloadHasLayoutWidth(workload: string): boolean {
     case 'off-axis-3d':
     case 'paint-effects':
     case 'paragraph-stress':
+    case 'rich-text':
       return true;
     default:
       return false;
@@ -533,7 +536,8 @@ function LiveWorkloadControls({
         workload === 'zoom-text' ||
         workload === 'text-ladder' ||
         workload === 'dynamic-layout' ||
-        workload === 'paragraph-stress') && (
+        workload === 'paragraph-stress' ||
+        workload === 'rich-text') && (
         <>
           <Toggle checked={animationEnabled} label="Animate" onChange={onAnimationEnabled} />
           <Field
@@ -550,7 +554,7 @@ function LiveWorkloadControls({
       {workload === 'dynamic-layout' && (
         <Toggle checked={showLayoutBounds} label="Show layout bounds" onChange={onShowLayoutBounds} />
       )}
-      {workload === 'paint-effects' && (
+      {(workload === 'paint-effects' || workload === 'rich-text') && (
         <>
           <Field
             label={`Opacity · ${paintOpacityPercent}%`}

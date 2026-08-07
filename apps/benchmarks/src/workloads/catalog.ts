@@ -6,6 +6,7 @@ import { iconGridDefinition } from './icon-grid/definition';
 import { offAxis3dDefinition } from './off-axis-3d/definition';
 import { paintEffectsDefinition } from './paint-effects/definition';
 import { paragraphStressDefinition } from './paragraph-stress/definition';
+import { richTextDefinition } from './rich-text/definition';
 import { textLadderDefinition } from './text-ladder/definition';
 import { zoomTextDefinition } from './zoom-text/definition';
 
@@ -39,6 +40,7 @@ export const BENCHMARK_WORKLOADS = {
   'dynamic-layout': dynamicLayoutDefinition,
   'paragraph-stress': paragraphStressDefinition,
   'paint-effects': paintEffectsDefinition,
+  'rich-text': richTextDefinition,
 } as const satisfies Record<BenchmarkWorkloadId, BenchmarkWorkloadDefinition>;
 
 export const BENCHMARK_WORKLOAD_IDS = Object.freeze(Object.keys(BENCHMARK_WORKLOADS) as readonly BenchmarkWorkloadId[]);

@@ -3,6 +3,7 @@ import { iconGridWorkload } from '../icon-grid/scene';
 import { offAxis3dWorkload } from '../off-axis-3d/scene';
 import { paintEffectsWorkload } from '../paint-effects/scene';
 import { paragraphStressWorkload } from '../paragraph-stress/scene';
+import { richTextWorkload } from '../rich-text/scene';
 import { textLadderWorkload } from '../text-ladder/scene';
 import { zoomTextWorkload } from '../zoom-text/scene';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition, ComparisonWorkloadId } from './contracts';
@@ -20,6 +21,7 @@ export const COMPARISON_WORKLOADS = {
   'dynamic-layout': dynamicLayoutWorkload,
   'paragraph-stress': paragraphStressWorkload,
   'paint-effects': paintEffectsWorkload,
+  'rich-text': richTextWorkload,
 } satisfies Record<ComparisonWorkloadId, ComparisonWorkloadDefinition>;
 
 export const COMPARISON_WORKLOAD_IDS = Object.freeze(

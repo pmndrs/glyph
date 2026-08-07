@@ -42,6 +42,10 @@ const conformanceCases: readonly BenchmarkCase[] = [
     targetId: 'advanced-shaping-conformance',
     scenarioId: 'advanced-shaping-conformance',
   },
+  {
+    targetId: 'rich-text-spans-conformance',
+    scenarioId: 'rich-text-spans-conformance',
+  },
 ];
 
 const readinessTimeoutMs = 30_000;

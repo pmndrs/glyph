@@ -63,6 +63,14 @@ const workloads = [
     amount: 50,
     camera: 'orthographic',
   },
+  {
+    id: 'rich-text',
+    label: 'Rich text spans',
+    fontSize: 26,
+    layoutWidthRatio: 0.82,
+    amount: 50,
+    camera: 'orthographic',
+  },
 ] as const;
 
 const consoleProblems: string[] = [];

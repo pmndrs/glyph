@@ -1,6 +1,7 @@
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { FontDelivery, HarnessLocation, RasterTechnique } from '../../benchmark/url-state';
 import { benchmarkWorkloadDefinition, isBenchmarkWorkloadId } from '../../workloads/catalog';
+import { workloadCompanionFontFixtures } from '../../workloads/shared/definition';
 
 let comparisonWorkloadModule: ReturnType<typeof importComparisonWorkload> | undefined;
 const liveSceneAssetResources = new Map<string, Promise<void>>();
@@ -34,7 +35,7 @@ export function liveSceneAssetResource(
 ): Promise<void> {
   const definition = isBenchmarkWorkloadId(workload) ? benchmarkWorkloadDefinition(workload) : undefined;
   const fixtures =
-    definition?.fontPolicy.kind === 'icon-grid' ? [fontFixture, definition.fontPolicy.iconFixture] : [fontFixture];
+    definition === undefined ? [fontFixture] : [fontFixture, ...workloadCompanionFontFixtures(definition.fontPolicy)];
   const comparison = definition?.surface === 'comparison';
   const key = `${technique}:${delivery}:${fixtures.join(',')}:${String(comparison)}`;
   const existing = liveSceneAssetResources.get(key);
