@@ -364,7 +364,8 @@ BEFORE EACH TEXT RENDER PHASE:
 Read the complete [Three.js API](docs/planning/three-api.md), [core API](docs/planning/core-api.md),
 [engine integration contract](docs/planning/engine-integration-contract.md), and
 [raster technique boundary](docs/planning/raster-technique-api.md),
-[TypeGPU program and engine API](docs/planning/typegpu-api.md), then the
+[TypeGPU program and engine API](docs/planning/typegpu-api.md), the
+[TypeGPU-first shader authority research](docs/planning/typegpu-first-shader-authority.md), then the
 [implementation plan](docs/planning/engine-integration-boundary.md).
 
 ```sh

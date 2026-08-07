@@ -38,7 +38,7 @@ sources:
     title: Three.js BufferAttribute
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T02:38:24Z'
 ---
 
 # Three.js text API
@@ -100,15 +100,28 @@ type ThreeProgramVariantKey = PropertyKey | object;
 
 interface ThreeRasterShader<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
-  evaluate(context: ThreeRasterContextOf<Technique>): ThreeRasterOutput;
+  vertex(context: ThreeRasterVertexContextOf<Technique>): ThreeRasterVertexOutput;
+  fragment(context: ThreeRasterFragmentContextOf<Technique>): ThreeRasterFragmentOutput;
 }
 
-interface ThreeRasterOutput {
+interface ThreeRasterVertexContextOf<Technique extends AnyRasterTechnique> {
+  readonly technique: Technique;
+  readonly localPosition: ReturnType<typeof TSL.vec2>;
+  readonly glyphIndex: ReturnType<typeof TSL.uint>;
+  readonly viewport: ReturnType<typeof TSL.vec2>;
+}
+
+interface ThreeRasterVertexOutput {
+  readonly position: ReturnType<typeof TSL.vec4>;
+  readonly techniqueVaryings: Readonly<Record<string, THREE.Node>>;
+}
+
+interface ThreeRasterFragmentOutput {
   readonly color: ReturnType<typeof TSL.vec4>;
   readonly coverage: ReturnType<typeof TSL.float>;
 }
 
-interface ThreeRasterContextOf<Technique extends AnyRasterTechnique> {
+interface ThreeRasterFragmentContextOf<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
   readonly localPosition: ReturnType<typeof TSL.vec2>;
   readonly glyphIndex: ReturnType<typeof TSL.uint>;
@@ -175,12 +188,6 @@ declare class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Lo
     onProgress?: (event: ProgressEvent) => void,
   ): Promise<LoadedFont<Technique>>;
 
-  dispose(): void;
-}
-
-interface LoadedFont<Technique extends AnyRasterTechnique> {
-  readonly technique: Technique;
-  readonly disposed: boolean;
   dispose(): void;
 }
 
@@ -269,6 +276,11 @@ export type {
 export type { ThreeRasterProgram, ThreeRasterShader, ThreeRenderVariant, ThreeTextEffectBinding };
 ```
 
+First-party programs keep bounded material/pipeline and materialized-variant caches. Factory options declare the limits,
+eviction retires resources through renderer-safe disposal, and `program.dispose()` releases every remaining entry. A fresh
+object-valued variant each frame therefore cannot grow the cache without bound. Custom programs own and document the same
+policy.
+
 ## Load fonts with the Three.js loader
 
 ```ts
@@ -348,7 +360,7 @@ pipeline compatibility, and final draw compiler. Fonts remain per `Text` and are
 ```ts
 const gradientSlug = createThreeSlugProgram({
   fragment({ shader, context }) {
-    const base = shader.evaluate(context);
+    const base = shader.fragment(context);
     return { ...base, color: gradient(base.color, context.localPosition) };
   },
 });

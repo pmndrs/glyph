@@ -14,6 +14,7 @@ okf_version: '0.2'
 - [Core text API](planning/core-api.md) — authoritative API for ordered font stacks, batch-owned paragraph handles, identity-preserving capacity changes, fixed-capacity failure, synchronized updates, and renderer-ready glyph batches.
 - [Engine integration contract](planning/engine-integration-contract.md) — exact storage, batching, submission, ownership, staging, and frame-publication boundary for custom renderers.
 - [Raster technique and engine resource API](planning/raster-technique-api.md) — portable artifact loading, CPU raster data, glyph-resource binding, reusable shader-backend programs, and engine target ownership.
+- [TypeGPU-first shader authority](planning/typegpu-first-shader-authority.md) — exploratory TypeGPU-first shader/program architecture, Three and gpucat bridge limits, fallback authority models, and proof gates.
 - [Merged v0 raster and baker plugin guide](planning/raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [External gpucat integration fitness plan](planning/gpucat-integration.md) — source-validated proof plan for consuming the target v1 core without private imports or core changes.
 
