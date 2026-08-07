@@ -137,7 +137,7 @@
   },
   "peerDependencies": {
     "@react-three/fiber": ">=10.0.0-alpha.2 <11",
-    "react": ">=19 <19.3",
+    "react": ">=19.2 <19.3",
     "three": ">=0.185.1",
     "typegpu": ">=0.11.9 <0.12"
   },

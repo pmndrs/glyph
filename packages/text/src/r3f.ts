@@ -48,12 +48,14 @@ export type R3fTextProps<Technique extends AnyRasterTechnique, Variant = ThreeRe
   readonly rasterPixelRatio?: number;
   readonly renderVariant?: Variant;
   readonly capacity?: StandaloneTextProperties<Technique, Variant>['capacity'];
+  readonly onError?: ((error: unknown) => void) | undefined;
   readonly ref?: Ref<ThreeText<Technique, Variant>>;
 };
 
 export type R3fTextGroupProps<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = Object3DProps &
   TextGroupOptions<Technique, Variant> & {
     readonly children?: ReactNode;
+    readonly onError?: ((error: unknown) => void) | undefined;
     readonly ref?: Ref<ThreeTextGroup<Technique, Variant>>;
   };
 
@@ -91,9 +93,11 @@ export function Text<Technique extends AnyRasterTechnique, Variant = ThreeRender
   const [store] = useState(() => createObjectStore<ThreeText<Technique, Variant>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
+  const onErrorRef = useRef(properties.onError);
   const createObject = useEffectEvent(() => {
     if (desired.font === undefined) throw new TypeError('an outer R3F Text requires a font');
     const created = new ThreeText(desired as StandaloneTextProperties<Technique, Variant>);
+    created.onError = (error: unknown) => onErrorRef.current?.(error);
     appliedRef.current = desired;
     return created;
   });
@@ -121,6 +125,10 @@ export function Text<Technique extends AnyRasterTechnique, Variant = ThreeRender
     invalidate();
   }, [desired, invalidate, object]);
 
+  useLayoutEffect(() => {
+    onErrorRef.current = properties.onError;
+  }, [properties.onError]);
+
   if (object === undefined) return null;
   return createElement('primitive', {
     ...objectProperties(properties),
@@ -134,15 +142,18 @@ export function TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeR
   const { ref: forwardedRef, ...properties } = input;
   const [store] = useState(() => createObjectStore<ThreeTextGroup<Technique, Variant>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  const createObject = useEffectEvent(
-    () =>
-      new ThreeTextGroup<Technique, Variant>({
-        technique: properties.technique,
-        ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
-        ...(properties.renderOrder === undefined ? {} : { renderOrder: properties.renderOrder }),
-        ...(properties.renderVariant === undefined ? {} : { renderVariant: properties.renderVariant }),
-      }),
-  );
+  const invalidate = useThree((state) => state.invalidate);
+  const onErrorRef = useRef(properties.onError);
+  const createObject = useEffectEvent(() => {
+    const created = new ThreeTextGroup<Technique, Variant>({
+      technique: properties.technique,
+      ...(properties.capacity === undefined ? {} : { capacity: properties.capacity }),
+      ...(properties.renderOrder === undefined ? {} : { renderOrder: properties.renderOrder }),
+      ...(properties.renderVariant === undefined ? {} : { renderVariant: properties.renderVariant }),
+    });
+    created.onError = (error: unknown) => onErrorRef.current?.(error);
+    return created;
+  });
 
   useLayoutEffect(() => {
     const created = createObject();
@@ -162,7 +173,12 @@ export function TextGroup<Technique extends AnyRasterTechnique, Variant = ThreeR
     if (properties.capacity !== undefined && !sameCapacity(properties.capacity, object))
       object.setCapacity(properties.capacity);
     object.setRenderVariant(properties.renderVariant);
-  }, [object, properties.capacity, properties.renderVariant, properties.technique]);
+    invalidate();
+  }, [invalidate, object, properties.capacity, properties.renderVariant, properties.technique]);
+
+  useLayoutEffect(() => {
+    onErrorRef.current = properties.onError;
+  }, [properties.onError]);
 
   if (object === undefined) return null;
   return createElement(
@@ -325,6 +341,7 @@ function objectProperties<Technique extends AnyRasterTechnique, Variant>(
     'rasterPixelRatio',
     'renderVariant',
     'capacity',
+    'onError',
     'ref',
   ])
     delete object[key];
@@ -335,7 +352,7 @@ function groupObjectProperties<Technique extends AnyRasterTechnique, Variant>(
   properties: R3fTextGroupProps<Technique, Variant>,
 ): Object3DProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['technique', 'capacity', 'renderVariant', 'children', 'ref']) delete object[key];
+  for (const key of ['technique', 'capacity', 'renderVariant', 'children', 'onError', 'ref']) delete object[key];
   return object as Object3DProps;
 }
 
