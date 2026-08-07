@@ -41,7 +41,7 @@ sources:
     title: TypeGPU to TSL integration
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:31:24Z'
+  at: '2026-08-07T04:49:05Z'
 ---
 
 # Raster technique and engine resource API
@@ -196,9 +196,9 @@ interface RasterTechnique<
   descriptor(options: RasterOptionsArgument<Options>): Descriptor;
   decode(font: RegisteredFont, raster: RegisteredRaster<Kind>, signal?: AbortSignal): Promise<Data>;
 
-  select(input: RasterGlyphInput<Data>): RasterGlyphSelection<Binding>;
+  select(input: RasterGlyphInput<Data>): RasterGlyphSelection<Binding> | undefined;
   createStorage(capacity: number): Storage;
-  writeStorage(storage: Storage, range: GlyphRange, input: RasterGlyphWriteInput<Data>): void;
+  writeStorage(storage: Storage, range: GlyphRange, input: RasterGlyphWriteInput<Data, Binding>): void;
   validatePaint?(paint: GlyphPaint): void;
   dispose(data: Data): void;
 }
@@ -207,12 +207,15 @@ interface RasterGlyphInput<Data> {
   readonly data: Data;
   readonly glyphId: number;
   readonly fontSize: number;
+  readonly originX: number;
+  readonly originY: number;
   readonly rasterPixelRatio: number;
   readonly paint: ResolvedPaint;
 }
 
-interface RasterGlyphWriteInput<Data> {
+interface RasterGlyphWriteInput<Data, Binding> {
   readonly data: Data;
+  readonly binding: Binding;
   readonly glyphs: readonly RasterGlyphInput<Data>[];
 }
 
@@ -325,10 +328,11 @@ interfaces such as `{ origins: Float32Array; glyphs: Uint16Array }` for lacking 
 `GlyphBatchStorageShape<Storage>` remains the strict concrete check: every field a technique declares must be an
 `ArrayBufferView`.
 
-`select()` returns the physical resource and pipeline division for one resolved glyph. Core uses it while building stable
-glyph batches; a target never repeats this selection. `resource` must be a stable technique/runtime identity, while
-`binding` is an immutable value that describes how to address that resource. Implementations need not allocate either value
-per glyph.
+`select()` returns the physical resource and pipeline division for one resolved glyph. It returns `undefined` for a shaped
+glyph that intentionally has no renderable raster record, such as whitespace. Missing-glyph fallback is already resolved
+before this call; omission is not another fallback mechanism. Core uses the result while building stable glyph batches, and
+a target never repeats this selection. `resource` must be a stable technique/runtime identity, while `binding` is an
+immutable value that describes how to address that resource. Implementations need not allocate either value per glyph.
 
 ```ts
 interface RasterGlyphSelection<Binding> {
@@ -362,8 +366,11 @@ or font records to derive it again.
 that requires another vertex layout. It is not the generic paragraph/span `renderVariant` and is not an application effect
 key. A raster program combines this technique value with its own variant compatibility key when compiling final draws.
 
-The technique also defines the canonical structure-of-arrays storage and writes it during core synchronization. This is
-where origin, size, glyph-record index, page index, paint index, or other technique values become renderer-ready CPU fields.
+The technique also defines the canonical structure-of-arrays storage and writes it during core synchronization. Each glyph
+input carries its paragraph-local displayed origin after any caller override, while the write request carries the exact
+immutable binding that core already used to form the physical batch. This is where origin, size, glyph-record index, page
+index, paint index, or other technique values become renderer-ready CPU fields without repeating layout or resource
+selection.
 
 ## Realize resources in an engine target
 

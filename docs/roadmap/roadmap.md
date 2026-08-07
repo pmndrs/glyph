@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T04:31:24Z'
+  at: '2026-08-07T04:49:05Z'
 ---
 
 # Canonical implementation roadmap
@@ -797,9 +797,11 @@ Engine transforms, scene composition, pass placement, command encoding, GPU sync
 adapter-owned. Core owns physical glyph grouping and ordered variant-bearing text runs; programs own compatible final draws.
 
 Implementation evidence begins with the public exact-typed `RasterTechnique` contract and a renderer-neutral lossless
-atlas decoder. Bitmap's Three texture creation is now an adapter step, and MTSDF consumes the same portable decoded bytes
-before creating its texture array. Item 11.2 remains open until all first-party techniques own portable selection and
-canonical packing and their reusable shader/program surfaces pass the external-engine proofs.
+atlas decoder. The target-v1 `/raster/mtsdf` subpath now authenticates and retains CPU pages without Three, selects one
+stable physical atlas binding per font while omitting absent records, and writes typed canonical origins, dimensions, UVs,
+page indices, fill, outline, and shadow fields. The merged-v0 `/raster/msdf` path remains the rendering baseline until its
+Three target is rebuilt. Item 11.2 remains open until Bitmap and Slug own the same portable selection/packing split and all
+three reusable shader/program surfaces pass their engine proofs.
 
 ### Milestone 12 — editorial flow regions and mixed-raster composition
 
