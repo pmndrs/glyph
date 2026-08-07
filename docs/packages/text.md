@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:55438ab96afaba1b7f78880733bf48ddfcd1750bc74688819bc308b87557c746'
+source_digest: 'sha256:dec30ee8127dd7b840c879f503b746feea024bf0292b2d88f60b4c8d61186011'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -178,7 +178,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T15:29:49Z'
+  at: '2026-08-07T16:45:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -227,6 +227,18 @@ its final colour over `bitmapShader`. Both passes light an identical 1,243-pixel
 channel, so the custom program inherited the canonical placement and coverage instead of reimplementing them. Extracting
 the three shaders left the retained proof pages unchanged at 1,226 lit pixels for Bitmap, 1,935 for MTSDF, and 1,510 for
 Slug on both backends.
+
+Two target-v1 raster defects surfaced when the benchmark began driving these programs against the exact conformance
+oracles rather than against themselves. Slug published each quad's lower-left em corner while its shader documented and
+consumed the upper-left, so every glyph integrated its coverage vertically mirrored inside a correctly placed quad;
+publishing the top and walking em space downward moved the CPU band-walk reference from 22.94 mean absolute error with
+22,911 severe error pixels to 0.223 with none, and restored the independent browser-rasterized source-outline envelope.
+Bitmap remains open: target-v1 dropped the device-pixel snapping the merged renderer applied to every glyph quad, which
+milestone 1 records as a hard density contract, and snapping alone does not close the residual difference against the CPU
+atlas compositor.
+
+Both defects were masked by self-comparison. A rendered-pixel count taken from the program under test only proves the
+program is stable, not correct, so each technique is held against a reference computed independently of it.
 
 The Three `FontLoader` forwards the two per-load capabilities the core runtime already accepted but the adapter withheld.
 A request may carry an `AbortSignal`, so a cancelled load stops instead of running to completion; the merged-v0 registry

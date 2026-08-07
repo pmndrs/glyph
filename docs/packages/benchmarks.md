@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:e4418bca586de45b7ae30745304c0e862d352769cfb17c4a250fcd07f129d9a3'
+source_digest: 'sha256:3dbc4738b16cb5112c75bf72fb22d8139ba9c6ab10285e73d91c4281ceb1535a'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -196,7 +196,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T15:28:50Z'
+  at: '2026-08-07T16:45:00Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
