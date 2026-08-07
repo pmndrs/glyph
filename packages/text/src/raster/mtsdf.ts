@@ -61,6 +61,7 @@ export {
   type MsdfDescriptorV0 as MtsdfDescriptorV0,
   type MsdfOptions as MtsdfOptions,
 } from '../internal/msdf-contract.js';
+export { DENSE_GLYPH_RECORD_STRIDE as MTSDF_GLYPH_RECORD_STRIDE } from '../internal/raster-atlas.js';
 
 const RECORD_STRIDE = DENSE_GLYPH_RECORD_STRIDE;
 const ABSENT_PAGE = ABSENT_GLYPH_PAGE;
