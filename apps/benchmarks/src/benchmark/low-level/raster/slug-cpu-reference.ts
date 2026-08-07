@@ -1,7 +1,6 @@
 import type { ParagraphLayout } from '@pmndrs/text';
-import type { SlugPageResource, SlugResource } from '@pmndrs/text/raster/slug/v0';
+import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/text/raster/slug';
 
-const RECORD_STRIDE = 40;
 const ABSENT_PAGE = 0xffff;
 const MAX_SAFE_BAND_CURVES = 512;
 const MINIMUM_FOOTPRINT = 1 / 65_536;
@@ -39,7 +38,7 @@ export interface FlatSlugCpuReferenceOptions {
  * and reference resources without invoking Three.js, TSL, or browser fonts.
  */
 export function renderFlatSlugCpuReference(
-  resource: SlugResource,
+  data: SlugData,
   layout: ParagraphLayout,
   options: FlatSlugCpuReferenceOptions,
 ): SlugCpuReference {
@@ -51,11 +50,13 @@ export function renderFlatSlugCpuReference(
   const fontSlot = nonnegativeInteger(options.fontSlot ?? 0, 'Slug CPU reference font slot');
   const fill = linearColor(options.fill ?? [1, 1, 1, 1]);
   assertLayoutArrays(layout);
-  if (resource.records.byteLength % RECORD_STRIDE !== 0) {
+  if (data.records.byteLength % SLUG_GLYPH_RECORD_STRIDE !== 0) {
     throw new TypeError('Slug CPU reference record table is not densely packed');
   }
 
-  const records = new DataView(resource.records.buffer, resource.records.byteOffset, resource.records.byteLength);
+  const records = new DataView(data.records.buffer, data.records.byteOffset, data.records.byteLength);
+  // The decoded pages carry bytes rather than texel views, so bind each page once instead of per evaluated band.
+  const pageTexels = data.pages.map(bindPageTexels);
   const pixels = opaqueBlack(width, height);
   let bounds: SlugCpuReferenceBounds | undefined;
   let unclippedBounds: SlugCpuReferenceBounds | undefined;
@@ -65,14 +66,15 @@ export function renderFlatSlugCpuReference(
   for (let glyphIndex = 0; glyphIndex < layout.glyphIds.length; glyphIndex += 1) {
     if (layout.glyphFontSlots[glyphIndex] !== fontSlot) continue;
     const glyphId = layout.glyphIds[glyphIndex]!;
-    if (glyphId >= resource.records.byteLength / RECORD_STRIDE) {
+    if (glyphId >= data.records.byteLength / SLUG_GLYPH_RECORD_STRIDE) {
       throw new TypeError('paragraph layout references a Slug glyph outside the resource');
     }
-    const record = glyphId * RECORD_STRIDE;
+    const record = glyphId * SLUG_GLYPH_RECORD_STRIDE;
     const pageIndex = records.getUint16(record + 8, true);
     if (pageIndex === ABSENT_PAGE) continue;
-    const page = resource.pages[pageIndex];
-    if (page === undefined) throw new TypeError('Slug record references a missing page');
+    const page = data.pages[pageIndex];
+    const texels = pageTexels[pageIndex];
+    if (page === undefined || texels === undefined) throw new TypeError('Slug record references a missing page');
 
     const planeLeft = records.getInt16(record, true);
     const planeBottom = records.getInt16(record + 2, true);
@@ -85,7 +87,7 @@ export function renderFlatSlugCpuReference(
     const verticalHeaderBase = records.getUint32(record + 28, true);
     const referenceBase = records.getUint32(record + 32, true);
     const fontSize = positiveFinite(layout.glyphFontSizes[glyphIndex]!, 'Slug CPU reference glyph font size');
-    const scale = fontSize / positiveFinite(resource.planeUnitsPerEm, 'Slug plane units per em');
+    const scale = fontSize / positiveFinite(data.planeUnitsPerEm, 'Slug plane units per em');
     const logicalLeft = originX + layout.x[glyphIndex]! + planeLeft * scale;
     const logicalRight = originX + layout.x[glyphIndex]! + planeRight * scale;
     const logicalTop = -(originY - layout.y[glyphIndex]! + planeTop * scale);
@@ -102,10 +104,10 @@ export function renderFlatSlugCpuReference(
     glyphCount += 1;
     bounds = unionBounds(bounds, clippedBounds);
 
-    const normalizedLeft = planeLeft / resource.planeUnitsPerEm;
-    const normalizedBottom = planeBottom / resource.planeUnitsPerEm;
-    const normalizedWidth = (planeRight - planeLeft) / resource.planeUnitsPerEm;
-    const normalizedHeight = (planeTop - planeBottom) / resource.planeUnitsPerEm;
+    const normalizedLeft = planeLeft / data.planeUnitsPerEm;
+    const normalizedBottom = planeBottom / data.planeUnitsPerEm;
+    const normalizedWidth = (planeRight - planeLeft) / data.planeUnitsPerEm;
+    const normalizedHeight = (planeTop - planeBottom) / data.planeUnitsPerEm;
     const bandScaleX = verticalBandCount / normalizedWidth;
     const bandScaleY = horizontalBandCount / normalizedHeight;
     const bandOffsetX = -normalizedLeft * bandScaleX;
@@ -116,7 +118,7 @@ export function renderFlatSlugCpuReference(
       const renderY = (-(y + 0.5) / dpr - originY + layout.y[glyphIndex]!) / fontSize;
       for (let x = clippedBounds.minX; x <= clippedBounds.maxX; x += 1) {
         const renderX = ((x + 0.5) / dpr - originX - layout.x[glyphIndex]!) / fontSize;
-        const horizontal = evaluateBand(page, {
+        const horizontal = evaluateBand(page, texels, {
           axis: 'horizontal',
           bandCount: horizontalBandCount,
           bandIndex: clampedBandIndex(renderY * bandScaleY + bandOffsetY, horizontalBandCount),
@@ -127,7 +129,7 @@ export function renderFlatSlugCpuReference(
           renderX,
           renderY,
         });
-        const vertical = evaluateBand(page, {
+        const vertical = evaluateBand(page, texels, {
           axis: 'vertical',
           bandCount: verticalBandCount,
           bandIndex: clampedBandIndex(renderX * bandScaleX + bandOffsetX, verticalBandCount),
@@ -148,6 +150,13 @@ export function renderFlatSlugCpuReference(
   return { width, height, pixels, bounds, unclippedBounds, glyphCount, evaluatedCurves };
 }
 
+/** Typed views over one decoded page, bound once so band evaluation stays a pure indexed read. */
+interface SlugPageTexels {
+  readonly curves: Uint16Array;
+  readonly headers: Uint32Array;
+  readonly references: Uint16Array;
+}
+
 interface BandOptions {
   readonly axis: 'horizontal' | 'vertical';
   readonly bandCount: number;
@@ -166,15 +175,12 @@ interface BandResult {
   readonly evaluatedCurves: number;
 }
 
-function evaluateBand(page: SlugPageResource, options: BandOptions): BandResult {
+function evaluateBand(page: SlugPageData, texels: SlugPageTexels, options: BandOptions): BandResult {
   const headerIndex = options.headerBase + options.bandIndex;
   if (headerIndex >= page.headerCount) throw new TypeError('Slug band header exceeds its page');
-  const headers = headerTexels(page);
-  const header = headers[headerIndex]!;
+  const header = texels.headers[headerIndex]!;
   const curveCount = Math.min(header >>> 16, MAX_SAFE_BAND_CURVES);
   const localReferenceOffset = header & 0xffff;
-  const references = referenceTexels(page);
-  const curves = curveTexels(page);
   let coverage = 0;
   let weight = 0;
   let evaluatedCurves = 0;
@@ -184,9 +190,8 @@ function evaluateBand(page: SlugPageResource, options: BandOptions): BandResult 
     if (referenceIndex >= page.referenceCount) {
       throw new TypeError('Slug band reference exceeds its page');
     }
-    const packedReference = references[referenceIndex >>> 1]!;
-    const curveTexel = options.curveBase + ((packedReference >>> ((referenceIndex & 1) * 16)) & 0xffff);
-    const curve = decodeCurve(curves, page.curveWidth, page.curveHeight, curveTexel);
+    const curveTexel = options.curveBase + texels.references[referenceIndex]!;
+    const curve = decodeCurve(texels.curves, page.curveWidth, page.curveHeight, curveTexel);
     const p0x = curve.p0x - options.renderX;
     const p0y = curve.p0y - options.renderY;
     const p1x = curve.p1x - options.renderX;
@@ -281,31 +286,24 @@ function verticalIntersections(
   return [(ay * t1 - by * 2) * t1 + p0y, (ay * t2 - by * 2) * t2 + p0y];
 }
 
-function curveTexels(page: SlugPageResource): Uint16Array {
-  const data: unknown = page.curveTexture.image.data;
-  if (!(data instanceof Uint16Array)) {
-    throw new TypeError('Slug CPU reference requires half-float curve texels');
-  }
-  if (data.length !== page.curveWidth * page.curveHeight * 4) {
-    throw new TypeError('Slug curve texture length does not match its dimensions');
-  }
-  return data;
+function bindPageTexels(page: SlugPageData): SlugPageTexels {
+  return {
+    curves: uint16Texels(page.curveBytes, page.curveWidth * page.curveHeight * 4, 'Slug curve bytes'),
+    headers: uint32Texels(page.headerBytes, page.headerWidth * page.headerHeight, 'Slug header bytes'),
+    references: uint16Texels(page.referenceBytes, page.referenceWidth * page.referenceHeight, 'Slug reference bytes'),
+  };
 }
 
-function headerTexels(page: SlugPageResource): Uint32Array {
-  const data: unknown = page.headerTexture.image.data;
-  if (!(data instanceof Uint32Array)) {
-    throw new TypeError('Slug CPU reference requires unsigned 32-bit headers');
-  }
-  return data;
+function uint16Texels(bytes: Uint8Array, texels: number, label: string): Uint16Array {
+  if (bytes.byteLength !== texels * 2) throw new TypeError(`${label} do not match their declared dimensions`);
+  const aligned = bytes.byteOffset % 2 === 0 ? bytes : bytes.slice();
+  return new Uint16Array(aligned.buffer, aligned.byteOffset, texels);
 }
 
-function referenceTexels(page: SlugPageResource): Uint32Array {
-  const data: unknown = page.referenceTexture.image.data;
-  if (!(data instanceof Uint32Array)) {
-    throw new TypeError('Slug CPU reference requires packed unsigned 32-bit reference texels');
-  }
-  return data;
+function uint32Texels(bytes: Uint8Array, texels: number, label: string): Uint32Array {
+  if (bytes.byteLength !== texels * 4) throw new TypeError(`${label} do not match their declared dimensions`);
+  const aligned = bytes.byteOffset % 4 === 0 ? bytes : bytes.slice();
+  return new Uint32Array(aligned.buffer, aligned.byteOffset, texels);
 }
 
 function decodeCurve(

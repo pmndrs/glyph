@@ -1,12 +1,6 @@
-import {
-  FontLoader,
-  FontRegistry,
-  Text,
-  type ParagraphLayout,
-  type RegisteredFont,
-  type TextSpan,
-} from '@pmndrs/text/v0';
-import { slug, slugDescriptorRasterKey, type SlugModule, type SlugResource } from '@pmndrs/text/raster/slug/v0';
+import { FontRegistry, type LoadedFont, type ParagraphLayout } from '@pmndrs/text';
+import { slug } from '@pmndrs/text/raster/slug';
+import { FontLoader, Text, type TextSpan } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import type { TargetRunOutput } from '../../../contracts';
@@ -148,9 +142,9 @@ interface FlatSlugConformanceResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly line: Text;
-  readonly resource: SlugResource;
+  /** Owns the decoded Slug data the CPU reference reads, so no scene decodes the raster a second time. */
+  readonly font: LoadedFont<typeof slug>;
+  readonly line: Text<typeof slug>;
   readonly sourceTypes?: SlugRasterSourceTypes;
 }
 
@@ -162,7 +156,7 @@ interface FlatSlugSceneOptions {
   readonly originX: number;
   readonly originY: number;
   readonly text: string;
-  readonly spans?: readonly TextSpan[];
+  readonly spans?: readonly TextSpan<typeof slug>[];
   readonly language: string;
   readonly direction: 'ltr' | 'rtl';
 }
@@ -498,7 +492,7 @@ export async function captureSlugProjectionZoomRoleScene(options: {
   });
   try {
     const layout = committedLayout(resources.line);
-    const zeroOriginReference = renderFlatSlugCpuReference(resources.resource, layout, {
+    const zeroOriginReference = renderFlatSlugCpuReference(resources.font.data, layout, {
       width: scene.physicalWidth,
       height: scene.physicalHeight,
       dpr,
@@ -568,7 +562,7 @@ interface CreateFlatSlugConformanceResourcesOptions {
   readonly delivery?: FontDelivery;
   readonly bakedArtifact?: SlugBakedArtifactSource;
   readonly sceneOptions?: FlatSlugSceneOptions;
-  readonly loadFont?: (signal?: AbortSignal) => Promise<{ readonly font: RegisteredFont; readonly raster: SlugModule }>;
+  readonly loadFont?: (signal?: AbortSignal) => Promise<LoadedFont<typeof slug>>;
   readonly renderer?: PersistentRenderSceneRenderer;
 }
 
@@ -596,45 +590,39 @@ async function createFlatSlugConformanceResources({
       : undefined;
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  let line: Text | undefined;
-  let resource: SlugResource | undefined;
+  let font: LoadedFont<typeof slug> | undefined;
+  let line: Text<typeof slug> | undefined;
   try {
-    const loaded =
+    font =
       loadFont === undefined
         ? await loadConformanceSlugFont(fontFixture, delivery, bakedArtifact, signal)
         : await loadFont(signal);
-    font = loaded.font;
-    const rasterKey = await slugDescriptorRasterKey();
     const specimen = sceneOptions ?? rasterConformanceSpecimen(fontFixture);
     line = new Text({
       text: specimen.text,
       ...(sceneOptions?.spans === undefined ? {} : { spans: sceneOptions.spans }),
       font,
-      raster: loaded.raster,
-      fontSize: sceneOptions?.fontSize ?? 64 / dpr,
       rasterPixelRatio: dpr,
-      lineHeight: 1.2,
-      width: sceneOptions?.layoutWidth ?? 476,
-      wrap: 'word',
-      color: 0xffffff,
-      language: specimen.language,
-      direction: specimen.direction,
-      textAlign: 'start',
+      // An exact width is what centre and end alignment measure against; `at-most` would collapse them onto the start.
+      contentBox: { width: { mode: 'exact', size: sceneOptions?.layoutWidth ?? 476 }, wrap: 'word', align: 'start' },
+      style: {
+        fontSize: sceneOptions?.fontSize ?? 64 / dpr,
+        lineHeight: 1.2,
+        language: specimen.language,
+        direction: specimen.direction,
+      },
+      paint: { color: '#ffffff' },
     });
-    await line.ready;
+    line.position.set(sceneOptions?.originX ?? 18, sceneOptions?.originY ?? -18, 0);
+    const scene = new THREE.Scene();
+    scene.add(line);
+    line.updateMatrixWorld(true);
     const missingGlyphs = committedLayout(line).glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);
     if (missingGlyphs !== 0) {
       throw new Error(`${fontFixture} Slug conformance specimen contains ${String(missingGlyphs)} missing glyphs`);
     }
-    const raster = await font.loadRaster({ rasterKey, kind: slug.kind }, signal === undefined ? undefined : { signal });
-    const sourceTypes =
-      loadFont === undefined ? undefined : slugRasterSourceTypes(font, rasterKey, raster.extensionData);
-    resource = await loaded.raster.decode(font, raster, signal);
+    const sourceTypes = loadFont === undefined ? undefined : slugRasterSourceTypes(font);
     signal?.throwIfAborted();
-    line.position.set(sceneOptions?.originX ?? 18, sceneOptions?.originY ?? -18, 0);
-    const scene = new THREE.Scene();
-    scene.add(line);
     const logicalWidth = sceneOptions?.width ?? WIDTH;
     const logicalHeight = sceneOptions?.height ?? FLAT_CONFORMANCE_HEIGHT;
     const camera = new THREE.OrthographicCamera(0, logicalWidth, 0, -logicalHeight, 0.1, 1_000);
@@ -661,12 +649,10 @@ async function createFlatSlugConformanceResources({
       camera,
       font,
       line,
-      resource,
       ...(sourceTypes === undefined ? {} : { sourceTypes }),
     };
   } catch (error) {
     line?.dispose();
-    if (resource !== undefined) slug.dispose(resource);
     font?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
@@ -679,7 +665,7 @@ async function loadConformanceSlugFont(
   delivery: FontDelivery,
   bakedArtifact: SlugBakedArtifactSource | undefined,
   signal: AbortSignal | undefined,
-): Promise<{ readonly font: RegisteredFont; readonly raster: SlugModule }> {
+): Promise<LoadedFont<typeof slug>> {
   const loaded = await loadSlugFontAsset(
     delivery === 'runtime'
       ? {
@@ -698,24 +684,39 @@ async function loadConformanceSlugFont(
           ...(signal === undefined ? {} : { signal }),
         },
   );
-  return { font: loaded.font, raster: loaded.raster };
+  return loaded.loaded;
 }
 
+/**
+ * Target-v1 `FontLoader` publishes no fetch hook, so the only way to observe which URLs one external artifact touches
+ * is to own `globalThis.fetch` for the duration of that load. The swap is scoped to this call and restored
+ * unconditionally; the embedded fixture of a parity run has already finished loading before it is installed.
+ */
 async function loadExternalSlugFont(
   artifactUrl: string,
   fetcher: typeof fetch,
   signal?: AbortSignal,
-): Promise<{ readonly font: RegisteredFont; readonly raster: SlugModule }> {
+): Promise<LoadedFont<typeof slug>> {
   signal?.throwIfAborted();
-  const loader = new FontLoader({ fetch: fetcher });
-  const font = await loader.load({ baked: artifactUrl }, signal === undefined ? undefined : { signal });
-  return { font, raster: slug };
+  const loader = new FontLoader();
+  const installedFetch = globalThis.fetch;
+  globalThis.fetch = fetcher;
+  try {
+    return await loader.loadAsync({
+      input: { baked: artifactUrl },
+      raster: { technique: slug },
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } finally {
+    globalThis.fetch = installedFetch;
+    loader.dispose();
+  }
 }
 
-function slugRasterSourceTypes(font: RegisteredFont, rasterKey: string, extensionData: unknown): SlugRasterSourceTypes {
-  const reference = font.rasterReferences.find((candidate) => candidate.rasterKey === rasterKey);
+function slugRasterSourceTypes(font: LoadedFont<typeof slug>): SlugRasterSourceTypes {
+  const reference = font.font.rasterReferences.find((candidate) => candidate.rasterKey === font.raster.rasterKey);
   if (reference === undefined) throw new Error('Slug raster reference disappeared after loading');
-  const extension = nonArrayObject(extensionData, 'Slug extension');
+  const extension = nonArrayObject(font.raster.extensionData, 'Slug extension');
   if (!Array.isArray(extension.pages) || extension.pages.length !== 1) {
     throw new TypeError('Slug external parity requires exactly one Inter page');
   }
@@ -764,7 +765,7 @@ async function captureFlatSlugConformance(
   resources: FlatSlugConformanceResources,
 ): Promise<SlugTextConformanceCapture> {
   const { candidate, width, height, renderSubmitMs } = await captureFlatSlugCandidate(resources);
-  const referenceResult = renderFlatSlugCpuReference(resources.resource, committedLayout(resources.line), {
+  const referenceResult = renderFlatSlugCpuReference(resources.font.data, committedLayout(resources.line), {
     width,
     height,
     dpr: resources.dpr,
@@ -908,15 +909,18 @@ function pixelHasInk(bytes: Uint8Array, pixelIndex: number): boolean {
   return bytes[offset] !== 0 || bytes[offset + 1] !== 0 || bytes[offset + 2] !== 0;
 }
 
-function committedLayout(line: Text): ParagraphLayout {
+/** Every layout read doubles as the commit check, because `Text` reports a failed synchronize through `error`. */
+function committedLayout(line: Text<typeof slug>): ParagraphLayout {
+  const error = line.error;
+  if (error !== undefined) throw error;
   const layout = line.layout;
   if (layout === undefined) throw new Error('Slug conformance Text lost its committed layout');
   return layout;
 }
 
 async function disposeFlatSlugConformanceResources(resources: FlatSlugConformanceResources): Promise<void> {
+  resources.line.removeFromParent();
   resources.line.dispose();
-  slug.dispose(resources.resource);
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);

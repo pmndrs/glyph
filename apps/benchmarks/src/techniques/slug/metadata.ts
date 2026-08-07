@@ -1,64 +1,47 @@
-import { type RegisteredFont } from '@pmndrs/text';
-import { slug, slugDescriptorRasterKey, type SlugResource } from '@pmndrs/text/raster/slug/v0';
+import { type SlugData } from '@pmndrs/text/raster/slug';
 
+/**
+ * Renderer-neutral Slug page allocation. Every byte figure counts decoded resource bytes the technique retains, not
+ * GPU residency: a renderer repacks the 16-bit reference table before upload, so only the renderer can report what it
+ * actually holds. Read retained GPU bytes from `Text.gpuBytes` or `TextGroup.gpuBytes` instead.
+ */
 export interface SlugRasterConfiguration {
   readonly planeUnitsPerEm: number;
   readonly pageCount: number;
   readonly curveTexelCount: number;
-  readonly curveGpuBytes: number;
+  readonly curveBytes: number;
   readonly headerCount: number;
-  readonly headerGpuBytes: number;
+  readonly headerBytes: number;
   readonly referenceCount: number;
-  readonly referenceGpuBytes: number;
-  readonly gpuBytes: number;
+  readonly referenceBytes: number;
+  readonly resourceBytes: number;
 }
 
-/** Decodes and releases Slug resources solely to report their stable allocation configuration. */
-export async function registeredSlugConfiguration(
-  font: RegisteredFont,
-  signal?: AbortSignal,
-): Promise<SlugRasterConfiguration> {
-  const rasterKey = await slugDescriptorRasterKey();
-  const raster = await font.loadRaster({ kind: slug.kind, rasterKey }, signal === undefined ? undefined : { signal });
-  const resource = await slug.decode(font, raster, signal);
-  try {
-    return slugResourceConfiguration(resource);
-  } finally {
-    slug.dispose(resource);
-  }
-}
-
-function slugResourceConfiguration(resource: SlugResource): SlugRasterConfiguration {
+/** Reports the stable allocation configuration of the Slug resource a font load already decoded. */
+export function slugDataConfiguration(data: SlugData): SlugRasterConfiguration {
   let curveTexelCount = 0;
-  let curveGpuBytes = 0;
+  let curveBytes = 0;
   let headerCount = 0;
-  let headerGpuBytes = 0;
+  let headerBytes = 0;
   let referenceCount = 0;
-  let referenceGpuBytes = 0;
-  for (const page of resource.pages) {
-    const curveAllocation = page.curveWidth * page.curveHeight * 8;
-    const headerAllocation = page.headerWidth * page.headerHeight * 4;
-    const referenceAllocation = page.referenceWidth * page.referenceHeight * 4;
+  let referenceBytes = 0;
+  for (const page of data.pages) {
     curveTexelCount += page.curveWidth * page.curveHeight;
-    curveGpuBytes += curveAllocation;
+    curveBytes += page.curveBytes.byteLength;
     headerCount += page.headerCount;
-    headerGpuBytes += headerAllocation;
+    headerBytes += page.headerBytes.byteLength;
     referenceCount += page.referenceCount;
-    referenceGpuBytes += referenceAllocation;
-  }
-  const allocationTotal = curveGpuBytes + headerGpuBytes + referenceGpuBytes;
-  if (allocationTotal !== resource.gpuBytes) {
-    throw new Error('Slug page allocations do not match the decoded resource GPU byte total');
+    referenceBytes += page.referenceBytes.byteLength;
   }
   return {
-    planeUnitsPerEm: resource.planeUnitsPerEm,
-    pageCount: resource.pages.length,
+    planeUnitsPerEm: data.planeUnitsPerEm,
+    pageCount: data.pages.length,
     curveTexelCount,
-    curveGpuBytes,
+    curveBytes,
     headerCount,
-    headerGpuBytes,
+    headerBytes,
     referenceCount,
-    referenceGpuBytes,
-    gpuBytes: resource.gpuBytes,
+    referenceBytes,
+    resourceBytes: curveBytes + headerBytes + referenceBytes,
   };
 }

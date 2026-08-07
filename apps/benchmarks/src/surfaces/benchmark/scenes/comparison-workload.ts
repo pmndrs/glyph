@@ -33,7 +33,7 @@ import type {
 import { committedTextLayout, type ComparisonWorkloadEntry } from '../../../workloads/shared/scene-entry';
 import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../../techniques/bitmap/metadata';
 import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from '../../../techniques/mtsdf/metadata';
-import { registeredSlugConfiguration, type SlugRasterConfiguration } from '../../../techniques/slug/metadata';
+import { slugDataConfiguration, type SlugRasterConfiguration } from '../../../techniques/slug/metadata';
 import { createCanvasSurface } from '../../../renderer/canvas-surface';
 import type { LiveFrameTelemetrySnapshot } from '../../../renderer/live-frame-telemetry';
 import { createTextUpdateTelemetry } from '../../../renderer/text-update-telemetry';
@@ -1326,14 +1326,14 @@ function measureLoadedFonts(fonts: readonly LoadedTechniqueFont[], metrics: Muta
     metrics.sourceFontBytes += font.metrics.sourceFontBytes;
     const slug = font.slugConfiguration;
     if (slug === undefined) continue;
-    metrics.slugCurveGpuBytes += slug.curveGpuBytes;
+    metrics.slugCurveGpuBytes += slug.curveBytes;
     metrics.slugCurveTexelCount += slug.curveTexelCount;
-    metrics.slugGpuBytes += slug.gpuBytes;
+    metrics.slugGpuBytes += slug.resourceBytes;
     metrics.slugHeaderCount += slug.headerCount;
-    metrics.slugHeaderGpuBytes += slug.headerGpuBytes;
+    metrics.slugHeaderGpuBytes += slug.headerBytes;
     metrics.slugPageCount += slug.pageCount;
     metrics.slugReferenceCount += slug.referenceCount;
-    metrics.slugReferenceGpuBytes += slug.referenceGpuBytes;
+    metrics.slugReferenceGpuBytes += slug.referenceBytes;
   }
 }
 
@@ -1411,10 +1411,11 @@ async function loadTechniqueFont(
           onProgress: onBakeProgress,
         },
   );
-  const slugConfiguration = await registeredSlugConfiguration(loaded.font, signal);
+  if (loaded.technique !== 'slug') throw new TypeError('Slug comparison workload loaded a different technique');
+  const slugConfiguration = slugDataConfiguration(loaded.loaded.data);
   return {
     artifactBytes: loaded.compressedBytes,
-    atlasGpuBytes: slugConfiguration.gpuBytes,
+    atlasGpuBytes: slugConfiguration.resourceBytes,
     atlasPages: [],
     bitmapStrikes: [],
     font: loaded.font,
