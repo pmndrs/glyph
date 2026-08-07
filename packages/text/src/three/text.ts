@@ -32,7 +32,6 @@ import { ThreeMtsdfTarget, type ThreeMtsdfTargetOwner } from './mtsdf-target.js'
 import {
   registerThreeRasterProgram,
   threeRasterProgram,
-  type ThreeRasterProgram,
   type ThreeRasterTargetAccounting,
 } from './program-registry.js';
 import { ThreeSlugTarget, type ThreeSlugTargetOwner } from './slug-target.js';
@@ -41,20 +40,9 @@ export interface ThreeRenderVariant {
   readonly effects?: readonly unknown[];
 }
 
-const asProgram = (build: (owner: never) => unknown): ThreeRasterProgram => build as ThreeRasterProgram;
-
-registerThreeRasterProgram(
-  bitmap,
-  asProgram((owner: ThreeBitmapTargetOwner) => new ThreeBitmapTarget(owner)),
-);
-registerThreeRasterProgram(
-  mtsdf,
-  asProgram((owner: ThreeMtsdfTargetOwner) => new ThreeMtsdfTarget(owner)),
-);
-registerThreeRasterProgram(
-  slug,
-  asProgram((owner: ThreeSlugTargetOwner) => new ThreeSlugTarget(owner)),
-);
+registerThreeRasterProgram(bitmap, (owner: ThreeBitmapTargetOwner) => new ThreeBitmapTarget<never>(owner));
+registerThreeRasterProgram(mtsdf, (owner: ThreeMtsdfTargetOwner) => new ThreeMtsdfTarget<never>(owner));
+registerThreeRasterProgram(slug, (owner: ThreeSlugTargetOwner) => new ThreeSlugTarget<never>(owner));
 
 export type TextSpan<Technique extends AnyRasterTechnique, Variant = ThreeRenderVariant> = ParagraphSpan<
   Technique,

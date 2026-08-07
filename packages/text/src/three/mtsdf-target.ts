@@ -1,6 +1,5 @@
 import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
-import type { Node } from 'three/webgpu';
 
 import type {
   GlyphBatchKey,
@@ -9,7 +8,8 @@ import type {
   PreparedParagraphBatchRevision,
 } from '../paragraph-batch.js';
 import type { ParagraphBatchTarget, ParagraphBatchTargetUpdate } from '../paragraph-batch-attachment.js';
-import { mtsdf, type MtsdfBinding, type MtsdfData } from '../raster/mtsdf.js';
+import { mtsdf, type MtsdfData } from '../raster/mtsdf.js';
+import { mtsdfShader } from './mtsdf-shader.js';
 import {
   instanceStorageBytes,
   invalidatePboTexture,
@@ -197,62 +197,36 @@ function createMtsdfTargetResource(
   const outlineColor = TSL.storage(attributes.outline, 'vec4', attributes.outline.count).setPBO(true).element(instance);
   const shadowColor = TSL.storage(attributes.shadow, 'vec4', attributes.shadow.count).setPBO(true).element(instance);
   const effects = TSL.storage(attributes.effects, 'vec4', attributes.effects.count).setPBO(true).element(instance);
-  const origin = geometry.xy;
-  const size = geometry.zw;
-  const uvOrigin = uvData.xy;
-  const uvSize = uvData.zw;
-  const shadowOffset = effects.xy;
-  const outlineWidth = effects.z;
-  const pageIndex = effects.w;
-  const atlasU = uvOrigin.x.add(TSL.uv().x.mul(uvSize.x));
-  const atlasV = uvOrigin.y.add(TSL.uv().y.mul(uvSize.y));
-  const minimumU = uvBounds.x.add(0.5 / batch.binding.width);
-  const minimumV = uvBounds.y.add(0.5 / batch.binding.height);
-  const maximumU = uvBounds.z.sub(0.5 / batch.binding.width);
-  const maximumV = uvBounds.w.sub(0.5 / batch.binding.height);
-  const baseInside = insideRectangle(atlasU, atlasV, uvBounds);
-  const layer = TSL.int(pageIndex);
-  const baseSample = TSL.texture(
-    atlas,
-    TSL.vec2(TSL.clamp(atlasU, minimumU, maximumU), TSL.clamp(atlasV, minimumV, maximumV)),
-  ).depth(layer);
-  const fillDistance = median3(baseSample.rgb).sub(0.5);
-  const trueDistance = baseSample.a.sub(0.5);
-  const pixelRange = screenPixelRange(atlasU, atlasV, batch.binding, batch.font.data.pixelRange);
-  const fillCoverage = distanceCoverage(fillDistance, pixelRange).mul(baseInside);
-  const outlineCoverage = distanceCoverage(trueDistance.add(outlineWidth), pixelRange).mul(baseInside);
-  const outlineOnly = TSL.max(outlineCoverage.sub(fillCoverage), 0);
-  const shadowU = atlasU.sub(shadowOffset.x);
-  const shadowV = atlasV.sub(shadowOffset.y);
-  const shadowInside = insideRectangle(shadowU, shadowV, uvBounds);
-  const shadowSample = TSL.texture(
-    atlas,
-    TSL.vec2(TSL.clamp(shadowU, minimumU, maximumU), TSL.clamp(shadowV, minimumV, maximumV)),
-  ).depth(layer);
-  const shadowCoverage = distanceCoverage(shadowSample.a.sub(0.5), pixelRange).mul(shadowInside);
-  const fillAlpha = fillColor.a.mul(fillCoverage);
-  const outlineAlpha = outlineColor.a.mul(outlineOnly);
-  const glyphAlpha = fillAlpha.add(outlineAlpha);
-  const shadowAlpha = shadowColor.a.mul(shadowCoverage).mul(TSL.float(1).sub(glyphAlpha));
-  const outputAlpha = glyphAlpha.add(shadowAlpha);
-  const outputRgb = fillColor.rgb
-    .mul(fillAlpha)
-    .add(outlineColor.rgb.mul(outlineAlpha))
-    .add(shadowColor.rgb.mul(shadowAlpha))
-    .div(TSL.max(outputAlpha, 1e-6));
+  const shader = mtsdfShader(
+    {
+      origin: geometry.xy,
+      size: geometry.zw,
+      uvOrigin: uvData.xy,
+      uvSize: uvData.zw,
+      uvBounds,
+      fillColor,
+      outlineColor,
+      shadowColor,
+      shadowOffset: effects.xy,
+      outlineWidth: effects.z,
+      pageIndex: effects.w,
+    },
+    {
+      atlas,
+      atlasWidth: batch.binding.width,
+      atlasHeight: batch.binding.height,
+      pixelRange: batch.font.data.pixelRange,
+    },
+  );
   const material = new THREE.MeshBasicNodeMaterial({
     depthTest: false,
     depthWrite: false,
     side: THREE.DoubleSide,
     transparent: true,
   });
-  material.positionNode = TSL.vec3(
-    origin.x.add(TSL.positionLocal.x.mul(size.x)),
-    origin.y.add(TSL.positionLocal.y.mul(size.y)).negate(),
-    0,
-  );
-  material.colorNode = outputRgb;
-  material.opacityNode = outputAlpha;
+  material.positionNode = shader.position;
+  material.colorNode = shader.color;
+  material.opacityNode = shader.opacity;
   const allAttributes = Object.entries(attributes);
   return {
     key: batch.key,
@@ -332,36 +306,6 @@ function markStorageRanges(
   }
   attribute.needsUpdate = true;
   invalidatePboTexture(attribute);
-}
-
-function median3(value: Node<'vec3'>): Node<'float'> {
-  return TSL.max(TSL.min(value.r, value.g), TSL.min(TSL.max(value.r, value.g), value.b));
-}
-
-function screenPixelRange(
-  atlasU: Node<'float'>,
-  atlasV: Node<'float'>,
-  binding: MtsdfBinding,
-  pixelRange: number,
-): Node<'float'> {
-  const screenTexelsU = TSL.float(1).div(TSL.max(TSL.fwidth(atlasU), 1e-6));
-  const screenTexelsV = TSL.float(1).div(TSL.max(TSL.fwidth(atlasV), 1e-6));
-  return TSL.max(
-    TSL.float(0.5).mul(
-      TSL.float(pixelRange / binding.width)
-        .mul(screenTexelsU)
-        .add(TSL.float(pixelRange / binding.height).mul(screenTexelsV)),
-    ),
-    1,
-  );
-}
-
-function distanceCoverage(distance: Node<'float'>, pixelRange: Node<'float'>): Node<'float'> {
-  return TSL.clamp(distance.mul(pixelRange).add(0.5), 0, 1);
-}
-
-function insideRectangle(u: Node<'float'>, v: Node<'float'>, bounds: Node<'vec4'>): Node<'float'> {
-  return TSL.step(bounds.x, u).mul(TSL.step(u, bounds.z)).mul(TSL.step(bounds.y, v)).mul(TSL.step(v, bounds.w));
 }
 
 function floatStorage(array: Float32Array, itemSize: number): THREE.StorageInstancedBufferAttribute {

@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:f10d7d83f0a87a92236ea45e5bd87145d7b28bb5df354658d490aef7e840cec4'
+source_digest: 'sha256:a28a374f848507f5976d9ff01e9b9a98e479fcae406ad5334695bbab8cc86132'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -77,6 +77,9 @@ sources:
   - id: v1-slug-proof
     resource: ../../apps/benchmarks/src/v1-slug-proof.ts
     title: Target-v1 retained Slug browser proof
+  - id: v1-compose-proof
+    resource: ../../apps/benchmarks/src/v1-compose-proof.ts
+    title: Target-v1 composed canonical-shader browser proof
   - id: v1-async-proof
     resource: ../../apps/benchmarks/src/v1-async-proof.ts
     title: Target-v1 Worker synchronization browser proof
@@ -190,7 +193,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T13:26:50Z'
+  at: '2026-08-07T14:52:58Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -204,6 +207,12 @@ than treating first pixels as sufficient evidence. Each raster proof also report
 when a visibly populated draw claims no GPU residency, so the accessor is proven against live engine resources rather than
 a unit fixture. The Worker proof distinguishes call-time snapshots, later desired state, supersession, abort, progress,
 and one reusable module Worker.
+
+A fifth proof covers composition over the exported canonical technique shaders. It renders one paragraph through the
+pre-registered Bitmap program, then through a third-party program that owns its own attributes, geometry, and material and
+composes only its final colour over `bitmapShader`. The verification compares the two passes on the same page rather than
+against a stored golden: an identical lit-pixel set proves the composed program inherited the canonical placement and
+coverage, and an empty green channel proves it still emitted its own output.
 
 During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
 their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths. Canonical `/raster/bitmap` and `/raster/slug`
