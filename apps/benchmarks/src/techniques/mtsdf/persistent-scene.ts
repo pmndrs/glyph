@@ -41,8 +41,13 @@ import { loadMtsdfFontAsset, MTSDF_FIXTURE_ARTIFACT_BYTE_LIMIT } from '../../wor
 import {
   captureGlyphOrigins,
   createFrameDrivenGlyphTransition,
+  glyphOriginPolicy,
+  snapGlyphOrigins,
+  transitionPresentation,
   type FrameDrivenGlyphTransition,
+  type GlyphOriginPresentation,
   type GlyphOriginSnapshot,
+  type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
 import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from './metadata';
 
@@ -145,13 +150,24 @@ export interface MtsdfTextPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   setGridVisible(visible: boolean): void;
-  update(update: MtsdfTextSceneUpdate): Promise<void>;
+  /** Whether `update` can commit `fixture` in the caller's own turn, or a `loadFontFixture` has to precede it. */
+  hasFontFixture(fixture: BenchmarkFontFixture): boolean;
+  /** Fetches and decodes a replacement fixture behind the visible text. The only asynchronous step a live update has. */
+  loadFontFixture(fixture: BenchmarkFontFixture): Promise<void>;
+  /**
+   * Applies and shapes one generation in the caller's own turn. Nothing here is deferred: an ordinary text, font-size,
+   * layout-width, anchor, or DPR change is visible on the next frame the host draws, which is the contract this
+   * harness exists to demonstrate. Only a fixture the scene has not loaded is refused, and `loadFontFixture` is how
+   * that is resolved.
+   */
+  update(update: MtsdfTextSceneUpdate): GlyphOriginPresentation;
 }
 
 /** The inputs one committed generation of the live paragraph was built from. */
 interface MtsdfTextState {
   readonly font: LoadedFont<typeof mtsdf>;
-  readonly text: string;
+  /** The shaped-run inputs this generation committed, kept beside the style so a rollback restores both together. */
+  readonly identity: ShapedTextIdentity;
   readonly contentBox: ParagraphContentBox;
   readonly style: ParagraphStyle;
   readonly rasterPixelRatio: number;
@@ -231,17 +247,35 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     resources.state = next;
   };
 
-  const beginPresentation = (resources: MtsdfPersistentActivation, before: GlyphOriginSnapshot): void => {
+  /**
+   * Presents one committed reflow. `before` is captured only when `glyphOriginPolicy` allows interpolation, so its
+   * absence is the decision to snap rather than a missing snapshot.
+   */
+  const presentReflow = (
+    resources: MtsdfPersistentActivation,
+    before: GlyphOriginSnapshot | undefined,
+  ): GlyphOriginPresentation => {
     const fromX = resources.line.position.x;
     const fromY = resources.line.position.y;
     resources.presentation?.transition.dispose();
     resources.presentation = undefined;
     positionLiveLine(resources.line, resources.viewport.width, resources.viewport.height, anchor, layoutWidthRatio);
+    if (before === undefined) return snapGlyphOrigins(resources.line);
     const toX = resources.line.position.x;
     const toY = resources.line.position.y;
     const transition = createFrameDrivenGlyphTransition(resources.line, before);
     resources.line.position.set(fromX, fromY, 0);
     resources.presentation = { transition, fromX, fromY, toX, toY };
+    return transitionPresentation(transition);
+  };
+
+  /** Captures the origins a reflow may interpolate from, or nothing when the change replaces or reorders glyphs. */
+  const originsToInterpolate = (
+    resources: MtsdfPersistentActivation,
+    next: ShapedTextIdentity,
+  ): GlyphOriginSnapshot | undefined => {
+    if (glyphOriginPolicy(resources.state.identity, next) === 'snap') return undefined;
+    return captureGlyphOrigins(resources.line);
   };
 
   const applyViewport = (viewport: PersistentRenderViewport): void => {
@@ -259,7 +293,8 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
     const updateStartedAt = performance.now();
     const revision = ++updateRevision;
     try {
-      const before = captureGlyphOrigins(resources.line);
+      // A viewport change leaves the shaped run intact, so its glyphs really do move continuously.
+      const before = originsToInterpolate(resources, resources.state.identity);
       commitState(resources, {
         ...resources.state,
         contentBox: mtsdfContentBox(nextContentWidth, textAlign),
@@ -268,7 +303,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       if (disposed || activation !== resources || revision !== updateRevision) return;
       resources.committedContentWidth = nextContentWidth;
       const sceneStartedAt = performance.now();
-      beginPresentation(resources, before);
+      presentReflow(resources, before);
       const finishedAt = performance.now();
       textUpdateTelemetry.record({
         scheduleMs: 0,
@@ -325,20 +360,23 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
           { dispose: (asset) => asset.loadedFont.dispose() },
         );
         const textStartedAt = performance.now();
+        const identity: ShapedTextIdentity = {
+          fontFixture: options.fontFixture ?? 'inter',
+          text: options.text,
+          language: options.language ?? 'en',
+          direction: options.direction ?? 'ltr',
+          features: options.features ?? [],
+        };
         const state: MtsdfTextState = {
           font: loadedFont,
-          text: options.text,
+          identity,
           contentBox: mtsdfContentBox(benchmarkContentWidth(context.viewport.width, layoutWidthRatio), textAlign),
-          style: mtsdfStyle(fontSize, {
-            language: options.language ?? 'en',
-            direction: options.direction ?? 'ltr',
-            features: options.features ?? [],
-          }),
+          style: mtsdfStyle(fontSize, identity),
           rasterPixelRatio: context.viewport.dpr,
         };
         line = new Text({
           font: state.font,
-          text: state.text,
+          text: state.identity.text,
           contentBox: state.contentBox,
           style: state.style,
           paint: { color: LIVE_TEXT_COLOR_CSS },
@@ -459,76 +497,78 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
       gridVisible = visible;
       activation?.canvasSurface.setGridVisible(visible);
     },
-    async update(next) {
+    hasFontFixture(fixture) {
+      return !disposed && activation !== undefined && activation.fontFixture.has(fixture);
+    },
+    async loadFontFixture(fixture) {
       const resources = await activationGate.wait();
+      await resources.fontFixture.load(fixture, async (requested, registry) => {
+        const fontStartedAt = performance.now();
+        const loaded = await loadMtsdfFontAsset({
+          technique: 'mtsdf',
+          fixture: requested,
+          delivery: options.delivery ?? 'baked',
+          registry,
+          signal: resources.signal,
+          ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
+        });
+        try {
+          const rasterConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, resources.signal);
+          return {
+            font: loaded.loaded.font,
+            fontLoadMs: performance.now() - fontStartedAt,
+            loaded,
+            loadedFont: loaded.loaded,
+            rasterConfiguration,
+          };
+        } catch (error) {
+          if (loaded.loaded !== resources.fontFixture.current.asset.loadedFont) loaded.loaded.dispose();
+          throw error;
+        }
+      });
+    },
+    update(next) {
+      const resources = active();
       const updateStartedAt = performance.now();
       const nextFontSize = positiveViewportSize(next.fontSize, 'MSDF scene font size');
       assertLayoutWidthRatio(next.layoutWidthRatio);
-      const revision = ++updateRevision;
+      updateRevision += 1;
       const nextContentWidth = benchmarkContentWidth(resources.viewport.width, next.layoutWidthRatio);
-      const before = captureGlyphOrigins(resources.line);
-      let scheduledAt = updateStartedAt;
-      await resources.fontFixture.update({
-        fixture: next.fontFixture ?? resources.fontFixture.current.fixture,
-        isCurrent: () => !disposed && activation === resources && revision === updateRevision,
-        load: async (fixture, registry) => {
-          const fontStartedAt = performance.now();
-          const loaded = await loadMtsdfFontAsset({
-            technique: 'mtsdf',
-            fixture,
-            delivery: options.delivery ?? 'baked',
-            registry,
-            signal: resources.signal,
-            ...(options.onBakeProgress === undefined ? {} : { onProgress: options.onBakeProgress }),
-          });
-          try {
-            const rasterConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, resources.signal);
-            return {
-              font: loaded.loaded.font,
-              fontLoadMs: performance.now() - fontStartedAt,
-              loaded,
-              loadedFont: loaded.loaded,
-              rasterConfiguration,
-            };
-          } catch (error) {
-            if (loaded.loaded !== resources.fontFixture.current.asset.loadedFont) loaded.loaded.dispose();
-            throw error;
-          }
-        },
-        commit: async (fontFixture) => {
-          scheduledAt = performance.now();
-          if (next.text.length === 0) resources.line.visible = false;
-          commitState(resources, {
-            font: fontFixture.loadedFont,
-            text: next.text,
-            contentBox: mtsdfContentBox(nextContentWidth, next.textAlign),
-            style: mtsdfStyle(nextFontSize, {
-              language: next.language,
-              direction: next.direction,
-              features: next.features,
-            }),
-            rasterPixelRatio: resources.viewport.dpr,
-          });
-          updateMtsdfDrawVisibility(resources.line);
-          fontSize = nextFontSize;
-          anchor = next.anchor;
-          textAlign = next.textAlign;
-          layoutWidthRatio = next.layoutWidthRatio;
-          resources.committedContentWidth = nextContentWidth;
-        },
+      const nextFixture = next.fontFixture ?? resources.fontFixture.current.fixture;
+      const identity: ShapedTextIdentity = {
+        fontFixture: nextFixture,
+        text: next.text,
+        language: next.language,
+        direction: next.direction,
+        features: next.features,
+      };
+      const before = originsToInterpolate(resources, identity);
+      resources.fontFixture.commit(nextFixture, (fontFixture) => {
+        if (next.text.length === 0) resources.line.visible = false;
+        commitState(resources, {
+          font: fontFixture.loadedFont,
+          identity,
+          contentBox: mtsdfContentBox(nextContentWidth, next.textAlign),
+          style: mtsdfStyle(nextFontSize, identity),
+          rasterPixelRatio: resources.viewport.dpr,
+        });
+        updateMtsdfDrawVisibility(resources.line);
+        fontSize = nextFontSize;
+        anchor = next.anchor;
+        textAlign = next.textAlign;
+        layoutWidthRatio = next.layoutWidthRatio;
+        resources.committedContentWidth = nextContentWidth;
       });
-      if (disposed || activation !== resources || revision !== updateRevision) {
-        throw new DOMException('The MSDF scene update was superseded', 'AbortError');
-      }
       const sceneStartedAt = performance.now();
-      beginPresentation(resources, before);
+      const presented = presentReflow(resources, before);
       const finishedAt = performance.now();
       textUpdateTelemetry.record({
-        scheduleMs: scheduledAt - updateStartedAt,
-        readyMs: sceneStartedAt - scheduledAt,
+        scheduleMs: 0,
+        readyMs: sceneStartedAt - updateStartedAt,
         sceneMs: finishedAt - sceneStartedAt,
         totalMs: finishedAt - updateStartedAt,
       });
+      return presented;
     },
     deactivate() {
       if (disposed) return;
@@ -552,7 +592,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
 function applyState(line: Text<typeof mtsdf>, next: MtsdfTextState): void {
   line.set({
     font: next.font,
-    text: next.text,
+    text: next.identity.text,
     contentBox: next.contentBox,
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,

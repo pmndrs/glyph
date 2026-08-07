@@ -1,9 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState, type RefObject } from 'react';
 
 import type { FontDelivery, GraphicsBackend } from '../../benchmark/url-state';
-import { createLatestAsyncQueue, type LatestAsyncQueue } from './latest-async-queue';
 import type { MtsdfTextLiveStats, MtsdfTextPersistentScene } from '../../techniques/mtsdf/persistent-scene';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
+import type { GlyphOriginPresentation } from '../../techniques/shared/glyph-origin-transition';
 import type { SlugTextLiveStats, SlugTextPersistentScene } from '../../techniques/slug/persistent-scene';
 import {
   benchmarkContentWidth,
@@ -21,6 +21,51 @@ function loadMtsdfTextRenderer() {
 
 function loadSlugTextRenderer() {
   return import('../../techniques/slug/persistent-scene');
+}
+
+/**
+ * The live-update surface both SDF technique scenes expose. Unlike bitmap they present reflows from their own frame
+ * clock, so a host-driven progress timeline has nothing to do here.
+ */
+interface SdfLiveTextScene {
+  hasFontFixture(fixture: LiveTextConfiguration['fontFixture']): boolean;
+  loadFontFixture(fixture: LiveTextConfiguration['fontFixture']): Promise<void>;
+  update(update: RetainedLiveTextUpdate): GlyphOriginPresentation;
+}
+
+/**
+ * Applies one authored configuration to the live scene and returns a cancel function for React's cleanup.
+ *
+ * The update is committed in this turn whenever the scene already holds the requested fixture, which is every change
+ * but a fixture swap. Only fetching and decoding a replacement fixture is awaited, and nothing coalesces or defers the
+ * shaping itself: a queue in front of `update` would drop work during continuous animation and quietly present text
+ * that lags the state the surface is already rendering from.
+ */
+function applySdfLiveTextUpdate(
+  scene: SdfLiveTextScene,
+  update: RetainedLiveTextUpdate,
+  handlers: {
+    readonly onCommitted: (presented: GlyphOriginPresentation, input: RetainedLiveTextUpdate) => void;
+    readonly onError: (error: unknown) => void;
+  },
+): () => void {
+  let cancelled = false;
+  const commit = (): void => {
+    if (cancelled) return;
+    handlers.onCommitted(scene.update(update), update);
+  };
+  if (scene.hasFontFixture(update.fontFixture)) {
+    try {
+      commit();
+    } catch (error) {
+      handlers.onError(error);
+    }
+  } else {
+    void scene.loadFontFixture(update.fontFixture).then(commit).catch(handlers.onError);
+  }
+  return () => {
+    cancelled = true;
+  };
 }
 
 interface SdfTextViewportProps<TStats> {
@@ -55,10 +100,17 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<MtsdfTextPersistentScene>(undefined);
-  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, void>>(undefined);
+  // The host owns `sceneRef` from the moment the scene is constructed; updates need the narrower window that starts
+  // once activation has actually committed a first layout.
+  const activeSceneRef = useRef<MtsdfTextPersistentScene>(undefined);
   const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [error, setError] = useState<string>();
   const [settledWorkload, setSettledWorkload] = useState<string>();
+  const [presentation, setPresentation] = useState<GlyphOriginPresentation>({
+    transitioned: false,
+    matchedGlyphs: 0,
+    targetGlyphs: 0,
+  });
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
@@ -96,8 +148,9 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     timelineTick,
     workload,
   }));
-  const publishSettledWorkload = useEffectEvent((value: string) => {
-    pendingSettledWorkloadRef.current = value;
+  const publishCommitted = useEffectEvent((presented: GlyphOriginPresentation, input: RetainedLiveTextUpdate) => {
+    setPresentation(presented);
+    pendingSettledWorkloadRef.current = input.workload;
   });
   useEffect(() => {
     const container = containerRef.current;
@@ -106,7 +159,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     const controller = new AbortController();
     const configuration = sceneConfiguration();
     let scene: MtsdfTextPersistentScene | undefined;
-    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, void> | undefined;
+    let cancelInitialUpdate: (() => void) | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -132,8 +185,6 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       });
       scene = created;
       sceneRef.current = created;
-      updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
-      updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
@@ -147,27 +198,33 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       );
       if (cancelled) await surfaceLease.release();
       else {
-        const committed = await updateQueue.enqueue(sceneConfiguration());
-        publishSettledWorkload(committed.input.workload);
+        // Activation committed the configuration this scene was constructed from; catch up with whatever the surface
+        // has moved on to since, then hand later changes to the synchronous effect below.
+        activeSceneRef.current = created;
+        cancelInitialUpdate = applySdfLiveTextUpdate(created, sceneConfiguration(), {
+          onCommitted: publishCommitted,
+          onError: publishError,
+        });
       }
     })();
     void initialization.catch(publishError);
     return () => {
       cancelled = true;
       controller.abort();
+      cancelInitialUpdate?.();
       void initialization.then(
         async () => {
           const current = scene;
           scene = undefined;
           if (sceneRef.current === current) sceneRef.current = undefined;
-          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
+          if (activeSceneRef.current === current) activeSceneRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
           const current = scene;
           scene = undefined;
           if (sceneRef.current === current) sceneRef.current = undefined;
-          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
+          if (activeSceneRef.current === current) activeSceneRef.current = undefined;
         },
       );
     };
@@ -176,10 +233,11 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
     sceneRef.current?.setGridVisible(grid);
   }, [grid]);
   useEffect(() => {
-    const updateQueue = updateQueueRef.current;
-    if (updateQueue === undefined) return;
-    void updateQueue
-      .enqueue({
+    const scene = activeSceneRef.current;
+    if (scene === undefined) return;
+    return applySdfLiveTextUpdate(
+      scene,
+      {
         anchor,
         direction,
         features,
@@ -191,9 +249,9 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
         textAlign,
         timelineTick,
         workload,
-      })
-      .then(({ input }) => publishSettledWorkload(input.workload))
-      .catch(publishError);
+      },
+      { onCommitted: publishCommitted, onError: publishError },
+    );
   }, [
     anchor,
     direction,
@@ -221,6 +279,7 @@ export function MtsdfTextViewport(props: SdfTextViewportProps<MtsdfTextLiveStats
       fontSize={fontSize}
       grid={grid}
       layoutWidthRatio={layoutWidthRatio}
+      presentation={presentation}
       stats={stats}
       suppressLoading={suppressLoading}
       text={text}
@@ -244,6 +303,7 @@ function MtsdfViewportChrome({
   fontSize,
   grid,
   layoutWidthRatio,
+  presentation,
   stats,
   suppressLoading,
   text,
@@ -263,6 +323,7 @@ function MtsdfViewportChrome({
   readonly fontSize: number;
   readonly grid: boolean;
   readonly layoutWidthRatio: number;
+  readonly presentation: GlyphOriginPresentation;
   readonly stats: MtsdfTextLiveStats | undefined;
   readonly suppressLoading: boolean;
   readonly text: string;
@@ -303,6 +364,9 @@ function MtsdfViewportChrome({
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
       data-missing-glyph-count={stats?.missingGlyphCount}
+      data-presentation-matched-glyphs={presentation.matchedGlyphs}
+      data-presentation-target-glyphs={presentation.targetGlyphs}
+      data-presentation-transitioned={presentation.transitioned}
       data-rendered-device-px={stats?.renderedPpem}
       data-raster-em-size={stats?.rasterEmSize}
       data-raster-pixel-range={stats?.rasterPixelRange}
@@ -362,10 +426,17 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SlugTextPersistentScene>(undefined);
-  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, void>>(undefined);
+  // The host owns `sceneRef` from the moment the scene is constructed; updates need the narrower window that starts
+  // once activation has actually committed a first layout.
+  const activeSceneRef = useRef<SlugTextPersistentScene>(undefined);
   const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [error, setError] = useState<string>();
   const [settledWorkload, setSettledWorkload] = useState<string>();
+  const [presentation, setPresentation] = useState<GlyphOriginPresentation>({
+    transitioned: false,
+    matchedGlyphs: 0,
+    targetGlyphs: 0,
+  });
   const {
     active: bakeProgressActive,
     finish: finishBakeProgress,
@@ -403,8 +474,9 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     timelineTick,
     workload,
   }));
-  const publishSettledWorkload = useEffectEvent((value: string) => {
-    pendingSettledWorkloadRef.current = value;
+  const publishCommitted = useEffectEvent((presented: GlyphOriginPresentation, input: RetainedLiveTextUpdate) => {
+    setPresentation(presented);
+    pendingSettledWorkloadRef.current = input.workload;
   });
   useEffect(() => {
     const container = containerRef.current;
@@ -413,7 +485,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     const controller = new AbortController();
     const configuration = sceneConfiguration();
     let scene: SlugTextPersistentScene | undefined;
-    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, void> | undefined;
+    let cancelInitialUpdate: (() => void) | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -438,8 +510,6 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       });
       scene = created;
       sceneRef.current = created;
-      updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
-      updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
@@ -453,27 +523,33 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       );
       if (cancelled) await surfaceLease.release();
       else {
-        const committed = await updateQueue.enqueue(sceneConfiguration());
-        publishSettledWorkload(committed.input.workload);
+        // Activation committed the configuration this scene was constructed from; catch up with whatever the surface
+        // has moved on to since, then hand later changes to the synchronous effect below.
+        activeSceneRef.current = created;
+        cancelInitialUpdate = applySdfLiveTextUpdate(created, sceneConfiguration(), {
+          onCommitted: publishCommitted,
+          onError: publishError,
+        });
       }
     })();
     void initialization.catch(publishError);
     return () => {
       cancelled = true;
       controller.abort();
+      cancelInitialUpdate?.();
       void initialization.then(
         async () => {
           const current = scene;
           scene = undefined;
           if (sceneRef.current === current) sceneRef.current = undefined;
-          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
+          if (activeSceneRef.current === current) activeSceneRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
           const current = scene;
           scene = undefined;
           if (sceneRef.current === current) sceneRef.current = undefined;
-          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
+          if (activeSceneRef.current === current) activeSceneRef.current = undefined;
         },
       );
     };
@@ -482,10 +558,11 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
     sceneRef.current?.setGridVisible(grid);
   }, [grid]);
   useEffect(() => {
-    const updateQueue = updateQueueRef.current;
-    if (updateQueue === undefined) return;
-    void updateQueue
-      .enqueue({
+    const scene = activeSceneRef.current;
+    if (scene === undefined) return;
+    return applySdfLiveTextUpdate(
+      scene,
+      {
         anchor,
         direction,
         features,
@@ -497,9 +574,9 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
         textAlign,
         timelineTick,
         workload,
-      })
-      .then(({ input }) => publishSettledWorkload(input.workload))
-      .catch(publishError);
+      },
+      { onCommitted: publishCommitted, onError: publishError },
+    );
   }, [
     anchor,
     direction,
@@ -527,6 +604,7 @@ export function SlugTextViewport(props: SdfTextViewportProps<SlugTextLiveStats>)
       fontSize={fontSize}
       grid={grid}
       layoutWidthRatio={layoutWidthRatio}
+      presentation={presentation}
       stats={stats}
       suppressLoading={suppressLoading}
       text={text}
@@ -550,6 +628,7 @@ function SlugViewportChrome({
   fontSize,
   grid,
   layoutWidthRatio,
+  presentation,
   stats,
   suppressLoading,
   text,
@@ -569,6 +648,7 @@ function SlugViewportChrome({
   readonly fontSize: number;
   readonly grid: boolean;
   readonly layoutWidthRatio: number;
+  readonly presentation: GlyphOriginPresentation;
   readonly stats: SlugTextLiveStats | undefined;
   readonly suppressLoading: boolean;
   readonly text: string;
@@ -607,6 +687,9 @@ function SlugViewportChrome({
       data-median-gpu-ms={stats?.medianGpuMs}
       data-median-submit-ms={stats?.medianSubmitMs}
       data-missing-glyph-count={stats?.missingGlyphCount}
+      data-presentation-matched-glyphs={presentation.matchedGlyphs}
+      data-presentation-target-glyphs={presentation.targetGlyphs}
+      data-presentation-transitioned={presentation.transitioned}
       data-rendered-device-px={stats?.renderedPpem}
       data-slug-curve-gpu-bytes={stats?.slugCurveGpuBytes}
       data-slug-header-gpu-bytes={stats?.slugHeaderGpuBytes}
