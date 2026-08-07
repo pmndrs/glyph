@@ -1,5 +1,6 @@
-import { Text, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text/v0';
-import { msdf, msdfDescriptorRasterKey, type MsdfResource } from '@pmndrs/text/raster/msdf';
+import type { LoadedFont, ParagraphLayout } from '@pmndrs/text';
+import type { mtsdf } from '@pmndrs/text/raster/mtsdf';
+import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import {
@@ -51,9 +52,8 @@ interface FlatMtsdfConformanceResources {
   readonly target: THREE.RenderTarget;
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  readonly font: RegisteredFont;
-  readonly line: Text;
-  readonly resource: MsdfResource;
+  readonly font: LoadedFont<typeof mtsdf>;
+  readonly line: Text<typeof mtsdf>;
 }
 
 /** A warm finite MTSDF session with an optional host renderer lease. */
@@ -185,9 +185,8 @@ async function createFlatMtsdfConformanceResources(options: {
       : undefined;
   const renderer = borrowedRenderer ?? ownedRenderer!;
   let target: THREE.RenderTarget | undefined;
-  let font: RegisteredFont | undefined;
-  let line: Text | undefined;
-  let resource: MsdfResource | undefined;
+  let font: LoadedFont<typeof mtsdf> | undefined;
+  let line: Text<typeof mtsdf> | undefined;
   try {
     const loaded = await loadMtsdfFontAsset({
       technique: 'mtsdf',
@@ -195,28 +194,25 @@ async function createFlatMtsdfConformanceResources(options: {
       delivery,
       ...(signal === undefined ? {} : { signal }),
     });
-    font = loaded.font;
-    const rasterKey = await msdfDescriptorRasterKey();
+    font = loaded.loaded;
     line = new Text({
       text: conformanceText(),
       font,
-      raster: loaded.raster,
+      contentBox: { width: { mode: 'exact', size: 476 }, wrap: 'word' },
       // Match the baked 64 px/em base level in device pixels. Deep minification
       // is exercised separately with the same authored field and derivative AA.
-      fontSize: 64 / dpr,
+      style: { fontSize: 64 / dpr, lineHeight: 1.2 },
+      paint: { color: '#ffffff' },
       rasterPixelRatio: dpr,
-      lineHeight: 1.2,
-      width: 476,
-      wrap: 'word',
-      color: 0xffffff,
     });
-    await line.ready;
-    const raster = await font.loadRaster({ rasterKey, kind: msdf.kind }, signal === undefined ? undefined : { signal });
-    resource = await loaded.raster.decode(font, raster, signal);
     signal?.throwIfAborted();
     line.position.set(18, -18, 0);
     const scene = new THREE.Scene();
     scene.add(line);
+    // The retained target binds, shapes, and commits during the world-matrix pass, so the layout the CPU
+    // reference reads is only available after it runs.
+    scene.updateMatrixWorld(true);
+    if (line.error !== undefined) throw line.error;
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
     camera.position.z = 500;
     camera.updateProjectionMatrix();
@@ -241,11 +237,9 @@ async function createFlatMtsdfConformanceResources(options: {
       camera,
       font,
       line,
-      resource,
     };
   } catch (error) {
     line?.dispose();
-    if (resource !== undefined) msdf.dispose(resource);
     font?.dispose();
     target?.dispose();
     if (ownedRenderer !== undefined) await disposeConfiguredRenderer(ownedRenderer);
@@ -277,7 +271,7 @@ async function captureFlatMtsdfConformance(
     height,
     resources.backend === 'webgl2' ? 'bottom-to-top' : 'top-to-bottom',
   );
-  const referenceResult = renderFlatMtsdfCpuReference(resources.resource, committedLayout(resources.line), {
+  const referenceResult = renderFlatMtsdfCpuReference(resources.font.data, committedLayout(resources.line), {
     width,
     height,
     dpr: resources.dpr,
@@ -300,14 +294,14 @@ async function captureFlatMtsdfConformance(
 }
 
 async function disposeFlatMtsdfConformanceResources(resources: FlatMtsdfConformanceResources): Promise<void> {
+  resources.line.removeFromParent();
   resources.line.dispose();
-  msdf.dispose(resources.resource);
   resources.font.dispose();
   resources.target.dispose();
   if (resources.ownedRenderer !== undefined) await disposeConfiguredRenderer(resources.ownedRenderer);
 }
 
-function committedLayout(line: Text): ParagraphLayout {
+function committedLayout(line: Text<typeof mtsdf>): ParagraphLayout {
   const layout = line.layout;
   if (layout === undefined) throw new Error('MTSDF conformance Text lost its committed layout');
   return layout;
