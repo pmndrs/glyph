@@ -10,6 +10,7 @@
 - [Raster technique and engine resource API](raster-technique-api.md) — authoritative split between portable baker/artifact/CPU technique data, reusable backend technique shaders, variant-aware programs, and engine GPU targets.
 - [TypeGPU raster programs and text engine](typegpu-api.md) — complete direct TypeGPU API for typed technique shaders, programs, variants, caller-owned render passes, transforms, synchronization, and disposal.
 - [TypeGPU-first shader authority](typegpu-first-shader-authority.md) — exploratory package shape and falsifiable proof ladder for sharing complete raster kernels with direct WebGPU hosts, Three.js, and gpucat without changing core.
+- [Three material authority for text draws](three-material-authority.md) — **work in progress, follow-up.** Proposes render variants carrying a user material factory over the exported canonical shaders. Recorded so the proposal survives; maintainers have identified incorrect edges that are unresolved.
 - [Merged v0 raster and baker plugin guide](raster-baker-plugin.md) — build against the implemented combined runtime/renderer module before the target v1 extraction replaces it.
 - [Architecture](architecture.md) — system ownership, import boundaries, and runtime flow.
 - [Renderer-neutral core, batching, and engine integration](engine-integration-boundary.md) — WIP extraction and proof plan for the batched core API, Three.js migration, direct TypeGPU engine, and Wayfare adapter.

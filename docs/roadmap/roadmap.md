@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T18:20:00Z'
+  at: '2026-08-07T19:05:00Z'
 ---
 
 # Canonical implementation roadmap
@@ -152,6 +152,7 @@ These rows replace the former separate backlog. Each is intended to become one f
 | 11.12 |   ⬜   | Bake underline position/thickness and strikeout position/size into font metrics without implementing decoration rendering, so text decoration becomes an additive renderer feature instead of an artifact version bump and a re-bake of every shipped font.                     |  S   | 11.6       |
 | 11.13 |   ⬜   | Prove the shaping and layout contract can represent a break-inserted hyphen glyph that has no source cluster, and fix the contract if it cannot. Language patterns, break selection, and justification quality controls remain later work.                                      |  M   | 11.6       |
 | 11.14 |   ⬜   | Add the professional typography the editorial showcase requires: `wordSpacing`, first-line indent, paragraph space before/after, and justification controls covering minimum/maximum word-space ratio, letter-space expansion, and last-line policy.                            |  L   | 11.12–11.13 |
+| 11.15 |   ⬜   | Settle Three material authority, so applications supply their own `NodeMaterial` and gain lighting, shadows, and depth-composited effects without implementing a raster program. Resolve the open edges in the [material authority concept](../planning/three-material-authority.md) first; it is a recorded proposal, not an accepted design. |  M   | 11.6       |
 
 ## Milestone 0 — accept contracts and versions
 
