@@ -1,5 +1,6 @@
-import { defineRaster, FontRegistry } from '@pmndrs/text';
+import { defineRaster } from '@pmndrs/text';
 import { msdf, type MsdfModule } from '@pmndrs/text/raster/msdf';
+import { mtsdf as mtsdfTechnique } from '@pmndrs/text/raster/mtsdf';
 
 import amiriCompressedFontUrl from '../../../fixtures/rendering/amiri-mtsdf.font.glb.gz?url';
 import dancingScriptCompressedFontUrl from '../../../fixtures/rendering/dancing-script-mtsdf.font.glb.gz?url';
@@ -13,14 +14,18 @@ import showcaseManifest from '../../../fixtures/rendering/showcase-mtsdf-fixture
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import { fetchAuthenticatedGzipAsset, preloadFontAssetUrls } from './authenticated-gzip';
 import type { AuthenticatedArtifactSize, BenchmarkFontAsset, BenchmarkFontAssetRequest } from './contracts';
-import { createFontDeliveryMetrics, loadRuntimeCoreFont, measuredRuntimeRaster, sourceUrlForFixture } from './runtime';
+import {
+  createFontDeliveryMetrics,
+  loadBakedFont,
+  loadSourceFont,
+  measuredRuntimeFontBake,
+  measuredRuntimeRaster,
+  sourceUrlForFixture,
+} from './runtime';
 
 export type { FontDeliveryMetrics } from './contracts';
 
-export type MtsdfFontAsset = Omit<BenchmarkFontAsset, 'raster' | 'technique'> & {
-  readonly technique: 'mtsdf';
-  readonly raster: MsdfModule;
-};
+export type MtsdfFontAsset = Extract<BenchmarkFontAsset, { readonly technique: 'mtsdf' }>;
 
 interface MtsdfFixtureManifest {
   readonly fontFixture: BenchmarkFontFixture;
@@ -71,19 +76,20 @@ export async function loadMtsdfFontAsset(
   const manifest = fixtureManifests.get(fixture);
   if (manifest === undefined) throw new RangeError(`Unknown MTSDF font fixture: ${fixture}`);
   if (delivery === 'runtime') {
-    const font = await loadRuntimeCoreFont({
+    const loaded = await loadSourceFont({
       source: sourceUrlForFixture(fixture),
-      metrics,
-      registry: registry ?? new FontRegistry(),
+      raster: { technique: measuredMtsdfTechnique(metrics, onProgress) },
+      runtimeBake: measuredRuntimeFontBake(metrics, onProgress),
+      registry,
       ...(signal === undefined ? {} : { signal }),
-      ...(onProgress === undefined ? {} : { onProgress }),
     });
     return {
       technique: 'mtsdf',
       artifactBytes: metrics.coreArtifactBytes,
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
-      font,
+      font: loaded.font,
+      loaded,
       metrics,
       raster: measuredMsdfRaster(metrics, onProgress),
     };
@@ -94,25 +100,34 @@ export async function loadMtsdfFontAsset(
     'MTSDF font fixture',
     signal,
   );
-  let font: Awaited<ReturnType<FontRegistry['registerAsset']>> | undefined;
-  try {
-    font = await (registry ?? new FontRegistry({ maxArtifactBytes: manifest.uncompressed.bytes })).registerAsset(
-      artifact,
-    );
-    signal?.throwIfAborted();
-    return {
-      technique: 'mtsdf',
-      artifactBytes: artifact.byteLength,
-      atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
-      compressedBytes: manifest.compressed.bytes,
-      font,
-      metrics,
-      raster: msdf,
-    };
-  } catch (error) {
-    font?.dispose();
-    throw error;
-  }
+  const loaded = await loadBakedFont({
+    artifact,
+    raster: { technique: mtsdfTechnique },
+    registry,
+    ...(signal === undefined ? {} : { signal }),
+  });
+  return {
+    technique: 'mtsdf',
+    artifactBytes: artifact.byteLength,
+    atlasGpuBytes: manifest.raster.runtimeTextureArray.basePaddedGpuBytes,
+    compressedBytes: manifest.compressed.bytes,
+    font: loaded.font,
+    loaded,
+    metrics,
+    raster: msdf,
+  };
+}
+
+/**
+ * Clones the technique with an instrumented runtime baker. The Three adapter resolves a program by technique ID rather
+ * than object identity, so the clone still renders while reporting the same raster delivery evidence.
+ */
+function measuredMtsdfTechnique(
+  metrics: BenchmarkFontAsset['metrics'],
+  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'mtsdf' }>['onProgress'],
+): typeof mtsdfTechnique {
+  const runtimeBaker = measuredRuntimeRaster(mtsdfTechnique.runtimeBaker, metrics, onProgress);
+  return { ...mtsdfTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
 }
 
 function measuredMsdfRaster(
