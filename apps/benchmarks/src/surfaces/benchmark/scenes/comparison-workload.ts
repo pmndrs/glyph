@@ -1,4 +1,5 @@
-import { FontRegistry, type AnyRasterInput, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
+import { FontRegistry, type AnyRasterTechnique, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
+import { TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap/v0';
 
@@ -30,7 +31,14 @@ import type {
   ComparisonWorkloadConfiguration,
   ComparisonWorkloadId,
 } from '../../../workloads/comparison/contracts';
-import { committedTextLayout, type ComparisonWorkloadEntry } from '../../../workloads/shared/scene-entry';
+import {
+  committedTextLayout,
+  exactWidth,
+  publishWorkloadTexts,
+  type ComparisonWorkloadEntry,
+  type WorkloadFont,
+  type WorkloadText,
+} from '../../../workloads/shared/scene-entry';
 import { registeredBitmapAtlas, type BitmapAtlasPageStats } from '../../../techniques/bitmap/metadata';
 import { registeredMtsdfConfiguration, type MtsdfRasterConfiguration } from '../../../techniques/mtsdf/metadata';
 import { slugDataConfiguration, type SlugRasterConfiguration } from '../../../techniques/slug/metadata';
@@ -209,12 +217,14 @@ interface LoadedTechniqueFont {
   readonly atlasGpuBytes: number;
   readonly atlasPages: readonly BitmapAtlasPageStats[];
   readonly bitmapStrikes: readonly { readonly ppem: number }[];
+  /** The registered font `loaded` owns; the technique metadata readers still key their reports off it. */
   readonly font: RegisteredFont;
   readonly fontLoadMs: number;
+  /** The target-v1 handle every workload Text binds to. It carries the technique, its decoded raster, and the runtime. */
+  readonly loaded: WorkloadFont;
   readonly metrics: FontDeliveryMetrics;
   readonly mtsdfConfiguration?: MtsdfRasterConfiguration;
   readonly slugConfiguration?: SlugRasterConfiguration;
-  readonly raster: AnyRasterInput;
 }
 
 interface PendingConfigurationUpdate {
@@ -325,6 +335,9 @@ async function createComparisonWorkloadRuntime(
   let iconFont: LoadedTechniqueFont | undefined;
   let selectedFontController: RetainedFontFixtureController<LoadedTechniqueFont> | undefined;
   let entries: readonly WorkloadEntry[] = [];
+  // The workload's batch root. A shared `TextGroup` packs every Text of a multi-instance workload into one paragraph
+  // batch; a plain Group leaves a single-paragraph workload on its own implicit batch of one.
+  let batchRoot: THREE.Object3D = new THREE.Group();
   let revision = 0;
   let disposed = false;
   let closing = false;
@@ -404,10 +417,10 @@ async function createComparisonWorkloadRuntime(
       sharedRegistry,
       { fixture: configuration.fontFixture, asset: font },
       {
-        // The selected label fixture and fixed icon fixture can deduplicate to one registry font. In that case the
+        // The selected label fixture and fixed icon fixture can deduplicate to one loaded font. In that case the
         // fixed icon owner releases the shared handle at teardown; a label switch must not invalidate its Texts.
-        dispose: (loaded) => {
-          if (loaded.font !== iconFont?.font) loaded.font.dispose();
+        dispose: (asset) => {
+          if (asset.loaded !== iconFont?.loaded) asset.loaded.dispose();
         },
       },
     );
@@ -443,38 +456,42 @@ async function createComparisonWorkloadRuntime(
     let fontFixtureSwitching = false;
     let fontFixtureCommitting = false;
     let committedContentWidth = comparisonWorkloadContentWidth(configuration, width);
+    const discardEntries = (discarded: readonly WorkloadEntry[]): void => {
+      for (const { node } of discarded) batchRoot.remove(node);
+      disposeEntries(discarded);
+    };
     const iconGridEntryPool: IconGridEntryPool = {
       entries: () => entries,
+      // Target-v1 has no per-Text readiness promise, so growing the pool is synchronous. The contract stays async
+      // because the Icon Grid instance owns the await point that keeps a superseded resize from publishing.
       async resize(poolCapacity, iconSize, layout) {
         if (iconFont === undefined) throw new Error('icon grid lost its icon font fixture');
         if (poolCapacity > entries.length) {
           const additions = createIconGridEntries({
             count: poolCapacity - entries.length,
             dpr: rendererViewport.pixelRatio,
-            iconFont,
+            iconFont: iconFont.loaded,
             iconSize,
-            labelFont: activeFont().font,
-            labelRaster: activeFont().raster,
+            labelFont: activeFont().loaded,
           });
           try {
-            await Promise.all(additions.flatMap(entryReadyPromises));
+            for (const { node } of additions) batchRoot.add(node);
+            publishWorkloadTexts(batchRoot, additions);
           } catch (error) {
-            disposeEntries(additions);
+            discardEntries(additions);
             throw error;
           }
           if (closing || disposed) {
-            disposeEntries(additions);
+            discardEntries(additions);
             return;
           }
           entries = [...entries, ...additions];
-          for (const { node } of additions) scene.add(node);
         } else if (poolCapacity < entries.length) {
           const removed = entries.slice(poolCapacity);
           entries = entries.slice(0, poolCapacity);
-          for (const { node } of removed) scene.remove(node);
-          disposeEntries(removed);
+          discardEntries(removed);
         }
-        resizeIconGridEntries(entries, iconSize, layout);
+        resizeIconGridEntries(entries, iconSize, layout, batchRoot);
       },
     };
     let iconGridInstance: IconGridWorkloadInstance | undefined;
@@ -506,7 +523,7 @@ async function createComparisonWorkloadRuntime(
             scheduledAt = performance.now();
             fontFixtureCommitting = true;
             try {
-              await applyRetainedTextFontFixture(targetTexts, activeSelectedFont.current.asset, nextFont);
+              applyRetainedTextFontFixture(batchRoot, entries, targetTexts, nextFont.loaded);
             } finally {
               fontFixtureCommitting = false;
             }
@@ -553,8 +570,7 @@ async function createComparisonWorkloadRuntime(
           ? nextIconGridInstance.activate(next, { height, width })
           : undefined;
       const nextEntries = createEntries(
-        activeFont().font,
-        activeFont().raster,
+        activeFont().loaded,
         technique,
         next,
         rendererViewport.pixelRatio,
@@ -562,22 +578,29 @@ async function createComparisonWorkloadRuntime(
         height,
         workloadChanged ? 0 : performance.now() - animationEpoch,
         options.textLadderSpecimen,
-        iconFont,
+        iconFont?.loaded,
         initialIconWindow?.scrollX ?? (workloadChanged ? 0 : -scene.position.x),
         initialIconWindow?.scrollY ?? (workloadChanged ? 0 : scene.position.y),
       );
+      const nextRoot = createBatchRoot(next.workload, activeFont().loaded);
       const scheduledAt = performance.now();
       try {
-        await Promise.all(nextEntries.flatMap(entryReadyPromises));
+        // The staged root is published off-scene: a TextGroup shapes, lays out, and packs its whole workload inside
+        // one `updateMatrixWorld`, so the committed layouts are readable before anything reaches the live scene.
+        for (const { node } of nextEntries) nextRoot.add(node);
+        publishWorkloadTexts(nextRoot, nextEntries);
         const readyAt = performance.now();
         if (disposed || commitRevision !== revision) {
           disposeEntries(nextEntries);
+          disposeBatchRoot(nextRoot);
           return;
         }
         const sceneStartedAt = performance.now();
         layoutEntries(nextEntries, next, width, height);
         const previous = entries;
+        const previousRoot = batchRoot;
         entries = nextEntries;
+        batchRoot = nextRoot;
         configuration = next;
         committedContentWidth = comparisonWorkloadContentWidth(next, width);
         if (workloadChanged) {
@@ -591,8 +614,9 @@ async function createComparisonWorkloadRuntime(
           zoomAnimationState.progress = 0;
         }
         scene.clear();
-        for (const { node } of entries) scene.add(node);
+        scene.add(nextRoot);
         disposeEntries(previous);
+        disposeBatchRoot(previousRoot);
         if (iconGridInstanceChanged) {
           iconGridInstance?.dispose();
           iconGridInstance = next.workload === 'icon-grid' ? nextIconGridInstance : undefined;
@@ -610,6 +634,7 @@ async function createComparisonWorkloadRuntime(
         }
       } catch (error) {
         disposeEntries(nextEntries);
+        disposeBatchRoot(nextRoot);
         if (iconGridInstanceChanged) nextIconGridInstance?.dispose();
         throw error;
       }
@@ -668,13 +693,7 @@ async function createComparisonWorkloadRuntime(
               : entries.map(() => nextContentWidth)
           : undefined;
         if (next.workload === 'dynamic-layout' && retainedWidths !== undefined) {
-          for (const [index, entry] of entries.entries()) {
-            entry.lastWidth = retainedWidths[index]!;
-            if (entry.widthUpdate === undefined) {
-              throw new Error('dynamic layout entry is missing its retained width update');
-            }
-            entry.widthUpdate.width = retainedWidths[index]!;
-          }
+          for (const [index, entry] of entries.entries()) entry.lastWidth = retainedWidths[index]!;
         }
         const scheduledAt = performance.now();
         applyRetainedTextLayout(
@@ -682,6 +701,7 @@ async function createComparisonWorkloadRuntime(
           retainedWidths,
           fontSizeChanged ? next.fontSize : undefined,
         );
+        publishWorkloadTexts(batchRoot, entries);
         const readyAt = performance.now();
         const sceneStartedAt = performance.now();
         layoutEntries(entries, next, width, height);
@@ -1017,8 +1037,11 @@ async function createComparisonWorkloadRuntime(
           iconGridInstance?.dispose();
           disposeEntries(entries);
           entries = [];
+          disposeBatchRoot(batchRoot);
+          batchRoot = new THREE.Group();
+          // Every Text holds a font lease, so the loaded fonts can only be released after the entries are disposed.
           activeSelectedFont.dispose();
-          iconFont?.font.dispose();
+          iconFont?.loaded.dispose();
           canvasSurface.dispose();
         })();
         return disposal;
@@ -1026,17 +1049,38 @@ async function createComparisonWorkloadRuntime(
     };
   } catch (error) {
     disposeEntries(entries);
-    iconFont?.font.dispose();
-    if (selectedFontController === undefined) font?.font.dispose();
+    disposeBatchRoot(batchRoot);
+    iconFont?.loaded.dispose();
+    if (selectedFontController === undefined) font?.loaded.dispose();
     else selectedFontController.dispose();
     canvasSurface.dispose();
     throw error;
   }
 }
 
+/**
+ * Multi-instance workloads mount under one shared `TextGroup`, so their Texts prepare and pack into a single paragraph
+ * batch that owns one set of GPU resources. A single-paragraph workload gets a plain Group and keeps its own implicit
+ * batch of one, which is what it already was.
+ */
+function createBatchRoot(workload: ComparisonWorkloadId, font: WorkloadFont): THREE.Object3D {
+  if (comparisonWorkloadDefinition(workload).batching === 'standalone') return new THREE.Group();
+  // `grow` keeps one buffer per physical resource. A chunked batch would split a paragraph's glyph run at every chunk
+  // boundary and turn one draw into several, which would make the batched lanes look worse than the standalone one.
+  return new TextGroup<AnyRasterTechnique>({
+    technique: font.technique,
+    capacity: { size: 4_096, policy: 'grow' },
+  });
+}
+
+function disposeBatchRoot(root: THREE.Object3D): void {
+  root.removeFromParent();
+  root.clear();
+  if (root instanceof TextGroup) root.dispose();
+}
+
 function createEntries(
-  font: RegisteredFont,
-  raster: AnyRasterInput,
+  font: WorkloadFont,
   technique: RasterTechnique,
   configuration: ComparisonWorkloadConfiguration,
   dpr: number,
@@ -1044,7 +1088,7 @@ function createEntries(
   viewportHeight: number,
   animationElapsedMs: number,
   textLadderSpecimen?: RasterConformanceSpecimen,
-  iconFont?: LoadedTechniqueFont,
+  iconFont?: WorkloadFont,
   iconScrollX = 0,
   iconScrollY = 0,
 ): readonly WorkloadEntry[] {
@@ -1056,16 +1100,11 @@ function createEntries(
     ...(iconFont === undefined ? {} : { iconFont }),
     iconScrollX,
     iconScrollY,
-    raster,
     technique,
     ...(textLadderSpecimen === undefined ? {} : { textLadderSpecimen }),
     viewportHeight,
     viewportWidth,
   });
-}
-
-function entryReadyPromises(entry: WorkloadEntry): readonly Promise<void>[] {
-  return entry.labelText === undefined ? [entry.text.ready] : [entry.text.ready, entry.labelText.ready];
 }
 
 function layoutEntries(
@@ -1128,42 +1167,33 @@ export function comparisonWorkloadRequiresIconWindowSuspension(
   return registryRequiresIconWindowSuspension(previous, next);
 }
 
-interface RetainedWidthText {
-  setProperties(properties: { readonly fontSize?: number; readonly width?: number }): void;
-  updateMatrixWorld(force?: boolean): void;
+/**
+ * Swaps the font fixture behind every retained Text and commits the whole set in one publication.
+ *
+ * The replacement `LoadedFont` is already resolved, so there is no readiness window to roll back: either the single
+ * `updateMatrixWorld` commits every Text onto the new fixture or it throws with none of them published, and the caller
+ * releases the candidate owner.
+ */
+export function applyRetainedTextFontFixture(
+  root: THREE.Object3D,
+  entries: readonly WorkloadEntry[],
+  texts: readonly WorkloadText[],
+  next: WorkloadFont,
+): void {
+  for (const text of texts) text.font = next;
+  publishWorkloadTexts(root, entries);
 }
 
-interface RetainedFontText {
-  readonly ready: Promise<void>;
-  setProperties(properties: { readonly font: RegisteredFont; readonly raster: AnyRasterInput }): void;
-  updateMatrixWorld(force?: boolean): void;
-}
-
-export async function applyRetainedTextFontFixture(
-  texts: readonly RetainedFontText[],
-  previous: Pick<LoadedTechniqueFont, 'font' | 'raster'>,
-  next: Pick<LoadedTechniqueFont, 'font' | 'raster'>,
-): Promise<void> {
-  try {
-    for (const text of texts) text.setProperties({ font: next.font, raster: next.raster });
-    publishRetainedTexts(texts);
-    await Promise.all(texts.map(({ ready }) => ready));
-  } catch (error) {
-    // A staging or readiness failure may leave earlier siblings queued. Restore the complete fixture before the
-    // candidate owner is released so no Text can retain a generation backed by a disposed font.
-    for (const text of texts) text.setProperties({ font: previous.font, raster: previous.raster });
-    publishRetainedTexts(texts);
-    await Promise.allSettled(texts.map(({ ready }) => ready));
-    throw new Error('comparison font fixture update failed and was rolled back', { cause: error });
-  }
-}
-
-export function applyRetainedTextWidths(texts: readonly RetainedWidthText[], widths: ArrayLike<number>): void {
+export function applyRetainedTextWidths(texts: readonly WorkloadText[], widths: ArrayLike<number>): void {
   applyRetainedTextLayout(texts, widths, undefined);
 }
 
+/**
+ * `set` replaces a property group wholesale, so a width or size change has to carry the rest of its group forward:
+ * dropping `wrap` would unwrap a paragraph, and dropping `align` would collapse a centred lane onto its start edge.
+ */
 function applyRetainedTextLayout(
-  texts: readonly RetainedWidthText[],
+  texts: readonly WorkloadText[],
   widths: ArrayLike<number> | undefined,
   fontSize: number | undefined,
 ): void {
@@ -1172,20 +1202,15 @@ function applyRetainedTextLayout(
     throw new RangeError('retained text widths must match the text entry count');
   }
   for (const [index, text] of texts.entries()) {
-    text.setProperties({
-      ...(fontSize === undefined ? {} : { fontSize }),
-      ...(widths === undefined ? {} : { width: widths[index]! }),
+    text.set({
+      ...(fontSize === undefined ? {} : { style: { ...text.style, fontSize } }),
+      ...(widths === undefined ? {} : { contentBox: { ...text.contentBox, width: exactWidth(widths[index]!) } }),
     });
   }
-  publishRetainedTexts(texts);
 }
 
-export function applyRetainedTextFontSize(texts: readonly RetainedWidthText[], fontSize: number): void {
+export function applyRetainedTextFontSize(texts: readonly WorkloadText[], fontSize: number): void {
   applyRetainedTextLayout(texts, undefined, fontSize);
-}
-
-function publishRetainedTexts(texts: readonly { updateMatrixWorld(force?: boolean): void }[]): void {
-  for (const text of texts) text.updateMatrixWorld(true);
 }
 
 export function comparisonWorkloadContentWidth(
@@ -1365,8 +1390,8 @@ async function loadTechniqueFont(
       bitmapStrikes: atlas.strikes,
       font: loaded.font,
       fontLoadMs: performance.now() - startedAt,
+      loaded: loaded.loaded,
       metrics: loaded.metrics,
-      raster: loaded.raster,
     };
   }
   if (technique === 'mtsdf') {
@@ -1386,9 +1411,9 @@ async function loadTechniqueFont(
       bitmapStrikes: [],
       font: loaded.font,
       fontLoadMs: performance.now() - startedAt,
+      loaded: loaded.loaded,
       metrics: loaded.metrics,
       mtsdfConfiguration,
-      raster: loaded.raster,
     };
   }
   const loaded = await loadBenchmarkFontAsset(
@@ -1420,9 +1445,9 @@ async function loadTechniqueFont(
     bitmapStrikes: [],
     font: loaded.font,
     fontLoadMs: performance.now() - startedAt,
+    loaded: loaded.loaded,
     metrics: loaded.metrics,
     slugConfiguration,
-    raster: loaded.raster,
   };
 }
 

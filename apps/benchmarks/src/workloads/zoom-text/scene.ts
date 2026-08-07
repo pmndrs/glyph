@@ -1,10 +1,11 @@
-import { Text } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
+  paintColor,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
@@ -45,10 +46,11 @@ export const zoomTextWorkload = {
     animateZoomTextEntries(entries, configuration, elapsedMs, scratch.zoomText);
   },
   applyRetainedConfiguration() {},
+  batching: 'group',
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {
-    return createZoomTextEntries({ dpr: context.dpr, font: context.font, raster: context.raster });
+    return createZoomTextEntries({ dpr: context.dpr, font: context.font });
   },
   id: 'zoom-text',
   layout(entries, context) {
@@ -87,15 +89,15 @@ export function createZoomTextEntries(context: WorkloadTextFactoryContext): read
     const opacity = zoomPhraseIndex === 0 ? 1 : 0;
     const text = new Text({
       font: context.font,
-      raster: context.raster,
       rasterPixelRatio: context.dpr,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
       text: phrase.text,
-      fontSize: ZOOM_TEXT_BASE_CSS_PX,
-      language: phrase.language,
-      direction: 'ltr',
-      color: LIVE_TEXT_COLOR,
-      opacity,
+      style: {
+        fontSize: ZOOM_TEXT_BASE_CSS_PX,
+        lineHeight: LIVE_TEXT_LINE_HEIGHT,
+        language: phrase.language,
+        direction: 'ltr',
+      },
+      paint: { color: paintColor(LIVE_TEXT_COLOR), opacity },
     });
     const node = new THREE.Group();
     node.add(text);
@@ -106,7 +108,6 @@ export function createZoomTextEntries(context: WorkloadTextFactoryContext): read
       sourceText: phrase.text,
       text,
       zoomOpacity: opacity,
-      zoomOpacityUpdate: { opacity },
       zoomLanguage: phrase.language,
       zoomMaximumScale: 1,
       zoomPhraseIndex,
@@ -204,10 +205,10 @@ function layoutZoomTextEntry(entry: ComparisonWorkloadEntry, viewportWidth: numb
 }
 
 function setZoomTextOpacity(entry: ComparisonWorkloadEntry, opacity: number): void {
-  if (entry.zoomOpacityUpdate === undefined || Math.abs((entry.zoomOpacity ?? -1) - opacity) < 0.002) return;
+  if (Math.abs((entry.zoomOpacity ?? -1) - opacity) < 0.002) return;
   entry.zoomOpacity = opacity;
-  entry.zoomOpacityUpdate.opacity = opacity;
-  entry.text.setProperties(entry.zoomOpacityUpdate);
+  // `set` replaces a property group wholesale, so the retained colour has to travel with the new opacity.
+  entry.text.set({ paint: { ...entry.text.paint, opacity } });
 }
 
 function animationRate(animationSpeed: number): number {

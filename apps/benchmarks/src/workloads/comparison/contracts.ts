@@ -1,9 +1,8 @@
-import type { AnyRasterInput, RegisteredFont } from '@pmndrs/text';
 import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen, BenchmarkFontFixture } from '../../benchmark/font-fixtures';
 import type { RasterTechnique } from '../../benchmark/url-state';
-import type { ComparisonWorkloadEntry } from '../shared/scene-entry';
+import type { ComparisonWorkloadEntry, WorkloadFont } from '../shared/scene-entry';
 
 /** The comparison workloads that share the retained benchmark render host. */
 export type ComparisonWorkloadId =
@@ -37,6 +36,16 @@ export interface ComparisonWorkloadConfiguration {
 export type ComparisonWorkloadUpdateKind = 'rebuild' | 'retained';
 export type WorkloadCameraKind = 'orthographic' | 'perspective';
 
+/**
+ * How the host parents a workload's Texts.
+ *
+ * `group` mounts them under one shared `TextGroup`, so every Text in the workload prepares and packs into a single
+ * paragraph batch. `standalone` leaves each Text to bind its own implicit batch of one, which is what a lone
+ * large-body paragraph already is; keeping that lane standalone also keeps its telemetry directly comparable to the
+ * merged-v0 scene it replaces.
+ */
+export type ComparisonWorkloadBatching = 'group' | 'standalone';
+
 /** App-private inputs made available to a workload's layout hook. */
 export interface ComparisonWorkloadLayoutContext {
   readonly configuration: ComparisonWorkloadConfiguration;
@@ -48,11 +57,10 @@ export interface ComparisonWorkloadLayoutContext {
 export interface ComparisonWorkloadCreateContext extends ComparisonWorkloadLayoutContext {
   readonly animationElapsedMs: number;
   readonly dpr: number;
-  readonly font: RegisteredFont;
-  readonly iconFont?: { readonly font: RegisteredFont; readonly raster: AnyRasterInput };
+  readonly font: WorkloadFont;
+  readonly iconFont?: WorkloadFont;
   readonly iconScrollX: number;
   readonly iconScrollY: number;
-  readonly raster: AnyRasterInput;
   readonly technique: RasterTechnique;
   readonly textLadderSpecimen?: RasterConformanceSpecimen;
 }
@@ -69,6 +77,7 @@ export interface ComparisonWorkloadAnimationScratch {
  * scene activation, cancellation, telemetry, and transactional Text publication.
  */
 export interface ComparisonWorkloadDefinition {
+  readonly batching: ComparisonWorkloadBatching;
   readonly cameraKind: WorkloadCameraKind;
   readonly contentWidth: 'none' | { readonly maximumWidth?: number; readonly multiplier?: number };
   readonly id: ComparisonWorkloadId;

@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 import type * as THREE from 'three/webgpu';
 
 import type { RasterConformanceSpecimen } from '../../benchmark/font-fixtures';
@@ -6,6 +6,7 @@ import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } fr
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
 import {
   committedTextLayout,
+  paintColor,
   type ComparisonWorkloadEntry,
   type WorkloadTextFactoryContext,
 } from '../shared/scene-entry';
@@ -36,13 +37,13 @@ export const textLadderWorkload = {
     );
   },
   applyRetainedConfiguration() {},
+  batching: 'group',
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {
     return createTextLadderEntries({
       dpr: context.dpr,
       font: context.font,
-      raster: context.raster,
       ...(context.textLadderSpecimen === undefined ? {} : { specimen: context.textLadderSpecimen }),
       viewportHeight: context.viewportHeight,
     });
@@ -66,14 +67,15 @@ export function createTextLadderEntries(
     const sourceText = context.specimen === undefined ? `${fontSize} px  ${specimen.text}` : specimen.text;
     const text = new Text({
       font: context.font,
-      raster: context.raster,
       rasterPixelRatio: context.dpr,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
       text: sourceText,
-      fontSize,
-      language: specimen.language,
-      direction: specimen.direction,
-      color: LIVE_TEXT_COLOR,
+      style: {
+        fontSize,
+        lineHeight: LIVE_TEXT_LINE_HEIGHT,
+        language: specimen.language,
+        direction: specimen.direction,
+      },
+      paint: { color: paintColor(LIVE_TEXT_COLOR) },
     });
     return { node: text, role: 'primary', sourceText, text };
   });

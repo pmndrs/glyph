@@ -1,10 +1,17 @@
-import { Text, type AnyRasterInput, type RegisteredFont } from '@pmndrs/text/v0';
+import { Text } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
 
 import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';
 import { LIVE_TEXT_COLOR, LIVE_TEXT_LINE_HEIGHT } from '../shared/text-style';
-import { committedTextLayout, type ComparisonWorkloadEntry } from '../shared/scene-entry';
+import {
+  committedTextLayout,
+  exactWidth,
+  paintColor,
+  publishWorkloadTexts,
+  type ComparisonWorkloadEntry,
+  type WorkloadFont,
+} from '../shared/scene-entry';
 
 export const ICON_GRID_LABEL_SIZE = 11;
 const ICON_GRID_LABEL_WIDTH = 112;
@@ -31,6 +38,7 @@ const ICON_GRID_CONTENT = ICON_GRID_ITEMS.map((icon) => {
 export const iconGridWorkload = {
   animate() {},
   applyRetainedConfiguration() {},
+  batching: 'group',
   cameraKind: 'orthographic',
   contentWidth: 'none',
   create(context) {
@@ -50,7 +58,6 @@ export const iconGridWorkload = {
       iconSize: context.configuration.fontSize,
       indices: window.indices,
       labelFont: context.font,
-      labelRaster: context.raster,
     });
   },
   id: 'icon-grid',
@@ -67,53 +74,45 @@ export const iconGridWorkload = {
   updateKind: () => 'retained',
 } satisfies ComparisonWorkloadDefinition;
 
-export interface IconGridFont {
-  readonly font: RegisteredFont;
-  readonly raster: AnyRasterInput;
-}
-
 export function createIconGridEntries({
   dpr,
   iconFont,
   iconSize,
   indices = [],
   labelFont,
-  labelRaster,
   count,
 }: {
   readonly count: number;
   readonly dpr: number;
-  readonly iconFont: IconGridFont;
+  readonly iconFont: WorkloadFont;
   readonly iconSize: number;
   readonly indices?: readonly number[];
-  readonly labelFont: RegisteredFont;
-  readonly labelRaster: AnyRasterInput;
+  readonly labelFont: WorkloadFont;
 }): readonly ComparisonWorkloadEntry[] {
   return Array.from({ length: count }, (_, poolIndex) => {
     const assignment = iconGridEntryAssignment(indices, poolIndex);
     const iconIndex = assignment.iconIndex;
     const { content, glyph } = iconGridContent(iconIndex);
     const text = new Text({
-      font: iconFont.font,
-      raster: iconFont.raster,
+      font: iconFont,
       rasterPixelRatio: dpr,
       text: glyph,
-      fontSize: iconSize,
-      color: LIVE_TEXT_COLOR,
+      style: { fontSize: iconSize },
+      paint: { color: paintColor(LIVE_TEXT_COLOR) },
     });
     const labelText = new Text({
       font: labelFont,
-      raster: labelRaster,
       rasterPixelRatio: dpr,
-      lineHeight: LIVE_TEXT_LINE_HEIGHT,
       text: iconGridLabel(iconIndex),
-      fontSize: ICON_GRID_LABEL_SIZE,
-      color: LIVE_TEXT_COLOR,
-      width: ICON_GRID_LABEL_WIDTH,
-      maxLines: 2,
-      overflow: 'ellipsis',
-      wrap: 'none',
-      textAlign: 'center',
+      style: { fontSize: ICON_GRID_LABEL_SIZE, lineHeight: LIVE_TEXT_LINE_HEIGHT },
+      paint: { color: paintColor(LIVE_TEXT_COLOR) },
+      contentBox: {
+        width: exactWidth(ICON_GRID_LABEL_WIDTH),
+        maxLines: 2,
+        overflow: 'ellipsis',
+        wrap: 'none',
+        align: 'center',
+      },
     });
     const node = new THREE.Group();
     node.add(text, labelText);
@@ -179,9 +178,10 @@ export function resizeIconGridEntries(
   entries: readonly ComparisonWorkloadEntry[],
   iconSize: number,
   layout: IconGridLayout,
+  root: THREE.Object3D,
 ): void {
-  for (const entry of entries) entry.text.setProperties({ fontSize: iconSize });
-  for (const { node } of entries) node.updateMatrixWorld(true);
+  for (const entry of entries) entry.text.set({ style: { ...entry.text.style, fontSize: iconSize } });
+  publishWorkloadTexts(root, entries);
   for (const entry of entries) {
     if (entry.virtualIconIndex === undefined) continue;
     const column = entry.virtualIconIndex % layout.columns;
@@ -689,11 +689,12 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     for (const [poolIndex, iconIndex] of this.#missingIndices.entries()) {
       const entry = this.#availableEntries[poolIndex]!;
       const { glyph } = iconGridContent(iconIndex);
-      entry.text.setProperties({ text: glyph });
-      entry.labelText?.setProperties({ text: iconGridLabel(iconIndex) });
+      entry.text.set({ text: glyph });
+      entry.labelText?.set({ text: iconGridLabel(iconIndex) });
       this.#pendingEntries.push(entry);
     }
-    for (const entry of this.#pendingEntries) entry.node.updateMatrixWorld(true);
+    // Recycled tiles share the workload's batch, so one publication commits every reassigned Text at once.
+    publishWorkloadTexts(scene, this.#pendingEntries);
     if (!this.#isLive()) return;
     for (const [poolIndex, entry] of this.#pendingEntries.entries()) {
       if (entry.disposed) continue;
