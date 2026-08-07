@@ -101,6 +101,9 @@ export type {
 } from './formatted-text.js';
 export { span, txt } from './formatted-text.js';
 
+export type { IdentifiedSpanRange, SpanRange } from './internal/span-cascade.js';
+export { SpanNestingError } from './internal/span-cascade.js';
+
 export type { GlyphPaint, LinearRgba, ResolvedPaint } from './paint.js';
 
 export type {

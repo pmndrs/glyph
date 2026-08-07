@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:7f73c45bb5cdef6b22b2f224f628c1726ccde4adc42c2495340226f4e6a64f30'
+source_digest: 'sha256:e4812fc58ecfcfd3128a674c058f1a3132b5da61e5d239813277ef117bd150ad'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -275,18 +275,39 @@ objects report the same batch-wide total rather than a per-paragraph share. On t
 41,971,712 bytes as its 41,943,040-byte padded atlas array plus 28,672 attribute bytes, and Slug measures 3,190,784 bytes;
 the same totals are reported on WebGPU and forced WebGL2.
 
-The `txt` and `span` composer emits UTF-16 ranges over the composed string, and every resolver — the shaping-style sweep,
-the paint lookup, and the render-variant lookup — applies the last span that covers a cluster.[^formatted-text-v1] The
-composer therefore emits an enclosing span before the spans nested inside it, so inner formatting composes over the
-formatting it is nested in rather than being overridden by it. A span states only the properties it was given: a
-style-only span carries no font and no paint, so it shapes from the surrounding font and keeps the surrounding paint
-instead of resetting either to a default. Ranges count UTF-16 code units, so an astral character before a span shifts that
+The `txt` and `span` composer emits UTF-16 ranges over the composed string.[^formatted-text-v1] One span carries two kinds
+of data with different consumption points: shaping data (`font`, `fontSize`, `lineHeight`, `letterSpacing`, `language`,
+`direction`, `features`) must resolve before shaping because it segments runs and changes advances, while paint data
+(`color`, `opacity`, `outline`, `shadow`) and the render variant resolve at glyph-instance packing. Both kinds resolve
+through one cascade with one set of semantics, and part company only where each is consumed: the resolved shaping style
+becomes disjoint segments that intersect with UAX #24 script and UAX #9 bidi runs before shaping, and the resolved paint
+becomes per-glyph values indexed during packing. Resolution therefore cannot give one answer for `fontSize` and a
+different one for `color`.
+
+The cascade folds every span covering a cluster from the outermost inward and merges **per property**, so a span states
+only what it changes and inherits the rest from the scope enclosing it. A style-only span shapes from the surrounding
+font; a span stating only `color` keeps the surrounding opacity, outline, and shadow; a span stating only `opacity`
+re-applies that opacity to the inherited fill, outline, and shadow colours. An absent property group stays absent rather
+than arriving as an empty object, so a span cannot silently reset a range to a default glyph colour or shaping style.
+
+Precedence follows containment rather than array order: the innermost covering span wins each property, and spans over
+exactly the same range fall back to array order. Producer emission order is therefore not load-bearing, and a hand-built
+span array that lists a contained span before the span enclosing it still resolves innermost-first. Partial overlap has no
+innermost span at all, so it is rejected with a typed `SpanNestingError` naming both offending spans and their ranges
+instead of resolving to whichever span a consumer happened to visit last. The font-fallback overlay the layout path
+generates is machine-produced rather than authored, so it is split at the authored boundaries it crosses and stays inside
+the same invariant. Resolution runs once per paragraph revision, keyed on the property snapshot, so packing indexes a
+precomputed per-glyph result instead of rescanning the span array for every glyph.
+
+Ranges count UTF-16 code units, so an astral character before a span shifts that
 span by two. Replacement content owns its own formatting on both the core `Paragraph` and the Three `Text`: assigning a
 literal installs that literal's spans, and assigning a plain string clears the spans it replaced rather than reinterpreting
 stale ranges against unrelated text. Runtime integration covers each of these against real shaped output — inherited font
-handles and glyph IDs, per-glyph font sizes and canonical linear colours, cluster indices across a surrogate pair,
-tuple-spread and direct `span` calls producing identical layout, and a formatted literal driven through `TextGroup`
-binding, `updateMatrixWorld`, and the drawn per-run instance counts.
+handles and glyph IDs, a nested style-only span shaping from the font its enclosing span selected, each paint property
+inherited independently through MTSDF fill, outline, and shadow storage, a span font size moving both shaped advances and
+the line break, the typed nesting error and order-independent precedence, per-glyph font sizes and canonical linear
+colours, cluster indices across a surrogate pair, tuple-spread and direct `span` calls producing identical layout, and a
+formatted literal driven through `TextGroup` binding, `updateMatrixWorld`, and the drawn per-run instance counts.
 
 `Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
 Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary
@@ -405,7 +426,7 @@ Item 5.2 implements final positioned `ParagraphLayout`. It caches line plans ind
 
 Item 5.3 now has a conformant Unicode 17 bidi foundation. The package-owned shaper reuses `unicode-bidi` 0.3.18's maintained post–Unicode-15 UAX #9 algorithm under `no_std + alloc`, disables its Unicode 16 tables, and supplies generated Unicode 17 `Bidi_Class` and normalized paired-bracket data through the crate's custom data-source seam. The Rust-generated JSON ABI describes one direct-memory UTF-16 analysis call and borrowed SoA levels/classes/paragraph arrays; no browser ICU, WASI, binding generator, or ambient Unicode version participates. Hash-pinned official inputs cover `DerivedBidiClass.txt`, `BidiTest.txt`, and `BidiCharacterTest.txt`. Ordinary integration tests expand the generic corpus to all 770,241 requested paragraph-direction cases and execute all 91,707 character-specific cases, comparing paragraph level, every specified resolved level, and complete visual order. Wasm integration separately proves supplementary-plane code units and explicit/automatic paragraph directions.
 
-Item 5.3 completes paragraph-level bidi and line policy. Preparation resolves overlapping span properties with input-order-preserving active-value sweeps, then intersects style, UAX #24 script, and precomputed UAX #9 runs in one interval pass rather than rescanning every cross-product. It shapes each run in its resolved direction, copies borrowed analysis/shaping data, applies line-specific L1 reset and L2 visual ordering, and batches only unsafe changed boundaries. Boundary validation occurs once while copying/normalizing public input; normalized shaping and layout loops do not repeat generic object checks. A pinned Amiri 1.002 fixture covers joining, combining marks, lam-alef forms, Arabic numbers, and Latin: HarfRust over the source font equals HarfRust over the reduced SFNT extracted from the validated GLB exactly, and pinned HarfBuzz 13 independently agrees on every glyph field.
+Item 5.3 completes paragraph-level bidi and line policy. Preparation resolves nested span properties through the shared per-property cascade, which folds covering spans from the outermost inward in one boundary sweep, then intersects the resulting style segments with UAX #24 script and precomputed UAX #9 runs in one interval pass rather than rescanning every cross-product. It shapes each run in its resolved direction, copies borrowed analysis/shaping data, applies line-specific L1 reset and L2 visual ordering, and batches only unsafe changed boundaries. Boundary validation occurs once while copying/normalizing public input; normalized shaping and layout loops do not repeat generic object checks. A pinned Amiri 1.002 fixture covers joining, combining marks, lam-alef forms, Arabic numbers, and Latin: HarfRust over the source font equals HarfRust over the reduced SFNT extracted from the validated GLB exactly, and pinned HarfBuzz 13 independently agrees on every glyph field.
 
 The generated `paragraph-bidi-layout-v0.json` contract owns complete SoA values for two mixed-direction Amiri layouts plus exact start/center/end/justify, clip, max-lines, and width/height ellipsis policies over Inter. Alignment-only and height-only compatible layouts share cached boundary shaping; every changed boundary is reported as one batched reshape. Ellipsizing a line ending in a mandatory break removes that control cluster before inserting the ellipsis, so the visible range never crosses into the hidden line. Fixed-seed fuzzing mutates Unicode text—including expected malformed UTF-16 rejection—axis modes, widths/heights, wrapping, alignment, truncation, letter spacing, line height, and direction twice, requiring finite, internally consistent, deterministic output.
 

@@ -4,6 +4,7 @@ import type { FontFeature, ResolvedFontFeature } from './font-feature.js';
 import type { RegisteredFont } from './font.js';
 import type { BidiAnalysisViews, ReshapeRange, RuntimeShaper, ShapeBatchRequest, ShapedBatchViews } from './shaper.js';
 import { analyzeUnicodeText, type UnicodeTextAnalysis } from './internal/unicode.js';
+import { resolveSpanCascade, type SpanCascadeEntry } from './internal/span-cascade.js';
 
 /**
  * A layout-system-neutral axis constraint.
@@ -88,10 +89,8 @@ interface StyleSegment {
   readonly style: ResolvedStyle;
 }
 
-interface ResolvedSpanStyle {
-  readonly index: number;
-  readonly start: number;
-  readonly end: number;
+/** The shaping properties one span states, before the cascade merges them. */
+interface StatedSpanStyle {
   readonly font?: FontHandle;
   readonly fontSize?: number;
   readonly lineHeight?: number;
@@ -99,12 +98,6 @@ interface ResolvedSpanStyle {
   readonly language?: string;
   readonly direction?: 'auto' | 'ltr' | 'rtl';
   readonly features?: readonly ResolvedFontFeature[];
-}
-
-interface ActiveStyleValue<Value> {
-  readonly index: number;
-  readonly end: number;
-  readonly value: Value;
 }
 
 interface PreparedRun extends StyleSegment {
@@ -477,56 +470,46 @@ function copyStyle(style: ParagraphStyle, name: string): ParagraphStyle {
   };
 }
 
+/**
+ * Shaping resolution consumes the one span cascade before run segmentation, so
+ * a span's font, size, language, direction, or features re-segment shaping and
+ * change advances rather than only scaling already-shaped glyphs.
+ */
 function resolveStyles(
   shaper: RuntimeShaper,
   input: ParagraphInput,
   graphemeBoundaries: Uint32Array,
 ): readonly StyleSegment[] {
-  const boundaries = new Set<number>([0, input.text.length]);
   const legalBoundaries = new Set(graphemeBoundaries);
-  const spansByStart = new Map<number, ResolvedSpanStyle[]>();
-  for (const [index, span] of (input.spans ?? []).entries()) {
+  const entries: SpanCascadeEntry<StatedSpanStyle>[] = [];
+  for (const span of input.spans ?? []) {
     assertTextRange(span.start, span.end, input.text.length, 'paragraph span');
     if (!legalBoundaries.has(span.start) || !legalBoundaries.has(span.end)) {
       throw new RangeError('paragraph span boundaries must be extended-grapheme boundaries');
     }
-    boundaries.add(span.start);
-    boundaries.add(span.end);
-    const resolved = resolveSpanStyle(shaper, span, index);
-    const starting = spansByStart.get(span.start);
-    if (starting === undefined) spansByStart.set(span.start, [resolved]);
-    else starting.push(resolved);
+    entries.push({ start: span.start, end: span.end, properties: resolveSpanStyle(shaper, span) });
   }
-  const sorted = [...boundaries].sort((left, right) => left - right);
   const root = resolveStyle(shaper, input.font, input.style ?? {}, 0, input.text.length);
   if (input.text.length === 0) return [{ start: 0, end: 0, style: root }];
-  const sweep = new StyleSweep(root);
   const segments: StyleSegment[] = [];
-  for (let index = 0; index + 1 < sorted.length; index += 1) {
-    const start = sorted[index];
-    const end = sorted[index + 1];
-    if (start === undefined || end === undefined || start === end) continue;
-    for (const span of spansByStart.get(start) ?? []) sweep.add(span);
-    const style = sweep.styleAt(start);
+  for (const segment of resolveSpanCascade(entries, input.text.length, 'paragraph span')) {
+    const style = styleOver(root, segment.properties);
     const previous = segments.at(-1);
-    if (previous !== undefined && previous.end === start && equalStyles(previous.style, style)) {
-      segments[segments.length - 1] = { ...previous, end };
+    if (previous !== undefined && previous.end === segment.start && equalStyles(previous.style, style)) {
+      segments[segments.length - 1] = { ...previous, end: segment.end };
     } else {
-      segments.push({ start, end, style });
+      segments.push({ start: segment.start, end: segment.end, style });
     }
   }
   return segments;
 }
 
-function resolveSpanStyle(shaper: RuntimeShaper, span: ParagraphSpan, index: number): ResolvedSpanStyle {
+function resolveSpanStyle(shaper: RuntimeShaper, span: ParagraphSpan): StatedSpanStyle {
   if (span.font !== undefined) shaper.registerFont(requireFont(shaper, span.font));
   const lineHeight = span.lineHeight === undefined ? undefined : finitePositive(span.lineHeight, 'lineHeight');
   const direction = span.direction;
   const language = span.language === undefined ? undefined : normalizeLanguage(span.language);
   return {
-    index,
-    start: span.start,
-    end: span.end,
     ...(span.font === undefined ? {} : { font: span.font }),
     ...(span.fontSize === undefined ? {} : { fontSize: finitePositive(span.fontSize, 'fontSize') }),
     ...(lineHeight === undefined ? {} : { lineHeight }),
@@ -537,96 +520,21 @@ function resolveSpanStyle(shaper: RuntimeShaper, span: ParagraphSpan, index: num
   };
 }
 
-/**
- * At each boundary, the last input span that is still active wins each style
- * property. Per-property max-heaps preserve that cascade without re-scanning
- * all spans for every segment; expired entries are discarded when observed.
- */
-class StyleSweep {
-  readonly #root: ResolvedStyle;
-  readonly #font = new LatestActiveValue<FontHandle>();
-  readonly #fontSize = new LatestActiveValue<number>();
-  readonly #lineHeight = new LatestActiveValue<number>();
-  readonly #letterSpacing = new LatestActiveValue<number>();
-  readonly #language = new LatestActiveValue<string>();
-  readonly #direction = new LatestActiveValue<'auto' | 'ltr' | 'rtl'>();
-  readonly #features = new LatestActiveValue<readonly ResolvedFontFeature[]>();
-
-  constructor(root: ResolvedStyle) {
-    this.#root = root;
-  }
-
-  add(span: ResolvedSpanStyle): void {
-    const entry = <Value>(value: Value): ActiveStyleValue<Value> => ({
-      index: span.index,
-      end: span.end,
-      value,
-    });
-    if (span.font !== undefined) this.#font.add(entry(span.font));
-    if (span.fontSize !== undefined) this.#fontSize.add(entry(span.fontSize));
-    if (span.lineHeight !== undefined) this.#lineHeight.add(entry(span.lineHeight));
-    if (span.letterSpacing !== undefined) this.#letterSpacing.add(entry(span.letterSpacing));
-    if (span.language !== undefined) this.#language.add(entry(span.language));
-    if (span.direction !== undefined) this.#direction.add(entry(span.direction));
-    if (span.features !== undefined) this.#features.add(entry(span.features));
-  }
-
-  styleAt(offset: number): ResolvedStyle {
-    const font = this.#font.valueAt(offset) ?? this.#root.font;
-    const fontSize = this.#fontSize.valueAt(offset) ?? this.#root.fontSize;
-    const lineHeight = this.#lineHeight.valueAt(offset) ?? this.#root.lineHeight;
-    const letterSpacing = this.#letterSpacing.valueAt(offset) ?? this.#root.letterSpacing;
-    const language = this.#language.valueAt(offset) ?? this.#root.language;
-    const override = this.#direction.valueAt(offset);
-    const direction = override ?? this.#root.direction;
-    const features = this.#features.valueAt(offset) ?? this.#root.features;
-    return {
-      font,
-      fontSize,
-      ...(lineHeight === undefined ? {} : { lineHeight }),
-      letterSpacing,
-      ...(language === undefined ? {} : { language }),
-      direction,
-      ...(override === undefined || direction === 'auto' ? {} : { bidiOverride: direction }),
-      features,
-    };
-  }
-}
-
-class LatestActiveValue<Value> {
-  readonly #heap: ActiveStyleValue<Value>[] = [];
-
-  add(value: ActiveStyleValue<Value>): void {
-    this.#heap.push(value);
-    let child = this.#heap.length - 1;
-    while (child > 0) {
-      const parent = (child - 1) >>> 1;
-      if ((this.#heap[parent]?.index ?? -1) >= value.index) break;
-      this.#heap[child] = this.#heap[parent] as ActiveStyleValue<Value>;
-      child = parent;
-    }
-    this.#heap[child] = value;
-  }
-
-  valueAt(offset: number): Value | undefined {
-    while (this.#heap[0]?.end !== undefined && this.#heap[0].end <= offset) this.#removeTop();
-    return this.#heap[0]?.value;
-  }
-
-  #removeTop(): void {
-    const last = this.#heap.pop();
-    if (last === undefined || this.#heap.length === 0) return;
-    let parent = 0;
-    while (true) {
-      const left = parent * 2 + 1;
-      const right = left + 1;
-      const child = (this.#heap[right]?.index ?? -1) > (this.#heap[left]?.index ?? -1) ? right : left;
-      if ((this.#heap[child]?.index ?? -1) <= last.index) break;
-      this.#heap[parent] = this.#heap[child] as ActiveStyleValue<Value>;
-      parent = child;
-    }
-    this.#heap[parent] = last;
-  }
+/** The paragraph is the outermost scope, so an unstated property inherits from it. */
+function styleOver(root: ResolvedStyle, stated: StatedSpanStyle): ResolvedStyle {
+  const lineHeight = stated.lineHeight ?? root.lineHeight;
+  const language = stated.language ?? root.language;
+  const direction = stated.direction ?? root.direction;
+  return {
+    font: stated.font ?? root.font,
+    fontSize: stated.fontSize ?? root.fontSize,
+    ...(lineHeight === undefined ? {} : { lineHeight }),
+    letterSpacing: stated.letterSpacing ?? root.letterSpacing,
+    ...(language === undefined ? {} : { language }),
+    direction,
+    ...(stated.direction === undefined || direction === 'auto' ? {} : { bidiOverride: direction }),
+    features: stated.features ?? root.features,
+  };
 }
 
 function resolveStyle(

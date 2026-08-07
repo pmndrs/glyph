@@ -24,6 +24,12 @@ import type { RuntimeShaper } from './shaper.js';
 import type { TextRuntime } from './text-runtime.js';
 import type { FormattedText, GlyphPaintInput, ParagraphSpan, TextInput } from './formatted-text.js';
 import {
+  assertSpanNesting,
+  resolveSpanCascade,
+  statedProperties,
+  type SpanCascadeSegment,
+} from './internal/span-cascade.js';
+import {
   attachParagraphBatch,
   type ParagraphBatchAttachment,
   type ParagraphBatchTarget,
@@ -572,6 +578,10 @@ interface PreparedOwnedParagraph<Technique extends AnyRasterTechnique, Variant> 
   readonly displayedY: Float32Array;
   readonly rasterPixelRatio: number;
   readonly batchRenderVariant: Variant | undefined;
+  /** Cascade-resolved paint per glyph, parallel to `layout.glyphIds`. */
+  readonly glyphPaints: readonly ResolvedPaint[];
+  /** Cascade-resolved render variant per glyph, parallel to `layout.glyphIds`. */
+  readonly glyphVariants: readonly (Variant | undefined)[];
 }
 
 class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Paragraph<Technique, Variant> {
@@ -775,6 +785,7 @@ class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Pa
       displayedY: capture.origins?.y ?? layout.y,
       rasterPixelRatio: capture.hasDensity ? capture.state.rasterPixelRatio : batchRasterPixelRatio,
       batchRenderVariant,
+      ...resolveGlyphAttribution(capture.state, layout, batchRenderVariant),
       publicParagraph: Object.freeze({ id: this.id, layout, topology }),
     };
   }
@@ -825,7 +836,6 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
       const handle = layout.fontHandles[layout.glyphFontSlots[index]!]!;
       const font = value.fonts.get(handle);
       if (font === undefined) throw new Error('paragraph layout referenced an unresolved loaded font');
-      const cluster = layout.clusters[index]!;
       const input = {
         data: font.data,
         glyphId: layout.glyphIds[index]!,
@@ -833,7 +843,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
         originX: value.displayedX[index]!,
         originY: value.displayedY[index]!,
         rasterPixelRatio: value.rasterPixelRatio,
-        paint: paintAt(value.state, cluster),
+        paint: value.glyphPaints[index]!,
       };
       const selection = technique.select(input);
       if (selection === undefined) continue;
@@ -843,7 +853,7 @@ function pack<Technique extends AnyRasterTechnique, Variant>(
         entry = { font, selection, glyphs: [] };
         entries.set(key, entry);
       }
-      const variant = variantAt(value.state, value.batchRenderVariant, cluster);
+      const variant = value.glyphVariants[index];
       const previousRun = orderedRuns.at(-1);
       if (
         previousRun !== undefined &&
@@ -1069,6 +1079,10 @@ function normalizeProperties<Technique extends AnyRasterTechnique, Variant>(
       throw new RangeError('paragraph span is outside the text');
     if (span.font !== undefined) assertFontSelection(span.font, runtime, technique);
   }
+  // Resolution folds covering spans from the outermost inward, so a pair that
+  // overlaps without nesting has no innermost span and must fail here rather
+  // than resolve to whichever span a consumer happened to visit last.
+  assertSpanNesting(spans, 'paragraph span');
   const rasterPixelRatio = positive(properties.rasterPixelRatio ?? 1, 'rasterPixelRatio');
   const order = finite(properties.order ?? 0, 'order');
   return Object.freeze({
@@ -1127,10 +1141,24 @@ function shapingSpans(
     ...(span.fonts === undefined ? {} : { font: span.fonts[0] }),
     ...(span.style ?? {}),
   }));
+  // A fallback overlay is machine-generated rather than authored, so it is split
+  // at the authored boundaries it crosses. Each piece then sits inside exactly
+  // one span or in a gap, which keeps the overlay inside the nesting invariant.
+  const boundaries = [
+    ...new Set([0, state.text.length, ...state.spans.flatMap((span) => [span.start, span.end])]),
+  ].sort((left, right) => left - right);
   const starts = [...fallbacks.keys()].sort((left, right) => left - right);
   for (let index = 0; index < starts.length; index += 1) {
     const start = starts[index]!;
-    authored.push({ start, end: starts[index + 1] ?? state.text.length, font: fallbacks.get(start)! });
+    const end = starts[index + 1] ?? state.text.length;
+    const font = fallbacks.get(start)!;
+    let cursor = start;
+    for (const boundary of boundaries) {
+      if (boundary <= cursor || boundary >= end) continue;
+      authored.push({ start: cursor, end: boundary, font });
+      cursor = boundary;
+    }
+    if (cursor < end) authored.push({ start: cursor, end, font });
   }
   return authored;
 }
@@ -1142,6 +1170,11 @@ function layoutWithFallback<Technique extends AnyRasterTechnique, Variant>(
   return prepareParagraphLayout(shaper, paragraphLayoutInput(state));
 }
 
+/**
+ * The shaping layer receives the cascade already resolved into disjoint
+ * segments, so a span's font and shaping style reach run segmentation with the
+ * same answer that packing later paints with.
+ */
 function paragraphLayoutInput<Technique extends AnyRasterTechnique, Variant>(
   state: ParagraphSnapshot<Technique, Variant>,
 ): WorkerParagraphLayoutInput {
@@ -1149,16 +1182,21 @@ function paragraphLayoutInput<Technique extends AnyRasterTechnique, Variant>(
     text: state.text,
     fonts: Object.freeze(concreteFonts(state.font).map((font) => font.font.handle)),
     spans: Object.freeze(
-      state.spans.map((span) =>
-        Object.freeze({
-          start: span.start,
-          end: span.end,
-          ...(span.font === undefined
-            ? {}
-            : { fonts: Object.freeze(concreteFonts(span.font).map((font) => font.font.handle)) }),
-          ...(span.style === undefined ? {} : { style: span.style }),
-        }),
-      ),
+      paragraphCascade(state).flatMap((segment) => {
+        const font = segment.properties.font;
+        const style = shapingStyleOf(segment.properties);
+        if (font === undefined && style === undefined) return [];
+        return [
+          Object.freeze({
+            start: segment.start,
+            end: segment.end,
+            ...(font === undefined
+              ? {}
+              : { fonts: Object.freeze(concreteFonts(font).map((value) => value.font.handle)) }),
+            ...(style === undefined ? {} : { style }),
+          }),
+        ];
+      }),
     ),
     style: state.style,
     contentBox: state.contentBox,
@@ -1236,26 +1274,123 @@ function fontHandlesAt(state: WorkerParagraphLayoutInput, cluster: number): read
   return selection;
 }
 
-function spanAt<Technique extends AnyRasterTechnique, Variant>(
+/**
+ * Every span property in one flat record so a single cascade resolves shaping
+ * and paint under one merge rule. `outline` and `shadow` stay whole values
+ * because neither is meaningful without all of its parts.
+ */
+interface StatedSpanProperties<Technique extends AnyRasterTechnique, Variant> extends ParagraphStyle, GlyphPaintInput {
+  readonly font?: FontSelection<Technique>;
+  readonly renderVariant?: Variant;
+}
+
+type ParagraphCascade<Technique extends AnyRasterTechnique, Variant> = readonly SpanCascadeSegment<
+  StatedSpanProperties<Technique, Variant>
+>[];
+
+/**
+ * A snapshot is replaced whenever a paragraph property changes, so keying the
+ * cascade on it resolves the spans once per revision for both the shaping layer
+ * and glyph-instance packing.
+ */
+const paragraphCascades = new WeakMap<object, unknown>();
+
+function paragraphCascade<Technique extends AnyRasterTechnique, Variant>(
   state: ParagraphSnapshot<Technique, Variant>,
-  cluster: number,
-): ParagraphSpan<Technique, Variant> | undefined {
-  let found: ParagraphSpan<Technique, Variant> | undefined;
-  for (const span of state.spans) if (span.start <= cluster && cluster < span.end) found = span;
+): ParagraphCascade<Technique, Variant> {
+  const cached = paragraphCascades.get(state);
+  if (cached !== undefined) return cached as ParagraphCascade<Technique, Variant>;
+  const resolved = resolveSpanCascade(
+    state.spans.map((span) => ({
+      start: span.start,
+      end: span.end,
+      properties: statedProperties<StatedSpanProperties<Technique, Variant>>(
+        span.font === undefined ? undefined : { font: span.font },
+        span.style,
+        span.paint,
+        span.renderVariant === undefined ? undefined : { renderVariant: span.renderVariant },
+      ),
+    })),
+    state.text.length,
+    'paragraph span',
+  );
+  paragraphCascades.set(state, resolved);
+  return resolved;
+}
+
+function shapingStyleOf<Technique extends AnyRasterTechnique, Variant>(
+  properties: StatedSpanProperties<Technique, Variant>,
+): ParagraphStyle | undefined {
+  const style = statedProperties<ParagraphStyle>({
+    fontSize: properties.fontSize,
+    lineHeight: properties.lineHeight,
+    letterSpacing: properties.letterSpacing,
+    language: properties.language,
+    direction: properties.direction,
+    features: properties.features,
+  });
+  return Object.keys(style).length === 0 ? undefined : style;
+}
+
+function paintOf<Technique extends AnyRasterTechnique, Variant>(
+  root: GlyphPaintInput,
+  properties: StatedSpanProperties<Technique, Variant>,
+): GlyphPaintInput | undefined {
+  const stated = statedProperties<GlyphPaintInput>({
+    color: properties.color,
+    opacity: properties.opacity,
+    outline: properties.outline,
+    shadow: properties.shadow,
+  });
+  return Object.keys(stated).length === 0 ? undefined : { ...root, ...stated };
+}
+
+/**
+ * Paint and render variant resolve once per revision from the same cascade the
+ * shaping layer consumed, so packing indexes a per-glyph result instead of
+ * rescanning the span array for every glyph.
+ */
+function resolveGlyphAttribution<Technique extends AnyRasterTechnique, Variant>(
+  state: ParagraphSnapshot<Technique, Variant>,
+  layout: ParagraphLayout,
+  batchRenderVariant: Variant | undefined,
+): {
+  readonly glyphPaints: readonly ResolvedPaint[];
+  readonly glyphVariants: readonly (Variant | undefined)[];
+} {
+  const cascade = paragraphCascade(state);
+  const rootPaint = resolvePaint(state.paint);
+  const rootVariant = state.renderVariant ?? batchRenderVariant;
+  const starts = Uint32Array.from(cascade, (segment) => segment.start);
+  const paints = cascade.map((segment) => {
+    const paint = paintOf(state.paint, segment.properties);
+    return paint === undefined ? rootPaint : resolvePaint(paint);
+  });
+  const variants = cascade.map((segment) => segment.properties.renderVariant ?? rootVariant);
+  const glyphPaints: ResolvedPaint[] = [];
+  const glyphVariants: (Variant | undefined)[] = [];
+  for (let index = 0; index < layout.glyphIds.length; index += 1) {
+    const segment = segmentIndexAt(starts, layout.clusters[index]!);
+    glyphPaints.push(segment === -1 ? rootPaint : paints[segment]!);
+    glyphVariants.push(segment === -1 ? rootVariant : variants[segment]);
+  }
+  return { glyphPaints, glyphVariants };
+}
+
+function segmentIndexAt(starts: Uint32Array, offset: number): number {
+  let low = 0;
+  let high = starts.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const middle = (low + high) >>> 1;
+    if (starts[middle]! <= offset) {
+      found = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
   return found;
-}
-function paintAt<Technique extends AnyRasterTechnique, Variant>(
-  state: ParagraphSnapshot<Technique, Variant>,
-  cluster: number,
-): ResolvedPaint {
-  return resolvePaint(spanAt(state, cluster)?.paint ?? state.paint);
-}
-function variantAt<Technique extends AnyRasterTechnique, Variant>(
-  state: ParagraphSnapshot<Technique, Variant>,
-  batchVariant: Variant | undefined,
-  cluster: number,
-): Variant | undefined {
-  return spanAt(state, cluster)?.renderVariant ?? state.renderVariant ?? batchVariant;
 }
 function layoutConstraints(box: ParagraphContentBox): import('./paragraph.js').ParagraphConstraints {
   const axis = (
