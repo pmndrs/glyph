@@ -309,10 +309,11 @@ const entries: SizeEntry[] = [
       excludedInitial: [
         '/packages/text/dist/runtime-bake.js',
         '/packages/text/dist/runtime-bake-worker.js',
-        '/packages/text/dist/react.js',
-        '/packages/text/dist/raster/bitmap.js',
-        '/packages/text/dist/raster/msdf.js',
-        '/packages/text/dist/raster/slug.js',
+        '/packages/text/dist/r3f.js',
+        '/packages/text/dist/three.js',
+        '/packages/text/dist/raster/bitmap-technique.js',
+        '/packages/text/dist/raster/mtsdf.js',
+        '/packages/text/dist/raster/slug-technique.js',
         '/packages/text/dist/bakers/msdf.js',
         '/packages/text/dist/node/',
         '/packages/font-baker/dist/index.js',
@@ -360,15 +361,6 @@ const entries: SizeEntry[] = [
     false,
     true,
     true,
-    {
-      expectedDynamic: [],
-      excludedInitial: [
-        '/packages/text/dist/raster/slug.js',
-        '/packages/text/dist/internal/slug-shaders/',
-        '/packages/text/dist/bakers/slug.js',
-        '/packages/text/dist/runtime-bakers/slug',
-      ],
-    },
   ),
   await measureJavaScript(
     'mtsdf-runtime-js',
@@ -377,15 +369,6 @@ const entries: SizeEntry[] = [
     false,
     true,
     true,
-    {
-      expectedDynamic: [],
-      excludedInitial: [
-        '/packages/text/dist/raster/slug.js',
-        '/packages/text/dist/internal/slug-shaders/',
-        '/packages/text/dist/bakers/slug.js',
-        '/packages/text/dist/runtime-bakers/slug',
-      ],
-    },
   ),
   await measureJavaScript(
     'slug-runtime-js',

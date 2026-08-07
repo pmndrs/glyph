@@ -10,7 +10,7 @@ import test from 'node:test';
 import { bakeFont, bakeProject, NodeBakeError } from '@pmndrs/text/bake';
 import { bitmapBaker } from '@pmndrs/text/bakers/bitmap';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
-import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
+import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 
 import { runCli } from '../../dist/node/cli.js';

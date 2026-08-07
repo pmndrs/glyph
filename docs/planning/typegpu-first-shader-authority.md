@@ -34,10 +34,10 @@ sources:
     resource: https://docs.swmansion.com/TypeGPU/why-typegpu/
     title: Official TypeGPU architecture and WebGPU scope
   - id: bitmap-v0
-    resource: ../../packages/text/src/raster/bitmap.ts
+    resource: ../../packages/text/src/raster/bitmap-technique.ts
     title: Merged v0 Bitmap TSL implementation
   - id: slug-v0
-    resource: ../../packages/text/src/raster/slug.ts
+    resource: ../../packages/text/src/raster/slug-technique.ts
     title: Merged v0 Slug TSL implementation
   - id: slug-texture-v0
     resource: ../../packages/text/src/internal/slug-shaders/slug-texture.ts

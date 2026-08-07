@@ -374,7 +374,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         registry,
         {
           fixture: initialFontFixture,
-          asset: { font: loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
+          asset: { font: loaded.loaded.font, fontLoadMs, loaded, loadedFont, rasterConfiguration },
         },
         // The loaded font owns the registered font, its decoded raster, and the runtime entry; releasing only the
         // registered font would strand the raster this technique still holds.
@@ -525,7 +525,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
           try {
             const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
             return {
-              font: loaded.font,
+              font: loaded.loaded.font,
               fontLoadMs: performance.now() - fontStartedAt,
               loaded,
               loadedFont: loaded.loaded,

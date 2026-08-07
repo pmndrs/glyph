@@ -1,6 +1,4 @@
-import { defineRaster } from '@pmndrs/text';
 import { bitmap as bitmapTechnique } from '@pmndrs/text/raster/bitmap';
-import { bitmap, type BitmapModule } from '@pmndrs/text/raster/bitmap/v0';
 
 import amiriBitmapFontUrl from '../../../fixtures/rendering/amiri-bitmap-16.font.glb?url';
 import amiriBitmapDensityFontUrl from '../../../fixtures/rendering/amiri-bitmap-16-32.font.glb?url';
@@ -36,8 +34,6 @@ export type BitmapFontAsset = Extract<BenchmarkFontAsset, { readonly technique: 
 
 const conformanceStrikes = [16] as const;
 const liveStrikes = [16, 32] as const;
-const bitmapRequest = bitmap({ strikes: conformanceStrikes });
-const liveBitmapRequest = bitmap({ strikes: liveStrikes });
 
 const bitmapFontUrls: Readonly<Record<BenchmarkFontFixture, string>> = {
   inter: interBitmapFontUrl,
@@ -80,7 +76,6 @@ export async function loadBitmapFontAsset(
   const { bitmapDensity, delivery, fixture, onProgress, registry, signal } = request;
   signal?.throwIfAborted();
   const metrics = createFontDeliveryMetrics(delivery);
-  const raster = bitmapDensity === 'live' ? liveBitmapRequest : bitmapRequest;
   const strikes = bitmapDensity === 'live' ? liveStrikes : conformanceStrikes;
   if (delivery === 'runtime') {
     const loaded = await loadSourceFont({
@@ -95,10 +90,8 @@ export async function loadBitmapFontAsset(
       artifactBytes: metrics.coreArtifactBytes,
       atlasGpuBytes: 0,
       compressedBytes: metrics.sourceFontBytes,
-      font: loaded.font,
       loaded,
       metrics,
-      raster: measuredBitmapRaster(raster, metrics, onProgress),
     };
   }
   const urls = bitmapDensity === 'live' ? bitmapDensityFontUrls : bitmapFontUrls;
@@ -117,10 +110,8 @@ export async function loadBitmapFontAsset(
     artifactBytes: bytes.byteLength,
     atlasGpuBytes: 0,
     compressedBytes: bytes.byteLength,
-    font: loaded.font,
     loaded,
     metrics,
-    raster,
   };
 }
 
@@ -134,17 +125,4 @@ function measuredBitmapTechnique(
 ): typeof bitmapTechnique {
   const runtimeBaker = measuredRuntimeRaster(bitmapTechnique.runtimeBaker, metrics, onProgress);
   return { ...bitmapTechnique, ...(runtimeBaker === undefined ? {} : { runtimeBaker }) };
-}
-
-function measuredBitmapRaster(
-  request: ReturnType<typeof bitmap>,
-  metrics: BenchmarkFontAsset['metrics'],
-  onProgress?: Extract<BenchmarkFontAssetRequest, { readonly technique: 'bitmap' }>['onProgress'],
-): ReturnType<typeof bitmap> {
-  const runtimeBaker = measuredRuntimeRaster(request.module.runtimeBaker, metrics, onProgress);
-  const module: BitmapModule = defineRaster({
-    ...request.module,
-    ...(runtimeBaker === undefined ? {} : { runtimeBaker }),
-  });
-  return { module, options: request.options };
 }

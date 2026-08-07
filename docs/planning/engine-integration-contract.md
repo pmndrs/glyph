@@ -22,7 +22,7 @@ sources:
     resource: ../../packages/text/src/raster.ts
     title: Current raster transaction contract
   - id: current-text
-    resource: ../../packages/text/src/text.ts
+    resource: ../../packages/text/src/three/text.ts
     title: Current Three.js text lifecycle
   - id: extraction-plan
     resource: engine-integration-boundary.md

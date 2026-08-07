@@ -1,7 +1,7 @@
 import { FontRegistry, type AnyRasterTechnique, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
 import { TextGroup } from '@pmndrs/text/three';
 import * as THREE from 'three/webgpu';
-import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap/v0';
+import { selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap';
 
 import type { BenchmarkFontFixture, RasterConformanceSpecimen } from '../../../benchmark/font-fixtures';
 import type { RuntimeLiveStats } from '../../../benchmark/runtime-world';
@@ -1406,13 +1406,13 @@ async function loadTechniqueFont(
       signal,
       onProgress: onBakeProgress,
     });
-    const atlas = await registeredBitmapAtlas(loaded.font, 'live');
+    const atlas = await registeredBitmapAtlas(loaded.loaded.font, 'live');
     return {
       artifactBytes: loaded.artifactBytes,
       atlasGpuBytes: atlas.gpuBytes,
       atlasPages: atlas.pages,
       bitmapStrikes: atlas.strikes,
-      font: loaded.font,
+      font: loaded.loaded.font,
       fontLoadMs: performance.now() - startedAt,
       loaded: loaded.loaded,
       metrics: loaded.metrics,
@@ -1427,13 +1427,13 @@ async function loadTechniqueFont(
       signal,
       onProgress: onBakeProgress,
     });
-    const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.font, signal);
+    const mtsdfConfiguration = await registeredMtsdfConfiguration(loaded.loaded.font, signal);
     return {
       artifactBytes: loaded.compressedBytes,
       atlasGpuBytes: loaded.atlasGpuBytes,
       atlasPages: [],
       bitmapStrikes: [],
-      font: loaded.font,
+      font: loaded.loaded.font,
       fontLoadMs: performance.now() - startedAt,
       loaded: loaded.loaded,
       metrics: loaded.metrics,
@@ -1467,7 +1467,7 @@ async function loadTechniqueFont(
     atlasGpuBytes: slugConfiguration.resourceBytes,
     atlasPages: [],
     bitmapStrikes: [],
-    font: loaded.font,
+    font: loaded.loaded.font,
     fontLoadMs: performance.now() - startedAt,
     loaded: loaded.loaded,
     metrics: loaded.metrics,

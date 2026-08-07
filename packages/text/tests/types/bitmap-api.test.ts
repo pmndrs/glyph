@@ -1,11 +1,11 @@
+import type { RasterKey, RegisteredFont, RegisteredRaster } from '@pmndrs/text';
 import {
   bitmap,
   bitmapDescriptor,
   bitmapRasterKey,
+  type BitmapData,
   type BitmapOptions,
-  type BitmapResource,
-} from '@pmndrs/text/raster/bitmap/v0';
-import type { RasterKey, RegisteredFont, RegisteredRaster } from '@pmndrs/text';
+} from '@pmndrs/text/raster/bitmap';
 
 const inline = bitmapDescriptor({ strikes: [16, 32] });
 const tuple = [16, 32] as const;
@@ -15,11 +15,10 @@ void fromTuple;
 
 const configured: BitmapOptions<typeof tuple> = { strikes: tuple };
 void bitmapRasterKey(configured);
-const request = bitmap(configured);
 declare const font: RegisteredFont;
 declare const raster: RegisteredRaster<'bitmap'>;
-const bitmapResource: Promise<BitmapResource> = request.module.decode(font, raster);
-void bitmapResource;
+const bitmapData: Promise<BitmapData> = bitmap.decode(font, raster);
+void bitmapData;
 declare const rasterKey: RasterKey;
 const loadedBitmap: Promise<RegisteredRaster<'bitmap'>> = font.loadRaster({
   rasterKey,
@@ -36,5 +35,5 @@ bitmapDescriptor({ strikes: [dynamicStrike] });
 bitmapDescriptor({ strikes: [] });
 // @ts-expect-error Broad arrays cannot describe bake-time payloads.
 bitmapDescriptor({ strikes: dynamicStrikes });
-// @ts-expect-error Broad arrays cannot configure the bitmap runtime module.
-bitmap({ strikes: dynamicStrikes });
+// @ts-expect-error Broad arrays cannot configure the portable bitmap technique.
+bitmap.descriptor({ strikes: dynamicStrikes });

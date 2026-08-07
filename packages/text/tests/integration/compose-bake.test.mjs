@@ -6,7 +6,7 @@ import { createFontBaker } from '@pmndrs/text-font-baker';
 import { parseGlb, validateFontArtifact } from '@pmndrs/text-font-baker/validate';
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/text/bakers/bitmap';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
-import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
+import { bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
 
 import { BakeCompositionError, composeFontBake } from '../../dist/internal/compose-bake.js';
 

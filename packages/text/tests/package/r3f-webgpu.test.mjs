@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const packageManifest = new URL('../../package.json', import.meta.url);
-const reactSource = new URL('../../src/react.ts', import.meta.url);
+const reactSource = new URL('../../src/r3f.ts', import.meta.url);
 
 test('pins the R3F v10 WebGPU entry without browser-global import side effects', async () => {
   assert.equal(globalThis.localStorage, undefined);

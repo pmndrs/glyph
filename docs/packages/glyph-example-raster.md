@@ -48,16 +48,20 @@ diagnostic rather than a text-quality recommendation. The baker accepts both emb
 The external lane authenticates the companion GLB and its separate record payload through the public raster and resource
 resolvers; the embedded lane proves recursive `BufferView` rebasing through the public Node composition host.
 
-The retained adapter allocates 25% instance slack capped at 256 entries, keeps logical count separate from capacity, updates
-every origin, size, color, and glyph identity in place, coalesces changes into 32-instance dirty buckets with an eight-range
-full-upload fallback, and replaces transactionally on overflow. Focused tests cover deterministic bytes, public Node bake,
-standalone companion validation, external resource resolution, abort-before-load, staged abort preservation, shrink,
-exact-capacity growth, overflow cleanup, and idempotent batch/resource disposal.
+The package now supplies both halves of the target-v1 boundary separately. `glyphExample` is a portable
+`defineRasterTechnique` that decodes, selects one shared resource, and packs canonical positive-down instance storage while
+importing no renderer; `@pmndrs/text-glyph-example-raster/three` registers the Three program for it through the public
+`registerThreeRasterProgram` registry, so nothing in `@pmndrs/text` names this package. Instance capacity and dirty ranges
+are now core's, not the plugin's: the program reads `PreparedGlyphBatch.capacity` and `.dirtyRanges` and retains its meshes,
+geometry, and buffers while both hold, which deleted this package's own slack planner and bucket coalescer. Focused tests
+cover deterministic bytes, public Node bake, standalone companion validation, external resource resolution,
+abort-before-decode, selection, range writes, binding identity, and paint admission.
 
-The hardware-browser target uses the public source-font fallback, package runtime baker, generic attachment, public `Text`,
-warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and complete disposal. WebGPU
-and forced WebGL2 each produced two deterministic samples with visible glyph frames, one draw, retained object and geometry
-identity, and the same RGBA SHA-256 `4c664f22222b8a4fce66a1c2921a0f131500280b029664a82833c33393b57826`.
+The hardware-browser target uses the public source-font fallback, package runtime baker, the target-v1 `FontLoader`, public
+`Text` and `TextGroup`, warm matrix-lifecycle publication, TSL compilation, draw, asynchronous render-target readback, and
+complete disposal. WebGPU and forced WebGL2 each produced two deterministic samples with visible glyph frames, one draw,
+retained mesh and geometry identity, and the same RGBA SHA-256
+`0e0ec025a2121ec3b29317276c12978e7a7a062197b0a9ad448a6b37c270b368`.
 When the benchmark route supplies an exclusive execution context, the target borrows that renderer, restores render target,
 clear, viewport, scissor, and scissor-test state, and never creates or disposes a parallel renderer. Run the focused lane with
 `pnpm scripts run benchmark:external-raster`.
@@ -72,6 +76,13 @@ it now preserves the resolver and the package's authenticated external-record te
 Third, generated raster Groups replaced the ordering inherited from caller-owned parent Groups before draws reached Three.js
 sorting. `Text` and the example batch now use neutral `Object3D` containers. The example implements the public base-order
 method so its child mesh combines `Text.renderOrder` with glyph-run-local order across cold and in-place updates.
+
+Porting the proof to target-v1 surfaced a fourth, still-open finding. Three derives a render list's `groupOrder` from
+`Object3D.isGroup`, and `TextGroup` extends `Object3D` rather than `Group`, so a `TextGroup` does not by itself establish the
+ordering boundary a caller-owned `THREE.Group` does. A scene that orders text against other content through group render
+order therefore needs a real `Group` above its `TextGroup`; this target keeps one, which is what makes its layering
+assertion meaningful. `TextGroup.renderOrder` still sets the text-local base every program adds its run index to, and the
+target checks both contracts separately.
 
 The remaining friction is documented rather than hidden. Static discovery maps an imported factory export name to
 `package.json#pmndrs.text[exportName]` and requires the default baker's kind to equal that export name. A standalone companion

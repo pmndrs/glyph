@@ -249,11 +249,9 @@ settled, and reports `matchedGlyphs` so the existing viewport telemetry keeps it
 progress because its React viewport already animates the timeline; MTSDF and Slug, whose surfaces do not drive progress,
 advance the same smoothstep from their own frame clock and gain the transition they previously lacked.
 
-During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
-their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths for the live Presentation surfaces. Canonical
-`/raster/bitmap` and `/raster/slug`
-resolve to the new renderer-neutral techniques. The harness paths preserve the existing Presentation oracle until the new
-`/three` adapter consumes canonical technique storage; they are not target-v1 application APIs. A fresh matrix after the
+Every benchmark surface now loads through the target-v1 `FontLoader` and renders through the `/three` adapter; the
+merged-v0 harness subpaths and the dual-shape `BenchmarkFontAsset` bridge that carried unmigrated scenes are gone, so a
+scene reads its registered font from `loaded.font` and its decoded raster from `loaded.data`. A fresh matrix after the
 move rendered all seven workloads visibly for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
 case.
 

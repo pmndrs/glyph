@@ -9,7 +9,7 @@ import {
   createBitmapBakerFromInstance,
   readBitmapBakerAbi,
 } from '@pmndrs/text/bakers/bitmap';
-import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
+import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
 import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
 
 const wasmUrl = new URL('../../dist/bitmap_baker.wasm', import.meta.url);
@@ -157,14 +157,12 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
     view: (index) => views[index],
     dispose() {},
   };
-  const module = bitmap(options).module;
-  const resource = await module.decode(font, runtimeRaster);
-  await module.prepare({ glyphIds: Uint16Array.of(43), glyphFontSlots: Uint16Array.of(0) }, resource, 0);
-  assert.throws(
-    () => module.prepare({ glyphIds: Uint16Array.of(45), glyphFontSlots: Uint16Array.of(0) }, resource, 0),
-    RasterCoverageError,
-  );
-  module.dispose(resource);
+  const data = await bitmap.decode(font, runtimeRaster);
+  const paint = { color: [1, 1, 1, 1] };
+  const selection = (glyphId) => ({ data, glyphId, fontSize: 16, originX: 0, originY: 0, rasterPixelRatio: 1, paint });
+  assert.ok(bitmap.select(selection(43)));
+  assert.throws(() => bitmap.select(selection(45)), RasterCoverageError);
+  bitmap.dispose(data);
 
   const mismatchedPolicy = {
     ...runtimeRaster,
@@ -172,7 +170,7 @@ test('bakes bounded coverage with deterministic progress and a validated selecti
   };
   mismatchedPolicy.extensionData.strikes[0].ppemX = 17;
   mismatchedPolicy.extensionData.strikes[0].ppemY = 17;
-  await assert.rejects(module.decode(font, mismatchedPolicy), /raster key does not match its generation policy/);
+  await assert.rejects(bitmap.decode(font, mismatchedPolicy), /raster key does not match its generation policy/);
 });
 
 test('rejects mismatched shaping context and honors pre-bake cancellation', async () => {

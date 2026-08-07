@@ -9,7 +9,7 @@ import {
   MAX_BITMAP_PPEM,
   bitmapDescriptor,
   bitmapRasterKey,
-} from '@pmndrs/text/raster/bitmap/v0';
+} from '@pmndrs/text/raster/bitmap';
 
 test('canonicalizes bitmap strikes and owns its compatibility versions', async () => {
   const descriptor = bitmapDescriptor({ strikes: [32, 16] });

@@ -4,15 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
-const sourceFiles = [
-  'artifact.ts',
-  'baker.ts',
-  'capacity.ts',
-  'contract.ts',
-  'index.ts',
-  'raster.ts',
-  'runtime-baker.ts',
-];
+const sourceFiles = ['artifact.ts', 'baker.ts', 'contract.ts', 'index.ts', 'raster.ts', 'runtime-baker.ts', 'three.ts'];
 
 describe('package boundary', () => {
   test('uses only published core entry points and its own renderer dependency', async () => {
@@ -20,7 +12,7 @@ describe('package boundary', () => {
       sourceFiles.map((file) => readFile(new URL(`../src/${file}`, import.meta.url), 'utf8')),
     );
     for (const source of sources) {
-      expect(source).not.toMatch(/@pmndrs\/text\/internal|@pmndrs\/text\/raster\/(?:bitmap|msdf|slug)/);
+      expect(source).not.toMatch(/@pmndrs\/text\/internal|@pmndrs\/text\/raster\/(?:bitmap|mtsdf|slug)/);
       expect(source).not.toMatch(/@pmndrs\/text\/bakers\/(?:bitmap|msdf|slug)/);
     }
   });

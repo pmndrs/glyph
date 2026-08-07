@@ -108,9 +108,10 @@ test('discovers plain JavaScript and JSX with the same symbol and constant seman
     writeFile(
       join(root, 'src', 'view.jsx'),
       `
-        import { Text as ReactText } from '@pmndrs/text/react'
+        import { defineFont } from '@pmndrs/text'
         import { bitmap } from '@fixture/raster'
-        export const label = <ReactText font="/fonts/JavaScriptJsx.ttf" raster={bitmap({ strikes: [16] })} />
+        export const label = defineFont('/fonts/JavaScriptJsx.ttf', bitmap({ strikes: [16] }))
+        export const Label = () => <span>{label ? 'ready' : 'pending'}</span>
       `,
     ),
   ]);
@@ -185,25 +186,22 @@ test('follows imported constants and resolves literal, concatenated, and absolut
   ]);
 });
 
-test('discovers core and React raw forms, resolves source overrides, and skips baked-only inputs', async (t) => {
+test('discovers raw and composed raster requests, resolves source overrides, and skips baked-only inputs', async (t) => {
   const root = await project();
   t.after(() => rm(root, { recursive: true, force: true }));
   await Promise.all([
     writeFile(join(root, 'public', 'fonts', 'Core.ttf'), 'core'),
-    writeFile(join(root, 'public', 'fonts', 'React.ttf'), 'react'),
     writeFile(join(root, 'public', 'fonts', 'Override.ttf'), 'override'),
   ]);
   await writeFile(
     join(root, 'src', 'main.tsx'),
     `
-      import { Text as CoreText, defineFont } from '@pmndrs/text/v0'
-      import { Text as ReactText } from '@pmndrs/text/react'
+      import { defineFont } from '@pmndrs/text'
       import { bitmap } from '@fixture/raster'
-      new CoreText({ font: '/fonts/Core.ttf', raster: bitmap({ strikes: [16] }) })
+      defineFont('/fonts/Core.ttf', bitmap({ strikes: [16] }))
       const override = { source: '/fonts/Override.ttf', baked: '/fonts/custom.glb' } as const
       defineFont(override, { module: bitmap, options: { strikes: [16, 32] } })
       defineFont({ baked: '/fonts/Already.font.glb' }, bitmap({ strikes: [16] }))
-      export const label = <ReactText font="/fonts/React.ttf" raster={bitmap({ strikes: [16] })} />
     `,
   );
 
@@ -213,7 +211,6 @@ test('discovers core and React raw forms, resolves source overrides, and skips b
   assert.deepEqual(report.fonts.map(({ publicPathname }) => publicPathname).sort(), [
     '/fonts/Core.ttf',
     '/fonts/Override.ttf',
-    '/fonts/React.ttf',
   ]);
 });
 

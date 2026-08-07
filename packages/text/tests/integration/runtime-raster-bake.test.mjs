@@ -4,8 +4,8 @@ import test from 'node:test';
 
 import bitmapBaker from '@pmndrs/text/bakers/bitmap';
 import msdfBaker from '@pmndrs/text/bakers/msdf';
-import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap/v0';
-import { msdf, msdfDescriptor, msdfRasterKey } from '@pmndrs/text/raster/msdf';
+import { bitmap, bitmapDescriptor, bitmapRasterKey } from '@pmndrs/text/raster/bitmap';
+import { mtsdf, mtsdfDescriptor, mtsdfRasterKey } from '@pmndrs/text/raster/mtsdf';
 import { normalizeBitmapOptions } from '../../dist/internal/bitmap-contract.js';
 import { normalizeMsdfOptions } from '../../dist/internal/msdf-contract.js';
 import { startRasterBakeWorker } from '../../dist/internal/raster-bake-worker-entry.js';
@@ -89,7 +89,7 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
 
   const font = { glyphCount: 7, shapingHash };
   const source = Uint8Array.from([9, 8, 7]);
-  const bitmapModule = bitmap({ strikes: [16] }).module;
+  const bitmapModule = bitmap;
   const runtimeBitmapBaker = await bitmapModule.runtimeBaker();
   const bitmapResult = await runtimeBitmapBaker.default.bake({
     source,
@@ -98,7 +98,7 @@ test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async
     rasterKey,
     options: { strikes: [16], coverage: { glyphIds: [3, 1] } },
   });
-  const runtimeMsdfBaker = await msdf.runtimeBaker();
+  const runtimeMsdfBaker = await mtsdf.runtimeBaker();
   const msdfResult = await runtimeMsdfBaker.default.bake({
     source,
     font,
@@ -202,7 +202,7 @@ test('bounded runtime cancellation replaces the active Worker and recovers the s
   const source = Uint8Array.of(9, 8, 7);
   const font = { glyphCount: 7, shapingHash };
   const options = { strikes: [16], coverage: { glyphIds: [1, 3] } };
-  const baker = (await bitmap(options).module.runtimeBaker()).default;
+  const baker = (await bitmap.runtimeBaker()).default;
   const controller = new AbortController();
   const cancelled = baker.bake({ source, font, fontFaceIndex: 0, rasterKey, options, signal: controller.signal });
   const recovered = baker.bake({ source, font, fontFaceIndex: 0, rasterKey, options });
@@ -302,8 +302,8 @@ test('Node and serial Worker entry produce identical bounded Bitmap and MTSDF ar
       baker: msdfBaker,
       normalize: normalizeMsdfOptions,
       options: { coverage: { glyphIds: [43, 44] } },
-      descriptor: msdfDescriptor({ coverage: { glyphIds: [43, 44] } }),
-      rasterKey: await msdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
+      descriptor: mtsdfDescriptor({ coverage: { glyphIds: [43, 44] } }),
+      rasterKey: await mtsdfRasterKey({ coverage: { glyphIds: [43, 44] } }),
     },
   ]) {
     const direct = await fixture.baker.bake({
