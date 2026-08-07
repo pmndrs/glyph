@@ -229,6 +229,26 @@ full-frame hash `a47930d3…e893` with the same 5,930 lit and 3,473 half-coverag
 bounds, so the oracle changed renderer without changing what counts as correct. Both `bitmap-text-webgl2` and
 `source-outline-bitmap-webgl2` consume this scene, so both moved together.
 
+The three live technique scenes moved to target-v1 next. `techniques/{bitmap,mtsdf,slug}/persistent-scene.ts` now build a
+standalone `Text` — an implicit batch of one, deliberately left off `TextGroup` so the single-paragraph adapter path stays
+exercised and their `drawCount` stays directly comparable with merged v0 — from the `LoadedFont` that
+`workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` and
+`layout` instead of awaiting readiness. Flat merged-v0 properties become nested `contentBox`, `style`, and `paint`, with
+the paragraph measure expressed as an exact width constraint and the live colour as `#ffffff`, which resolves through the
+same transfer function as the numeric constant it replaces. Because a rejected generation would otherwise leave the failed
+candidate font leased and undisposable, each scene commits through one apply-or-roll-back step that restores the previously
+committed inputs before rethrowing.
+
+Their presentation transitions are now owned by the application. Merged v0 exported `captureBitmapGlyphPositions` and
+`createBitmapGlyphPositionTransition`, which packaged glyph identity matching and interpolation together for Bitmap only.
+Target-v1 core deliberately stops at owned glyph snapshots and topology-guarded displayed-origin writes, so
+`techniques/shared/glyph-origin-transition.ts` reimplements the policy once for all three techniques: it matches glyphs on
+the identity merged v0 used — font handle, glyph id, cluster, exact font size, and occurrence index — interpolates toward
+the shaped origins rather than the current displayed ones, writes through `setGlyphOrigins`, clears the overrides when
+settled, and reports `matchedGlyphs` so the existing viewport telemetry keeps its meaning. Bitmap keeps its host-driven
+progress because its React viewport already animates the timeline; MTSDF and Slug, whose surfaces do not drive progress,
+advance the same smoothstep from their own frame clock and gain the transition they previously lacked.
+
 During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
 their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths for the live Presentation surfaces. Canonical
 `/raster/bitmap` and `/raster/slug`
