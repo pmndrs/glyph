@@ -41,8 +41,13 @@ import type { RendererBackend } from '../../renderer/webgpu-renderer';
 import {
   captureGlyphOrigins,
   createFrameDrivenGlyphTransition,
+  glyphOriginPolicy,
+  snapGlyphOrigins,
+  transitionPresentation,
   type FrameDrivenGlyphTransition,
+  type GlyphOriginPresentation,
   type GlyphOriginSnapshot,
+  type ShapedTextIdentity,
 } from '../shared/glyph-origin-transition';
 import { slugDataConfiguration, type SlugRasterConfiguration } from './metadata';
 
@@ -156,7 +161,8 @@ interface SlugPersistentFontFixture {
 /** The inputs one committed generation of the live paragraph was built from. */
 interface SlugTextState {
   readonly font: LoadedFont<typeof slug>;
-  readonly text: string;
+  /** The shaped-run inputs this generation committed, kept beside the style so a rollback restores both together. */
+  readonly identity: ShapedTextIdentity;
   readonly contentBox: ParagraphContentBox;
   readonly style: ParagraphStyle;
   readonly rasterPixelRatio: number;
@@ -175,7 +181,17 @@ export interface SlugTextPersistentScene extends PersistentRenderScene {
   panBy(deltaX: number, deltaY: number): void;
   resetView(): void;
   setGridVisible(visible: boolean): void;
-  update(update: SlugTextSceneUpdate): Promise<void>;
+  /** Whether `update` can commit `fixture` in the caller's own turn, or a `loadFontFixture` has to precede it. */
+  hasFontFixture(fixture: BenchmarkFontFixture): boolean;
+  /** Fetches and decodes a replacement fixture behind the visible text. The only asynchronous step a live update has. */
+  loadFontFixture(fixture: BenchmarkFontFixture): Promise<void>;
+  /**
+   * Applies and shapes one generation in the caller's own turn. Nothing here is deferred: an ordinary text, font-size,
+   * layout-width, anchor, or DPR change is visible on the next frame the host draws, which is the contract this
+   * harness exists to demonstrate. Only a fixture the scene has not loaded is refused, and `loadFontFixture` is how
+   * that is resolved.
+   */
+  update(update: SlugTextSceneUpdate): GlyphOriginPresentation;
 }
 
 export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOptions): SlugTextPersistentScene {
@@ -263,17 +279,36 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     committedState = next;
   };
 
-  const beginPresentation = (activeLine: Text<typeof slug>, before: GlyphOriginSnapshot): void => {
+  /**
+   * Presents one committed reflow. `before` is captured only when `glyphOriginPolicy` allows interpolation, so its
+   * absence is the decision to snap rather than a missing snapshot.
+   */
+  const presentReflow = (
+    activeLine: Text<typeof slug>,
+    before: GlyphOriginSnapshot | undefined,
+  ): GlyphOriginPresentation => {
     const fromX = activeLine.position.x;
     const fromY = activeLine.position.y;
     presentation?.transition.dispose();
     presentation = undefined;
     positionLiveLine(activeLine, width, height, anchor, layoutWidthRatio);
+    if (before === undefined) return snapGlyphOrigins(activeLine);
     const toX = activeLine.position.x;
     const toY = activeLine.position.y;
     const transition = createFrameDrivenGlyphTransition(activeLine, before);
     activeLine.position.set(fromX, fromY, 0);
     presentation = { transition, fromX, fromY, toX, toY };
+    return transitionPresentation(transition);
+  };
+
+  /** Captures the origins a reflow may interpolate from, or nothing when the change replaces or reorders glyphs. */
+  const originsToInterpolate = (
+    activeLine: Text<typeof slug>,
+    committed: SlugTextState,
+    next: ShapedTextIdentity,
+  ): GlyphOriginSnapshot | undefined => {
+    if (glyphOriginPolicy(committed.identity, next) === 'snap') return undefined;
+    return captureGlyphOrigins(activeLine);
   };
 
   /**
@@ -318,7 +353,8 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     const updateStartedAt = performance.now();
     const revision = ++updateRevision;
     try {
-      const before = captureGlyphOrigins(activeLine);
+      // A viewport change leaves the shaped run intact, so its glyphs really do move continuously.
+      const before = originsToInterpolate(activeLine, state, state.identity);
       commitState(activeLine, {
         ...state,
         contentBox: slugContentBox(nextContentWidth, textAlign),
@@ -327,7 +363,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       if (closing || disposed || revision !== updateRevision) return;
       committedContentWidth = nextContentWidth;
       const resizeSceneStartedAt = performance.now();
-      beginPresentation(activeLine, before);
+      presentReflow(activeLine, before);
       const finishedAt = performance.now();
       textUpdateTelemetry.record({
         scheduleMs: 0,
@@ -381,16 +417,17 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         { dispose: (asset) => asset.loadedFont.dispose() },
       );
       const textStarted = performance.now();
+      const identity: ShapedTextIdentity = { fontFixture: initialFontFixture, text, language, direction, features };
       const state: SlugTextState = {
         font: loadedFont,
-        text,
+        identity,
         contentBox: slugContentBox(committedContentWidth, textAlign),
-        style: slugStyle(fontSize, { language, direction, features }),
+        style: slugStyle(fontSize, identity),
         rasterPixelRatio: context.viewport.dpr,
       };
       line = new Text({
         font: state.font,
-        text: state.text,
+        text: state.identity.text,
         contentBox: state.contentBox,
         style: state.style,
         paint: { color: LIVE_TEXT_COLOR_CSS },
@@ -492,84 +529,88 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       gridVisible = visible;
       activeResources().canvasSurface.setGridVisible(visible);
     },
-    async update(next) {
+    hasFontFixture(fixture) {
+      return !closing && !disposed && fontFixture !== undefined && fontFixture.has(fixture);
+    },
+    async loadFontFixture(fixture) {
       await activationGate.wait();
       if (closing || disposed) throw new DOMException('The Slug scene is disposed', 'AbortError');
-      const active = activeResources();
-      const activeLine = active.line;
       const activeFontFixture = fontFixture;
       const signal = activationSignal;
       if (activeFontFixture === undefined || signal === undefined) {
         throw new DOMException('The Slug scene is not active', 'InvalidStateError');
       }
+      await activeFontFixture.load(fixture, async (requested, fixtureRegistry) => {
+        const fontStartedAt = performance.now();
+        const loaded = await loadSlugFontAsset({
+          technique: 'slug',
+          fixture: requested,
+          delivery,
+          registry: fixtureRegistry,
+          signal,
+          ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
+        });
+        try {
+          const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
+          return {
+            font: loaded.loaded.font,
+            fontLoadMs: performance.now() - fontStartedAt,
+            loaded,
+            loadedFont: loaded.loaded,
+            rasterConfiguration,
+          };
+        } catch (error) {
+          if (loaded.loaded !== activeFontFixture.current.asset.loadedFont) loaded.loaded.dispose();
+          throw error;
+        }
+      });
+    },
+    update(next) {
+      if (closing || disposed) throw new DOMException('The Slug scene is disposed', 'AbortError');
+      const active = activeResources();
+      const activeLine = active.line;
+      const activeFontFixture = fontFixture;
+      if (activeFontFixture === undefined) throw new DOMException('The Slug scene is not active', 'InvalidStateError');
       const updateStartedAt = performance.now();
       const nextFontSize = positiveViewportSize(next.fontSize, 'Slug scene font size');
       assertLayoutWidthRatio(next.layoutWidthRatio);
-      const revision = ++updateRevision;
+      updateRevision += 1;
       const nextContentWidth = benchmarkContentWidth(width, next.layoutWidthRatio);
-      const before = captureGlyphOrigins(activeLine);
-      let updateScheduledAt = updateStartedAt;
-      await activeFontFixture.update({
-        fixture: next.fontFixture ?? activeFontFixture.current.fixture,
-        isCurrent: () => !closing && !disposed && revision === updateRevision,
-        load: async (fixture, fixtureRegistry) => {
-          const fontStartedAt = performance.now();
-          const loaded = await loadSlugFontAsset({
-            technique: 'slug',
-            fixture,
-            delivery,
-            registry: fixtureRegistry,
-            signal,
-            ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
-          });
-          try {
-            const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
-            return {
-              font: loaded.loaded.font,
-              fontLoadMs: performance.now() - fontStartedAt,
-              loaded,
-              loadedFont: loaded.loaded,
-              rasterConfiguration,
-            };
-          } catch (error) {
-            if (loaded.loaded !== activeFontFixture.current.asset.loadedFont) loaded.loaded.dispose();
-            throw error;
-          }
-        },
-        commit: async (fixture) => {
-          updateScheduledAt = performance.now();
-          if (next.text.length === 0) activeLine.visible = false;
-          commitState(activeLine, {
-            font: fixture.loadedFont,
-            text: next.text,
-            contentBox: slugContentBox(nextContentWidth, next.textAlign),
-            style: slugStyle(nextFontSize, {
-              language: next.language,
-              direction: next.direction,
-              features: next.features,
-            }),
-            rasterPixelRatio: active.state.rasterPixelRatio,
-          });
-          updateSlugDrawVisibility(activeLine);
-          fontSize = nextFontSize;
-          anchor = next.anchor;
-          textAlign = next.textAlign;
-          layoutWidthRatio = next.layoutWidthRatio;
-          committedContentWidth = nextContentWidth;
-        },
+      const nextFixture = next.fontFixture ?? activeFontFixture.current.fixture;
+      const identity: ShapedTextIdentity = {
+        fontFixture: nextFixture,
+        text: next.text,
+        language: next.language,
+        direction: next.direction,
+        features: next.features,
+      };
+      const before = originsToInterpolate(activeLine, active.state, identity);
+      activeFontFixture.commit(nextFixture, (fixture) => {
+        if (next.text.length === 0) activeLine.visible = false;
+        commitState(activeLine, {
+          font: fixture.loadedFont,
+          identity,
+          contentBox: slugContentBox(nextContentWidth, next.textAlign),
+          style: slugStyle(nextFontSize, identity),
+          rasterPixelRatio: active.state.rasterPixelRatio,
+        });
+        updateSlugDrawVisibility(activeLine);
+        fontSize = nextFontSize;
+        anchor = next.anchor;
+        textAlign = next.textAlign;
+        layoutWidthRatio = next.layoutWidthRatio;
+        committedContentWidth = nextContentWidth;
       });
-      if (closing || disposed || revision !== updateRevision) {
-        throw new DOMException('The Slug scene update was superseded', 'AbortError');
-      }
       const updateSceneStartedAt = performance.now();
-      beginPresentation(activeLine, before);
+      const presented = presentReflow(activeLine, before);
       const finishedAt = performance.now();
       textUpdateTelemetry.record({
-        scheduleMs: updateScheduledAt - updateStartedAt,
-        readyMs: updateSceneStartedAt - updateScheduledAt,
+        scheduleMs: 0,
+        readyMs: updateSceneStartedAt - updateStartedAt,
         sceneMs: finishedAt - updateSceneStartedAt,
         totalMs: finishedAt - updateStartedAt,
       });
+      return presented;
     },
     deactivate() {
       if (disposed) return;
@@ -601,7 +642,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
 function applyState(line: Text<typeof slug>, next: SlugTextState): void {
   line.set({
     font: next.font,
-    text: next.text,
+    text: next.identity.text,
     contentBox: next.contentBox,
     style: next.style,
     rasterPixelRatio: next.rasterPixelRatio,

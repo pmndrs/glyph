@@ -7,7 +7,6 @@ import type {
   BitmapTextPersistentScene,
   BitmapTextSceneSnapshot,
 } from '../../techniques/bitmap/persistent-scene';
-import { createLatestAsyncQueue, type LatestAsyncQueue } from './latest-async-queue';
 import { usePersistentRenderHost } from '../../renderer/persistent-render-host-context';
 import {
   benchmarkContentWidth,
@@ -28,6 +27,66 @@ const GLYPH_POSITION_TRANSITION_MS = 110;
 
 function loadBitmapTextRenderer() {
   return import('../../techniques/bitmap/persistent-scene');
+}
+
+interface LiveTextUpdateHandlers {
+  readonly onPresentation: (snapshot: BitmapTextSceneSnapshot, progress: 0 | 1) => void;
+  readonly onSettled: (snapshot: BitmapTextSceneSnapshot, input: RetainedLiveTextUpdate) => void;
+  readonly onError: (error: unknown) => void;
+}
+
+/**
+ * Applies one authored configuration to the live scene and returns a cancel function for React's cleanup.
+ *
+ * The update is committed in this turn whenever the scene already holds the requested fixture, which is every change
+ * but a fixture swap. Only fetching and decoding a replacement fixture is awaited, and nothing coalesces or defers the
+ * shaping itself: a queue in front of `update` would drop work during continuous animation and quietly present text
+ * that lags the state the surface is already rendering from.
+ */
+function applyLiveTextUpdate(
+  scene: BitmapTextPersistentScene,
+  update: RetainedLiveTextUpdate,
+  animatePresentation: boolean,
+  handlers: LiveTextUpdateHandlers,
+): () => void {
+  let cancelled = false;
+  let animationFrame: number | undefined;
+  const commit = (): void => {
+    if (cancelled) return;
+    const snapshot = scene.update(update);
+    handlers.onPresentation(snapshot, 0);
+    // A snapped reflow has no matched glyphs to move, so there is no timeline for the host to drive.
+    if (!animatePresentation || !snapshot.transitioned) {
+      handlers.onSettled(scene.finishPresentation(snapshot.revision), update);
+      return;
+    }
+    const startedAt = performance.now();
+    const animate = (timestamp: number): void => {
+      if (cancelled) return;
+      const linearProgress = Math.min(1, Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS));
+      const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
+      const presented = scene.setPresentationProgress(snapshot.revision, easedProgress);
+      if (linearProgress === 1) {
+        handlers.onSettled(presented, update);
+        return;
+      }
+      animationFrame = requestAnimationFrame(animate);
+    };
+    animationFrame = requestAnimationFrame(animate);
+  };
+  if (scene.hasFontFixture(update.fontFixture)) {
+    try {
+      commit();
+    } catch (error) {
+      handlers.onError(error);
+    }
+  } else {
+    void scene.loadFontFixture(update.fontFixture).then(commit).catch(handlers.onError);
+  }
+  return () => {
+    cancelled = true;
+    if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+  };
 }
 
 function bitmapViewportEvidence({
@@ -100,6 +159,7 @@ function bitmapViewportEvidence({
     'data-presentation-progress': presentationEvidence.progress,
     'data-presentation-revision': presentationEvidence.revision,
     'data-presentation-target-glyphs': presentationEvidence.targetGlyphs,
+    'data-presentation-transitioned': presentationEvidence.transitioned,
     'data-backend': stats?.backend,
     'data-dpr': stats?.dpr,
     'data-font-delivery': stats?.delivery,
@@ -144,7 +204,9 @@ export function BitmapTextViewport({
   const activatePersistentSurface = useEffectEvent(activateSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BitmapTextPersistentScene>(undefined);
-  const updateQueueRef = useRef<LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextSceneSnapshot>>(undefined);
+  // The host owns `sceneRef` from the moment the scene is constructed; updates need the narrower window that starts
+  // once activation has actually committed a first layout.
+  const activeSceneRef = useRef<BitmapTextPersistentScene>(undefined);
   const pendingSettledWorkloadRef = useRef<string>(undefined);
   const [settledRevision, setSettledRevision] = useState(0);
   const [settledTextLength, setSettledTextLength] = useState(0);
@@ -153,6 +215,7 @@ export function BitmapTextViewport({
   const [presentationEvidence, setPresentationEvidence] = useState<PresentationEvidence>({
     revision: 0,
     progress: 1,
+    transitioned: false,
     matchedGlyphs: 0,
     targetGlyphs: 0,
   });
@@ -206,25 +269,21 @@ export function BitmapTextViewport({
     timelineTick,
     workload,
   }));
-  const publishSettledRevision = useEffectEvent((revision: number) => {
-    setSettledRevision(revision);
-  });
-  const publishSettledTimelineTick = useEffectEvent((tick: number | undefined) => {
-    setSettledTimelineTick(tick);
-  });
-  const publishSettledTextLength = useEffectEvent((length: number) => {
-    setSettledTextLength(length);
-  });
-  const publishSettledWorkload = useEffectEvent((value: string) => {
-    pendingSettledWorkloadRef.current = value;
-  });
   const publishPresentation = useEffectEvent((snapshot: BitmapTextSceneSnapshot, progress: 0 | 1) => {
     setPresentationEvidence({
       revision: snapshot.revision,
       progress,
+      transitioned: snapshot.transitioned,
       matchedGlyphs: snapshot.matchedGlyphs,
       targetGlyphs: snapshot.targetGlyphs,
     });
+  });
+  const publishSettled = useEffectEvent((snapshot: BitmapTextSceneSnapshot, input: RetainedLiveTextUpdate) => {
+    publishPresentation(snapshot, 1);
+    setSettledRevision(snapshot.revision);
+    setSettledTimelineTick(input.timelineTick);
+    setSettledTextLength(input.text.length);
+    pendingSettledWorkloadRef.current = input.workload;
   });
 
   useEffect(() => {
@@ -234,7 +293,7 @@ export function BitmapTextViewport({
     const controller = new AbortController();
     const configuration = sceneConfiguration();
     let scene: BitmapTextPersistentScene | undefined;
-    let updateQueue: LatestAsyncQueue<RetainedLiveTextUpdate, BitmapTextSceneSnapshot> | undefined;
+    let cancelInitialUpdate: (() => void) | undefined;
     let surfaceLease: Awaited<ReturnType<typeof activateSurface>> | undefined;
     let cancelled = false;
     const initialization = (async () => {
@@ -263,8 +322,6 @@ export function BitmapTextViewport({
       });
       scene = created;
       sceneRef.current = created;
-      updateQueue = createLatestAsyncQueue((update: RetainedLiveTextUpdate) => created.update(update));
-      updateQueueRef.current = updateQueue;
       surfaceLease = await activatePersistentSurface(
         {
           anchor: surfaceAnchor,
@@ -280,28 +337,33 @@ export function BitmapTextViewport({
         await surfaceLease.release();
         return;
       }
-      const committed = await updateQueue.enqueue(sceneConfiguration());
-      publishSettledTimelineTick(committed.input.timelineTick);
-      publishSettledTextLength(committed.input.text.length);
-      publishSettledWorkload(committed.input.workload);
+      // Activation committed the configuration this scene was constructed from; catch up with whatever the surface
+      // has moved on to since, then hand later changes to the synchronous effect below.
+      activeSceneRef.current = created;
+      cancelInitialUpdate = applyLiveTextUpdate(created, sceneConfiguration(), false, {
+        onPresentation: publishPresentation,
+        onSettled: publishSettled,
+        onError: publishError,
+      });
     })();
     void initialization.catch(publishError);
     return () => {
       cancelled = true;
       controller.abort();
+      cancelInitialUpdate?.();
       void initialization.then(
         async () => {
           const current = scene;
           scene = undefined;
           if (sceneRef.current === current) sceneRef.current = undefined;
-          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
+          if (activeSceneRef.current === current) activeSceneRef.current = undefined;
           await surfaceLease?.release();
         },
         () => {
           const current = scene;
           scene = undefined;
           if (sceneRef.current === current) sceneRef.current = undefined;
-          if (updateQueueRef.current === updateQueue) updateQueueRef.current = undefined;
+          if (activeSceneRef.current === current) activeSceneRef.current = undefined;
         },
       );
     };
@@ -312,21 +374,11 @@ export function BitmapTextViewport({
   }, [grid]);
 
   useEffect(() => {
-    const scene = sceneRef.current;
-    const updateQueue = updateQueueRef.current;
-    if (scene === undefined || updateQueue === undefined) return;
-    let cancelled = false;
-    let animationFrame: number | undefined;
-    const publishSettled = (snapshot: BitmapTextSceneSnapshot, input: RetainedLiveTextUpdate): void => {
-      if (cancelled) return;
-      publishPresentation(snapshot, 1);
-      publishSettledRevision(snapshot.revision);
-      publishSettledTimelineTick(input.timelineTick);
-      publishSettledTextLength(input.text.length);
-      publishSettledWorkload(input.workload);
-    };
-    void updateQueue
-      .enqueue({
+    const scene = activeSceneRef.current;
+    if (scene === undefined) return;
+    return applyLiveTextUpdate(
+      scene,
+      {
         anchor,
         fontFixture,
         fontSize,
@@ -339,33 +391,10 @@ export function BitmapTextViewport({
         textAlign,
         timelineTick,
         workload,
-      })
-      .then(({ input, output: snapshot }) => {
-        if (cancelled) return;
-        publishPresentation(snapshot, 0);
-        if (!animatePresentation) {
-          publishSettled(scene.finishPresentation(snapshot.revision), input);
-          return;
-        }
-        const startedAt = performance.now();
-        const animate = (timestamp: number): void => {
-          if (cancelled) return;
-          const linearProgress = Math.min(1, Math.max(0, (timestamp - startedAt) / GLYPH_POSITION_TRANSITION_MS));
-          const easedProgress = linearProgress * linearProgress * (3 - 2 * linearProgress);
-          const presented = scene.setPresentationProgress(snapshot.revision, easedProgress);
-          if (linearProgress === 1) {
-            publishSettled(presented, input);
-            return;
-          }
-          animationFrame = requestAnimationFrame(animate);
-        };
-        animationFrame = requestAnimationFrame(animate);
-      })
-      .catch(publishError);
-    return () => {
-      cancelled = true;
-      if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
-    };
+      },
+      animatePresentation,
+      { onPresentation: publishPresentation, onSettled: publishSettled, onError: publishError },
+    );
   }, [
     anchor,
     animatePresentation,

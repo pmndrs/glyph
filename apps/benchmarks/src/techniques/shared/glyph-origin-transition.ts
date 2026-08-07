@@ -1,4 +1,4 @@
-import type { GlyphOriginUpdate, GlyphSnapshot, ParagraphLayout } from '@pmndrs/text';
+import type { FontFeature, GlyphOriginUpdate, GlyphSnapshot, ParagraphLayout } from '@pmndrs/text';
 
 /**
  * The part of a committed target-v1 `Text` this helper needs. Core owns glyph snapshots and topology-guarded
@@ -10,6 +10,54 @@ export interface TransitionableText {
   snapshotGlyphs(): GlyphSnapshot;
   setGlyphOrigins(update: GlyphOriginUpdate): void;
   clearGlyphOriginOverrides(): void;
+}
+
+/**
+ * The paragraph inputs that decide which glyphs exist and in what visual order. Font size, layout width, anchor, and
+ * device pixel ratio are deliberately absent: they move the same glyphs rather than replacing or reordering them.
+ */
+export interface ShapedTextIdentity {
+  readonly fontFixture: string;
+  readonly text: string;
+  readonly language: string;
+  readonly direction: 'ltr' | 'rtl';
+  readonly features: readonly FontFeature[];
+}
+
+export type GlyphOriginPolicy = 'snap' | 'transition';
+
+/**
+ * The one place every live technique scene decides whether a reflow may interpolate glyph identities.
+ *
+ * Identity matching keys a glyph on its UTF-16 source cluster, which survives a reflow but says nothing about visual
+ * order. Under bidi, inserting one character reorders a whole run, so a typewriter reveal that kept matching would
+ * slide glyphs across their neighbours to reach positions they never travelled through. A change that alters the
+ * source text — or the fixture, script, or features that decide which glyphs the text shapes into — therefore snaps.
+ * Geometry and style changes leave the shaped run and its visual order intact, so their glyphs really do move
+ * continuously and matching is sound.
+ */
+export function glyphOriginPolicy(previous: ShapedTextIdentity, next: ShapedTextIdentity): GlyphOriginPolicy {
+  if (previous.text !== next.text) return 'snap';
+  if (previous.fontFixture !== next.fontFixture) return 'snap';
+  if (previous.language !== next.language || previous.direction !== next.direction) return 'snap';
+  return sameFontFeatures(previous.features, next.features) ? 'transition' : 'snap';
+}
+
+/** What one committed reflow did with glyph identities, so a snapped update cannot report a match it never made. */
+export interface GlyphOriginPresentation {
+  readonly transitioned: boolean;
+  /** Glyphs whose previous displayed origin was recovered by identity. Always `0` when the reflow snapped. */
+  readonly matchedGlyphs: number;
+  readonly targetGlyphs: number;
+}
+
+/**
+ * Presents a reflow with no interpolation, returning displayed origins to the layout that just committed. A change
+ * that replaces or reorders glyphs has no correspondence to animate, so zero matches is the honest report.
+ */
+export function snapGlyphOrigins(text: TransitionableText): GlyphOriginPresentation {
+  text.clearGlyphOriginOverrides();
+  return { transitioned: false, matchedGlyphs: 0, targetGlyphs: text.layout?.glyphIds.length ?? 0 };
 }
 
 /** Displayed glyph origins copied out of one committed paragraph. It retains no renderer or core resources. */
@@ -163,6 +211,22 @@ export function createFrameDrivenGlyphTransition(
       transition.dispose();
     },
   };
+}
+
+/** Reports a reflow the scene chose to interpolate, keeping the snapped and transitioned reports one shape. */
+export function transitionPresentation(transition: {
+  readonly matchedGlyphs: number;
+  readonly targetGlyphs: number;
+}): GlyphOriginPresentation {
+  return { transitioned: true, matchedGlyphs: transition.matchedGlyphs, targetGlyphs: transition.targetGlyphs };
+}
+
+function sameFontFeatures(previous: readonly FontFeature[], next: readonly FontFeature[]): boolean {
+  if (previous.length !== next.length) return false;
+  return previous.every((feature, index) => {
+    const other = next[index];
+    return other !== undefined && feature.tag === other.tag && feature.value === other.value;
+  });
 }
 
 /**

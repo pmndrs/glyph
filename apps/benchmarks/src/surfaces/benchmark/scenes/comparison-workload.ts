@@ -538,28 +538,30 @@ async function createComparisonWorkloadRuntime(
       let scheduledAt = updateStartedAt;
       fontFixtureSwitching = true;
       try {
-        await activeSelectedFont.update({
-          fixture: nextFixture,
-          isCurrent: () => !closing && !disposed,
-          load: (fixture, registry) =>
-            loadTechniqueFont(
-              technique,
-              fixture,
-              options.delivery,
-              signal,
-              options.onBakeProgress,
-              options.slugBakedArtifact,
-              registry,
-            ),
-          commit: async (nextFont) => {
-            scheduledAt = performance.now();
-            fontFixtureCommitting = true;
-            try {
-              applyRetainedTextFontFixture(batchRoot, entries, targetTexts, nextFont.loaded);
-            } finally {
-              fontFixtureCommitting = false;
-            }
-          },
+        // Only the bytes are awaited. Once they are decoded the swap itself commits in this turn, so the scene never
+        // renders a generation the caller has already replaced.
+        await activeSelectedFont.load(nextFixture, (fixture, registry) =>
+          loadTechniqueFont(
+            technique,
+            fixture,
+            options.delivery,
+            signal,
+            options.onBakeProgress,
+            options.slugBakedArtifact,
+            registry,
+          ),
+        );
+        if (closing || disposed) {
+          throw new DOMException('The comparison workload font fixture switch was superseded', 'AbortError');
+        }
+        scheduledAt = performance.now();
+        activeSelectedFont.commit(nextFixture, (nextFont) => {
+          fontFixtureCommitting = true;
+          try {
+            applyRetainedTextFontFixture(batchRoot, entries, targetTexts, nextFont.loaded);
+          } finally {
+            fontFixtureCommitting = false;
+          }
         });
       } finally {
         fontFixtureSwitching = false;
