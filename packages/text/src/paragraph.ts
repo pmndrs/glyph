@@ -328,7 +328,7 @@ class ParagraphImpl implements Paragraph {
 
   update(input: ParagraphInput): void {
     this.#assertActive();
-    this.#prepared = prepareParagraph(this.#shaper, input);
+    this.#prepared = prepareParagraph(this.#shaper, input, this.#prepared);
     this.#measurements.clear();
     this.#linePlans.clear();
     this.#positioning.clear();
@@ -383,7 +383,11 @@ function retainRecent<Key, Value>(cache: Map<Key, Value>, key: Key, value: Value
   if (!oldest.done) cache.delete(oldest.value);
 }
 
-function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): PreparedParagraph {
+function prepareParagraph(
+  shaper: RuntimeShaper,
+  input: ParagraphInput,
+  previous?: PreparedParagraph,
+): PreparedParagraph {
   const ownedInput = copyInput(input);
   const unicode = analyzeUnicodeText(ownedInput.text);
   const styles = resolveStyles(shaper, ownedInput, unicode.graphemeBoundaries);
@@ -392,8 +396,12 @@ function prepareParagraph(shaper: RuntimeShaper, input: ParagraphInput): Prepare
   const runs = prepareRuns(ownedInput.text, styles, unicode, bidi);
   const shapedRequest = shapeRequest(ownedInput.text, runs);
   const request = shapedRequest.request;
-  const borrowed = request.runs.length === 0 ? emptyShape() : shaper.shapeBatch(request);
-  const shape = ownShape(borrowed);
+  // Shaping is deterministic in its request, and the request carries no font size, line height, or letter spacing —
+  // those scale the shaped advances afterward. An animated resize therefore rebuilds an identical request, so reusing
+  // the retained shape skips the whole shaping pass while every measurement below still recomputes at the new size.
+  // A shape is plain owned typed arrays that nothing releases, so retaining one across preparations is safe.
+  const reused = previous !== undefined && sameShapeRequest(previous.request, request) ? previous.shape : undefined;
+  const shape = reused ?? ownShape(request.runs.length === 0 ? emptyShape() : shaper.shapeBatch(request));
   const ellipses = measureEllipses(shaper, runs, shape, shapedRequest.ellipses);
   const clusters = measureClusters(shaper, ownedInput.text, unicode, styles, runs, shape);
   const clusterIndexes = indexClusters(ownedInput.text, clusters);
@@ -1722,6 +1730,43 @@ function equalFeatures(left: readonly ResolvedFontFeature[], right: readonly Res
       );
     })
   );
+}
+
+/**
+ * Whether two shape requests would produce identical shaped output. Compares exactly what the shaper reads, so a
+ * paragraph whose size, line height, or letter spacing changed rebuilds an equal request and reuses its shape.
+ */
+function sameShapeRequest(left: ShapeBatchRequest, right: ShapeBatchRequest): boolean {
+  if (left.textUtf16.length !== right.textUtf16.length) return false;
+  for (let index = 0; index < left.textUtf16.length; index += 1) {
+    if (left.textUtf16[index] !== right.textUtf16[index]) return false;
+  }
+  if (left.runs.length !== right.runs.length) return false;
+  for (let index = 0; index < left.runs.length; index += 1) {
+    const a = left.runs[index]!;
+    const b = right.runs[index]!;
+    if (
+      a.font !== b.font ||
+      a.textStart !== b.textStart ||
+      a.textEnd !== b.textEnd ||
+      a.direction !== b.direction ||
+      a.script !== b.script ||
+      a.language !== b.language ||
+      a.clusterLevel !== b.clusterLevel ||
+      a.flags !== b.flags ||
+      a.featureStart !== b.featureStart ||
+      a.featureCount !== b.featureCount
+    ) {
+      return false;
+    }
+  }
+  if (left.features.length !== right.features.length) return false;
+  for (let index = 0; index < left.features.length; index += 1) {
+    const a = left.features[index]!;
+    const b = right.features[index]!;
+    if (a.tag !== b.tag || a.value !== b.value || a.start !== b.start || a.end !== b.end) return false;
+  }
+  return true;
 }
 
 function ownShape(shape: ShapedBatchViews): OwnedShape {
