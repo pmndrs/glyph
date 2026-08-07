@@ -47,9 +47,14 @@ export const packageSizeBudgets = {
     gzipBytes: 95_000,
     brotliBytes: 75_000,
   },
+  // Slug is the only raster carrying an analytic shader core, and its TypeGPU shader
+  // functions ship a transpiled syntax tree per function for runtime resolution. That
+  // metadata compresses well, so the reviewed gzip and Brotli ceilings are unchanged
+  // and still shared with the other two rasters; only the uncompressed dimensions rise.
+  // The TypeGPU runtime itself is a peer dependency and is outside these figures.
   'slug-runtime-js': {
-    rawBytes: 425_000,
-    minifiedBytes: 325_000,
+    rawBytes: 460_000,
+    minifiedBytes: 345_000,
     gzipBytes: 95_000,
     brotliBytes: 75_000,
   },
