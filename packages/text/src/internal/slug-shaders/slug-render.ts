@@ -1,16 +1,21 @@
 /**
- * Adapted from three-flatland Slug at 2935a89f (MIT).
- * The texture addressing is adapted to PMNDRS_font_slug V0's exact R32UI
- * header grid and R16UI glyph-local reference grid.
+ * Three.js/TSL entry point for the analytic Slug fill.
+ *
+ * This module only wires TSL nodes into the host-agnostic core: the fragment scale,
+ * the thickening factor, and the final weighted blend are all portable core calls.
  */
 import type { Node } from 'three/webgpu';
-import { add, div, float, max, mul, sub } from 'three/tsl';
-import { calcCoverage } from './calc-coverage.js';
+import { float } from 'three/tsl';
+import { d } from 'typegpu';
+import * as t3 from '@typegpu/three';
+import { coreValue } from './core-boundary.js';
+import { slugPixelsPerEm, slugThickenFactor } from './core/band.js';
+import { calcCoverage } from './core/coverage.js';
 import { evaluateBand, type SlugShaderGlyph } from './slug-band.js';
 import type { SlugShaderPage } from './slug-texture.js';
-import { vec2Fwidth } from './tsl-compat.js';
 
-export { MAX_SAFE_SLUG_BAND_CURVES, type SlugShaderPage } from './slug-texture.js';
+export { MAX_SAFE_SLUG_BAND_CURVES } from './core/band.js';
+export type { SlugShaderPage } from './slug-texture.js';
 export type { SlugShaderGlyph } from './slug-band.js';
 
 export interface SlugRenderOptions {
@@ -20,14 +25,6 @@ export interface SlugRenderOptions {
   readonly thicken?: Node<'float'>;
 }
 
-function namedFloat(node: Node<'float'>, name: string): Node<'float'> {
-  return node.toVar(name);
-}
-
-function namedVec2(node: Node<'vec2'>, name: string): Node<'vec2'> {
-  return node.toVar(name);
-}
-
 /** Evaluate analytic Slug fill coverage for one fragment. */
 export function slugRender(
   page: SlugShaderPage,
@@ -35,31 +32,36 @@ export function slugRender(
   renderCoordinate: Node<'vec2'>,
   options: SlugRenderOptions,
 ): Node<'float'> {
-  // These derivatives and reciprocal footprints are loop-invariant. Explicit
-  // variables prevent TSL from re-emitting them once per candidate curve.
-  const emsPerPixel: Node<'vec2'> = namedVec2(vec2Fwidth(renderCoordinate), 'slugEmsPerPixel');
-  const minimumFootprintX: Node<'float'> = max(emsPerPixel.x, 1 / 65_536);
-  const minimumFootprintY: Node<'float'> = max(emsPerPixel.y, 1 / 65_536);
-  const pixelsPerEmX: Node<'float'> = namedFloat(div(1, minimumFootprintX), 'slugPixelsPerEmX');
-  const pixelsPerEmY: Node<'float'> = namedFloat(div(1, minimumFootprintY), 'slugPixelsPerEmY');
-  const pixelsPerEmSum: Node<'float'> = add(pixelsPerEmX, pixelsPerEmY);
-  const pixelsPerEm: Node<'float'> = namedFloat(mul(pixelsPerEmSum, 0.5), 'slugPixelsPerEm');
-  const thickenFactor: Node<'float'> =
-    options.thicken === undefined
-      ? float(1)
-      : namedFloat(add(1, mul(options.thicken, max(0, sub(1, div(pixelsPerEm, 24))))), 'slugThickenFactor');
+  // The screen-space scale and the thickening it feeds are loop-invariant, and every
+  // core boundary already materializes into its own variable, so neither is re-emitted
+  // per candidate curve.
+  const pixelsPerEm: Node<'vec3'> = coreValue('vec3', 'slugFragmentScale', () => {
+    'use gpu';
+    return slugPixelsPerEm(t3.fromTSL(renderCoordinate, d.vec2f).$);
+  });
+  // Absent thickening and stem darkening are exactly their identity values, so the
+  // core keeps one shader signature instead of an optional parameter per effect.
+  const thicken: Node<'float'> = options.thicken ?? float(0);
+  const stemDarken: Node<'float'> = options.stemDarken ?? float(0);
+  const thickenFactor: Node<'float'> = coreValue('float', 'slugCoverageThicken', () => {
+    'use gpu';
+    return slugThickenFactor(t3.fromTSL(thicken, d.f32).$, t3.fromTSL(pixelsPerEm.z, d.f32).$);
+  });
 
-  const horizontal = evaluateBand(page, glyph, renderCoordinate, 'horizontal', pixelsPerEmX, thickenFactor);
-  const vertical = evaluateBand(page, glyph, renderCoordinate, 'vertical', pixelsPerEmY, thickenFactor);
+  const horizontal = evaluateBand(page, glyph, renderCoordinate, 'horizontal', pixelsPerEm.x, thickenFactor);
+  const vertical = evaluateBand(page, glyph, renderCoordinate, 'vertical', pixelsPerEm.y, thickenFactor);
 
-  return calcCoverage(
-    horizontal.coverage,
-    horizontal.weight,
-    vertical.coverage,
-    vertical.weight,
-    options.evenOdd,
-    options.weightBoost,
-    options.stemDarken,
-    pixelsPerEm,
-  );
+  return coreValue('float', 'slugFillCoverage', () => {
+    'use gpu';
+    return calcCoverage(
+      t3.fromTSL(horizontal.coverage, d.f32).$,
+      t3.fromTSL(horizontal.weight, d.f32).$,
+      t3.fromTSL(vertical.coverage, d.f32).$,
+      t3.fromTSL(vertical.weight, d.f32).$,
+      t3.fromTSL(options.evenOdd, d.bool).$,
+      t3.fromTSL(options.weightBoost, d.bool).$,
+      t3.fromTSL(stemDarken, d.f32).$,
+      t3.fromTSL(pixelsPerEm.z, d.f32).$,
+    );
+  });
 }

@@ -28,5 +28,8 @@ export default defineConfig({
   clean: ['dist/**/*.js', 'dist/**/*.d.ts', 'dist/**/*.map', 'dist/.tsbuildinfo'],
   deps: { neverBundle: true },
   report: false,
-  plugins: [typegpu()],
+  // The plugin's default include matches every `.ts` path, and its early pruning keeps
+  // any file naming `typegpu`, so emitted declarations reach it and fail to parse as
+  // non-ambient TypeScript. Declarations carry no shader body, so they are excluded.
+  plugins: [typegpu({ exclude: [/\.d\.[cm]?ts$/] })],
 });
