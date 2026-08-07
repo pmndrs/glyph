@@ -13,7 +13,7 @@ import {
   type BidiAnalysisViews,
   type FontInputOf,
   type FontRasterModuleOf,
-  type LoadedFont,
+  type LoadedFontV0,
   type GlyphPaint,
   type RasterKey,
   type RasterBatchOf,
@@ -32,13 +32,13 @@ import {
   type Sha256Hex,
   type ShapeBatchRequest,
   type ShapedBatchViews,
-  type Paragraph,
+  type LayoutParagraph,
   type ParagraphConstraints,
   type ParagraphMeasurement,
   type TextProperties,
   type TextUpdateProperties,
   type ThreeRasterDrawBatch,
-} from '../../src/index.js';
+} from '../../src/v0.js';
 import type { ReactElement } from 'react';
 import type { Object3D } from 'three/webgpu';
 import type { LazyRaster, ReactTextProps, UseFont } from '../../src/react.js';
@@ -94,7 +94,7 @@ const shapedPromise: Promise<ShapedBatchViews> = shaperPromise.then((shaper) => 
 const bidiPromise: Promise<BidiAnalysisViews> = shaperPromise.then((shaper) =>
   shaper.analyzeBidi(Uint16Array.of(0x05d0), 'auto'),
 );
-const preparedParagraph: Promise<Paragraph> = shaperPromise.then((shaper) =>
+const preparedParagraph: Promise<LayoutParagraph> = shaperPromise.then((shaper) =>
   createParagraphEngine({ shaper }).create({ text: 'Hello', font: fontHandle }),
 );
 void registeredPromise;
@@ -241,7 +241,7 @@ void coreText.layout;
 coreText.setProperties({ opacity: 0.75 });
 coreText.dispose();
 
-declare const paragraph: Paragraph;
+declare const paragraph: LayoutParagraph;
 
 const naturalMeasurement: ParagraphMeasurement = paragraph.measure();
 const constrainedMeasurement = paragraph.measure({
@@ -287,12 +287,12 @@ void tokenText;
 declare const useFont: UseFont;
 const preloadedTitleFont = useFont.preload(titleFont);
 type _PreloadedTitleFont = Expect<
-  Equal<Awaited<typeof preloadedTitleFont>, LoadedFont<typeof msdf, '/fonts/Inter-Regular.ttf'>>
+  Equal<Awaited<typeof preloadedTitleFont>, LoadedFontV0<typeof msdf, '/fonts/Inter-Regular.ttf'>>
 >;
 
 function TitleFontTypeProbe(): null {
   const loadedTitleFont = useFont(titleFont);
-  type _LoadedTitleFont = Expect<Equal<typeof loadedTitleFont, LoadedFont<typeof msdf, '/fonts/Inter-Regular.ttf'>>>;
+  type _LoadedTitleFont = Expect<Equal<typeof loadedTitleFont, LoadedFontV0<typeof msdf, '/fonts/Inter-Regular.ttf'>>>;
   void (0 as unknown as _LoadedTitleFont);
   return null;
 }

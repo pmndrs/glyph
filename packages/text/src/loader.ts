@@ -24,6 +24,7 @@ import type {
   RegisteredRaster,
 } from './raster.js';
 import type { BakeProgressListener } from './bake.js';
+import type { RuntimeShaperFontData } from './shaper.js';
 
 const DEFAULT_MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_BUFFER_VIEWS = 4_096;
@@ -132,6 +133,38 @@ export class FontRegistry {
 
   getByHandle(handle: FontHandle): RegisteredFont | undefined {
     return this.#fontsByHandle.get(handle);
+  }
+
+  /** @internal Register a shaping-only font replica inside a preparation Worker. */
+  _registerShapingFont(data: RuntimeShaperFontData): RegisteredFont {
+    const existing = this.#fontsByHandle.get(data.handle);
+    if (existing !== undefined) {
+      if (existing.shapingHash !== data.shapingHash)
+        throw new TypeError('Worker font handle is already registered with another shaping identity');
+      return existing;
+    }
+    const font = new RegisteredFontImpl({
+      registry: this,
+      key: data.key,
+      handle: data.handle,
+      shapingHash: data.shapingHash,
+      glyphCount: data.glyphCount,
+      metrics: data.metrics,
+    });
+    setRegisteredFontData(font, {
+      fontFaceIndex: data.fontFaceIndex,
+      sourceHash: data.sourceHash,
+      sourceCandidates: [],
+      shapingSfnt: data.shapingSfnt,
+      glyphExtents: data.glyphExtents,
+      glyphExtentsAvailability: data.glyphExtentsAvailability,
+      rasterSources: new Map(),
+      unicodeVersion: data.unicodeVersion,
+    });
+    this.#fontsByKey.set(data.key, font);
+    this.#fontsByHash.set(data.shapingHash, font);
+    this.#fontsByHandle.set(data.handle, font);
+    return font;
   }
 
   /** @internal */

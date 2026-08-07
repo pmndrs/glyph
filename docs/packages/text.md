@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:cf6f890cc55cc14cabe2e6f9ceecd13c05668e285392c413edc458ce8899f328'
+source_digest: 'sha256:5ad223897319dae6f47d8739f0a772dd4e58a39f9c20b0bb4840460e0efb68f3'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -95,6 +95,24 @@ sources:
   - id: raster-technique-api
     resource: ../../packages/text/src/raster-technique.ts
     title: Portable raster technique contract
+  - id: text-runtime-v1
+    resource: ../../packages/text/src/text-runtime.ts
+    title: Target-v1 renderer-neutral text runtime
+  - id: paragraph-batch-v1
+    resource: ../../packages/text/src/paragraph-batch.ts
+    title: Target-v1 paragraph batching and canonical storage
+  - id: paragraph-attachment-v1
+    resource: ../../packages/text/src/paragraph-batch-attachment.ts
+    title: Target-v1 renderer attachment coordinator
+  - id: three-v1
+    resource: ../../packages/text/src/three.ts
+    title: Maintained target-v1 Three.js integration
+  - id: r3f-v1
+    resource: ../../packages/text/src/r3f.ts
+    title: Maintained target-v1 React Three Fiber integration
+  - id: typegpu-v1
+    resource: ../../packages/text/src/typegpu.ts
+    title: Maintained target-v1 TypeGPU integration
   - id: raster-ktx
     resource: ../../packages/text/src/internal/raster-ktx.ts
     title: Shared dependency-light KTX2 validation
@@ -162,9 +180,13 @@ generated:
 
 # Package reference: `@pmndrs/text`
 
-Status: ✅ Milestone 9 Slug integration is complete
+Status: 🚧 Target-v1 core and maintained integrations are in progress
 
-Target-v1 extraction now has executable renderer-neutral Bitmap, MTSDF, and Slug techniques. `RasterTechnique` preserves
+Target-v1 now has an executable renderer-neutral `TextRuntime`, `ParagraphBatch`, attachment state machine, and Bitmap,
+MTSDF, and Slug techniques. The maintained `/three` adapter renders all three techniques through `WebGPURenderer` on native
+WebGPU and forced WebGL2, `/r3f` retains those Three objects through React 19 Strict Mode without leaking font leases, and
+the first `/typegpu` slice provides the caller-owned-root engine plus exact program/target boundary. Built-in TypeGPU raster
+programs and their live-pixel proof remain open. `RasterTechnique` preserves
 exact options, descriptor, decoded data, binding, and canonical storage types without `any`; its public helpers validate
 and brand technique and resource identities without requiring casts. `/raster/bitmap`, `/raster/mtsdf`, and `/raster/slug`
 decode and authenticate CPU resources without importing Three, explicitly omit absent records, select stable physical

@@ -1,6 +1,11 @@
-import { bitmap, type BitmapBinding, type BitmapData, type BitmapGlyphBatchStorage } from '@pmndrs/text/raster/bitmap';
-import { mtsdf, type MtsdfBinding, type MtsdfData, type MtsdfGlyphBatchStorage } from '@pmndrs/text/raster/mtsdf';
-import { slug, type SlugBinding, type SlugData, type SlugGlyphBatchStorage } from '@pmndrs/text/raster/slug';
+import {
+  bitmap,
+  type BitmapBinding,
+  type BitmapData,
+  type BitmapGlyphBatchStorage,
+} from '../../src/raster/bitmap-technique.js';
+import { mtsdf, type MtsdfBinding, type MtsdfData, type MtsdfGlyphBatchStorage } from '../../src/raster/mtsdf.js';
+import { slug, type SlugBinding, type SlugData, type SlugGlyphBatchStorage } from '../../src/raster/slug-technique.js';
 import type { GlyphBatchStorageOf, RasterBindingOf, RasterDataOf } from '../../src/index.js';
 
 type Equal<Left, Right> =

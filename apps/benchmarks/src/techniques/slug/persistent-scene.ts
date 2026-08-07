@@ -5,7 +5,7 @@ import {
   type FontFeature,
   type ParagraphLayout,
   type RegisteredFont,
-} from '@pmndrs/text';
+} from '@pmndrs/text/v0';
 import * as THREE from 'three/webgpu';
 
 import type { BenchmarkFontFixture } from '../../benchmark/font-fixtures';

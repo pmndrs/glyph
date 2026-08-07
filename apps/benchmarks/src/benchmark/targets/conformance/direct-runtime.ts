@@ -2,7 +2,7 @@ import {
   createParagraphEngine,
   createRuntimeShaper,
   FontRegistry,
-  type Paragraph,
+  type LayoutParagraph as Paragraph,
   type ParagraphConstraints,
   type ParagraphLayout,
   type ParagraphMeasurement,

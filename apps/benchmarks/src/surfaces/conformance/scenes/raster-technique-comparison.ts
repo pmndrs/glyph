@@ -1,4 +1,4 @@
-import { Text, type RegisteredFont } from '@pmndrs/text';
+import { Text, type RegisteredFont } from '@pmndrs/text/v0';
 import type { Node } from 'three/webgpu';
 import * as THREE from 'three/webgpu';
 import { mul, saturate, sub, texture, vec4 } from 'three/tsl';

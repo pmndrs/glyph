@@ -60,6 +60,7 @@ test('the public loader graph exposes registration without eager baker or Node h
   assert.doesNotMatch(initialGraph, /(?:from\s+["']\.\/runtime-bake|new Worker|font_baker\.wasm|node:)/);
   assert.doesNotMatch(initialGraph, /(?:\.\/node\/|\.\/bakers\/)/);
   assert.doesNotMatch(initialGraph, /(?:PMNDRS_font_slug|\.\/raster\/slug|slug-shaders)/);
+  assert.doesNotMatch(entry, /(?:three\/|three["']|\.\/text\.js)/, 'core entry must not import Three or v0 Text');
   assert.match(runtimeHost, /workerUrl:\s*new URL\(["']\.\/runtime-bake-worker\.js["']/);
   assert.match(serialWorkerHost, /new Worker\(this\.#protocol\.workerUrl/);
   assert.match(serialWorkerHost, /type:\s*["']module["']/);

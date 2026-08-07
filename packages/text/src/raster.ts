@@ -145,8 +145,8 @@ export interface RasterModule<Kind extends string, Resource, DrawBatch extends R
 // so a concrete `RasterModule<'bitmap', ...>` no longer satisfies this erasure.
 export type AnyRasterModule = RasterModule<any, any, any, any>;
 
-export type RasterKindOf<Module extends AnyRasterModule> =
-  Module extends RasterModule<infer Kind, any, any, any> ? Kind : never;
+export type RasterKindOf<Raster extends { readonly kind: string }> =
+  Raster extends RasterModule<infer Kind, any, any, any> ? Kind : Raster['kind'];
 
 export type RasterResourceOf<Module extends AnyRasterModule> =
   Module extends RasterModule<any, infer Resource, any, any> ? Resource : never;

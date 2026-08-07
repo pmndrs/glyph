@@ -1,4 +1,4 @@
-import { Text } from '@pmndrs/text';
+import { Text } from '@pmndrs/text/v0';
 import type * as THREE from 'three/webgpu';
 
 import { benchmarkIpsumText } from '../../benchmark/font-fixtures';

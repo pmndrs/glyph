@@ -1,4 +1,4 @@
-import type { FontInput, LoadedFont, RegisteredFont } from '../font.js';
+import type { FontInput, LoadedFontV0, RegisteredFont } from '../font.js';
 import { FontLoader, FontRegistry, isPackageRegisteredFont, registeredFontRegistry } from '../loader.js';
 import { RasterRuntime } from '../raster-runtime.js';
 import type { AnyRasterModule, LoadedRaster, RasterRequest } from '../raster.js';
@@ -60,7 +60,7 @@ export async function loadTextToken<Module extends AnyRasterModule, Input extend
   token: { readonly input: Input; readonly raster: RasterRequest<Module> },
   registry: FontRegistry,
   signal?: AbortSignal,
-): Promise<LoadedFont<Module, Input>> {
+): Promise<LoadedFontV0<Module, Input>> {
   const font = await loadTextFont(token.input, registry, signal);
   const raster = await sharedRasterRuntime.load(font, token.raster, signal === undefined ? undefined : { signal });
   await textShaper(registry);

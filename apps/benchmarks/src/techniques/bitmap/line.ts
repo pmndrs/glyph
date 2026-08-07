@@ -1,4 +1,4 @@
-import { Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text';
+import { Text, type FontFeature, type ParagraphLayout, type RegisteredFont } from '@pmndrs/text/v0';
 import { bitmap, selectBitmapStrikePpem } from '@pmndrs/text/raster/bitmap/v0';
 import * as THREE from 'three/webgpu';
 

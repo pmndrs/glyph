@@ -1,4 +1,4 @@
-import { Text, type AnyRasterInput, type RegisteredFont } from '@pmndrs/text';
+import { Text, type AnyRasterInput, type RegisteredFont } from '@pmndrs/text/v0';
 import * as THREE from 'three/webgpu';
 
 import fontAwesomeIcons from '../../../fixtures/fonts/font-awesome-free-6.7.2/icons.json';

@@ -1,9 +1,9 @@
-import type { RegisteredFont } from './font.js';
+import type { FontMetrics, RegisteredFont } from './font.js';
 import { textShaperAbi } from './generated/text-shaper-abi.js';
-import type { FontHandle } from './identity.js';
+import type { FontHandle, FontKey, Sha256Hex } from './identity.js';
 import { getRegisteredFontData } from './internal/registered-font.js';
 import { FontRegistry } from './loader.js';
-import type { ResolvedFontFeature } from './text.js';
+import type { ResolvedFontFeature } from './font-feature.js';
 
 export type TextShaperWasmSource = BufferSource | WebAssembly.Module;
 
@@ -85,6 +85,27 @@ export interface RuntimeShaper {
   reshapeRanges(request: ReshapeBatchRequest): ShapedBatchViews;
   memoryReport(): RuntimeShaperMemoryReport;
   dispose(): void;
+}
+
+/** @internal Worker-side shaping registration that bypasses renderer and loader ownership. */
+export interface RuntimeShaperFontData {
+  readonly key: FontKey;
+  readonly handle: FontHandle;
+  readonly shapingHash: Sha256Hex;
+  readonly glyphCount: number;
+  readonly metrics: FontMetrics;
+  readonly fontFaceIndex: number;
+  readonly sourceHash: string;
+  readonly unicodeVersion: string;
+  readonly shapingSfnt: Uint8Array;
+  readonly glyphExtents: Uint8Array;
+  readonly glyphExtentsAvailability: Uint8Array;
+}
+
+/** @internal */
+export function registerRuntimeShaperFontData(shaper: RuntimeShaper, data: RuntimeShaperFontData): void {
+  if (!(shaper instanceof RuntimeShaperImpl)) throw new TypeError('runtime shaper was not created by this package');
+  shaper._registerFontData(data);
 }
 
 interface LayoutBase {
@@ -229,7 +250,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
   readonly registry: FontRegistry;
   readonly #exports: ShaperExports;
   readonly #layouts: ShaperAbiLayouts;
-  readonly #registered = new Map<FontHandle, RegisteredFont>();
+  readonly #registered = new Map<FontHandle, RegisteredFont | undefined>();
   readonly #unsubscribe: () => void;
   #disposed = false;
 
@@ -247,6 +268,26 @@ class RuntimeShaperImpl implements RuntimeShaper {
     }
     if (this.#registered.get(font.handle) === font) return;
     const data = getRegisteredFontData(font);
+    this.#registerFontBytes({
+      key: font.key,
+      handle: font.handle,
+      shapingHash: font.shapingHash,
+      glyphCount: font.glyphCount,
+      metrics: font.metrics,
+      ...data,
+    });
+    this.#registered.set(font.handle, font);
+  }
+
+  /** @internal */
+  _registerFontData(data: RuntimeShaperFontData): void {
+    this.#assertActive();
+    if (this.#registered.has(data.handle)) return;
+    this.#registerFontBytes(data);
+    this.#registered.set(data.handle, undefined);
+  }
+
+  #registerFontBytes(data: RuntimeShaperFontData): void {
     let sfnt: { readonly pointer: number; readonly length: number } | undefined;
     let extents: { readonly pointer: number; readonly length: number } | undefined;
     let availability: { readonly pointer: number; readonly length: number } | undefined;
@@ -255,7 +296,7 @@ class RuntimeShaperImpl implements RuntimeShaper {
       extents = copyIntoWasm(this.#exports, data.glyphExtents);
       availability = copyIntoWasm(this.#exports, data.glyphExtentsAvailability);
       const status = this.#exports.registerFont(
-        font.handle,
+        data.handle,
         sfnt.pointer,
         sfnt.length,
         extents.pointer,
@@ -264,7 +305,6 @@ class RuntimeShaperImpl implements RuntimeShaper {
         availability.length,
       );
       if (status !== 0) throw shaperStatusError(status, 'register font');
-      this.#registered.set(font.handle, font);
     } finally {
       if (availability !== undefined) {
         this.#exports.deallocate(availability.pointer, availability.length);

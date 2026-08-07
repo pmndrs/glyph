@@ -1,4 +1,4 @@
-import { Text, type TextSpan } from '@pmndrs/text';
+import { Text, type TextSpan } from '@pmndrs/text/v0';
 
 import type { RasterTechnique } from '../../benchmark/url-state';
 import type { ComparisonWorkloadConfiguration, ComparisonWorkloadDefinition } from '../comparison/contracts';

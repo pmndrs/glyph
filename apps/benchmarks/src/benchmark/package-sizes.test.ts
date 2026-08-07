@@ -65,13 +65,13 @@ describe('independent package-size report', () => {
     }
   });
 
-  it('bounds accumulated renderer growth from the pre-coverage baseline', () => {
+  it('bounds accumulated target-v1 growth from the pre-coverage baseline', () => {
     const coverageGrowth = {
       'browser-core': {
-        rawBytes: { baseline: 324_269, maximumGrowth: 17_500 },
-        minifiedBytes: { baseline: 247_205, maximumGrowth: 11_500 },
-        gzipBytes: { baseline: 72_108, maximumGrowth: 2_500 },
-        brotliBytes: { baseline: 55_251, maximumGrowth: 2_100 },
+        rawBytes: { baseline: 324_269, maximumGrowth: 42_000 },
+        minifiedBytes: { baseline: 247_205, maximumGrowth: 29_000 },
+        gzipBytes: { baseline: 72_108, maximumGrowth: 7_800 },
+        brotliBytes: { baseline: 55_251, maximumGrowth: 6_500 },
       },
       'bitmap-baker-js': {
         rawBytes: { baseline: 17_478, maximumGrowth: 5_700 },
@@ -86,10 +86,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 173_552, maximumGrowth: 7_000 },
       },
       'bitmap-runtime-js': {
-        rawBytes: { baseline: 361_809, maximumGrowth: 27_500 },
-        minifiedBytes: { baseline: 271_005, maximumGrowth: 17_000 },
-        gzipBytes: { baseline: 78_673, maximumGrowth: 3_750 },
-        brotliBytes: { baseline: 60_857, maximumGrowth: 3_200 },
+        rawBytes: { baseline: 361_809, maximumGrowth: 30_000 },
+        minifiedBytes: { baseline: 271_005, maximumGrowth: 18_500 },
+        gzipBytes: { baseline: 78_673, maximumGrowth: 4_100 },
+        brotliBytes: { baseline: 60_857, maximumGrowth: 3_400 },
       },
       'mtsdf-baker-wasm': {
         rawBytes: { baseline: 534_709, maximumGrowth: 18_500 },
@@ -104,10 +104,10 @@ describe('independent package-size report', () => {
         brotliBytes: { baseline: 4_176, maximumGrowth: 800 },
       },
       'mtsdf-runtime-js': {
-        rawBytes: { baseline: 370_255, maximumGrowth: 27_000 },
-        minifiedBytes: { baseline: 275_271, maximumGrowth: 16_500 },
-        gzipBytes: { baseline: 79_993, maximumGrowth: 3_800 },
-        brotliBytes: { baseline: 62_081, maximumGrowth: 3_300 },
+        rawBytes: { baseline: 370_255, maximumGrowth: 29_000 },
+        minifiedBytes: { baseline: 275_271, maximumGrowth: 17_500 },
+        gzipBytes: { baseline: 79_993, maximumGrowth: 4_000 },
+        brotliBytes: { baseline: 62_081, maximumGrowth: 3_400 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;
@@ -126,15 +126,15 @@ describe('independent package-size report', () => {
     const retainedCapacityGrowth = {
       'bitmap-runtime-js': {
         baseline: { rawBytes: 382_060, minifiedBytes: 283_898, gzipBytes: 81_435, brotliBytes: 63_146 },
-        maximumGrowth: { rawBytes: 7_000, minifiedBytes: 3_750, gzipBytes: 900, brotliBytes: 850 },
+        maximumGrowth: { rawBytes: 9_000, minifiedBytes: 5_250, gzipBytes: 1_250, brotliBytes: 1_000 },
       },
       'mtsdf-runtime-js': {
         baseline: { rawBytes: 389_761, minifiedBytes: 287_629, gzipBytes: 82_721, brotliBytes: 64_286 },
-        maximumGrowth: { rawBytes: 7_500, minifiedBytes: 4_000, gzipBytes: 1_050, brotliBytes: 1_050 },
+        maximumGrowth: { rawBytes: 8_750, minifiedBytes: 4_750, gzipBytes: 1_150, brotliBytes: 1_050 },
       },
       'slug-runtime-js': {
         baseline: { rawBytes: 390_276, minifiedBytes: 286_600, gzipBytes: 82_730, brotliBytes: 64_271 },
-        maximumGrowth: { rawBytes: 10_750, minifiedBytes: 5_750, gzipBytes: 1_500, brotliBytes: 1_450 },
+        maximumGrowth: { rawBytes: 12_750, minifiedBytes: 7_250, gzipBytes: 1_850, brotliBytes: 1_700 },
       },
     } as const;
     const fields = ['rawBytes', 'minifiedBytes', 'gzipBytes', 'brotliBytes'] as const;

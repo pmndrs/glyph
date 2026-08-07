@@ -1,4 +1,4 @@
-import { Text, type RegisteredFont } from '@pmndrs/text';
+import { Text, type RegisteredFont } from '@pmndrs/text/v0';
 import { slug } from '@pmndrs/text/raster/slug/v0';
 import * as THREE from 'three/webgpu';
 

@@ -65,7 +65,8 @@ export interface AnyFontToken {
   };
 }
 
-export interface LoadedFont<Module extends AnyRasterModule, Input extends FontInput = FontInput> {
+/** @deprecated Merged-v0 loaded font/raster pair retained only by the v0 React harness. */
+export interface LoadedFontV0<Module extends AnyRasterModule, Input extends FontInput = FontInput> {
   readonly input: Input;
   readonly font: RegisteredFont;
   readonly raster: LoadedRaster<Module>;
