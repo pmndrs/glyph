@@ -235,16 +235,16 @@ function sameFontFeatures(previous: readonly FontFeature[], next: readonly FontF
  */
 function glyphIdentityKeys(layout: ParagraphLayout, glyphs: GlyphSnapshot): readonly string[] {
   assertParallelGlyphIdentity(layout, glyphs);
-  const floatBits = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT);
-  const floatValue = new Float32Array(floatBits);
-  const unsignedValue = new Uint32Array(floatBits);
   const counts = new Map<string, number>();
   const keys: string[] = [];
   for (let index = 0; index < glyphs.glyphIds.length; index += 1) {
     const fontHandle = layout.fontHandles[glyphs.fontSlots[index]!];
     if (fontHandle === undefined) throw new TypeError('paragraph layout references a missing font slot');
-    floatValue[0] = layout.glyphFontSizes[index]!;
-    const baseKey = `${fontHandle}:${glyphs.glyphIds[index]!}:${glyphs.clusters[index]!}:${unsignedValue[0]!}`;
+    // Font size is deliberately absent. The merged renderer keyed on it, which made a glyph fail to match itself across
+    // the one change the transition exists to animate, so a size change reported every glyph as new and interpolated
+    // nothing. Font handle, glyph id, cluster, and occurrence still identify a glyph, and a uniform scale preserves
+    // visual order, so matching across a resize recovers exactly the glyph that moved.
+    const baseKey = `${fontHandle}:${glyphs.glyphIds[index]!}:${glyphs.clusters[index]!}`;
     const occurrence = counts.get(baseKey) ?? 0;
     counts.set(baseKey, occurrence + 1);
     keys.push(`${baseKey}:${occurrence}`);
