@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:5ad223897319dae6f47d8739f0a772dd4e58a39f9c20b0bb4840460e0efb68f3'
+source_digest: 'sha256:d35a9f2feef14d87f168a31d3e24663462516c99836c46d066300762ca304555'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -199,6 +199,13 @@ subpaths, while `/raster/msdf` remains the historical spelling, until the target
 renderer remains separate from portable packing, but the relocated harness paths passed a fresh 42-cell Presentation
 matrix: all seven workloads remained visible for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
 case. Runtime batching and target-v1 engine targets remain open.
+
+The `/three` adapter resolves each technique's target through a program registry keyed by the technique's stable
+identifier rather than its object identity, and pre-registers the three first-party programs. Identifier keying preserves
+the public raster extension boundary proven in milestone 10: a third party registers a Three program for its own technique
+through `registerThreeRasterProgram`, and an application may wrap a first-party technique to instrument its runtime baker
+without the wrapper losing its program. An unregistered technique fails at batch construction with a typed error naming
+the identifier instead of rendering nothing.
 
 `Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
 Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary
