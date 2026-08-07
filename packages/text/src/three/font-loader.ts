@@ -9,12 +9,22 @@ import {
   type TextPreparationWorker,
   type TextRuntime,
 } from '../text-runtime.js';
-import type { RuntimeFontBake } from '../loader.js';
+import type { FontRegistry, RuntimeFontBake } from '../loader.js';
 
 export interface ThreeFontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
   readonly createWorker?: () => TextPreparationWorker;
+  /**
+   * Registers loaded fonts in a registry the application already owns. Without one the runtime creates its own, and a
+   * caller holding registry-scoped state cannot reach the fonts this loader produces.
+   */
+  readonly registry?: FontRegistry;
 }
+
+/** A font request that an application can cancel, matching the signal the core runtime already accepts. */
+export type ThreeLoadedFontRequest<Technique extends AnyRasterTechnique> = LoadedFontRequest<Technique> & {
+  readonly signal?: AbortSignal;
+};
 
 interface RuntimeDomain {
   readonly manager: THREE.LoadingManager;
@@ -37,7 +47,7 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
   }
 
   override load<Technique extends AnyRasterTechnique>(
-    request: LoadedFontRequest<Technique>,
+    request: ThreeLoadedFontRequest<Technique>,
     onLoad: (font: LoadedFont<Technique>) => void,
     _onProgress?: (event: ProgressEvent) => void,
     onError?: (error: unknown) => void,
@@ -59,7 +69,7 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
   }
 
   override loadAsync<Technique extends AnyRasterTechnique>(
-    request: LoadedFontRequest<Technique>,
+    request: ThreeLoadedFontRequest<Technique>,
     onProgress?: (event: ProgressEvent) => void,
   ): Promise<LoadedFont<Technique>> {
     return new Promise((resolve, reject) => this.load(request, resolve, onProgress, reject));
@@ -77,13 +87,15 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
   }
 
   async #load<Technique extends AnyRasterTechnique>(
-    request: LoadedFontRequest<Technique>,
+    request: ThreeLoadedFontRequest<Technique>,
   ): Promise<LoadedFont<Technique>> {
+    const { signal, ...requested } = request;
     const domain = this.#runtimeDomain();
     const runtime = await domain.runtime;
     this.#assertActive();
-    const normalized = normalizeRequest(request, this.#options.runtimeBake);
-    const font = await runtime.loadFont(normalized);
+    signal?.throwIfAborted();
+    const normalized = normalizeRequest(requested as LoadedFontRequest<Technique>, this.#options.runtimeBake);
+    const font = await runtime.loadFont(normalized, signal === undefined ? {} : { signal });
     this.#assertActive();
     if (!domain.fonts.has(font)) {
       domain.fonts.add(font);
@@ -103,6 +115,7 @@ export class FontLoader extends THREE.Loader<LoadedFont<AnyRasterTechnique>, Loa
         manager: this.manager,
         runtime: createTextRuntime({
           ...(this.#options.createWorker === undefined ? {} : { async: { createWorker: this.#options.createWorker } }),
+          ...(this.#options.registry === undefined ? {} : { registry: this.#options.registry }),
         }),
         fonts: new Set(),
         loaderCount: 0,
