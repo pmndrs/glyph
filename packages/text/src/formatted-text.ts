@@ -101,10 +101,12 @@ function compose<Technique extends AnyRasterTechnique>(
     if (isFragment(value)) {
       const fragment = value as TextLiteral<Technique> | TextSpanFragment<Technique>;
       text += fragment.text;
-      for (const nested of fragment.spans) spans.push(offsetSpan(nested, start));
+      // Every resolver applies the last covering span, so an enclosing span must
+      // precede the spans it contains for inner formatting to compose over it.
       if ('properties' in fragment && fragment.text.length !== 0) {
         spans.push(Object.freeze({ start, end: text.length, ...fragment.properties }));
       }
+      for (const nested of fragment.spans) spans.push(offsetSpan(nested, start));
     } else {
       text += String(value);
     }
@@ -140,13 +142,15 @@ function normalizeFormats<Technique extends AnyRasterTechnique>(
     else {
       const { color, opacity, outline, shadow, ...layout } = format;
       style = Object.freeze({ ...(style ?? {}), ...layout });
-      paint = Object.freeze({
-        ...(paint ?? {}),
+      const painted = {
         ...(color === undefined ? {} : { color }),
         ...(opacity === undefined ? {} : { opacity }),
         ...(outline === undefined ? {} : { outline }),
         ...(shadow === undefined ? {} : { shadow }),
-      });
+      };
+      // An absent paint must stay absent so the span inherits the surrounding
+      // paint instead of resetting it to the default glyph colour.
+      if (Object.keys(painted).length !== 0) paint = Object.freeze({ ...(paint ?? {}), ...painted });
     }
   }
   return Object.freeze({

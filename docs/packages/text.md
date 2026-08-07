@@ -101,6 +101,9 @@ sources:
   - id: paragraph-batch-v1
     resource: ../../packages/text/src/paragraph-batch.ts
     title: Target-v1 paragraph batching and canonical storage
+  - id: formatted-text-v1
+    resource: ../../packages/text/src/formatted-text.ts
+    title: Target-v1 formatted text and span composer
   - id: paragraph-attachment-v1
     resource: ../../packages/text/src/paragraph-batch-attachment.ts
     title: Target-v1 renderer attachment coordinator
@@ -175,7 +178,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T14:52:58Z'
+  at: '2026-08-07T15:29:49Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -242,6 +245,19 @@ objects report the same batch-wide total rather than a per-paragraph share. On t
 16-pixel Inter Bitmap measures 707,584 bytes as one 1024×679 R8 page plus 12,288 attribute bytes, MTSDF measures
 41,971,712 bytes as its 41,943,040-byte padded atlas array plus 28,672 attribute bytes, and Slug measures 3,190,784 bytes;
 the same totals are reported on WebGPU and forced WebGL2.
+
+The `txt` and `span` composer emits UTF-16 ranges over the composed string, and every resolver — the shaping-style sweep,
+the paint lookup, and the render-variant lookup — applies the last span that covers a cluster.[^formatted-text-v1] The
+composer therefore emits an enclosing span before the spans nested inside it, so inner formatting composes over the
+formatting it is nested in rather than being overridden by it. A span states only the properties it was given: a
+style-only span carries no font and no paint, so it shapes from the surrounding font and keeps the surrounding paint
+instead of resetting either to a default. Ranges count UTF-16 code units, so an astral character before a span shifts that
+span by two. Replacement content owns its own formatting on both the core `Paragraph` and the Three `Text`: assigning a
+literal installs that literal's spans, and assigning a plain string clears the spans it replaced rather than reinterpreting
+stale ranges against unrelated text. Runtime integration covers each of these against real shaped output — inherited font
+handles and glyph IDs, per-glyph font sizes and canonical linear colours, cluster indices across a surrogate pair,
+tuple-spread and direct `span` calls producing identical layout, and a formatted literal driven through `TextGroup`
+binding, `updateMatrixWorld`, and the drawn per-run instance counts.
 
 `Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
 Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary

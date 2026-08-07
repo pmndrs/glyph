@@ -663,7 +663,7 @@ class ParagraphImpl<Technique extends AnyRasterTechnique, Variant> implements Pa
   set(update: ParagraphUpdate<Technique, Variant>): void {
     this.#assertActive();
     const next = normalizeProperties(
-      { ...this.#state, ...update } as ParagraphProperties<Technique, Variant>,
+      { ...this.#state, ...replacedContent(update) } as ParagraphProperties<Technique, Variant>,
       this.batch.runtime,
       this.batch.technique,
     );
@@ -1031,6 +1031,19 @@ class CapacityOverflow extends Error {
     this.overflows = overflows;
     this.required = Math.max(...overflows.map((overflow) => overflow.required));
   }
+}
+
+/**
+ * Replacement text carries its own formatting: a literal brings its spans and a
+ * plain string brings none. Retaining the previous spans would reinterpret them
+ * against unrelated text, so an update that replaces text without stating spans
+ * clears the ones it replaced.
+ */
+function replacedContent<Technique extends AnyRasterTechnique, Variant>(
+  update: ParagraphUpdate<Technique, Variant>,
+): ParagraphUpdate<Technique, Variant> {
+  if (!('text' in update) || 'spans' in update) return update;
+  return { ...update, spans: [] } as ParagraphUpdate<Technique, Variant>;
 }
 
 function normalizeProperties<Technique extends AnyRasterTechnique, Variant>(
