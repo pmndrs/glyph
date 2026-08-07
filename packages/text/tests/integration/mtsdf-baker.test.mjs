@@ -648,10 +648,14 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   assert.equal(data.records.byteLength, 2937 * 20);
   assert.equal(data.pages.length, 10);
   assert.deepEqual(data.binding, { width: 1024, height: 1024, layers: 10 });
-  assert.equal(
-    data.pages.reduce((bytes, page) => bytes + page.bytes.byteLength, 0),
-    41_943_040,
-  );
+  // Decoded pages carry their own bytes, not the padded binding. This Inter atlas has unequal page sizes inside a
+  // 1024x1024x10 binding, so retaining actual page bytes holds 37.3 MiB where padding every page to the binding would
+  // hold 40 MiB. The technique ends at CPU data; padding into the texture array is the engine target's work.
+  const paddedBindingBytes = data.binding.width * data.binding.height * data.binding.layers * 4;
+  const decodedPageBytes = data.pages.reduce((bytes, page) => bytes + page.bytes.byteLength, 0);
+  assert.equal(paddedBindingBytes, 41_943_040);
+  assert.equal(decodedPageBytes, 39_111_736);
+  assert.ok(decodedPageBytes < paddedBindingBytes, 'decoded pages must not carry the binding padding');
 
   const glyphIds = firstPresentGlyphByPage(records, data.pages.length);
   const decorated = {
