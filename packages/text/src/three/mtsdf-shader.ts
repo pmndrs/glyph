@@ -37,7 +37,13 @@ export interface ThreeMtsdfShaderResources {
   readonly pixelRange: number;
 }
 
-/** Everything the canonical MTSDF graph produces, so a program can consume a stage or compose over its final output. */
+/**
+ * Everything the canonical MTSDF graph produces, so a program can consume a stage or compose over its final output.
+ *
+ * Unlike Bitmap this output publishes no `clipPosition`: a distance field reconstructs its edge from the screen-space
+ * gradient, so it is correct at any subpixel placement and must keep the default projection rather than snap to the
+ * physical pixel grid.
+ */
 export interface ThreeMtsdfShaderOutput {
   readonly position: Node<'vec3'>;
   /** Unclamped atlas coordinate the glyph cell is sampled at. */

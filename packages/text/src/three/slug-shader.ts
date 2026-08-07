@@ -62,7 +62,12 @@ export interface ThreeSlugShaderResources {
   readonly fillRule?: ThreeSlugFillRule;
 }
 
-/** Everything the canonical Slug graph produces, so a program can consume a stage or compose over its final output. */
+/**
+ * Everything the canonical Slug graph produces, so a program can consume a stage or compose over its final output.
+ *
+ * Unlike Bitmap this output publishes no `clipPosition`: Slug integrates coverage analytically from outlines, so it is
+ * correct at any subpixel placement and must keep the default projection rather than snap to the physical pixel grid.
+ */
 export interface ThreeSlugShaderOutput {
   /** Dilated glyph-quad position. Reading it from a vertex node is what publishes `renderCoordinate`. */
   readonly position: Node<'vec3'>;

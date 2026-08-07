@@ -5,7 +5,7 @@ description: Provides the shared interactive and automated benchmark product sur
 resource: ../../apps/benchmarks
 workspace_package: '@pmndrs/text-benchmarks'
 documentation_type: reference
-source_digest: 'sha256:3dbc4738b16cb5112c75bf72fb22d8139ba9c6ab10285e73d91c4281ceb1535a'
+source_digest: 'sha256:f6be4eaed5a9e6e332a1652a4313bee4dc5079dbd00b736193862e8f0b454994'
 tags: [package, benchmarks, react, vite, product-e2e]
 sources:
   - id: manifest
@@ -98,6 +98,9 @@ sources:
   - id: bitmap-finite-scene
     resource: ../../apps/benchmarks/src/benchmark/low-level/raster/bitmap-finite-scene.ts
     title: Shared finite Bitmap scene and exact CPU-reference capture
+  - id: bitmap-conformance-line
+    resource: ../../apps/benchmarks/src/techniques/bitmap/conformance-line.ts
+    title: Target-v1 committed Bitmap conformance paragraph
   - id: bitmap-conformance-capture
     resource: ../../apps/benchmarks/src/benchmark/targets/conformance/raster/bitmap-capture.ts
     title: Target-owned finite Bitmap conformance capture
@@ -196,7 +199,7 @@ sources:
     title: Realtime comparison product probe
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T16:45:00Z'
+  at: '2026-08-07T17:05:00Z'
 ---
 
 # Package reference: `@pmndrs/text-benchmarks`
@@ -214,11 +217,21 @@ and one reusable module Worker.
 A fifth proof covers composition over the exported canonical technique shaders. It renders one paragraph through the
 pre-registered Bitmap program, then through a third-party program that owns its own attributes, geometry, and material and
 composes only its final colour over `bitmapShader`. The verification compares the two passes on the same page rather than
-against a stored golden: an identical lit-pixel set proves the composed program inherited the canonical placement and
-coverage, and an empty green channel proves it still emitted its own output.
+against a stored golden: an identical lit-pixel set proves the composed program inherited the canonical placement,
+snapping, and coverage, and an empty green channel proves it still emitted its own output.
+
+The finite Bitmap conformance lane now drives that adapter directly. `bitmap-finite-scene` builds its paragraph with the
+target-v1 `Text` and reads the CPU reference from the `LoadedFont` raster data it already holds, which removes the second
+raster load and decode the merged-v0 path performed. A committed `Text` replaces the awaited readiness promise: the
+paragraph is parented, `updateMatrixWorld` reconciles it, and a preparation failure surfaces as a thrown error rather than
+an empty frame. The migrated lane reproduces the CPU compositor in zero mismatched bytes and returns the merged-v0
+full-frame hash `a47930d3…e893` with the same 5,930 lit and 3,473 half-coverage pixels and `[68, 18, 313, 112]` ink
+bounds, so the oracle changed renderer without changing what counts as correct. Both `bitmap-text-webgl2` and
+`source-outline-bitmap-webgl2` consume this scene, so both moved together.
 
 During target-v1 implementation, the benchmark intentionally imports the merged Bitmap and Slug renderer modules through
-their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths. Canonical `/raster/bitmap` and `/raster/slug`
+their explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness paths for the live Presentation surfaces. Canonical
+`/raster/bitmap` and `/raster/slug`
 resolve to the new renderer-neutral techniques. The harness paths preserve the existing Presentation oracle until the new
 `/three` adapter consumes canonical technique storage; they are not target-v1 application APIs. A fresh matrix after the
 move rendered all seven workloads visibly for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per

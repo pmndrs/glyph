@@ -255,6 +255,7 @@ class ComposedBitmapTarget implements ParagraphBatchTarget<typeof composedBitmap
       transparent: true,
     });
     material.positionNode = shader.position;
+    material.vertexNode = shader.clipPosition;
     material.colorNode = shader.color.mul(TSL.vec3(1, 0, 0));
     material.opacityNode = shader.opacity;
     return {

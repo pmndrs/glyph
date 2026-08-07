@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:dec30ee8127dd7b840c879f503b746feea024bf0292b2d88f60b4c8d61186011'
+source_digest: 'sha256:7f73c45bb5cdef6b22b2f224f628c1726ccde4adc42c2495340226f4e6a64f30'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -178,7 +178,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-07T16:45:00Z'
+  at: '2026-08-07T17:05:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
@@ -198,7 +198,14 @@ strike/page per glyph and retains R8 pages; MTSDF retains one RGBA8 atlas-array 
 RGBA16F curve, R32 header, and R16 reference bytes so Three's R16-to-R32 workaround remains target-owned. Focused package
 tests prove selection, range writes, binding identity, coordinates, paint, and analytic addresses. The merged-v0 Bitmap and
 Slug renderer modules remain temporarily reachable through explicit `/raster/bitmap/v0` and `/raster/slug/v0` harness
-subpaths, while `/raster/msdf` remains the historical spelling, until the target-v1 Three adapter replaces them. The prior
+subpaths, while `/raster/msdf` remains the historical spelling, until the target-v1 Three adapter replaces them. The
+Bitmap conformance lane no longer needs that fallback: driven by the target-v1 `Text`, `ThreeBitmapTarget`, and
+`LoadedFont` raster data, it reproduces the benchmark's independent CPU atlas compositor in zero mismatched bytes and
+returns the same pinned full-frame hash `a47930d3…e893`, the same 5,930 lit and 3,473 half-coverage pixels, and the same
+`[68, 18, 313, 112]` ink bounds the merged-v0 renderer produced. Reaching that required two corrections to the exported
+Bitmap graph, both invisible to a coverage-threshold smoke check and both caught only by the exact oracle: the graph had
+inherited merged-v0's vertical atlas flip, which belongs to that renderer's `flipY`-enabled upload rather than to the
+target-v1 pages, and it had dropped the physical-pixel snap the strike's integer placement depends on. The prior
 renderer remains separate from portable packing, but the relocated harness paths passed a fresh 42-cell Presentation
 matrix: all seven workloads remained visible for Bitmap, MTSDF, and Slug on WebGPU and forced WebGL2 with one renderer per
 case. Runtime batching and target-v1 engine targets remain open.
@@ -221,21 +228,31 @@ functions, so a composed program cannot drift from what the first-party path ren
 built-in target rather than an unused mirror. Each function reads `positionLocal` and `uv()` from the technique's unit
 quad, so a program supplying its own geometry owns that correspondence.
 
+`bitmapShader` additionally publishes `clipPosition`, the projected quad rounded to whole physical pixels, which a program
+assigns to `material.vertexNode`. Bitmap coverage is authored at one atlas texel per device pixel, so an unsnapped quad
+resamples the strike rather than reproducing it, and placing that snap in the exported shader rather than in the built-in
+target is what makes a composed program inherit it by construction instead of by convention. The output carries no other
+route to a vertex stage, so the seam cannot be silently skipped. MTSDF and Slug deliberately publish no such member: a
+distance field reconstructs its edge from the screen-space gradient and Slug integrates coverage analytically from
+outlines, so both are correct at any subpixel placement and must keep the default projection. Bitmap pages upload in the
+atlas's own top-down row order with `flipY` disabled, and `atlasUv` addresses that same space directly, so the sampled row
+is the baked row on both backends.
+
 The composed-program proof renders one paragraph twice on native WebGPU and forced WebGL2: once through the pre-registered
 Bitmap program, then through a third-party program that owns its own attributes, geometry, and material and composes only
-its final colour over `bitmapShader`. Both passes light an identical 1,243-pixel set while the composed pass emits no green
-channel, so the custom program inherited the canonical placement and coverage instead of reimplementing them. Extracting
-the three shaders left the retained proof pages unchanged at 1,226 lit pixels for Bitmap, 1,935 for MTSDF, and 1,510 for
-Slug on both backends.
+its final colour over `bitmapShader`. Both passes light an identical 2,616-pixel set while the composed pass emits no green
+channel, so the custom program inherited the canonical placement, snapping, and coverage instead of reimplementing them.
+The retained proof pages light 2,606 pixels for Bitmap, 1,935 for MTSDF, and 1,510 for Slug on both backends.
 
 Two target-v1 raster defects surfaced when the benchmark began driving these programs against the exact conformance
 oracles rather than against themselves. Slug published each quad's lower-left em corner while its shader documented and
 consumed the upper-left, so every glyph integrated its coverage vertically mirrored inside a correctly placed quad;
 publishing the top and walking em space downward moved the CPU band-walk reference from 22.94 mean absolute error with
 22,911 severe error pixels to 0.223 with none, and restored the independent browser-rasterized source-outline envelope.
-Bitmap remains open: target-v1 dropped the device-pixel snapping the merged renderer applied to every glyph quad, which
-milestone 1 records as a hard density contract, and snapping alone does not close the residual difference against the CPU
-atlas compositor.
+Bitmap carried two defects at once. It kept the merged renderer's vertical atlas flip, which belonged to a `flipY`
+upload the target-v1 program no longer performs, so every fragment sampled the mirrored row of its page; and it dropped
+the device-pixel snapping milestone 1 records as a hard density contract. Correcting both restores the pinned merged-v0
+frame exactly: hash `a47930d3…e893`, 3,473 half-coverage pixels, and ink bounds `[68, 18, 313, 112]`.
 
 Both defects were masked by self-comparison. A rendered-pixel count taken from the program under test only proves the
 program is stable, not correct, so each technique is held against a reference computed independently of it.

@@ -186,6 +186,7 @@ function createBitmapTargetResource(
     transparent: true,
   });
   material.positionNode = shader.position;
+  material.vertexNode = shader.clipPosition;
   material.colorNode = shader.color;
   material.opacityNode = shader.opacity;
 

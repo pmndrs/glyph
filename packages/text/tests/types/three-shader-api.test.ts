@@ -35,6 +35,18 @@ material.positionNode = slugOutput.position;
 material.colorNode = mul(slugOutput.color, vec3(1, 0, 0));
 material.opacityNode = slugOutput.opacity;
 
+// A composed Bitmap program inherits device-pixel snapping by driving its vertex stage from the published clip
+// position; nothing else in the output can supply it, so the seam cannot be missed by construction.
+const bitmapMaterial = new THREE.MeshBasicNodeMaterial();
+bitmapMaterial.positionNode = bitmapOutput.position;
+bitmapMaterial.vertexNode = bitmapOutput.clipPosition;
+
+// @ts-expect-error MTSDF is resolution-independent and deliberately publishes no clip position to snap.
+void mtsdfOutput.clipPosition;
+
+// @ts-expect-error Slug is resolution-independent and deliberately publishes no clip position to snap.
+void slugOutput.clipPosition;
+
 // @ts-expect-error The canonical colour is a vec3, so a float composition cannot silently consume it.
 const wrongColor: Node<'float'> = bitmapOutput.color;
 
@@ -45,5 +57,6 @@ void bitmapCoverage;
 void mtsdfOutlineCoverage;
 void slugCoverage;
 void material;
+void bitmapMaterial;
 void wrongColor;
 void mtsdfOutput;
