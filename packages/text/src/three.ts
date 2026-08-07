@@ -14,7 +14,11 @@ export type { ParagraphLayout } from './layout.js';
 export type { ParagraphStyle } from './paragraph.js';
 export { FontLoader } from './three/font-loader.js';
 export { registerThreeRasterProgram } from './three/program-registry.js';
-export type { ThreeRasterProgram, ThreeRasterTargetOwner } from './three/program-registry.js';
+export type {
+  ThreeRasterProgram,
+  ThreeRasterTargetAccounting,
+  ThreeRasterTargetOwner,
+} from './three/program-registry.js';
 export type { ThreeFontLoaderOptions as FontLoaderOptions } from './three/font-loader.js';
 export { Text, TextGroup } from './three/text.js';
 export type {

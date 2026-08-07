@@ -14,12 +14,20 @@ export interface ThreeRasterTargetOwner {
 }
 
 /**
+ * Optional GPU accounting a Three target may report: the bytes of the engine resources it currently retains. Only the
+ * target knows its realized allocation, so a portable technique never reports one; a third-party program may omit it.
+ */
+export interface ThreeRasterTargetAccounting {
+  readonly gpuBytes?: number;
+}
+
+/**
  * Builds the Three target that realizes one technique's prepared glyph batches as engine resources and draws. Core
  * owns partitioning, packing, and ordering; a program owns shaders, pipelines, and final draw compilation.
  */
 export type ThreeRasterProgram = (
   owner: ThreeRasterTargetOwner,
-) => ParagraphBatchTarget<AnyRasterTechnique, never, ParagraphBatchTargetRevision>;
+) => ParagraphBatchTarget<AnyRasterTechnique, never, ParagraphBatchTargetRevision> & ThreeRasterTargetAccounting;
 
 const programs = new Map<RasterTechniqueId, ThreeRasterProgram>();
 
