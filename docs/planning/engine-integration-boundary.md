@@ -41,7 +41,7 @@ sources:
     title: Raw TypeGPU proof target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -310,9 +310,10 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Move Three textures, attributes, TSL materials, scene objects, and renderer disposal into Three raster targets.
 - Permit an optional `RasterProgram` seam when multiple engines share a shader/resource backend such as TypeGPU and raw
   WebGPU interop; do not require an artificial universal shader interface in core.
-- Permit an optional external Three/TypeGPU program package that adapts shared TypeGPU raster functions into TSL nodes.
-  Keep Three-owned accessors, materials, pipeline state, and lifecycle in that adapter; neither core nor the portable
-  technique imports TypeGPU or TSL.
+- Permit an optional external Three/TypeGPU experiment only for capabilities the exact-version bridge proves. At the
+  reviewed versions it is nullary WGSL injection, WebGPU-only, and not a complete Slug/Bitmap resource bridge. Keep
+  Three-owned accessors, materials, pipeline state, and lifecycle in that adapter; neither core nor the portable technique
+  imports TypeGPU or TSL.
 - Retain decoded CPU page/table bytes through loaded-font lifetime so several targets and late attachment need no refetch or
   decode.
 
@@ -384,21 +385,22 @@ Implement the complete [TypeGPU API](typegpu-api.md), then build the smallest ap
 - one synchronous update and one asynchronous update;
 - no Three.js import or Three-derived adapter logic.
 
-### 8a. Prove TypeGPU-authored TSL
+### 8a. Falsify or narrow the TypeGPU-to-Three bridge
 
-Use `@typegpu/three` `toTSL()` to adapt the same TypeGPU-authored Bitmap and Slug raster functions into the Three program.
-Keep Three accessors, material assembly, blending, depth, renderer lifecycle, and target ownership in the Three adapter.
-Against the repository-pinned Three.js version, inspect the emitted WebGPU shaders, prove deterministic render parity with
-the native TSL programs, and measure tree-shaken raw/gzip/Brotli transfer plus graph-construction and shader-compilation
-cost. Keep this implementation in an optional external shader/integration package unless those results justify making it
-the default Three program.
+Start from the reviewed baseline `three@0.185.1`, `typegpu@0.11.9`, and `@typegpu/three@0.11.0`: `toTSL()` accepts a nullary
+closure, injects resolved WGSL through Three's WebGPU builder, has no forced-WebGL2 route, and has not carried Slug's
+sampleable resources. Build a minimal exact-version fixture before adapting text. Only if that fixture proves real Bitmap
+and Slug resources, dependent loads, vertex work, structured results, and every promised backend should the experiment
+inspect parity and measure transfer/graph/compilation cost. Otherwise narrow the optional external package to the pure
+WebGPU math it actually supports; native TSL remains authoritative for Three.
 
 ### 9. Prove Wayfare
 
-Build the smallest application in `iwoplaza/wayfare` that proves the same contract through Wayfare's entity, transform,
-render-pass, and frame lifecycle. The Wayfare adapter may own scene integration but must not reshape, repartition physical
-storage, resort source text, or recompute canonical packing. It may reuse a TypeGPU program while retaining its own final
-pass and draw lifecycle.
+First inspect and pin `iwoplaza/wayfare` source to establish its public device, pass, resource, transform, and lifecycle
+hooks; no current document treats compatibility as already proven. Then build the smallest application that proves the
+same contract. The Wayfare adapter may own scene integration but must not reshape, repartition physical storage, resort
+source text, or recompute canonical packing. Reuse a TypeGPU program only if the pinned source and execution proof establish
+compatible WebGPU device/pass interop; otherwise implement a Wayfare-native program against the same semantic raster ABI.
 
 ### 10. Prove an external gpucat package
 

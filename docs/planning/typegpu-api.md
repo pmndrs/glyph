@@ -38,7 +38,7 @@ sources:
     title: TypeGPU and TSL interoperability
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # TypeGPU raster programs and text engine
@@ -104,9 +104,11 @@ pass.end();
 TypeGPU itself preserves that ownership when a root is initialized from an existing device. The application owns device
 loss, canvas configuration, command encoders, pass descriptors, queue submission, and frame fences.
 
-## Complete public surface
+## Proposed public surface (compile gate required)
 
 ```ts
+import type { TgpuRoot } from 'typegpu';
+
 interface TypeGpuTextEngine {
   readonly root: TgpuRoot;
   readonly current: TextRuntimeRevision;
@@ -187,8 +189,10 @@ interface TypeGpuFrame {
 }
 ```
 
-One TypeGPU paragraph batch wraps one core `ParagraphBatch` and one attached target. `encode()` commits a ready target
-candidate, binds its program resources, and encodes the target revision's compiled draws into the supplied pass. The caller
+One TypeGPU paragraph batch wraps one core `ParagraphBatch` and one attached target. `encode()` calls the hidden
+attachment's `prepare()`, commits its ready candidate, binds program resources, and encodes the target revision's compiled
+draws into the supplied pass. The standard target stages synchronously; an alternative target that needs asynchronous
+pipeline work uses the public attachment contract directly and resolves it before encoding. The caller
 may encode the same live batch in several compatible passes or omit it for a frame. A batch is fixed to the root/device and
 render-target compatibility declared at engine construction.
 
@@ -356,6 +360,10 @@ interface TypeGpuRasterProgram<
   >;
   readonly shader: Shader;
   readonly variant: TypeGpuVariantCodec<Variant, VariantKey, VariantSchema, VariantValue>;
+  readonly cacheLimits: {
+    readonly pipelines: number;
+    readonly materializedVariants: number;
+  };
 
   createFontResources(root: TgpuRoot, font: LoadedFont<Technique>, binding: RasterBindingOf<Technique>): FontResources;
   createPipeline(root: TgpuRoot, key: VariantKey, pipelineVariant: number): Pipeline;
@@ -422,8 +430,9 @@ declare function createTypeGpuParagraphBatchTarget<
 ```
 
 `TypeGpuTextEngine.createParagraphBatch()` constructs this target, attaches it to the hidden core batch, and exposes the
-retained convenience shown earlier. Wayfare or another engine may call the factory directly, attach it to its own public
-core batch, and decide when to commit and encode. Several targets and batches can lease one program without sharing their
+retained convenience shown earlier. Another engine may call the factory directly only after proving compatible WebGPU
+device/pass interop, attach it to its own public core batch, and decide when to prepare, commit, and encode. Wayfare remains
+an unverified candidate rather than a claimed consumer. Several targets and batches can lease one program without sharing their
 instance, transform, draw-revision, or fence state.
 
 `variant.key()` describes pipeline/material compatibility, not authored identity. Two different parameter bindings may
@@ -442,35 +451,21 @@ each frame cannot create an unbounded cache. Custom programs own and document eq
 
 ## Compose effects without replacing the technique
 
-```ts
-interface TypeGpuTextEffect<ParameterSchema, Parameters, Context, Output, Compose> {
-  readonly parameters: ParameterSchema;
-  readonly compose: Compose;
-  readonly types?: {
-    readonly parameters: Parameters;
-    readonly context: Context;
-    readonly output: Output;
-  };
-  bind(parameters: Parameters): TypeGpuTextEffectBinding<Parameters>;
-}
+The convenience helper's exact declaration is intentionally not claimed yet. TypeGPU is not installed in this repository,
+and the earlier five-parameter sketch could infer `Parameters`, `Context`, and `Output` as `unknown`. The accepted shape is
+constrained instead:
 
-interface TypeGpuTextEffectBinding<Parameters> {
-  readonly parameters: Parameters;
-  readonly effect: TypeGpuTextEffect<unknown, Parameters, unknown, unknown, unknown>;
-}
+- the helper takes the exact technique shader as an inference anchor;
+- parameter values are derived from the declared TypeGPU schema through the installed TypeGPU type utilities;
+- fragment context and output are derived from that shader's exact fragment stage; and
+- the returned binding accepts only the derived parameter value.
 
-declare function defineTypeGpuTextEffect<ParameterSchema, Parameters, Context, Output, Compose>(definition: {
-  readonly parameters: ParameterSchema;
-  readonly compose: Compose;
-}): TypeGpuTextEffect<ParameterSchema, Parameters, Context, Output, Compose>;
-```
-
-The supplied `compose` is an exact TypeGPU function built against the declared parameter schema and the canonical shader's
-context/output schemas. As with technique shaders, `tgpu.fn()` provides the concrete GPU signature validation and the
-definition helper preserves it without erasure.
+Milestone 11's compile fixture must name the actual TypeGPU schema-value utility and prove contextual callback types before
+this helper becomes public. If TypeGPU cannot expose that relation, the package exports only already-typed `tgpu.fn()`
+composition values and does not manufacture a weaker wrapper.
 
 ```ts
-const gradient = defineTypeGpuTextEffect({
+const gradient = defineTypeGpuTextEffect(slugShader, {
   parameters: GradientParameters,
   compose(base, parameters, context) {
     return { ...base, color: applyGradient(base.color, context.localPosition, parameters) };
@@ -482,6 +477,8 @@ const gradientSlug = createTypeGpuSlugProgram(root, {
 });
 ```
 
+This is target syntax for the gated helper, not current compile evidence.
+
 The effect helper is optional program authoring sugar. It produces a typed program variant and composes after the canonical
 technique shader. Applications may instead define their own variant and complete program. Core never imports or interprets
 the effect. Effect-definition identity contributes to the program key; parameter values live in sidecar storage and do not
@@ -489,7 +486,7 @@ create a pipeline per text instance.
 
 ## Adapt the same shader to Three
 
-`@typegpu/three` may translate a zero-argument TypeGPU closure to a TSL node:
+`@typegpu/three@0.11.0` can inject a resolved zero-argument TypeGPU WGSL closure through Three's WebGPU node builder:
 
 ```ts
 const slugNode = t3.toTSL(() => {
@@ -499,11 +496,12 @@ const slugNode = t3.toTSL(() => {
 const threeProgram = createThreeSlugProgram({ shader: slugNode });
 ```
 
-`fromTSL()` can expose supported Three-owned nodes where the closure needs them. Whether it can carry the real Slug texture
-loads, Bitmap texture sampling, returned structures, and both techniques' vertex work is an executable gate, not an
-accepted capability. Three still
-owns its node material, render-list integration, pipeline state, lifecycle, and final variant/draw compiler. The direct
-TypeGPU program and Three program share the hard technique algorithm; they are not the same engine target.
+`fromTSL()` can expose supported Three-owned data nodes where the closure needs them. The reviewed bridge has not carried
+the real Slug sampleable resources, Bitmap texture sampling, returned structures, or both techniques' vertex work; those
+are executable gates, not accepted capabilities. Three still
+owns its node material, render-list integration, pipeline state, lifecycle, and final variant/draw compiler. Only a passed
+complete-technique gate permits saying the direct TypeGPU and Three programs share the hard algorithm; they remain different
+engine targets in every case.
 
 This bridge remains WebGPU-only in the currently documented `@typegpu/three` release and experimental until generated
 shader inspection, Bitmap and Slug pixel parity, repository-pinned Three compatibility, and measured tree-shaken

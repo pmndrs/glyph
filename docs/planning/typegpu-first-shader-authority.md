@@ -47,7 +47,7 @@ sources:
     title: gpucat at the reviewed revision
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # TypeGPU-first shader authority
@@ -67,6 +67,21 @@ TypeGPU shader source
 This is an exploratory answer, not an accepted replacement for the native TSL implementation. The strongest form is worth
 testing because one authoritative shader implementation would reduce drift and give custom programs the real Slug,
 MTSDF, and Bitmap logic without copying it. The boundary must still survive if only part of that bridge works.
+
+## Reviewed-version baseline
+
+TypeGPU is not installed in this repository, so no TypeGPU declaration in this plan is yet compile evidence. The external
+review inspected `three@0.185.1`, `typegpu@0.11.9`, and `@typegpu/three@0.11.0` exactly. At those versions:
+
+- `toTSL()` accepts a nullary closure and resolves it to WGSL text parsed by Three's `WGSLNodeBuilder`; it is not a native
+  TSL graph conversion;
+- `fromTSL()` carries WGSL data values, not a demonstrated sampleable-resource handle for Slug's dependent loads;
+- the package deep-imports Three WebGPU internals and has no forced-WebGL2 path; and
+- an argument-taking `tgpu.fn(...)` cannot be passed directly to `toTSL()`.
+
+Those are current falsifiers for outcome A, not permanent claims about future releases. The experiment pins all three exact
+versions, reruns the capability fixture on every upgrade, and constrains released peer ranges to combinations that passed.
+The broad upstream peer range is not compatibility evidence because the bridge deep-imports renderer internals.
 
 ## Preserve the accepted core
 
@@ -162,6 +177,7 @@ const target = createTypeGpuParagraphBatchTarget({
 const attachment = paragraphs.attach(target);
 
 runtime.update();
+attachment.prepare();
 attachment.commit();
 target.encode(pass, attachment.current, frame);
 ```
@@ -170,8 +186,9 @@ The host owns the `TgpuRoot`, device, render pass, command submission, frame loo
 owns typed layouts, GPU font-resource caches, bounded pipeline/variant caches, shader functions, and draw compilation. The
 target owns one batch's instance/transform buffers and committed draw revision.
 
-Wayfare can reuse the program if it exposes compatible WebGPU device and render-pass interop. It does not need to adopt the
-direct text engine or surrender its own entity lifecycle.
+Wayfare is only a candidate consumer if it exposes compatible WebGPU device and render-pass interop. Its source has not yet
+been inspected in this research pass, so reuse is a Gate 3 proof obligation rather than a claim. If compatible, it need not
+adopt the direct text engine or surrender its own entity lifecycle.
 
 ## Bridge to Three.js
 
@@ -196,12 +213,13 @@ Three still owns `MeshBasicNodeMaterial`, attributes/accessors, texture objects,
 ordering, renderer isolation, resource retirement, and custom TSL composition. TypeGPU supplies only the kernel embedded in
 that Three program.
 
-This is not proven for the real techniques. Official `@typegpu/three` documentation currently states that the bridge works
-only on WebGPU-enabled devices. Its examples capture supported TSL values inside a nullary closure; they do not prove that
+This does not work for the real techniques at the reviewed versions. Official `@typegpu/three` documentation states that
+the bridge works only on WebGPU-enabled devices. Its examples capture supported TSL values inside a nullary closure; they do not prove that
 Three textures can enter TypeGPU as sampleable resources, that Slug's dependent texture loads and dynamic loops survive,
 or that a structured vertex/fragment ABI returns usable TSL nodes.
 
-Therefore the native TSL program remains the flagship implementation. Retiring it is permitted only after the bridge
+The reviewed implementation confirms WGSL injection, no WebGL2 route, and no demonstrated way to carry the required
+sampleable Three resources. Therefore the native TSL program remains the flagship implementation. Retiring it is permitted only after the bridge
 passes the complete Bitmap, MTSDF, and Slug proof on every backend promised by `@pmndrs/text-three`. If TypeGPU remains
 WebGPU-only, it is an optional package rather than a silent implementation detail of the default Three integration.
 
@@ -278,6 +296,11 @@ gates. Users still receive exported first-party shader implementations and never
 
 Outcome C is the fallback, not a core API change.
 
+The semantic resource ABI names logical records and addressing, not one GPU storage class. Slug may realize the same
+header/reference/curve records as storage buffers on WebGPU and integer textures on WebGL2. Each backend wrapper must prove
+that its accessor implements the same bounds, indices, texel/word decoding, and coordinate convention before it calls the
+shared math. This separates the algorithm without pretending that a WebGPU bind-group layout is portable to WebGL2.
+
 ## Preserve customization and batching
 
 Core `renderVariant` remains opaque and resolves batch → paragraph → span intent onto ordered runs:
@@ -293,6 +316,19 @@ program.compileRuns({ glyphBatches, glyphRuns })
   -> one draw when effect parameters fit indexed sidecar storage
   -> several ordered draws when graph, blend, depth, or binding compatibility differs
 ```
+
+For indexed sidecar batching, the program makes the opaque-to-slot step explicit:
+
+```ts
+for (const run of glyphRuns) {
+  const compatibility = variantCodec.key(run.renderVariant);
+  const variantSlot = variantTable.intern(variantCodec.value(run.renderVariant));
+  draws.appendOrMerge({ run, compatibility, variantSlot });
+}
+```
+
+The sidecar table belongs to the program revision, is bounded with the pipeline/material caches, and writes its slot index
+into target-owned instance data while staging. Core neither assigns the slot nor splits physical storage by variant.
 
 A custom program imports the canonical kernel and replaces final composition, not the technique:
 
@@ -372,3 +408,47 @@ Implement Gate 0 before building a TypeGPU engine. Until then:
 - `@pmndrs/text-three-typegpu` is an isolated experiment;
 - gpucat remains an external public-API fitness test;
 - no TypeGPU, Three, or gpucat type enters core.
+
+## External review disposition
+
+This ledger covers the complete retained Claude Opus report, not only its top findings. “Gate” means the prose claim was
+narrowed and cannot become accepted architecture until that executable evidence exists.
+
+| Finding | Disposition in the canonical docs |
+| --- | --- |
+| B1 raster density had no core path | Corrected: batch and paragraph density are pre-update core inputs; spans do not override target density. |
+| B2 target font leases did not exist | Corrected by removing the lease claim: targets synchronously copy required CPU font data during staging and own the result. |
+| B3 interface storage failed `Record` | Corrected with the self-mapped storage constraint; the focused TypeScript probe passed. |
+| B4 key identity/IDs were undefined | Corrected with branded IDs and interned frozen key identity through a physical allocation generation. |
+| B5 `toTSL` capability claims | Falsified at `three@0.185.1` / `typegpu@0.11.9` / `@typegpu/three@0.11.0`; exact-version Gate 0 replaces the claim. |
+| B6 WebGL2 omitted from the gate | Corrected: forced WebGPU and forced WebGL2 are explicit acceptance cases. |
+| H1 reusable shader omitted vertex work | Corrected: the reusable algorithm includes typed vertex and fragment stages; Bitmap snap and Slug dilation are named requirements. |
+| H2 Three context could not express techniques | Corrected: each technique exports exact resource, instance, vertex, fragment, derivative, and screen-scale context types. |
+| H3 effect generics inferred `unknown` | Three helper corrected by binding schema inference to an exact shader. TypeGPU helper remains gated on an installed compile fixture. |
+| H4 program inference helper undeclared | Corrected: `defineTypeGpuRasterProgram()` is declared, but remains unverified until the TypeGPU fixture exists. |
+| H5 per-group hook staged unrelated targets | Corrected: core publication only records attachment source; the observed engine calls `attachment.prepare()`. |
+| H6 Three silently assumed ready staging | Corrected: the standard Three target must synchronously return `ready`; pending custom targets cannot claim same-frame publication. |
+| H7 unbounded variant/pipeline caches | Corrected: first-party programs require configurable bounds and GPU-safe eviction; custom programs must document equivalents. |
+| H8 gpucat order interval could interleave | Corrected as a limitation: no interval is claimed reserved; strict adjacency requires one aggregate object or host reservation support. |
+| H9 gpucat WebGL needed GLSL | Corrected: WebGL support requires an explicit GLSL companion and parity gate; WGSL alone is WebGPU-only. |
+| H10 gpucat instance ABI differs | Corrected: semantic canonical SoA is shared; Three attributes and gpucat data textures are target-owned accessors. |
+| M1 duplicate `LoadedFont` | Removed; integration docs import the core declaration. |
+| M2 resize/chunk identity was undefined | Corrected: every real capacity change creates a complete new physical allocation generation and retires old keys. |
+| M3 adjacent revision rule was ambiguous | Corrected: only successful publication increments runtime/batch revisions. |
+| M4 no instance-to-paragraph mapping | Corrected: the contract defines the complete derivation by scanning disjoint ordered runs. |
+| M5 duplicate run `order` | Removed; array position is authoritative. |
+| M6 duplicate batch `chunk` | Removed from `PreparedGlyphBatch`; `GlyphBatchKey.chunk` is authoritative. |
+| M7 “complete API” used undefined types | Corrected for core-owned public values; external `TgpuRoot` remains an imported TypeGPU type and TypeGPU declarations remain a draft gate. |
+| M8 topology semantics were undefined | Corrected: the exact invalidation/preservation rules and stale-write behavior are specified. |
+| M9 duplicate decision IDs | Corrected by assigning D-146 through D-151 to the duplicate rows. |
+| M10 broad peers hid deep-import drift | Corrected: the experiment pins exact versions and reruns the compatibility fixture per upgrade. |
+| L1 `msdf`/`mtsdf` naming mismatch | Documented as an intentional target-v1 rename from the merged v0 export. |
+| L2 preparing/pending/failure flags | Corrected: active async work, eligible dirty work, and latched failure are distinct states. |
+| L3 gpucat failing test attribution | Rechecked: 256/260 passed; one failure proves process-global symbol instability and three are stale flip-Y golden snapshots, none text evidence. |
+| U1 newer bridge versions may differ | Kept open through an exact-version rerun gate, never a floating peer-range assumption. |
+| U2 “technique compositing order” undefined | Corrected to visual run-array order plus adjacent program-expanded per-run passes. |
+| U3 vertex ownership unclear | Corrected: canonical semantics/specification are shared; each engine program owns its executable vertex stage. |
+| U4 Slug buffer-vs-texture split | Corrected with a semantic resource ABI and backend-specific storage accessors. |
+| U5 variant-to-sidecar mapping absent | Corrected with an explicit program-owned codec/intern/write step and bounded revision lifetime. |
+| U6 Wayfare was not inspected | Claim withdrawn; Wayfare reuse is an explicit source-inspection and execution gate. |
+| U7 async variant mapping under supersession | Corrected: candidate input/span tables are immutable and generation-tagged; stale Worker results never map against current state. |

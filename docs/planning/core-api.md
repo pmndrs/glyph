@@ -41,7 +41,7 @@ sources:
     title: Current raster transaction contract
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # Core text API
@@ -99,6 +99,34 @@ interface TextRuntimeOptions {
   }>;
 }
 
+interface LoadedFontRequest<Technique extends AnyRasterTechnique> {
+  readonly input:
+    | { readonly baked: string | URL }
+    | { readonly source: string | URL; readonly runtimeBake: RuntimeFontBake };
+  readonly raster: {
+    readonly technique: Technique;
+    readonly options?: RasterOptionsOf<Technique>;
+  };
+}
+
+interface RuntimeFontBakeRequest {
+  readonly source: Uint8Array;
+  readonly sourceUrl: string;
+  readonly bakedUrl?: string;
+  readonly signal?: AbortSignal;
+}
+
+type RuntimeFontBake = (request: RuntimeFontBakeRequest) => Promise<ArrayBufferView>;
+
+interface TextPreparationWorker {
+  postMessage(message: unknown, transfer?: readonly Transferable[]): void;
+  addEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
+  removeEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
+  addEventListener(type: 'error', listener: (event: ErrorEvent) => void): void;
+  removeEventListener(type: 'error', listener: (event: ErrorEvent) => void): void;
+  terminate(): void;
+}
+
 declare function createTextRuntime(options?: TextRuntimeOptions): Promise<TextRuntime>;
 ```
 
@@ -130,6 +158,10 @@ await bakeFont({
   ],
 });
 ```
+
+`@pmndrs/text/raster/mtsdf` is the intentional target-v1 name. The merged v0 package still exports the historical
+`@pmndrs/text/raster/msdf` spelling even though its artifact is MTSDF; migration removes that alias when the v1 surface
+lands.
 
 Baking produces font metrics, glyph records, and technique resources before the application runs. Runtime fallback may
 perform the same bake in a Worker, but loading remains explicit in either case.
@@ -248,7 +280,7 @@ interface ParagraphBatch<Technique extends AnyRasterTechnique, Variant = undefin
   subscribe(observer: ParagraphBatchObserver<Technique, Variant>): () => void;
   attach<TargetRevision extends ParagraphBatchTargetRevision>(
     target: ParagraphBatchTarget<Technique, Variant, TargetRevision>,
-  ): ParagraphBatchAttachment<TargetRevision>;
+  ): ParagraphBatchAttachment<Technique, Variant, TargetRevision>;
   dispose(): void;
 }
 
@@ -263,8 +295,9 @@ batch calls `complete()` exactly once; unsubscribing is idempotent and prevents 
 public observation contract is sufficient to build renderer coordination without access to shaping, allocation, or other
 batch internals.
 
-`attach()` is the retained convenience for that coordination. It validates technique compatibility, subscribes the target,
-stages revisions, exposes renderer-safe commit, and couples attachment disposal to batch disposal. It is policy built on the
+`attach()` is the retained convenience for that coordination. It validates technique compatibility, records published
+source revisions, exposes explicit renderer-owned `prepare()` and `commit()` boundaries, and couples attachment disposal
+to batch disposal. It is policy built on the
 same public revisions and lifecycle events, not a second shaping or batching API. The exact target contract is specified in
 the [engine integration contract](engine-integration-contract.md).
 
@@ -302,6 +335,11 @@ paragraph or membership mutation clears the latch and schedules a new attempt. S
 `preparationError`. Calling `setCapacity()` with a different normalized capacity also clears the latch and schedules one
 new attempt while the last committed revision remains live.
 
+`runtime.hasPendingChanges` and `batch.hasPendingChanges` report unpublished desired work that the next synchronization may
+attempt. A latched unchanged failure reports false; its retained `preparationError` is the observable state. `isPreparing`
+is true only while an asynchronous candidate is actively shaping or awaiting its Worker result. It becomes false on
+publication, failure, abort, or supersession and is independent of a latched error.
+
 Resize a batch when an application wants to replace a fixed allocation explicitly:
 
 ```ts
@@ -314,13 +352,18 @@ worldText.has(label); // true: batch and paragraph identity did not change
 `setCapacity()` validates and records the normalized requested capacity synchronously but does not mutate published
 canonical storage. The next `update()` or `updateAsync()` reuses compatible shaping and layout results, stages replacement
 storage, and atomically publishes it only when complete. Failure preserves the previous revision and every handle.
-Attached targets receive the new revision through their existing attachments, stage replacement engine buffers, commit at
-their safe frame boundary, and retire old buffers after their fences. The `ParagraphBatch`, its `Paragraph` handles,
+Existing attachments record the new source revision. Each target stages replacement engine buffers when its owner next
+calls `prepare()`, commits at its safe frame boundary, and retires old buffers after its fences. The `ParagraphBatch`, its `Paragraph` handles,
 subscriptions, attachments, desired state, order, glyph overrides, and font leases never change identity.
 
 Changing from `fixed` to `grow` or `chunk`, growing a fixed size, and deliberately shrinking are all explicit capacity
 changes. A shrink that cannot hold the desired generation reports `capacity-exceeded` at synchronization and retains the
 previous complete revision. Passing the current normalized capacity is a no-op and does not retry a latched failure.
+
+Every non-no-op capacity change creates a new physical-allocation generation at synchronization. Core repacks all live
+slots, retires every old `GlyphBatchKey`, increments `GlyphBatchKey.generation`, and interns fresh keys. This
+gives targets one unambiguous replacement signal. `chunk` numbers are reassigned densely from zero per resource in the new
+generation; semantic paragraph, batch, subscription, and attachment identities remain unchanged.
 
 Create another paragraph batch when text must be rendered in another phase, even if it uses the same technique.
 
@@ -383,6 +426,30 @@ interface ParagraphBaseProperties<Technique extends AnyRasterTechnique, Variant 
   readonly rasterPixelRatio?: number;
   readonly order?: number;
   readonly renderVariant?: Variant;
+}
+
+type ParagraphAxisConstraint =
+  | { readonly mode: 'unconstrained' }
+  | { readonly mode: 'at-most'; readonly size: number }
+  | { readonly mode: 'exact'; readonly size: number };
+
+interface ParagraphContentBox {
+  readonly width?: ParagraphAxisConstraint;
+  readonly height?: ParagraphAxisConstraint;
+  readonly maxLines?: number;
+  readonly wrap?: 'none' | 'word' | 'character';
+  readonly align?: 'start' | 'center' | 'end' | 'justify';
+  readonly overflow?: 'visible' | 'clip' | 'ellipsis';
+}
+
+type LinearRgba = readonly [number, number, number, number];
+type ColorInput = string | LinearRgba;
+
+interface GlyphPaintInput {
+  readonly color?: ColorInput;
+  readonly opacity?: number;
+  readonly outline?: { readonly color: ColorInput; readonly width: number };
+  readonly shadow?: { readonly color: ColorInput; readonly offset: readonly [number, number] };
 }
 
 type ParagraphContentProperties<Technique extends AnyRasterTechnique, Variant = undefined> =
@@ -827,7 +894,6 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
   readonly key: GlyphBatchKey;
   readonly technique: Technique;
   readonly font: LoadedFont<Technique>;
-  readonly chunk: number;
   readonly capacity: number;
   readonly instanceCount: number;
   readonly binding: RasterBindingOf<Technique>;
@@ -845,6 +911,7 @@ interface GlyphBatchKey {
   readonly technique: RasterTechniqueId;
   readonly resource: RasterResourceId;
   readonly pipelineVariant: number;
+  readonly generation: number;
   readonly chunk: number;
 }
 
@@ -854,7 +921,6 @@ interface PreparedGlyphRun<Variant = undefined> {
   readonly renderVariant: Variant | undefined;
   readonly start: number;
   readonly count: number;
-  readonly order: number;
 }
 ```
 
@@ -865,10 +931,14 @@ different density choices for the same paragraph and revision across two attache
 partition one batch across several strikes. Render the same logical paragraph simultaneously at different target densities
 with separate batches, or update the value before the synchronization that prepares that render phase.
 
+Spans do not override `rasterPixelRatio`. Density describes the target-space realization of one laid-out paragraph, while
+spans describe source-local shaping and paint. A visual subsection that truly needs another density is a separate paragraph
+(and, when it belongs to another render target, a separate batch).
+
 `RasterTechniqueId` and `RasterResourceId` are opaque branded strings whose values are stable and unique within a runtime.
 Core interns and freezes one `GlyphBatchKey` object for each live physical glyph batch and reuses that object in
 `PreparedGlyphBatch.key`, `PreparedGlyphRun.batch`, and adjacent revisions until the physical batch retires. Integrations
-may therefore use the object as a `Map` key. The tuple `(technique, resource, pipelineVariant, chunk)` is also its stable
+may therefore use the object as a `Map` key. The tuple `(technique, resource, pipelineVariant, generation, chunk)` is also its stable
 diagnostic and deterministic ordering value; consumers must not manufacture keys.
 
 Given the resolved font sequence `Inter -> Noto -> Inter`, core may retain one Inter buffer and one Noto buffer while
@@ -876,9 +946,9 @@ emitting three ordered glyph runs:
 
 ```ts
 revision.glyphRuns = [
-  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 0, count: 8, order: 0 },
-  { batch: notoBatch.key, paragraph: label.id, renderVariant: warning, start: 0, count: 3, order: 1 },
-  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 8, count: 5, order: 2 },
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 0, count: 8 },
+  { batch: notoBatch.key, paragraph: label.id, renderVariant: warning, start: 0, count: 3 },
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 8, count: 5 },
 ];
 ```
 
@@ -890,10 +960,16 @@ raster-resource, capacity, source order, or variant boundaries. Each glyph batch
 `PreparedGlyphRun` is not a promised draw call. It is the smallest ordered core-authored range an integration may need to
 classify. The target may split a run, or coalesce adjacent compatible runs, when compiling engine draws. It must preserve
 the supplied order and compositing semantics unless its documented depth/blend policy proves another ordering equivalent.
-It may not redo shaping, fallback, resource selection, or slot allocation.
+It may not redo shaping, fallback, resource selection, or slot allocation. Array position is the authoritative run order;
+there is no duplicate numeric run-order field. Every live physical glyph slot appears in exactly one run. A technique that
+needs several passes for one run expands them in its program and keeps those passes adjacent unless equivalent ordering is
+proven.
 
-Render variants remain on the calling thread. Async shaping workers receive shaping and layout inputs, not renderer
-objects; after worker results return, core maps source clusters to the resolved variant before atomic publication. A
+Render variants remain on the calling thread. `updateAsync()` snapshots immutable text/span input and its resolved variant
+table under one candidate generation ID before posting shaping/layout input to a Worker. The Worker never receives renderer
+objects or variants. On return, core maps source clusters against that same candidate's span table—not current desired
+state—then publishes only if the candidate is still current. A newer synchronous or asynchronous publication supersedes
+and discards the older candidate before variant mapping can become visible. A
 variant boundary does not split a shaping cluster or ligature. The cluster receives the variant of the span containing its
 first UTF-16 code unit. Exact partial-ligature styling requires an authored shaping boundary or a shader masking technique.
 
@@ -935,6 +1011,29 @@ This CPU copy deliberately decouples core publication from inaccessible or in-fl
 buffers, upload commands, double/triple buffering, frame publication, fences, and retirement.
 
 ## Move glyphs without reshaping
+
+```ts
+declare const glyphTopologyBrand: unique symbol;
+type GlyphTopology = number & { readonly [glyphTopologyBrand]: true };
+
+interface GlyphSnapshot {
+  readonly topology: GlyphTopology;
+  readonly glyphIds: Uint32Array;
+  readonly clusters: Uint32Array;
+  readonly fontSlots: Uint16Array;
+  readonly shapedX: Float32Array;
+  readonly shapedY: Float32Array;
+  readonly displayedX: Float32Array;
+  readonly displayedY: Float32Array;
+}
+
+interface GlyphOriginUpdate {
+  readonly topology: GlyphTopology;
+  readonly start: number;
+  readonly x: ArrayLike<number>;
+  readonly y: ArrayLike<number>;
+}
+```
 
 ```ts
 const snapshot = label.snapshotGlyphs();

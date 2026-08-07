@@ -38,7 +38,7 @@ sources:
     title: Three.js BufferAttribute
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # Three.js text API
@@ -81,34 +81,99 @@ interface ThreeRenderVariant {
   readonly effects?: readonly ThreeTextEffectBinding[];
 }
 
-interface ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output> {
-  readonly parameters: ParameterSchema;
-  compose(base: Output, parameters: Parameters, context: Context): Output;
-  bind(parameters: Parameters): ThreeTextEffectBinding<Parameters>;
+type ThreeEffectParameterType = 'f32' | 'vec2f' | 'vec3f' | 'vec4f';
+type ThreeEffectParameterSchema = Readonly<Record<string, ThreeEffectParameterType>>;
+type ThreeEffectParametersOf<Schema extends ThreeEffectParameterSchema> = {
+  readonly [Key in keyof Schema]: Schema[Key] extends 'f32'
+    ? ReturnType<typeof TSL.float>
+    : Schema[Key] extends 'vec2f'
+      ? ReturnType<typeof TSL.vec2>
+      : Schema[Key] extends 'vec3f'
+        ? ReturnType<typeof TSL.vec3>
+        : ReturnType<typeof TSL.vec4>;
+};
+
+interface ThreeTextEffectDefinition<Shader extends AnyThreeRasterShader<AnyRasterTechnique>, Schema extends ThreeEffectParameterSchema> {
+  readonly shader: Shader;
+  readonly parameters: Schema;
+  compose(
+    base: ThreeRasterFragmentOutputOf<Shader>,
+    parameters: ThreeEffectParametersOf<Schema>,
+    context: ThreeRasterFragmentContextOf<Shader>,
+  ): ThreeRasterFragmentOutputOf<Shader>;
+  bind(parameters: ThreeEffectParametersOf<Schema>): ThreeTextEffectBinding<Shader, Schema>;
 }
 
-interface ThreeTextEffectBinding<Parameters = unknown> {
-  readonly effect: ThreeTextEffectDefinition<Parameters, unknown, unknown, unknown>;
-  readonly parameters: Parameters;
+interface ThreeTextEffectBinding<
+  Shader extends AnyThreeRasterShader<AnyRasterTechnique> = AnyThreeRasterShader<AnyRasterTechnique>,
+  Schema extends ThreeEffectParameterSchema = ThreeEffectParameterSchema,
+> {
+  readonly effect: ThreeTextEffectDefinition<Shader, Schema>;
+  readonly parameters: ThreeEffectParametersOf<Schema>;
 }
 
-declare function defineTextEffect<Parameters, ParameterSchema, Context, Output>(
-  definition: Omit<ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output>, 'bind'>,
-): ThreeTextEffectDefinition<Parameters, ParameterSchema, Context, Output>;
+declare function defineTextEffect<
+  Shader extends AnyThreeRasterShader<AnyRasterTechnique>,
+  const Schema extends ThreeEffectParameterSchema,
+>(
+  shader: Shader,
+  definition: Omit<ThreeTextEffectDefinition<Shader, Schema>, 'shader' | 'bind'>,
+): ThreeTextEffectDefinition<Shader, Schema>;
 
 type ThreeProgramVariantKey = PropertyKey | object;
 
-interface ThreeRasterShader<Technique extends AnyRasterTechnique> {
-  readonly technique: Technique;
-  vertex(context: ThreeRasterVertexContextOf<Technique>): ThreeRasterVertexOutput;
-  fragment(context: ThreeRasterFragmentContextOf<Technique>): ThreeRasterFragmentOutput;
+declare const threeRasterShaderTypes: unique symbol;
+interface ThreeRasterShaderTypeMap<VertexContext, VertexOutput, FragmentContext, FragmentOutput> {
+  readonly vertexContext: VertexContext;
+  readonly vertexOutput: VertexOutput;
+  readonly fragmentContext: FragmentContext;
+  readonly fragmentOutput: FragmentOutput;
 }
 
-interface ThreeRasterVertexContextOf<Technique extends AnyRasterTechnique> {
+interface AnyThreeRasterShader<Technique extends AnyRasterTechnique> {
   readonly technique: Technique;
+  readonly [threeRasterShaderTypes]?: ThreeRasterShaderTypeMap<unknown, unknown, unknown, unknown>;
+}
+
+interface ThreeRasterShader<Technique extends AnyRasterTechnique, VertexContext, VertexOutput, FragmentContext, FragmentOutput>
+  extends AnyThreeRasterShader<Technique> {
+  readonly [threeRasterShaderTypes]?: ThreeRasterShaderTypeMap<VertexContext, VertexOutput, FragmentContext, FragmentOutput>;
+  vertex(context: VertexContext): VertexOutput;
+  fragment(context: FragmentContext): FragmentOutput;
+}
+
+type ThreeRasterShaderTypesOf<Shader extends AnyThreeRasterShader<AnyRasterTechnique>> = NonNullable<
+  Shader[typeof threeRasterShaderTypes]
+>;
+type ThreeRasterFragmentContextOf<Shader extends AnyThreeRasterShader<AnyRasterTechnique>> =
+  ThreeRasterShaderTypesOf<Shader>['fragmentContext'];
+type ThreeRasterFragmentOutputOf<Shader extends AnyThreeRasterShader<AnyRasterTechnique>> =
+  ThreeRasterShaderTypesOf<Shader>['fragmentOutput'];
+
+interface ThreeMtsdfVertexContext {
   readonly localPosition: ReturnType<typeof TSL.vec2>;
   readonly glyphIndex: ReturnType<typeof TSL.uint>;
   readonly viewport: ReturnType<typeof TSL.vec2>;
+  readonly modelViewProjection: THREE.Node;
+  readonly instance: ThreeMtsdfInstanceNodes;
+  readonly resources: ThreeMtsdfResourceNodes;
+}
+
+interface ThreeMtsdfInstanceNodes {
+  readonly origin: ReturnType<typeof TSL.vec2>;
+  readonly fontSize: ReturnType<typeof TSL.float>;
+  readonly glyphRecord: ReturnType<typeof TSL.uint>;
+  readonly paintIndex: ReturnType<typeof TSL.uint>;
+}
+
+interface ThreeMtsdfResourceNodes {
+  readonly atlas: THREE.Node;
+  readonly emSize: ReturnType<typeof TSL.float>;
+  readonly pixelRange: ReturnType<typeof TSL.float>;
+}
+
+interface ThreeDerivativeNodes {
+  fwidth(value: THREE.Node): THREE.Node;
 }
 
 interface ThreeRasterVertexOutput {
@@ -121,16 +186,19 @@ interface ThreeRasterFragmentOutput {
   readonly coverage: ReturnType<typeof TSL.float>;
 }
 
-interface ThreeRasterFragmentContextOf<Technique extends AnyRasterTechnique> {
-  readonly technique: Technique;
+interface ThreeMtsdfFragmentContext {
   readonly localPosition: ReturnType<typeof TSL.vec2>;
   readonly glyphIndex: ReturnType<typeof TSL.uint>;
   readonly paintIndex: ReturnType<typeof TSL.uint>;
+  readonly screenScale: ReturnType<typeof TSL.float>;
+  readonly derivatives: ThreeDerivativeNodes;
+  readonly instance: ThreeMtsdfInstanceNodes;
+  readonly resources: ThreeMtsdfResourceNodes;
 }
 
-interface ThreeProgramMaterialContext<Technique extends AnyRasterTechnique> {
+interface ThreeProgramMaterialContext<Technique extends AnyRasterTechnique, Shader extends AnyThreeRasterShader<Technique>> {
   readonly renderer: THREE.WebGPURenderer;
-  readonly shader: ThreeRasterShader<Technique>;
+  readonly shader: Shader;
   readonly font: LoadedFont<Technique>;
   readonly binding: RasterBindingOf<Technique>;
   readonly pipelineVariant: number;
@@ -153,20 +221,30 @@ interface ThreeProgramDraw {
   readonly count: number;
 }
 
-interface ThreeRasterProgram<Technique extends AnyRasterTechnique, Variant> {
+interface ThreeRasterProgram<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Shader extends AnyThreeRasterShader<Technique> = AnyThreeRasterShader<Technique>,
+> {
   readonly technique: Technique;
-  readonly shader: ThreeRasterShader<Technique>;
+  readonly shader: Shader;
+  readonly cacheLimits: {
+    readonly pipelines: number;
+    readonly materializedVariants: number;
+  };
   supportsVariant(value: unknown): value is Variant;
   variantKey(value: Variant | undefined): ThreeProgramVariantKey;
-  createMaterial(context: ThreeProgramMaterialContext<Technique>): THREE.NodeMaterial;
+  createMaterial(context: ThreeProgramMaterialContext<Technique, Shader>): THREE.NodeMaterial;
   writeVariants(context: ThreeProgramVariantWriteContext<Variant>): void;
   compileRuns(context: ThreeProgramRunContext<Technique, Variant>): readonly ThreeProgramDraw[];
   dispose(): void;
 }
 
-declare function defineThreeRasterProgram<Technique extends AnyRasterTechnique, Variant>(
-  program: ThreeRasterProgram<Technique, Variant>,
-): ThreeRasterProgram<Technique, Variant>;
+declare function defineThreeRasterProgram<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  Shader extends AnyThreeRasterShader<Technique>,
+>(program: ThreeRasterProgram<Technique, Variant, Shader>): ThreeRasterProgram<Technique, Variant, Shader>;
 
 interface FontLoaderOptions {
   readonly runtimeBake?: RuntimeFontBake;
@@ -275,6 +353,13 @@ export type {
 } from '@pmndrs/text';
 export type { ThreeRasterProgram, ThreeRasterShader, ThreeRenderVariant, ThreeTextEffectBinding };
 ```
+
+There is deliberately no universal four-field raster context. Each first-party shader exports its exact resource,
+instance, vertex-context/output, and fragment-context/output types. Bitmap includes viewport/device-pixel snapping inputs;
+MTSDF includes atlas access, `emSize`, `pixelRange`, derivatives, and screen scale; Slug includes curve/header/reference
+resources, band bases, dilation inputs, and dependent-load accessors. The associated type map carries those exact types into
+`createMaterial()` and `defineTextEffect()`. Adding a technique means defining those semantics, not widening a shared
+context with optional fields.
 
 First-party programs keep bounded material/pipeline and materialized-variant caches. Factory options declare the limits,
 eviction retires resources through renderer-safe disposal, and `program.dispose()` releases every remaining entry. A fresh
@@ -387,7 +472,7 @@ separate draw proxies. A variant is not automatically a material and is not auto
 The standard programs accept `ThreeRenderVariant`, whose optional `effects` list is produced by the effect helpers:
 
 ```ts
-const chromatic = defineTextEffect({
+const chromatic = defineTextEffect(slugShader, {
   parameters: { phase: 'f32' },
   compose(base, parameters, context) {
     return { ...base, color: chromaticColor(base.color, context.paintIndex, parameters.phase) };
@@ -423,9 +508,11 @@ React Three Fiber expresses the same span variant through nested text:
 </Text>
 ```
 
-A TypeGPU-authored first-party shader may enter the same program through `@typegpu/three` `toTSL()`. Three still owns its
-accessors, material, blend/depth state, render-list integration, draw compilation, and lifecycle. Native TSL and adapted
-TypeGPU shaders are alternative program implementations, not different core techniques.
+An optional TypeGPU-authored pure-WebGPU function may enter a Three program only through capabilities proven for a pinned
+`@typegpu/three` version. At the reviewed 0.11.0 bridge, `toTSL()` injects a nullary WGSL closure through Three's WebGPU
+builder, has no WebGL2 path, and has not carried the real Slug resources. Three still owns accessors, material, blend/depth
+state, render-list integration, draw compilation, and lifecycle. Native TSL remains the only specified complete Three
+program; any adapted TypeGPU shader is an experimental program implementation, not a different core technique.
 
 ### Use the default or preallocate explicitly
 
@@ -623,7 +710,10 @@ class TextGroup<Technique extends AnyRasterTechnique, Variant> extends THREE.Obj
     // Returns runtime.current without allocating when no desired state is dirty.
     this.#binding.runtime.update();
 
-    // Commit any target revision staged by the runtime publication. This installs
+    // Stage only this observed renderer target from the latest core publication.
+    this.#binding.prepareCurrentRevision();
+
+    // Commit this target revision. This installs
     // the exact internal meshes needed by the program-compiled draw sequence.
     this.#binding.commitPreparedRevision();
 
@@ -643,11 +733,12 @@ class TextGroup<Technique extends AnyRasterTechnique, Variant> extends THREE.Obj
 `paragraph.dispose()`. It applies desired-state setters to already bound paragraphs before `runtime.update()`. No shaping
 happens in `Text.text`, `Text.set()`, `Text.setSpan()`, or the scene-graph event handlers.
 
-`runtime.update()` publishes one atomic `TextRuntimeRevision`. Each attached paragraph-batch target receives its changed
-`PreparedParagraphBatchRevision` by calling:
+`runtime.update()` publishes one atomic `TextRuntimeRevision` and updates the attachment's latest source revision. It never
+calls a target or allocates renderer resources. The currently traversed binding then calls:
 
 ```ts
-threeTarget.stage(attachment.current, preparedParagraphBatchRevision);
+attachment.prepare();
+// coordinator calls threeTarget.stage(attachment.current, attachment.source)
 ```
 
 `ThreeParagraphBatchTarget.stage()` performs the engine-layout work: it creates or reuses the required Three
@@ -658,6 +749,13 @@ compatible runs into internal meshes or draw proxies. It does not shape, sort pa
 storage, or upload directly to a GPU queue. A ready
 stage is still unpublished until `commitPreparedRevision()` calls `attachment.commit()` at this render boundary and swaps
 the binding's live internal draw objects.
+
+The standard Three target is intentionally synchronous: `stage()` must return `{ status: 'ready', stage }` before
+`prepareCurrentRevision()` returns. Font bytes, raster pages, and optional program modules are loaded explicitly before a
+`Text` can bind; Three `NodeMaterial` and buffer objects are created synchronously, while WebGPURenderer performs physical
+pipeline compilation/upload later in its normal render path. A custom target that returns `pending` remains valid under the
+core attachment contract, but cannot provide this integration's same-observing-frame guarantee and is not accepted by the
+standard `TextGroup` binding.
 
 With Three's default `scene.matrixWorldAutoUpdate = true`, the complete WebGPURenderer 0.185.1 call chain is:
 
@@ -671,7 +769,10 @@ renderer.render(scene, camera)
            -> ParagraphBatch.add(...) / Paragraph.dispose() / Paragraph setters
         -> TextRuntime.update()
            -> publish TextRuntimeRevision
-           -> ThreeParagraphBatchTarget.stage(previous, preparedBatch)
+           -> attachment records latest source revision
+        -> binding.prepareCurrentRevision()
+           -> ParagraphBatchAttachment.prepare()
+           -> ThreeParagraphBatchTarget.stage(previous, preparedBatch) // must be ready
         -> binding.commitPreparedRevision()
            -> ParagraphBatchAttachment.commit()
            -> install the staged internal draw meshes
@@ -786,11 +887,13 @@ renderer.setAnimationLoop(() => {
 ```
 
 Applications do not call a core update and then copy the result into Three. The integration coalesces desired-state and
-membership changes, invokes the shared runtime's `update()` from each encountered standalone `Text` or `TextGroup`, publishes
-that owner's resulting Three draw objects, and then continues normal matrix traversal. Core specifies that a no-op
+membership changes, invokes the shared runtime's `update()` from each encountered standalone `Text` or `TextGroup`, then
+prepares only that encountered owner's attachment and continues normal matrix traversal. Core specifies that a no-op
 `update()` returns the current revision without allocation or notification. The first call after a mutation therefore
 prepares every dirty paragraph across every paragraph batch; later calls in the same frame, scene, or render pass are cheap
-revision checks unless their own membership reconciliation introduced new dirty work.
+revision checks unless their own membership reconciliation introduced new dirty work. Publication alone never stages,
+cancels, aborts, allocates, uploads, or commits another scene's or renderer's target. That attachment reconciles its stale
+candidate and prepares the latest source only when its owner is actually traversed.
 
 `WebGPURenderer.render(scene, camera)` updates and projects only the supplied scene or object root. Three does not first
 update every scene known to the application. When an application renders several scenes, each scene traversal naturally

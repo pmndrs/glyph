@@ -32,7 +32,7 @@ sources:
     title: Target v1 raster technique boundary
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # External gpucat integration fitness plan
@@ -194,7 +194,9 @@ for (const [index, mesh] of orderedMeshes.entries()) {
 
 This preserves order among the hidden meshes, but it does not reserve the numeric interval: an unrelated object may choose
 the same or an intermediate value and interleave. The integration must document that limitation, expose distinct render
-phases, or prove an engine-level ordering allocator before claiming atomic group ordering. Compatible adjacent runs may
+phases, collapse the batch into one aggregate render item that performs its internal ordered draws, or prove an
+engine-level ordering allocator before claiming atomic group ordering. The default may not describe consecutive values as
+an atomic `TextGroup`. Compatible adjacent runs may
 become several entries in one `Mesh.draws`. A different material, pipeline, transparency
 class, or pass becomes another hidden `Mesh`. The program must preserve `PreparedGlyphRun` order across both forms. If an
 application needs unrelated engine draws between text draws, it creates separate text groups/render phases; core does not
@@ -242,7 +244,7 @@ The final external fitness fixture must:
 The core API fitness test passes only when that last condition is true in executable code. This review establishes that the
 required public surfaces exist in the design; it does not substitute for the application proof.
 
-[^gpucat]: Reviewed at commit `11cf91b5172cc5143f68ff6ebf01c5e815de4e94`. The repository build passed. A focused test run passed 55 of 56 tests; the remaining assertion compared generated GLSL containing process-global suffixes (`storage183` versus `storage226`), so this review records it as upstream nondeterminism rather than text-integration evidence.
+[^gpucat]: Reviewed at commit `11cf91b5172cc5143f68ff6ebf01c5e815de4e94`. The repository build passed. A full re-run on 2026-08-06 passed 256 of 260 tests. One failure directly exposed process-global generated-symbol instability (`storage183` versus `storage226`); three golden snapshots expected pre-flip-Y shader output. These are upstream checkout/test-state evidence, not text-integration evidence, and no gpucat integration claim relies on the suite being green.
 
 [^gpucat-buffer]: gpucat update ranges use flat component offsets and counts; the adapter must convert core glyph ranges through the concrete buffer schema instead of assuming byte offsets.
 

@@ -343,7 +343,11 @@ BEFORE EACH TEXT RENDER PHASE:
   CALL runtime.update()
     core shapes every dirty paragraph across the runtime
     core publishes prepared paragraph batches atomically
-    changed attachments call target.stage(previous, prepared)
+    attachments record their newest source revision without touching renderer resources
+
+  CALL attachment.prepare()
+    calls target.stage(previous, prepared) only for this observed render phase
+    repeated calls are no-ops when that source revision is already prepared
 
   CALL attachment.commit()
     publishes a ready renderer revision at this safe frame boundary

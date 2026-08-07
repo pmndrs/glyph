@@ -35,7 +35,7 @@ sources:
     title: TypeGPU raster programs and text engine
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T02:38:24Z'
+  at: '2026-08-07T03:25:58Z'
 ---
 
 # Engine integration contract
@@ -66,7 +66,7 @@ interface ParagraphBatch<Technique extends AnyRasterTechnique, Variant = undefin
 
   attach<TargetRevision extends ParagraphBatchTargetRevision>(
     target: ParagraphBatchTarget<Technique, Variant, TargetRevision>,
-  ): ParagraphBatchAttachment<TargetRevision>;
+  ): ParagraphBatchAttachment<Technique, Variant, TargetRevision>;
 }
 
 interface ParagraphBatchObserver<Technique extends AnyRasterTechnique, Variant = undefined> {
@@ -80,11 +80,17 @@ attached to more than one target. They share core's canonical CPU arrays while e
 and GPU lifetime.
 
 ```ts
-interface ParagraphBatchAttachment<TargetRevision extends ParagraphBatchTargetRevision> {
+interface ParagraphBatchAttachment<
+  Technique extends AnyRasterTechnique,
+  Variant,
+  TargetRevision extends ParagraphBatchTargetRevision,
+> {
+  readonly source: PreparedParagraphBatchRevision<Technique, Variant>;
   readonly current: TargetRevision | undefined;
   readonly candidate: ParagraphBatchTargetStage<TargetRevision> | undefined;
   readonly error: ParagraphBatchTargetError | undefined;
 
+  prepare(): void;
   commit(): TargetRevision | undefined;
   retry(): void;
   dispose(): void;
@@ -97,21 +103,25 @@ interface ParagraphBatchTargetError {
 }
 ```
 
-Targets may attach before or after the first update. Attaching later stages the current prepared storage and glyph-run
-plan without reshaping.
+Targets may attach before or after the first update. Attachment and later source publication update `source` synchronously,
+but do not call `target.stage()`. The observing engine calls `prepare()` at its own render boundary; a late attachment then
+prepares current storage and glyph runs without reshaping. Repeated `prepare()` calls are no-ops while the current source
+revision is already staged, pending, or committed.
 
 `attach()` is the standard lifecycle coordinator, not a privileged preparation operation. Its behavior can be implemented
-entirely with `current`, `subscribe()`, and the target interfaces in this document: subscription synchronously replays the
-current revision, reports every later publication, and completes when the batch is disposed. The method belongs on the
+entirely with `current`, `subscribe()`, and the target interfaces in this document: subscription synchronously records the
+current revision, records every later publication, and completes when the batch is disposed. `prepare()` is the explicit
+policy boundary that calls `target.stage(current, source)`. The method belongs on the
 batch because that retained relationship terminates with the batch and technique compatibility can be rejected at the
 call. An integration needing different publication policy may subscribe directly and build its own coordinator; it does
 not receive access to private shaping or allocation state by doing so.
 
-A synchronous throw from `target.stage()` or rejection of its pending `ready` Promise becomes `attachment.error`. It does
+A synchronous throw from `target.stage()` during `prepare()` or rejection of its pending `ready` Promise becomes
+`attachment.error`. It does
 not roll back the published core revision, replace `attachment.current`, or escape through `attachment.commit()`. A later
 success clears the error. Engine adapters decide how to surface that retained target failure to their own users.
-`retry()` clears no live state and makes exactly one new staging attempt against the current source revision; it is a no-op
-while an attempt for that revision is already pending.
+`retry()` clears no live state and marks the current source revision eligible for one new attempt; the target is called by
+the owner's next `prepare()`, never by `retry()` itself. It is a no-op while an attempt for that revision is already pending.
 
 Ownership is one-way. Disposing an attachment releases only that target's staged/live engine resources; it does not dispose
 the source paragraph batch, paragraphs, or fonts. Disposing the source `ParagraphBatch` invalidates every owned paragraph
@@ -125,8 +135,8 @@ the source handle. This adapter ownership is what permits scene-object reuse wit
 For explicit capacity replacement, `ParagraphBatch.setCapacity(capacity)` changes the requested allocation without changing
 the paragraph batch, any paragraph handle, or any attachment. Core may reuse semantic shaping and layout caches, stages new
 canonical capacity-bound storage, and publishes it atomically while the source revision remains live. Existing attachments
-stage replacement target resources, swap at their safe frame boundary, and retire the old resources after their own fences.
-A failed resize preserves the live revision and every identity.
+record the replacement source. A failed resize preserves the live revision and every identity. Each engine stages the
+replacement when that attachment's owner next calls `prepare()`.
 
 ## Consume canonical CPU storage
 
@@ -172,9 +182,11 @@ Core retains enough state to reshape, reflow, rebuild a target, and address stab
 interface CoreRetainedParagraphState {
   readonly input: ParagraphProperties<AnyRasterTechnique>;
   readonly layout: ParagraphLayout;
-  readonly allocations: GlyphAllocationTable;
-  readonly shapedOrigins: GlyphOrigins;
-  readonly originOverrides?: GlyphOriginOverrides;
+  readonly allocationsByBatch: ReadonlyMap<GlyphBatchKey, readonly GlyphRange[]>;
+  readonly shapedX: Float32Array;
+  readonly shapedY: Float32Array;
+  readonly overrideX?: Float32Array;
+  readonly overrideY?: Float32Array;
 }
 ```
 
@@ -211,12 +223,33 @@ interface PreparedParagraph {
   readonly paragraph: Paragraph<AnyRasterTechnique>;
   readonly insertionOrder: number;
   readonly order: number;
-  readonly topology: number;
+  readonly topology: GlyphTopology;
   readonly rasterPixelRatio: number;
   readonly layout: ParagraphLayout;
-  readonly paint: GlyphPaint;
+  readonly paint: PreparedGlyphPaint;
   readonly fontSlots: readonly PreparedFontSlot[];
   readonly origins: PreparedGlyphOrigins;
+}
+
+interface PreparedGlyphPaint {
+  readonly paintIndices: Uint16Array;
+  readonly palette: readonly PreparedLinearPaint[];
+}
+
+interface PreparedLinearPaint {
+  readonly color: readonly [number, number, number, number];
+  readonly outline?: { readonly color: readonly [number, number, number, number]; readonly width: number };
+  readonly shadow?: {
+    readonly color: readonly [number, number, number, number];
+    readonly offset: readonly [number, number];
+  };
+}
+
+interface PreparedGlyphOrigins {
+  readonly shapedX: Float32Array;
+  readonly shapedY: Float32Array;
+  readonly displayedX: Float32Array;
+  readonly displayedY: Float32Array;
 }
 
 interface PreparedFontSlot {
@@ -235,7 +268,6 @@ interface PreparedGlyphBatch<Technique extends AnyRasterTechnique> {
   readonly key: GlyphBatchKey;
   readonly technique: Technique;
   readonly font: LoadedFont<Technique>;
-  readonly chunk: number;
   readonly capacity: number;
   readonly instanceCount: number;
   readonly binding: RasterBindingOf<Technique>;
@@ -249,6 +281,7 @@ interface GlyphBatchKey {
   readonly technique: RasterTechniqueId;
   readonly resource: RasterResourceId;
   readonly pipelineVariant: number;
+  readonly generation: number;
   readonly chunk: number;
 }
 
@@ -265,6 +298,10 @@ It may coalesce overlapping or adjacent upload ranges for the same physical batc
 makes late attachment, a superseded pending stage, and recovery after a skipped revision correct without retaining a
 private core change journal.
 
+A paragraph-batch revision number increments only when that batch publishes changed prepared content. Runtime no-ops,
+failed preparation, superseded candidates, and updates that publish only other batches do not advance it. Therefore numeric
+adjacency means the target has the exact canonical predecessor required by `dirtyRanges`.
+
 Published canonical arrays remain readable through the next paragraph-batch publication. `stage()` therefore consumes or
 copies every selected CPU range synchronously before returning. A pending target update may await allocation, compilation,
 queue completion, or another engine operation, but it must not retain a canonical typed-array view and read it later after
@@ -275,8 +312,12 @@ queue completion, or another engine operation, but it must not retain a canonica
 
 Core interns and freezes each `GlyphBatchKey` for the lifetime of its physical batch. The identical key object appears in
 the prepared batch, every referencing run, and adjacent revisions until that physical batch retires, so targets may use it
-as a `Map` key. Its branded technique/resource IDs and numeric pipeline/chunk fields also form the deterministic diagnostic
+as a `Map` key. Its branded technique/resource IDs and numeric pipeline/generation/chunk fields form the deterministic diagnostic
 tuple; integrations never construct keys themselves.
+
+`generation` is monotonic for replacement storage at the same technique/resource/pipeline/chunk position. A new overflow
+chunk begins at generation zero; grow-mode replacement increments only the replaced chunk; an explicit capacity change
+rebuilds all chunks and increments their generations. A retired key object and tuple never become live again.
 
 One key represents compatible GPU storage, not necessarily one submit. Public capacity has only two settings: glyph-slot
 `size` per physical resource buffer and `policy`. Explicit paragraph batches default to lazily allocated
@@ -289,8 +330,10 @@ a hard per-buffer limit, preserves the prior revision, and reports typed `capaci
 the exact physical resource demand but before any target publication.
 
 Different techniques can never appear in one `PreparedParagraphBatchRevision`. Different raster resources normally produce
-different `GlyphBatchKey` values even when they use the same technique. A technique may opt two fonts into one key only if
-it actually creates a shared GPU resource capable of addressing both.
+different `GlyphBatchKey` values even when they use the same technique. One physical batch names exactly one `LoadedFont`;
+its resource ID is runtime-unique for that font/resource selection. Targets may still share immutable GPU atlas/table
+objects between physical batches when their technique binding proves the resource compatible, but core never hides several
+font owners behind the singular `PreparedGlyphBatch.font` field.
 
 ## Compile ordered glyph runs into draws
 
@@ -301,24 +344,26 @@ interface PreparedGlyphRun<Variant = undefined> {
   readonly renderVariant: Variant | undefined;
   readonly start: number;
   readonly count: number;
-  readonly order: number;
 }
 ```
 
-Core sorts paragraphs by ascending finite `paragraph.order`, then stable insertion order, and preserves the technique's
-required glyph compositing order. It resolves batch, paragraph, and span variant inheritance, then segments the sequence
+Array position is the only run-order value. Core sorts paragraphs by ascending finite `paragraph.order`, then stable
+insertion order, and emits each paragraph's visual glyph sequence from shaping and layout. It resolves batch, paragraph,
+and span variant inheritance, then segments the sequence
 whenever its physical batch, paragraph, or effective variant changes.
 
 ```ts
 // Resolved font sequence: Inter -> Noto -> Inter
 revision.glyphRuns = [
-  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 0, count: 8, order: 0 },
-  { batch: notoBatch.key, paragraph: label.id, renderVariant: warning, start: 0, count: 3, order: 1 },
-  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 8, count: 5, order: 2 },
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 0, count: 8 },
+  { batch: notoBatch.key, paragraph: label.id, renderVariant: warning, start: 0, count: 3 },
+  { batch: interBatch.key, paragraph: label.id, renderVariant: plain, start: 8, count: 5 },
 ];
 ```
 
-The run list is not a one-run/one-draw prescription. The target may split a run or coalesce adjacent runs when its program
+Every live glyph slot is named by exactly one run. Technique-internal multi-pass work expands inside the program's draw
+compiler rather than duplicating a core run; all passes expanded from one run remain adjacent unless the program proves an
+equivalent blend/depth ordering. The run list is not a one-run/one-draw prescription. The target may split a run or coalesce adjacent runs when its program
 declares them compatible. A program that places variant parameters in indexed sidecar storage may render many variants in
 one draw; a program whose variant changes material or pipeline state must split them. The target must preserve the provided
 sequence unless its documented depth/compositing policy proves another order equivalent.
@@ -372,6 +417,11 @@ for (const prepared of revision.paragraphs) {
   target.updateParagraphTransform(prepared.paragraph, matrix);
 }
 ```
+
+An integration that needs a per-glyph transform index derives it without inspecting or repartitioning glyphs: scan
+`revision.glyphRuns` in order and write the target-owned index for `run.paragraph` across `[run.start, run.start +
+run.count)` in the storage selected by `run.batch`. Because every live slot appears in exactly one run, this is the complete
+instance-to-paragraph mapping; it is target storage, not another core column.
 
 The target may repeat a matrix per glyph, use one transform index per instance, store a transform table, or create separate
 draws. Core does not shape a 3D transform. A transform change does not require reshaping unless an integration deliberately
@@ -431,7 +481,9 @@ interface ParagraphBatchTargetStage<TargetRevision extends ParagraphBatchTargetR
 `commit()` only swaps staged ownership at the engine's safe frame boundary.
 
 `previous` is always the attachment's committed target revision, never an unpublished candidate. When a newer source
-revision arrives, the attachment cancels or aborts the older candidate before staging the newer one. The full-range rule
+revision arrives, the attachment only records it. On the owner's next `prepare()`, the coordinator cancels or aborts any
+older candidate before staging the latest source. A stale pending result that resolves first is aborted and never becomes
+committable. The full-range rule
 above therefore covers every skipped candidate without replaying obsolete target work.
 
 On commit, the attachment asks the prior target revision to retire only after the replacement is live; its `dispose()`
@@ -441,6 +493,7 @@ same idempotent attachment disposal path.
 
 ```ts
 function beforeRender() {
+  attachment.prepare();
   const next = attachment.commit();
   if (next !== undefined) live = next;
 
