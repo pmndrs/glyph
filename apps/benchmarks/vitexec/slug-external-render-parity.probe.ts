@@ -64,11 +64,8 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
   }
   const fetches = canonicalExpectedUrls.map((url) => {
     const count = fetchedUrls.filter((fetched) => fetched === url).length;
-    const expectedCount = isPageResource(url) ? 2 : 1;
-    if (count !== expectedCount) {
-      throw new Error(
-        `${backend} fetched ${stableTransientUrl(url)} ${String(count)} times instead of ${String(expectedCount)}`,
-      );
+    if (count !== 1) {
+      throw new Error(`${backend} fetched ${stableTransientUrl(url)} ${String(count)} times instead of once`);
     }
     return { url: stableTransientUrl(url), count };
   });
@@ -89,7 +86,7 @@ for (const backend of ['webgpu', 'webgl2'] as const) {
     },
     fetches,
     fetchContract:
-      'core and companion once; page resources twice for public Text and independent CPU-reference decodes',
+      'core, companion, and every page resource exactly once; one target-v1 load feeds both Text and the CPU reference',
     embeddedRenderSubmitMs: capture.embeddedRenderSubmitMs,
     externalRenderSubmitMs: capture.externalRenderSubmitMs,
   });
@@ -137,8 +134,4 @@ function stableTransientUrl(value: string): string {
   const file = new URL(value).pathname.split('/').at(-1);
   if (file === undefined || file.length === 0) throw new Error('Fetched Slug URL has no file name');
   return `transient:///${file}`;
-}
-
-function isPageResource(value: string): boolean {
-  return /(?:-curves\.ktx2|-headers\.r32ui\.bin|-references\.r16ui\.bin)$/u.test(value);
 }

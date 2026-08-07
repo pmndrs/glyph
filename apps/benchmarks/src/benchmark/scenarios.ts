@@ -198,10 +198,15 @@ function slugTextValidation(values: readonly import('./contracts').BenchmarkMeas
       metrics.distinctRgbColors < 4 ||
       metrics.artifactBytes !== 3_444_916 ||
       metrics.compressedArtifactBytes !== 618_487 ||
-      !finitePositive(metrics.slugCurveGpuBytes) ||
-      !finitePositive(metrics.slugHeaderGpuBytes) ||
-      !finitePositive(metrics.slugReferenceGpuBytes) ||
-      metrics.slugGpuBytes !== metrics.slugCurveGpuBytes + metrics.slugHeaderGpuBytes + metrics.slugReferenceGpuBytes ||
+      !finitePositive(metrics.slugCurveBytes) ||
+      !finitePositive(metrics.slugHeaderBytes) ||
+      !finitePositive(metrics.slugReferenceBytes) ||
+      !finitePositive(metrics.slugResourceBytes) ||
+      // The technique reports what it decoded and the Three targets report what they uploaded, so a renderer that
+      // retains less than the decoded pages has lost a page rather than merely repacked one. Comparing the decoded
+      // subtotals against their own sum would only restate the app's arithmetic, so that check is gone.
+      !finitePositive(metrics.slugGpuBytes) ||
+      metrics.slugGpuBytes < metrics.slugResourceBytes ||
       metrics.renderTargetGpuBytes !== value.outputBytes ||
       !finiteNonnegative(metrics.fontLoadMs) ||
       !finiteNonnegative(metrics.firstDrawMs) ||

@@ -30,7 +30,7 @@ import {
   type RetainedFontFixtureController,
 } from '../../renderer/retained-font-fixture';
 import type { RendererBackend } from '../../renderer/webgpu-renderer';
-import { registeredSlugConfiguration, type SlugRasterConfiguration } from './metadata';
+import { slugDataConfiguration, type SlugRasterConfiguration } from './metadata';
 
 export interface SlugTextLiveStats {
   readonly technique: 'slug';
@@ -266,7 +266,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
       font = loaded.font;
       const fontLoadMs = performance.now() - fontStarted;
       context.signal.throwIfAborted();
-      const rasterConfiguration = await registeredSlugConfiguration(font, context.signal);
+      const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
       fontFixture = createRetainedFontFixtureController(registry, {
         fixture: initialFontFixture,
         asset: { font, fontLoadMs, loaded, rasterConfiguration },
@@ -337,15 +337,15 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         lineCount: layout.lineGlyphCounts.length,
         slugPageCount: currentFontFixture.rasterConfiguration.pageCount,
         slugCurveTexelCount: currentFontFixture.rasterConfiguration.curveTexelCount,
-        slugCurveGpuBytes: currentFontFixture.rasterConfiguration.curveGpuBytes,
+        slugCurveGpuBytes: currentFontFixture.rasterConfiguration.curveBytes,
         slugHeaderCount: currentFontFixture.rasterConfiguration.headerCount,
-        slugHeaderGpuBytes: currentFontFixture.rasterConfiguration.headerGpuBytes,
+        slugHeaderGpuBytes: currentFontFixture.rasterConfiguration.headerBytes,
         slugReferenceCount: currentFontFixture.rasterConfiguration.referenceCount,
-        slugReferenceGpuBytes: currentFontFixture.rasterConfiguration.referenceGpuBytes,
-        slugGpuBytes: currentFontFixture.rasterConfiguration.gpuBytes,
-        atlasGpuBytes: currentFontFixture.rasterConfiguration.gpuBytes,
+        slugReferenceGpuBytes: currentFontFixture.rasterConfiguration.referenceBytes,
+        slugGpuBytes: currentFontFixture.rasterConfiguration.resourceBytes,
+        atlasGpuBytes: currentFontFixture.rasterConfiguration.resourceBytes,
         framebufferGpuBytes,
-        totalGpuBytes: currentFontFixture.rasterConfiguration.gpuBytes + framebufferGpuBytes,
+        totalGpuBytes: currentFontFixture.rasterConfiguration.resourceBytes + framebufferGpuBytes,
         artifactBytes: currentFontFixture.loaded.compressedBytes,
         delivery,
         sourceFontBytes: currentFontFixture.loaded.metrics.sourceFontBytes,
@@ -407,7 +407,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
             ...(onBakeProgress === undefined ? {} : { onProgress: onBakeProgress }),
           });
           try {
-            const rasterConfiguration = await registeredSlugConfiguration(loaded.font, signal);
+            const rasterConfiguration = slugDataConfiguration(loaded.loaded.data);
             return { font: loaded.font, fontLoadMs: performance.now() - fontStartedAt, loaded, rasterConfiguration };
           } catch (error) {
             if (loaded.font !== activeFontFixture.current.asset.font) loaded.font.dispose();

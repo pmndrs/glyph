@@ -1,13 +1,12 @@
-import type { ParagraphLayout } from '@pmndrs/text';
-import type { SlugResource } from '@pmndrs/text/raster/slug/v0';
-import * as THREE from 'three/webgpu';
+import { defineRasterResourceId, type ParagraphLayout } from '@pmndrs/text';
+import { SLUG_GLYPH_RECORD_STRIDE, type SlugData, type SlugPageData } from '@pmndrs/text/raster/slug';
 import { describe, expect, it } from 'vitest';
 
 import { renderFlatSlugCpuReference } from './slug-cpu-reference';
 
 describe('conformance flat Slug CPU reference', () => {
   it('reconstructs an exact quadratic square at physical pixel centers', () => {
-    const result = renderFlatSlugCpuReference(squareResource(), specimenLayout(), {
+    const result = renderFlatSlugCpuReference(squareData(), specimenLayout(), {
       width: 4,
       height: 4,
     });
@@ -32,7 +31,7 @@ describe('conformance flat Slug CPU reference', () => {
       x: new Float32Array([-1, 1]),
       y: new Float32Array([4, 4]),
     });
-    const result = renderFlatSlugCpuReference(squareResource(), layout, {
+    const result = renderFlatSlugCpuReference(squareData(), layout, {
       width: 4,
       height: 4,
       fill: [1, 1, 1, 0.5],
@@ -49,8 +48,8 @@ describe('conformance flat Slug CPU reference', () => {
     ]);
   });
 
-  it('skips canonical absent records and rejects malformed texture storage', () => {
-    const absent = squareResource();
+  it('skips canonical absent records and rejects malformed page storage', () => {
+    const absent = squareData();
     new DataView(absent.records.buffer).setUint16(8, 0xffff, true);
     expect(renderFlatSlugCpuReference(absent, specimenLayout(), { width: 4, height: 4 })).toMatchObject({
       glyphCount: 0,
@@ -58,18 +57,16 @@ describe('conformance flat Slug CPU reference', () => {
       evaluatedCurves: 0,
     });
 
-    const malformed = squareResource();
-    Object.defineProperty(malformed.pages[0]!.curveTexture.image, 'data', {
-      value: new Uint16Array(3),
-    });
+    const data = squareData();
+    const malformed = { ...data, pages: [{ ...data.pages[0]!, curveBytes: new Uint8Array(6) }] };
     expect(() => renderFlatSlugCpuReference(malformed, specimenLayout(), { width: 4, height: 4 })).toThrow(
-      'curve texture length',
+      'Slug curve bytes',
     );
   });
 });
 
-function squareResource(): SlugResource {
-  const records = new Uint8Array(40);
+function squareData(): SlugData {
+  const records = new Uint8Array(SLUG_GLYPH_RECORD_STRIDE);
   const record = new DataView(records.buffer);
   record.setInt16(0, 0, true);
   record.setInt16(2, 0, true);
@@ -92,31 +89,41 @@ function squareResource(): SlugResource {
     ...curve(0, 1, 0, 0.5, 0, 0),
   ]);
   const headers = Uint32Array.from([(4 << 16) | 0, (4 << 16) | 4]);
-  const references = Uint32Array.from([2 | (0 << 16), 4 | (6 << 16), 2 | (4 << 16), 6 | (0 << 16)]);
-  const curveTexture = new THREE.DataTexture(curves, 8, 1, THREE.RGBAFormat, THREE.HalfFloatType);
-  const headerTexture = new THREE.DataTexture(headers, 2, 1, THREE.RedIntegerFormat, THREE.UnsignedIntType);
-  const referenceTexture = new THREE.DataTexture(references, 4, 1, THREE.RedIntegerFormat, THREE.UnsignedIntType);
+  const references = Uint16Array.from([2, 0, 4, 6, 2, 4, 6, 0]);
+  const page: SlugPageData = {
+    resource: defineRasterResourceId('pmndrs.slug/test/square/0'),
+    curveWidth: 8,
+    curveHeight: 1,
+    curveBytes: bytes(curves),
+    headerCount: 2,
+    headerWidth: 2,
+    headerHeight: 1,
+    headerBytes: bytes(headers),
+    referenceCount: 8,
+    referenceWidth: 8,
+    referenceHeight: 1,
+    referenceBytes: bytes(references),
+  };
   return {
     planeUnitsPerEm: 2048,
     records,
-    pages: [
+    pages: [page],
+    bindings: [
       {
-        curveTexture,
-        curveWidth: 8,
-        curveHeight: 1,
-        headerTexture,
-        headerWidth: 2,
-        headerHeight: 1,
-        headerCount: 2,
-        referenceTexture,
-        referenceWidth: 4,
-        referenceHeight: 1,
-        referenceCount: 8,
-        gpuBytes: curves.byteLength + headers.byteLength + references.byteLength,
+        page: 0,
+        curveWidth: page.curveWidth,
+        curveHeight: page.curveHeight,
+        headerWidth: page.headerWidth,
+        headerHeight: page.headerHeight,
+        referenceWidth: page.referenceWidth,
+        referenceHeight: page.referenceHeight,
       },
     ],
-    gpuBytes: curves.byteLength + headers.byteLength + references.byteLength,
   };
+}
+
+function bytes(texels: Uint16Array | Uint32Array): Uint8Array {
+  return new Uint8Array(texels.buffer, texels.byteOffset, texels.byteLength);
 }
 
 function curve(p0x: number, p0y: number, p1x: number, p1y: number, p2x: number, p2y: number): readonly number[] {
