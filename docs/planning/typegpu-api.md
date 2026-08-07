@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: TypeGPU raster programs and text engine
-description: Target v1 API for an external TypeGPU integration package containing reusable technique shaders, variant-aware raster programs, and a direct WebGPU text engine that consumes public core paragraph batches without Three.js.
+description: Target v1 API for the package-owned TypeGPU integration subpath containing reusable technique shaders, variant-aware raster programs, and a direct WebGPU text engine that consumes renderer-neutral core paragraph batches without Three.js.
 documentation_type: reference
 tags: [api, typegpu, webgpu, shaders, raster, engine, batching, variants]
 status: draft
@@ -38,21 +38,21 @@ sources:
     title: TypeGPU and TSL interoperability
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T03:25:58Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # TypeGPU raster programs and text engine
 
-This is an engine-integration package, not part of core:
+This is an engine-integration subpath, not part of the renderer-neutral core entry:
 
 ```ts
 import { createTextRuntime, type ParagraphBatchTarget } from '@pmndrs/text';
-import { createTypeGpuTextEngine } from '@pmndrs/text-typegpu';
+import { createTypeGpuTextEngine } from '@pmndrs/text/typegpu';
 ```
 
-`@pmndrs/text-typegpu` may live in this monorepo or an independent repository. It consumes only public `@pmndrs/text` and
-raster-technique exports. Core never imports TypeGPU, and the integration does not require an `@pmndrs/text/typegpu`
-subpath or access to package internals.
+`@pmndrs/text/typegpu` is maintained and shipped by this package. Its dependency direction is still enforced: it consumes
+renderer-neutral core and technique contracts, core never imports TypeGPU, and the subpath receives no package-private
+shaping or batching state.
 
 The TypeGPU surface has two independent jobs:
 
@@ -71,7 +71,7 @@ loop.
 
 ```ts
 import tgpu from 'typegpu';
-import { createTypeGpuTextEngine, createTypeGpuSlugProgram } from '@pmndrs/text-typegpu';
+import { createTypeGpuTextEngine, createTypeGpuSlugProgram } from '@pmndrs/text/typegpu';
 import { slug } from '@pmndrs/text/raster/slug';
 
 const root = tgpu.initFromDevice({ device });

@@ -30,13 +30,13 @@ import { rasterInstanceCapacity, rasterInstanceUpdateRanges } from '../internal/
 import {
   ABSENT_GLYPH_PAGE,
   DENSE_GLYPH_RECORD_STRIDE,
-  decodeEmbeddedLosslessAtlasPage,
   jsonArray,
   jsonObject,
   nonnegativeSafeInteger,
   positiveSafeInteger,
   validateDenseGlyphRecords,
 } from '../internal/raster-atlas.js';
+import { decodeEmbeddedLosslessThreeAtlasPage } from '../internal/three-raster-atlas.js';
 import {
   defineRaster,
   defineRasterBatchStage,
@@ -512,7 +512,7 @@ function disposeBitmapStrikes(strikes: readonly BitmapStrikeResource[]): void {
 }
 
 function decodeBitmapPage(raster: RegisteredRaster, value: JsonValue, path: string): BitmapPageResource {
-  return decodeEmbeddedLosslessAtlasPage(raster, value, path, {
+  return decodeEmbeddedLosslessThreeAtlasPage(raster, value, path, {
     gpuFormat: 'r8unorm',
     vkFormat: VK_FORMAT_R8_UNORM,
     blockWidth: 1,

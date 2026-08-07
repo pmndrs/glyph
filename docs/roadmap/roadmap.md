@@ -25,7 +25,7 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # Canonical implementation roadmap
@@ -782,8 +782,8 @@ Deliver:
 - reusable Three `Text` objects that survive group disposal, bind fresh core handles elsewhere, and never inherit or transfer stale batch resources;
 - a complete direct TypeGPU engine rendering Bitmap, MTSDF, and Slug into caller-owned passes without Three.js or TSL in
   portable graphs, plus a Wayfare target reusing its programs;
-- Three.js, React Three Fiber, TypeGPU, Wayfare, and gpucat integrations that can live as independent packages consuming
-  public core and technique exports without privileged subpaths;
+- package-owned Three.js, React Three Fiber, and TypeGPU subpath exports with strict renderer-neutral dependency direction,
+  plus external Wayfare and gpucat fitness targets consuming public core and technique exports without deep imports;
 - a pinned gpucat proof covering public buffer/texture realization, partial dirty-range uploads, instanced draw ordering,
   transforms, lifecycle, and reusable Slug shader access without changing core;
 - shared TypeGPU raster programs across compatible WebGPU hosts without moving scene or pass lifecycle into the technique;
@@ -795,6 +795,11 @@ Only after these gates pass may maintainers declare and publish v1.
 The [renderer-neutral extraction plan](../planning/engine-integration-boundary.md) owns the issue sequence and proof matrix.
 Engine transforms, scene composition, pass placement, command encoding, GPU synchronization, and device lifecycle remain
 adapter-owned. Core owns physical glyph grouping and ordered variant-bearing text runs; programs own compatible final draws.
+
+Implementation evidence begins with the public exact-typed `RasterTechnique` contract and a renderer-neutral lossless
+atlas decoder. Bitmap's Three texture creation is now an adapter step, and MTSDF consumes the same portable decoded bytes
+before creating its texture array. Item 11.2 remains open until all first-party techniques own portable selection and
+canonical packing and their reusable shader/program surfaces pass the external-engine proofs.
 
 ### Milestone 12 — editorial flow regions and mixed-raster composition
 

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:59cfc72dfcff42889b5e951c630c8778b058eac24f5b240662cc43cab0be8958'
+source_digest: 'sha256:edf3b71c52d16571f1ba9068e8cca7a0ffadabf41f4a03244a2164a4768ed9e1'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -88,7 +88,13 @@ sources:
     title: Shared direct-memory raster baker host
   - id: raster-atlas-runtime
     resource: ../../packages/text/src/internal/raster-atlas.ts
-    title: Shared lossless-atlas runtime adapter
+    title: Renderer-neutral lossless-atlas decoder
+  - id: three-raster-atlas-runtime
+    resource: ../../packages/text/src/internal/three-raster-atlas.ts
+    title: Three.js lossless-atlas adapter
+  - id: raster-technique-api
+    resource: ../../packages/text/src/raster-technique.ts
+    title: Portable raster technique contract
   - id: raster-ktx
     resource: ../../packages/text/src/internal/raster-ktx.ts
     title: Shared dependency-light KTX2 validation
@@ -142,12 +148,22 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T01:16:02Z'
+  at: '2026-08-07T04:12:04Z'
 ---
 
 # Package reference: `@pmndrs/text`
 
 Status: ✅ Milestone 9 Slug integration is complete
+
+Target-v1 extraction now has its first renderer-neutral implementation boundary. `RasterTechnique` preserves exact
+options, descriptor, decoded data, binding, and canonical storage types without `any`; its public helpers validate and
+brand technique and resource identities without requiring third-party casts. Lossless KTX2 atlas validation and byte
+decoding now produce renderer-neutral `{ width, height, bytes }` pages. Bitmap adapts those pages to Three textures in a
+separate internal module, while MTSDF builds its Three texture array directly from the portable bytes. This removes Three
+from the shared atlas decoder without changing the merged-v0 raster module or benchmark rendering behavior. The complete
+42-cell Presentation matrix produced visible Bitmap, MTSDF, and Slug output for all seven workloads on both WebGPU and
+WebGL2 after the split. The remaining Milestone 11 technique conversions, canonical packing, runtime batching, and external
+engine targets are still open.
 
 `Text` is a composite `Object3D`, not a `Group`, so it honors the primary `groupOrder` of any caller-owned parent Group.
 Generated raster batches also use neutral `Object3D` roots rather than nested Groups. `Text.renderOrder` becomes the secondary

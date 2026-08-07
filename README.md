@@ -8,7 +8,7 @@ engine integrations below are implemented and pass their portability gates.
 ## Render text with React Three Fiber
 
 ```tsx
-import { Text, TextGroup, useFont } from '@pmndrs/text-r3f';
+import { Text, TextGroup, useFont } from '@pmndrs/text/r3f';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 function Labels() {
@@ -28,7 +28,7 @@ function Labels() {
 ## Render text with Three.js
 
 ```ts
-import { FontLoader, Text, TextGroup } from '@pmndrs/text-three';
+import { FontLoader, Text, TextGroup } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
@@ -49,7 +49,7 @@ Both integrations load fonts explicitly and add one same-technique text batch to
 
 ```ts
 import { createFontStack } from '@pmndrs/text';
-import { FontLoader, Text, TextGroup, span, txt, type SpanStyle } from '@pmndrs/text-three';
+import { FontLoader, Text, TextGroup, span, txt, type SpanStyle } from '@pmndrs/text/three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();

@@ -154,7 +154,7 @@ export type RasterResourceOf<Module extends AnyRasterModule> =
 export type RasterBatchOf<Module extends AnyRasterModule> =
   Module extends RasterModule<any, any, infer DrawBatch, any> ? DrawBatch : never;
 
-export type RasterOptionsOf<Module extends AnyRasterModule> =
+export type RasterModuleOptionsOf<Module extends AnyRasterModule> =
   Module extends RasterModule<any, any, any, infer Options> ? Options : never;
 
 type RasterRequestBase<Module extends AnyRasterModule> = {
@@ -162,14 +162,16 @@ type RasterRequestBase<Module extends AnyRasterModule> = {
 };
 
 export type RasterRequest<Module extends AnyRasterModule> = RasterRequestBase<Module> &
-  ([RasterOptionsOf<Module>] extends [never]
+  ([RasterModuleOptionsOf<Module>] extends [never]
     ? { readonly options?: never }
-    : undefined extends RasterOptionsOf<Module>
-      ? { readonly options?: RasterOptionsOf<Module> }
-      : { readonly options: RasterOptionsOf<Module> });
+    : undefined extends RasterModuleOptionsOf<Module>
+      ? { readonly options?: RasterModuleOptionsOf<Module> }
+      : { readonly options: RasterModuleOptionsOf<Module> });
 
 export type RasterInput<Module extends AnyRasterModule> =
-  RasterOptionsOptional<RasterOptionsOf<Module>> extends true ? Module | RasterRequest<Module> : RasterRequest<Module>;
+  RasterOptionsOptional<RasterModuleOptionsOf<Module>> extends true
+    ? Module | RasterRequest<Module>
+    : RasterRequest<Module>;
 
 export type AnyRasterInput =
   | AnyRasterModule

@@ -32,7 +32,7 @@ sources:
     title: Target v1 raster technique boundary
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T03:25:58Z'
+  at: '2026-08-07T04:31:24Z'
 ---
 
 # External gpucat integration fitness plan
@@ -79,19 +79,19 @@ import { GpucatText, GpucatTextGroup } from '@pmndrs/text-gpucat';
 `@pmndrs/text-gpucat` may live in another repository. It must compile using only documented package exports and a gpucat
 peer dependency. It must not import `@pmndrs/text/src/*`, workspace-relative source, or an engine-specific core subpath.
 
-The same rule applies to the target v1 integrations:
+The package-owned integrations remain public subpaths; gpucat is deliberately different because it is the external fitness
+test:
 
 ```txt
-@pmndrs/text          core, loading, shaping, layout, paragraph batches, target protocol
-@pmndrs/text-three    Three.js integration
-@pmndrs/text-r3f      React Three Fiber integration over @pmndrs/text-three
-@pmndrs/text-typegpu  TypeGPU programs and direct engine
-@pmndrs/text-gpucat   gpucat objects, resources, programs, and target
+@pmndrs/text           core, loading, shaping, layout, paragraph batches, target protocol
+@pmndrs/text/three     package-owned Three.js integration
+@pmndrs/text/r3f       package-owned React Three Fiber integration over /three
+@pmndrs/text/typegpu   package-owned TypeGPU programs and direct engine
+@pmndrs/text-gpucat    external gpucat objects, resources, programs, and target
 ```
 
-These package names make dependency direction mechanically visible. Repository location is an ownership choice; package
-independence is the contract. A monorepo workspace integration still needs a packed-package test that installs public
-tarballs into an isolated fixture so workspace path aliases cannot hide a private import.
+The core-to-maintained-subpath dependency direction is enforced by package graph tests. The gpucat proof additionally
+installs packed public output into an isolated fixture so workspace path aliases cannot hide a private import.
 
 ## Map a core batch onto gpucat
 

@@ -83,7 +83,7 @@ export type {
   RasterResourceResolverContext,
   RasterResourceSource,
   RasterResourceOf,
-  RasterOptionsOf,
+  RasterModuleOptionsOf,
   RasterOptionsArgument,
   RasterSelection,
   RasterSource,
@@ -96,6 +96,27 @@ export type {
 export { defineRaster, defineRasterBatchStage } from './raster.js';
 export { RasterRuntime } from './raster-runtime.js';
 export type { RasterDrawBatch, RasterObjectDrawBatch } from './raster.js';
+
+export type {
+  AnyRasterTechnique,
+  GlyphBatchStorage,
+  GlyphBatchStorageOf,
+  GlyphBatchStorageShape,
+  GlyphRange,
+  RasterBindingOf,
+  RasterDataOf,
+  RasterGlyphInput,
+  RasterGlyphSelection,
+  RasterGlyphWriteInput,
+  RasterResourceId,
+  RasterTechnique,
+  RasterTechniqueDescriptorOf,
+  RasterTechniqueId,
+  RasterOptionsOf,
+  RasterTechniqueOptionsOf,
+  RasterTechniqueTypesOf,
+} from './raster-technique.js';
+export { defineRasterResourceId, defineRasterTechnique } from './raster-technique.js';
 
 export type { RasterCoverage, RasterCoverageV0, RasterUnicodeRange, RasterUnicodeRangeV0 } from './raster-coverage.js';
 export {
