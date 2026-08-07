@@ -37,15 +37,15 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-06T21:52:54Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Build a raster and baker plugin
 
 > [!NOTE]
-> This guide documents the currently implemented V1 `RasterModule` surface. The next extraction API is authoritative in
+> This guide documents the merged, unreleased v0 `RasterModule` surface. The target v1 extraction API is authoritative in
 > the [raster technique and engine resource specification](raster-technique-api.md); this guide will be rewritten against
-> that split when implementation replaces the V1 module.
+> that split when implementation replaces the v0 module.
 
 Use this guide to create an ESM package that adds a raster technique to `pmndrs/text` without changing or importing its
 internals. The finished package will own:
@@ -58,7 +58,7 @@ internals. The finished package will own:
 
 The exact interfaces remain authoritative in the [API reference](api-shapes.md#raster-module-boundary). The private
 [`@pmndrs/text-glyph-example-raster`](../../packages/glyph-example-raster) workspace package is a complete external proof using
-only published entry points.
+only public package entry points.
 
 ## 1. Create separate runtime and baker entry points
 

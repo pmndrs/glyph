@@ -1,7 +1,7 @@
 ---
 type: Design Research
 title: Responsive editorial flow and mixed-raster composition
-description: Defines the post-V1 layout model and benchmark for responsive multi-column text around exclusions rendered with bitmap, MTSDF, and Slug.
+description: Defines the post-v1 layout model and benchmark for responsive multi-column text around exclusions rendered with Bitmap, MTSDF, and Slug.
 tags: [layout, benchmark, typography, exclusions, bitmap, mtsdf, slug]
 sources:
   - id: 'pretext'
@@ -19,16 +19,16 @@ sources:
 
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-27T01:29:13Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Responsive editorial flow and mixed-raster composition
 
-Status: accepted post-V1 direction; API and performance conclusions remain evidence-gated
+Status: accepted post-v1 direction; API and performance conclusions remain evidence-gated
 
 ## Recommendation
 
-Add responsive flow regions and a mixed-raster editorial benchmark after Slug and the V1 release gate. Do not expand V1's box-constrained paragraph contract to fit this work prematurely.
+Add responsive flow regions and a mixed-raster editorial benchmark after the target v1 release gate. Do not expand target v1's box-constrained paragraph contract to fit this work prematurely.
 
 The benchmark should be a typographic composition that needs all three first-party techniques:
 
@@ -62,7 +62,7 @@ The showcase should exercise all four lanes and label them separately. Repeated 
 
 ## Current boundary
 
-V1 lays out horizontal text in a rectangular `ParagraphConstraints` box. It can reshape changed line boundaries efficiently, but it does not represent columns, holes, floats, arbitrary contours, or more than one usable interval on a baseline. An oversized letter can be rendered beside a box today, but body text cannot correctly flow around its contour.
+Target v1 lays out horizontal text in a rectangular content box. It can reshape changed line boundaries efficiently, but it does not represent columns, holes, floats, arbitrary contours, or more than one usable interval on a baseline. An oversized letter can be rendered beside a box today, but body text cannot correctly flow around its contour.
 
 The shaping engine is not the missing piece. The missing piece is a flow planner between paragraph measurement and final positioning.
 
@@ -152,7 +152,7 @@ Compare both a static first layout and deterministic dynamic updates. Keep appro
 
 ## Milestone gates
 
-Milestone 11 begins only after Slug and the V1 renderer-set gate. Before accepting a public flow API it must prove:
+Milestone 12 begins only after the target v1 renderer-set gate. Before accepting a public flow API it must prove:
 
 - rectangular layout remains the zero-overhead common path;
 - the same prepared paragraph can produce box and exclusion-region layouts;

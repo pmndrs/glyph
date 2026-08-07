@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: TypeGPU raster programs and text engine
-description: Canonical API for reusable TypeGPU technique shaders, variant-aware raster programs, and a direct WebGPU text engine that consumes core paragraph batches without Three.js.
+description: Target v1 API for an external TypeGPU integration package containing reusable technique shaders, variant-aware raster programs, and a direct WebGPU text engine that consumes public core paragraph batches without Three.js.
 documentation_type: reference
 tags: [api, typegpu, webgpu, shaders, raster, engine, batching, variants]
 status: stable
@@ -38,10 +38,21 @@ sources:
     title: TypeGPU and TSL interoperability
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # TypeGPU raster programs and text engine
+
+This is an engine-integration package, not part of core:
+
+```ts
+import { createTextRuntime, type ParagraphBatchTarget } from '@pmndrs/text';
+import { createTypeGpuTextEngine } from '@pmndrs/text-typegpu';
+```
+
+`@pmndrs/text-typegpu` may live in this monorepo or an independent repository. It consumes only public `@pmndrs/text` and
+raster-technique exports. Core never imports TypeGPU, and the integration does not require an `@pmndrs/text/typegpu`
+subpath or access to package internals.
 
 The TypeGPU surface has two independent jobs:
 
@@ -60,8 +71,8 @@ loop.
 
 ```ts
 import tgpu from 'typegpu';
-import { createTypeGpuTextEngine } from '@pmndrs/text/typegpu';
-import { createTypeGpuSlugProgram, slug } from '@pmndrs/text/raster/slug/typegpu';
+import { createTypeGpuTextEngine, createTypeGpuSlugProgram } from '@pmndrs/text-typegpu';
+import { slug } from '@pmndrs/text/raster/slug';
 
 const root = tgpu.initFromDevice({ device });
 const program = createTypeGpuSlugProgram(root);

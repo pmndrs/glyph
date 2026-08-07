@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Renderer capability matrix
-description: Compares evidence-backed V1 raster roles and explicitly planned later capabilities across bitmap, MSDF, and Slug.
+description: Compares evidence-backed merged v0 raster roles and explicitly planned target v1 or later capabilities across bitmap, MSDF, and Slug.
 tags: [rendering, bitmap, msdf, mtsdf, slug, games]
 sources:
   - id: 'citation-1-1'
@@ -40,21 +40,21 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-03T15:29:54Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Renderer capability matrix
 
-This matrix separates the evidence-backed V1 raster roles from explicitly planned later capabilities. The public MSDF
+This matrix separates the evidence-backed merged v0 raster roles from explicitly planned target v1 or later capabilities. The public MSDF
 raster uses one MTSDF RGBA atlas; MTSDF is its encoding, not another selectable engine. The recommendation and current
-scale/effect boundaries below are release claims. Rows describing later color, paging, mixed-raster, or expanded-effect
-work remain intended capabilities rather than claims about the V1 implementation.
+scale/effect boundaries below are implementation evidence, not release claims. Rows describing later color, paging, mixed-raster, or expanded-effect
+work remain intended capabilities rather than claims about the merged v0 implementation.
 
 | Symbol | Meaning                                                                   |
 | :----: | ------------------------------------------------------------------------- |
 |   ✅   | Natural, fully intended capability                                        |
 |   ⚠️   | Supported with a bounded range, extra pass/data, or documented constraint |
-|   🟡   | Planned additive capability; not implemented in V1                        |
+|   🟡   | Planned additive capability; not implemented in merged v0                 |
 |   ❌   | Not represented by this technique; choose another raster                  |
 
 ## Styling and effects
@@ -98,7 +98,7 @@ Notes:
 
 Notes:
 
-1. V1 bakes monochrome OpenType outlines only. The color and standalone-SVG rows are additive plans, not accepted input
+1. Merged v0 bakes monochrome OpenType outlines only. The color and standalone-SVG rows are additive plans, not accepted input
    paths in the current baker or renderer.
 2. A future Bitmap color path can flatten supported source artwork to RGBA strikes, but loses vector palette behavior.
 3. Arbitrary SVG paint and embedded images are not distance fields. Any future MSDF admission must define a supported
@@ -137,17 +137,17 @@ All rasters consume the same result for:
 - bidi ordering, wrapping, alignment, clipping, and ellipsis;
 - font-scoped glyph identity and, after its roadmap milestone, mixed-font fallback.
 
-Switching raster must never reshape text or change line breaks. V1 selects one raster per font slot. The additive color-emoji/SVG lane may later assign a raster per glyph by combining each artifact's `page = 0xffff` availability sentinel with an explicit raster-priority policy and passing the resulting glyph mask through the required `stageBatch` transaction; that mechanism is not part of the first release contract.
+Switching raster must never reshape text or change line breaks. Merged v0 selects one raster per font slot. The additive color-emoji/SVG lane may later assign a raster per glyph by combining each artifact's `page = 0xffff` availability sentinel with an explicit raster-priority policy and passing the resulting glyph mask through the required `stageBatch` transaction; that mechanism is not part of the merged v0 contract.
 
 ## Recommendation
 
-- Use **MSDF** for ordinary scalable game and UI text and inexpensive runtime outlines/effects. Its V1 MTSDF encoding
+- Use **MSDF** for ordinary scalable game and UI text and inexpensive runtime outlines/effects. Its merged v0 MTSDF encoding
   passed the shared workload, DPR, transform, effects, source-outline error, atlas, and dual-backend gates recorded in the
   [benchmark evidence](../packages/benchmarks.md).
 - Use **bitmap strikes** for tiny, known-density, or intentionally pixel-authored text. The exact DPR-1/DPR-2 strike and
   CPU/GPU frame oracles establish this role; bitmap does not silently approximate unsupported outline or shadow effects.
 - Use **Slug** for large or deeply zoomed fill text and intricate monochrome outlines. The 36-cell dual-backend/DPR
-  release-role matrix covers large size, 1,024-ppem magnification, complex scripts, clipping, affine transforms, and
+  raster-role matrix covers large size, 1,024-ppem magnification, complex scripts, clipping, affine transforms, and
   projection zoom against source outlines. Slug V0 deliberately rejects outline, shadow, and color-layer paint.
 - Keep the choice explicit. `pmndrs/text` may expose recommendations and capabilities, but it does not silently switch engines.
 

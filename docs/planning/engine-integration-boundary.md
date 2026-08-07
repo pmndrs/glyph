@@ -21,6 +21,9 @@ sources:
   - id: typegpu-api
     resource: typegpu-api.md
     title: TypeGPU raster programs and text engine
+  - id: gpucat-integration
+    resource: gpucat-integration.md
+    title: External gpucat integration fitness plan
   - id: roadmap
     resource: ../roadmap/roadmap.md
     title: Canonical implementation order
@@ -38,7 +41,7 @@ sources:
     title: Raw TypeGPU proof target
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Renderer-neutral core and engine integration
@@ -178,7 +181,7 @@ for (const draw of program.compileRuns(revision.glyphRuns)) draw(draw);
 
 ## Current system versus target
 
-| Current V1 behavior                                                      | Target behavior                                                                                 |
+| Merged v0 behavior                                                       | Target v1 behavior                                                                              |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
 | `Text` combines paragraph, raster, and Three ownership                   | Paragraph state and batch compilation live in core; Three is one target                         |
 | Property changes can prepare one `Text` immediately                      | Handle setters only mark desired state dirty                                                    |
@@ -307,9 +310,9 @@ expect(resolveFonts('Inter -> Noto -> Inter')).toProduce({
 - Move Three textures, attributes, TSL materials, scene objects, and renderer disposal into Three raster targets.
 - Permit an optional `RasterProgram` seam when multiple engines share a shader/resource backend such as TypeGPU and raw
   WebGPU interop; do not require an artificial universal shader interface in core.
-- Permit an optional `@typegpu/three` program subpath that adapts shared TypeGPU raster functions into TSL nodes. Keep
-  Three-owned accessors, materials, pipeline state, and lifecycle in that adapter; neither core nor the portable technique
-  imports TypeGPU or TSL.
+- Permit an optional external Three/TypeGPU program package that adapts shared TypeGPU raster functions into TSL nodes.
+  Keep Three-owned accessors, materials, pipeline state, and lifecycle in that adapter; neither core nor the portable
+  technique imports TypeGPU or TSL.
 - Retain decoded CPU page/table bytes through loaded-font lifetime so several targets and late attachment need no refetch or
   decode.
 
@@ -364,7 +367,7 @@ expect(typeGpuThreeMtsdfProgram.technique).toBe(mtsdfTechnique);
 - Preserve Suspense for loading only; warm shaping does not require a readiness Promise.
 - Make synchronous versus asynchronous synchronization an integration policy selectable per frame/update.
 
-### 8. Implement and prove the direct TypeGPU engine
+### 8. Implement and prove the external TypeGPU engine
 
 Implement the complete [TypeGPU API](typegpu-api.md), then build the smallest application in
 `AlexJWayne/typegpu-shader-canvas` that proves:
@@ -387,7 +390,8 @@ Use `@typegpu/three` `toTSL()` to adapt the same TypeGPU-authored Bitmap and Slu
 Keep Three accessors, material assembly, blending, depth, renderer lifecycle, and target ownership in the Three adapter.
 Against the repository-pinned Three.js version, inspect the emitted WebGPU shaders, prove deterministic render parity with
 the native TSL programs, and measure tree-shaken raw/gzip/Brotli transfer plus graph-construction and shader-compilation
-cost. Keep this implementation behind an explicit export subpath unless those results justify making it the default.
+cost. Keep this implementation in an optional external shader/integration package unless those results justify making it
+the default Three program.
 
 ### 9. Prove Wayfare
 
@@ -396,7 +400,14 @@ render-pass, and frame lifecycle. The Wayfare adapter may own scene integration 
 storage, resort source text, or recompute canonical packing. It may reuse a TypeGPU program while retaining its own final
 pass and draw lifecycle.
 
-### 10. Verify all techniques
+### 10. Prove an external gpucat package
+
+Implement the [gpucat fitness plan](gpucat-integration.md) in an isolated package that installs packed public core and
+technique artifacts. Prove typed buffer/texture realization, dirty-range uploads, transforms, ordered instanced draws,
+resource disposal, and Bitmap/MTSDF/Slug output without changing core or importing private source. Treat canonical Slug
+shader reuse as its own gate: a failed shader-sharing experiment may require a gpucat-native program, but not a core API.
+
+### 11. Verify all techniques
 
 Run Bitmap, MTSDF, and Slug independently through:
 
@@ -405,6 +416,7 @@ await proveHeadlessCore();
 await proveThree({ backends: ['webgpu', 'webgl2'] });
 await proveRawTypeGpu();
 await proveWayfare();
+await proveGpucatExternalPackage();
 ```
 
 No test combines techniques inside one font stack or paragraph batch. A technique-specific proof may use several fonts and
@@ -453,5 +465,7 @@ callback-form asynchronous updates do not allocate a public Promise.
 - Separate paragraph batches remain separate render phases.
 - Explicit capacity changes preserve batch, paragraph, attachment, and Three object identities; core and Three batch
   cloning remain unsupported.
-- Three.js, raw TypeGPU, and Wayfare execute the same core output for Bitmap, MTSDF, and Slug.
+- Three.js, raw TypeGPU, Wayfare, and the external gpucat package execute the same core output for Bitmap, MTSDF, and Slug.
+- Core, portable techniques, and bakers import no Three.js, TypeGPU, Wayfare, or gpucat code; integration packages pass a
+  packed-public-package test without deep imports.
 - Full repository checks, package-size gates, and documentation validation pass.

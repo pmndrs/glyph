@@ -24,6 +24,9 @@ sources:
   - id: typegpu-api
     resource: typegpu-api.md
     title: TypeGPU raster programs and text engine
+  - id: gpucat-integration
+    resource: gpucat-integration.md
+    title: External gpucat integration fitness plan
   - id: current-api
     resource: api-shapes.md
     title: Existing API migration fixture
@@ -38,7 +41,7 @@ sources:
     title: Current raster transaction contract
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Core text API
@@ -925,7 +928,7 @@ current displayed positions.
 
 ## Three.js is a separate public surface
 
-Three.js applications use `FontLoader`, `TextGroup`, and `Text` from `@pmndrs/text/three`. That integration owns these core
+Three.js applications use `FontLoader`, `TextGroup`, and `Text` from `@pmndrs/text-three`. That integration owns these core
 objects privately and synchronizes them during Three's render lifecycle; it never asks an application to create core
 paragraphs and wrap them in adapter objects.
 

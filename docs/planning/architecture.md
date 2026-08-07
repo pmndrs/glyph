@@ -25,10 +25,13 @@ sources:
   - id: typegpu-api
     resource: typegpu-api.md
     title: TypeGPU raster programs and text engine
+  - id: gpucat-integration
+    resource: gpucat-integration.md
+    title: External gpucat integration fitness plan
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Proposed architecture
@@ -151,7 +154,7 @@ The arrows back into the shared bake units express code and record parity, not a
 - `PMNDRS_font` writing and validation;
 - deterministic core-font diagnostics.
 
-The shared core does not define, generate, serialize, validate, decode, or render raster artifacts. V0 emits the closed shaping-only static SFNT profile and exposes the font context used by the separately imported bitmap baker for the integration proof. Later milestones add separately owned MTSDF-backed MSDF and Slug packages before V1 can ship. Subsetting, closure, dense remapping, compiled lookups, and color-emoji/SVG-icon extensions remain separate later work.
+The shared core does not define, generate, serialize, validate, decode, or render raster artifacts. The merged v0 implementation emits the closed shaping-only static SFNT profile and exposes the font context used by separately imported Bitmap, MTSDF, and Slug bakers. The target v1 work separates their portable techniques from engine realization before any public release. Subsetting, closure, dense remapping, compiled lookups, and color-emoji/SVG-icon extensions remain separate later work.
 
 ### Each raster package owns
 
@@ -219,38 +222,39 @@ break opportunities come from `@cto.af/linebreak` 4.0.3. Generated tables and
 official conformance fixtures are build/test inputs; application code does not
 consult ambient `Intl` or a browser-dependent ICU version.
 
-### Raster modules own
+### Engine targets own
 
-- the runtime half of their package-owned artifact contract;
-- validation of technique-specific ranges;
+- synchronization from canonical technique CPU storage into engine buffers;
 - GPU resource creation and direct upload;
-- instance generation and renderer submission.
+- shaders/programs, transforms, scene/pass placement, renderer submission, fences, and retirement.
 
-### Three.js text object owns
+### Three.js integration owns
 
-- the public framework-neutral text lifecycle;
-- one paragraph instance and selected raster resource;
+- the public `FontLoader`, `TextGroup`, and `Text` lifecycle over private core handles;
 - standard `Object3D` transforms, scene attachment, bounds, visibility, and disposal;
-- mapping property changes to paint-only updates, reflow, or reshaping.
+- target synchronization through the Three render lifecycle;
+- TSL materials and program-owned draw compilation.
 
-### React subpath owns
+### React Three Fiber integration owns
 
-- Suspense-backed font loading through the core loader;
-- reconciling root props onto the core Three.js text object;
+- Suspense-backed font loading through the Three integration loader;
+- reconciling props onto the Three integration's retained text objects;
 - flattening nested `<Text>` children into one source string and inline spans;
 - ref forwarding and React lifecycle disposal.
 
-The React subpath owns no shaping, line-breaking, baking, raster decoding, shaders, or GPU formats.
+The React integration owns no shaping, line-breaking, baking, raster decoding, shaders, or GPU formats.
 
 ## Dependency and import graph
 
 ```mermaid
 flowchart LR
-  React["@pmndrs/text/react"] --> Core["@pmndrs/text"]
+  React["@pmndrs/text-r3f"] --> Three["@pmndrs/text-three"] --> Core["@pmndrs/text"]
+  TypeGPU["@pmndrs/text-typegpu"] --> Core
+  Gpucat["@pmndrs/text-gpucat"] --> Core
   Core --> Registry["asset validator / registry"]
   Core --> Shaper["shaper bridge"]
   Core --> Paragraph["paragraph engine"]
-  Core --> Interfaces["raster interfaces"]
+  Core --> Interfaces["portable raster techniques"]
   Bake["@pmndrs/text/bake"] --> Node["Node host"] --> Shared["font bake core"]
   Runtime["@pmndrs/text/runtime-bake"] --> Worker["Worker host"] --> Shared
   Node -. "dynamic" .-> Generator["selected raster baker package"]
@@ -258,6 +262,9 @@ flowchart LR
   Bitmap["raster/bitmap"] --> Interfaces
   Msdf["raster/msdf<br/>MTSDF resource"] --> Interfaces
   Slug["raster/slug"] --> Interfaces
+  Three --> Interfaces
+  TypeGPU --> Interfaces
+  Gpucat --> Interfaces
 ```
 
 A baked asset hit must not make the main module graph reach the runtime baker library or generator modules.

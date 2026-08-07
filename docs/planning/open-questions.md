@@ -5,7 +5,7 @@ description: Tracks unresolved decisions, blockers, and prototype questions for 
 tags: [questions, governance, blockers]
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-25T18:00:06Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Open questions
@@ -24,7 +24,7 @@ Status: unresolved unless marked otherwise.
 1. Should subsetting use Skera/Fontations, HarfBuzz subset in native tooling, or a project-owned closure pass?
 2. What deterministic outline representation feeds Slug, MSDF, and bitmap generation?
 3. [x] Own a purpose-built `no_std + alloc` Rust MTSDF core with pinned native `msdfgen` as its test-only oracle; [D-097](decision-register.md), the [admission conclusion](mtsdf-generator-admission.md), and [generation research](mtsdf-generation-research.md) define the boundary and proof.
-4. Does V1 bitmap rendering include TrueType hinting, or use deterministic unhinted oversampling?
+4. Does target v1 Bitmap rendering include TrueType hinting, or preserve deterministic unhinted oversampling?
 5. What are default runtime-bake glyph ranges, time limits, memory limits, and atlas limits?
 6. Can WOFF2 decoding remain out of the always-loaded shaper module and live only in the baker?
 7. Which GLB writer details could prevent full byte identity even when authoritative Node/Worker sections are identical?
@@ -49,12 +49,12 @@ The [shaping compilation research note](shaping-compilation-research.md) owns th
 
 ## Paragraph engine
 
-V1 owns UAX #9 bidi analysis/reordering, UAX #14 break opportunities, UAX #24 script itemization, and UAX #29 grapheme boundaries in the JavaScript paragraph engine.
+Target v1 owns UAX #9 bidi analysis/reordering, UAX #14 break opportunities, UAX #24 script itemization, and UAX #29 grapheme boundaries in the JavaScript paragraph engine.
 
 1. Which UAX #14 implementation and tailoring strategy should be used in JS?
 2. How much surrounding context is necessary when reshaping final line slices?
 3. Which scripts always trigger boundary reshaping versus relying on unsafe-break flags?
-4. Is balanced wrapping a post-V1 strategy behind the same interface?
+4. Is balanced wrapping a post-v1 strategy behind the same interface?
 5. What is the font-fallback unit: code point, grapheme, shaping cluster, or script run?
 6. How are selections, carets, and hit testing represented in the first public layout output?
 7. What is the emergency-break policy for a single cluster wider than the region?
@@ -62,7 +62,7 @@ V1 owns UAX #9 bidi analysis/reordering, UAX #14 break opportunities, UAX #24 sc
 ## Rasters
 
 1. Which pieces of Three Flatland Slug are legally and technically suitable to port?
-2. How are missing glyph rasters reported and substituted within the V1 per-font-slot raster assignment?
+2. How are missing glyph rasters reported and substituted within the target v1 per-font-slot raster assignment?
 3. Which safe OpenType-SVG subset and standalone-SVG manifest contract must the large-coverage CJK/icon milestone accept?
 
 ## Product and package shape

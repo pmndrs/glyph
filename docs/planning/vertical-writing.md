@@ -1,7 +1,7 @@
 ---
 type: Design Research
 title: Vertical writing for CJK and mixed scripts
-description: Defines the retained data, layout stages, renderer work, and acceptance gates for a post-V1 vertical-writing milestone.
+description: Defines the retained data, layout stages, renderer work, and acceptance gates for a post-v1 vertical-writing milestone.
 tags: [layout, shaping, cjk, vertical-writing, typography]
 sources:
   - id: unicode-vertical-orientation
@@ -18,12 +18,12 @@ sources:
     title: Canonical implementation roadmap
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-27T15:05:00Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Vertical writing for CJK and mixed scripts
 
-Status: accepted post-V1 direction; implementation is scheduled after complete CJK paging
+Status: accepted post-v1 direction; implementation is scheduled after complete CJK paging
 
 ## Recommendation
 

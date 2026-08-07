@@ -1,7 +1,7 @@
 ---
 type: API Specification
 title: Three.js text API
-description: Canonical Three.js API for loading text fonts, declaring scene-local text batches, retaining transform-bearing Text objects, and synchronizing hidden core work inside the Three.js render lifecycle.
+description: Target v1 API for an external Three.js integration package that loads fonts, declares scene-local text batches, retains transform-bearing Text objects, and synchronizes hidden core work inside the Three.js render lifecycle.
 documentation_type: reference
 tags: [api, threejs, fonts, text, batching, lifecycle, rendering]
 status: stable
@@ -38,10 +38,13 @@ sources:
     title: Three.js BufferAttribute
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-08-07T00:37:30Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Three.js text API
+
+`@pmndrs/text-three` is an engine integration over public `@pmndrs/text` contracts. It may be maintained in this monorepo or
+an external repository; core never imports Three.js, and consumers do not need an `@pmndrs/text/three` subpath.
 
 Three.js owns the core API internally. A Three.js application never creates a `TextRuntime`,
 `ParagraphBatch`, `Paragraph`, prepared revision, or glyph run.
@@ -270,7 +273,7 @@ export type { ThreeRasterProgram, ThreeRasterShader, ThreeRenderVariant, ThreeTe
 
 ```ts
 import { createFontStack } from '@pmndrs/text';
-import { FontLoader } from '@pmndrs/text/three';
+import { FontLoader } from '@pmndrs/text-three';
 import { mtsdf } from '@pmndrs/text/raster/mtsdf';
 
 const loader = new FontLoader();
@@ -312,7 +315,7 @@ successfully disposed member for a new `Text` is rejected.
 ## Create an explicit batch with `TextGroup`
 
 ```ts
-import { TextGroup } from '@pmndrs/text/three';
+import { TextGroup } from '@pmndrs/text-three';
 
 const worldText = new TextGroup({
   technique: mtsdf,
@@ -502,7 +505,7 @@ batches follow the same rule.
 ## Add and remove text through the scene graph
 
 ```ts
-import { Text } from '@pmndrs/text/three';
+import { Text } from '@pmndrs/text-three';
 
 const label = new Text({
   font: inter,
@@ -858,7 +861,7 @@ The Three entry point re-exports core's renderer-neutral `txt` and `span` tags. 
 `Text` class or parse a markup language.
 
 ```ts
-import { Text, span, txt } from '@pmndrs/text/three';
+import { Text, span, txt } from '@pmndrs/text-three';
 
 const emphasis = span(noto, { color: '#ffddff' });
 

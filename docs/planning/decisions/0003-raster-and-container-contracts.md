@@ -16,7 +16,7 @@ sources:
     title: glTF extension drafts
 generated:
   by: openai-codex/gpt-5.6
-  at: '2026-07-26T19:51:43Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # ADR 0003: Raster and container contracts
@@ -31,7 +31,7 @@ Shaping data and raster payloads have different lifecycles, coverage, sizes, and
 
 ## Decision
 
-The provisional `PMNDRS_font` GLB family separates one shaping core from typed raster companions. Embedded and external forms use the same schema and reciprocal identity. Raster packages own final fixed-stride GPU records and lossless KTX2 payloads; direct-to-GPU means no semantic reconstruction or record repacking. V1 contains bitmap, linear RGBA8 MTSDF, and Slug modules. Bitmap proves the path at native device-pixel strikes; MTSDF is the general recommendation; Slug owns outline-accurate large and zoomed text.
+The provisional `PMNDRS_font` GLB family separates one shaping core from typed raster companions. Embedded and external forms use the same schema and reciprocal identity. Raster packages own final fixed-stride GPU records and lossless KTX2 payloads; direct-to-GPU means no semantic reconstruction or record repacking. Merged v0 contains Bitmap, linear RGBA8 MTSDF, and Slug modules; target v1 preserves all three behind the renderer-neutral boundary. Bitmap proves the path at native device-pixel strikes; MTSDF is the general recommendation; Slug owns outline-accurate large and zoomed text.
 
 ## Alternatives considered
 

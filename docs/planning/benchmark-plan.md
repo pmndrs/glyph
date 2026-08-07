@@ -22,7 +22,7 @@ sources:
 
 generated:
   by: 'openai-codex/gpt-5.6'
-  at: '2026-08-06T16:07:26Z'
+  at: '2026-08-07T01:16:02Z'
 ---
 
 # Benchmark plan
@@ -217,7 +217,7 @@ Like the reference project, bundle sizes are produced from independent import en
 - runtime baker loader and bake Wasm;
 - each raster runtime;
 - each raster generator;
-- combined V1 application path.
+- combined target v1 application path.
 
 Report raw, minified, gzip, and Brotli JavaScript; raw, gzip, and Brotli Wasm; and every substantial dynamically imported validator, Worker host, generator, or transcoder separately. The initial entry measurement follows only static chunk imports and never adds dynamic chunks merely because they are reachable. The interactive lab reads generated result JSON rather than estimating sizes from the development bundle.
 
@@ -379,7 +379,7 @@ CJK and icon benchmarks share one page-stress lane. The same pinned sources are 
 - cancellation and stale-generation behavior when text changes during preparation;
 - selected icon subset versus complete icon-library stress case.
 
-The synthetic maximum-cardinality contract fixture runs early to protect the format. Full-face raster generation, long page walks, and device residency measurements belong to scheduled/manual jobs and Milestone 13; they do not block the Latin-first V1 renderer gate. Item 5.4 consumes the complete CJK source for shaping but does not create these raster tiers.
+The synthetic maximum-cardinality contract fixture runs early to protect the format. Full-face raster generation, long page walks, and device residency measurements belong to scheduled/manual jobs and Milestone 14; they do not block the Latin-first target v1 renderer gate. Item 5.4 consumes the complete CJK source for shaping but does not create these raster tiers.
 
 ## Raster benchmarks
 
