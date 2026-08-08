@@ -231,16 +231,23 @@ interface MeasuredPlan {
   readonly lines: readonly LinePlan[];
 }
 
-interface LineFragment {
-  readonly line: number;
-  readonly run: number;
-  readonly start: number;
-  readonly end: number;
-  readonly flags: number;
-  readonly level: number;
-  readonly ellipsis?: EllipsisPlan;
-  readonly reshape: boolean;
+/**
+ * A fragment under construction. {@link collectLineFragments} appends fragments in logical order, then fills the
+ * shaping flags and the reshape decision in place once the line's first and last fragments are known, and reorders the
+ * line's own range in place. Published fragments are read-only.
+ */
+interface LineFragmentDraft {
+  line: number;
+  run: number;
+  start: number;
+  end: number;
+  flags: number;
+  level: number;
+  ellipsis?: EllipsisPlan;
+  reshape: boolean;
 }
+
+type LineFragment = Readonly<LineFragmentDraft>;
 
 interface PositionedGeometry {
   readonly fontHandles: Uint32Array;
@@ -1569,47 +1576,53 @@ function justificationSpaces(prepared: PreparedParagraph, line: LinePlan, start:
 }
 
 function collectLineFragments(prepared: PreparedParagraph, lines: readonly LinePlan[]): readonly LineFragment[] {
-  const fragments: LineFragment[] = [];
+  const fragments: LineFragmentDraft[] = [];
+  // One scratch buffer for the whole paragraph rather than a fresh copy of every line's levels. The reordered levels
+  // of a line are read only while that line's fragments are built, so the lines share it.
+  const levels = new Uint8Array(prepared.input.text.length);
   for (const [lineIndex, line] of lines.entries()) {
-    const levels = reorderedLineLevels(prepared.bidi, line.textStart, line.textEnd);
-    const logical = [];
+    const levelCount = reorderedLineLevels(prepared.bidi, line.textStart, line.textEnd, levels);
+    const logicalStart = fragments.length;
     for (const [runIndex, run] of prepared.runs.entries()) {
       const start = Math.max(line.textStart, run.start);
       const end = Math.min(line.textEnd, run.end);
       if (start >= end) continue;
       let fragmentStart = start;
       while (fragmentStart < end) {
-        const localStart = fragmentStart - line.textStart;
-        const resolvedLevel = levels[localStart] ?? run.bidiLevel;
-        const level =
-          run.style.bidiOverride === undefined ? resolvedLevel : forceLevelDirection(resolvedLevel, run.direction);
+        const level = fragmentLevel(run, levels, levelCount, fragmentStart - line.textStart);
         let fragmentEnd = fragmentStart + 1;
         while (fragmentEnd < end) {
-          const nextResolved = levels[fragmentEnd - line.textStart] ?? run.bidiLevel;
-          const nextLevel =
-            run.style.bidiOverride === undefined ? nextResolved : forceLevelDirection(nextResolved, run.direction);
-          if (nextLevel !== level) break;
+          if (fragmentLevel(run, levels, levelCount, fragmentEnd - line.textStart) !== level) break;
           fragmentEnd += 1;
         }
-        logical.push({ run: runIndex, start: fragmentStart, end: fragmentEnd, level });
+        fragments.push({
+          line: lineIndex,
+          run: runIndex,
+          start: fragmentStart,
+          end: fragmentEnd,
+          level,
+          flags: 0,
+          reshape: false,
+        });
         fragmentStart = fragmentEnd;
       }
     }
-    const decorated: Omit<LineFragment, 'line'>[] = logical.map((fragment, logicalIndex) => {
-      const first = logicalIndex === 0;
-      const last = logicalIndex === logical.length - 1;
+    const logicalEnd = fragments.length;
+    for (let index = logicalStart; index < logicalEnd; index += 1) {
+      const fragment = fragments[index];
+      if (fragment === undefined) continue;
+      const first = index === logicalStart;
+      const last = index === logicalEnd - 1;
       const run = prepared.runs[fragment.run];
       if (run === undefined) throw new Error('line fragment references a missing shaping run');
       const boundaryLine = (first && line.textStart > run.start) || (last && line.textEnd < run.end);
-      const unsafe = fragmentHasFlag(prepared, fragment.run, fragment.start, fragment.end, GLYPH_UNSAFE_TO_CONCAT);
-      return {
-        ...fragment,
-        flags: PRODUCE_UNSAFE_TO_CONCAT | (first ? BEGINNING_OF_TEXT : 0) | (last ? END_OF_TEXT : 0),
-        reshape: boundaryLine && unsafe,
-      };
-    });
+      fragment.flags = PRODUCE_UNSAFE_TO_CONCAT | (first ? BEGINNING_OF_TEXT : 0) | (last ? END_OF_TEXT : 0);
+      fragment.reshape =
+        boundaryLine && fragmentHasFlag(prepared, fragment.run, fragment.start, fragment.end, GLYPH_UNSAFE_TO_CONCAT);
+    }
     if (line.ellipsis !== undefined) {
-      decorated.push({
+      fragments.push({
+        line: lineIndex,
         run: line.ellipsis.sourceRun,
         start: line.ellipsis.cluster,
         end: line.ellipsis.cluster,
@@ -1619,22 +1632,31 @@ function collectLineFragments(prepared: PreparedParagraph, lines: readonly LineP
         ellipsis: line.ellipsis,
       });
     }
-    for (const fragment of reorderFragments(decorated)) {
-      fragments.push({ line: lineIndex, ...fragment });
-    }
+    reorderFragments(fragments, logicalStart, fragments.length);
   }
   return fragments;
 }
 
-function reorderedLineLevels(bidi: OwnedBidiAnalysis, start: number, end: number): Uint8Array {
-  const levels = bidi.levels.slice(start, end);
-  const classes = bidi.classes.subarray(start, end);
+/** The bidi level a fragment resolves to, honouring a span that overrode the run's direction. */
+function fragmentLevel(run: PreparedRun, levels: Uint8Array, levelCount: number, localOffset: number): number {
+  const resolved = (localOffset < levelCount ? levels[localOffset] : undefined) ?? run.bidiLevel;
+  return run.style.bidiOverride === undefined ? resolved : forceLevelDirection(resolved, run.direction);
+}
+
+/**
+ * Writes the line's levels, with the trailing and separator resets of UAX #9 rule L1 applied, into the first
+ * `end - start` entries of `levels` and returns how many it wrote.
+ */
+function reorderedLineLevels(bidi: OwnedBidiAnalysis, start: number, end: number, levels: Uint8Array): number {
+  const count = Math.max(0, Math.min(end, bidi.levels.length) - start);
+  for (let index = 0; index < count; index += 1) levels[index] = bidi.levels[start + index] ?? 0;
+  const classes = bidi.classes;
   const paragraphLevel = paragraphLevelAt(bidi, start);
   let resetFrom: number | undefined = 0;
   let resetTo: number | undefined;
   let previousLevel = paragraphLevel;
-  for (let index = 0; index < classes.length; index += 1) {
-    const bidiClass = classes[index];
+  for (let index = 0; index < count; index += 1) {
+    const bidiClass = classes[start + index];
     if (bidiClass === BIDI_B || bidiClass === BIDI_S) {
       resetTo = index + 1;
       resetFrom ??= index;
@@ -1666,8 +1688,8 @@ function reorderedLineLevels(bidi: OwnedBidiAnalysis, start: number, end: number
     }
     previousLevel = levels[index] ?? paragraphLevel;
   }
-  if (resetFrom !== undefined) levels.fill(paragraphLevel, resetFrom);
-  return levels;
+  if (resetFrom !== undefined) levels.fill(paragraphLevel, resetFrom, count);
+  return count;
 }
 
 function paragraphLevelAt(bidi: OwnedBidiAnalysis, offset: number): number {
@@ -1681,28 +1703,30 @@ function paragraphLevelAt(bidi: OwnedBidiAnalysis, offset: number): number {
   return bidi.paragraphLevels.at(-1) ?? 0;
 }
 
+/** Reorders `visual[rangeStart, rangeEnd)` from logical into visual order in place, by UAX #9 rule L2. */
 function reorderFragments<Fragment extends { readonly level: number }>(
-  logical: readonly Fragment[],
-): readonly Fragment[] {
-  const visual = [...logical];
+  visual: Fragment[],
+  rangeStart: number,
+  rangeEnd: number,
+): void {
   let maximum = 0;
   let lowestOdd = Number.POSITIVE_INFINITY;
-  for (const fragment of visual) {
-    maximum = Math.max(maximum, fragment.level);
-    if ((fragment.level & 1) === 1) lowestOdd = Math.min(lowestOdd, fragment.level);
+  for (let index = rangeStart; index < rangeEnd; index += 1) {
+    const level = visual[index]?.level ?? 0;
+    maximum = Math.max(maximum, level);
+    if ((level & 1) === 1) lowestOdd = Math.min(lowestOdd, level);
   }
-  if (!Number.isFinite(lowestOdd)) return visual;
+  if (!Number.isFinite(lowestOdd)) return;
   for (let level = maximum; level >= lowestOdd; level -= 1) {
-    let start = 0;
-    while (start < visual.length) {
-      while (start < visual.length && (visual[start]?.level ?? -1) < level) start += 1;
+    let start = rangeStart;
+    while (start < rangeEnd) {
+      while (start < rangeEnd && (visual[start]?.level ?? -1) < level) start += 1;
       let end = start;
-      while (end < visual.length && (visual[end]?.level ?? -1) >= level) end += 1;
+      while (end < rangeEnd && (visual[end]?.level ?? -1) >= level) end += 1;
       reverse(visual, start, end);
       start = end;
     }
   }
-  return visual;
 }
 
 function reverse<Value>(values: Value[], start: number, end: number): void {
