@@ -10,7 +10,7 @@ sources:
     resource: ../../packages/text/src/raster.ts
     title: Raster module contract
   - id: mtsdf-runtime
-    resource: ../../packages/text/src/raster/mtsdf.ts
+    resource: ../../packages/text/src/raster/msdf.ts
     title: MTSDF runtime material and paint implementation
   - id: text-runtime
     resource: ../../packages/text/src/three/text.ts

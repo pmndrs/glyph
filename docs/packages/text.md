@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6bc6e04ce21fd514d8d8966dc5047b26dd84ee0f6a97c85243ce83c7d8ec7f35'
+source_digest: 'sha256:f8b7aeab1e2c43ea8245a02530b7afd98b29f77a6850724c27cafd6a964f0802'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -51,7 +51,7 @@ sources:
     resource: ../../packages/text/src/internal/mtsdf-generator.ts
     title: MTSDF direct-memory TypeScript host
   - id: mtsdf-contract
-    resource: ../../packages/text/src/raster/mtsdf.ts
+    resource: ../../packages/text/src/raster/msdf.ts
     title: Portable MTSDF runtime technique
   - id: mtsdf-baker
     resource: ../../packages/text/src/bakers/msdf.ts
@@ -156,7 +156,7 @@ sources:
     resource: ../../packages/text/src/raster-runtime.ts
     title: Shared decoded-raster runtime
   - id: mtsdf-technique
-    resource: ../../packages/text/src/raster/mtsdf.ts
+    resource: ../../packages/text/src/raster/msdf.ts
     title: Renderer-neutral MTSDF technique
   - id: bitmap-technique
     resource: ../../packages/text/src/raster/bitmap-technique.ts
@@ -172,7 +172,7 @@ sources:
     title: Unicode analysis implementation
 generated:
   by: anthropic-claude/opus-5
-  at: '2026-08-08T06:30:00Z'
+  at: '2026-08-08T08:15:00Z'
 ---
 
 # Package reference: `@pmndrs/text`
