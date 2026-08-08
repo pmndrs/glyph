@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+import { renderPolicyBytes } from '../support/engine-abi.mjs';
+
 const wasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
 const abiUrl = new URL('../../dist/text-shaper-abi-v0.json', import.meta.url);
 
@@ -46,48 +48,3 @@ test('registers compiler-mapped render policies as retained typed Wasm state', a
   assert.equal(count(), 0);
   assert.equal(register(8, pointer, bytes.byteLength), abi.status.invalidRequest);
 });
-
-function renderPolicyBytes(abi) {
-  const request = abi.layouts.policyRequest;
-  const program = abi.layouts.policyProgram;
-  const buffer = abi.layouts.policyBuffer;
-  const operation = abi.layouts.policyOperation;
-  const programsOffset = align(request.size, program.alignment);
-  const buffersOffset = align(programsOffset + program.size, buffer.alignment);
-  const operationsOffset = align(buffersOffset + buffer.size, operation.alignment);
-  const operationCount = 2;
-  const bytes = new Uint8Array(operationsOffset + operation.size * operationCount);
-  const view = new DataView(bytes.buffer);
-
-  view.setUint32(request.byteLength, bytes.byteLength, true);
-  view.setUint32(request.programsOffset, programsOffset, true);
-  view.setUint32(request.programCount, 1, true);
-  view.setUint32(request.buffersOffset, buffersOffset, true);
-  view.setUint32(request.bufferCount, 1, true);
-  view.setUint32(request.operationsOffset, operationsOffset, true);
-  view.setUint32(request.operationCount, operationCount, true);
-
-  view.setUint32(programsOffset + program.techniqueId, 1, true);
-  view.setUint32(programsOffset + program.programId, 1, true);
-  view.setUint8(programsOffset + program.f32InputCount, 1);
-  view.setUint16(programsOffset + program.bufferCount, 1, true);
-  view.setUint16(programsOffset + program.operationCount, operationCount, true);
-
-  view.setUint16(buffersOffset + buffer.id, 1, true);
-  view.setUint8(buffersOffset + buffer.scalar, abi.policy.scalarTypes.f32);
-  view.setUint8(buffersOffset + buffer.vectorWidth, 1);
-
-  view.setUint8(operationsOffset + operation.opcode, abi.policy.opcodes.loadF32);
-  view.setUint8(operationsOffset + operation.target, 0);
-  view.setUint8(operationsOffset + operation.operand0, 0);
-
-  const storeOffset = operationsOffset + operation.size;
-  view.setUint8(storeOffset + operation.opcode, abi.policy.opcodes.storeF32);
-  view.setUint8(storeOffset + operation.operand0, 0);
-  view.setUint32(storeOffset + operation.immediate0, 1, true);
-  return bytes;
-}
-
-function align(value, alignment) {
-  return Math.ceil(value / alignment) * alignment;
-}

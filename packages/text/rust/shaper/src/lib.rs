@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![recursion_limit = "256"]
 
 extern crate alloc;
 
@@ -29,6 +30,9 @@ pub const STATUS_INVALID_REQUEST: u32 = 6;
 pub const STATUS_RESULT_TOO_LARGE: u32 = 7;
 pub const STATUS_POLICY_CONFLICT: u32 = 8;
 pub const STATUS_POLICY_MISSING: u32 = 9;
+pub const STATUS_SESSION_CONFLICT: u32 = 10;
+pub const STATUS_SESSION_MISSING: u32 = 11;
+pub const STATUS_REVISION_CONFLICT: u32 = 12;
 
 const BUFFER_FLAGS_MASK: u32 = 0xff;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
