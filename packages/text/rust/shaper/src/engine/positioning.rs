@@ -341,6 +341,19 @@ impl PositionedGlyphArena {
         index: &mut IdentityIndex,
         next_revision: &mut u32,
     ) -> Result<(), EngineError> {
+        if self.glyphs.len() == previous.glyphs.len()
+            && self
+                .glyphs
+                .iter()
+                .zip(&previous.glyphs)
+                .all(|(next, old)| next.stable_id == old.stable_id)
+        {
+            *next_revision = (*next_revision).max(1);
+            for slot in 0..self.glyphs.len() {
+                self.assign_content_revision(slot, previous, Some(slot), next_revision)?;
+            }
+            return Ok(());
+        }
         index
             .prepare(previous.glyphs.len())
             .map_err(identity_index_error)?;
@@ -357,25 +370,36 @@ impl PositionedGlyphArena {
             let previous_slot = index
                 .get(self.glyphs[slot].stable_id)
                 .and_then(|value| usize::try_from(value).ok());
-            let change_mask = previous_slot.map_or(ALL_SEMANTIC_CHANGES, |previous_slot| {
-                self.semantic_change_mask(slot, previous, previous_slot)
-            });
-            let revision = if change_mask == 0 {
-                previous.glyphs[previous_slot.expect("zero change requires a previous glyph")]
-                    .content_revision
-            } else {
-                let revision = *next_revision;
-                *next_revision = next_revision
-                    .checked_add(1)
-                    .ok_or(EngineError::ResultTooLarge)?;
-                revision
-            };
-            if revision == 0 {
-                return Err(EngineError::ResultTooLarge);
-            }
-            self.glyphs[slot].content_revision = revision;
-            self.semantic_change_masks.push(change_mask);
+            self.assign_content_revision(slot, previous, previous_slot, next_revision)?;
         }
+        Ok(())
+    }
+
+    fn assign_content_revision(
+        &mut self,
+        slot: usize,
+        previous: &Self,
+        previous_slot: Option<usize>,
+        next_revision: &mut u32,
+    ) -> Result<(), EngineError> {
+        let change_mask = previous_slot.map_or(ALL_SEMANTIC_CHANGES, |previous_slot| {
+            self.semantic_change_mask(slot, previous, previous_slot)
+        });
+        let revision = if change_mask == 0 {
+            previous.glyphs[previous_slot.expect("zero change requires a previous glyph")]
+                .content_revision
+        } else {
+            let revision = *next_revision;
+            *next_revision = next_revision
+                .checked_add(1)
+                .ok_or(EngineError::ResultTooLarge)?;
+            revision
+        };
+        if revision == 0 {
+            return Err(EngineError::ResultTooLarge);
+        }
+        self.glyphs[slot].content_revision = revision;
+        self.semantic_change_masks.push(change_mask);
         Ok(())
     }
 
@@ -779,6 +803,22 @@ mod tests {
             .unwrap();
         assert_eq!(pending.glyphs[0].content_revision, 3);
         assert_eq!(pending.glyphs[1].content_revision, 4);
+        assert_eq!(next_revision, 5);
+
+        let mut reordered = PositionedGlyphArena::default();
+        reordered.glyphs.extend(active.glyphs.iter().rev().copied());
+        for field in 0..SEMANTIC_F32_FIELD_COUNT {
+            reordered.semantic_f32[field].extend(active.semantic_f32[field].iter().rev().copied());
+        }
+        for field in 0..SEMANTIC_U32_FIELD_COUNT {
+            reordered.semantic_u32[field].extend(active.semantic_u32[field].iter().rev().copied());
+        }
+        reordered
+            .assign_content_revisions(&active, &mut index, &mut next_revision)
+            .unwrap();
+        assert_eq!(reordered.glyphs[0].content_revision, 2);
+        assert_eq!(reordered.glyphs[1].content_revision, 1);
+        assert_eq!(reordered.semantic_change_masks, [0, 0]);
         assert_eq!(next_revision, 5);
     }
 }

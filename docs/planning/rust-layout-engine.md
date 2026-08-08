@@ -1156,6 +1156,13 @@ payload reduction; it confirms that packing and copying were not the dominant co
 current path, so layout composition is the next measured optimization target. Memory right-sizing, incremental text
 edits, Three consumption, and deletion of the duplicate TypeScript path remain foundation-stack gates.
 
+A symbolized temporary no-`std` Wasm profile can now isolate the canonical column-resize case without changing its
+default measurement sequence. Positioning is the largest sampled Rust function, followed by policy gather. Positioned
+reconciliation now checks the common equal-length/equal-stable-ID order before building the exact identity index; bidi
+or flow reordering retains the map fallback. The current five-warmup/11-sample resize medians are
+4.414/4.984/5.196 ms for Bitmap/MTSDF/Slug. The inter-run variance is too large to assign a precise causal speedup to
+this small change, and all three remain above the median gate.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
