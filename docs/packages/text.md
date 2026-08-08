@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:41917a3e5f759cd02ddb43da0a38d1ea178dda666cad7a410c4e84c0bbcb5103'
+source_digest: 'sha256:560c885f3d3e7034a35e967be4e608498fa38496058ef1ec618f96573b17ddba'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -672,6 +672,8 @@ Roadmap item 5.1 adds synchronous paragraph preparation and measurement. Unicode
 The target Rust frame path now derives the same line opportunities internally. Its generator resolves the pinned `@cto.af/linebreak` property trie into a compact Rust scalar partition, and a specialized allocation-reusing `no_std` evaluator ports the ordered UAX #14 rules while retaining the upstream MIT notice. The Rust lane independently passes all 19,338 unchanged official Unicode 17 line-break vectors at canonical UTF-16 offsets; its results are retained with the session's transactional Unicode analysis rather than serialized through the legacy shaping ABI.
 
 The same frame path aggregates final fallback glyphs into a retained grapheme-cluster SoA. It keeps ordered double-precision advances, compact shaping/line-break flags, style/source/font identities, and a UTF-16 offset index. Font UPEM and horizontal line metrics are parsed once at registration; glyph design-unit advances are scaled once per contributing final font, and authored letter/word spacing joins that accumulation without constructing per-cluster objects. Optional Unicode line opportunities survive only where the next cluster is safe according to HarfRust output.
+
+An allocation-free Rust line kernel advances that retained grapheme cursor for a supplied width while preserving word, character, no-wrap, required-break, over-wide-cluster, and trailing-hard-break behavior. It remains an internal proof until declarative region bands and exclusions drive it during a production frame update.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

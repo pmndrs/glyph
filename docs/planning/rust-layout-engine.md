@@ -909,6 +909,12 @@ capacity reuse; real-font compiled Wasm reaches the pass for primary and fallbac
 379,510 / 295,708 raw/gzip/Brotli bytes (+5,117 / +2,457 / -167). The Brotli change is recorded as compressor interaction,
 not a performance claim. Line composition, nonempty plan output, and complete-path timing remain open.
 
+The first line-composition kernel now advances a grapheme cursor for one caller-supplied width without allocating. It
+matches the retained TypeScript break order: word wrapping prefers safe UAX #14 opportunities, then safe HarfRust
+boundaries; character wrapping admits every safe grapheme boundary; no-wrap still honors required breaks; and a final
+hard break produces the trailing empty line. Width accumulation remains `f64`. This is a kernel proof only: region-band
+resolution has not yet connected it to production frame output, so it carries no end-to-end timing or Wasm-size claim.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a
