@@ -1,6 +1,7 @@
 use alloc::{collections::BTreeMap, vec::Vec};
 
 use crate::{
+    STATUS_RESULT_TOO_LARGE, ShapeRunRef, ShaperRegistry,
     bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
     unicode::{UnicodeAnalysis, UnicodeError},
 };
@@ -14,7 +15,7 @@ use super::{
     },
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
-    shaping_state::ShapingRunArena,
+    shaping_state::{ShapeArena, ShapingRunArena},
     style_state::{
         DEFAULT_STYLE_CAPACITY, MutationKey, ResolutionScope, ResolvedStyleArena, StyleArena,
     },
@@ -72,6 +73,8 @@ struct EngineSession {
     pending_bidi: BidiAnalysis,
     shaping_runs: ShapingRunArena,
     pending_shaping_runs: ShapingRunArena,
+    shape: ShapeArena,
+    pending_shape: ShapeArena,
     style_mutation_scratch: Vec<MutationKey>,
     style_order_scratch: Vec<usize>,
     style_nesting_scratch: Vec<u32>,
@@ -80,6 +83,7 @@ struct EngineSession {
     unicode_prepared: bool,
     bidi_prepared: bool,
     shaping_runs_prepared: bool,
+    shape_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
@@ -310,6 +314,9 @@ impl TextEngine {
         session.pending_bidi.reserve(capacity).map_err(bidi_error)?;
         session.shaping_runs.reserve(capacity)?;
         session.pending_shaping_runs.reserve(capacity)?;
+        let glyph_capacity = capacity.saturating_mul(2);
+        session.shape.reserve(glyph_capacity)?;
+        session.pending_shape.reserve(glyph_capacity)?;
         Ok(())
     }
 
@@ -356,8 +363,27 @@ impl TextEngine {
         self.sessions.len().try_into().unwrap_or(u32::MAX)
     }
 
+    #[cfg(test)]
     pub(crate) fn prepare_update(
         &mut self,
+        request: UpdateRequest<'_>,
+        publication_generation: u32,
+    ) -> Result<PreparedUpdate, EngineError> {
+        self.prepare_update_inner(None, request, publication_generation)
+    }
+
+    pub(crate) fn prepare_update_with_shaper(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        request: UpdateRequest<'_>,
+        publication_generation: u32,
+    ) -> Result<PreparedUpdate, EngineError> {
+        self.prepare_update_inner(Some(shaper), request, publication_generation)
+    }
+
+    fn prepare_update_inner(
+        &mut self,
+        shaper: Option<&mut ShaperRegistry>,
         request: UpdateRequest<'_>,
         publication_generation: u32,
     ) -> Result<PreparedUpdate, EngineError> {
@@ -440,12 +466,23 @@ impl TextEngine {
             session.abort_bidi();
             return Err(error);
         }
+        if let Some(shaper) = shaper
+            && let Err(error) = session.prepare_shape(shaper, font_stacks)
+        {
+            session.abort_text();
+            session.abort_styles();
+            session.abort_unicode();
+            session.abort_bidi();
+            session.abort_shaping_runs();
+            return Err(error);
+        }
         if let Err(error) = session.prepare_geometry(request.geometry) {
             session.abort_text();
             session.abort_styles();
             session.abort_unicode();
             session.abort_bidi();
             session.abort_shaping_runs();
+            session.abort_shape();
             return Err(error);
         }
         if let Err(error) = gather.gather(
@@ -468,6 +505,7 @@ impl TextEngine {
             session.abort_unicode();
             session.abort_bidi();
             session.abort_shaping_runs();
+            session.abort_shape();
             session.abort_geometry();
             return Err(gather_error(error));
         }
@@ -485,6 +523,7 @@ impl TextEngine {
             session.abort_unicode();
             session.abort_bidi();
             session.abort_shaping_runs();
+            session.abort_shape();
             session.abort_geometry();
             return Err(plan_error(error));
         }
@@ -535,6 +574,7 @@ impl TextEngine {
         session.abort_unicode();
         session.abort_bidi();
         session.abort_shaping_runs();
+        session.abort_shape();
         session.abort_geometry();
         Ok(())
     }
@@ -556,6 +596,7 @@ impl TextEngine {
         session.commit_unicode();
         session.commit_bidi();
         session.commit_shaping_runs();
+        session.commit_shape();
         session.commit_geometry();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
@@ -784,6 +825,68 @@ impl EngineSession {
         self.abort_shaping_runs();
     }
 
+    fn prepare_shape(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        font_stacks: &[RegisteredFontStack],
+    ) -> Result<(), EngineError> {
+        self.abort_shape();
+        if !self.shaping_runs_prepared {
+            return Ok(());
+        }
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        let styles = if self.styles_prepared {
+            &self.pending_styles
+        } else {
+            &self.styles
+        };
+        let runs = self.pending_shaping_runs.runs();
+        let output = &mut self.pending_shape;
+        for (index, run) in runs.iter().copied().enumerate() {
+            let stack = font_stacks
+                .binary_search_by_key(&run.style.font_stack_handle, |stack| stack.handle)
+                .ok()
+                .and_then(|stack| font_stacks.get(stack))
+                .ok_or(EngineError::FontStackMissing)?;
+            let font_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
+            shaper
+                .with_shaped_run(
+                    font_handle,
+                    text,
+                    ShapeRunRef {
+                        text_start: run.text_start,
+                        text_end: run.text_end,
+                        script: run.script,
+                        language: styles.resolved_language(run.style),
+                        features: styles.resolved_features(run.style),
+                        direction: run.direction,
+                        cluster_level: 0,
+                        flags: 0x40,
+                    },
+                    |shaped| output.append(index, font_handle, shaped),
+                )
+                .map_err(shaper_error)?;
+        }
+        self.shape_prepared = true;
+        Ok(())
+    }
+
+    fn abort_shape(&mut self) {
+        self.pending_shape.clear();
+        self.shape_prepared = false;
+    }
+
+    fn commit_shape(&mut self) {
+        if self.shape_prepared {
+            core::mem::swap(&mut self.shape, &mut self.pending_shape);
+        }
+        self.abort_shape();
+    }
+
     fn prepare_geometry(
         &mut self,
         geometry: super::semantic_wire::GeometryBatch<'_>,
@@ -874,6 +977,14 @@ fn bidi_error(error: BidiError) -> EngineError {
     match error {
         BidiError::InvalidDirection => EngineError::InvalidRequest,
         BidiError::ResultTooLarge => EngineError::ResultTooLarge,
+    }
+}
+
+fn shaper_error(status: u32) -> EngineError {
+    if status == STATUS_RESULT_TOO_LARGE {
+        EngineError::ResultTooLarge
+    } else {
+        EngineError::InvalidRequest
     }
 }
 

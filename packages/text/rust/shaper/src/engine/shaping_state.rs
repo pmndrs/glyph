@@ -25,6 +25,26 @@ pub(crate) struct ShapingRunArena {
     runs: Vec<ShapingRun>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ShapedRun {
+    pub source_run: u32,
+    pub font_handle: u32,
+    pub glyph_start: u32,
+    pub glyph_count: u32,
+}
+
+#[derive(Default)]
+pub(crate) struct ShapeArena {
+    pub runs: Vec<ShapedRun>,
+    pub glyph_ids: Vec<u16>,
+    pub clusters: Vec<u32>,
+    pub x_advances: Vec<i32>,
+    pub y_advances: Vec<i32>,
+    pub x_offsets: Vec<i32>,
+    pub y_offsets: Vec<i32>,
+    pub glyph_flags: Vec<u16>,
+}
+
 impl ShapingRunArena {
     pub(crate) fn reserve(&mut self, capacity: usize) -> Result<(), EngineError> {
         if self.runs.capacity() < capacity {
@@ -188,6 +208,73 @@ impl ShapingRunArena {
         self.runs.push(run);
         Ok(())
     }
+}
+
+impl ShapeArena {
+    pub(crate) fn reserve(&mut self, capacity: usize) -> Result<(), EngineError> {
+        reserve_vec(&mut self.runs, capacity)?;
+        reserve_vec(&mut self.glyph_ids, capacity)?;
+        reserve_vec(&mut self.clusters, capacity)?;
+        reserve_vec(&mut self.x_advances, capacity)?;
+        reserve_vec(&mut self.y_advances, capacity)?;
+        reserve_vec(&mut self.x_offsets, capacity)?;
+        reserve_vec(&mut self.y_offsets, capacity)?;
+        reserve_vec(&mut self.glyph_flags, capacity)
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.runs.clear();
+        self.glyph_ids.clear();
+        self.clusters.clear();
+        self.x_advances.clear();
+        self.y_advances.clear();
+        self.x_offsets.clear();
+        self.y_offsets.clear();
+        self.glyph_flags.clear();
+    }
+
+    pub(crate) fn append(
+        &mut self,
+        source_run: usize,
+        font_handle: u32,
+        shaped: &harfrust::GlyphBuffer,
+    ) -> Result<(), u32> {
+        let glyph_start =
+            u32::try_from(self.glyph_ids.len()).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?;
+        let glyph_count =
+            u32::try_from(shaped.len()).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?;
+        self.reserve(self.glyph_ids.len().saturating_add(shaped.len()))
+            .map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?;
+        self.runs.push(ShapedRun {
+            source_run: u32::try_from(source_run).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?,
+            font_handle,
+            glyph_start,
+            glyph_count,
+        });
+        for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
+            self.glyph_ids
+                .push(u16::try_from(info.glyph_id).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?);
+            self.clusters.push(info.cluster);
+            self.x_advances.push(position.x_advance);
+            self.y_advances.push(position.y_advance);
+            self.x_offsets.push(position.x_offset);
+            self.y_offsets.push(position.y_offset);
+            self.glyph_flags.push(
+                u16::try_from(info.flags().to_bits())
+                    .map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?,
+            );
+        }
+        Ok(())
+    }
+}
+
+fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
+    if values.capacity() < capacity {
+        values
+            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .map_err(|_| EngineError::ResultTooLarge)?;
+    }
+    Ok(())
 }
 
 fn direction(style: ResolvedStyle, level: u8) -> u8 {

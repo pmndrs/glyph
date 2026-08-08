@@ -155,6 +155,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
     fontStackHandle: 17,
     text: [0x61, 0x62, 0x63, 0x64],
   });
+  assert.equal(fn.planCount(), 0);
   let requestPointer = fn.requestPointer(29);
   new Uint8Array(memory.buffer, requestPointer, initialUpdate.byteLength).set(initialUpdate);
   let resultPointer = fn.textUpdate(29, requestPointer, initialUpdate.byteLength);
@@ -162,6 +163,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   let result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.ok);
   assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 1);
+  assert.equal(fn.planCount(), 1, 'text_update must shape retained runs through HarfRust');
 
   const removeRoot = engineStyleUpdateBytes(abi, {
     sessionId: 29,
@@ -179,6 +181,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   result = new DataView(memory.buffer, resultPointer, abi.layouts.engineResult.size);
   assert.equal(result.getUint32(abi.layouts.engineResult.status, true), abi.status.invalidRequest);
   assert.equal(result.getUint32(abi.layouts.engineResult.engineRevision, true), 1);
+  assert.equal(fn.planCount(), 1, 'an aborted update must not perform another shape');
   assert.equal(fn.disposeSession(29), abi.status.ok);
   assert.equal(fn.disposePolicy(23), abi.status.ok);
 

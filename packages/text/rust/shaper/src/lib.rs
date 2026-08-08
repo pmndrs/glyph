@@ -40,12 +40,14 @@ pub const STATUS_FONT_IN_USE: u32 = 14;
 const BUFFER_FLAGS_MASK: u32 = 0xff;
 const MAX_CACHED_PLANS_PER_FONT: usize = 64;
 const DEFAULT_SHAPE_BUFFER_CAPACITY: usize = 32_768;
+const DEFAULT_SHAPE_FEATURE_CAPACITY: usize = 128;
 
 pub struct ShaperRegistry {
     fonts: BTreeMap<u32, RegisteredFont>,
     result: ResultArena,
     shape_buffer: Option<UnicodeBuffer>,
     context_codepoints: Vec<u32>,
+    shape_features: Vec<Feature>,
 }
 
 impl Default for ShaperRegistry {
@@ -55,6 +57,7 @@ impl Default for ShaperRegistry {
             result: ResultArena::default(),
             shape_buffer: Some(UnicodeBuffer::new()),
             context_codepoints: Vec::new(),
+            shape_features: Vec::new(),
         }
     }
 }
@@ -131,6 +134,33 @@ struct SegmentRange {
     flags: u32,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ShapeRunRef<'a> {
+    pub text_start: u32,
+    pub text_end: u32,
+    pub script: u32,
+    pub language: Option<&'a [u8]>,
+    pub features: &'a [FeatureRecord],
+    pub direction: u8,
+    pub cluster_level: u8,
+    pub flags: u32,
+}
+
+impl<'a> From<&'a RunRequest> for ShapeRunRef<'a> {
+    fn from(run: &'a RunRequest) -> Self {
+        Self {
+            text_start: run.text_start,
+            text_end: run.text_end,
+            script: run.script,
+            language: run.language.as_deref(),
+            features: &run.features,
+            direction: run.direction,
+            cluster_level: run.cluster_level,
+            flags: run.flags,
+        }
+    }
+}
+
 pub struct ShapeBatchRequest {
     pub text: Vec<u16>,
     pub runs: Vec<RunRequest>,
@@ -162,6 +192,9 @@ impl ShaperRegistry {
             .try_reserve_exact(
                 DEFAULT_SHAPE_BUFFER_CAPACITY.saturating_sub(self.context_codepoints.len()),
             )
+            .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+        self.shape_features
+            .try_reserve_exact(DEFAULT_SHAPE_FEATURE_CAPACITY)
             .map_err(|_| STATUS_RESULT_TOO_LARGE)
     }
 
@@ -271,6 +304,7 @@ impl ShaperRegistry {
                 )
             };
             let run = &request.runs[run_index];
+            let run_ref = ShapeRunRef::from(run);
             let slot = if let Some(slot) = font_slots.get(&run.font_handle) {
                 *slot
             } else {
@@ -289,10 +323,11 @@ impl ShaperRegistry {
             let shaped = shape_segment(
                 font,
                 &request.text,
-                run,
+                run_ref,
                 range,
                 &mut self.shape_buffer,
                 &mut self.context_codepoints,
+                &mut self.shape_features,
             )?;
             let append_result: Result<(), u32> = (|| {
                 let glyph_count =
@@ -320,6 +355,38 @@ impl ShaperRegistry {
             append_result?;
         }
         Ok(output)
+    }
+
+    pub(crate) fn with_shaped_run<T>(
+        &mut self,
+        font_handle: u32,
+        text: &[u16],
+        run: ShapeRunRef<'_>,
+        consume: impl FnOnce(&harfrust::GlyphBuffer) -> Result<T, u32>,
+    ) -> Result<T, u32> {
+        let font = self
+            .fonts
+            .get_mut(&font_handle)
+            .ok_or(STATUS_FONT_MISSING)?;
+        let range = SegmentRange {
+            item_start: run.text_start,
+            item_end: run.text_end,
+            context_start: run.text_start,
+            context_end: run.text_end,
+            flags: run.flags,
+        };
+        let shaped = shape_segment(
+            font,
+            text,
+            run,
+            range,
+            &mut self.shape_buffer,
+            &mut self.context_codepoints,
+            &mut self.shape_features,
+        )?;
+        let result = consume(&shaped);
+        self.shape_buffer = Some(shaped.clear());
+        result
     }
 
     pub fn clear_result(&mut self) {
@@ -475,20 +542,28 @@ fn validate_request(
 fn shape_segment(
     font: &mut RegisteredFont,
     text: &[u16],
-    run: &RunRequest,
+    run: ShapeRunRef<'_>,
     range: SegmentRange,
     buffer_slot: &mut Option<UnicodeBuffer>,
     context_codepoints: &mut Vec<u32>,
+    features: &mut Vec<Feature>,
 ) -> Result<harfrust::GlyphBuffer, u32> {
     let mut buffer = buffer_slot.take().ok_or(STATUS_INVALID_REQUEST)?;
-    let features =
-        match shape_segment_inner(font, text, run, range, &mut buffer, context_codepoints) {
-            Ok(features) => features,
-            Err(status) => {
-                *buffer_slot = Some(buffer);
-                return Err(status);
-            }
-        };
+    match shape_segment_inner(
+        font,
+        text,
+        run,
+        range,
+        &mut buffer,
+        context_codepoints,
+        features,
+    ) {
+        Ok(()) => {}
+        Err(status) => {
+            *buffer_slot = Some(buffer);
+            return Err(status);
+        }
+    }
 
     let font_ref = match FontRef::new(&font.sfnt) {
         Ok(font_ref) => font_ref,
@@ -509,7 +584,7 @@ fn shape_segment(
     Ok(shaper.shape(
         buffer,
         ShapeOptions::new()
-            .features(&features)
+            .features(features)
             .plan(Some(plan))
             .font_funcs(Some(&mut extents)),
     ))
@@ -518,11 +593,12 @@ fn shape_segment(
 fn shape_segment_inner(
     font: &mut RegisteredFont,
     text: &[u16],
-    run: &RunRequest,
+    run: ShapeRunRef<'_>,
     range: SegmentRange,
     buffer: &mut UnicodeBuffer,
     context_codepoints: &mut Vec<u32>,
-) -> Result<Vec<Feature>, u32> {
+    features: &mut Vec<Feature>,
+) -> Result<(), u32> {
     let direction = match run.direction {
         0 => Direction::LeftToRight,
         1 => Direction::RightToLeft,
@@ -532,10 +608,9 @@ fn shape_segment_inner(
         .ok_or(STATUS_INVALID_REQUEST)?;
     let language = run
         .language
-        .as_ref()
         .map(|value| parse_language(value).ok_or(STATUS_INVALID_REQUEST))
         .transpose()?;
-    let features = shape_features(run, range);
+    shape_features(run, range, features)?;
     let key = PlanKey {
         direction: run.direction,
         script: run.script,
@@ -560,7 +635,7 @@ fn shape_segment_inner(
             direction,
             Some(script),
             language.as_ref(),
-            &features,
+            features,
         );
         if font.plans.len() == MAX_CACHED_PLANS_PER_FONT {
             font.plans.remove(0);
@@ -598,22 +673,28 @@ fn shape_segment_inner(
     });
     buffer.set_flags(BufferFlags::from_bits(range.flags).ok_or(STATUS_INVALID_REQUEST)?);
 
-    Ok(features)
+    Ok(())
 }
 
-fn shape_features(run: &RunRequest, range: SegmentRange) -> Vec<Feature> {
-    run.features
-        .iter()
-        .map(|feature| {
-            let global = feature.start <= range.item_start && feature.end >= range.item_end;
-            Feature {
-                tag: Tag::from_be_bytes(feature.tag.to_be_bytes()),
-                value: feature.value,
-                start: if global { 0 } else { feature.start },
-                end: if global { u32::MAX } else { feature.end },
-            }
-        })
-        .collect()
+fn shape_features(
+    run: ShapeRunRef<'_>,
+    range: SegmentRange,
+    output: &mut Vec<Feature>,
+) -> Result<(), u32> {
+    output.clear();
+    output
+        .try_reserve(run.features.len())
+        .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
+    output.extend(run.features.iter().map(|feature| {
+        let global = feature.start <= range.item_start && feature.end >= range.item_end;
+        Feature {
+            tag: Tag::from_be_bytes(feature.tag.to_be_bytes()),
+            value: feature.value,
+            start: if global { 0 } else { feature.start },
+            end: if global { u32::MAX } else { feature.end },
+        }
+    }));
+    Ok(())
 }
 
 struct FlatExtents<'a> {
