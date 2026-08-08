@@ -27,7 +27,7 @@ const fontStackHandle = 1;
 const regionHeight = options.height;
 
 const [wasm, abi, artifact] = await Promise.all([
-  readFile(new URL('../dist/text_shaper.wasm', import.meta.url)),
+  readFile(options.wasm ?? new URL('../dist/text_shaper.wasm', import.meta.url)),
   readFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
   loadArtifact(options.technique),
 ]);
@@ -70,9 +70,9 @@ console.log(
 );
 
 const reports = [];
-reports.push(measureCold());
-for (const name of ['no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit']) {
-  reports.push(measureWarm(name));
+const cases = ['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit'];
+for (const name of options.case === undefined ? cases : [options.case]) {
+  reports.push(name === 'cold' ? measureCold() : measureWarm(name));
 }
 printReport(reports);
 
@@ -261,6 +261,8 @@ function registerPolicy() {
 
 function summarize(name, glyphs, samples, plans) {
   const sorted = samples.toSorted((left, right) => left - right);
+  const patchCounts = plans.map((plan) => plan.patchCount).toSorted((left, right) => left - right);
+  const writeBytes = plans.map((plan) => plan.writeBytes).toSorted((left, right) => left - right);
   const mean = sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
   const variance = sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / sorted.length;
   return {
@@ -270,8 +272,8 @@ function summarize(name, glyphs, samples, plans) {
     p95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
     minMs: sorted[0],
     rsdPercent: (Math.sqrt(variance) / mean) * 100,
-    patchCount: plans[Math.floor(plans.length / 2)].patchCount,
-    writeBytes: plans[Math.floor(plans.length / 2)].writeBytes,
+    patchCount: patchCounts[Math.floor(patchCounts.length / 2)],
+    writeBytes: writeBytes[Math.floor(writeBytes.length / 2)],
   };
 }
 
@@ -311,6 +313,8 @@ function parseArguments(arguments_) {
   };
   return {
     technique: normalizeTechnique(readString('--technique', 'bitmap')),
+    wasm: readString('--wasm'),
+    case: readCase('--case'),
     glyphs: read('--glyphs', 22_000),
     height: read('--height', 100_000),
     repetitions: read('--reps', 11),
@@ -320,6 +324,17 @@ function parseArguments(arguments_) {
   function readString(name, fallback) {
     const index = arguments_.indexOf(name);
     return index === -1 ? fallback : arguments_[index + 1];
+  }
+
+  function readCase(name) {
+    const value = readString(name);
+    if (
+      value !== undefined &&
+      !['cold', 'no-op', 'font-size', 'column-resize', 'suffix-edit', 'localized-edit'].includes(value)
+    ) {
+      throw new RangeError(`unknown benchmark case: ${value}`);
+    }
+    return value;
   }
 }
 

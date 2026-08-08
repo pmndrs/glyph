@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:f0446f18de7e14725259e1a3ad9fc562f081daf8b7764abfc59c613190ede3e6'
+source_digest: 'sha256:1f5414678eccbef60f2e2ecce2164c807d8d8b3a4806ef5db2bc76918a819c89'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -696,6 +696,8 @@ Exact retained invalidation now stops at the earliest affected Rust stage. Font-
 The full-policy benchmark validates real baked Inter artifacts and compiles all three first-party GPU shapes: five Bitmap buffers totaling 48 bytes per instance, seven MTSDF vec4 buffers totaling 112 bytes, and five Slug float vec4 plus two unsigned vec4 buffers totaling 112 bytes. Absent raster records are omitted exactly as `RasterTechnique.select` omits them, leaving 21,805 renderable instances from the unchanged 25,515-positioned-glyph stress text. Derived linear color channels and inverse font size materialize only in requested gather lanes; they add no retained per-glyph arrays. SIMD execution transposes four-record SoA arithmetic into tightly packed vec2/vec4 output and uses contiguous 128-bit stores.
 
 Policy registration now propagates semantic dependencies to every physical buffer. Positioning records exact six-F32/four-U32 change bits in a compact side lane while preserving the 60-byte `PlanGlyph`; both ordered-direct and stable-indirect planning publish only buffers whose dependencies intersect. A full-column resize over 21,805 instances writes 170.4 KiB for Bitmap and 340.7 KiB for MTSDF or Slug rather than their 1,022.1/2,384.9/2,384.9 KiB cold-plan payloads. Font-size writes 340.7/340.7/681.4 KiB. Five-warmup/11-sample resize medians remain 4.599/4.916/6.057 milliseconds, so the exact payload reduction does not support a packing-dominance or general latency-speedup claim; layout remains above the sub-4 ms gate. The optimized module is 1,065,394 raw / 399,111 gzip / 317,830 Brotli bytes. A 97.19 MiB sequential-process high-water mark remains unresolved process evidence, not an accepted session budget.
+
+Order-preserving reflow now compares retained positioned glyphs directly by stable-ID slot and uses the exact identity index only after a reorder. A symbolized temporary Wasm profile identifies positioning as the largest sampled resize function and policy gather as the second. The canonical benchmark supports case isolation and an explicit profiling module while retaining its unchanged defaults. Current Bitmap/MTSDF/Slug resize medians are 4.414/4.984/5.196 milliseconds; inter-run variance prevents a precise speedup attribution and the sub-4 ms gate remains open. Optimized Wasm is 1,065,543 raw / 399,248 gzip / 318,131 Brotli bytes.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 
