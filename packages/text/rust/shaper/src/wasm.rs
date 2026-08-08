@@ -4,12 +4,11 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use crate::{
     STATUS_INVALID_HANDLE, STATUS_INVALID_REQUEST, STATUS_POLICY_CONFLICT, STATUS_POLICY_MISSING,
     STATUS_RESULT_TOO_LARGE, STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT,
-    STATUS_SESSION_MISSING, ShaperRegistry,
-    abi_contract::ENGINE_RESULT_HEADER_SIZE,
-    bidi,
+    STATUS_SESSION_MISSING, ShaperRegistry, bidi,
     engine::{
         EngineError, TextEngine, frame::SessionRevision, frame_wire::parse_update_request,
-        transport::FrameTransport, wire::parse_policy,
+        render_plan::RenderPlanView, render_plan_wire::plan_layout, transport::FrameTransport,
+        wire::parse_policy,
     },
     wire::{
         pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
@@ -400,22 +399,58 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
                 return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
             }
         };
-        let Some(transport) = state.frames.get(&session_id) else {
-            return 0;
+        let policy_fingerprint = match state.engine.policy(request.policy_handle) {
+            Ok(policy) => policy.fingerprint(),
+            Err(error) => {
+                return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
+            }
         };
-        if let Err(status) = transport.ensure_publish_capacity(ENGINE_RESULT_HEADER_SIZE) {
+        let plan = RenderPlanView {
+            policy_handle: request.policy_handle,
+            capability_set: 0,
+            policy_fingerprint,
+            ..RenderPlanView::default()
+        };
+        let required_output = match plan_layout(plan) {
+            Ok(layout) => layout.byte_length,
+            Err(status) => return publish_failure(state, session_id, revision, status, 0, 0),
+        };
+        if required_output > request.limits.max_output_bytes {
             return publish_failure(
                 state,
                 session_id,
                 revision,
-                status,
+                STATUS_RESULT_TOO_LARGE,
                 0,
-                ENGINE_RESULT_HEADER_SIZE,
+                required_output,
             );
+        }
+        let Some(transport) = state.frames.get(&session_id) else {
+            return 0;
+        };
+        if let Err(status) = transport.ensure_publish_capacity(required_output) {
+            return publish_failure(state, session_id, revision, status, 0, required_output);
         }
         if let Err(status) = transport.next_publication_generation() {
             return publish_failure(state, session_id, revision, status, 0, 0);
         }
+        let staged = match state
+            .frames
+            .get_mut(&session_id)
+            .and_then(|transport| transport.stage_plan(plan).ok())
+        {
+            Some(staged) => staged,
+            None => {
+                return publish_failure(
+                    state,
+                    session_id,
+                    revision,
+                    STATUS_RESULT_TOO_LARGE,
+                    0,
+                    required_output,
+                );
+            }
+        };
         let commit = match state.engine.commit_update(prepared) {
             Ok(commit) => commit,
             Err(error) => {
@@ -425,7 +460,7 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
         let Some(transport) = state.frames.get_mut(&session_id) else {
             return 0;
         };
-        u32::try_from(transport.publish_success(commit)).unwrap_or(0)
+        u32::try_from(transport.publish_success(commit, staged)).unwrap_or(0)
     })
 }
 

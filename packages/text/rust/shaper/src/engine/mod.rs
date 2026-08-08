@@ -16,6 +16,8 @@ mod state;
 pub(crate) mod transport;
 
 pub mod policy;
+pub mod render_plan;
+pub(crate) mod render_plan_wire;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 pub(crate) mod wire;
 

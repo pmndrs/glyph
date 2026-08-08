@@ -5,11 +5,13 @@ use crate::{
     STATUS_INVALID_REQUEST, STATUS_RESULT_TOO_LARGE,
     abi_contract::{
         ABI_VERSION, ENGINE_RESULT_ABI_VERSION, ENGINE_RESULT_BUFFER_COUNT,
-        ENGINE_RESULT_BUFFERS_OFFSET, ENGINE_RESULT_BYTE_LENGTH, ENGINE_RESULT_DIAGNOSTIC_COUNT,
-        ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT, ENGINE_RESULT_DRAWS_OFFSET,
-        ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FLAGS, ENGINE_RESULT_HEADER_ALIGNMENT,
-        ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT, ENGINE_RESULT_PATCH_COUNT,
-        ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION, ENGINE_RESULT_PRIMITIVE_COUNT,
+        ENGINE_RESULT_BUFFERS_OFFSET, ENGINE_RESULT_BYTE_LENGTH, ENGINE_RESULT_CAPABILITY_SET,
+        ENGINE_RESULT_DIAGNOSTIC_COUNT, ENGINE_RESULT_DIAGNOSTICS_OFFSET, ENGINE_RESULT_DRAW_COUNT,
+        ENGINE_RESULT_DRAWS_OFFSET, ENGINE_RESULT_ENGINE_REVISION, ENGINE_RESULT_FLAGS,
+        ENGINE_RESULT_HEADER_ALIGNMENT, ENGINE_RESULT_HEADER_SIZE, ENGINE_RESULT_OUTPUT_SLOT,
+        ENGINE_RESULT_PATCH_COUNT, ENGINE_RESULT_PATCHES_OFFSET, ENGINE_RESULT_PLAN_REVISION,
+        ENGINE_RESULT_POLICY_FINGERPRINT_HIGH, ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
+        ENGINE_RESULT_POLICY_HANDLE, ENGINE_RESULT_PRIMITIVE_COUNT,
         ENGINE_RESULT_PRIMITIVES_OFFSET, ENGINE_RESULT_PUBLICATION_GENERATION,
         ENGINE_RESULT_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_BASE_REVISION,
         ENGINE_RESULT_REQUIRED_REQUEST_CAPACITY, ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
@@ -19,7 +21,11 @@ use crate::{
         ENGINE_RESULT_SEMANTICS_OFFSET, ENGINE_RESULT_SESSION_ID, ENGINE_RESULT_STATUS,
         ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     },
-    engine::frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, SessionRevision},
+    engine::{
+        frame::{CommittedUpdate, RESULT_FLAG_CHECKPOINT, SessionRevision},
+        render_plan::RenderPlanView,
+        render_plan_wire::{EncodedPlanLayout, encode_plan},
+    },
     wire::write_u32,
 };
 
@@ -102,11 +108,23 @@ impl FrameTransport {
             .ok_or(STATUS_RESULT_TOO_LARGE)
     }
 
-    pub fn publish_success(&mut self, commit: CommittedUpdate) -> usize {
+    pub fn stage_plan(&mut self, plan: RenderPlanView<'_>) -> Result<StagedPlan, u32> {
         let slot = self.inactive_slot();
+        let layout = encode_plan(plan, self.outputs[slot].bytes_mut())?;
+        Ok(StagedPlan {
+            slot,
+            policy_handle: plan.policy_handle,
+            capability_set: plan.capability_set,
+            policy_fingerprint: plan.policy_fingerprint,
+            layout,
+        })
+    }
+
+    pub fn publish_success(&mut self, commit: CommittedUpdate, staged: StagedPlan) -> usize {
+        debug_assert_eq!(staged.slot, self.inactive_slot());
         let generation = self.publication_generation + 1;
         self.write_header(
-            slot,
+            staged.slot,
             HeaderValues {
                 status: 0,
                 flags: if commit.checkpoint {
@@ -120,11 +138,15 @@ impl FrameTransport {
                 publication_generation: generation,
                 required_request_capacity: 0,
                 required_result_capacity: 0,
+                policy_handle: staged.policy_handle,
+                capability_set: staged.capability_set,
+                policy_fingerprint: staged.policy_fingerprint,
+                layout: staged.layout,
             },
         );
-        self.active_slot = Some(slot);
+        self.active_slot = Some(staged.slot);
         self.publication_generation = generation;
-        self.outputs[slot].pointer()
+        self.outputs[staged.slot].pointer()
     }
 
     pub fn publish_failure(
@@ -147,6 +169,13 @@ impl FrameTransport {
                 publication_generation: self.publication_generation,
                 required_request_capacity,
                 required_result_capacity,
+                policy_handle: 0,
+                capability_set: 0,
+                policy_fingerprint: 0,
+                layout: EncodedPlanLayout {
+                    byte_length: ENGINE_RESULT_HEADER_SIZE,
+                    ..EncodedPlanLayout::default()
+                },
             },
         );
         self.outputs[slot].pointer()
@@ -162,7 +191,7 @@ impl FrameTransport {
         let bytes = self.outputs[slot].bytes_mut();
         bytes[..ENGINE_RESULT_HEADER_SIZE as usize].fill(0);
         write_u32(bytes, ENGINE_RESULT_ABI_VERSION, ABI_VERSION);
-        write_u32(bytes, ENGINE_RESULT_BYTE_LENGTH, ENGINE_RESULT_HEADER_SIZE);
+        write_u32(bytes, ENGINE_RESULT_BYTE_LENGTH, values.layout.byte_length);
         write_u32(bytes, ENGINE_RESULT_STATUS, values.status);
         write_u32(bytes, ENGINE_RESULT_FLAGS, values.flags);
         write_u32(bytes, ENGINE_RESULT_SESSION_ID, values.session_id);
@@ -191,26 +220,66 @@ impl FrameTransport {
             ENGINE_RESULT_REQUIRED_RESULT_CAPACITY,
             values.required_result_capacity,
         );
-        for offset in [
+        write_u32(bytes, ENGINE_RESULT_POLICY_HANDLE, values.policy_handle);
+        write_u32(bytes, ENGINE_RESULT_CAPABILITY_SET, values.capability_set);
+        write_u32(
+            bytes,
+            ENGINE_RESULT_POLICY_FINGERPRINT_LOW,
+            values.policy_fingerprint as u32,
+        );
+        write_u32(
+            bytes,
+            ENGINE_RESULT_POLICY_FINGERPRINT_HIGH,
+            (values.policy_fingerprint >> 32) as u32,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_SEMANTICS_OFFSET,
             ENGINE_RESULT_SEMANTICS_COUNT,
+            values.layout.semantics,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_RESOURCES_OFFSET,
             ENGINE_RESULT_RESOURCE_COUNT,
+            values.layout.resources,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_BUFFERS_OFFSET,
             ENGINE_RESULT_BUFFER_COUNT,
+            values.layout.buffers,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_PATCHES_OFFSET,
             ENGINE_RESULT_PATCH_COUNT,
+            values.layout.patches,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_PRIMITIVES_OFFSET,
             ENGINE_RESULT_PRIMITIVE_COUNT,
+            values.layout.primitives,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_DRAWS_OFFSET,
             ENGINE_RESULT_DRAW_COUNT,
+            values.layout.draws,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_RETIREMENTS_OFFSET,
             ENGINE_RESULT_RETIREMENT_COUNT,
+            values.layout.retirements,
+        );
+        write_span(
+            bytes,
             ENGINE_RESULT_DIAGNOSTICS_OFFSET,
             ENGINE_RESULT_DIAGNOSTIC_COUNT,
-        ] {
-            write_u32(bytes, offset, 0);
-        }
+            values.layout.diagnostics,
+        );
     }
 }
 
@@ -223,6 +292,28 @@ struct HeaderValues {
     publication_generation: u32,
     required_request_capacity: u32,
     required_result_capacity: u32,
+    policy_handle: u32,
+    capability_set: u32,
+    policy_fingerprint: u64,
+    layout: EncodedPlanLayout,
+}
+
+pub(crate) struct StagedPlan {
+    slot: usize,
+    policy_handle: u32,
+    capability_set: u32,
+    policy_fingerprint: u64,
+    layout: EncodedPlanLayout,
+}
+
+fn write_span(
+    bytes: &mut [u8],
+    offset_field: usize,
+    count_field: usize,
+    span: super::render_plan_wire::TableSpan,
+) {
+    write_u32(bytes, offset_field, span.offset);
+    write_u32(bytes, count_field, span.count);
 }
 
 struct AlignedArena {
@@ -307,6 +398,10 @@ const _: () = assert!(ENGINE_RESULT_HEADER_ALIGNMENT as usize == ARENA_ALIGNMENT
 mod tests {
     use super::*;
     use crate::wire::read_u32;
+    use crate::{
+        abi_contract::{ENGINE_RESULT_POLICY_HANDLE, PATCH_PAYLOAD_OFFSET},
+        engine::render_plan::{BUFFER_ORDERED_DIRECT, BufferRecord, PATCH_WRITE, PatchRecord},
+    };
 
     #[test]
     fn arenas_are_aligned_and_double_without_losing_request_bytes() {
@@ -326,7 +421,8 @@ mod tests {
     #[test]
     fn successful_publications_alternate_and_failures_preserve_the_active_slot() {
         let mut transport = FrameTransport::new(256, 256).unwrap();
-        let first = transport.publish_success(commit(1));
+        let first_plan = transport.stage_plan(plan()).unwrap();
+        let first = transport.publish_success(commit(1), first_plan);
         let first_bytes = transport.outputs[0].bytes();
         assert_eq!(read_u32(first_bytes, ENGINE_RESULT_OUTPUT_SLOT).unwrap(), 0);
         assert_eq!(
@@ -345,7 +441,8 @@ mod tests {
         assert_eq!(transport.active_slot, Some(0));
         assert_eq!(transport.publication_generation, 1);
 
-        let second = transport.publish_success(commit(2));
+        let second_plan = transport.stage_plan(plan()).unwrap();
+        let second = transport.publish_success(commit(2), second_plan);
         assert_eq!(second, failure);
         let second_bytes = transport.outputs[1].bytes();
         assert_eq!(
@@ -358,6 +455,49 @@ mod tests {
         );
     }
 
+    #[test]
+    fn publication_header_addresses_the_exact_plan_tables_and_payload() {
+        let buffers = [BufferRecord {
+            id: 1,
+            generation: 2,
+            program_id: 3,
+            policy_buffer_id: 4,
+            scalar_type: 1,
+            vector_width: 4,
+            strategy: BUFFER_ORDERED_DIRECT,
+            live_records: 1,
+            capacity_records: 8,
+            byte_length: 128,
+            ..BufferRecord::default()
+        }];
+        let patches = [PatchRecord {
+            opcode: PATCH_WRITE,
+            buffer_id: 1,
+            buffer_generation: 2,
+            byte_length: 4,
+            ..PatchRecord::default()
+        }];
+        let plan = RenderPlanView {
+            policy_handle: 9,
+            capability_set: 10,
+            policy_fingerprint: 0x1122_3344_5566_7788,
+            buffers: &buffers,
+            patches: &patches,
+            payload: &[1, 2, 3, 4],
+            ..RenderPlanView::default()
+        };
+        let mut transport = FrameTransport::new(256, 1024).unwrap();
+        let staged = transport.stage_plan(plan).unwrap();
+        transport.publish_success(commit(1), staged);
+        let bytes = transport.outputs[0].bytes();
+        let patch_offset = read_u32(bytes, ENGINE_RESULT_PATCHES_OFFSET).unwrap() as usize;
+        let payload_offset = read_u32(bytes, patch_offset + PATCH_PAYLOAD_OFFSET).unwrap() as usize;
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_POLICY_HANDLE).unwrap(), 9);
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_BUFFER_COUNT).unwrap(), 1);
+        assert_eq!(read_u32(bytes, ENGINE_RESULT_PATCH_COUNT).unwrap(), 1);
+        assert_eq!(&bytes[payload_offset..payload_offset + 4], &[1, 2, 3, 4]);
+    }
+
     fn commit(revision: u32) -> CommittedUpdate {
         CommittedUpdate {
             session_id: 3,
@@ -367,6 +507,13 @@ mod tests {
             },
             required_base_revision: revision - 1,
             checkpoint: revision == 1,
+        }
+    }
+
+    fn plan() -> RenderPlanView<'static> {
+        RenderPlanView {
+            policy_handle: 1,
+            ..RenderPlanView::default()
         }
     }
 }
