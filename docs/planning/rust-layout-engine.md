@@ -149,11 +149,22 @@ renderer.
 - Each program owns an explicit typed gather recipe. Ordered 4-byte records name `semantic`, `glyph`, `resource`, or
   `strike` source lanes for every F32 field followed by every U32 field. This is numeric policy data, not a callback;
   registration validates and fingerprints it so retained input meanings cannot change under one handle. The per-font
-  render binding owns the latter three lane families and layout owns semantic lanes. Registration is live, while gather
-  execution waits for those binding tables and therefore has no frame timing claim yet.
+  render binding owns the latter three lane families and layout owns semantic lanes. Both policy and binding
+  registration are live, while gather execution waits for the Rust layout connection and therefore has no frame timing
+  claim yet.
 - A loaded font owns its raster technique and resource binding. `FontStack`, `Text`, and `TextGroup` do not ask the user
   to repeat a technique: an ordered stack may contain fonts from different techniques in the same runtime, and the
   render policy declares which of those techniques its engine can lower.
+
+Per-font render data is normalized without paying for a union of every built-in technique's fields. One immutable
+binding owns a technique/program variant, a dense font-wide glyph table, one or more strikes, a dense strike×glyph
+address table, and a resource directory. MSDF and Slug use one scalable strike identified by zero ppem; Bitmap uses
+strictly increasing physical ppem strikes and selects the nearest to `fontSize × rasterPixelRatio`, retaining the lower
+strike at an exact tie. Every strike×glyph row selects a resource or carries the missing sentinel. Glyph, selected-strike,
+and selected-resource F32/U32 data are field-major SoA tables with at most 32 lanes per scalar kind, so four neighboring
+glyphs remain directly gatherable by the policy executor. The cold compiler-mapped decoder rejects noncanonical strikes,
+unsorted/invalid resources, nonfinite floats, invalid indices, field-shape mismatch, reserved data, overlap, and shaping
+glyph-count mismatch before publication.
 - Result publication uses A/B Wasm buffers for synchronous reads only. A retained or asynchronous result is copied into
   a worker-owned transferable `ArrayBuffer`; root returns ownership of that same buffer to the worker on retirement so
   pooling or garbage collection occurs on the worker rather than root.

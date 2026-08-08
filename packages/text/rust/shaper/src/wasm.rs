@@ -7,8 +7,9 @@ use crate::{
     STATUS_REVISION_CONFLICT, STATUS_SESSION_CONFLICT, STATUS_SESSION_MISSING, ShaperRegistry,
     bidi,
     engine::{
-        EngineError, TextEngine, frame::SessionRevision, frame_wire::parse_update_request,
-        render_plan_wire::plan_layout, transport::FrameTransport, wire::parse_policy,
+        EngineError, TextEngine, font_binding_wire::parse_font_binding, frame::SessionRevision,
+        frame_wire::parse_update_request, render_plan_wire::plan_layout, transport::FrameTransport,
+        wire::parse_policy,
     },
     wire::{
         pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
@@ -81,7 +82,11 @@ pub extern "C" fn pmndrs_text_shaper_dispose_font(handle: u32) -> u32 {
         if state.engine.references_font(handle) {
             STATUS_FONT_IN_USE
         } else {
-            state.registry.dispose_font(handle)
+            let status = state.registry.dispose_font(handle);
+            if status == STATUS_OK {
+                state.engine.dispose_font_binding(handle);
+            }
+            status
         }
     })
 }
@@ -143,6 +148,38 @@ pub extern "C" fn pmndrs_text_engine_dispose_font_stack(handle: u32) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn pmndrs_text_engine_font_stack_count() -> u32 {
     with_state(|state| state.engine.font_stack_count())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pmndrs_text_engine_register_font_binding(
+    handle: u32,
+    pointer: u32,
+    length: u32,
+) -> u32 {
+    with_state(|state| {
+        let Some(glyph_count) = state.registry.glyph_count(handle) else {
+            return crate::STATUS_FONT_MISSING;
+        };
+        let Some(bytes) = owned_bytes(&state.allocations, pointer, length) else {
+            return STATUS_INVALID_REQUEST;
+        };
+        let binding = match parse_font_binding(bytes) {
+            Ok(binding) => binding,
+            Err(status) => return status,
+        };
+        match state
+            .engine
+            .register_font_binding(handle, glyph_count, binding)
+        {
+            Ok(()) => STATUS_OK,
+            Err(error) => engine_status(error),
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pmndrs_text_engine_font_binding_count() -> u32 {
+    with_state(|state| state.engine.font_binding_count())
 }
 
 #[unsafe(no_mangle)]

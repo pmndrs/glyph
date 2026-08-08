@@ -5,6 +5,7 @@ import test from 'node:test';
 import { createRuntimeShaper, FontRegistry } from '@pmndrs/text';
 import { createFontBaker } from '@pmndrs/text-font-baker';
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { fontBindingBytes } from '../support/engine-abi.mjs';
 
 const fixtureDirectory = new URL('../../../../apps/benchmarks/fixtures/fonts/inter-v4.1/', import.meta.url);
 const shaperWasmUrl = new URL('../../dist/text_shaper.wasm', import.meta.url);
@@ -109,6 +110,34 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   );
   for (const allocation of allocations) fn.deallocate(allocation.pointer, allocation.length);
 
+  assert.deepEqual(abi.layouts.fontBindingStrike, { alignment: 4, ppem: 0, reserved: 4, size: 8 });
+  assert.deepEqual(abi.layouts.fontBindingResource, {
+    alignment: 4,
+    generation: 4,
+    id: 0,
+    kind: 8,
+    reference: 12,
+    reserved: 10,
+    size: 16,
+  });
+  const bindingBytes = fontBindingBytes(abi, {
+    techniqueId: 1,
+    glyphCount: validated.glyphExtents.byteLength / 8,
+    strikes: [0],
+    resources: [{ id: 71, generation: 1, kind: 1, reference: 19 }],
+    resourceIndices: new Array(validated.glyphExtents.byteLength / 8).fill(0),
+    glyphF32: [new Array(validated.glyphExtents.byteLength / 8).fill(1)],
+  });
+  const binding = copyToWasm(memory, fn.allocate, bindingBytes);
+  assert.equal(fn.fontBindingCount(), 0);
+  assert.equal(fn.registerFontBinding(101, binding.pointer, binding.length), abi.status.ok);
+  assert.equal(fn.registerFontBinding(101, binding.pointer, binding.length), abi.status.ok);
+  assert.equal(fn.fontBindingCount(), 1);
+  new DataView(memory.buffer).setUint32(binding.pointer + abi.layouts.fontBindingRequest.techniqueId, 2, true);
+  assert.equal(fn.registerFontBinding(101, binding.pointer, binding.length), abi.status.policyConflict);
+  fn.deallocate(binding.pointer, binding.length);
+  assert.equal(fn.fontBindingCount(), 1, 'binding state must not borrow the registration allocation');
+
   const stack = copyToWasm(memory, fn.allocate, Uint8Array.of(101, 0, 0, 0));
   assert.equal(fn.registerFontStack(17, stack.pointer, 1), abi.status.ok);
   fn.deallocate(stack.pointer, stack.length);
@@ -117,6 +146,7 @@ test('compiled Wasm retains ordered font stacks and prevents dangling font dispo
   assert.equal(fn.disposeFontStack(17), abi.status.ok);
   assert.equal(fn.disposeFontStack(17), abi.status.fontStackMissing);
   assert.equal(fn.disposeFont(101), abi.status.ok);
+  assert.equal(fn.fontBindingCount(), 0);
 });
 
 test('shaper ownership stays scoped to its FontRegistry', async () => {
