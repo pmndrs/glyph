@@ -698,6 +698,19 @@ replacement, style edits, and flow changes at the start, middle, and end of larg
 If `required_base_revision` does not match the consumer, the engine returns a checkpoint containing complete live state.
 Skipped render revisions can never be repaired by applying an adjacent delta blindly.
 
+The first retained compiler slice implements ordered-direct physical storage behind an explicit prepare/view/commit-or-
+abort lifecycle. Stable instance IDs and semantic content revisions—not physical byte comparison—select dirty records.
+Capability alignment expands ranges at record granularity; gap/call costs, fragmentation budget, and the whole-buffer
+threshold coalesce them. Consecutive changed inputs stay batched through the four-record SIMD policy executor. A no-op
+produces no resource, buffer, patch, retirement, or payload records; a tail deletion changes live metadata without an
+upload; a middle insertion rewrites only that resource/program batch's suffix. Checkpoint/growth allocates and writes
+complete aligned storage. CPU mirrors change only on commit, so failed A/B serialization can abort preparation.
+
+This slice deliberately does not yet claim a complete display list: primitive/draw compilation, stable-indirect order
+storage, session integration, and target-hardware timing remain open in Stage 2. Its production Wasm code is currently
+unreachable from `text_update` and is removed by LTO; that keeps the shipping path unchanged while the missing tables
+land, rather than treating native unit behavior as end-to-end evidence.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a

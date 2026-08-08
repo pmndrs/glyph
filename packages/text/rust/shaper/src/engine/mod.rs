@@ -15,6 +15,7 @@ mod state;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) mod transport;
 
+pub mod ordered_plan;
 pub mod policy;
 pub mod render_plan;
 pub(crate) mod render_plan_wire;
