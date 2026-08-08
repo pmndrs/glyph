@@ -963,6 +963,13 @@ identity-table implementation. Its isolated size is 1,043,094 / 394,035 / 307,25
 +2,357); the Brotli regression is accepted for the single correctness implementation and will be remeasured with its
 glyph-reconciliation consumer reachable.
 
+Glyph identity reconciliation now consumes that index inside the cluster transaction. Existing cluster identities reuse
+the IDs of surviving glyph ordinals; new clusters and added ordinals consume monotonic nonzero IDs. The allocator cursor
+commits only with the pending cluster arena, so abort/retry is exact. A fixture transforms prior per-cluster glyph IDs
+`[[1,2],[3]]` into `[[4],[1],[3,5]]` after inserting a cluster and growing the final cluster, then reproduces the result
+without growing scratch. Optimized Wasm is 1,044,797 / 395,222 / 307,795 raw/gzip/Brotli bytes (+1,703 / +1,187 / +536).
+Final positioned-content comparison will own `content_revision`; shaping identity alone does not overclaim GPU equality.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a
