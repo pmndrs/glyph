@@ -3,8 +3,10 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use super::{
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
-    plan_input::PlanInput,
     policy::{CapabilitySetId, ValidatedPolicy},
+    policy_gather::{
+        DEFAULT_GATHER_RECORD_CAPACITY, GatherError, LayoutPlanInput, PolicyGatherWorkspace,
+    },
     render_plan::RenderPlanView,
     render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
 };
@@ -29,6 +31,7 @@ pub struct TextEngine {
     font_bindings: Vec<RegisteredFontBinding>,
     font_stacks: Vec<RegisteredFontStack>,
     sessions: BTreeMap<u32, EngineSession>,
+    gather: PolicyGatherWorkspace,
 }
 
 struct RegisteredFontBinding {
@@ -59,6 +62,12 @@ struct PolicyBinding {
 }
 
 impl TextEngine {
+    pub fn initialize(&mut self) -> Result<(), EngineError> {
+        self.gather
+            .reserve_records(DEFAULT_GATHER_RECORD_CAPACITY)
+            .map_err(gather_error)
+    }
+
     pub fn register_font_binding(
         &mut self,
         handle: u32,
@@ -185,6 +194,9 @@ impl TextEngine {
                 Err(EngineError::HandleConflict)
             };
         }
+        self.gather
+            .reserve_policy(&policy, DEFAULT_GATHER_RECORD_CAPACITY)
+            .map_err(|_| EngineError::ResultTooLarge)?;
         self.policies.insert(handle, policy);
         Ok(())
     }
@@ -271,6 +283,8 @@ impl TextEngine {
             return Err(EngineError::InvalidRequest);
         }
         let policy_fingerprint = policy.fingerprint();
+        let font_bindings = &self.font_bindings;
+        let gather = &mut self.gather;
         let session = self
             .sessions
             .get_mut(&request.session_id)
@@ -307,14 +321,29 @@ impl TextEngine {
         // plan preparation or publication later aborts.
         session.acknowledged_publication_generation = request.acknowledged_publication_generation;
         session.prepare_text(request.text_mutations)?;
+        if let Err(error) = gather.gather(
+            policy,
+            CapabilitySetId(request.capability_set),
+            LayoutPlanInput {
+                glyphs: &[],
+                semantic_f32: &[],
+                semantic_u32: &[],
+            },
+            |handle| {
+                font_bindings
+                    .iter()
+                    .find(|binding| binding.handle == handle)
+                    .map(|binding| &binding.binding)
+            },
+        ) {
+            session.abort_text();
+            return Err(gather_error(error));
+        }
+        let gathered = gather.view();
         if let Err(error) = session.plan.prepare(
             policy,
             CapabilitySetId(request.capability_set),
-            PlanInput {
-                glyphs: &[],
-                f32_fields: &[],
-                u32_fields: &[],
-            },
+            gathered.plan_input(),
             checkpoint,
             publication_generation,
             request.acknowledged_publication_generation,
@@ -497,6 +526,17 @@ fn plan_error(error: RenderPlanCompilerError) -> EngineError {
         EngineError::ResultTooLarge
     } else {
         EngineError::InvalidRequest
+    }
+}
+
+fn gather_error(error: GatherError) -> EngineError {
+    match error {
+        GatherError::AllocationFailed => EngineError::ResultTooLarge,
+        GatherError::InvalidSemanticShape
+        | GatherError::FontBindingMissing
+        | GatherError::GlyphBindingMissing
+        | GatherError::ProgramMissing
+        | GatherError::SourceFieldMissing => EngineError::InvalidRequest,
     }
 }
 
