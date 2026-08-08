@@ -739,13 +739,23 @@ partitions, assigns ordered-direct buffers to the low `u32` ID half and stable-i
 patch payload spans, deduplicates shared resources, and merges draws by their original global order token. A program may
 therefore change allocation strategy without retiring a resource that remains live through the other compiler. A
 homogeneous frame delegates its plan view directly to one compiler and does not populate merge scratch; a mixed no-op
-publishes nothing, and repeated same-shape mixed edits retain settled vector capacities. Session integration, a
-dedicated renderer-fence acknowledgment in the request, and target-hardware timing remain open in Stage 2;
-`consumed_plan_revision` cannot substitute because host application does not prove GPU completion. The planners are
-still unreachable from `text_update` and removed by LTO.
-Adding the reachable reserved-binding ABI identity leaves the optimized artifact at 739,909 raw bytes and changes only
-compression from 272,607 to 272,624 gzip bytes and 214,288 to 214,395 Brotli bytes. This is not end-to-end latency
-evidence.
+publishes nothing, and repeated same-shape mixed edits retain settled vector capacities.
+
+Each engine session now owns that dispatcher and pins the first committed policy handle/fingerprint while allowing
+capability-set changes within the same validated policy. The compiler-derived update header is 124 bytes and carries a
+dedicated `acknowledged_publication_generation`; it must advance monotonically and cannot name the publication currently
+being prepared. `consumed_plan_revision` remains independent because host application does not prove GPU completion.
+The Wasm update prepares the Rust plan, validates and serializes it into the inactive arena, commits compiler/session
+state only after staging succeeds, and aborts preparation on every intervening failure. The acknowledgment itself
+survives an aborted publication because it reports an already-completed renderer fence. Compiled-Wasm tests exercise
+accepted and future acknowledgments, A/B preservation, and retry after abort.
+
+This makes the full retained plan compiler reachable: the optimized artifact changes from 739,909 / 272,624 / 214,395
+to 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. The 82,534 raw / 35,409 gzip / 28,052 Brotli increase is shared
+runtime code, not font-local shaping data, and is now an explicit size-optimization target. Mutation sections still reject
+nonempty data and the session currently supplies an empty semantic input, so the Wasm path emits an empty Rust plan.
+Rust shaping/layout → nonempty plan connection and its 25,515-glyph end-to-end timing remain open; the TypeScript layout
+benchmark is baseline evidence only.
 
 ## Performance contract
 

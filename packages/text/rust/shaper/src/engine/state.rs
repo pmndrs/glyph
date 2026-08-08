@@ -2,7 +2,10 @@ use alloc::collections::BTreeMap;
 
 use super::{
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
+    plan_input::PlanInput,
     policy::{CapabilitySetId, ValidatedPolicy},
+    render_plan::RenderPlanView,
+    render_plan_compiler::{RenderPlanCompiler, RenderPlanCompilerError},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,6 +18,7 @@ pub enum EngineError {
     RevisionConflict,
     RevisionExhausted,
     InvalidRequest,
+    ResultTooLarge,
 }
 
 #[derive(Default)]
@@ -26,6 +30,15 @@ pub struct TextEngine {
 #[derive(Default)]
 struct EngineSession {
     revision: SessionRevision,
+    acknowledged_publication_generation: u32,
+    policy_binding: Option<PolicyBinding>,
+    plan: RenderPlanCompiler,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PolicyBinding {
+    handle: u32,
+    fingerprint: u64,
 }
 
 impl TextEngine {
@@ -93,25 +106,39 @@ impl TextEngine {
     }
 
     pub(crate) fn prepare_update(
-        &self,
+        &mut self,
         request: UpdateRequest,
+        publication_generation: u32,
     ) -> Result<PreparedUpdate, EngineError> {
         if !request.limits.all_nonzero() {
             return Err(EngineError::InvalidRequest);
         }
-        let session = self
-            .sessions
-            .get(&request.session_id)
-            .ok_or(EngineError::SessionMissing)?;
-        let policy = self.policy(request.policy_handle)?;
+        let policy = self
+            .policies
+            .get(&request.policy_handle)
+            .ok_or(EngineError::PolicyMissing)?;
         if policy
             .capability_set(CapabilitySetId(request.capability_set))
             .is_none()
         {
             return Err(EngineError::InvalidRequest);
         }
+        let policy_fingerprint = policy.fingerprint();
+        let session = self
+            .sessions
+            .get_mut(&request.session_id)
+            .ok_or(EngineError::SessionMissing)?;
+        if session.policy_binding.is_some_and(|binding| {
+            binding.handle != request.policy_handle || binding.fingerprint != policy_fingerprint
+        }) {
+            return Err(EngineError::InvalidRequest);
+        }
         if request.expected_engine_revision != session.revision.engine
             || request.consumed_plan_revision > session.revision.plan
+            || publication_generation == 0
+            || request.acknowledged_publication_generation
+                < session.acknowledged_publication_generation
+            || request.acknowledged_publication_generation >= publication_generation
         {
             return Err(EngineError::RevisionConflict);
         }
@@ -129,13 +156,65 @@ impl TextEngine {
         };
         let checkpoint =
             session.revision.plan == 0 || request.consumed_plan_revision != session.revision.plan;
+        session.acknowledged_publication_generation = request.acknowledged_publication_generation;
+        session
+            .plan
+            .prepare(
+                policy,
+                CapabilitySetId(request.capability_set),
+                PlanInput {
+                    glyphs: &[],
+                    f32_fields: &[],
+                    u32_fields: &[],
+                },
+                checkpoint,
+                publication_generation,
+                request.acknowledged_publication_generation,
+            )
+            .map_err(plan_error)?;
         Ok(PreparedUpdate {
             session_id: request.session_id,
             previous: session.revision,
             next,
             required_base_revision: if checkpoint { 0 } else { session.revision.plan },
             checkpoint,
+            policy_handle: request.policy_handle,
+            capability_set: request.capability_set,
+            policy_fingerprint,
         })
+    }
+
+    pub(crate) fn prepared_plan(
+        &self,
+        prepared: PreparedUpdate,
+    ) -> Result<RenderPlanView<'_>, EngineError> {
+        let session = self
+            .sessions
+            .get(&prepared.session_id)
+            .ok_or(EngineError::SessionMissing)?;
+        if session.revision != prepared.previous {
+            return Err(EngineError::RevisionConflict);
+        }
+        session
+            .plan
+            .plan_view(
+                prepared.policy_handle,
+                CapabilitySetId(prepared.capability_set),
+                prepared.policy_fingerprint,
+            )
+            .map_err(plan_error)
+    }
+
+    pub(crate) fn abort_update(&mut self, prepared: PreparedUpdate) -> Result<(), EngineError> {
+        let session = self
+            .sessions
+            .get_mut(&prepared.session_id)
+            .ok_or(EngineError::SessionMissing)?;
+        if session.revision != prepared.previous {
+            return Err(EngineError::RevisionConflict);
+        }
+        session.plan.abort();
+        Ok(())
     }
 
     pub(crate) fn commit_update(
@@ -149,6 +228,11 @@ impl TextEngine {
         if session.revision != prepared.previous {
             return Err(EngineError::RevisionConflict);
         }
+        session.plan.commit().map_err(plan_error)?;
+        session.policy_binding = Some(PolicyBinding {
+            handle: prepared.policy_handle,
+            fingerprint: prepared.policy_fingerprint,
+        });
         session.revision = prepared.next;
         Ok(CommittedUpdate {
             session_id: prepared.session_id,
@@ -156,6 +240,14 @@ impl TextEngine {
             required_base_revision: prepared.required_base_revision,
             checkpoint: prepared.checkpoint,
         })
+    }
+}
+
+fn plan_error(error: RenderPlanCompilerError) -> EngineError {
+    if error.is_result_too_large() {
+        EngineError::ResultTooLarge
+    } else {
+        EngineError::InvalidRequest
     }
 }
 
@@ -210,7 +302,10 @@ mod tests {
             .unwrap();
         engine.create_session(4).unwrap();
 
-        let first = engine.prepare_update(update(0, 0)).unwrap();
+        let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        let first_plan = engine.prepared_plan(first).unwrap();
+        assert_eq!(first_plan.policy_handle, 9);
+        assert_eq!(first_plan.capability_set, 1);
         assert_eq!(
             engine.session_revision(4).unwrap(),
             SessionRevision::default()
@@ -220,13 +315,13 @@ mod tests {
         assert_eq!(first.required_base_revision, 0);
         assert_eq!(first.revision, SessionRevision { engine: 1, plan: 1 });
 
-        let second = engine.prepare_update(update(1, 1)).unwrap();
+        let second = engine.prepare_update(update(1, 1, 1), 2).unwrap();
         let second = engine.commit_update(second).unwrap();
         assert!(!second.checkpoint);
         assert_eq!(second.required_base_revision, 1);
 
         assert_eq!(
-            engine.prepare_update(update(1, 2)),
+            engine.prepare_update(update(1, 2, 1), 3),
             Err(EngineError::RevisionConflict)
         );
         assert_eq!(engine.session_count(), 1);
@@ -241,15 +336,74 @@ mod tests {
             .register_policy(9, validated_policy(TechniqueId(1)))
             .unwrap();
         engine.create_session(4).unwrap();
-        let mut request = update(0, 0);
+        let mut request = update(0, 0, 0);
         request.capability_set = 2;
         assert_eq!(
-            engine.prepare_update(request),
+            engine.prepare_update(request, 1),
             Err(EngineError::InvalidRequest)
         );
         assert_eq!(
             engine.session_revision(4).unwrap(),
             SessionRevision::default()
+        );
+    }
+
+    #[test]
+    fn renderer_fence_acknowledgment_is_monotonic_and_cannot_name_the_pending_publication() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(first).unwrap();
+        let second = engine.prepare_update(update(1, 1, 1), 2).unwrap();
+        engine.commit_update(second).unwrap();
+
+        assert_eq!(
+            engine.prepare_update(update(2, 2, 3), 3),
+            Err(EngineError::RevisionConflict)
+        );
+        assert_eq!(
+            engine.prepare_update(update(2, 2, 0), 3),
+            Err(EngineError::RevisionConflict)
+        );
+    }
+
+    #[test]
+    fn aborting_a_prepared_plan_preserves_revisions_and_allows_retry() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let prepared = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.abort_update(prepared).unwrap();
+        assert_eq!(
+            engine.session_revision(4).unwrap(),
+            SessionRevision::default()
+        );
+        let retry = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(retry).unwrap();
+    }
+
+    #[test]
+    fn a_committed_session_rejects_rebinding_its_policy_identity() {
+        let mut engine = TextEngine::default();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(1)))
+            .unwrap();
+        engine.create_session(4).unwrap();
+        let first = engine.prepare_update(update(0, 0, 0), 1).unwrap();
+        engine.commit_update(first).unwrap();
+
+        engine.dispose_policy(9).unwrap();
+        engine
+            .register_policy(9, validated_policy(TechniqueId(2)))
+            .unwrap();
+        assert_eq!(
+            engine.prepare_update(update(1, 1, 1), 2),
+            Err(EngineError::InvalidRequest)
         );
     }
 
@@ -304,11 +458,16 @@ mod tests {
         .unwrap()
     }
 
-    fn update(expected_engine_revision: u32, consumed_plan_revision: u32) -> UpdateRequest {
+    fn update(
+        expected_engine_revision: u32,
+        consumed_plan_revision: u32,
+        acknowledged_publication_generation: u32,
+    ) -> UpdateRequest {
         UpdateRequest {
             session_id: 4,
             expected_engine_revision,
             consumed_plan_revision,
+            acknowledged_publication_generation,
             policy_handle: 9,
             capability_set: 1,
             limits: super::super::frame::UpdateLimits {

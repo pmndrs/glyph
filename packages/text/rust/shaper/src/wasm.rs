@@ -7,8 +7,7 @@ use crate::{
     STATUS_SESSION_MISSING, ShaperRegistry, bidi,
     engine::{
         EngineError, TextEngine, frame::SessionRevision, frame_wire::parse_update_request,
-        render_plan::RenderPlanView, render_plan_wire::plan_layout, transport::FrameTransport,
-        wire::parse_policy,
+        render_plan_wire::plan_layout, transport::FrameTransport, wire::parse_policy,
     },
     wire::{
         pack_bidi_result, pack_result, parse_bidi_request, parse_reshape_request,
@@ -393,32 +392,45 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
                 }
             }
         };
-        let prepared = match state.engine.prepare_update(request) {
+        let publication_generation = match state
+            .frames
+            .get(&session_id)
+            .and_then(|transport| transport.next_publication_generation().ok())
+        {
+            Some(generation) => generation,
+            None => {
+                return publish_failure(state, session_id, revision, STATUS_RESULT_TOO_LARGE, 0, 0);
+            }
+        };
+        let prepared = match state.engine.prepare_update(request, publication_generation) {
             Ok(prepared) => prepared,
             Err(error) => {
                 return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
             }
         };
-        let policy_fingerprint = match state.engine.policy(request.policy_handle) {
-            Ok(policy) => policy.fingerprint(),
+        let plan = match state.engine.prepared_plan(prepared) {
+            Ok(plan) => plan,
             Err(error) => {
-                return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
+                return publish_prepared_failure(
+                    state,
+                    prepared,
+                    revision,
+                    engine_status(error),
+                    0,
+                    0,
+                );
             }
-        };
-        let plan = RenderPlanView {
-            policy_handle: request.policy_handle,
-            capability_set: request.capability_set,
-            policy_fingerprint,
-            ..RenderPlanView::default()
         };
         let required_output = match plan_layout(plan) {
             Ok(layout) => layout.byte_length,
-            Err(status) => return publish_failure(state, session_id, revision, status, 0, 0),
+            Err(status) => {
+                return publish_prepared_failure(state, prepared, revision, status, 0, 0);
+            }
         };
         if required_output > request.limits.max_output_bytes {
-            return publish_failure(
+            return publish_prepared_failure(
                 state,
-                session_id,
+                prepared,
                 revision,
                 STATUS_RESULT_TOO_LARGE,
                 0,
@@ -426,13 +438,11 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
             );
         }
         let Some(transport) = state.frames.get(&session_id) else {
+            let _ = state.engine.abort_update(prepared);
             return 0;
         };
         if let Err(status) = transport.ensure_publish_capacity(required_output) {
-            return publish_failure(state, session_id, revision, status, 0, required_output);
-        }
-        if let Err(status) = transport.next_publication_generation() {
-            return publish_failure(state, session_id, revision, status, 0, 0);
+            return publish_prepared_failure(state, prepared, revision, status, 0, required_output);
         }
         let staged = match state
             .frames
@@ -441,9 +451,9 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
         {
             Some(staged) => staged,
             None => {
-                return publish_failure(
+                return publish_prepared_failure(
                     state,
-                    session_id,
+                    prepared,
                     revision,
                     STATUS_RESULT_TOO_LARGE,
                     0,
@@ -454,7 +464,14 @@ pub unsafe extern "C" fn pmndrs_text_engine_update(
         let commit = match state.engine.commit_update(prepared) {
             Ok(commit) => commit,
             Err(error) => {
-                return publish_failure(state, session_id, revision, engine_status(error), 0, 0);
+                return publish_prepared_failure(
+                    state,
+                    prepared,
+                    revision,
+                    engine_status(error),
+                    0,
+                    0,
+                );
             }
         };
         let Some(transport) = state.frames.get_mut(&session_id) else {
@@ -642,7 +659,28 @@ fn engine_status(error: EngineError) -> u32 {
         EngineError::RevisionConflict => STATUS_REVISION_CONFLICT,
         EngineError::RevisionExhausted => STATUS_RESULT_TOO_LARGE,
         EngineError::InvalidRequest => STATUS_INVALID_REQUEST,
+        EngineError::ResultTooLarge => STATUS_RESULT_TOO_LARGE,
     }
+}
+
+fn publish_prepared_failure(
+    state: &mut WasmState,
+    prepared: crate::engine::frame::PreparedUpdate,
+    revision: SessionRevision,
+    status: u32,
+    required_request_capacity: u32,
+    required_result_capacity: u32,
+) -> u32 {
+    let session_id = prepared.session_id();
+    let _ = state.engine.abort_update(prepared);
+    publish_failure(
+        state,
+        session_id,
+        revision,
+        status,
+        required_request_capacity,
+        required_result_capacity,
+    )
 }
 
 fn publish_failure(

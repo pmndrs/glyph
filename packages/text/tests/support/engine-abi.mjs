@@ -50,7 +50,10 @@ export function kernelPolicyBytes(abi) {
   ]);
 }
 
-export function engineUpdateBytes(abi, { sessionId, policyHandle, expectedEngineRevision, consumedPlanRevision }) {
+export function engineUpdateBytes(
+  abi,
+  { sessionId, policyHandle, expectedEngineRevision, consumedPlanRevision, acknowledgedPublicationGeneration = 0 },
+) {
   const layout = abi.layouts.engineUpdateRequest;
   const bytes = new Uint8Array(layout.size);
   const view = new DataView(bytes.buffer);
@@ -59,6 +62,7 @@ export function engineUpdateBytes(abi, { sessionId, policyHandle, expectedEngine
   view.setUint32(layout.sessionId, sessionId, true);
   view.setUint32(layout.expectedEngineRevision, expectedEngineRevision, true);
   view.setUint32(layout.consumedPlanRevision, consumedPlanRevision, true);
+  view.setUint32(layout.acknowledgedPublicationGeneration, acknowledgedPublicationGeneration, true);
   view.setUint32(layout.policyHandle, policyHandle, true);
   view.setUint32(layout.capabilitySet, 1, true);
   for (const field of [

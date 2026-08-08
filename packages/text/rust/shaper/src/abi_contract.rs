@@ -137,6 +137,7 @@ struct EngineUpdateRequestHeader {
     session_id: u32,
     expected_engine_revision: u32,
     consumed_plan_revision: u32,
+    acknowledged_publication_generation: u32,
     policy_handle: u32,
     capability_set: u32,
     flags: u32,
@@ -593,6 +594,11 @@ field_offset!(
     ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
     EngineUpdateRequestHeader,
     consumed_plan_revision
+);
+field_offset!(
+    ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
+    EngineUpdateRequestHeader,
+    acknowledged_publication_generation
 );
 field_offset!(
     ENGINE_UPDATE_POLICY_HANDLE,
@@ -1177,6 +1183,7 @@ pub fn json() -> String {
                 "sessionId": ENGINE_UPDATE_SESSION_ID,
                 "expectedEngineRevision": ENGINE_UPDATE_EXPECTED_ENGINE_REVISION,
                 "consumedPlanRevision": ENGINE_UPDATE_CONSUMED_PLAN_REVISION,
+                "acknowledgedPublicationGeneration": ENGINE_UPDATE_ACKNOWLEDGED_PUBLICATION_GENERATION,
                 "policyHandle": ENGINE_UPDATE_POLICY_HANDLE,
                 "capabilitySet": ENGINE_UPDATE_CAPABILITY_SET,
                 "flags": ENGINE_UPDATE_FLAGS,

@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:83743db2511596234438802099b7746463b60b41d7c1515c235f833a3f911a61'
+source_digest: 'sha256:0a8d6555832935707d801b778ebe21b577bbf355aa39249f8e14148dc5681e93'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -386,7 +386,7 @@ remains within measurement variance: baseline-to-current cold/font-size/layout-w
 
 The retained frame shell gives each engine session one 16-byte-aligned request arena and two 16-byte-aligned result
 arenas. Cold creation and reservation may resize them; a warm update reads the already-pinned request and returns the
-selected result pointer in that single call. The compiler-derived request header is 120 bytes. Its section offsets cover
+selected result pointer in that single call. The initial Stage 1 compiler-derived request header was 120 bytes. Its section offsets cover
 text/style mutations, constraints, regions, exclusions, inline objects, and policy parameters; Stage 1 accepts only the
 canonical empty transaction and rejects a nonempty section until its Rust consumer exists. The 144-byte aligned result
 header fixes revisions, base requirements, capacity watermarks, output slot and generation, policy handle, capability
@@ -469,6 +469,18 @@ timing claim before session integration. The required unchanged-path 25,515-glyp
 57.18/12.44/8.58/39.28 ms median and 72.41/15.53/11.32/41.81 ms p95 for cold/font-size/width/text versus the prior
 recorded 54.42/12.15/8.31/38.98 ms medians. The optimized Wasm remains 739,909 raw and 214,395 Brotli bytes, so the
 dispatcher is still LTO-stripped and the table is baseline run variance rather than a planner performance result.
+
+Engine sessions now own the Rust allocation-strategy dispatcher. The compiler-derived request grows from 120 to 124
+bytes for `acknowledgedPublicationGeneration`, a renderer-fence field independent from `consumedPlanRevision`. Rust
+requires acknowledgment to be monotonic and no newer than the last successful publication. The update path prepares and
+views the session plan, stages it in the inactive result arena, commits planner and revision state only after successful
+serialization, and aborts the planner on every failure. A session pins its first committed policy handle/fingerprint;
+capability sets may change within that policy, but replacing the policy beneath retained buffers fails before mutation.
+Focused host and compiled-Wasm tests cover future/stale fences, abort/retry, unchanged A/B publication, and policy
+identity. The now-reachable planners increase the optimized artifact from 739,909 / 272,624 / 214,395 to
+822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. This is a measured shared-runtime cost and a pending optimization
+target. Nonempty mutation sections remain rejected, so sessions currently publish an empty Rust plan; there is no Rust
+shaping/layout performance result yet, and the TypeScript layout table above remains baseline-only.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

@@ -5,6 +5,7 @@ pub(crate) struct UpdateRequest {
     pub session_id: u32,
     pub expected_engine_revision: u32,
     pub consumed_plan_revision: u32,
+    pub acknowledged_publication_generation: u32,
     pub policy_handle: u32,
     pub capability_set: u32,
     pub limits: UpdateLimits,
@@ -46,6 +47,15 @@ pub(crate) struct PreparedUpdate {
     pub(super) next: SessionRevision,
     pub(super) required_base_revision: u32,
     pub(super) checkpoint: bool,
+    pub(super) policy_handle: u32,
+    pub(super) capability_set: u32,
+    pub(super) policy_fingerprint: u64,
+}
+
+impl PreparedUpdate {
+    pub(crate) fn session_id(self) -> u32 {
+        self.session_id
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
