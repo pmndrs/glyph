@@ -7,6 +7,7 @@ use crate::{
 };
 
 use super::{
+    cluster_state::ClusterArena,
     font_binding::FontRenderBinding,
     frame::{CommittedUpdate, PreparedUpdate, SessionRevision, UpdateRequest},
     policy::{CapabilitySetId, ValidatedPolicy},
@@ -91,6 +92,8 @@ struct EngineSession {
     pending_shaping_runs: ShapingRunArena,
     shape: ShapeArena,
     pending_shape: ShapeArena,
+    clusters: ClusterArena,
+    pending_clusters: ClusterArena,
     fallback_spans: Vec<FallbackSpan>,
     pending_fallback_spans: Vec<FallbackSpan>,
     fallback_span_scratch: Vec<FallbackSpan>,
@@ -104,6 +107,7 @@ struct EngineSession {
     bidi_prepared: bool,
     shaping_runs_prepared: bool,
     shape_prepared: bool,
+    clusters_prepared: bool,
     geometry_fingerprint: u64,
     pending_geometry_fingerprint: u64,
     geometry_prepared: bool,
@@ -337,6 +341,8 @@ impl TextEngine {
         let glyph_capacity = capacity.saturating_mul(2);
         session.shape.reserve(glyph_capacity)?;
         session.pending_shape.reserve(glyph_capacity)?;
+        session.clusters.reserve(capacity)?;
+        session.pending_clusters.reserve(capacity)?;
         reserve_vec(&mut session.fallback_spans, capacity)?;
         reserve_vec(&mut session.pending_fallback_spans, capacity)?;
         reserve_vec(&mut session.fallback_span_scratch, capacity)?;
@@ -490,15 +496,25 @@ impl TextEngine {
             session.abort_bidi();
             return Err(error);
         }
-        if let Some(shaper) = shaper
-            && let Err(error) = session.prepare_shape(shaper, font_stacks)
-        {
-            session.abort_text();
-            session.abort_styles();
-            session.abort_unicode();
-            session.abort_bidi();
-            session.abort_shaping_runs();
-            return Err(error);
+        if let Some(shaper) = shaper {
+            if let Err(error) = session.prepare_shape(shaper, font_stacks) {
+                session.abort_text();
+                session.abort_styles();
+                session.abort_unicode();
+                session.abort_bidi();
+                session.abort_shaping_runs();
+                return Err(error);
+            }
+            if let Err(error) = session.prepare_clusters(shaper) {
+                session.abort_text();
+                session.abort_styles();
+                session.abort_unicode();
+                session.abort_bidi();
+                session.abort_shaping_runs();
+                session.abort_shape();
+                session.abort_clusters();
+                return Err(error);
+            }
         }
         if let Err(error) = session.prepare_geometry(request.geometry) {
             session.abort_text();
@@ -507,6 +523,7 @@ impl TextEngine {
             session.abort_bidi();
             session.abort_shaping_runs();
             session.abort_shape();
+            session.abort_clusters();
             return Err(error);
         }
         if let Err(error) = gather.gather(
@@ -530,6 +547,7 @@ impl TextEngine {
             session.abort_bidi();
             session.abort_shaping_runs();
             session.abort_shape();
+            session.abort_clusters();
             session.abort_geometry();
             return Err(gather_error(error));
         }
@@ -548,6 +566,7 @@ impl TextEngine {
             session.abort_bidi();
             session.abort_shaping_runs();
             session.abort_shape();
+            session.abort_clusters();
             session.abort_geometry();
             return Err(plan_error(error));
         }
@@ -599,6 +618,7 @@ impl TextEngine {
         session.abort_bidi();
         session.abort_shaping_runs();
         session.abort_shape();
+        session.abort_clusters();
         session.abort_geometry();
         Ok(())
     }
@@ -621,6 +641,7 @@ impl TextEngine {
         session.commit_bidi();
         session.commit_shaping_runs();
         session.commit_shape();
+        session.commit_clusters();
         session.commit_geometry();
         session.policy_binding = Some(PolicyBinding {
             handle: prepared.policy_handle,
@@ -1028,6 +1049,60 @@ impl EngineSession {
             core::mem::swap(&mut self.fallback_spans, &mut self.pending_fallback_spans);
         }
         self.abort_shape();
+    }
+
+    fn prepare_clusters(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+        self.abort_clusters();
+        if !self.shape_prepared {
+            return Ok(());
+        }
+        let text = if self.text_prepared {
+            self.pending_text.as_slice()
+        } else {
+            self.text.as_slice()
+        };
+        let unicode = if self.unicode_prepared {
+            &self.pending_unicode
+        } else {
+            &self.unicode
+        };
+        let styles = if self.styles_prepared {
+            self.pending_resolved_styles.segments()
+        } else {
+            self.resolved_styles.segments()
+        };
+        let runs = if self.shaping_runs_prepared {
+            self.pending_shaping_runs.runs()
+        } else {
+            self.shaping_runs.runs()
+        };
+        if runs.is_empty() {
+            self.pending_clusters.clear();
+            self.clusters_prepared = true;
+            return Ok(());
+        }
+        self.pending_clusters.build(
+            text,
+            unicode,
+            styles,
+            runs,
+            &self.pending_shape,
+            |handle| shaper.font_metrics(handle),
+        )?;
+        self.clusters_prepared = true;
+        Ok(())
+    }
+
+    fn abort_clusters(&mut self) {
+        self.pending_clusters.clear();
+        self.clusters_prepared = false;
+    }
+
+    fn commit_clusters(&mut self) {
+        if self.clusters_prepared {
+            core::mem::swap(&mut self.clusters, &mut self.pending_clusters);
+        }
+        self.abort_clusters();
     }
 
     fn prepare_geometry(

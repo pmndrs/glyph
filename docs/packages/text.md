@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:6a323c3e295101f2919510e10cd1e6b3da9d5970a5846a9c41e66a2b0faa9fa8'
+source_digest: 'sha256:41917a3e5f759cd02ddb43da0a38d1ea178dda666cad7a410c4e84c0bbcb5103'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -670,6 +670,8 @@ One `shapeBatch` or `reshapeRanges` call packs validated UTF-16, run, feature, l
 Roadmap item 5.1 adds synchronous paragraph preparation and measurement. Unicode 17 Script/Script_Extensions tables are generated deterministically from the pinned UCD package; `unicode-segmenter` supplies extended grapheme boundaries and `@cto.af/linebreak` supplies line-break opportunities. The ordinary suite executes all 766 official grapheme vectors and all 19,338 official line-break vectors from hash-pinned gzip fixtures. Prepared text is split only at grapheme-safe style/script boundaries, shaped once through the existing GLB-retained HarfRust path, copied immediately out of its borrowed result arena, and measured into legal break clusters with explicit baselines. Equivalent width constraints reuse frozen measurement objects and width-only reflow performs zero Wasm calls.
 
 The target Rust frame path now derives the same line opportunities internally. Its generator resolves the pinned `@cto.af/linebreak` property trie into a compact Rust scalar partition, and a specialized allocation-reusing `no_std` evaluator ports the ordered UAX #14 rules while retaining the upstream MIT notice. The Rust lane independently passes all 19,338 unchanged official Unicode 17 line-break vectors at canonical UTF-16 offsets; its results are retained with the session's transactional Unicode analysis rather than serialized through the legacy shaping ABI.
+
+The same frame path aggregates final fallback glyphs into a retained grapheme-cluster SoA. It keeps ordered double-precision advances, compact shaping/line-break flags, style/source/font identities, and a UTF-16 offset index. Font UPEM and horizontal line metrics are parsed once at registration; glyph design-unit advances are scaled once per contributing final font, and authored letter/word spacing joins that accumulation without constructing per-cluster objects. Optional Unicode line opportunities survive only where the next cluster is safe according to HarfRust output.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

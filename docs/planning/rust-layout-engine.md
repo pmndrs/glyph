@@ -899,6 +899,16 @@ offsets, and required CRLF/end breaks have focused tests. Optimized Wasm is 1,00
 bytes (+27,104 / +8,870 / +5,436). Cluster measurement, composition, nonempty plan output, and complete-path timing remain
 open.
 
+Retained cluster measurement now consumes final fallback-shaped glyphs and Unicode analysis without a host view. One A/B
+SoA stores grapheme UTF-16 bounds, `f64` logical advances, compact safe/allowed/required/hard-break flags, resolved-style
+index, source-run/font identity, and one offset-to-cluster index. Glyph advances remain `i32` design units until the
+cluster pass scales them once with font size and cached UPEM; letter spacing, word spacing, and hard-break width are
+applied in that same ordered accumulation. UAX #14 opportunities are admitted only at a HarfRust-safe next cluster.
+Synthetic exact tests cover scaling, both spacing lanes, hard breaks, allowed/required flags, unsafe suppression, and
+capacity reuse; real-font compiled Wasm reaches the pass for primary and fallback text. Optimized Wasm is 1,014,577 /
+379,510 / 295,708 raw/gzip/Brotli bytes (+5,117 / +2,457 / -167). The Brotli change is recorded as compressor interaction,
+not a performance claim. Line composition, nonempty plan output, and complete-path timing remain open.
+
 ## Performance contract
 
 Text does not own an 8.33 ms frame. The hard warm-update ceiling is p95 < 4.0 ms from mutation submission through a
