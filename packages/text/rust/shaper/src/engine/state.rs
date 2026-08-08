@@ -1639,6 +1639,7 @@ fn gather_error(error: GatherError) -> EngineError {
         GatherError::InvalidSemanticShape
         | GatherError::FontBindingMissing
         | GatherError::GlyphBindingMissing
+        | GatherError::ResourceBindingMissing
         | GatherError::ProgramMissing
         | GatherError::SourceFieldMissing => EngineError::InvalidRequest,
     }

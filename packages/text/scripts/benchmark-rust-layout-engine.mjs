@@ -5,31 +5,36 @@
   "writes": "stdout only"
 } */
 import { readFile } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
 
 import { validateFontArtifact } from '@pmndrs/text-font-baker/validate';
+import { validateBitmapArtifact } from '@pmndrs/text/bakers/bitmap/validate';
+import { validateMsdfArtifact } from '@pmndrs/text/bakers/msdf/validate';
+import { validateSlugArtifact } from '@pmndrs/text/bakers/slug/validate';
+import { bitmapDescriptor } from '@pmndrs/text/raster/bitmap';
+import { msdfDescriptor } from '@pmndrs/text/raster/msdf';
+import { slugDescriptor } from '@pmndrs/text/raster/slug';
 
 import { paragraphTextForGlyphs } from './support/paragraph-benchmark-fixture.mts';
-import {
-  copyIntoAllocation,
-  engineFrameUpdateBytes,
-  fontBindingBytes,
-  renderPolicyBytes,
-} from '../tests/support/engine-abi.mjs';
+import { copyIntoAllocation, engineFrameUpdateBytes } from '../tests/support/engine-abi.mjs';
+import { techniqueProof } from './support/render-technique-proof.mjs';
 
 const options = parseArguments(process.argv.slice(2));
 const sessionId = 1;
 const policyHandle = 1;
 const fontHandle = 1;
 const fontStackHandle = 1;
-const outputCapacity = 4 * 1024 * 1024;
 const regionHeight = options.height;
 
 const [wasm, abi, artifact] = await Promise.all([
   readFile(new URL('../dist/text_shaper.wasm', import.meta.url)),
   readFile(new URL('../dist/text-shaper-abi-v0.json', import.meta.url), 'utf8').then(JSON.parse),
-  readFile(new URL('../../../apps/benchmarks/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url)),
+  loadArtifact(options.technique),
 ]);
 const validated = await validateFontArtifact(artifact);
+const raster = await validateRaster(options.technique, artifact, validated);
+const technique = techniqueProof(abi, options.technique, raster);
+const outputCapacity = technique.outputBytesPerGlyph > 48 ? 8 * 1024 * 1024 : 4 * 1024 * 1024;
 const instance = await WebAssembly.instantiate(await WebAssembly.compile(wasm), {});
 const memory = instance.exports[abi.memory];
 const fn = Object.fromEntries(
@@ -61,7 +66,7 @@ const initial = updateBytes({
 let sessionMemory;
 
 console.log(
-  `memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
+  `technique=${options.technique} output=${technique.outputBytesPerGlyph} bytes/glyph · memory bytes: instantiate=${memoryAtInstantiation}, initialize=${memoryAfterInitialize}, registered=${memoryAfterRegistration}`,
 );
 
 const reports = [];
@@ -214,15 +219,7 @@ function registerFont() {
 }
 
 function registerBinding() {
-  const glyphCount = validated.glyphExtents.byteLength / 8;
-  const bytes = fontBindingBytes(abi, {
-    techniqueId: 1,
-    glyphCount,
-    strikes: [0],
-    resources: [{ id: 1, generation: 1, kind: 1, reference: 1 }],
-    resourceIndices: new Array(glyphCount).fill(0),
-    glyphF32: [new Array(glyphCount).fill(1)],
-  });
+  const bytes = technique.bindingBytes;
   const pointer = copyIntoAllocation(memory, fn.allocate, bytes);
   requireStatus(fn.registerFontBinding(fontHandle, pointer, bytes.byteLength), 'register font binding');
   fn.deallocate(pointer, bytes.byteLength);
@@ -236,7 +233,7 @@ function registerStack() {
 }
 
 function registerPolicy() {
-  const bytes = renderPolicyBytes(abi);
+  const bytes = technique.policyBytes;
   const pointer = copyIntoAllocation(memory, fn.allocate, bytes);
   requireStatus(fn.registerPolicy(policyHandle, pointer, bytes.byteLength), 'register render policy');
   fn.deallocate(pointer, bytes.byteLength);
@@ -258,10 +255,10 @@ function summarize(name, glyphs, samples) {
 
 function printReport(caseReports) {
   console.log(
-    `\ncomplete Rust text_update · ${caseReports[0]?.glyphs ?? 0} laid-out glyphs (${options.glyphs} fixture target) · ${options.warmup} warmup · ${options.repetitions} measured`,
+    `\ncomplete Rust text_update + ${options.technique} render plan · ${caseReports[0]?.glyphs ?? 0} renderable instances (${options.glyphs} fixture target) · ${options.warmup} warmup · ${options.repetitions} measured`,
   );
   console.log(
-    `${'case'.padEnd(16)}${'glyphs'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}`,
+    `${'case'.padEnd(16)}${'instances'.padStart(9)}${'median'.padStart(11)}${'p95'.padStart(11)}${'min'.padStart(11)}${'rsd'.padStart(9)}`,
   );
   for (const report of caseReports) {
     console.log(
@@ -287,9 +284,51 @@ function parseArguments(arguments_) {
     return index === -1 ? fallback : Number.parseInt(arguments_[index + 1], 10);
   };
   return {
+    technique: normalizeTechnique(readString('--technique', 'bitmap')),
     glyphs: read('--glyphs', 22_000),
     height: read('--height', 100_000),
     repetitions: read('--reps', 11),
     warmup: read('--warmup', 5),
   };
+
+  function readString(name, fallback) {
+    const index = arguments_.indexOf(name);
+    return index === -1 ? fallback : arguments_[index + 1];
+  }
+}
+
+function normalizeTechnique(value) {
+  const name = value === 'msdf' ? 'mtsdf' : value;
+  if (!['bitmap', 'mtsdf', 'slug'].includes(name)) {
+    throw new RangeError('--technique must be bitmap, mtsdf, msdf, or slug');
+  }
+  return name;
+}
+
+async function loadArtifact(techniqueName) {
+  const fixtures = {
+    bitmap: ['inter-bitmap-16.font.glb', false],
+    mtsdf: ['inter-mtsdf.font.glb.gz', true],
+    slug: ['inter-slug.font.glb.gz', true],
+  };
+  const [file, compressed] = fixtures[techniqueName];
+  const bytes = await readFile(new URL(`../../../apps/benchmarks/fixtures/rendering/${file}`, import.meta.url));
+  return compressed ? gunzipSync(bytes) : bytes;
+}
+
+async function validateRaster(techniqueName, bytes, core) {
+  const rasterIdentity = core.document.extensions.PMNDRS_font.rasters[0];
+  const context = {
+    rasterKey: rasterIdentity.rasterKey,
+    shapingHash: core.shapingHash,
+    glyphCount: core.glyphCount,
+    glyphIdWidth: 16,
+  };
+  if (techniqueName === 'bitmap') {
+    return validateBitmapArtifact(bytes, { ...context, descriptor: bitmapDescriptor({ strikes: [16] }) });
+  }
+  if (techniqueName === 'mtsdf') {
+    return validateMsdfArtifact(bytes, { ...context, descriptor: msdfDescriptor() });
+  }
+  return validateSlugArtifact(bytes, { ...context, descriptor: slugDescriptor() });
 }

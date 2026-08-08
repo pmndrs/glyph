@@ -4,6 +4,10 @@ use alloc::vec::Vec;
 
 use super::{
     font_binding::{FontRenderBinding, SelectedGlyphBinding},
+    frame::{
+        SEMANTIC_F32_FOREGROUND_ALPHA, SEMANTIC_F32_FOREGROUND_BLUE, SEMANTIC_F32_FOREGROUND_GREEN,
+        SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_U32_FOREGROUND_RGBA,
+    },
     plan_input::{PlanGlyph, PlanInput},
     policy::{CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedPolicy},
 };
@@ -41,6 +45,7 @@ pub enum GatherError {
     InvalidSemanticShape,
     FontBindingMissing,
     GlyphBindingMissing,
+    ResourceBindingMissing,
     ProgramMissing,
     SourceFieldMissing,
 }
@@ -112,9 +117,11 @@ impl PolicyGatherWorkspace {
             let glyph = input.glyphs[glyph_index];
             let binding =
                 binding_for_font(glyph.font_handle).ok_or(GatherError::FontBindingMissing)?;
-            let selected = binding
-                .select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
-                .ok_or(GatherError::GlyphBindingMissing)?;
+            let Some(selected) =
+                binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
+            else {
+                continue;
+            };
             let program = policy
                 .program(
                     capability_set,
@@ -127,9 +134,9 @@ impl PolicyGatherWorkspace {
                 .resources()
                 .get(
                     usize::try_from(selected.resource)
-                        .map_err(|_| GatherError::GlyphBindingMissing)?,
+                        .map_err(|_| GatherError::ResourceBindingMissing)?,
                 )
-                .ok_or(GatherError::GlyphBindingMissing)?;
+                .ok_or(GatherError::ResourceBindingMissing)?;
             self.glyphs.push(PlanGlyph {
                 stable_id: glyph.stable_id,
                 content_revision: glyph.content_revision,
@@ -320,6 +327,9 @@ fn source_f32(
 ) -> Result<f32, GatherError> {
     let (table, row) = match scope {
         InputScope::Semantic => {
+            if let Some(value) = derived_semantic_f32(field, input, glyph_index)? {
+                return Ok(value);
+            }
             return input
                 .semantic_f32
                 .get(usize::from(field))
@@ -339,6 +349,36 @@ fn source_f32(
         .and_then(|values| values.get(row))
         .copied()
         .ok_or(GatherError::SourceFieldMissing)
+}
+
+fn derived_semantic_f32(
+    field: u8,
+    input: LayoutPlanInput<'_>,
+    glyph_index: usize,
+) -> Result<Option<f32>, GatherError> {
+    if field == SEMANTIC_F32_INVERSE_FONT_SIZE {
+        let font_size = input
+            .glyphs
+            .get(glyph_index)
+            .map(|glyph| glyph.font_size)
+            .ok_or(GatherError::SourceFieldMissing)?;
+        return Ok(Some(1.0 / font_size));
+    }
+    let shift = match field {
+        SEMANTIC_F32_FOREGROUND_RED => 24,
+        SEMANTIC_F32_FOREGROUND_GREEN => 16,
+        SEMANTIC_F32_FOREGROUND_BLUE => 8,
+        SEMANTIC_F32_FOREGROUND_ALPHA => 0,
+        _ => return Ok(None),
+    };
+    let packed = input
+        .semantic_u32
+        .get(usize::from(SEMANTIC_U32_FOREGROUND_RGBA))
+        .and_then(|values| values.get(glyph_index))
+        .copied()
+        .ok_or(GatherError::SourceFieldMissing)?;
+    let channel = (packed >> shift) & 0xff;
+    Ok(Some((f64::from(channel) / 255.0) as f32))
 }
 
 fn source_u32(
@@ -417,6 +457,37 @@ mod tests {
     use alloc::vec;
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
+
+    #[test]
+    fn derives_policy_color_channels_and_inverse_font_size_without_retained_arrays() {
+        let glyphs = [layout_glyph(1, 0)];
+        let foreground = [0x8040_20ff];
+        let input = LayoutPlanInput {
+            glyphs: &glyphs,
+            semantic_f32: &[],
+            semantic_u32: &[&foreground],
+        };
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_RED, input, 0),
+            Ok(Some((128.0_f64 / 255.0) as f32))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_GREEN, input, 0),
+            Ok(Some((64.0_f64 / 255.0) as f32))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_BLUE, input, 0),
+            Ok(Some((32.0_f64 / 255.0) as f32))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_FOREGROUND_ALPHA, input, 0),
+            Ok(Some(1.0))
+        );
+        assert_eq!(
+            derived_semantic_f32(SEMANTIC_F32_INVERSE_FONT_SIZE, input, 0),
+            Ok(Some(1.0 / 16.0))
+        );
+    }
 
     #[test]
     fn gathers_program_specific_sources_without_a_union_record() {
