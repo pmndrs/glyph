@@ -1,8 +1,8 @@
 //! Direct-memory decoding for the retained engine update transaction.
 //!
 //! The compiler-derived offsets in `abi_contract` remain the sole layout authority. Stage 1
-//! accepts the complete fixed header but deliberately rejects nonempty mutation sections until
-//! their Rust semantic consumers land; no request can silently fall back to TypeScript logic.
+//! admits only semantic sections whose Rust consumer has landed; no request can silently fall
+//! back to TypeScript logic.
 
 use crate::{
     STATUS_INVALID_REQUEST,
@@ -24,13 +24,19 @@ use crate::{
         ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET, ENGINE_UPDATE_TEXT_MUTATION_COUNT,
         ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET,
     },
-    engine::frame::{UpdateLimits, UpdateRequest},
+    engine::{
+        frame::{UpdateLimits, UpdateRequest},
+        semantic_wire::parse_text_mutations,
+    },
     wire::read_u32,
 };
 
 const MAX_DECLARED_OUTPUT_BYTES: u32 = 64 * 1024 * 1024;
 
-pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<UpdateRequest, u32> {
+pub(crate) fn parse_update_request(
+    bytes: &[u8],
+    session_id: u32,
+) -> Result<UpdateRequest<'_>, u32> {
     if bytes.len() < ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize
         || read_u32(bytes, ENGINE_UPDATE_ABI_VERSION)? != ABI_VERSION
         || read_u32(bytes, ENGINE_UPDATE_SESSION_ID)? != session_id
@@ -43,10 +49,6 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
     }
 
     for (offset, count) in [
-        (
-            ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET,
-            ENGINE_UPDATE_TEXT_MUTATION_COUNT,
-        ),
         (
             ENGINE_UPDATE_STYLE_MUTATIONS_OFFSET,
             ENGINE_UPDATE_STYLE_MUTATION_COUNT,
@@ -73,10 +75,6 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
             return Err(STATUS_INVALID_REQUEST);
         }
     }
-    if bytes.len() != ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize {
-        return Err(STATUS_INVALID_REQUEST);
-    }
-
     let limits = UpdateLimits {
         max_clusters: positive(bytes, ENGINE_UPDATE_MAX_CLUSTERS)?,
         max_lines: positive(bytes, ENGINE_UPDATE_MAX_LINES)?,
@@ -92,6 +90,18 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
     {
         return Err(STATUS_INVALID_REQUEST);
     }
+    let text_mutation_count = read_u32(bytes, ENGINE_UPDATE_TEXT_MUTATION_COUNT)?;
+    if text_mutation_count > limits.max_clusters {
+        return Err(STATUS_INVALID_REQUEST);
+    }
+    let text_mutations = parse_text_mutations(
+        bytes,
+        read_u32(bytes, ENGINE_UPDATE_TEXT_MUTATIONS_OFFSET)?,
+        text_mutation_count,
+    )?;
+    if text_mutation_count == 0 && bytes.len() != ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize {
+        return Err(STATUS_INVALID_REQUEST);
+    }
     Ok(UpdateRequest {
         session_id,
         expected_engine_revision: read_u32(bytes, ENGINE_UPDATE_EXPECTED_ENGINE_REVISION)?,
@@ -103,6 +113,7 @@ pub(crate) fn parse_update_request(bytes: &[u8], session_id: u32) -> Result<Upda
         policy_handle: read_u32(bytes, ENGINE_UPDATE_POLICY_HANDLE)?,
         capability_set: positive(bytes, ENGINE_UPDATE_CAPABILITY_SET)?,
         limits,
+        text_mutations,
     })
 }
 

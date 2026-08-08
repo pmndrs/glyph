@@ -52,10 +52,23 @@ export function kernelPolicyBytes(abi) {
 
 export function engineUpdateBytes(
   abi,
-  { sessionId, policyHandle, expectedEngineRevision, consumedPlanRevision, acknowledgedPublicationGeneration = 0 },
+  {
+    sessionId,
+    policyHandle,
+    expectedEngineRevision,
+    consumedPlanRevision,
+    acknowledgedPublicationGeneration = 0,
+    textMutations = [],
+  },
 ) {
   const layout = abi.layouts.engineUpdateRequest;
-  const bytes = new Uint8Array(layout.size);
+  const mutationLayout = abi.layouts.engineTextMutation;
+  const mutationsOffset = textMutations.length === 0 ? 0 : align(layout.size, mutationLayout.alignment);
+  const recordsEnd =
+    textMutations.length === 0 ? layout.size : mutationsOffset + textMutations.length * mutationLayout.size;
+  const payloadOffset = align(recordsEnd, 2);
+  const payloadLength = textMutations.reduce((total, mutation) => total + mutation.insert.length * 2, 0);
+  const bytes = new Uint8Array(payloadOffset + payloadLength);
   const view = new DataView(bytes.buffer);
   view.setUint32(layout.abiVersion, abi.version, true);
   view.setUint32(layout.byteLength, bytes.byteLength, true);
@@ -73,9 +86,27 @@ export function engineUpdateBytes(
     'maxInlineObjects',
     'maxSlotsPerBand',
   ]) {
-    view.setUint32(layout[field], 1, true);
+    view.setUint32(layout[field], field === 'maxClusters' ? Math.max(1, textMutations.length) : 1, true);
   }
   view.setUint32(layout.maxOutputBytes, abi.layouts.engineResult.size, true);
+  view.setUint32(layout.textMutationsOffset, mutationsOffset, true);
+  view.setUint32(layout.textMutationCount, textMutations.length, true);
+  let insertOffset = payloadOffset;
+  for (const [index, mutation] of textMutations.entries()) {
+    const record = mutationsOffset + index * mutationLayout.size;
+    view.setUint8(record + mutationLayout.opcode, abi.engine.textMutationOpcodes.replaceUtf16);
+    view.setUint8(record + mutationLayout.encoding, abi.engine.textEncodings.utf16Le);
+    view.setUint32(record + mutationLayout.textStart, mutation.start, true);
+    view.setUint32(record + mutationLayout.deleteCount, mutation.deleteCount, true);
+    if (mutation.insert.length > 0) {
+      view.setUint32(record + mutationLayout.insertOffset, insertOffset, true);
+      view.setUint32(record + mutationLayout.insertCount, mutation.insert.length, true);
+      for (const unit of mutation.insert) {
+        view.setUint16(insertOffset, unit, true);
+        insertOffset += 2;
+      }
+    }
+  }
   return bytes;
 }
 

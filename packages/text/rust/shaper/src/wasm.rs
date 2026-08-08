@@ -133,6 +133,7 @@ pub extern "C" fn pmndrs_text_engine_create_session(
     handle: u32,
     request_capacity: u32,
     result_capacity: u32,
+    text_capacity: u32,
 ) -> u32 {
     with_state(|state| {
         if handle == 0 {
@@ -148,6 +149,15 @@ pub extern "C" fn pmndrs_text_engine_create_session(
         if let Err(error) = state.engine.create_session(handle) {
             return engine_status(error);
         }
+        let text_capacity = if text_capacity == 0 {
+            crate::engine::frame::DEFAULT_SESSION_TEXT_CAPACITY
+        } else {
+            text_capacity
+        };
+        if let Err(error) = state.engine.reserve_session_text(handle, text_capacity) {
+            let _ = state.engine.dispose_session(handle);
+            return engine_status(error);
+        }
         state.frames.insert(handle, transport);
         0
     })
@@ -158,15 +168,21 @@ pub extern "C" fn pmndrs_text_engine_reserve_session(
     handle: u32,
     request_capacity: u32,
     result_capacity: u32,
+    text_capacity: u32,
 ) -> u32 {
     with_state(|state| {
         let Some(transport) = state.frames.get_mut(&handle) else {
             return STATUS_SESSION_MISSING;
         };
-        match transport.reserve(request_capacity, result_capacity) {
-            Ok(()) => 0,
-            Err(status) => status,
+        if let Err(status) = transport.reserve(request_capacity, result_capacity) {
+            return status;
         }
+        if text_capacity != 0
+            && let Err(error) = state.engine.reserve_session_text(handle, text_capacity)
+        {
+            return engine_status(error);
+        }
+        0
     })
 }
 

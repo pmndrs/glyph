@@ -22,6 +22,7 @@ pub mod policy;
 pub mod render_plan;
 pub mod render_plan_compiler;
 pub(crate) mod render_plan_wire;
+mod semantic_wire;
 #[cfg_attr(not(test), allow(dead_code))]
 mod stable_order;
 pub mod stable_plan;

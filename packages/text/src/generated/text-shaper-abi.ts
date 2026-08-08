@@ -38,6 +38,7 @@ export const textShaperAbi = {
       "orderedDirect": 1,
       "stableIndirect": 2
     },
+    "defaultSessionTextCapacity": 1024,
     "flowShapeKinds": {
       "polygon": 2,
       "rectangle": 1
@@ -85,6 +86,9 @@ export const textShaperAbi = {
     "styleMutationOpcodes": {
       "remove": 2,
       "upsert": 1
+    },
+    "textEncodings": {
+      "utf16Le": 1
     },
     "textMutationOpcodes": {
       "replaceUtf16": 1
