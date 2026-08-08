@@ -350,15 +350,19 @@ function paragraphLayoutValidation(values: readonly import('./contracts').Benchm
     if (
       value.hash !== 'bb15bbcc:4f111a3f:e8c0e9d5' ||
       value.metrics?.shapeBoundaryCrossings !== 1 ||
-      value.metrics.reshapeBoundaryCrossings !== 2 ||
+      // Zero, because boundary reshaping requested the whole run as context and so returned the glyphs the retained
+      // shape already held. The pinned hash above is unchanged by removing it, which is the proof.
+      value.metrics.reshapeBoundaryCrossings !== 0 ||
       value.metrics.batchedBoundaryLayouts !== 2 ||
       value.metrics.layoutCount !== 3 ||
       value.metrics.glyphCount !== 165
     ) {
-      throw new Error('Paragraph layout sample did not preserve its exact SoA and batch contract');
+      throw new Error(
+        `Paragraph layout sample did not preserve its exact SoA and batch contract: hash=${value.hash} shape=${String(value.metrics?.shapeBoundaryCrossings)} reshape=${String(value.metrics?.reshapeBoundaryCrossings)} batched=${String(value.metrics?.batchedBoundaryLayouts)} layouts=${String(value.metrics?.layoutCount)} glyphs=${String(value.metrics?.glyphCount)}`,
+      );
     }
   }
-  return `${values.length}/${values.length} exact positioned outputs · 1 reshape batch/changed width`;
+  return `${values.length}/${values.length} exact positioned outputs · no reshape crossings`;
 }
 
 function paragraphPolicyValidation(values: readonly import('./contracts').BenchmarkMeasurement[]): string {
@@ -371,9 +375,11 @@ function paragraphPolicyValidation(values: readonly import('./contracts').Benchm
       value.metrics.uikitMeasurementCount !== 25 ||
       value.metrics.uikitLayoutCount !== 1 ||
       value.metrics.shapeBoundaryCrossings !== 4 ||
-      value.metrics.reshapeBoundaryCrossings !== 5
+      value.metrics.reshapeBoundaryCrossings !== 0
     ) {
-      throw new Error('Paragraph policy sample did not preserve its bidi, policy, and uikit contract');
+      throw new Error(
+        `Paragraph policy sample did not preserve its bidi, policy, and uikit contract: hash=${value.hash} shape=${String(value.metrics?.shapeBoundaryCrossings)} reshape=${String(value.metrics?.reshapeBoundaryCrossings)}`,
+      );
     }
   }
   return `${values.length}/${values.length} exact bidi/policy outputs · current-uikit-shaped flow`;

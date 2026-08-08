@@ -10,11 +10,11 @@
       "label": "Browser core",
       "status": "measured",
       "format": "javascript",
-      "sha256": "bf7bb68a228a5ace41beb54fd8680696b3774d76018c7859beed730f94178084",
-      "rawBytes": 379892,
-      "minifiedBytes": 281093,
-      "gzipBytes": 81398,
-      "brotliBytes": 62703
+      "sha256": "558b69a9746e5f27ec16e6ed974d75d2102b122d6bbde78a3a44f6cc14f9ec9d",
+      "rawBytes": 387922,
+      "minifiedBytes": 283664,
+      "gzipBytes": 82269,
+      "brotliBytes": 63452
     },
     {
       "id": "font-validator-js",
@@ -219,11 +219,11 @@
       "label": "Unicode 17 analysis JS",
       "status": "measured",
       "format": "javascript",
-      "sha256": "6b00639c8e68585691bfe19714f98aa845276b9aef1fa3fe1541c49f8a97c4fb",
-      "rawBytes": 164786,
-      "minifiedBytes": 139936,
-      "gzipBytes": 42047,
-      "brotliBytes": 30989
+      "sha256": "7b4320ddbb5d713a92337daa13f762ef9f56ba3e2bb0ffd3ef2354a702d8a1d7",
+      "rawBytes": 167796,
+      "minifiedBytes": 141127,
+      "gzipBytes": 42406,
+      "brotliBytes": 31287
     }
   ]
 }
