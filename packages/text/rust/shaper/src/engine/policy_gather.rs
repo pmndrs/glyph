@@ -112,28 +112,74 @@ impl PolicyGatherWorkspace {
         policy: &ValidatedPolicy,
         capability_set: CapabilitySetId,
         input: LayoutPlanInput<'_>,
+        force_all_inputs: bool,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<(), GatherError> {
         validate_semantic_shape(input)?;
         self.reserve_policy(policy, input.glyphs.len())?;
         self.clear();
+        let semantic_changes = if input.semantic_change_masks.len() == input.glyphs.len() {
+            input
+                .semantic_change_masks
+                .iter()
+                .copied()
+                .fold(0_u16, |union, mask| union | mask)
+        } else {
+            super::positioning::ALL_SEMANTIC_CHANGES
+        };
+        let mut cached_font_handle = None;
+        let mut cached_binding = None;
+        let mut cached_program = None;
         for glyph_index in 0..input.glyphs.len() {
             let glyph = input.glyphs[glyph_index];
-            let binding =
-                binding_for_font(glyph.font_handle).ok_or(GatherError::FontBindingMissing)?;
+            let binding = if cached_font_handle == Some(glyph.font_handle) {
+                cached_binding.ok_or(GatherError::FontBindingMissing)?
+            } else {
+                let binding =
+                    binding_for_font(glyph.font_handle).ok_or(GatherError::FontBindingMissing)?;
+                cached_font_handle = Some(glyph.font_handle);
+                cached_binding = Some(binding);
+                binding
+            };
             let Some(selected) =
                 binding.select(glyph.glyph_id, glyph.font_size, glyph.raster_pixel_ratio)
             else {
                 continue;
             };
-            let program = policy
-                .program(
-                    capability_set,
-                    binding.technique(),
-                    binding.program_variant(),
-                )
-                .ok_or(GatherError::ProgramMissing)?;
-            self.gather_fields(input, glyph_index, binding, selected, program)?;
+            let technique = binding.technique();
+            let variant = binding.program_variant();
+            let (program, f32_inputs, u32_inputs) = match cached_program {
+                Some((cached_technique, cached_variant, program, f32_inputs, u32_inputs))
+                    if cached_technique == technique && cached_variant == variant =>
+                {
+                    (program, f32_inputs, u32_inputs)
+                }
+                _ => {
+                    let program = policy
+                        .program(capability_set, technique, variant)
+                        .ok_or(GatherError::ProgramMissing)?;
+                    let (f32_inputs, u32_inputs) = policy
+                        .input_masks_for_changes(
+                            capability_set,
+                            technique,
+                            variant,
+                            semantic_changes,
+                            force_all_inputs,
+                        )
+                        .ok_or(GatherError::ProgramMissing)?;
+                    cached_program = Some((technique, variant, program, f32_inputs, u32_inputs));
+                    (program, f32_inputs, u32_inputs)
+                }
+            };
+            self.gather_fields(
+                input,
+                glyph_index,
+                binding,
+                selected,
+                program,
+                f32_inputs,
+                u32_inputs,
+            )?;
             let resource = binding
                 .resources()
                 .get(
@@ -196,11 +242,13 @@ impl PolicyGatherWorkspace {
         binding: &FontRenderBinding,
         selected: SelectedGlyphBinding,
         program: &ProgramDescriptor,
+        required_f32: u32,
+        required_u32: u32,
     ) -> Result<(), GatherError> {
         let f32_count = usize::from(program.f32_input_count);
         let u32_count = usize::from(program.u32_input_count);
         for field in 0..self.f32_fields.len() {
-            let value = if field < f32_count {
+            let value = if field < f32_count && required_f32 & (1 << field) != 0 {
                 let source = program.inputs[field];
                 source_f32(
                     source.scope,
@@ -216,7 +264,7 @@ impl PolicyGatherWorkspace {
             self.f32_fields[field].push(value)?;
         }
         for field in 0..self.u32_fields.len() {
-            let value = if field < u32_count {
+            let value = if field < u32_count && required_u32 & (1 << field) != 0 {
                 let source = program.inputs[f32_count + field];
                 source_u32(
                     source.scope,
@@ -527,6 +575,7 @@ mod tests {
                     semantic_f32: &[&semantic_x],
                     semantic_u32: &[&semantic_kind],
                 },
+                true,
                 |handle| (handle == 9).then_some(&binding),
             )
             .unwrap();
@@ -575,6 +624,39 @@ mod tests {
     }
 
     #[test]
+    fn changed_gather_reads_only_inputs_reaching_changed_buffers() {
+        let binding = binding();
+        let policy = policy();
+        let glyphs = [layout_glyph(1, 0), layout_glyph(2, 1)];
+        let semantic_x = [10.0, 20.0];
+        let semantic_kind = [100, 200];
+        let mut workspace = PolicyGatherWorkspace::default();
+        workspace
+            .gather(
+                &policy,
+                CAPABILITY,
+                LayoutPlanInput {
+                    glyphs: &glyphs,
+                    semantic_change_masks: &[1, 1],
+                    semantic_f32: &[&semantic_x],
+                    semantic_u32: &[&semantic_kind],
+                },
+                false,
+                |_| Some(&binding),
+            )
+            .unwrap();
+        let gathered = workspace.view();
+        let input = gathered.plan_input();
+        assert_eq!(input.f32_fields[0], &[10.0, 20.0]);
+        assert!(
+            input.f32_fields[1..]
+                .iter()
+                .all(|field| *field == [0.0, 0.0])
+        );
+        assert!(input.u32_fields.iter().all(|field| *field == [0, 0]));
+    }
+
+    #[test]
     fn missing_program_binding_and_source_are_explicit() {
         let binding = binding();
         let policy = policy();
@@ -590,6 +672,7 @@ mod tests {
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
+                true,
                 |_| None,
             ),
             Err(GatherError::FontBindingMissing)
@@ -604,6 +687,7 @@ mod tests {
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
+                true,
                 |_| Some(&binding),
             ),
             Err(GatherError::ProgramMissing)
@@ -618,6 +702,7 @@ mod tests {
                     semantic_f32: &[],
                     semantic_u32: &[],
                 },
+                true,
                 |_| Some(&binding),
             ),
             Err(GatherError::SourceFieldMissing)

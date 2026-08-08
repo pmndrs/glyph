@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:0e38f1a6590252d59ab0bae52ce79c6984c0cb47d859a9e2386ee6ab33a3ac7f'
+source_digest: 'sha256:5219712d1fc2859a65b1018bead1334d25c58850f351c7408983a97e2149f17b'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -700,6 +700,17 @@ Policy registration now propagates semantic dependencies to every physical buffe
 Order-preserving reflow now compares retained positioned glyphs directly by stable-ID slot and uses the exact identity index only after a reorder. A symbolized temporary Wasm profile identifies positioning as the largest sampled resize function and policy gather as the second. The canonical benchmark supports case isolation and an explicit profiling module while retaining its unchanged defaults. Current Bitmap/MTSDF/Slug resize medians are 4.414/4.984/5.196 milliseconds; inter-run variance prevents a precise speedup attribution and the sub-4 ms gate remains open. Optimized Wasm is 1,065,543 raw / 399,248 gzip / 318,131 Brotli bytes.
 
 Trivially LTR positioning now proves all retained bidi levels are even and no run is direction-overridden once, then walks logical clusters without filling line-level or visual-order scratch. Odd levels and overrides preserve the complete UAX #9 L1/L2 path. Two adjacent eight-warmup/31-sample Bitmap baselines measured 5.197 and 5.162 milliseconds; two optimized runs measured 4.849 and 4.878 milliseconds with the same 170.4 KiB patch. Post-change MTSDF and Slug medians are 5.355 and 6.001 milliseconds. The optimized module is 1,065,857 raw / 403,525 gzip / 318,137 Brotli bytes, and the sub-4 ms gate remains open.
+
+Policy validation now also compiles which source lanes and straight-line operations can reach each physical buffer.
+Position-only updates gather zero placeholders for unreachable inputs and skip unreachable scalar/SIMD operations;
+checkpoints, inserted glyphs, and non-positioning updates still evaluate every declared input and output. The gather
+loop caches only consecutive font-binding and immutable policy-program resolution, while glyph selection and resource
+selection remain per glyph. A factorial measurement rejected either optimization in isolation: selective gathering
+measured 5.027/5.685/6.443 ms for Bitmap/MTSDF/Slug resize, and operation liveness measured
+4.880/5.329/5.985 ms. Combined they measured 4.207/4.833/5.615 ms; adding resolution caching measured Bitmap at
+3.981 and 4.120 ms in two canonical full-sequence runs, MTSDF at 4.646 ms, and Slug at 5.622 ms. A case-isolated
+Bitmap run measured 4.799 ms, exposing material Node/Wasm tiering sensitivity, so the sub-4 ms target is approached but
+not reproducibly closed. Final optimized size is 1,069,973 raw / 405,888 gzip / 319,558 Brotli bytes.
 
 The canonical integration lane derives its natural width directly from the checked-in HarfRust glyph advances, then compares exact natural, 720 px, and 360 px measurements after source TTF → baker GLB → validator → registry → Wasm shaping. A second paragraph invalidates the shaper's borrowed arena before the first is measured, proving paragraph ownership rather than accidental view lifetime. Chromium repeats the same three measurements with deterministic hash `79874b9d`, one preparation shape, zero reflow calls, and no positioned glyph arrays.
 

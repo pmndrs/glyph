@@ -1172,6 +1172,21 @@ retains a measured positioning reduction without claiming the still-open sub-4 m
 raw / 403,525 gzip / 318,137 Brotli bytes; Brotli changes by six bytes from D-201, while gzip is sensitive to the new
 code layout.
 
+Policy registration now closes the dependency chain in both directions: forward propagation records which F32/U32
+input lanes reach each physical buffer, and reverse liveness records which physical buffers consume each operation.
+For a positioned update, the frame-level semantic-change union selects active buffers, gather reads only their required
+lanes, and scalar/SIMD execution skips operations that reach no active buffer. New glyphs, checkpoints, and changes
+outside retained positioning force all inputs. Consecutive glyphs reuse their last resolved font binding and immutable
+policy program without caching selection results.
+
+The mechanisms must be evaluated together. Selective gather alone measured 5.027/5.685/6.443 ms for
+Bitmap/MTSDF/Slug resize and operation liveness alone measured 4.880/5.329/5.985 ms, against the preceding
+4.878/5.355/6.001 ms checkpoint. Combined they measured 4.207/4.833/5.615 ms. Adding binding/program resolution
+caching measured 3.981 and 4.120 ms in two canonical full-sequence Bitmap runs, 4.646 ms for MTSDF, and 5.622 ms for
+Slug. A separate case-isolated Bitmap process measured 4.799 ms, so process/JIT tiering prevents treating the single
+3.981 ms result as closure of the sub-4 ms gate. Optimized Wasm is 1,069,973 raw / 405,888 gzip / 319,558 Brotli
+bytes, an increase of 14,116 raw / 2,363 gzip / 1,421 Brotli bytes over D-202.
+
 ### Foundation stack — Wasm, policy, render plan, and complete current semantics
 
 ### Stage 0 — contracts and measurement
