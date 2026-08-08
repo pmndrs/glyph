@@ -108,6 +108,7 @@ export const textShaperAbi = {
     "disposePolicy": "pmndrs_text_engine_dispose_policy",
     "disposeSession": "pmndrs_text_engine_dispose_session",
     "fontCount": "pmndrs_text_shaper_font_count",
+    "initialize": "pmndrs_text_shaper_initialize",
     "planCount": "pmndrs_text_shaper_plan_count",
     "policyCount": "pmndrs_text_engine_policy_count",
     "registerFont": "pmndrs_text_shaper_register_font",

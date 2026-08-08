@@ -338,6 +338,12 @@ updates, not one 25K-glyph allocation per paragraph. Those production arrays pre
 they land, covering the 25,515-glyph target fixture, and expose explicit cold growth beyond that envelope. A warm update
 inside declared capacities may not lazily settle another allocation.
 
+Module initialization is explicit rather than an incidental side effect of the first operational export. The generated
+ABI publishes `initialize()`, and the standard host calls it immediately after `WebAssembly.instantiate`; this eagerly
+creates module-owned state before a font registration, session operation, or update can be observed. At the current
+checkpoint this moves only the state allocation. The 32,768-record claim begins when the concrete production SoA lanes
+are created and reserved by that initializer, not before.
+
 ## Rust layout pipeline
 
 Each update follows one dependency graph inside Rust:
