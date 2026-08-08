@@ -38,6 +38,10 @@ export const textShaperAbi = {
       "orderedDirect": 1,
       "stableIndirect": 2
     },
+    "flowShapeKinds": {
+      "polygon": 2,
+      "rectangle": 1
+    },
     "internalBufferBindings": {
       "order": 65535
     },
@@ -77,6 +81,18 @@ export const textShaperAbi = {
       "line": 1,
       "run": 3,
       "selection": 6
+    },
+    "styleMutationOpcodes": {
+      "remove": 2,
+      "upsert": 1
+    },
+    "textMutationOpcodes": {
+      "replaceUtf16": 1
+    },
+    "writingModes": {
+      "horizontalTb": 1,
+      "verticalLr": 3,
+      "verticalRl": 2
     }
   },
   "functions": {
@@ -139,6 +155,29 @@ export const textShaperAbi = {
       "strategy": 16,
       "vectorWidth": 15
     },
+    "engineConstraint": {
+      "align": 47,
+      "alignment": 4,
+      "blockAlign": 49,
+      "flags": 50,
+      "flowThreadId": 0,
+      "geometryRevision": 4,
+      "height": 12,
+      "heightMode": 45,
+      "maxLines": 28,
+      "overflow": 48,
+      "regionCount": 40,
+      "regionStart": 32,
+      "resumeBlockOffset": 24,
+      "resumeCluster": 36,
+      "resumeRegion": 42,
+      "size": 52,
+      "viewportBlockEnd": 20,
+      "viewportBlockStart": 16,
+      "width": 8,
+      "widthMode": 44,
+      "wrap": 46
+    },
     "engineDiagnostic": {
       "alignment": 4,
       "code": 0,
@@ -170,6 +209,51 @@ export const textShaperAbi = {
       "resourceCount": 44,
       "resourceStart": 40,
       "size": 60
+    },
+    "engineExclusion": {
+      "alignment": 4,
+      "blockEnd": 36,
+      "blockStart": 28,
+      "flags": 18,
+      "geometryRevision": 8,
+      "id": 0,
+      "inlineEnd": 32,
+      "inlineStart": 24,
+      "marginBlock": 44,
+      "marginInline": 40,
+      "regionId": 4,
+      "reserved0": 22,
+      "shape": 20,
+      "size": 48,
+      "vertexCount": 16,
+      "verticesOffset": 12,
+      "wrapSide": 21
+    },
+    "engineFlowVertex": {
+      "alignment": 4,
+      "block": 4,
+      "inline": 0,
+      "size": 8
+    },
+    "engineInlineObject": {
+      "alignment": 4,
+      "baselineAlignment": 52,
+      "baselineOffset": 32,
+      "blockExtent": 28,
+      "contentRevision": 4,
+      "flags": 53,
+      "id": 0,
+      "inlineExtent": 24,
+      "marginBlockEnd": 48,
+      "marginBlockStart": 44,
+      "marginInlineEnd": 40,
+      "marginInlineStart": 36,
+      "materialId": 12,
+      "reserved0": 54,
+      "resourceGeneration": 20,
+      "resourceId": 16,
+      "size": 56,
+      "textOffset": 8
     },
     "enginePatch": {
       "alignment": 4,
@@ -206,6 +290,29 @@ export const textShaperAbi = {
       "semanticId": 44,
       "size": 64,
       "techniqueId": 8
+    },
+    "engineRegion": {
+      "alignment": 4,
+      "blockEnd": 36,
+      "blockStart": 28,
+      "clipBlockEnd": 52,
+      "clipBlockStart": 44,
+      "clipInlineEnd": 48,
+      "clipInlineStart": 40,
+      "exclusionCount": 16,
+      "exclusionStart": 14,
+      "flags": 18,
+      "geometryRevision": 4,
+      "id": 0,
+      "inlineEnd": 32,
+      "inlineStart": 24,
+      "reserved0": 23,
+      "shape": 20,
+      "size": 56,
+      "textOrientation": 22,
+      "vertexCount": 12,
+      "verticesOffset": 8,
+      "writingMode": 21
     },
     "engineResource": {
       "action": 14,
@@ -286,6 +393,46 @@ export const textShaperAbi = {
       "size": 44,
       "textEnd": 16,
       "textStart": 12
+    },
+    "engineStyleMutation": {
+      "alignment": 4,
+      "baselineShift": 56,
+      "decorationFlags": 68,
+      "decorationOffset": 76,
+      "decorationRgba": 64,
+      "decorationStyle": 2,
+      "decorationThickness": 72,
+      "direction": 1,
+      "featureCount": 34,
+      "featuresOffset": 36,
+      "fieldMask": 8,
+      "flags": 3,
+      "fontSize": 40,
+      "fontStackHandle": 20,
+      "foregroundRgba": 60,
+      "languageLength": 32,
+      "languageOffset": 28,
+      "letterSpacing": 48,
+      "lineHeight": 44,
+      "materialId": 24,
+      "opcode": 0,
+      "size": 80,
+      "styleId": 4,
+      "textEnd": 16,
+      "textStart": 12,
+      "wordSpacing": 52
+    },
+    "engineTextMutation": {
+      "alignment": 4,
+      "deleteCount": 8,
+      "encoding": 1,
+      "insertCount": 16,
+      "insertOffset": 12,
+      "opcode": 0,
+      "reserved0": 2,
+      "reserved1": 20,
+      "size": 24,
+      "textStart": 4
     },
     "engineUpdateRequest": {
       "abiVersion": 0,

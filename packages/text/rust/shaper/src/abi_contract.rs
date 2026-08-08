@@ -2,7 +2,11 @@ use alloc::string::{String, ToString};
 use core::mem::{align_of, offset_of, size_of};
 use serde_json::json;
 
-use crate::engine::frame::RESULT_FLAG_CHECKPOINT;
+use crate::engine::frame::{
+    RESULT_FLAG_CHECKPOINT, SHAPE_POLYGON, SHAPE_RECTANGLE, STYLE_MUTATION_REMOVE,
+    STYLE_MUTATION_UPSERT, TEXT_MUTATION_REPLACE_UTF16, WRITING_HORIZONTAL_TB, WRITING_VERTICAL_LR,
+    WRITING_VERTICAL_RL,
+};
 use crate::engine::policy::{
     ALLOCATION_ORDERED_DIRECT, ALLOCATION_STABLE_INDIRECT, BATCH_CLIP, BATCH_DEPTH, BATCH_MATERIAL,
     BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE, BUFFER_USAGE_COPY_DST,
@@ -165,6 +169,137 @@ struct EngineUpdateRequestHeader {
     policy_parameters_length: u32,
 }
 
+#[repr(C)]
+struct EngineTextMutationRecord {
+    opcode: u8,
+    encoding: u8,
+    reserved0: u16,
+    text_start: u32,
+    delete_count: u32,
+    insert_offset: u32,
+    insert_count: u32,
+    reserved1: u32,
+}
+
+#[repr(C)]
+struct EngineStyleMutationRecord {
+    opcode: u8,
+    direction: u8,
+    decoration_style: u8,
+    flags: u8,
+    style_id: u32,
+    field_mask: u32,
+    text_start: u32,
+    text_end: u32,
+    font_stack_handle: u32,
+    material_id: u32,
+    language_offset: u32,
+    language_length: u16,
+    feature_count: u16,
+    features_offset: u32,
+    font_size: f32,
+    line_height: f32,
+    letter_spacing: f32,
+    word_spacing: f32,
+    baseline_shift: f32,
+    foreground_rgba: u32,
+    decoration_rgba: u32,
+    decoration_flags: u32,
+    decoration_thickness: f32,
+    decoration_offset: f32,
+}
+
+#[repr(C)]
+struct EngineConstraintRecord {
+    flow_thread_id: u32,
+    geometry_revision: u32,
+    width: f32,
+    height: f32,
+    viewport_block_start: f32,
+    viewport_block_end: f32,
+    resume_block_offset: f32,
+    max_lines: u32,
+    region_start: u32,
+    resume_cluster: u32,
+    region_count: u16,
+    resume_region: u16,
+    width_mode: u8,
+    height_mode: u8,
+    wrap: u8,
+    align: u8,
+    overflow: u8,
+    block_align: u8,
+    flags: u16,
+}
+
+#[repr(C)]
+struct EngineFlowVertexRecord {
+    inline: f32,
+    block: f32,
+}
+
+#[repr(C)]
+struct EngineRegionRecord {
+    id: u32,
+    geometry_revision: u32,
+    vertices_offset: u32,
+    vertex_count: u16,
+    exclusion_start: u16,
+    exclusion_count: u16,
+    flags: u16,
+    shape: u8,
+    writing_mode: u8,
+    text_orientation: u8,
+    reserved0: u8,
+    inline_start: f32,
+    block_start: f32,
+    inline_end: f32,
+    block_end: f32,
+    clip_inline_start: f32,
+    clip_block_start: f32,
+    clip_inline_end: f32,
+    clip_block_end: f32,
+}
+
+#[repr(C)]
+struct EngineExclusionRecord {
+    id: u32,
+    region_id: u32,
+    geometry_revision: u32,
+    vertices_offset: u32,
+    vertex_count: u16,
+    flags: u16,
+    shape: u8,
+    wrap_side: u8,
+    reserved0: u16,
+    inline_start: f32,
+    block_start: f32,
+    inline_end: f32,
+    block_end: f32,
+    margin_inline: f32,
+    margin_block: f32,
+}
+
+#[repr(C)]
+struct EngineInlineObjectRecord {
+    id: u32,
+    content_revision: u32,
+    text_offset: u32,
+    material_id: u32,
+    resource_id: u32,
+    resource_generation: u32,
+    inline_extent: f32,
+    block_extent: f32,
+    baseline_offset: f32,
+    margin_inline_start: f32,
+    margin_inline_end: f32,
+    margin_block_start: f32,
+    margin_block_end: f32,
+    baseline_alignment: u8,
+    flags: u8,
+    reserved0: u16,
+}
+
 #[repr(C, align(16))]
 struct EngineResultHeader {
     abi_version: u32,
@@ -317,6 +452,41 @@ layout!(
     ENGINE_UPDATE_REQUEST_HEADER_SIZE,
     ENGINE_UPDATE_REQUEST_HEADER_ALIGNMENT,
     EngineUpdateRequestHeader
+);
+layout!(
+    ENGINE_TEXT_MUTATION_RECORD_SIZE,
+    ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT,
+    EngineTextMutationRecord
+);
+layout!(
+    ENGINE_STYLE_MUTATION_RECORD_SIZE,
+    ENGINE_STYLE_MUTATION_RECORD_ALIGNMENT,
+    EngineStyleMutationRecord
+);
+layout!(
+    ENGINE_CONSTRAINT_RECORD_SIZE,
+    ENGINE_CONSTRAINT_RECORD_ALIGNMENT,
+    EngineConstraintRecord
+);
+layout!(
+    ENGINE_FLOW_VERTEX_RECORD_SIZE,
+    ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
+    EngineFlowVertexRecord
+);
+layout!(
+    ENGINE_REGION_RECORD_SIZE,
+    ENGINE_REGION_RECORD_ALIGNMENT,
+    EngineRegionRecord
+);
+layout!(
+    ENGINE_EXCLUSION_RECORD_SIZE,
+    ENGINE_EXCLUSION_RECORD_ALIGNMENT,
+    EngineExclusionRecord
+);
+layout!(
+    ENGINE_INLINE_OBJECT_RECORD_SIZE,
+    ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
+    EngineInlineObjectRecord
 );
 layout!(
     ENGINE_RESULT_HEADER_SIZE,
@@ -720,6 +890,413 @@ field_offset!(
     ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH,
     EngineUpdateRequestHeader,
     policy_parameters_length
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_OPCODE,
+    EngineTextMutationRecord,
+    opcode
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_ENCODING,
+    EngineTextMutationRecord,
+    encoding
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_RESERVED0,
+    EngineTextMutationRecord,
+    reserved0
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_TEXT_START,
+    EngineTextMutationRecord,
+    text_start
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_DELETE_COUNT,
+    EngineTextMutationRecord,
+    delete_count
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_INSERT_OFFSET,
+    EngineTextMutationRecord,
+    insert_offset
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_INSERT_COUNT,
+    EngineTextMutationRecord,
+    insert_count
+);
+field_offset!(
+    ENGINE_TEXT_MUTATION_RESERVED1,
+    EngineTextMutationRecord,
+    reserved1
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_OPCODE,
+    EngineStyleMutationRecord,
+    opcode
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_DIRECTION,
+    EngineStyleMutationRecord,
+    direction
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_DECORATION_STYLE,
+    EngineStyleMutationRecord,
+    decoration_style
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FLAGS,
+    EngineStyleMutationRecord,
+    flags
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_STYLE_ID,
+    EngineStyleMutationRecord,
+    style_id
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FIELD_MASK,
+    EngineStyleMutationRecord,
+    field_mask
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_TEXT_START,
+    EngineStyleMutationRecord,
+    text_start
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_TEXT_END,
+    EngineStyleMutationRecord,
+    text_end
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FONT_STACK_HANDLE,
+    EngineStyleMutationRecord,
+    font_stack_handle
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_MATERIAL_ID,
+    EngineStyleMutationRecord,
+    material_id
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET,
+    EngineStyleMutationRecord,
+    language_offset
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH,
+    EngineStyleMutationRecord,
+    language_length
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FEATURE_COUNT,
+    EngineStyleMutationRecord,
+    feature_count
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+    EngineStyleMutationRecord,
+    features_offset
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FONT_SIZE,
+    EngineStyleMutationRecord,
+    font_size
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_LINE_HEIGHT,
+    EngineStyleMutationRecord,
+    line_height
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_LETTER_SPACING,
+    EngineStyleMutationRecord,
+    letter_spacing
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_WORD_SPACING,
+    EngineStyleMutationRecord,
+    word_spacing
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_BASELINE_SHIFT,
+    EngineStyleMutationRecord,
+    baseline_shift
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
+    EngineStyleMutationRecord,
+    foreground_rgba
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_DECORATION_RGBA,
+    EngineStyleMutationRecord,
+    decoration_rgba
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_DECORATION_FLAGS,
+    EngineStyleMutationRecord,
+    decoration_flags
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_DECORATION_THICKNESS,
+    EngineStyleMutationRecord,
+    decoration_thickness
+);
+field_offset!(
+    ENGINE_STYLE_MUTATION_DECORATION_OFFSET,
+    EngineStyleMutationRecord,
+    decoration_offset
+);
+field_offset!(
+    ENGINE_CONSTRAINT_FLOW_THREAD_ID,
+    EngineConstraintRecord,
+    flow_thread_id
+);
+field_offset!(
+    ENGINE_CONSTRAINT_GEOMETRY_REVISION,
+    EngineConstraintRecord,
+    geometry_revision
+);
+field_offset!(ENGINE_CONSTRAINT_WIDTH, EngineConstraintRecord, width);
+field_offset!(ENGINE_CONSTRAINT_HEIGHT, EngineConstraintRecord, height);
+field_offset!(
+    ENGINE_CONSTRAINT_VIEWPORT_BLOCK_START,
+    EngineConstraintRecord,
+    viewport_block_start
+);
+field_offset!(
+    ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
+    EngineConstraintRecord,
+    viewport_block_end
+);
+field_offset!(
+    ENGINE_CONSTRAINT_RESUME_BLOCK_OFFSET,
+    EngineConstraintRecord,
+    resume_block_offset
+);
+field_offset!(
+    ENGINE_CONSTRAINT_MAX_LINES,
+    EngineConstraintRecord,
+    max_lines
+);
+field_offset!(
+    ENGINE_CONSTRAINT_REGION_START,
+    EngineConstraintRecord,
+    region_start
+);
+field_offset!(
+    ENGINE_CONSTRAINT_RESUME_CLUSTER,
+    EngineConstraintRecord,
+    resume_cluster
+);
+field_offset!(
+    ENGINE_CONSTRAINT_REGION_COUNT,
+    EngineConstraintRecord,
+    region_count
+);
+field_offset!(
+    ENGINE_CONSTRAINT_RESUME_REGION,
+    EngineConstraintRecord,
+    resume_region
+);
+field_offset!(
+    ENGINE_CONSTRAINT_WIDTH_MODE,
+    EngineConstraintRecord,
+    width_mode
+);
+field_offset!(
+    ENGINE_CONSTRAINT_HEIGHT_MODE,
+    EngineConstraintRecord,
+    height_mode
+);
+field_offset!(ENGINE_CONSTRAINT_WRAP, EngineConstraintRecord, wrap);
+field_offset!(ENGINE_CONSTRAINT_ALIGN, EngineConstraintRecord, align);
+field_offset!(ENGINE_CONSTRAINT_OVERFLOW, EngineConstraintRecord, overflow);
+field_offset!(
+    ENGINE_CONSTRAINT_BLOCK_ALIGN,
+    EngineConstraintRecord,
+    block_align
+);
+field_offset!(ENGINE_CONSTRAINT_FLAGS, EngineConstraintRecord, flags);
+field_offset!(ENGINE_FLOW_VERTEX_INLINE, EngineFlowVertexRecord, inline);
+field_offset!(ENGINE_FLOW_VERTEX_BLOCK, EngineFlowVertexRecord, block);
+field_offset!(ENGINE_REGION_ID, EngineRegionRecord, id);
+field_offset!(
+    ENGINE_REGION_GEOMETRY_REVISION,
+    EngineRegionRecord,
+    geometry_revision
+);
+field_offset!(
+    ENGINE_REGION_VERTICES_OFFSET,
+    EngineRegionRecord,
+    vertices_offset
+);
+field_offset!(ENGINE_REGION_VERTEX_COUNT, EngineRegionRecord, vertex_count);
+field_offset!(
+    ENGINE_REGION_EXCLUSION_START,
+    EngineRegionRecord,
+    exclusion_start
+);
+field_offset!(
+    ENGINE_REGION_EXCLUSION_COUNT,
+    EngineRegionRecord,
+    exclusion_count
+);
+field_offset!(ENGINE_REGION_FLAGS, EngineRegionRecord, flags);
+field_offset!(ENGINE_REGION_SHAPE, EngineRegionRecord, shape);
+field_offset!(ENGINE_REGION_WRITING_MODE, EngineRegionRecord, writing_mode);
+field_offset!(
+    ENGINE_REGION_TEXT_ORIENTATION,
+    EngineRegionRecord,
+    text_orientation
+);
+field_offset!(ENGINE_REGION_RESERVED0, EngineRegionRecord, reserved0);
+field_offset!(ENGINE_REGION_INLINE_START, EngineRegionRecord, inline_start);
+field_offset!(ENGINE_REGION_BLOCK_START, EngineRegionRecord, block_start);
+field_offset!(ENGINE_REGION_INLINE_END, EngineRegionRecord, inline_end);
+field_offset!(ENGINE_REGION_BLOCK_END, EngineRegionRecord, block_end);
+field_offset!(
+    ENGINE_REGION_CLIP_INLINE_START,
+    EngineRegionRecord,
+    clip_inline_start
+);
+field_offset!(
+    ENGINE_REGION_CLIP_BLOCK_START,
+    EngineRegionRecord,
+    clip_block_start
+);
+field_offset!(
+    ENGINE_REGION_CLIP_INLINE_END,
+    EngineRegionRecord,
+    clip_inline_end
+);
+field_offset!(
+    ENGINE_REGION_CLIP_BLOCK_END,
+    EngineRegionRecord,
+    clip_block_end
+);
+field_offset!(ENGINE_EXCLUSION_ID, EngineExclusionRecord, id);
+field_offset!(ENGINE_EXCLUSION_REGION_ID, EngineExclusionRecord, region_id);
+field_offset!(
+    ENGINE_EXCLUSION_GEOMETRY_REVISION,
+    EngineExclusionRecord,
+    geometry_revision
+);
+field_offset!(
+    ENGINE_EXCLUSION_VERTICES_OFFSET,
+    EngineExclusionRecord,
+    vertices_offset
+);
+field_offset!(
+    ENGINE_EXCLUSION_VERTEX_COUNT,
+    EngineExclusionRecord,
+    vertex_count
+);
+field_offset!(ENGINE_EXCLUSION_FLAGS, EngineExclusionRecord, flags);
+field_offset!(ENGINE_EXCLUSION_SHAPE, EngineExclusionRecord, shape);
+field_offset!(ENGINE_EXCLUSION_WRAP_SIDE, EngineExclusionRecord, wrap_side);
+field_offset!(ENGINE_EXCLUSION_RESERVED0, EngineExclusionRecord, reserved0);
+field_offset!(
+    ENGINE_EXCLUSION_INLINE_START,
+    EngineExclusionRecord,
+    inline_start
+);
+field_offset!(
+    ENGINE_EXCLUSION_BLOCK_START,
+    EngineExclusionRecord,
+    block_start
+);
+field_offset!(
+    ENGINE_EXCLUSION_INLINE_END,
+    EngineExclusionRecord,
+    inline_end
+);
+field_offset!(ENGINE_EXCLUSION_BLOCK_END, EngineExclusionRecord, block_end);
+field_offset!(
+    ENGINE_EXCLUSION_MARGIN_INLINE,
+    EngineExclusionRecord,
+    margin_inline
+);
+field_offset!(
+    ENGINE_EXCLUSION_MARGIN_BLOCK,
+    EngineExclusionRecord,
+    margin_block
+);
+field_offset!(ENGINE_INLINE_OBJECT_ID, EngineInlineObjectRecord, id);
+field_offset!(
+    ENGINE_INLINE_OBJECT_CONTENT_REVISION,
+    EngineInlineObjectRecord,
+    content_revision
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_TEXT_OFFSET,
+    EngineInlineObjectRecord,
+    text_offset
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_MATERIAL_ID,
+    EngineInlineObjectRecord,
+    material_id
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_RESOURCE_ID,
+    EngineInlineObjectRecord,
+    resource_id
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_RESOURCE_GENERATION,
+    EngineInlineObjectRecord,
+    resource_generation
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_INLINE_EXTENT,
+    EngineInlineObjectRecord,
+    inline_extent
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_BLOCK_EXTENT,
+    EngineInlineObjectRecord,
+    block_extent
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_BASELINE_OFFSET,
+    EngineInlineObjectRecord,
+    baseline_offset
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_MARGIN_INLINE_START,
+    EngineInlineObjectRecord,
+    margin_inline_start
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_MARGIN_INLINE_END,
+    EngineInlineObjectRecord,
+    margin_inline_end
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_MARGIN_BLOCK_START,
+    EngineInlineObjectRecord,
+    margin_block_start
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_MARGIN_BLOCK_END,
+    EngineInlineObjectRecord,
+    margin_block_end
+);
+field_offset!(
+    ENGINE_INLINE_OBJECT_BASELINE_ALIGNMENT,
+    EngineInlineObjectRecord,
+    baseline_alignment
+);
+field_offset!(ENGINE_INLINE_OBJECT_FLAGS, EngineInlineObjectRecord, flags);
+field_offset!(
+    ENGINE_INLINE_OBJECT_RESERVED0,
+    EngineInlineObjectRecord,
+    reserved0
 );
 field_offset!(ENGINE_RESULT_ABI_VERSION, EngineResultHeader, abi_version);
 field_offset!(ENGINE_RESULT_BYTE_LENGTH, EngineResultHeader, byte_length);
@@ -1210,6 +1787,137 @@ pub fn json() -> String {
                 "policyParametersOffset": ENGINE_UPDATE_POLICY_PARAMETERS_OFFSET,
                 "policyParametersLength": ENGINE_UPDATE_POLICY_PARAMETERS_LENGTH
             },
+            "engineTextMutation": {
+                "size": ENGINE_TEXT_MUTATION_RECORD_SIZE,
+                "alignment": ENGINE_TEXT_MUTATION_RECORD_ALIGNMENT,
+                "opcode": ENGINE_TEXT_MUTATION_OPCODE,
+                "encoding": ENGINE_TEXT_MUTATION_ENCODING,
+                "reserved0": ENGINE_TEXT_MUTATION_RESERVED0,
+                "textStart": ENGINE_TEXT_MUTATION_TEXT_START,
+                "deleteCount": ENGINE_TEXT_MUTATION_DELETE_COUNT,
+                "insertOffset": ENGINE_TEXT_MUTATION_INSERT_OFFSET,
+                "insertCount": ENGINE_TEXT_MUTATION_INSERT_COUNT,
+                "reserved1": ENGINE_TEXT_MUTATION_RESERVED1
+            },
+            "engineStyleMutation": {
+                "size": ENGINE_STYLE_MUTATION_RECORD_SIZE,
+                "alignment": ENGINE_STYLE_MUTATION_RECORD_ALIGNMENT,
+                "opcode": ENGINE_STYLE_MUTATION_OPCODE,
+                "direction": ENGINE_STYLE_MUTATION_DIRECTION,
+                "decorationStyle": ENGINE_STYLE_MUTATION_DECORATION_STYLE,
+                "flags": ENGINE_STYLE_MUTATION_FLAGS,
+                "styleId": ENGINE_STYLE_MUTATION_STYLE_ID,
+                "fieldMask": ENGINE_STYLE_MUTATION_FIELD_MASK,
+                "textStart": ENGINE_STYLE_MUTATION_TEXT_START,
+                "textEnd": ENGINE_STYLE_MUTATION_TEXT_END,
+                "fontStackHandle": ENGINE_STYLE_MUTATION_FONT_STACK_HANDLE,
+                "materialId": ENGINE_STYLE_MUTATION_MATERIAL_ID,
+                "languageOffset": ENGINE_STYLE_MUTATION_LANGUAGE_OFFSET,
+                "languageLength": ENGINE_STYLE_MUTATION_LANGUAGE_LENGTH,
+                "featureCount": ENGINE_STYLE_MUTATION_FEATURE_COUNT,
+                "featuresOffset": ENGINE_STYLE_MUTATION_FEATURES_OFFSET,
+                "fontSize": ENGINE_STYLE_MUTATION_FONT_SIZE,
+                "lineHeight": ENGINE_STYLE_MUTATION_LINE_HEIGHT,
+                "letterSpacing": ENGINE_STYLE_MUTATION_LETTER_SPACING,
+                "wordSpacing": ENGINE_STYLE_MUTATION_WORD_SPACING,
+                "baselineShift": ENGINE_STYLE_MUTATION_BASELINE_SHIFT,
+                "foregroundRgba": ENGINE_STYLE_MUTATION_FOREGROUND_RGBA,
+                "decorationRgba": ENGINE_STYLE_MUTATION_DECORATION_RGBA,
+                "decorationFlags": ENGINE_STYLE_MUTATION_DECORATION_FLAGS,
+                "decorationThickness": ENGINE_STYLE_MUTATION_DECORATION_THICKNESS,
+                "decorationOffset": ENGINE_STYLE_MUTATION_DECORATION_OFFSET
+            },
+            "engineConstraint": {
+                "size": ENGINE_CONSTRAINT_RECORD_SIZE,
+                "alignment": ENGINE_CONSTRAINT_RECORD_ALIGNMENT,
+                "flowThreadId": ENGINE_CONSTRAINT_FLOW_THREAD_ID,
+                "geometryRevision": ENGINE_CONSTRAINT_GEOMETRY_REVISION,
+                "width": ENGINE_CONSTRAINT_WIDTH,
+                "height": ENGINE_CONSTRAINT_HEIGHT,
+                "viewportBlockStart": ENGINE_CONSTRAINT_VIEWPORT_BLOCK_START,
+                "viewportBlockEnd": ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
+                "resumeBlockOffset": ENGINE_CONSTRAINT_RESUME_BLOCK_OFFSET,
+                "maxLines": ENGINE_CONSTRAINT_MAX_LINES,
+                "regionStart": ENGINE_CONSTRAINT_REGION_START,
+                "resumeCluster": ENGINE_CONSTRAINT_RESUME_CLUSTER,
+                "regionCount": ENGINE_CONSTRAINT_REGION_COUNT,
+                "resumeRegion": ENGINE_CONSTRAINT_RESUME_REGION,
+                "widthMode": ENGINE_CONSTRAINT_WIDTH_MODE,
+                "heightMode": ENGINE_CONSTRAINT_HEIGHT_MODE,
+                "wrap": ENGINE_CONSTRAINT_WRAP,
+                "align": ENGINE_CONSTRAINT_ALIGN,
+                "overflow": ENGINE_CONSTRAINT_OVERFLOW,
+                "blockAlign": ENGINE_CONSTRAINT_BLOCK_ALIGN,
+                "flags": ENGINE_CONSTRAINT_FLAGS
+            },
+            "engineFlowVertex": {
+                "size": ENGINE_FLOW_VERTEX_RECORD_SIZE,
+                "alignment": ENGINE_FLOW_VERTEX_RECORD_ALIGNMENT,
+                "inline": ENGINE_FLOW_VERTEX_INLINE,
+                "block": ENGINE_FLOW_VERTEX_BLOCK
+            },
+            "engineRegion": {
+                "size": ENGINE_REGION_RECORD_SIZE,
+                "alignment": ENGINE_REGION_RECORD_ALIGNMENT,
+                "id": ENGINE_REGION_ID,
+                "geometryRevision": ENGINE_REGION_GEOMETRY_REVISION,
+                "verticesOffset": ENGINE_REGION_VERTICES_OFFSET,
+                "vertexCount": ENGINE_REGION_VERTEX_COUNT,
+                "exclusionStart": ENGINE_REGION_EXCLUSION_START,
+                "exclusionCount": ENGINE_REGION_EXCLUSION_COUNT,
+                "flags": ENGINE_REGION_FLAGS,
+                "shape": ENGINE_REGION_SHAPE,
+                "writingMode": ENGINE_REGION_WRITING_MODE,
+                "textOrientation": ENGINE_REGION_TEXT_ORIENTATION,
+                "reserved0": ENGINE_REGION_RESERVED0,
+                "inlineStart": ENGINE_REGION_INLINE_START,
+                "blockStart": ENGINE_REGION_BLOCK_START,
+                "inlineEnd": ENGINE_REGION_INLINE_END,
+                "blockEnd": ENGINE_REGION_BLOCK_END,
+                "clipInlineStart": ENGINE_REGION_CLIP_INLINE_START,
+                "clipBlockStart": ENGINE_REGION_CLIP_BLOCK_START,
+                "clipInlineEnd": ENGINE_REGION_CLIP_INLINE_END,
+                "clipBlockEnd": ENGINE_REGION_CLIP_BLOCK_END
+            },
+            "engineExclusion": {
+                "size": ENGINE_EXCLUSION_RECORD_SIZE,
+                "alignment": ENGINE_EXCLUSION_RECORD_ALIGNMENT,
+                "id": ENGINE_EXCLUSION_ID,
+                "regionId": ENGINE_EXCLUSION_REGION_ID,
+                "geometryRevision": ENGINE_EXCLUSION_GEOMETRY_REVISION,
+                "verticesOffset": ENGINE_EXCLUSION_VERTICES_OFFSET,
+                "vertexCount": ENGINE_EXCLUSION_VERTEX_COUNT,
+                "flags": ENGINE_EXCLUSION_FLAGS,
+                "shape": ENGINE_EXCLUSION_SHAPE,
+                "wrapSide": ENGINE_EXCLUSION_WRAP_SIDE,
+                "reserved0": ENGINE_EXCLUSION_RESERVED0,
+                "inlineStart": ENGINE_EXCLUSION_INLINE_START,
+                "blockStart": ENGINE_EXCLUSION_BLOCK_START,
+                "inlineEnd": ENGINE_EXCLUSION_INLINE_END,
+                "blockEnd": ENGINE_EXCLUSION_BLOCK_END,
+                "marginInline": ENGINE_EXCLUSION_MARGIN_INLINE,
+                "marginBlock": ENGINE_EXCLUSION_MARGIN_BLOCK
+            },
+            "engineInlineObject": {
+                "size": ENGINE_INLINE_OBJECT_RECORD_SIZE,
+                "alignment": ENGINE_INLINE_OBJECT_RECORD_ALIGNMENT,
+                "id": ENGINE_INLINE_OBJECT_ID,
+                "contentRevision": ENGINE_INLINE_OBJECT_CONTENT_REVISION,
+                "textOffset": ENGINE_INLINE_OBJECT_TEXT_OFFSET,
+                "materialId": ENGINE_INLINE_OBJECT_MATERIAL_ID,
+                "resourceId": ENGINE_INLINE_OBJECT_RESOURCE_ID,
+                "resourceGeneration": ENGINE_INLINE_OBJECT_RESOURCE_GENERATION,
+                "inlineExtent": ENGINE_INLINE_OBJECT_INLINE_EXTENT,
+                "blockExtent": ENGINE_INLINE_OBJECT_BLOCK_EXTENT,
+                "baselineOffset": ENGINE_INLINE_OBJECT_BASELINE_OFFSET,
+                "marginInlineStart": ENGINE_INLINE_OBJECT_MARGIN_INLINE_START,
+                "marginInlineEnd": ENGINE_INLINE_OBJECT_MARGIN_INLINE_END,
+                "marginBlockStart": ENGINE_INLINE_OBJECT_MARGIN_BLOCK_START,
+                "marginBlockEnd": ENGINE_INLINE_OBJECT_MARGIN_BLOCK_END,
+                "baselineAlignment": ENGINE_INLINE_OBJECT_BASELINE_ALIGNMENT,
+                "flags": ENGINE_INLINE_OBJECT_FLAGS,
+                "reserved0": ENGINE_INLINE_OBJECT_RESERVED0
+            },
             "engineResult": {
                 "size": ENGINE_RESULT_HEADER_SIZE,
                 "alignment": ENGINE_RESULT_HEADER_ALIGNMENT,
@@ -1497,6 +2205,22 @@ pub fn json() -> String {
             }
         },
         "engine": {
+            "textMutationOpcodes": {
+                "replaceUtf16": TEXT_MUTATION_REPLACE_UTF16
+            },
+            "styleMutationOpcodes": {
+                "upsert": STYLE_MUTATION_UPSERT,
+                "remove": STYLE_MUTATION_REMOVE
+            },
+            "flowShapeKinds": {
+                "rectangle": SHAPE_RECTANGLE,
+                "polygon": SHAPE_POLYGON
+            },
+            "writingModes": {
+                "horizontalTb": WRITING_HORIZONTAL_TB,
+                "verticalRl": WRITING_VERTICAL_RL,
+                "verticalLr": WRITING_VERTICAL_LR
+            },
             "resultFlags": {
                 "checkpoint": RESULT_FLAG_CHECKPOINT
             },

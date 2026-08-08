@@ -1,5 +1,14 @@
 pub(crate) const RESULT_FLAG_CHECKPOINT: u32 = 1;
 
+pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
+pub(crate) const STYLE_MUTATION_UPSERT: u8 = 1;
+pub(crate) const STYLE_MUTATION_REMOVE: u8 = 2;
+pub(crate) const SHAPE_RECTANGLE: u8 = 1;
+pub(crate) const SHAPE_POLYGON: u8 = 2;
+pub(crate) const WRITING_HORIZONTAL_TB: u8 = 1;
+pub(crate) const WRITING_VERTICAL_RL: u8 = 2;
+pub(crate) const WRITING_VERTICAL_LR: u8 = 3;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct UpdateRequest {
     pub session_id: u32,

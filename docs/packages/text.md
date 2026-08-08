@@ -5,7 +5,7 @@ description: Implements public font loading, shaping, paragraph measurement, sta
 resource: ../../packages/text
 workspace_package: '@pmndrs/text'
 documentation_type: reference
-source_digest: 'sha256:47777c53e70e358e43385ae0100ca532d9f81297e57815a7547eca00f35cd311'
+source_digest: 'sha256:1f44b1ea6bb9e562a7a941e0f8a5cc3e224ba6273230a4c0afdcdd3dc958a1c4'
 tags: [package, public-api, typescript, contracts]
 sources:
   - id: manifest
@@ -484,6 +484,14 @@ optimized artifact from 739,909 / 272,624 / 214,395 to
 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. This is a measured shared-runtime cost and a pending optimization
 target. Nonempty mutation sections remain rejected, so sessions currently publish an empty Rust plan; there is no Rust
 shaping/layout performance result yet, and the TypeScript layout table above remains baseline-only.
+
+The semantic request now has compiler-derived record layouts without a handwritten TypeScript mirror: 24-byte UTF-16
+text replacements, 80-byte stable style mutations, 52-byte constraints, 8-byte flow vertices, 56-byte regions, 48-byte
+exclusions, and 56-byte inline objects. Region/exclusion rectangles use inline bounds, while bounded polygons reference
+vertices inside the same request. Styles include current shaping fields plus word spacing, material/color, and
+decoration inputs. The generated ABI and compiled-Wasm test pin every size, tag, and the inline-object
+`baselineAlignment` offset; the semantic decoder still rejects nonempty sections, so this checkpoint changes no runtime
+layout behavior and has no performance result.
 
 The asynchronous frame transport has a test-only, byte-opaque ownership proof. A functional worker-side state machine
 copies the selected Wasm publication once into a capacity-classed `ArrayBuffer`, transfers it with a numeric ownership

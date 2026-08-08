@@ -2,6 +2,12 @@
 
 ## 2026-08-08
 
+- **Fixed the semantic update record grammar in the compiler-derived ABI** — Added exact UTF-16 text replacement,
+  stable style, constraint, flow-vertex, region, exclusion, and inline-object layouts. Rectangle and bounded-polygon
+  geometry resolve inside the same request; style records carry shaping, spacing, material/color, and decoration data.
+  Generated ABI tests pin the record sizes and tags. Nonempty sections remain rejected until the Rust decoder lands, so
+  this checkpoint makes no layout or performance claim.
+
 - **Made Rust render-plan state session-owned and fence-safe** — The 124-byte compiler-derived update request now carries
   a monotonic renderer-fence acknowledgment distinct from consumed plan revision. Each session owns the Rust mixed-plan
   dispatcher and pins its committed policy identity. Wasm prepares, validates, stages, and only then commits planner and
