@@ -748,7 +748,9 @@ being prepared. `consumed_plan_revision` remains independent because host applic
 The Wasm update prepares the Rust plan, validates and serializes it into the inactive arena, commits compiler/session
 state only after staging succeeds, and aborts preparation on every intervening failure. The acknowledgment itself
 survives an aborted publication because it reports an already-completed renderer fence. Compiled-Wasm tests exercise
-accepted and future acknowledgments, A/B preservation, and retry after abort.
+accepted and future acknowledgments plus A/B preservation. Host tests exercise compiler abort/retry directly. A
+post-prepare Wasm failure is not constructible while semantic input is empty and the encoded plan is the minimum-size
+header; that ABI ordering requires a regression test once nonempty Rust semantic input can exceed a request limit.
 
 This makes the full retained plan compiler reachable: the optimized artifact changes from 739,909 / 272,624 / 214,395
 to 822,443 / 308,033 / 242,447 raw/gzip/Brotli bytes. The 82,534 raw / 35,409 gzip / 28,052 Brotli increase is shared

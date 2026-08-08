@@ -362,6 +362,8 @@ impl StablePlanCompiler {
             .ok_or(StablePlanError::CapabilitySetMissing)?;
         validate_input(input)?;
         for batch in &mut self.batches {
+            // GPU completion is external monotonic state, not part of the publication transaction.
+            // Reclamation therefore intentionally survives a later prepare failure or abort.
             batch.acknowledge(acknowledged_publication_generation)?;
         }
         self.reset_pending();
@@ -479,7 +481,11 @@ impl StablePlanCompiler {
     }
 
     pub(crate) fn has_state(&self) -> bool {
-        self.batches.iter().any(|batch| batch.active)
+        self.batches.iter().any(|batch| {
+            batch.active
+                || batch.slots.has_quarantined_slots()
+                || !batch.quarantined_chunks.is_empty()
+        })
     }
 
     pub(crate) fn publishes_bindings(&self) -> bool {
@@ -1736,6 +1742,23 @@ mod tests {
             2,
         );
         assert_eq!(compiler.input_slots[2], 2);
+    }
+
+    #[test]
+    fn an_inactive_batch_stays_live_only_until_its_quarantine_is_acknowledged() {
+        let policy = policy(false);
+        let mut compiler = StablePlanCompiler::default();
+        let initial = [glyph(1, 1)];
+        prepare(&mut compiler, &policy, &initial, &[1.0], true, 1, 0);
+        compiler.commit().unwrap();
+
+        prepare(&mut compiler, &policy, &[], &[], false, 2, 0);
+        compiler.commit().unwrap();
+        assert!(compiler.has_state());
+
+        prepare(&mut compiler, &policy, &[], &[], false, 3, 2);
+        compiler.commit().unwrap();
+        assert!(!compiler.has_state());
     }
 
     #[test]

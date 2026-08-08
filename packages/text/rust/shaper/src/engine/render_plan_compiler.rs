@@ -67,25 +67,61 @@ impl RenderPlanCompilerError {
     pub(crate) fn is_result_too_large(self) -> bool {
         match self {
             Self::AllocationFailed | Self::ArithmeticOverflow => true,
-            Self::Ordered(error) => matches!(
-                error,
-                OrderedPlanError::AllocationFailed
-                    | OrderedPlanError::CapacityExceeded
-                    | OrderedPlanError::IdentifierExhausted
-                    | OrderedPlanError::ArithmeticOverflow
-                    | OrderedPlanError::PolicyExecution(PolicyExecutionError::OutputCapacity)
-            ),
-            Self::Stable(error) => matches!(
-                error,
-                StablePlanError::AllocationFailed
-                    | StablePlanError::CapacityExceeded
-                    | StablePlanError::IdentifierExhausted
-                    | StablePlanError::ArithmeticOverflow
-                    | StablePlanError::PolicyExecution(PolicyExecutionError::OutputCapacity)
-            ),
-            _ => false,
+            Self::AlreadyPrepared
+            | Self::NotPrepared
+            | Self::CapabilitySetMissing
+            | Self::ProgramMissing
+            | Self::UnsupportedStrategy
+            | Self::InvalidInputShape
+            | Self::InvalidIdentity
+            | Self::InvalidResource
+            | Self::InvalidPlan => false,
+            Self::Ordered(error) => ordered_result_too_large(error),
+            Self::Stable(error) => stable_result_too_large(error),
         }
     }
+}
+
+fn policy_result_too_large(error: PolicyExecutionError) -> bool {
+    match error {
+        PolicyExecutionError::OutputCapacity => true,
+        PolicyExecutionError::CapabilitySetMissing
+        | PolicyExecutionError::ProgramMissing
+        | PolicyExecutionError::InputFieldCount
+        | PolicyExecutionError::InputLength
+        | PolicyExecutionError::OutputBufferCount
+        | PolicyExecutionError::OutputSchema
+        | PolicyExecutionError::NonFiniteOutput => false,
+    }
+}
+
+macro_rules! classify_plan_error {
+    ($error:expr, $error_type:ident) => {
+        match $error {
+            $error_type::AllocationFailed
+            | $error_type::CapacityExceeded
+            | $error_type::IdentifierExhausted
+            | $error_type::ArithmeticOverflow => true,
+            $error_type::AlreadyPrepared
+            | $error_type::NotPrepared
+            | $error_type::CapabilitySetMissing
+            | $error_type::ProgramMissing
+            | $error_type::UnsupportedStrategy
+            | $error_type::InvalidInputShape
+            | $error_type::InvalidIdentity
+            | $error_type::DuplicateIdentity
+            | $error_type::InvalidResource => false,
+            $error_type::PolicyExecution(error) => policy_result_too_large(error),
+        }
+    };
+}
+
+fn ordered_result_too_large(error: OrderedPlanError) -> bool {
+    classify_plan_error!(error, OrderedPlanError)
+}
+
+fn stable_result_too_large(error: StablePlanError) -> bool {
+    classify_plan_error!(error, StablePlanError)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

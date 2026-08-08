@@ -86,6 +86,10 @@ impl StableSlotPool {
         Ok(())
     }
 
+    pub fn has_quarantined_slots(&self) -> bool {
+        !self.quarantine.is_empty()
+    }
+
     pub fn prepare(
         &mut self,
         desired: &[SlotIdentity],
