@@ -162,9 +162,18 @@ function policyBytes(abi, programs) {
     view.setUint32(offset + programLayout.resourceKindMask, descriptor.resourceKindMask ?? 1, true);
     view.setUint32(offset + programLayout.semanticViewMask, descriptor.semanticViewMask ?? 0, true);
     view.setUint32(
-      offset + programLayout.batchKeyMask,
-      descriptor.batchKeyMask ??
-        (abi.policy.batchFields.program | abi.policy.batchFields.resource | abi.policy.batchFields.order),
+      offset + programLayout.storageKeyMask,
+      descriptor.storageKeyMask ??
+        (abi.policy.batchFields.technique | abi.policy.batchFields.program | abi.policy.batchFields.resource),
+      true,
+    );
+    view.setUint32(
+      offset + programLayout.drawKeyMask,
+      descriptor.drawKeyMask ??
+        (abi.policy.batchFields.technique |
+          abi.policy.batchFields.program |
+          abi.policy.batchFields.resource |
+          abi.policy.batchFields.order),
       true,
     );
     view.setUint16(offset + programLayout.variant, descriptor.variant ?? 0, true);

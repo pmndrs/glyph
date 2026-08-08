@@ -604,7 +604,8 @@ The descriptor includes:
 - a technique capability table mapping stable technique IDs to program IDs, accepted resource kinds, supported paint and
   compositing features, and physical schemas;
 - required semantic inputs and requested derived views;
-- a batch-compatibility key assembled from declared resource, technique, material, clipping, depth, and ordering fields;
+- separate storage and draw compatibility keys assembled from declared resource, technique, material, clipping, depth,
+  and ordering fields;
 - backend capabilities such as storage-buffer support, indirect draws, aliasable vector widths, maximum binding sizes,
   and update alignment;
 - an upload cost model: preferred coalescing gap, range/call penalty, whole-buffer threshold, and fragmentation budget;
@@ -623,8 +624,9 @@ The compiler-mapped V0 registration ABI uses a 36-byte request header followed b
 program, 16-byte physical-buffer, and 16-byte operation records. Capability-set selection is part of program lookup:
 an exact set-specific program wins over a set-agnostic program, and an update naming an undeclared set fails before its
 revision changes. Capability sets own storage/indirect/aliasing flags, maximum binding and draw limits, update alignment,
-and the integer upload-cost model. Programs own the resource-kind mask, semantic-view request, batch-key mask, and one
-of the two allocation strategies. Physical streams own explicit alignment, padded stride, usage, and capacity class.
+and the integer upload-cost model. Programs own the resource-kind mask, semantic-view request, storage-key mask, draw-key
+mask, and one of the two allocation strategies. Physical streams own explicit alignment, padded stride, usage, and
+capacity class.
 All reserved bits and fields are zero and unknown flags fail registration.
 
 V0 does not alias several logical stores into one mutable interleaved byte span. Augmentation instead combines semantic
@@ -636,6 +638,10 @@ version and measured binding-pressure evidence; it is not a latent V0 implementa
 Augmentation examples include packing `origin + size` into `vec4`, adding atlas/material indices, emitting selection or
 object IDs, quantizing fields, or requesting per-glyph bounds. It may not choose line breaks, mutate cluster order, or
 change semantic positions.
+
+The policy program is the only bytecode in this design. It is a validated, forward-only packing expression executed by
+Rust while compiling physical records; it has no loop, backward branch, arbitrary address, allocator, host callback, or
+layout/shaping authority. The render plan below is fixed-record data, not executable bytecode.
 
 ## Render-plan IR
 
@@ -666,7 +672,7 @@ Bitmap uses `vec2`/`vec4` records and MSDF and Slug use `vec4`/`uvec4` records, 
 consumer proves schema, patch, revision, and retirement semantics without claiming another renderer integration.
 
 The V0 wire checkpoint uses a 144-byte, 16-byte-aligned result header followed by compiler-mapped little-endian tables:
-44-byte semantic, 40-byte resource, 36-byte physical-buffer, 36-byte patch, 64-byte primitive, 48-byte draw, 24-byte
+44-byte semantic, 40-byte resource, 36-byte physical-buffer, 36-byte patch, 64-byte primitive, 60-byte draw, 24-byte
 retirement, and 24-byte diagnostic records. Resource kind and create/update/retain action are separate. Buffer strategy
 is an explicit ordered-direct or stable-indirect tag. Variable patch payload bytes are part of the same immutable
 publication; write patches rebase their checked payload span to an absolute result offset. Other patch opcodes carry no
@@ -698,18 +704,31 @@ replacement, style edits, and flow changes at the start, middle, and end of larg
 If `required_base_revision` does not match the consumer, the engine returns a checkpoint containing complete live state.
 Skipped render revisions can never be repaired by applying an adjacent delta blindly.
 
-The first retained compiler slice implements ordered-direct physical storage behind an explicit prepare/view/commit-or-
-abort lifecycle. Stable instance IDs and semantic content revisions—not physical byte comparison—select dirty records.
+The retained ordered-direct compiler implements physical storage behind an explicit prepare/view/commit-or-abort
+lifecycle. Stable instance IDs and semantic content revisions—not physical byte comparison—select dirty records.
 Capability alignment expands ranges at record granularity; gap/call costs, fragmentation budget, and the whole-buffer
 threshold coalesce them. Consecutive changed inputs stay batched through the four-record SIMD policy executor. A no-op
 produces no resource, buffer, patch, retirement, or payload records; a tail deletion changes live metadata without an
 upload; a middle insertion rewrites only that resource/program batch's suffix. Checkpoint/growth allocates and writes
-complete aligned storage. CPU mirrors change only on commit, so failed A/B serialization can abort preparation.
+complete aligned storage. CPU mirrors change only on commit, so failed A/B serialization can abort preparation. A dirty
+transaction republishes the complete compact binding and command tables while its fat physical payload stays delta-
+minimal. Glyph primitives are spans over consecutive physical records, split by logical run, binding identity, or the
+65,535-record wire limit; this avoids publishing one 64-byte command per glyph. Draw packets carry numeric material,
+clip, and depth identities plus exact resource/buffer table ranges. No-op preparation publishes no table or payload.
 
-This slice deliberately does not yet claim a complete display list: primitive/draw compilation, stable-indirect order
-storage, session integration, and target-hardware timing remain open in Stage 2. Its production Wasm code is currently
-unreachable from `text_update` and is removed by LTO; that keeps the shipping path unchanged while the missing tables
-land, rather than treating native unit behavior as end-to-end evidence.
+Storage and draw compatibility are deliberately independent. The standard shared-storage policy puts material in the
+draw key but not the storage key, so different materials reference ranges in the same physical glyph buffers. A policy
+may put material in both keys when a fallback or custom per-material schema requires separate physical buffers. This is
+not left to the adapter after publication: focused tests prove both plans. The distinction matters for the pinned Three
+implementation because its ordinary WebGPU and WebGL fallback render-object paths both submit `firstInstance = 0`; a
+shared-buffer adapter must supply an explicit storage index base, while a partitioned policy avoids that requirement.
+
+Interleaved `A, A, B, A` resource tests prove three ordered spans over two deduplicated resources and buffers, and the
+wire validator accepts the compiled transaction. Stable-indirect order storage, session integration, and target-
+hardware timing remain open in Stage 2. The production planner is still unreachable from `text_update` and removed by
+LTO; only the expanded reachable wire grammar and independent policy keys change the optimized artifact, from 739,643
+to 739,909 raw bytes, 272,537 to 272,607 gzip bytes, and 214,149 to 214,288 Brotli bytes. This is not end-to-end latency
+evidence.
 
 ## Performance contract
 

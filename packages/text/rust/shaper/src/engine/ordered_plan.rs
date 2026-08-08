@@ -9,28 +9,37 @@ use core::{mem, slice};
 
 use super::{
     policy::{
-        ALLOCATION_ORDERED_DIRECT, BufferSchema, CapabilitySetId, PhysicalBufferMut,
-        PolicyExecutionError, SemanticInputBatch, TechniqueId, ValidatedPolicy,
+        ALLOCATION_ORDERED_DIRECT, BATCH_MATERIAL, BufferSchema, CapabilitySetId,
+        PhysicalBufferMut, PolicyExecutionError, SemanticInputBatch, TechniqueId, ValidatedPolicy,
     },
     render_plan::{
-        BUFFER_ORDERED_DIRECT, BufferRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE, PatchRecord,
-        RESOURCE_ACTION_CREATE, RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE,
-        RETIRE_SLOT_RANGE, RenderPlanView, ResourceRecord, RetirementRecord,
+        BUFFER_ORDERED_DIRECT, BufferRecord, DrawRecord, PATCH_ALLOCATE_OR_RESIZE, PATCH_WRITE,
+        PRIMITIVE_GLYPH, PatchRecord, PrimitiveRecord, RESOURCE_ACTION_CREATE,
+        RESOURCE_ACTION_RETAIN, RETIRE_BUFFER, RETIRE_RESOURCE, RETIRE_SLOT_RANGE, RenderPlanView,
+        ResourceRecord, RetirementRecord,
     },
 };
 
 const MAX_PHYSICAL_BUFFERS: usize = 16;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OrderedGlyph {
     pub stable_id: u32,
     pub content_revision: u32,
     pub technique: TechniqueId,
-    pub variant: u16,
+    pub program_variant: u16,
     pub resource_id: u32,
     pub resource_generation: u32,
     pub resource_kind: u16,
     pub resource_reference: u32,
+    pub semantic_id: u32,
+    pub material_id: u32,
+    pub clip_id: u32,
+    pub depth_key: u32,
+    pub inline_start: f32,
+    pub block_start: f32,
+    pub inline_extent: f32,
+    pub block_extent: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -61,12 +70,15 @@ pub enum OrderedPlanError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct BatchKey {
     technique: TechniqueId,
-    variant: u16,
+    program_variant: u16,
     program_id: u32,
     resource_id: u32,
     resource_generation: u32,
     resource_kind: u16,
     resource_reference: u32,
+    material_id: u32,
+    clip_id: u32,
+    depth_key: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -98,7 +110,7 @@ struct PhysicalBufferState {
 struct PendingBatch {
     state: BatchState,
     prior_index: Option<u32>,
-    changed: bool,
+    capacity: u32,
     buffer_ids: [u32; MAX_PHYSICAL_BUFFERS],
     buffer_generations: [u32; MAX_PHYSICAL_BUFFERS],
 }
@@ -134,6 +146,7 @@ pub struct OrderedPlanCompiler {
     pending_instances: Vec<InstanceState>,
     pending_allocations: Vec<PendingAllocation>,
     input_batches: Vec<u32>,
+    input_slots: Vec<u32>,
     identity_keys: Vec<u32>,
     identity_epochs: Vec<u32>,
     identity_epoch: u32,
@@ -141,11 +154,16 @@ pub struct OrderedPlanCompiler {
     changed_ranges: Vec<RecordRange>,
     resources: Vec<ResourceRecord>,
     plan_buffers: Vec<BufferRecord>,
+    primitives: Vec<PrimitiveRecord>,
+    draws: Vec<DrawRecord>,
+    live_primitives: Vec<PrimitiveRecord>,
+    live_draws: Vec<DrawRecord>,
     patches: Vec<PatchRecord>,
     retirements: Vec<RetirementRecord>,
     payload: Vec<u8>,
     next_buffer_id: u32,
     pending_next_buffer_id: u32,
+    publish_bindings: bool,
     prepared: bool,
 }
 
@@ -170,8 +188,10 @@ impl OrderedPlanCompiler {
         validate_input(input)?;
         self.reset_pending();
         reserve(&mut self.input_batches, input.glyphs.len())?;
+        reserve(&mut self.input_slots, input.glyphs.len())?;
         reserve(&mut self.pending_instances, input.glyphs.len())?;
         self.input_batches.resize(input.glyphs.len(), 0);
+        self.input_slots.resize(input.glyphs.len(), 0);
         self.prepare_identity_set(input.glyphs.len())?;
 
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate() {
@@ -180,7 +200,7 @@ impl OrderedPlanCompiler {
                 return Err(OrderedPlanError::DuplicateIdentity);
             }
             let program = policy
-                .program(capability_set, glyph.technique, glyph.variant)
+                .program(capability_set, glyph.technique, glyph.program_variant)
                 .ok_or(OrderedPlanError::ProgramMissing)?;
             if program.allocation_strategy != ALLOCATION_ORDERED_DIRECT {
                 return Err(OrderedPlanError::UnsupportedStrategy);
@@ -193,12 +213,27 @@ impl OrderedPlanCompiler {
             }
             let key = BatchKey {
                 technique: glyph.technique,
-                variant: glyph.variant,
+                program_variant: glyph.program_variant,
                 program_id: program.id.0,
                 resource_id: glyph.resource_id,
                 resource_generation: glyph.resource_generation,
                 resource_kind: glyph.resource_kind,
                 resource_reference: glyph.resource_reference,
+                material_id: if program.storage_key_mask & BATCH_MATERIAL != 0 {
+                    glyph.material_id
+                } else {
+                    0
+                },
+                clip_id: if program.storage_key_mask & super::policy::BATCH_CLIP != 0 {
+                    glyph.clip_id
+                } else {
+                    0
+                },
+                depth_key: if program.storage_key_mask & super::policy::BATCH_DEPTH != 0 {
+                    glyph.depth_key
+                } else {
+                    0
+                },
             };
             let batch_index = match self
                 .pending_batches
@@ -222,7 +257,7 @@ impl OrderedPlanCompiler {
                             buffer_count: 0,
                         },
                         prior_index,
-                        changed: checkpoint || prior_index.is_none(),
+                        capacity: 0,
                         buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
                         buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
                     });
@@ -253,6 +288,7 @@ impl OrderedPlanCompiler {
             self.prepare_batch(context, batch_index)?;
         }
         self.prepare_removed_batches(publication_generation)?;
+        self.compile_bindings(context)?;
         self.prepared = true;
         Ok(())
     }
@@ -266,14 +302,36 @@ impl OrderedPlanCompiler {
         if !self.prepared {
             return Err(OrderedPlanError::NotPrepared);
         }
+        let resources = if self.publish_bindings {
+            self.resources.as_slice()
+        } else {
+            &[]
+        };
+        let buffers = if self.publish_bindings {
+            self.plan_buffers.as_slice()
+        } else {
+            &[]
+        };
+        let primitives = if self.publish_bindings {
+            self.primitives.as_slice()
+        } else {
+            &[]
+        };
+        let draws = if self.publish_bindings {
+            self.draws.as_slice()
+        } else {
+            &[]
+        };
         Ok(RenderPlanView {
             policy_handle,
             capability_set: capability_set.0,
             policy_fingerprint,
-            resources: &self.resources,
-            buffers: &self.plan_buffers,
+            resources,
+            buffers,
             patches: &self.patches,
             retirements: &self.retirements,
+            primitives,
+            draws,
             payload: &self.payload,
             ..RenderPlanView::default()
         })
@@ -319,6 +377,10 @@ impl OrderedPlanCompiler {
         self.spare_batches.clear();
         mem::swap(&mut self.instances, &mut self.pending_instances);
         self.pending_instances.clear();
+        mem::swap(&mut self.live_primitives, &mut self.primitives);
+        self.primitives.clear();
+        mem::swap(&mut self.live_draws, &mut self.draws);
+        self.draws.clear();
         self.next_buffer_id = self.pending_next_buffer_id;
         self.prepared = false;
         Ok(())
@@ -351,9 +413,12 @@ impl OrderedPlanCompiler {
         self.changed_ranges.clear();
         self.resources.clear();
         self.plan_buffers.clear();
+        self.primitives.clear();
+        self.draws.clear();
         self.patches.clear();
         self.retirements.clear();
         self.payload.clear();
+        self.publish_bindings = false;
     }
 
     fn prepare_identity_set(&mut self, count: usize) -> Result<(), OrderedPlanError> {
@@ -422,6 +487,9 @@ impl OrderedPlanCompiler {
                 content_revision: glyph.content_revision,
                 input_index: input_index as u32,
             };
+            self.input_slots[input_index] = u32::try_from(destination)
+                .map_err(|_| OrderedPlanError::ArithmeticOverflow)?
+                - self.pending_batches[batch].state.instance_start;
             self.batch_cursors[batch] = self.batch_cursors[batch]
                 .checked_add(1)
                 .ok_or(OrderedPlanError::ArithmeticOverflow)?;
@@ -445,7 +513,7 @@ impl OrderedPlanCompiler {
         let pending = self.pending_batches[batch_index];
         let key = pending.state.key;
         let program = policy
-            .program(capability_set, key.technique, key.variant)
+            .program(capability_set, key.technique, key.program_variant)
             .ok_or(OrderedPlanError::ProgramMissing)?;
         let prior = pending
             .prior_index
@@ -471,8 +539,8 @@ impl OrderedPlanCompiler {
                 return Err(OrderedPlanError::CapacityExceeded);
             }
         }
+        self.pending_batches[batch_index].capacity = capacity;
 
-        let buffer_start = self.plan_buffers.len();
         let new_or_resized = prior.is_none() || capacity != prior_capacity;
         let prior_instances = match prior {
             Some(batch) => self
@@ -490,37 +558,6 @@ impl OrderedPlanCompiler {
             checkpoint || new_or_resized,
         )?;
         coalesce_ranges(&mut self.changed_ranges, program, capability, required)?;
-        if !self.changed_ranges.is_empty()
-            || prior.is_some_and(|old| old.instance_count != required)
-        {
-            self.pending_batches[batch_index].changed = true;
-        }
-
-        if self.pending_batches[batch_index].changed {
-            let existing_resource = self.batches.iter().any(|batch| {
-                batch.key.resource_id == key.resource_id
-                    && batch.key.resource_generation == key.resource_generation
-            });
-            if !self.resources.iter().any(|resource| {
-                resource.id == key.resource_id && resource.generation == key.resource_generation
-            }) {
-                reserve(&mut self.resources, 1)?;
-                self.resources.push(ResourceRecord {
-                    id: key.resource_id,
-                    generation: key.resource_generation,
-                    technique_id: key.technique.0,
-                    resource_kind: key.resource_kind,
-                    action: if checkpoint || !existing_resource {
-                        RESOURCE_ACTION_CREATE
-                    } else {
-                        RESOURCE_ACTION_RETAIN
-                    },
-                    reference_id: key.resource_reference,
-                    ..ResourceRecord::default()
-                });
-            }
-        }
-
         for (schema_index, schema) in program.buffers.iter().copied().enumerate() {
             let previous = prior
                 .and_then(|batch| self.buffers.get(batch.buffer_start as usize + schema_index))
@@ -543,25 +580,6 @@ impl OrderedPlanCompiler {
                     .ok_or(OrderedPlanError::IdentifierExhausted)?;
                 (self.pending_next_buffer_id, 1)
             };
-            if self.pending_batches[batch_index].changed {
-                reserve(&mut self.plan_buffers, 1)?;
-                self.plan_buffers.push(BufferRecord {
-                    id,
-                    generation,
-                    program_id: key.program_id,
-                    policy_buffer_id: schema.id.0,
-                    scalar_type: schema.scalar as u8,
-                    vector_width: schema.vector_width,
-                    strategy: BUFFER_ORDERED_DIRECT,
-                    flags: schema.usage as u16,
-                    live_records: required,
-                    capacity_records: capacity,
-                    byte_length: capacity
-                        .checked_mul(u32::from(schema.stride))
-                        .ok_or(OrderedPlanError::ArithmeticOverflow)?,
-                    order_buffer_id: 0,
-                });
-            }
             if checkpoint || new_or_resized {
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {
@@ -599,9 +617,8 @@ impl OrderedPlanCompiler {
             input,
             program,
             prior,
-            pending,
+            self.pending_batches[batch_index],
             checkpoint || new_or_resized,
-            buffer_start,
         )?;
         if let Some(prior) = prior
             && required < prior.instance_count
@@ -623,8 +640,6 @@ impl OrderedPlanCompiler {
                 });
             }
         }
-        self.pending_batches[batch_index].state.buffer_start =
-            u32::try_from(buffer_start).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         self.pending_batches[batch_index].state.buffer_count = u16::try_from(program.buffers.len())
             .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         Ok(())
@@ -641,7 +656,6 @@ impl OrderedPlanCompiler {
         prior: Option<BatchState>,
         pending: PendingBatch,
         replace: bool,
-        plan_buffer_start: usize,
     ) -> Result<(), OrderedPlanError> {
         let record_alignment = record_alignment(program, capability.update_alignment)?;
         let next_instances = &self.pending_instances
@@ -711,10 +725,8 @@ impl OrderedPlanCompiler {
             }
 
             for (schema_index, schema) in program.buffers.iter().enumerate() {
-                let record = self
-                    .plan_buffers
-                    .get(plan_buffer_start + schema_index)
-                    .ok_or(OrderedPlanError::InvalidIdentity)?;
+                let buffer_id = pending.buffer_ids[schema_index];
+                let buffer_generation = pending.buffer_generations[schema_index];
                 let byte_length = count
                     .checked_mul(u32::from(schema.stride))
                     .ok_or(OrderedPlanError::ArithmeticOverflow)?;
@@ -725,8 +737,8 @@ impl OrderedPlanCompiler {
                 reserve(&mut self.patches, 1)?;
                 self.patches.push(PatchRecord {
                     opcode: PATCH_WRITE,
-                    buffer_id: record.id,
-                    buffer_generation: record.generation,
+                    buffer_id,
+                    buffer_generation,
                     destination_offset,
                     byte_length,
                     payload_start: u32::try_from(payload_starts[schema_index])
@@ -734,8 +746,8 @@ impl OrderedPlanCompiler {
                     ..PatchRecord::default()
                 });
                 if let Some(allocation) = self.pending_allocations.iter_mut().find(|allocation| {
-                    allocation.state.id == record.id
-                        && allocation.state.generation == record.generation
+                    allocation.state.id == buffer_id
+                        && allocation.state.generation == buffer_generation
                 }) {
                     let destination = destination_offset as usize;
                     let source = payload_starts[schema_index];
@@ -784,6 +796,199 @@ impl OrderedPlanCompiler {
             },
         });
         Ok(())
+    }
+
+    fn compile_bindings(&mut self, context: PrepareContext<'_>) -> Result<(), OrderedPlanError> {
+        for batch_index in 0..self.pending_batches.len() {
+            let batch = self.pending_batches[batch_index];
+            let program = context
+                .policy
+                .program(
+                    context.capability_set,
+                    batch.state.key.technique,
+                    batch.state.key.program_variant,
+                )
+                .ok_or(OrderedPlanError::ProgramMissing)?;
+            if usize::from(batch.state.buffer_count)
+                > usize::from(context.capability.max_buffers_per_draw)
+            {
+                return Err(OrderedPlanError::CapacityExceeded);
+            }
+            let buffer_start = self.plan_buffers.len();
+            reserve(&mut self.plan_buffers, program.buffers.len())?;
+            for (schema_index, schema) in program.buffers.iter().copied().enumerate() {
+                self.plan_buffers.push(BufferRecord {
+                    id: batch.buffer_ids[schema_index],
+                    generation: batch.buffer_generations[schema_index],
+                    program_id: batch.state.key.program_id,
+                    policy_buffer_id: schema.id.0,
+                    scalar_type: schema.scalar as u8,
+                    vector_width: schema.vector_width,
+                    strategy: BUFFER_ORDERED_DIRECT,
+                    flags: schema.usage as u16,
+                    live_records: batch.state.instance_count,
+                    capacity_records: batch.capacity,
+                    byte_length: batch
+                        .capacity
+                        .checked_mul(u32::from(schema.stride))
+                        .ok_or(OrderedPlanError::ArithmeticOverflow)?,
+                    order_buffer_id: 0,
+                });
+            }
+            self.pending_batches[batch_index].state.buffer_start =
+                u32::try_from(buffer_start).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+        }
+
+        for glyph in context.input.glyphs.iter().copied() {
+            if let Some(resource) = self.resources.iter().find(|resource| {
+                resource.id == glyph.resource_id && resource.generation == glyph.resource_generation
+            }) {
+                if resource.technique_id != glyph.technique.0
+                    || resource.resource_kind != glyph.resource_kind
+                    || resource.reference_id != glyph.resource_reference
+                {
+                    return Err(OrderedPlanError::InvalidResource);
+                }
+                continue;
+            }
+            reserve(&mut self.resources, 1)?;
+            let existing = self.batches.iter().any(|batch| {
+                batch.key.resource_id == glyph.resource_id
+                    && batch.key.resource_generation == glyph.resource_generation
+            });
+            self.resources.push(ResourceRecord {
+                id: glyph.resource_id,
+                generation: glyph.resource_generation,
+                technique_id: glyph.technique.0,
+                resource_kind: glyph.resource_kind,
+                action: if context.checkpoint || !existing {
+                    RESOURCE_ACTION_CREATE
+                } else {
+                    RESOURCE_ACTION_RETAIN
+                },
+                reference_id: glyph.resource_reference,
+                ..ResourceRecord::default()
+            });
+        }
+
+        if context.capability.max_resources_per_draw < 1 {
+            return Err(OrderedPlanError::CapacityExceeded);
+        }
+        let mut input_index = 0_usize;
+        while input_index < context.input.glyphs.len() {
+            let first = context.input.glyphs[input_index];
+            let batch_index = self.input_batches[input_index] as usize;
+            let first_slot = self.input_slots[input_index];
+            let program = context
+                .policy
+                .program(
+                    context.capability_set,
+                    first.technique,
+                    first.program_variant,
+                )
+                .ok_or(OrderedPlanError::ProgramMissing)?;
+            let split_material = program.draw_key_mask & BATCH_MATERIAL != 0;
+            let mut end = input_index + 1;
+            while end < context.input.glyphs.len()
+                && end - input_index < usize::from(u16::MAX)
+                && self.same_draw_span(
+                    context.input.glyphs,
+                    input_index,
+                    end,
+                    batch_index,
+                    first_slot,
+                    split_material,
+                )
+            {
+                end += 1;
+            }
+            let count = u16::try_from(end - input_index)
+                .map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+            let (inline_start, block_start, inline_extent, block_extent) =
+                span_bounds(&context.input.glyphs[input_index..end])?;
+            let batch = self.pending_batches[batch_index];
+            let resource_start = self
+                .resources
+                .iter()
+                .position(|resource| {
+                    resource.id == first.resource_id
+                        && resource.generation == first.resource_generation
+                })
+                .ok_or(OrderedPlanError::InvalidResource)?;
+            let primitive_start = self.primitives.len();
+            reserve(&mut self.primitives, 1)?;
+            self.primitives.push(PrimitiveRecord {
+                id: first.stable_id,
+                kind: PRIMITIVE_GLYPH,
+                technique_id: first.technique.0,
+                resource_id: first.resource_id,
+                resource_generation: first.resource_generation,
+                program_id: batch.state.key.program_id,
+                program_variant: first.program_variant,
+                record_count: count,
+                buffer_id: batch.buffer_ids[0],
+                record_index: first_slot,
+                logical_order: u32::try_from(input_index)
+                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                clip_id: first.clip_id,
+                semantic_id: first.semantic_id,
+                inline_start,
+                block_start,
+                inline_extent,
+                block_extent,
+                ..PrimitiveRecord::default()
+            });
+            reserve(&mut self.draws, 1)?;
+            self.draws.push(DrawRecord {
+                id: first.stable_id,
+                program_id: batch.state.key.program_id,
+                program_variant: first.program_variant,
+                material_id: if split_material { first.material_id } else { 0 },
+                clip_id: first.clip_id,
+                depth_key: first.depth_key,
+                primitive_start: u32::try_from(primitive_start)
+                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                primitive_count: 1,
+                buffer_start: batch.state.buffer_start,
+                buffer_count: u32::from(batch.state.buffer_count),
+                resource_start: u32::try_from(resource_start)
+                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                resource_count: 1,
+                order_token: u32::try_from(input_index)
+                    .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
+                ..DrawRecord::default()
+            });
+            input_index = end;
+        }
+        self.publish_bindings = context.checkpoint
+            || !self.patches.is_empty()
+            || !self.retirements.is_empty()
+            || self.primitives != self.live_primitives
+            || self.draws != self.live_draws;
+        Ok(())
+    }
+
+    fn same_draw_span(
+        &self,
+        glyphs: &[OrderedGlyph],
+        start: usize,
+        next: usize,
+        batch_index: usize,
+        first_slot: u32,
+        split_material: bool,
+    ) -> bool {
+        let first = glyphs[start];
+        let glyph = glyphs[next];
+        self.input_batches[next] as usize == batch_index
+            && self.input_slots[next] == first_slot + (next - start) as u32
+            && glyph.technique == first.technique
+            && glyph.program_variant == first.program_variant
+            && glyph.resource_id == first.resource_id
+            && glyph.resource_generation == first.resource_generation
+            && (!split_material || glyph.material_id == first.material_id)
+            && glyph.clip_id == first.clip_id
+            && glyph.depth_key == first.depth_key
+            && glyph.semantic_id == first.semantic_id
     }
 
     fn prepare_removed_batches(
@@ -867,7 +1072,38 @@ fn validate_glyph(glyph: OrderedGlyph) -> Result<(), OrderedPlanError> {
     {
         return Err(OrderedPlanError::InvalidResource);
     }
+    if !glyph.inline_start.is_finite()
+        || !glyph.block_start.is_finite()
+        || !glyph.inline_extent.is_finite()
+        || !glyph.block_extent.is_finite()
+        || glyph.inline_extent < 0.0
+        || glyph.block_extent < 0.0
+        || !(glyph.inline_start + glyph.inline_extent).is_finite()
+        || !(glyph.block_start + glyph.block_extent).is_finite()
+    {
+        return Err(OrderedPlanError::InvalidInputShape);
+    }
     Ok(())
+}
+
+fn span_bounds(glyphs: &[OrderedGlyph]) -> Result<(f32, f32, f32, f32), OrderedPlanError> {
+    let first = glyphs.first().ok_or(OrderedPlanError::InvalidInputShape)?;
+    let mut inline_start = first.inline_start;
+    let mut block_start = first.block_start;
+    let mut inline_end = first.inline_start + first.inline_extent;
+    let mut block_end = first.block_start + first.block_extent;
+    for glyph in &glyphs[1..] {
+        inline_start = inline_start.min(glyph.inline_start);
+        block_start = block_start.min(glyph.block_start);
+        inline_end = inline_end.max(glyph.inline_start + glyph.inline_extent);
+        block_end = block_end.max(glyph.block_start + glyph.block_extent);
+    }
+    let inline_extent = inline_end - inline_start;
+    let block_extent = block_end - block_start;
+    if !inline_extent.is_finite() || !block_extent.is_finite() {
+        return Err(OrderedPlanError::InvalidInputShape);
+    }
+    Ok((inline_start, block_start, inline_extent, block_extent))
 }
 
 fn collect_changed_ranges(
@@ -1173,9 +1409,9 @@ fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), OrderedPlanE
 mod tests {
     use super::*;
     use crate::engine::policy::{
-        BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE,
-        BufferId, CAP_ORDERED_DIRECT, CapabilitySet, Operation, PolicyDescriptor,
-        ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
+        BATCH_MATERIAL, BATCH_ORDER, BATCH_PROGRAM, BATCH_RESOURCE, BATCH_TECHNIQUE,
+        BUFFER_USAGE_COPY_DST, BUFFER_USAGE_STORAGE, BufferId, CAP_ORDERED_DIRECT, CapabilitySet,
+        Operation, PolicyDescriptor, ProgramCapabilities, ProgramDescriptor, ProgramId, ScalarType,
     };
     use crate::engine::render_plan_wire::plan_layout;
     use alloc::vec;
@@ -1195,6 +1431,11 @@ mod tests {
             .unwrap();
         assert_eq!(first.buffers.len(), 1);
         assert_eq!(first.patches.len(), 2);
+        assert_eq!(first.primitives.len(), 1);
+        assert_eq!(first.primitives[0].record_count, 3);
+        assert_eq!(first.draws.len(), 1);
+        assert_eq!(first.draws[0].buffer_count, 1);
+        assert_eq!(first.draws[0].resource_count, 1);
         assert!(plan_layout(first).unwrap().byte_length > 144);
         compiler.commit().unwrap();
 
@@ -1208,6 +1449,8 @@ mod tests {
         assert_eq!(delta.patches[0].destination_offset, 4);
         assert_eq!(delta.patches[0].byte_length, 4);
         assert_eq!(delta.payload.len(), 4);
+        assert_eq!(delta.primitives, first_span(3).as_slice());
+        assert_eq!(delta.draws.len(), 1);
         compiler.commit().unwrap();
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 4), 20.0);
     }
@@ -1258,6 +1501,8 @@ mod tests {
         assert!(no_op.resources.is_empty());
         assert!(no_op.buffers.is_empty());
         assert!(no_op.patches.is_empty());
+        assert!(no_op.primitives.is_empty());
+        assert!(no_op.draws.is_empty());
         assert!(no_op.payload.is_empty());
         compiler.commit().unwrap();
         assert_eq!(read_f32(compiler.buffer_bytes(1).unwrap(), 0), 1.0);
@@ -1271,6 +1516,99 @@ mod tests {
         assert_eq!(shrink.retirements.len(), 1);
         assert_eq!(shrink.retirements[0].byte_offset, 8);
         assert_eq!(shrink.retirements[0].byte_length, 4);
+    }
+
+    #[test]
+    fn interleaved_resources_compile_to_ordered_spans_with_shared_bindings() {
+        let policy = policy();
+        let mut compiler = OrderedPlanCompiler::default();
+        let a1 = glyph(1, 1);
+        let a2 = glyph(2, 1);
+        let mut b = glyph(3, 1);
+        b.resource_id = 12;
+        b.resource_reference = 100;
+        let a3 = glyph(4, 1);
+        let glyphs = [a1, a2, b, a3];
+        prepare(&mut compiler, &policy, &glyphs, &[1.0, 2.0, 3.0, 4.0], true);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+
+        assert_eq!(plan.resources.len(), 2);
+        assert_eq!(plan.buffers.len(), 2);
+        assert_eq!(plan.primitives.len(), 3);
+        assert_eq!(plan.draws.len(), 3);
+        assert_eq!(plan.primitives[0].record_count, 2);
+        assert_eq!(plan.primitives[0].record_index, 0);
+        assert_eq!(plan.primitives[1].resource_id, 12);
+        assert_eq!(plan.primitives[2].resource_id, 11);
+        assert_eq!(plan.primitives[2].record_index, 2);
+        assert_eq!(plan.draws[0].order_token, 0);
+        assert_eq!(plan.draws[1].order_token, 2);
+        assert_eq!(plan.draws[2].order_token, 3);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
+    fn material_identity_splits_draws_without_splitting_physical_storage() {
+        let policy = policy();
+        let mut compiler = OrderedPlanCompiler::default();
+        let first = glyph(1, 1);
+        let mut second = glyph(2, 1);
+        second.material_id = 2;
+        let glyphs = [first, second];
+        prepare(&mut compiler, &policy, &glyphs, &[1.0, 2.0], true);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+
+        assert_eq!(plan.buffers.len(), 1);
+        assert_eq!(plan.primitives.len(), 2);
+        assert_eq!(plan.draws.len(), 2);
+        assert_eq!(plan.draws[0].material_id, 1);
+        assert_eq!(plan.draws[1].material_id, 2);
+        assert_eq!(plan.draws[0].buffer_start, plan.draws[1].buffer_start);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
+    fn policy_can_partition_physical_storage_by_material() {
+        let policy = policy_with_material_storage(true);
+        let mut compiler = OrderedPlanCompiler::default();
+        let first = glyph(1, 1);
+        let mut second = glyph(2, 1);
+        second.material_id = 2;
+        let glyphs = [first, second];
+        prepare(&mut compiler, &policy, &glyphs, &[1.0, 2.0], true);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+
+        assert_eq!(plan.buffers.len(), 2);
+        assert_eq!(plan.draws.len(), 2);
+        assert_ne!(plan.draws[0].buffer_start, plan.draws[1].buffer_start);
+        assert!(plan_layout(plan).is_ok());
+    }
+
+    #[test]
+    fn glyph_spans_split_at_the_wire_record_limit() {
+        let policy = policy_with_limits(false, 512 * 1024);
+        let mut compiler = OrderedPlanCompiler::default();
+        let glyphs: Vec<_> = (1..=u32::from(u16::MAX) + 1)
+            .map(|stable_id| glyph(stable_id, 1))
+            .collect();
+        let x = vec![0.0; glyphs.len()];
+        prepare(&mut compiler, &policy, &glyphs, &x, true);
+        let plan = compiler
+            .plan_view(7, CAPABILITY, policy.fingerprint())
+            .unwrap();
+
+        assert_eq!(plan.primitives.len(), 2);
+        assert_eq!(plan.primitives[0].record_count, u16::MAX);
+        assert_eq!(plan.primitives[1].record_count, 1);
+        assert_eq!(plan.primitives[1].record_index, u32::from(u16::MAX));
+        assert_eq!(plan.draws.len(), 2);
+        assert!(plan_layout(plan).is_ok());
     }
 
     #[test]
@@ -1335,20 +1673,36 @@ mod tests {
             stable_id,
             content_revision,
             technique: TECHNIQUE,
-            variant: 0,
+            program_variant: 0,
             resource_id: 11,
             resource_generation: 1,
             resource_kind: 1,
             resource_reference: 99,
+            semantic_id: 1,
+            material_id: 1,
+            clip_id: 0,
+            depth_key: 0,
+            inline_start: stable_id as f32,
+            block_start: 0.0,
+            inline_extent: 1.0,
+            block_extent: 1.0,
         }
     }
 
     fn policy() -> ValidatedPolicy {
+        policy_with_material_storage(false)
+    }
+
+    fn policy_with_material_storage(partition_materials: bool) -> ValidatedPolicy {
+        policy_with_limits(partition_materials, 1024)
+    }
+
+    fn policy_with_limits(partition_materials: bool, max_buffer_bytes: u32) -> ValidatedPolicy {
         ValidatedPolicy::new(PolicyDescriptor {
             capability_sets: vec![CapabilitySet {
                 id: CAPABILITY,
                 flags: CAP_ORDERED_DIRECT,
-                max_buffer_bytes: 1024,
+                max_buffer_bytes,
                 update_alignment: 4,
                 coalesce_gap_bytes: 0,
                 range_call_penalty_bytes: 0,
@@ -1365,7 +1719,19 @@ mod tests {
                 capability_set: CapabilitySetId(0),
                 resource_kind_mask: 1,
                 semantic_view_mask: 0,
-                batch_key_mask: BATCH_PROGRAM | BATCH_RESOURCE | BATCH_ORDER,
+                storage_key_mask: BATCH_TECHNIQUE
+                    | BATCH_PROGRAM
+                    | BATCH_RESOURCE
+                    | if partition_materials {
+                        BATCH_MATERIAL
+                    } else {
+                        0
+                    },
+                draw_key_mask: BATCH_TECHNIQUE
+                    | BATCH_PROGRAM
+                    | BATCH_RESOURCE
+                    | BATCH_MATERIAL
+                    | BATCH_ORDER,
                 allocation_strategy: ALLOCATION_ORDERED_DIRECT,
                 f32_input_count: 1,
                 u32_input_count: 0,
@@ -1397,18 +1763,46 @@ mod tests {
         f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
     }
 
-    fn capacities(compiler: &OrderedPlanCompiler) -> [usize; 13] {
+    fn first_span(record_count: u16) -> [PrimitiveRecord; 1] {
+        [PrimitiveRecord {
+            id: 1,
+            kind: PRIMITIVE_GLYPH,
+            technique_id: TECHNIQUE.0,
+            resource_id: 11,
+            resource_generation: 1,
+            program_id: 5,
+            program_variant: 0,
+            record_count,
+            buffer_id: 1,
+            record_index: 0,
+            logical_order: 0,
+            clip_id: 0,
+            semantic_id: 1,
+            inline_start: 1.0,
+            block_start: 0.0,
+            inline_extent: record_count as f32,
+            block_extent: 1.0,
+            ..PrimitiveRecord::default()
+        }]
+    }
+
+    fn capacities(compiler: &OrderedPlanCompiler) -> [usize; 18] {
         [
             compiler.pending_batches.capacity(),
             compiler.pending_instances.capacity(),
             compiler.pending_allocations.capacity(),
             compiler.input_batches.capacity(),
+            compiler.input_slots.capacity(),
             compiler.identity_keys.capacity(),
             compiler.identity_epochs.capacity(),
             compiler.batch_cursors.capacity(),
             compiler.changed_ranges.capacity(),
             compiler.resources.capacity(),
             compiler.plan_buffers.capacity(),
+            compiler.primitives.capacity(),
+            compiler.draws.capacity(),
+            compiler.live_primitives.capacity(),
+            compiler.live_draws.capacity(),
             compiler.patches.capacity(),
             compiler.retirements.capacity(),
             compiler.payload.capacity(),

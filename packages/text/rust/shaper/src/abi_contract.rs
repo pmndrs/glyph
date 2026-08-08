@@ -91,7 +91,7 @@ struct PolicyProgramRecord {
     capability_set_id: u32,
     resource_kind_mask: u32,
     semantic_view_mask: u32,
-    batch_key_mask: u32,
+    storage_key_mask: u32,
     paint_capabilities: u32,
     compositing_capabilities: u32,
     buffer_start: u32,
@@ -103,7 +103,7 @@ struct PolicyProgramRecord {
     f32_input_count: u8,
     u32_input_count: u8,
     reserved0: u16,
-    reserved1: u32,
+    draw_key_mask: u32,
 }
 
 #[repr(C)]
@@ -481,9 +481,9 @@ field_offset!(
     semantic_view_mask
 );
 field_offset!(
-    POLICY_PROGRAM_BATCH_KEY_MASK,
+    POLICY_PROGRAM_STORAGE_KEY_MASK,
     PolicyProgramRecord,
-    batch_key_mask
+    storage_key_mask
 );
 field_offset!(POLICY_PROGRAM_VARIANT, PolicyProgramRecord, variant);
 field_offset!(
@@ -532,7 +532,11 @@ field_offset!(
     PolicyProgramRecord,
     allocation_strategy
 );
-field_offset!(POLICY_PROGRAM_RESERVED1, PolicyProgramRecord, reserved1);
+field_offset!(
+    POLICY_PROGRAM_DRAW_KEY_MASK,
+    PolicyProgramRecord,
+    draw_key_mask
+);
 field_offset!(POLICY_BUFFER_ID, PolicyBufferRecord, id);
 field_offset!(POLICY_BUFFER_SCALAR, PolicyBufferRecord, scalar);
 field_offset!(POLICY_BUFFER_VECTOR_WIDTH, PolicyBufferRecord, vector_width);
@@ -896,8 +900,8 @@ field_offset!(
     resource_generation
 );
 field_offset!(PRIMITIVE_PROGRAM_ID, PrimitiveRecord, program_id);
-field_offset!(PRIMITIVE_VARIANT, PrimitiveRecord, variant);
-field_offset!(PRIMITIVE_RESERVED, PrimitiveRecord, reserved);
+field_offset!(PRIMITIVE_PROGRAM_VARIANT, PrimitiveRecord, program_variant);
+field_offset!(PRIMITIVE_RECORD_COUNT, PrimitiveRecord, record_count);
 field_offset!(PRIMITIVE_BUFFER_ID, PrimitiveRecord, buffer_id);
 field_offset!(PRIMITIVE_RECORD_INDEX, PrimitiveRecord, record_index);
 field_offset!(PRIMITIVE_LOGICAL_ORDER, PrimitiveRecord, logical_order);
@@ -909,8 +913,11 @@ field_offset!(PRIMITIVE_INLINE_EXTENT, PrimitiveRecord, inline_extent);
 field_offset!(PRIMITIVE_BLOCK_EXTENT, PrimitiveRecord, block_extent);
 field_offset!(DRAW_ID, DrawRecord, id);
 field_offset!(DRAW_PROGRAM_ID, DrawRecord, program_id);
-field_offset!(DRAW_VARIANT, DrawRecord, variant);
+field_offset!(DRAW_PROGRAM_VARIANT, DrawRecord, program_variant);
 field_offset!(DRAW_FLAGS, DrawRecord, flags);
+field_offset!(DRAW_MATERIAL_ID, DrawRecord, material_id);
+field_offset!(DRAW_CLIP_ID, DrawRecord, clip_id);
+field_offset!(DRAW_DEPTH_KEY, DrawRecord, depth_key);
 field_offset!(DRAW_PRIMITIVE_START, DrawRecord, primitive_start);
 field_offset!(DRAW_PRIMITIVE_COUNT, DrawRecord, primitive_count);
 field_offset!(DRAW_BUFFER_START, DrawRecord, buffer_start);
@@ -1124,7 +1131,8 @@ pub fn json() -> String {
                 "capabilitySetId": POLICY_PROGRAM_CAPABILITY_SET_ID,
                 "resourceKindMask": POLICY_PROGRAM_RESOURCE_KIND_MASK,
                 "semanticViewMask": POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
-                "batchKeyMask": POLICY_PROGRAM_BATCH_KEY_MASK,
+                "storageKeyMask": POLICY_PROGRAM_STORAGE_KEY_MASK,
+                "drawKeyMask": POLICY_PROGRAM_DRAW_KEY_MASK,
                 "variant": POLICY_PROGRAM_VARIANT,
                 "f32InputCount": POLICY_PROGRAM_F32_INPUT_COUNT,
                 "u32InputCount": POLICY_PROGRAM_U32_INPUT_COUNT,
@@ -1135,8 +1143,7 @@ pub fn json() -> String {
                 "reserved0": POLICY_PROGRAM_RESERVED0,
                 "operationStart": POLICY_PROGRAM_OPERATION_START,
                 "operationCount": POLICY_PROGRAM_OPERATION_COUNT,
-                "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY,
-                "reserved1": POLICY_PROGRAM_RESERVED1
+                "allocationStrategy": POLICY_PROGRAM_ALLOCATION_STRATEGY
             },
             "policyBuffer": {
                 "size": POLICY_BUFFER_RECORD_SIZE,
@@ -1304,8 +1311,8 @@ pub fn json() -> String {
                 "resourceId": PRIMITIVE_RESOURCE_ID,
                 "resourceGeneration": PRIMITIVE_RESOURCE_GENERATION,
                 "programId": PRIMITIVE_PROGRAM_ID,
-                "variant": PRIMITIVE_VARIANT,
-                "reserved": PRIMITIVE_RESERVED,
+                "programVariant": PRIMITIVE_PROGRAM_VARIANT,
+                "recordCount": PRIMITIVE_RECORD_COUNT,
                 "bufferId": PRIMITIVE_BUFFER_ID,
                 "recordIndex": PRIMITIVE_RECORD_INDEX,
                 "logicalOrder": PRIMITIVE_LOGICAL_ORDER,
@@ -1321,8 +1328,11 @@ pub fn json() -> String {
                 "alignment": DRAW_RECORD_ALIGNMENT,
                 "id": DRAW_ID,
                 "programId": DRAW_PROGRAM_ID,
-                "variant": DRAW_VARIANT,
+                "programVariant": DRAW_PROGRAM_VARIANT,
                 "flags": DRAW_FLAGS,
+                "materialId": DRAW_MATERIAL_ID,
+                "clipId": DRAW_CLIP_ID,
+                "depthKey": DRAW_DEPTH_KEY,
                 "primitiveStart": DRAW_PRIMITIVE_START,
                 "primitiveCount": DRAW_PRIMITIVE_COUNT,
                 "bufferStart": DRAW_BUFFER_START,

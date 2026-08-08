@@ -26,13 +26,13 @@ use crate::{
         POLICY_OPERATION_IMMEDIATE2, POLICY_OPERATION_OPCODE, POLICY_OPERATION_OPERAND0,
         POLICY_OPERATION_OPERAND1, POLICY_OPERATION_RECORD_ALIGNMENT, POLICY_OPERATION_RECORD_SIZE,
         POLICY_OPERATION_TARGET, POLICY_OPERATIONS_OFFSET, POLICY_PROGRAM_ALLOCATION_STRATEGY,
-        POLICY_PROGRAM_BATCH_KEY_MASK, POLICY_PROGRAM_BUFFER_COUNT, POLICY_PROGRAM_BUFFER_START,
-        POLICY_PROGRAM_CAPABILITY_SET_ID, POLICY_PROGRAM_COMPOSITING_CAPABILITIES,
-        POLICY_PROGRAM_COUNT, POLICY_PROGRAM_F32_INPUT_COUNT, POLICY_PROGRAM_ID,
+        POLICY_PROGRAM_BUFFER_COUNT, POLICY_PROGRAM_BUFFER_START, POLICY_PROGRAM_CAPABILITY_SET_ID,
+        POLICY_PROGRAM_COMPOSITING_CAPABILITIES, POLICY_PROGRAM_COUNT,
+        POLICY_PROGRAM_DRAW_KEY_MASK, POLICY_PROGRAM_F32_INPUT_COUNT, POLICY_PROGRAM_ID,
         POLICY_PROGRAM_OPERATION_COUNT, POLICY_PROGRAM_OPERATION_START,
         POLICY_PROGRAM_PAINT_CAPABILITIES, POLICY_PROGRAM_RECORD_ALIGNMENT,
-        POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0, POLICY_PROGRAM_RESERVED1,
-        POLICY_PROGRAM_RESOURCE_KIND_MASK, POLICY_PROGRAM_SEMANTIC_VIEW_MASK,
+        POLICY_PROGRAM_RECORD_SIZE, POLICY_PROGRAM_RESERVED0, POLICY_PROGRAM_RESOURCE_KIND_MASK,
+        POLICY_PROGRAM_SEMANTIC_VIEW_MASK, POLICY_PROGRAM_STORAGE_KEY_MASK,
         POLICY_PROGRAM_TECHNIQUE_ID, POLICY_PROGRAM_U32_INPUT_COUNT, POLICY_PROGRAM_VARIANT,
         POLICY_PROGRAMS_OFFSET, POLICY_REQUEST_HEADER_SIZE,
     },
@@ -109,9 +109,7 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
         .try_reserve_exact(usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)?)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in programs.chunks_exact(POLICY_PROGRAM_RECORD_SIZE as usize) {
-        if read_u16(record, POLICY_PROGRAM_RESERVED0)? != 0
-            || read_u32(record, POLICY_PROGRAM_RESERVED1)? != 0
-        {
+        if read_u16(record, POLICY_PROGRAM_RESERVED0)? != 0 {
             return Err(STATUS_INVALID_REQUEST);
         }
         let selected_buffers = indexed_records(
@@ -133,7 +131,8 @@ pub(crate) fn parse_policy(bytes: &[u8]) -> Result<ValidatedPolicy, u32> {
             capability_set: CapabilitySetId(read_u32(record, POLICY_PROGRAM_CAPABILITY_SET_ID)?),
             resource_kind_mask: read_u32(record, POLICY_PROGRAM_RESOURCE_KIND_MASK)?,
             semantic_view_mask: read_u32(record, POLICY_PROGRAM_SEMANTIC_VIEW_MASK)?,
-            batch_key_mask: read_u32(record, POLICY_PROGRAM_BATCH_KEY_MASK)?,
+            storage_key_mask: read_u32(record, POLICY_PROGRAM_STORAGE_KEY_MASK)?,
+            draw_key_mask: read_u32(record, POLICY_PROGRAM_DRAW_KEY_MASK)?,
             allocation_strategy: read_u16(record, POLICY_PROGRAM_ALLOCATION_STRATEGY)?,
             f32_input_count: byte(record, POLICY_PROGRAM_F32_INPUT_COUNT)?,
             u32_input_count: byte(record, POLICY_PROGRAM_U32_INPUT_COUNT)?,
@@ -508,8 +507,18 @@ mod tests {
         put_u32(program, POLICY_PROGRAM_RESOURCE_KIND_MASK, 1);
         put_u32(
             program,
-            POLICY_PROGRAM_BATCH_KEY_MASK,
-            crate::engine::policy::BATCH_PROGRAM,
+            POLICY_PROGRAM_STORAGE_KEY_MASK,
+            crate::engine::policy::BATCH_TECHNIQUE
+                | crate::engine::policy::BATCH_PROGRAM
+                | crate::engine::policy::BATCH_RESOURCE,
+        );
+        put_u32(
+            program,
+            POLICY_PROGRAM_DRAW_KEY_MASK,
+            crate::engine::policy::BATCH_TECHNIQUE
+                | crate::engine::policy::BATCH_PROGRAM
+                | crate::engine::policy::BATCH_RESOURCE
+                | crate::engine::policy::BATCH_ORDER,
         );
         put_u16(
             program,
